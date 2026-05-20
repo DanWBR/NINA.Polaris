@@ -1,0 +1,91 @@
+[data-theme="night"] {
+    --bg-primary: #0a0000;
+    --bg-secondary: #120000;
+    --bg-tertiary: #1a0000;
+    --bg-input: #0e0000;
+    --text-primary: #cc3333;
+    --text-secondary: #993333;
+    --text-muted: #662222;
+    --accent: #aa2222;
+    --accent-hover: #882222;
+    --success: #663333;
+    --warning: #884422;
+    --danger: #aa2222;
+    --border: #331111;
+}
+
+[data-theme="night"] .logo {
+    color: #cc3333;
+}
+
+[data-theme="night"] .status-indicator.ok {
+    background: rgba(102, 51, 51, 0.3);
+    color: #993333;
+}
+
+[data-theme="night"] .status-indicator.error {
+    background: rgba(170, 34, 34, 0.2);
+    color: #aa2222;
+}
+
+[data-theme="night"] .dpad-stop {
+    background: #661111;
+    border-color: #661111;
+}
+
+[data-theme="night"] .dpad-stop:hover {
+    background: #882222;
+}
+
+[data-theme="night"] .btn-primary {
+    background: #882222;
+    border-color: #882222;
+}
+
+[data-theme="night"] .btn-primary:hover {
+    background: #aa2222;
+}
+
+[data-theme="night"] .btn-danger {
+    background: rgba(170, 34, 34, 0.15);
+    border-color: #882222;
+    color: #aa2222;
+}
+
+[data-theme="night"] .seq-num {
+    background: #882222;
+}
+
+[data-theme="night"] .stepper-value {
+    color: #cc3333;
+}
+
+[data-theme="night"] .preview-area {
+    background: #050000;
+}
+
+[data-theme="night"] .sky-viewer {
+    background: #050000;
+}
+
+[data-theme="night"] .chip-icon {
+    color: #cc3333;
+}
+
+[data-theme="night"] .input-sm,
+[data-theme="night"] .input-md,
+[data-theme="night"] .search-input {
+    background: #0e0000;
+    border-color: #331111;
+    color: #cc3333;
+}
+
+[data-theme="night"] .input-sm:focus,
+[data-theme="night"] .input-md:focus,
+[data-theme="night"] .search-input:focus {
+    border-color: #882222;
+}
+
+[data-theme="night"] input[type="range"] {
+    accent-color: #882222;
+}

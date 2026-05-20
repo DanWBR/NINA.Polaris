@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>NINA Headless</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <link rel="stylesheet" href="/css/night-mode.css">
+</head>
+<body x-data="ninaApp()" x-init="init()">
+
+    <!-- Status Bar -->
+    <header class="status-bar">
+        <div class="status-bar-left">
+            <span class="logo">NINA</span>
+            <span class="version">Headless v0.1</span>
+        </div>
+        <div class="status-bar-right">
+            <span class="status-indicator" :class="indiConnected ? 'ok' : 'error'"
+                  x-text="indiConnected ? 'INDI' : 'INDI OFF'"></span>
+            <span class="status-chip" x-show="cameraTemp !== null">
+                <span class="chip-icon">T</span>
+                <span x-text="cameraTemp !== null ? cameraTemp.toFixed(1) + '&deg;C' : '--'"></span>
+            </span>
+            <button class="btn-icon" @click="toggleNightMode()" :title="nightMode ? 'Day Mode' : 'Night Mode'">
+                <span x-text="nightMode ? 'DAY' : 'NIGHT'"></span>
+            </button>
+        </div>
+    </header>
+
+    <div class="app-layout">
+        <!-- Sidebar (desktop) / Bottom tabs (mobile) -->
+        <nav class="sidebar">
+            <button class="nav-btn" :class="{ active: tab === 'live' }" @click="tab = 'live'" title="Live View">
+                <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
+                <span class="nav-label">Live</span>
+            </button>
+            <button class="nav-btn" :class="{ active: tab === 'mount' }" @click="tab = 'mount'" title="Mount Control">
+                <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2L2 22h20L12 2z" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                <span class="nav-label">Mount</span>
+            </button>
+            <button class="nav-btn" :class="{ active: tab === 'focus' }" @click="tab = 'focus'" title="Focus">
+                <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><line x1="12" y1="2" x2="12" y2="6" stroke="currentColor" stroke-width="2"/><line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" stroke-width="2"/><line x1="2" y1="12" x2="6" y2="12" stroke="currentColor" stroke-width="2"/><line x1="18" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="2"/></svg>
+                <span class="nav-label">Focus</span>
+            </button>
+            <button class="nav-btn" :class="{ active: tab === 'guide' }" @click="tab = 'guide'" title="Guider">
+                <svg viewBox="0 0 24 24" width="22" height="22"><polygon points="12,2 15,10 23,10 17,15 19,23 12,18 5,23 7,15 1,10 9,10" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                <span class="nav-label">Guide</span>
+            </button>
+            <button class="nav-btn" :class="{ active: tab === 'sky' }" @click="tab = 'sky'" title="Sky Explorer">
+                <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><ellipse cx="12" cy="12" rx="10" ry="4" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="12" y1="2" x2="12" y2="22" stroke="currentColor" stroke-width="1.5"/></svg>
+                <span class="nav-label">Sky</span>
+            </button>
+            <button class="nav-btn" :class="{ active: tab === 'sequence' }" @click="tab = 'sequence'" title="Sequence">
+                <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="3" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="10" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="17" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                <span class="nav-label">Seq</span>
+            </button>
+            <button class="nav-btn" :class="{ active: tab === 'settings' }" @click="tab = 'settings'" title="Settings">
+                <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 1v3m0 16v3m-9-11h3m16 0h3m-3.3-7.7l-2.1 2.1M6.4 17.6l-2.1 2.1m0-15.4l2.1 2.1m11.2 11.2l2.1 2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                <span class="nav-label">Settings</span>
+            </button>
+        </nav>
+
+        <!-- Main content area -->
+        <main class="content">
+
+            <!-- LIVE VIEW -->
+            <div x-show="tab === 'live'" class="tab-panel">
+                <div class="preview-area">
+                    <canvas id="liveCanvas" class="preview-canvas"></canvas>
+                    <div class="preview-overlay" x-show="!liveActive">
+                        <p>No camera connected</p>
+                        <p class="hint">Connect a camera in Settings to start imaging</p>
+                    </div>
+                </div>
+                <div class="quick-controls">
+                    <div class="control-row">
+                        <label>Exp<input type="number" x-model.number="exposure" step="1" min="0.001" class="input-sm"> s</label>
+                        <label>Gain<input type="number" x-model.number="gain" step="10" min="0" class="input-sm"></label>
+                        <label>Bin<select x-model="binning" class="input-sm">
+                            <option value="1">1x1</option>
+                            <option value="2">2x2</option>
+                            <option value="4">4x4</option>
+                        </select></label>
+                    </div>
+                    <div class="control-row actions">
+                        <button class="btn btn-primary" @click="capture()">Capture</button>
+                        <button class="btn" @click="loopCapture()">Loop</button>
+                        <button class="btn btn-danger" @click="stopCapture()">Stop</button>
+                    </div>
+                </div>
+                <div class="stats-bar">
+                    <span>Stars: <strong x-text="stats.starCount">--</strong></span>
+                    <span>HFR: <strong x-text="stats.hfr ? stats.hfr.toFixed(2) + '\"' : '--'">--</strong></span>
+                    <span>Mean: <strong x-text="stats.mean ? Math.round(stats.mean) : '--'">--</strong></span>
+                    <span x-text="currentTime"></span>
+                </div>
+            </div>
+
+            <!-- MOUNT CONTROL -->
+            <div x-show="tab === 'mount'" class="tab-panel">
+                <div class="panel-header">Mount Control</div>
+                <div class="mount-layout">
+                    <div class="dpad-container">
+                        <button class="dpad-btn dpad-n" @click="mountMove('n')">N</button>
+                        <button class="dpad-btn dpad-w" @click="mountMove('w')">W</button>
+                        <button class="dpad-btn dpad-stop" @click="mountMove('stop')">STOP</button>
+                        <button class="dpad-btn dpad-e" @click="mountMove('e')">E</button>
+                        <button class="dpad-btn dpad-s" @click="mountMove('s')">S</button>
+                    </div>
+                    <div class="mount-info">
+                        <div class="info-row"><span>RA:</span><strong x-text="mount.ra || '--'"></strong></div>
+                        <div class="info-row"><span>Dec:</span><strong x-text="mount.dec || '--'"></strong></div>
+                        <div class="info-row"><span>Alt:</span><strong x-text="mount.alt || '--'"></strong></div>
+                        <div class="info-row"><span>Az:</span><strong x-text="mount.az || '--'"></strong></div>
+                        <div class="info-row"><span>Tracking:</span><strong x-text="mount.tracking ? 'ON' : 'OFF'"></strong></div>
+                    </div>
+                </div>
+                <div class="control-row actions" style="margin-top: 1rem;">
+                    <button class="btn" @click="parkMount()">Park</button>
+                    <button class="btn" @click="unparkMount()">Unpark</button>
+                    <button class="btn btn-primary" @click="tab = 'sky'">GoTo (Sky Explorer)</button>
+                </div>
+            </div>
+
+            <!-- FOCUS -->
+            <div x-show="tab === 'focus'" class="tab-panel">
+                <div class="panel-header">Focus Control</div>
+                <div class="focus-controls">
+                    <div class="stepper">
+                        <button class="btn btn-lg" @click="focusMove(-focusStep)">&lt;&lt;</button>
+                        <button class="btn" @click="focusMove(-1)">&lt;</button>
+                        <span class="stepper-value" x-text="focusPosition">0</span>
+                        <button class="btn" @click="focusMove(1)">&gt;</button>
+                        <button class="btn btn-lg" @click="focusMove(focusStep)">&gt;&gt;</button>
+                    </div>
+                    <label class="slider-control">
+                        Step Size
+                        <input type="range" min="1" max="500" x-model.number="focusStep">
+                        <span x-text="focusStep"></span>
+                    </label>
+                </div>
+                <div class="control-row actions" style="margin-top: 1rem;">
+                    <button class="btn btn-primary" @click="autoFocus()">Auto Focus</button>
+                </div>
+                <div class="chart-placeholder">
+                    <p>Focus curve will appear here during auto-focus</p>
+                </div>
+            </div>
+
+            <!-- GUIDER -->
+            <div x-show="tab === 'guide'" class="tab-panel">
+                <div class="panel-header">Guider</div>
+                <div class="guide-info">
+                    <div class="info-row"><span>RMS RA:</span><strong>--</strong></div>
+                    <div class="info-row"><span>RMS Dec:</span><strong>--</strong></div>
+                    <div class="info-row"><span>Total RMS:</span><strong>--</strong></div>
+                </div>
+                <div class="chart-placeholder">
+                    <p>Guiding graph will appear here when guiding is active</p>
+                </div>
+                <div class="control-row actions" style="margin-top: 1rem;">
+                    <button class="btn btn-primary">Start Guiding</button>
+                    <button class="btn">Calibrate</button>
+                    <button class="btn btn-danger">Stop</button>
+                </div>
+            </div>
+
+            <!-- SKY EXPLORER -->
+            <div x-show="tab === 'sky'" class="tab-panel tab-panel-sky">
+                <div class="sky-toolbar">
+                    <input type="text" class="search-input" placeholder="Search object (M31, NGC 7000...)"
+                           x-model="skySearch" @keyup.enter="searchSky()">
+                    <button class="btn btn-sm" @click="searchSky()">Search</button>
+                </div>
+                <div id="aladin-lite-div" class="sky-viewer">
+                    <div class="sky-placeholder">
+                        <p>Aladin Lite sky viewer</p>
+                        <p class="hint">Will load when Aladin Lite JS is integrated</p>
+                    </div>
+                </div>
+                <div class="sky-info-panel">
+                    <div class="sky-target" x-show="skyTarget">
+                        <strong x-text="skyTarget?.name || 'No target'"></strong>
+                        <span x-text="skyTarget?.type || ''"></span>
+                    </div>
+                    <div class="sky-coords" x-show="skyTarget">
+                        <span>RA: <strong x-text="skyTarget?.ra || '--'"></strong></span>
+                        <span>Dec: <strong x-text="skyTarget?.dec || '--'"></strong></span>
+                        <span>FOV: <strong x-text="fov.width.toFixed(2) + '&deg; x ' + fov.height.toFixed(2) + '&deg;'"></strong></span>
+                    </div>
+                    <div class="control-row actions">
+                        <button class="btn btn-primary" @click="slewAndCenter()" :disabled="!skyTarget">Slew &amp; Center</button>
+                        <button class="btn" @click="addToSequence()" :disabled="!skyTarget">Add to Sequence</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEQUENCE -->
+            <div x-show="tab === 'sequence'" class="tab-panel">
+                <div class="panel-header">Sequence</div>
+                <div class="sequence-empty" x-show="sequence.length === 0">
+                    <p>No sequence loaded</p>
+                    <p class="hint">Add targets from Sky Explorer or load a sequence file</p>
+                </div>
+                <div class="sequence-list" x-show="sequence.length > 0">
+                    <template x-for="(item, i) in sequence" :key="i">
+                        <div class="sequence-item">
+                            <span class="seq-num" x-text="i + 1"></span>
+                            <span class="seq-name" x-text="item.name"></span>
+                            <span class="seq-detail" x-text="item.exposure + 's x ' + item.count"></span>
+                        </div>
+                    </template>
+                </div>
+                <div class="control-row actions" style="margin-top: 1rem;">
+                    <button class="btn btn-primary" @click="startSequence()">Start</button>
+                    <button class="btn" @click="pauseSequence()">Pause</button>
+                    <button class="btn btn-danger" @click="stopSequence()">Stop</button>
+                </div>
+            </div>
+
+            <!-- SETTINGS -->
+            <div x-show="tab === 'settings'" class="tab-panel">
+                <div class="panel-header">Settings</div>
+                <div class="settings-section">
+                    <h3>INDI Server</h3>
+                    <label>Host<input type="text" x-model="settings.indiHost" class="input-md"></label>
+                    <label>Port<input type="number" x-model.number="settings.indiPort" class="input-sm"></label>
+                    <button class="btn btn-primary" @click="connectIndi()">Connect</button>
+                </div>
+                <div class="settings-section">
+                    <h3>Observatory</h3>
+                    <label>Latitude<input type="number" x-model.number="settings.latitude" step="0.001" class="input-md"></label>
+                    <label>Longitude<input type="number" x-model.number="settings.longitude" step="0.001" class="input-md"></label>
+                    <label>Altitude (m)<input type="number" x-model.number="settings.altitude" step="1" class="input-sm"></label>
+                </div>
+                <div class="settings-section">
+                    <h3>Camera Optics</h3>
+                    <label>Sensor Width (mm)<input type="number" x-model.number="settings.sensorWidth" step="0.1" class="input-sm"></label>
+                    <label>Sensor Height (mm)<input type="number" x-model.number="settings.sensorHeight" step="0.1" class="input-sm"></label>
+                    <label>Focal Length (mm)<input type="number" x-model.number="settings.focalLength" step="1" class="input-sm"></label>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script src="/js/lib/alpine.min.js" defer></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>

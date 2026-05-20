@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/NINA.Core.Portable/NINA.Core.Portable.csproj" />
+    <Project Path="src/NINA.Headless/NINA.Headless.csproj" />
+    <Project Path="src/NINA.Image.Portable/NINA.Image.Portable.csproj" />
+    <Project Path="src/NINA.INDI/NINA.INDI.csproj" />
+  </Folder>
+</Solution>
