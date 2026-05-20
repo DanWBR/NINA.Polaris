@@ -88,6 +88,14 @@ function ninaApp() {
         toasts: [],
         _toastId: 0,
 
+        // Equipment tab state
+        equipCameraChoice: '',
+        equipMountChoice: '',
+        equipFocuserChoice: '',
+        equipFilterChoice: '',
+        equipCoolerTarget: -10,
+        equipCameraInfo: { coolerOn: false, binX: 0, binY: 0, bitDepth: 0 },
+
         // In-flight request tracking
         _pending: {},
         _previewFetching: false,
@@ -813,6 +821,129 @@ function ninaApp() {
             }
         },
 
+        // --- Equipment tab connect/disconnect ---
+
+        async equipConnectCamera() {
+            if (!this.equipCameraChoice) return;
+            try {
+                await this.apiPost(`/api/camera/select/${encodeURIComponent(this.equipCameraChoice)}`);
+                await this.apiPost('/api/camera/connect');
+                this.selectedCamera = this.equipCameraChoice;
+                this.toast('Camera connected: ' + this.equipCameraChoice, 'ok');
+                this.pollCameraInfo();
+            } catch (e) {
+                this.toast('Camera connection failed: ' + e.message, 'error');
+            }
+        },
+
+        async equipDisconnectCamera() {
+            try {
+                await this.apiPost('/api/camera/disconnect');
+                this.selectedCamera = null;
+                this.cameraTemp = null;
+                this.equipCameraInfo = { coolerOn: false, binX: 0, binY: 0, bitDepth: 0 };
+                this.toast('Camera disconnected', 'warn');
+            } catch (e) {
+                this.toast('Camera disconnect failed: ' + e.message, 'error');
+            }
+        },
+
+        async equipConnectMount() {
+            if (!this.equipMountChoice) return;
+            try {
+                await this.apiPost(`/api/telescope/select/${encodeURIComponent(this.equipMountChoice)}`);
+                await this.apiPost('/api/telescope/connect');
+                this.selectedTelescope = this.equipMountChoice;
+                this.mount.connected = true;
+                this.toast('Mount connected: ' + this.equipMountChoice, 'ok');
+            } catch (e) {
+                this.toast('Mount connection failed: ' + e.message, 'error');
+            }
+        },
+
+        async equipDisconnectMount() {
+            try {
+                await this.apiPost('/api/telescope/disconnect');
+                this.selectedTelescope = null;
+                this.mount.connected = false;
+                this.mount.tracking = false;
+                this.mount.slewing = false;
+                this.mount.parked = false;
+                this.toast('Mount disconnected', 'warn');
+            } catch (e) {
+                this.toast('Mount disconnect failed: ' + e.message, 'error');
+            }
+        },
+
+        async equipConnectFocuser() {
+            if (!this.equipFocuserChoice) return;
+            try {
+                await this.apiPost(`/api/focuser/select/${encodeURIComponent(this.equipFocuserChoice)}`);
+                await this.apiPost('/api/focuser/connect');
+                this.selectedFocuser = this.equipFocuserChoice;
+                this.focusConnected = true;
+                this.toast('Focuser connected: ' + this.equipFocuserChoice, 'ok');
+            } catch (e) {
+                this.toast('Focuser connection failed: ' + e.message, 'error');
+            }
+        },
+
+        async equipDisconnectFocuser() {
+            try {
+                await this.apiPost('/api/focuser/disconnect');
+                this.selectedFocuser = null;
+                this.focusConnected = false;
+                this.focusPosition = 0;
+                this.focusTemp = null;
+                this.toast('Focuser disconnected', 'warn');
+            } catch (e) {
+                this.toast('Focuser disconnect failed: ' + e.message, 'error');
+            }
+        },
+
+        async equipConnectFilter() {
+            if (!this.equipFilterChoice) return;
+            try {
+                await this.apiPost(`/api/filterwheel/select/${encodeURIComponent(this.equipFilterChoice)}`);
+                await this.apiPost('/api/filterwheel/connect');
+                this.selectedFilterWheel = this.equipFilterChoice;
+                this.filterWheel.connected = true;
+                this.toast('Filter wheel connected: ' + this.equipFilterChoice, 'ok');
+            } catch (e) {
+                this.toast('Filter wheel connection failed: ' + e.message, 'error');
+            }
+        },
+
+        async equipDisconnectFilter() {
+            try {
+                await this.apiPost('/api/filterwheel/disconnect');
+                this.selectedFilterWheel = null;
+                this.filterWheel.connected = false;
+                this.filterWheel.filters = [];
+                this.filterWheel.currentFilter = '';
+                this.toast('Filter wheel disconnected', 'warn');
+            } catch (e) {
+                this.toast('Filter wheel disconnect failed: ' + e.message, 'error');
+            }
+        },
+
+        async pollCameraInfo() {
+            try {
+                const data = await this.apiGet('/api/camera/status');
+                if (data.connected) {
+                    this.equipCameraInfo = {
+                        coolerOn: data.coolerOn || false,
+                        binX: data.binX || 0,
+                        binY: data.binY || 0,
+                        bitDepth: data.bitDepth || 0
+                    };
+                    if (data.temperature !== null && data.temperature !== undefined) {
+                        this.cameraTemp = data.temperature;
+                    }
+                }
+            } catch (e) { }
+        },
+
         // --- Sky ---
 
         async searchSky() {
@@ -1048,6 +1179,12 @@ function ninaApp() {
             if (eq.camera) {
                 this.cameraTemp = eq.camera.temperature;
                 this.selectedCamera = eq.camera.name;
+                this.equipCameraInfo = {
+                    coolerOn: eq.camera.coolerOn || false,
+                    binX: eq.camera.binX || 0,
+                    binY: eq.camera.binY || 0,
+                    bitDepth: eq.camera.bitDepth || 0
+                };
             }
             if (eq.telescope) {
                 Object.assign(this.mount, {

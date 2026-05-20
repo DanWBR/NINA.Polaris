@@ -6,6 +6,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <title>NINA Headless</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
     <link rel="stylesheet" href="/css/app.css">
     <link rel="stylesheet" href="/css/night-mode.css">
 </head>
@@ -52,6 +55,10 @@
             <button class="nav-btn" :class="{ active: tab === 'guide' }" @click="tab = 'guide'" title="Guider">
                 <svg viewBox="0 0 24 24" width="22" height="22"><polygon points="12,2 15,10 23,10 17,15 19,23 12,18 5,23 7,15 1,10 9,10" fill="none" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Guide</span>
+            </button>
+            <button class="nav-btn" :class="{ active: tab === 'equip' }" @click="tab = 'equip'" title="Equipment">
+                <svg viewBox="0 0 24 24" width="22" height="22"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a3 3 0 0 1-4.2 4.2L7 20a2 2 0 0 1-2.8-2.8l10.3-10.3a3 3 0 0 1 4.2-4.2l-3.8 3.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span class="nav-label">Equip</span>
             </button>
             <button class="nav-btn" :class="{ active: tab === 'sky' }" @click="tab = 'sky'" title="Sky Explorer">
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><ellipse cx="12" cy="12" rx="10" ry="4" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="12" y1="2" x2="12" y2="22" stroke="currentColor" stroke-width="1.5"/></svg>
@@ -236,6 +243,203 @@
                 </div>
             </div>
 
+            <!-- EQUIPMENT MANAGEMENT -->
+            <div x-show="tab === 'equip'" class="tab-panel tab-panel-equip">
+                <div class="panel-header">
+                    Equipment
+                    <span class="status-indicator-sm" :class="indiConnected ? 'ok' : 'error'"
+                          x-text="indiConnected ? 'INDI (' + devices.length + ' devices)' : 'INDI Off'"></span>
+                </div>
+
+                <!-- INDI not connected prompt -->
+                <div class="equip-connect-prompt" x-show="!indiConnected">
+                    <p>Connect to INDI server to discover devices</p>
+                    <div class="control-row" style="margin-top: 10px;">
+                        <label>Host<input type="text" x-model="settings.indiHost" class="input-md"></label>
+                        <label>Port<input type="number" x-model.number="settings.indiPort" class="input-sm"></label>
+                    </div>
+                    <div class="control-row actions" style="margin-top: 8px;">
+                        <button class="btn btn-primary" @click="connectIndi()">Connect INDI</button>
+                    </div>
+                </div>
+
+                <div class="equip-scroll" x-show="indiConnected">
+
+                    <!-- Camera -->
+                    <div class="equip-card">
+                        <div class="equip-card-header">
+                            <span class="equip-card-icon">&#x1F4F7;</span>
+                            <span class="equip-card-title">Camera</span>
+                            <span class="equip-status-dot" :class="selectedCamera ? 'connected' : 'disconnected'"></span>
+                        </div>
+                        <div class="equip-card-body">
+                            <div class="equip-select-row">
+                                <select class="equip-select" x-model="equipCameraChoice">
+                                    <option value="">-- Select device --</option>
+                                    <template x-for="dev in devices" :key="'cam-'+dev.name">
+                                        <option :value="dev.name" x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
+                                    </template>
+                                </select>
+                                <button class="btn btn-sm btn-primary" @click="equipConnectCamera()"
+                                        :disabled="!equipCameraChoice">Connect</button>
+                                <button class="btn btn-sm btn-danger" @click="equipDisconnectCamera()"
+                                        :disabled="!selectedCamera">Disconnect</button>
+                            </div>
+                            <div class="equip-detail" x-show="selectedCamera">
+                                <div class="equip-detail-name" x-text="selectedCamera"></div>
+                                <div class="equip-detail-props">
+                                    <span x-show="cameraTemp !== null">Temp: <strong x-text="(cameraTemp?.toFixed(1) || '--') + '°C'"></strong></span>
+                                    <span>Cooler: <strong :class="equipCameraInfo.coolerOn ? 'text-ok' : 'text-muted'"
+                                                          x-text="equipCameraInfo.coolerOn ? 'ON' : 'OFF'"></strong></span>
+                                    <span x-show="equipCameraInfo.binX">Bin: <strong x-text="equipCameraInfo.binX + 'x' + equipCameraInfo.binY"></strong></span>
+                                    <span x-show="equipCameraInfo.bitDepth">Depth: <strong x-text="equipCameraInfo.bitDepth + '-bit'"></strong></span>
+                                </div>
+                                <div class="equip-inline-controls">
+                                    <button class="btn btn-sm" @click="setCooler(!equipCameraInfo.coolerOn, equipCoolerTarget)"
+                                            :class="equipCameraInfo.coolerOn ? 'btn-active' : ''"
+                                            x-text="equipCameraInfo.coolerOn ? 'Cooler ON' : 'Cooler OFF'"></button>
+                                    <label class="equip-temp-label">
+                                        Target
+                                        <input type="number" x-model.number="equipCoolerTarget" step="1" min="-40" max="30" class="input-sm">
+                                        <span>&deg;C</span>
+                                    </label>
+                                    <button class="btn btn-sm" @click="setCooler(true, equipCoolerTarget)">Set</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mount -->
+                    <div class="equip-card">
+                        <div class="equip-card-header">
+                            <span class="equip-card-icon">&#x1F52D;</span>
+                            <span class="equip-card-title">Mount</span>
+                            <span class="equip-status-dot" :class="mount.connected ? 'connected' : 'disconnected'"></span>
+                        </div>
+                        <div class="equip-card-body">
+                            <div class="equip-select-row">
+                                <select class="equip-select" x-model="equipMountChoice">
+                                    <option value="">-- Select device --</option>
+                                    <template x-for="dev in devices" :key="'mnt-'+dev.name">
+                                        <option :value="dev.name" x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
+                                    </template>
+                                </select>
+                                <button class="btn btn-sm btn-primary" @click="equipConnectMount()"
+                                        :disabled="!equipMountChoice">Connect</button>
+                                <button class="btn btn-sm btn-danger" @click="equipDisconnectMount()"
+                                        :disabled="!mount.connected">Disconnect</button>
+                            </div>
+                            <div class="equip-detail" x-show="mount.connected">
+                                <div class="equip-detail-name" x-text="selectedTelescope"></div>
+                                <div class="equip-detail-props">
+                                    <span>RA: <strong x-text="formatRA(mount.ra)"></strong></span>
+                                    <span>Dec: <strong x-text="formatDec(mount.dec)"></strong></span>
+                                    <span>Tracking: <strong :class="mount.tracking ? 'text-ok' : 'text-warn'"
+                                                             x-text="mount.tracking ? 'ON' : 'OFF'"></strong></span>
+                                    <span x-show="mount.parked" class="text-warn">PARKED</span>
+                                </div>
+                                <div class="equip-inline-controls">
+                                    <button class="btn btn-sm" @click="toggleTracking()"
+                                            :class="mount.tracking ? 'btn-active' : ''"
+                                            x-text="mount.tracking ? 'Tracking ON' : 'Tracking OFF'"></button>
+                                    <button class="btn btn-sm" @click="parkMount()" :disabled="mount.parked">Park</button>
+                                    <button class="btn btn-sm" @click="unparkMount()" :disabled="!mount.parked">Unpark</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Focuser -->
+                    <div class="equip-card">
+                        <div class="equip-card-header">
+                            <span class="equip-card-icon">&#x1F50D;</span>
+                            <span class="equip-card-title">Focuser</span>
+                            <span class="equip-status-dot" :class="focusConnected ? 'connected' : 'disconnected'"></span>
+                        </div>
+                        <div class="equip-card-body">
+                            <div class="equip-select-row">
+                                <select class="equip-select" x-model="equipFocuserChoice">
+                                    <option value="">-- Select device --</option>
+                                    <template x-for="dev in devices" :key="'foc-'+dev.name">
+                                        <option :value="dev.name" x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
+                                    </template>
+                                </select>
+                                <button class="btn btn-sm btn-primary" @click="equipConnectFocuser()"
+                                        :disabled="!equipFocuserChoice">Connect</button>
+                                <button class="btn btn-sm btn-danger" @click="equipDisconnectFocuser()"
+                                        :disabled="!focusConnected">Disconnect</button>
+                            </div>
+                            <div class="equip-detail" x-show="focusConnected">
+                                <div class="equip-detail-name" x-text="selectedFocuser"></div>
+                                <div class="equip-detail-props">
+                                    <span>Position: <strong x-text="focusPosition"></strong></span>
+                                    <span x-show="focusTemp !== null">Temp: <strong x-text="(focusTemp?.toFixed(1) || '--') + '°C'"></strong></span>
+                                    <span x-show="focusMoving" class="text-warn">MOVING</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filter Wheel -->
+                    <div class="equip-card">
+                        <div class="equip-card-header">
+                            <span class="equip-card-icon">&#x2699;&#xFE0F;</span>
+                            <span class="equip-card-title">Filter Wheel</span>
+                            <span class="equip-status-dot" :class="filterWheel.connected ? 'connected' : 'disconnected'"></span>
+                        </div>
+                        <div class="equip-card-body">
+                            <div class="equip-select-row">
+                                <select class="equip-select" x-model="equipFilterChoice">
+                                    <option value="">-- Select device --</option>
+                                    <template x-for="dev in devices" :key="'fw-'+dev.name">
+                                        <option :value="dev.name" x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
+                                    </template>
+                                </select>
+                                <button class="btn btn-sm btn-primary" @click="equipConnectFilter()"
+                                        :disabled="!equipFilterChoice">Connect</button>
+                                <button class="btn btn-sm btn-danger" @click="equipDisconnectFilter()"
+                                        :disabled="!filterWheel.connected">Disconnect</button>
+                            </div>
+                            <div class="equip-detail" x-show="filterWheel.connected">
+                                <div class="equip-detail-name" x-text="selectedFilterWheel"></div>
+                                <div class="equip-detail-props">
+                                    <span>Current: <strong class="text-ok" x-text="filterWheel.currentFilter || '--'"></strong></span>
+                                    <span>Slot: <strong x-text="filterWheel.position"></strong></span>
+                                    <span x-show="filterWheel.moving" class="text-warn">MOVING</span>
+                                </div>
+                                <div class="equip-filter-buttons" x-show="filterWheel.filters.length > 0">
+                                    <template x-for="f in filterWheel.filters" :key="'fb-'+f">
+                                        <button class="btn btn-sm" @click="setFilter(f)"
+                                                :class="f === filterWheel.currentFilter ? 'btn-active' : ''"
+                                                x-text="f"></button>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Guider (placeholder) -->
+                    <div class="equip-card equip-card-placeholder">
+                        <div class="equip-card-header">
+                            <span class="equip-card-icon">&#x2B50;</span>
+                            <span class="equip-card-title">Guider</span>
+                            <span class="equip-status-dot disconnected"></span>
+                        </div>
+                        <div class="equip-card-body">
+                            <p class="text-muted" style="font-size: 12px;">PHD2 / INDI guider integration coming soon</p>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Footer -->
+                <div class="equip-footer" x-show="indiConnected">
+                    <button class="btn btn-sm" @click="refreshDevices()">Refresh Devices</button>
+                    <span class="text-muted" style="font-size: 11px;" x-text="devices.length + ' devices'"></span>
+                    <button class="btn btn-sm btn-danger" @click="disconnectIndi()" style="margin-left: auto;">Disconnect INDI</button>
+                </div>
+            </div>
+
             <!-- SKY EXPLORER -->
             <div x-show="tab === 'sky'" class="tab-panel tab-panel-sky">
                 <div class="sky-toolbar">
@@ -412,24 +616,12 @@
                     </div>
                 </div>
 
-                <div class="settings-section" x-show="indiConnected && devices.length > 0">
-                    <h3>Devices (<span x-text="devices.length"></span> found)</h3>
-                    <template x-for="dev in devices" :key="dev.name">
-                        <div class="device-card">
-                            <div class="device-name" x-text="dev.name"></div>
-                            <div class="device-driver" x-text="dev.driver || 'Unknown driver'"></div>
-                            <div class="device-actions">
-                                <button class="btn btn-sm" @click="selectCamera(dev.name)"
-                                        :class="selectedCamera === dev.name ? 'btn-active' : ''">Camera</button>
-                                <button class="btn btn-sm" @click="selectTelescope(dev.name)"
-                                        :class="selectedTelescope === dev.name ? 'btn-active' : ''">Mount</button>
-                                <button class="btn btn-sm" @click="selectFocuser(dev.name)"
-                                        :class="selectedFocuser === dev.name ? 'btn-active' : ''">Focuser</button>
-                                <button class="btn btn-sm" @click="selectFilterWheel(dev.name)"
-                                        :class="selectedFilterWheel === dev.name ? 'btn-active' : ''">Filter</button>
-                            </div>
-                        </div>
-                    </template>
+                <div class="settings-section" x-show="indiConnected">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span class="status-indicator ok" style="font-size: 11px;">Connected</span>
+                        <span class="text-muted" style="font-size: 12px;" x-text="devices.length + ' devices found'"></span>
+                        <button class="btn btn-sm" @click="tab = 'equip'" style="margin-left: auto;">Manage Equipment</button>
+                    </div>
                 </div>
 
                 <div class="settings-section">

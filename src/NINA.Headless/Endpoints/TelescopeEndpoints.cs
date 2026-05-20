@@ -110,6 +110,14 @@ public static class TelescopeEndpoints {
             await equip.Telescope.ConnectAsync();
             return Results.Ok(new { status = "connected", device = equip.Telescope.DeviceName });
         });
+
+        group.MapPost("/disconnect", async (EquipmentManager equip) => {
+            if (equip.Telescope == null)
+                return Results.BadRequest(new { error = "No telescope selected" });
+
+            await equip.Telescope.DisconnectAsync();
+            return Results.Ok(new { status = "disconnected" });
+        });
     }
 
     public record SlewRequest(double Ra, double Dec);

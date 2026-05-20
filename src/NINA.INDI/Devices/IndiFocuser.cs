@@ -26,6 +26,11 @@ public class IndiFocuser {
             new Dictionary<string, bool> { ["CONNECT"] = true, ["DISCONNECT"] = false }, ct);
     }
 
+    public async Task DisconnectAsync(CancellationToken ct = default) {
+        await _client.SetSwitchAsync(DeviceName, "CONNECTION",
+            new Dictionary<string, bool> { ["CONNECT"] = false, ["DISCONNECT"] = true }, ct);
+    }
+
     public async Task MoveAbsoluteAsync(int position, CancellationToken ct = default) {
         await _client.SetNumberAsync(DeviceName, "ABS_FOCUS_POSITION",
             new Dictionary<string, double> { ["FOCUS_ABSOLUTE_POSITION"] = position }, ct);

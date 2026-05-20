@@ -40,6 +40,11 @@ public class IndiTelescope {
             new Dictionary<string, bool> { ["CONNECT"] = true, ["DISCONNECT"] = false }, ct);
     }
 
+    public async Task DisconnectAsync(CancellationToken ct = default) {
+        await _client.SetSwitchAsync(DeviceName, "CONNECTION",
+            new Dictionary<string, bool> { ["CONNECT"] = false, ["DISCONNECT"] = true }, ct);
+    }
+
     public async Task SlewAsync(double ra, double dec, CancellationToken ct = default) {
         // Set coord mode to SLEW
         await _client.SetSwitchAsync(DeviceName, "ON_COORD_SET",

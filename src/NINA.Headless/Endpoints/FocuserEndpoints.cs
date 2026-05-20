@@ -62,6 +62,14 @@ public static class FocuserEndpoints {
             await equip.Focuser.ConnectAsync();
             return Results.Ok(new { status = "connected", device = equip.Focuser.DeviceName });
         });
+
+        group.MapPost("/disconnect", async (EquipmentManager equip) => {
+            if (equip.Focuser == null)
+                return Results.BadRequest(new { error = "No focuser selected" });
+
+            await equip.Focuser.DisconnectAsync();
+            return Results.Ok(new { status = "disconnected" });
+        });
     }
 
     public record MoveAbsoluteRequest(int Position);
