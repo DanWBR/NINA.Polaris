@@ -890,6 +890,8 @@
                     <input type="text" class="search-input" placeholder="Search object (M31, NGC 7000, Orion...)"
                            x-model="skySearch" @keyup.enter="searchSky()" @input="skyShowResults = false">
                     <button class="btn btn-sm" @click="searchSky()">Search</button>
+                    <button class="btn btn-sm" @click="getFromStellarium()"
+                            title="Use currently-selected object in Stellarium as target">🔭 Stellarium</button>
                 </div>
 
                 <!-- Search results dropdown -->

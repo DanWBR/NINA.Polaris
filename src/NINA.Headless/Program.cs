@@ -25,6 +25,7 @@ builder.Services.AddSingleton<AutoFocusService>();
 builder.Services.AddSingleton<MeridianFlipService>();
 builder.Services.AddSingleton<FlatWizardService>();
 builder.Services.AddSingleton<NINA.Headless.Services.Alpaca.AlpacaDiscovery>();
+builder.Services.AddSingleton<StellariumClient>();
 builder.Services.AddHostedService<MdnsService>();
 builder.Services.AddSingleton(sp =>
 {
@@ -55,6 +56,7 @@ app.MapAutoFocusEndpoints();
 app.MapMeridianFlipEndpoints();
 app.MapFlatWizardEndpoints();
 app.MapAlpacaEndpoints();
+app.MapStellariumEndpoints();
 app.MapSequenceEndpoints();
 app.MapSkyEndpoints();
 app.MapSystemEndpoints();

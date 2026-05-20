@@ -65,7 +65,9 @@ function ninaApp() {
             indiHost: 'localhost',
             indiPort: 7624,
             latitude: 0, longitude: 0, altitude: 0,
-            sensorWidth: 23.5, sensorHeight: 15.7, focalLength: 478
+            sensorWidth: 23.5, sensorHeight: 15.7, focalLength: 478,
+            stellariumHost: 'localhost',
+            stellariumPort: 8090
         },
 
         // Connection state
@@ -2274,6 +2276,29 @@ function ninaApp() {
         },
 
         // --- Sky ---
+
+        async getFromStellarium() {
+            const host = this.settings.stellariumHost || 'localhost';
+            const port = this.settings.stellariumPort || 8090;
+            try {
+                const t = await this.apiGet(`/api/stellarium/target?host=${encodeURIComponent(host)}&port=${port}`);
+                if (!t) { this.toast('Stellarium: no object selected', 'warn'); return; }
+                this.skyTarget = {
+                    name: t.name,
+                    ra: t.raHours,
+                    dec: t.decDeg,
+                    type: t.type || 'Stellarium',
+                    magnitude: t.magnitude != null ? t.magnitude.toFixed(2) : '',
+                    raFormatted: this.formatRA(t.raHours),
+                    decFormatted: this.formatDec(t.decDeg)
+                };
+                this.skyShowResults = false;
+                this._goToSelectedTarget();
+                this.toast('Loaded from Stellarium: ' + t.name, 'ok');
+            } catch (e) {
+                this.toast('Stellarium fetch failed: ' + e.message, 'error');
+            }
+        },
 
         async searchSky() {
             if (!this.skySearch.trim()) return;
