@@ -472,7 +472,169 @@ function ninaApp() {
             img.src = url;
         },
 
-        // Raw LZ4 mode: parse header, decompress, auto-stretch, render grayscale
+        // ----- WebGL renderer (debayer + MTF stretch on GPU) -----
+        // State held on the Alpine instance so it survives across frames.
+        // _gl, _glProgram, _glLocs, _glTexture, _glCanvas
+
+        _initWebGL() {
+            if (this._gl) return true;
+            const canvas = document.getElementById('liveCanvas');
+            if (!canvas) return false;
+            const gl = canvas.getContext('webgl2', { antialias: false, premultipliedAlpha: false });
+            if (!gl) {
+                console.info('WebGL2 not available, falling back to CPU stretch');
+                return false;
+            }
+
+            // Vertex shader: clip-space quad
+            const vs = `#version 300 es
+                in vec2 a_pos;
+                out vec2 v_uv;
+                void main() {
+                    v_uv = vec2((a_pos.x + 1.0) * 0.5, 1.0 - (a_pos.y + 1.0) * 0.5);
+                    gl_Position = vec4(a_pos, 0.0, 1.0);
+                }`;
+
+            // Fragment shader: sample uint16 R channel + optional 2x2 debayer + MTF stretch.
+            // Bayer pattern encoding (matches server-side BayerPatternEnum):
+            //   0 = None (mono), 1 = RGGB, 2 = BGGR, 3 = GRBG, 4 = GBRG
+            const fs = `#version 300 es
+                precision highp float;
+                precision highp usampler2D;
+                uniform usampler2D u_tex;
+                uniform vec2 u_texSize;
+                uniform float u_shadow;
+                uniform float u_scale;
+                uniform float u_mtf;   // typically 0.25
+                uniform int u_bayer;   // 0=mono 1=RGGB 2=BGGR 3=GRBG 4=GBRG
+                in vec2 v_uv;
+                out vec4 fragColor;
+
+                float fetch(vec2 uv) {
+                    ivec2 p = ivec2(uv * u_texSize);
+                    p = clamp(p, ivec2(0), ivec2(u_texSize) - ivec2(1));
+                    return float(texelFetch(u_tex, p, 0).r);
+                }
+
+                float stretch(float v) {
+                    float n = max(0.0, (v - u_shadow) * u_scale);
+                    n = clamp(n, 0.0, 1.0);
+                    // MTF: y = (m*x) / ((2m - 1)*x - m + 1) for m∈(0,1)
+                    return (u_mtf * n) / ((u_mtf - 1.0) * n - u_mtf + 1.0 + 1e-12);
+                }
+
+                void main() {
+                    if (u_bayer == 0) {
+                        float v = fetch(v_uv);
+                        float s = stretch(v);
+                        fragColor = vec4(s, s, s, 1.0);
+                        return;
+                    }
+                    // Simple half-resolution debayer: read a 2x2 superpixel and
+                    // average the two greens. Works for any pattern.
+                    vec2 px = vec2(1.0) / u_texSize;
+                    // Snap UV to top-left of 2x2 cell
+                    vec2 base = floor(v_uv * (u_texSize * 0.5)) * 2.0 / u_texSize;
+                    float p00 = fetch(base);
+                    float p10 = fetch(base + vec2(px.x, 0.0));
+                    float p01 = fetch(base + vec2(0.0, px.y));
+                    float p11 = fetch(base + vec2(px.x, px.y));
+                    float r, g, b;
+                    if (u_bayer == 1) { r = p00; g = 0.5 * (p10 + p01); b = p11; }       // RGGB
+                    else if (u_bayer == 2) { b = p00; g = 0.5 * (p10 + p01); r = p11; }   // BGGR
+                    else if (u_bayer == 3) { g = 0.5 * (p00 + p11); r = p10; b = p01; }   // GRBG
+                    else /* 4 GBRG */      { g = 0.5 * (p00 + p11); b = p10; r = p01; }
+                    fragColor = vec4(stretch(r), stretch(g), stretch(b), 1.0);
+                }`;
+
+            const compile = (type, src) => {
+                const sh = gl.createShader(type);
+                gl.shaderSource(sh, src);
+                gl.compileShader(sh);
+                if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+                    console.error('Shader compile error:', gl.getShaderInfoLog(sh));
+                    return null;
+                }
+                return sh;
+            };
+            const vsObj = compile(gl.VERTEX_SHADER, vs);
+            const fsObj = compile(gl.FRAGMENT_SHADER, fs);
+            if (!vsObj || !fsObj) return false;
+            const prog = gl.createProgram();
+            gl.attachShader(prog, vsObj);
+            gl.attachShader(prog, fsObj);
+            gl.linkProgram(prog);
+            if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+                console.error('Program link error:', gl.getProgramInfoLog(prog));
+                return false;
+            }
+
+            // Fullscreen quad
+            const buf = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+            gl.bufferData(gl.ARRAY_BUFFER,
+                new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+            const aPos = gl.getAttribLocation(prog, 'a_pos');
+            gl.enableVertexAttribArray(aPos);
+            gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+            this._gl = gl;
+            this._glProgram = prog;
+            this._glLocs = {
+                tex: gl.getUniformLocation(prog, 'u_tex'),
+                texSize: gl.getUniformLocation(prog, 'u_texSize'),
+                shadow: gl.getUniformLocation(prog, 'u_shadow'),
+                scale: gl.getUniformLocation(prog, 'u_scale'),
+                mtf: gl.getUniformLocation(prog, 'u_mtf'),
+                bayer: gl.getUniformLocation(prog, 'u_bayer')
+            };
+            this._glTexture = gl.createTexture();
+            console.info('WebGL2 renderer initialised');
+            return true;
+        },
+
+        _tryRenderWebGL(pixels, width, height, bitDepth, bayerPattern, shadow, scaleFactor) {
+            if (!this._initWebGL()) return false;
+            const gl = this._gl;
+            const canvas = document.getElementById('liveCanvas');
+            if (!canvas) return false;
+
+            // Size canvas to container while preserving aspect ratio
+            const container = canvas.parentElement;
+            const scale = Math.min(container.clientWidth / width, container.clientHeight / height, 1);
+            canvas.width = Math.round(width * scale);
+            canvas.height = Math.round(height * scale);
+
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            gl.useProgram(this._glProgram);
+
+            // Upload pixel data as R16UI texture
+            gl.bindTexture(gl.TEXTURE_2D, this._glTexture);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            try {
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16UI, width, height, 0,
+                    gl.RED_INTEGER, gl.UNSIGNED_SHORT, pixels);
+            } catch (e) {
+                console.warn('R16UI texture upload failed:', e);
+                return false;
+            }
+
+            gl.activeTexture(gl.TEXTURE0);
+            gl.uniform1i(this._glLocs.tex, 0);
+            gl.uniform2f(this._glLocs.texSize, width, height);
+            gl.uniform1f(this._glLocs.shadow, shadow);
+            gl.uniform1f(this._glLocs.scale, scaleFactor);
+            gl.uniform1f(this._glLocs.mtf, 0.25);
+            gl.uniform1i(this._glLocs.bayer, bayerPattern | 0);
+
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            return true;
+        },
+
+        // Raw LZ4 mode: parse header, decompress, auto-stretch, render (WebGL when possible)
         _renderRawFrame(arrayBuffer) {
             const dv = new DataView(arrayBuffer);
             if (arrayBuffer.byteLength < 24) return; // too small
@@ -506,8 +668,11 @@ function ninaApp() {
             const pixels = new Uint16Array(decompressed.buffer);
             const maxVal = (1 << bitDepth) - 1;
 
-            // Auto-stretch: compute median and MAD for MTF stretch
-            const sorted = Float32Array.from(pixels).sort();
+            // Auto-stretch: subsample for speed on huge arrays
+            const step = Math.max(1, Math.floor(pixels.length / 200000));
+            const sample = new Float32Array(Math.floor(pixels.length / step));
+            for (let i = 0, j = 0; j < sample.length; i += step, j++) sample[j] = pixels[i];
+            const sorted = sample.slice().sort();
             const median = sorted[Math.floor(sorted.length * 0.5)];
             const deviations = Float32Array.from(sorted, v => Math.abs(v - median)).sort();
             const mad = deviations[Math.floor(deviations.length * 0.5)] * 1.4826;
@@ -515,6 +680,11 @@ function ninaApp() {
             // Stretch parameters (Midtone Transfer Function)
             const shadow = Math.max(0, median - 2.8 * mad);
             const scaleFactor = maxVal > shadow ? 1.0 / (maxVal - shadow) : 1.0;
+
+            // Try WebGL2 path first (GPU does debayer + stretch in microseconds)
+            if (this._tryRenderWebGL(pixels, width, height, bitDepth, bayerPattern, shadow, scaleFactor)) {
+                return;
+            }
 
             // Render to canvas
             const canvas = document.getElementById('liveCanvas');
