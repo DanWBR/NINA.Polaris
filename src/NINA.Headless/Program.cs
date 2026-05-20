@@ -22,6 +22,7 @@ builder.Services.AddSingleton<ProfileService>();
 builder.Services.AddSingleton<PHD2Client>();
 builder.Services.AddSingleton<AutoFocusService>();
 builder.Services.AddSingleton<MeridianFlipService>();
+builder.Services.AddHostedService<MdnsService>();
 builder.Services.AddSingleton(sp =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
