@@ -23,6 +23,7 @@ builder.Services.AddSingleton<ImageWriterService>();
 builder.Services.AddSingleton<PHD2Client>();
 builder.Services.AddSingleton<AutoFocusService>();
 builder.Services.AddSingleton<MeridianFlipService>();
+builder.Services.AddSingleton<FlatWizardService>();
 builder.Services.AddHostedService<MdnsService>();
 builder.Services.AddSingleton(sp =>
 {
@@ -51,6 +52,7 @@ app.MapWeatherEndpoints();
 app.MapGuiderEndpoints();
 app.MapAutoFocusEndpoints();
 app.MapMeridianFlipEndpoints();
+app.MapFlatWizardEndpoints();
 app.MapSequenceEndpoints();
 app.MapSkyEndpoints();
 app.MapSystemEndpoints();
