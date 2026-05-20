@@ -161,6 +161,10 @@ function ninaApp() {
         imageViewerOpen: false,
         _osdViewer: null,
 
+        // First-run location setup modal
+        showLocationSetup: false,
+        locSetup: { lat: null, lon: null, alt: 0, locating: false, error: null },
+
         // Full image statistics + histogram
         fullStats: null,
         histogramData: null,
@@ -860,8 +864,78 @@ function ninaApp() {
                     this.settings.sensorHeight = data.sensorHeightMm || 15.7;
                     this.settings.focalLength = data.focalLengthMm || 478;
                     this.updateFov();
+                    this._maybeShowLocationSetup();
                 }
             } catch (e) { }
+        },
+
+        // Show the first-run location modal when both lat and lon are still
+        // zero AND the user hasn't already dismissed it once.
+        _maybeShowLocationSetup() {
+            const isUnset = Math.abs(this.settings.latitude || 0) < 0.01
+                         && Math.abs(this.settings.longitude || 0) < 0.01;
+            const dismissed = localStorage.getItem('nina-location-prompted') === '1';
+            if (isUnset && !dismissed) {
+                // Pre-fill the modal with current values (zeros), wait one tick
+                this.$nextTick(() => {
+                    this.locSetup = {
+                        lat: this.settings.latitude || null,
+                        lon: this.settings.longitude || null,
+                        alt: this.settings.altitude || 0,
+                        locating: false, error: null
+                    };
+                    this.showLocationSetup = true;
+                });
+            }
+        },
+
+        useBrowserGeolocation() {
+            if (!navigator.geolocation) {
+                this.locSetup.error = 'Browser geolocation API not available';
+                return;
+            }
+            this.locSetup.locating = true;
+            this.locSetup.error = null;
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    this.locSetup.lat = +pos.coords.latitude.toFixed(4);
+                    this.locSetup.lon = +pos.coords.longitude.toFixed(4);
+                    if (pos.coords.altitude != null) {
+                        this.locSetup.alt = Math.round(pos.coords.altitude);
+                    }
+                    this.locSetup.locating = false;
+                },
+                (err) => {
+                    this.locSetup.locating = false;
+                    this.locSetup.error = err.message || 'Geolocation request denied';
+                },
+                { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+            );
+        },
+
+        async saveLocationAndDismiss() {
+            const lat = parseFloat(this.locSetup.lat);
+            const lon = parseFloat(this.locSetup.lon);
+            if (isNaN(lat) || isNaN(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+                this.locSetup.error = 'Latitude must be -90..90 and longitude -180..180';
+                return;
+            }
+            this.settings.latitude = lat;
+            this.settings.longitude = lon;
+            this.settings.altitude = parseFloat(this.locSetup.alt) || 0;
+            this.saveSettings();
+            await this.saveSettingsToServer();
+            localStorage.setItem('nina-location-prompted', '1');
+            this.showLocationSetup = false;
+            this.toast(`Location saved: ${lat.toFixed(2)}°, ${lon.toFixed(2)}°`, 'ok');
+        },
+
+        // remember=true means "don't ask again until they clear localStorage"
+        dismissLocationSetup(remember) {
+            this.showLocationSetup = false;
+            if (remember) {
+                localStorage.setItem('nina-location-prompted', '1');
+            }
         },
 
         // ---- Aladin Lite (Sky Explorer) ----

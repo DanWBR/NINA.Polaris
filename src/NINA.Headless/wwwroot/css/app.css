@@ -707,6 +707,70 @@ select.input-sm {
     color: var(--text-primary);
 }
 
+/* First-run location setup modal */
+.location-setup-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.location-setup-frame {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    max-width: 560px;
+    width: 100%;
+    color: var(--text-primary);
+}
+
+.location-setup-frame h2 {
+    margin: 0 0 12px;
+    font-size: 18px;
+}
+
+.location-setup-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    margin: 16px 0;
+}
+
+.location-setup-row label {
+    display: flex;
+    flex-direction: column;
+    font-size: 11px;
+    color: var(--text-secondary);
+    gap: 4px;
+}
+
+.location-setup-row input {
+    padding: 6px 8px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.location-setup-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+@media (max-width: 540px) {
+    .location-setup-row {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* OpenSeadragon image-viewer modal */
 .image-viewer-modal {
     position: fixed;
