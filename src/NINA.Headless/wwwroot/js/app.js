@@ -156,6 +156,14 @@ function ninaApp() {
         fullStats: null,
         histogramData: null,
 
+        // Manual stretch controls
+        stretchAuto: true,
+        stretchBlack: 0.0,    // 0..1 normalised (0% = black point at min)
+        stretchWhite: 1.0,    // 0..1 normalised (100% = white point at max)
+        stretchMid: 0.25,     // MTF midtones coefficient
+        _lastRawFrame: null,  // cache: { pixels, width, height, bitDepth, bayerPattern }
+        showStretchPanel: false,
+
         // Temperature history (sensor temp samples for chart)
         tempHistory: [],     // [{t: msEpoch, temp: °C, power: %}]
         _tempLastSample: 0,
@@ -476,6 +484,34 @@ function ninaApp() {
             img.src = url;
         },
 
+        // Compute shadow/scale either from manual sliders or auto-stretch (median+MAD)
+        _computeStretchParams(pixels, maxVal) {
+            if (!this.stretchAuto) {
+                const shadow = this.stretchBlack * maxVal;
+                const white = Math.max(shadow + 1, this.stretchWhite * maxVal);
+                return { shadow, scaleFactor: 1.0 / (white - shadow) };
+            }
+            // Subsample for speed
+            const step = Math.max(1, Math.floor(pixels.length / 200000));
+            const sample = new Float32Array(Math.floor(pixels.length / step));
+            for (let i = 0, j = 0; j < sample.length; i += step, j++) sample[j] = pixels[i];
+            const sorted = sample.slice().sort();
+            const median = sorted[Math.floor(sorted.length * 0.5)];
+            const deviations = Float32Array.from(sorted, v => Math.abs(v - median)).sort();
+            const mad = deviations[Math.floor(deviations.length * 0.5)] * 1.4826;
+            const shadow = Math.max(0, median - 2.8 * mad);
+            return { shadow, scaleFactor: maxVal > shadow ? 1.0 / (maxVal - shadow) : 1.0 };
+        },
+
+        // Re-render the cached last frame with current stretch settings.
+        // Called when sliders move.
+        applyManualStretch() {
+            const f = this._lastRawFrame;
+            if (!f) return;
+            const { shadow, scaleFactor } = this._computeStretchParams(f.pixels, f.maxVal);
+            this._tryRenderWebGL(f.pixels, f.width, f.height, f.bitDepth, f.bayerPattern, shadow, scaleFactor);
+        },
+
         // ----- WebGL renderer (debayer + MTF stretch on GPU) -----
         // State held on the Alpine instance so it survives across frames.
         // _gl, _glProgram, _glLocs, _glTexture, _glCanvas
@@ -631,7 +667,7 @@ function ninaApp() {
             gl.uniform2f(this._glLocs.texSize, width, height);
             gl.uniform1f(this._glLocs.shadow, shadow);
             gl.uniform1f(this._glLocs.scale, scaleFactor);
-            gl.uniform1f(this._glLocs.mtf, 0.25);
+            gl.uniform1f(this._glLocs.mtf, this.stretchMid || 0.25);
             gl.uniform1i(this._glLocs.bayer, bayerPattern | 0);
 
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -672,18 +708,11 @@ function ninaApp() {
             const pixels = new Uint16Array(decompressed.buffer);
             const maxVal = (1 << bitDepth) - 1;
 
-            // Auto-stretch: subsample for speed on huge arrays
-            const step = Math.max(1, Math.floor(pixels.length / 200000));
-            const sample = new Float32Array(Math.floor(pixels.length / step));
-            for (let i = 0, j = 0; j < sample.length; i += step, j++) sample[j] = pixels[i];
-            const sorted = sample.slice().sort();
-            const median = sorted[Math.floor(sorted.length * 0.5)];
-            const deviations = Float32Array.from(sorted, v => Math.abs(v - median)).sort();
-            const mad = deviations[Math.floor(deviations.length * 0.5)] * 1.4826;
+            // Cache the raw frame so manual-stretch slider changes can re-render
+            // without waiting for the next capture
+            this._lastRawFrame = { pixels, width, height, bitDepth, bayerPattern, maxVal };
 
-            // Stretch parameters (Midtone Transfer Function)
-            const shadow = Math.max(0, median - 2.8 * mad);
-            const scaleFactor = maxVal > shadow ? 1.0 / (maxVal - shadow) : 1.0;
+            const { shadow, scaleFactor } = this._computeStretchParams(pixels, maxVal);
 
             // Try WebGL2 path first (GPU does debayer + stretch in microseconds)
             if (this._tryRenderWebGL(pixels, width, height, bitDepth, bayerPattern, shadow, scaleFactor)) {

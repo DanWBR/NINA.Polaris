@@ -123,8 +123,43 @@
                     <span x-show="filterWheel.connected" class="text-ok" x-text="filterWheel.currentFilter"></span>
                     <span>Frames: <strong x-text="sessionCaptures"></strong></span>
                     <span x-text="currentTime"></span>
-                    <button class="btn btn-sm" @click="loadFullStats()" style="margin-left:auto;"
+                    <button class="btn btn-sm" @click="showStretchPanel = !showStretchPanel"
+                            :class="showStretchPanel ? 'btn-active' : ''" style="margin-left:auto;"
+                            :disabled="!selectedCamera">Stretch</button>
+                    <button class="btn btn-sm" @click="loadFullStats()"
                             :disabled="!selectedCamera">Detailed stats</button>
+                </div>
+
+                <!-- Manual stretch panel -->
+                <div class="stretch-panel" x-show="showStretchPanel">
+                    <div class="stretch-header">
+                        <strong>Stretch</strong>
+                        <label class="seq-dither-toggle">
+                            <input type="checkbox" x-model="stretchAuto" @change="applyManualStretch()">
+                            <span :class="stretchAuto ? 'text-ok' : 'text-warn'"
+                                  x-text="stretchAuto ? 'AUTO' : 'MANUAL'"></span>
+                        </label>
+                        <span class="text-muted" style="font-size: 11px;" x-show="!_lastRawFrame">
+                            (raw mode only — switch image stream to raw)
+                        </span>
+                    </div>
+                    <div class="stretch-sliders" :class="stretchAuto ? 'disabled' : ''">
+                        <label>Black point: <span x-text="(stretchBlack * 100).toFixed(1) + '%'"></span>
+                            <input type="range" min="0" max="0.5" step="0.001" x-model.number="stretchBlack"
+                                   @input="applyManualStretch()" :disabled="stretchAuto">
+                        </label>
+                        <label>White point: <span x-text="(stretchWhite * 100).toFixed(1) + '%'"></span>
+                            <input type="range" min="0.5" max="1" step="0.001" x-model.number="stretchWhite"
+                                   @input="applyManualStretch()" :disabled="stretchAuto">
+                        </label>
+                        <label>Midtones (MTF): <span x-text="stretchMid.toFixed(3)"></span>
+                            <input type="range" min="0.01" max="0.9" step="0.005" x-model.number="stretchMid"
+                                   @input="applyManualStretch()">
+                        </label>
+                    </div>
+                    <div class="control-row actions">
+                        <button class="btn btn-sm" @click="stretchBlack=0; stretchWhite=1; stretchMid=0.25; stretchAuto=true; applyManualStretch()">Reset</button>
+                    </div>
                 </div>
 
                 <!-- Expanded stats panel -->

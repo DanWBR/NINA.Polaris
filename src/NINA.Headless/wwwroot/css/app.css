@@ -584,6 +584,47 @@ select.input-sm {
     min-height: 150px;
 }
 
+/* Manual stretch panel */
+.stretch-panel {
+    margin: 8px 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.stretch-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+}
+
+.stretch-sliders {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.stretch-sliders.disabled {
+    opacity: 0.5;
+}
+
+.stretch-sliders label {
+    display: flex;
+    flex-direction: column;
+    font-size: 11px;
+    color: var(--text-secondary);
+    gap: 2px;
+}
+
+.stretch-sliders input[type="range"] {
+    width: 100%;
+}
+
 /* Full statistics panel */
 .full-stats-panel {
     margin: 8px 14px;
