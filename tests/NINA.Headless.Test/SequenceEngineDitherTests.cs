@@ -21,7 +21,8 @@ public class SequenceEngineDitherTests {
         var profile = new ProfileService(emptyConfig, NullLogger<ProfileService>.Instance);
         var meridianFlip = new MeridianFlipService(equip, phd2, slewCenter, autoFocus, profile,
             NullLogger<MeridianFlipService>.Instance);
-        return new SequenceEngine(equip, relay, liveStack, phd2, meridianFlip,
+        var imageWriter = new ImageWriterService(equip, profile, NullLogger<ImageWriterService>.Instance);
+        return new SequenceEngine(equip, relay, liveStack, phd2, meridianFlip, imageWriter,
             NullLogger<SequenceEngine>.Instance);
     }
 

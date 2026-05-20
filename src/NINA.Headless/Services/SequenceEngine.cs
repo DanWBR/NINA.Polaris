@@ -9,6 +9,7 @@ public class SequenceEngine {
     private readonly LiveStackingService _liveStack;
     private readonly PHD2Client _phd2;
     private readonly MeridianFlipService _meridianFlip;
+    private readonly ImageWriterService _imageWriter;
     private readonly ILogger<SequenceEngine> _logger;
 
     private CancellationTokenSource? _cts;
@@ -34,12 +35,13 @@ public class SequenceEngine {
 
     public SequenceEngine(EquipmentManager equip, ImageRelayService relay,
         LiveStackingService liveStack, PHD2Client phd2, MeridianFlipService meridianFlip,
-        ILogger<SequenceEngine> logger) {
+        ImageWriterService imageWriter, ILogger<SequenceEngine> logger) {
         _equip = equip;
         _relay = relay;
         _liveStack = liveStack;
         _phd2 = phd2;
         _meridianFlip = meridianFlip;
+        _imageWriter = imageWriter;
         _logger = logger;
     }
 
@@ -71,6 +73,7 @@ public class SequenceEngine {
         LastError = null;
         _framesSinceDither = 0;
         DithersIssued = 0;
+        _imageWriter.ResetSessionCounter();
 
         if (_pauseGate.CurrentCount == 0)
             _pauseGate.Release();
@@ -211,6 +214,18 @@ public class SequenceEngine {
                     bool frameOk = false;
                     try {
                         var imageData = await _equip.Camera.CaptureAsync(item.Exposure, ct);
+
+                        // Populate exposure-level metadata before saving / relaying
+                        imageData.MetaData.Exposure.ExposureTime = item.Exposure;
+                        if (!string.IsNullOrEmpty(item.Filter))
+                            imageData.MetaData.Exposure.Filter = item.Filter;
+                        if (!string.IsNullOrEmpty(item.Name))
+                            imageData.MetaData.Target.Name = item.Name;
+                        if (item.Ra.HasValue) imageData.MetaData.Target.RightAscension = item.Ra.Value;
+                        if (item.Dec.HasValue) imageData.MetaData.Target.Declination = item.Dec.Value;
+
+                        // Persist to disk with extended FITS headers (no-op if no output dir)
+                        _imageWriter.SaveImage(imageData, targetName: item.Name, imageType: "LIGHT", gain: item.Gain);
 
                         if (_liveStack.IsRunning) {
                             await _liveStack.AddFrameAsync(imageData, ct);

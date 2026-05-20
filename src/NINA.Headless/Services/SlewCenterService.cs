@@ -1,6 +1,5 @@
-using System.Buffers.Binary;
 using System.Collections.Concurrent;
-using System.Text;
+using NINA.Image.FileFormat.FITS;
 using NINA.Image.Interfaces;
 
 namespace NINA.Headless.Services;
@@ -94,7 +93,7 @@ public class SlewCenterService {
                 var tempFits = Path.Combine(Path.GetTempPath(),
                     $"nina_solve_{job.Id}_{i}.fits");
 
-                WriteMinimalFits(imageData, tempFits);
+                FITSWriter.Write(imageData, tempFits);
 
                 ct.ThrowIfCancellationRequested();
 
@@ -176,46 +175,6 @@ public class SlewCenterService {
         _logger.LogWarning("Slew did not complete within 5 minutes");
     }
 
-    private static void WriteMinimalFits(IImageData imageData, string path) {
-        var w = imageData.Properties.Width;
-        var h = imageData.Properties.Height;
-        var pixels = imageData.Data;
-
-        using var fs = new FileStream(path, FileMode.Create, FileAccess.Write);
-
-        var headers = new List<string> {
-            FitsCard("SIMPLE", "T"),
-            FitsCard("BITPIX", "16"),
-            FitsCard("NAXIS", "2"),
-            FitsCard("NAXIS1", w.ToString()),
-            FitsCard("NAXIS2", h.ToString()),
-            FitsCard("BZERO", "32768"),
-            FitsCard("BSCALE", "1"),
-            "END" + new string(' ', 77)
-        };
-
-        while (headers.Count % 36 != 0)
-            headers.Add(new string(' ', 80));
-
-        var headerBytes = Encoding.ASCII.GetBytes(string.Concat(headers));
-        fs.Write(headerBytes);
-
-        var buf = new byte[2];
-        foreach (var px in pixels) {
-            short signed = (short)(px - 32768);
-            BinaryPrimitives.WriteInt16BigEndian(buf, signed);
-            fs.Write(buf);
-        }
-
-        var dataLen = pixels.Length * 2;
-        var pad = (2880 - (dataLen % 2880)) % 2880;
-        if (pad > 0) fs.Write(new byte[pad]);
-    }
-
-    private static string FitsCard(string key, string value) {
-        var card = $"{key,-8}= {value,20}";
-        return card.PadRight(80);
-    }
 
     private static double AngularSeparationArcsec(double ra1Hours, double dec1Deg,
         double ra2Hours, double dec2Deg) {
