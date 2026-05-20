@@ -800,11 +800,28 @@
                     </template>
                 </div>
 
-                <div id="aladin-lite-div" class="sky-viewer">
-                    <div class="sky-placeholder">
-                        <p>Aladin Lite sky viewer</p>
-                        <p class="hint">Interactive sky map will load when Aladin Lite JS is integrated</p>
-                    </div>
+                <div id="aladin-lite-div" class="sky-viewer"
+                     x-init="$nextTick(() => initAladin())"></div>
+                <div class="sky-survey-row">
+                    <label>Survey
+                        <select class="input-md" x-model="aladinSurvey" @change="changeAladinSurvey()">
+                            <option value="P/DSS2/color">DSS2 Color</option>
+                            <option value="P/DSS2/red">DSS2 Red</option>
+                            <option value="P/2MASS/color">2MASS Color</option>
+                            <option value="P/SDSS9/color">SDSS9 Color</option>
+                            <option value="P/PanSTARRS/DR1/color-z-zg-g">Pan-STARRS DR1</option>
+                            <option value="P/Mellinger/color">Mellinger</option>
+                        </select>
+                    </label>
+                    <label>FOV
+                        <input type="number" class="input-sm" x-model.number="aladinFov" min="0.05" max="60" step="0.1"
+                               @change="setAladinFov()">°
+                    </label>
+                    <label class="seq-dither-checkbox">
+                        <input type="checkbox" x-model="aladinShowFov" @change="updateAladinFov()">
+                        Show camera FOV
+                    </label>
+                    <button class="btn btn-sm" @click="aladinGoToMount()" :disabled="!mount.connected">Center on mount</button>
                 </div>
 
                 <!-- Slew & Center progress -->
@@ -1128,6 +1145,7 @@
     </div>
 
     <script src="/js/lib/chart.umd.min.js"></script>
+    <script src="/js/lib/aladin.min.js" type="text/javascript" charset="utf-8"></script>
     <script src="/js/lib/alpine.min.js" defer></script>
     <script src="/js/app.js"></script>
 </body>

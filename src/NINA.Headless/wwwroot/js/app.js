@@ -141,6 +141,13 @@ function ninaApp() {
         guideChartH: 160,
         guideChartScale: 2.0, // arcsec range each direction (auto-expands)
 
+        // Aladin Lite (Sky Explorer)
+        aladinInstance: null,
+        aladinFov: 2.0,
+        aladinSurvey: 'P/DSS2/color',
+        aladinShowFov: true,
+        _aladinFovOverlay: null,
+
         // Temperature history (sensor temp samples for chart)
         tempHistory: [],     // [{t: msEpoch, temp: °C, power: %}]
         _tempLastSample: 0,
@@ -629,6 +636,114 @@ function ninaApp() {
                     this.updateFov();
                 }
             } catch (e) { }
+        },
+
+        // ---- Aladin Lite (Sky Explorer) ----
+
+        async initAladin() {
+            if (this.aladinInstance) return; // already created
+            if (typeof A === 'undefined' || !A.init) {
+                console.warn('Aladin Lite not loaded yet');
+                setTimeout(() => this.initAladin(), 500);
+                return;
+            }
+            try {
+                await A.init;
+                const initialRa = this.mount.ra ? this.mount.ra * 15 : 0; // hours → deg
+                const initialDec = this.mount.dec ?? 0;
+                this.aladinInstance = A.aladin('#aladin-lite-div', {
+                    survey: this.aladinSurvey,
+                    fov: this.aladinFov,
+                    target: `${initialRa} ${initialDec}`,
+                    cooFrame: 'ICRSd',
+                    reticleColor: '#88f',
+                    showReticle: true,
+                    showZoomControl: true,
+                    showFullscreenControl: true,
+                    showLayersControl: true,
+                    showGotoControl: true,
+                    showShareControl: false,
+                    showSimbadPointerControl: true,
+                    showFrame: true,
+                    fullScreen: false
+                });
+                // Click handler to set as target
+                this.aladinInstance.on('click', (obj) => {
+                    if (obj && obj.ra !== undefined && obj.dec !== undefined) {
+                        const raHours = obj.ra / 15;
+                        const decDeg = obj.dec;
+                        this.skyTarget = {
+                            name: obj.name || `RA ${raHours.toFixed(2)}h Dec ${decDeg.toFixed(2)}°`,
+                            ra: raHours,
+                            dec: decDeg,
+                            type: 'click',
+                            magnitude: ''
+                        };
+                    }
+                });
+                this.updateAladinFov();
+                console.log('Aladin Lite ready');
+            } catch (e) {
+                console.error('Aladin init failed', e);
+            }
+        },
+
+        changeAladinSurvey() {
+            if (this.aladinInstance) {
+                this.aladinInstance.setImageSurvey(this.aladinSurvey);
+            }
+        },
+
+        setAladinFov() {
+            if (this.aladinInstance) {
+                this.aladinInstance.setFov(Math.max(0.05, Math.min(60, this.aladinFov)));
+            }
+        },
+
+        aladinGoToMount() {
+            if (!this.aladinInstance) return;
+            if (this.mount.ra == null || this.mount.dec == null) return;
+            this.aladinInstance.gotoRaDec(this.mount.ra * 15, this.mount.dec); // deg
+        },
+
+        // Draw / update the camera-FOV rectangle overlay
+        updateAladinFov() {
+            if (!this.aladinInstance) return;
+            // Remove old overlay
+            if (this._aladinFovOverlay) {
+                try { this.aladinInstance.removeLayer(this._aladinFovOverlay); } catch (e) { }
+                this._aladinFovOverlay = null;
+            }
+            if (!this.aladinShowFov) return;
+
+            const center = this.aladinInstance.getRaDec(); // [raDeg, decDeg]
+            const wDeg = this.fov.width;
+            const hDeg = this.fov.height;
+            // Compensate Dec for the cosine factor when offsetting in RA
+            const cosDec = Math.cos(center[1] * Math.PI / 180);
+            const dRa = (wDeg / 2) / Math.max(0.001, cosDec);
+            const dDec = hDeg / 2;
+            const corners = [
+                [center[0] - dRa, center[1] - dDec],
+                [center[0] + dRa, center[1] - dDec],
+                [center[0] + dRa, center[1] + dDec],
+                [center[0] - dRa, center[1] + dDec]
+            ];
+            try {
+                const overlay = A.graphicOverlay({ color: '#4caf50', lineWidth: 2 });
+                this.aladinInstance.addOverlay(overlay);
+                overlay.add(A.polygon(corners));
+                this._aladinFovOverlay = overlay;
+            } catch (e) { console.warn('FOV overlay failed', e); }
+        },
+
+        // When a sky target is selected via search, also re-center Aladin on it.
+        _goToSelectedTarget() {
+            if (!this.aladinInstance || !this.skyTarget) return;
+            const raDeg = (this.skyTarget.ra || 0) * 15;
+            const decDeg = this.skyTarget.dec || 0;
+            this.aladinInstance.gotoRaDec(raDeg, decDeg);
+            this.$nextTick(() => this.updateAladinFov());
         },
 
         async loadMfSettings() {
@@ -1689,6 +1804,7 @@ function ninaApp() {
         selectSkyTarget(obj) {
             this.skyTarget = obj;
             this.skyShowResults = false;
+            this._goToSelectedTarget();
         },
 
         async slewAndCenter() {

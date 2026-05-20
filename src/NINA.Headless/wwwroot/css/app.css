@@ -771,9 +771,28 @@ select.input-sm {
 
 .sky-viewer {
     flex: 1;
-    min-height: 300px;
+    min-height: 400px;
     background: #000;
     position: relative;
+}
+
+.sky-survey-row {
+    display: flex;
+    gap: 12px;
+    padding: 8px 14px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+    align-items: center;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.sky-survey-row label {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
 }
 
 .sky-placeholder {
