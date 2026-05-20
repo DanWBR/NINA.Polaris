@@ -62,17 +62,66 @@ ASTAP-based plate solving with automated centering workflow:
 - Async job tracking with real-time status polling
 - Supports search radius, FOV, and downsample configuration
 
-### Sky Catalog & Object Search
+### Guiding (PHD2)
+
+Full PHD2 event-server integration over TCP (port 4400):
+
+- JSON-RPC 2.0 line-framed protocol with async event loop
+- Ring buffer of last 300 GuideSteps with running RMS RA / RMS Dec / total RMS + peak values
+- Live RA/Dec error chart (Chart.js) with auto-scaling Y-axis
+- Commands: connect / start guiding / stop / loop / pause / resume / dither (with settle pixels + time + timeout) / auto-select star / clear calibration / clear history
+- Calibration data captured automatically after a successful CalibrationComplete event
+- Alert + settle status surfaced in the UI as toasts and banners
+
+### Auto-Focus (V-Curve)
+
+Automated focus point determination via symmetric sweep:
+
+- Captures N exposures around the current focuser position, measures HFR per sample via flood-fill star detection (median HFR for robustness against outliers)
+- Least-squares parabola fit through valid samples; moves to the vertex
+- Configurable step size, point count, exposure, minimum stars, backlash compensation, post-focus confirmation frame
+- Live V-curve chart (Chart.js scatter) with fitted parabola and best-position marker
+- Restores starting position automatically on cancel or failure
+
+### Meridian Flip Automation
+
+Hands-off pier-side change during a sequence:
+
+- Static LST/GMST math validated against USNO J2000 reference
+- Workflow: pause PHD2 → re-slew to target (mount firmware flips) → settle → plate-solve recenter via Slew & Center → optional auto-focus → resume PHD2 guiding
+- Configurable minutes-after-meridian trigger threshold (default 5 min)
+- Live "Meridian in 1h 23m" countdown in the Sequence tab
+- Safe failure paths: errors and cancels always try to resume guiding
+
+### Dithering
+
+Random pixel-offset between frames to defeat fixed-pattern noise:
+
+- Calls PHD2 `dither` RPC after every N successfully captured frames
+- Waits for SettleDone event before next exposure
+- Configurable dither pixels, every-N-frames, RA-only toggle, settle parameters
+- Silent skip with debug log when PHD2 isn't connected or guiding — sequence never aborts
+
+### Sky Catalog & Sky Atlas
 
 Embedded deep sky catalog with 200+ objects:
 
-- All 110 Messier objects
-- Popular Caldwell objects
-- Notable NGC/IC targets
-- Fuzzy search by designation, common name, or alias (e.g., "M31", "Andromeda", "NGC 224")
-- Object metadata: coordinates (J2000), magnitude, type, size, common names
+- All 110 Messier objects + popular Caldwell + notable NGC/IC targets
+- Fuzzy search by designation, common name, or alias ("M31", "Andromeda", "NGC 224")
+- **Filtered browser** — type / magnitude range / declination range, sorted brightest first
+- **Altitude chart** — target altitude across tonight's window (sunset → sunrise) with civil / nautical / astronomical twilight transitions
+- Object metadata: coordinates (J2000), magnitude, type, common names
 
-### Sequence Engine
+### Sky Map (Aladin Lite)
+
+Embedded WebGL sky viewer for visual target selection:
+
+- HiPS tile surveys: DSS2 color/red, 2MASS, SDSS9, Pan-STARRS DR1, Mellinger
+- Camera-FOV overlay calculated from sensor + focal length (auto-applies cos(Dec) compensation)
+- Click-to-pick targets, "Center on mount" button
+- Stellarium Remote Control sync — pull the currently-selected object from Stellarium with one click
+
+### Sequence Engine + FITS Output
 
 Target list execution with automated imaging:
 
@@ -80,19 +129,31 @@ Target list execution with automated imaging:
 - Automatic slew-to-target before capture
 - Pause/resume with SemaphoreSlim gate
 - Real-time progress tracking via WebSocket (1Hz status broadcast)
-- Per-item status: completed frames, active state
+- **Persisted FITS output** with extended headers (camera, telescope, focuser, rotator, filter, weather, observer, target — 30+ keywords per the N.I.N.A. manual spec)
+- Configurable filename pattern (`{target}_{filter}_{exposure}s_{date}_{seq}` etc.)
+- Optional dithering between frames + automatic meridian flip
+
+### Flat Wizard
+
+Automated flat-field acquisition:
+
+- Binary search on exposure time per filter until median ADU lands within tolerance of target (default 30000 ADU ± 5%)
+- Captures N flat frames at the converged exposure, tagged `IMAGETYP=FLAT`
+- Per-(filter, binning) trained exposures persisted to `trained-flats.json` for next session
 
 ### Web UI
 
 Responsive, dark-themed interface inspired by ASIAIR:
 
-- **Live View** — Real-time camera preview with crosshair overlay, exposure/gain/binning/filter controls, capture/loop/stop, live stack toggle, session stats, image history
+- **Live View** — Real-time camera preview with WebGL2 GPU rendering (debayer + MTF stretch on GPU), star annotations overlay, crosshair + 3x3 grid, hover pixel readout (raw ADU or RGB), manual stretch sliders, image-history thumbnail strip, HFR + star-count history chart, detailed statistics panel + histogram, full-resolution zoom viewer (OpenSeadragon)
+- **Equipment** — Cards for Camera (with temperature + cooler power chart), Mount, Focuser, Filter Wheel, Rotator, Flat Panel, Dome, Weather, Guider (PHD2). Per-device select / connect / disconnect plus quick controls.
 - **Mount Control** — NSEW directional pad, tracking toggle, park/unpark, GoTo via Sky Explorer
-- **Focus** — Step-based focuser control with in/out buttons, adjustable step size, temperature readout
-- **Guider** — Guiding status display (placeholder for PHD2 integration)
-- **Sky Explorer** — Object search, target info panel with coordinates/magnitude/aliases, Slew & Center with progress, Add to Sequence
-- **Sequence** — Target list editor, inline editing, progress bars, start/pause/resume/stop
+- **Focus** — Manual stepper + full Auto-Focus V-curve panel (start/abort, live progress bar, fitted parabola chart, best-position marker)
+- **Guider** — PHD2 connection panel, live RA/Dec error chart with RMS readouts, settle parameters, full control buttons (Guide / Loop / Auto-select Star / Pause / Resume / Stop / Dither)
+- **Sky Explorer** — Aladin Lite sky map with HiPS surveys + camera FOV overlay. Object search, filtered catalog browser (type / magnitude / Dec), "Tonight's altitude" chart with twilight bands, Stellarium sync, Slew & Center, Add to Sequence
+- **Sequence** — Target list editor with progress bars, collapsible Meridian Flip + Dithering panels, start/pause/resume/stop
 - **Settings** — INDI connection, device selection, observatory location, sensor/optics config, profile management
+- **First-run** — Location-setup modal with **address geocoder** (OpenStreetMap/Nominatim), browser geolocation, or manual lat/lon entry
 
 **Night Mode** — Red-on-black theme that preserves dark adaptation (critical for field use).
 
@@ -118,6 +179,12 @@ Built for unreliable field WiFi:
 - Server reachability detection with automatic recovery
 - Toast notifications for connection state changes
 - 15-second request timeout with abort controller
+- **Adaptive bandwidth** — server measures actual WebSocket send latency and auto-downgrades raw clients to JPEG when bandwidth degrades, upgrades back when it recovers
+
+### Discovery & Cross-Platform Drivers
+
+- **mDNS announcer** — host reachable at `nina-<hostname>.local:5000` from any device on the LAN (no IP needed)
+- **Alpaca (ASCOM HTTP) support** — UDP discovery on port 32227 plus base Camera / Telescope wrappers, so you can drive Windows-only ASCOM drivers exposed over the network
 
 ## Architecture
 
@@ -139,13 +206,17 @@ nina-headless/
 │       └── Devices/                ← 9 device type implementations
 │
 ├── tests/
-│   └── NINA.Headless.Test/         ← 64 unit tests (NUnit)
+│   └── NINA.Headless.Test/         ← 114 unit tests (NUnit)
 │
-└── deploy/                         ← Deployment scripts
-    ├── nina-headless.service        ← systemd unit file
-    ├── install.sh                   ← Linux installer
-    ├── publish-linux-arm64.sh       ← RPi build script
-    └── publish-win-x64.ps1         ← Windows build script
+├── deploy/                         ← Deployment scripts
+│   ├── nina-headless.service        ← systemd unit file
+│   ├── install.sh                   ← Linux installer
+│   ├── publish-linux-arm64.sh       ← RPi build script
+│   ├── publish-win-x64.ps1         ← Windows build script
+│   └── docker-build.sh             ← Multi-arch Docker buildx
+│
+├── Dockerfile                      ← Multi-stage, linux/amd64 + arm64
+└── docker-compose.yml              ← NINA + optional indiserver sidecar
 ```
 
 ### Technology Stack
@@ -154,13 +225,22 @@ nina-headless/
 |-------|-----------|---------|
 | Web server | Kestrel (standalone) | Native .NET, no nginx/IIS needed |
 | API | ASP.NET Core Minimal API | Low overhead, AOT-friendly |
-| Real-time (images) | WebSocket (binary) | JPEG or LZ4-compressed raw frames |
-| Real-time (status) | WebSocket (JSON) | Equipment + sequence status at 1Hz |
+| Real-time (images) | WebSocket (binary) | JPEG or LZ4-compressed raw frames, adaptive |
+| Real-time (status) | WebSocket (JSON) | Equipment + sequence + guider + AF + meridian flip at 1Hz |
 | Frontend framework | Alpine.js v3 | Reactive UI (~15KB, no build step) |
-| Image encoding | SixLabors.ImageSharp | Cross-platform JPEG encoding |
+| Charts | Chart.js v4 | Guiding, focus, HFR, temperature, histogram, altitude |
+| Sky map | Aladin Lite v3 | HiPS sky surveys (DSS / 2MASS / SDSS / Pan-STARRS) |
+| Image viewer | OpenSeadragon | Full-resolution zoom/pan over last frame |
+| Image rendering | WebGL2 shaders | GPU debayer + MTF stretch (CPU fallback) |
+| Image encoding | SkiaSharp | Cross-platform JPEG encoding |
+| FITS I/O | Custom FITSWriter | Extended headers per N.I.N.A. manual spec |
 | Compression | K4os.Compression.LZ4 | Fast image compression (~2GB/s) |
-| Equipment drivers | INDI protocol (TCP/XML) | 400+ Linux astronomy drivers |
+| Equipment drivers | INDI protocol (TCP/XML) + Alpaca (HTTP) | 400+ Linux drivers + ASCOM over network |
 | Plate solving | ASTAP (external process) | Offline astrometric solver |
+| Guiding | PHD2 (TCP/JSON-RPC, port 4400) | Industry-standard guider |
+| Discovery | Makaretu.Dns.Multicast | mDNS announcer for `nina.local` |
+| Geocoding | Nominatim (OpenStreetMap, proxied) | Address → coordinates for location setup |
+| Stellarium sync | HTTP (Remote Control plugin, port 8090) | Pull selected object as target |
 | Logging | Serilog | Structured logging to console + file |
 | Target framework | .NET 10.0 | Latest LTS, cross-platform |
 
@@ -243,15 +323,26 @@ sudo systemctl restart nina-headless   # Restart
 .\deploy\publish-win-x64.ps1 -InstallService
 ```
 
-### Docker (optional)
+### Docker
 
-```dockerfile
-FROM mcr.microsoft.com/dotnet/aspnet:10.0
-WORKDIR /app
-COPY publish/linux-arm64/ .
-EXPOSE 5000
-ENTRYPOINT ["./NINA.Headless"]
+Multi-stage `Dockerfile` and `docker-compose.yml` are checked in. Builds for both `linux/amd64` and `linux/arm64`:
+
+```bash
+# Single host build (uses your platform)
+docker compose up -d --build
+
+# Multi-arch build + push to registry
+REGISTRY=ghcr.io/yourname ./deploy/docker-build.sh latest
 ```
+
+The default compose file runs in `network_mode: host` so mDNS and INDI LAN
+reach work out of the box. Add `--profile indi` to also start an
+indiserver sidecar with the standard simulators (good for testing with no
+hardware).
+
+Persistence:
+- `nina-data` volume → profiles + trained-flat exposures
+- `./images` bind-mount → captured FITS output
 
 ## API Reference
 
@@ -308,7 +399,69 @@ ENTRYPOINT ["./NINA.Headless"]
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/image/latest/preview` | Latest image as JPEG |
-| GET | `/api/image/latest/stats` | Image dimensions and metadata |
+| GET | `/api/image/latest/stats?withStars` | Image dimensions + mean/median/min/max/stddev/MAD (+ optional star detection HFR stats) |
+| GET | `/api/image/latest/histogram?bins=256` | Pixel-value histogram |
+| GET | `/api/image/latest/stars?maxStars&sigma` | Detected star list with (x, y, HFR, flux, peak) |
+| GET | `/api/image/stream/clients` | Per-client WebSocket diagnostics (mode, latency, streaks) |
+| POST | `/api/image/stream/adaptive` | Toggle adaptive bandwidth `{ enabled }` |
+
+### Guider (PHD2)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/guider/connect` | Connect to PHD2 `{ host, port }` |
+| POST | `/api/guider/disconnect` | Disconnect |
+| GET | `/api/guider/status` | App state, RMS, peak, settle, pixel scale, last alert |
+| GET | `/api/guider/steps?limit=N` | Recent GuideStep history |
+| POST | `/api/guider/guide` | Start guiding `{ settlePixels, settleTime, settleTimeout, recalibrate }` |
+| POST | `/api/guider/dither` | Dither `{ pixels, raOnly, settle* }` |
+| POST | `/api/guider/stop` / `/loop` / `/pause` / `/resume` | State changes |
+| POST | `/api/guider/find-star` / `/clear-calibration` / `/clear-history` | Maintenance |
+
+### Auto-Focus
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/autofocus/start` | Start V-curve `{ steps, stepSize, exposureSeconds, minStars, backlashSteps }` |
+| POST | `/api/autofocus/abort` | Abort + restore start position |
+| GET | `/api/autofocus/status` | Live progress + sampled points |
+| GET | `/api/autofocus/result` | Most recent completed run + fitted parabola coefficients |
+
+### Meridian Flip
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/meridianflip/settings` | Current configuration |
+| PUT | `/api/meridianflip/settings` | Update settings |
+| GET | `/api/meridianflip/status` | State + LST + hour angle + minutes-to-meridian |
+| POST | `/api/meridianflip/trigger` | Manual flip `{ ra, dec }` |
+| POST | `/api/meridianflip/abort` | Abort in-progress flip |
+
+### Flat Wizard
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/flatwizard/start` | Start automated flat acquisition `{ filters, framesPerFilter, targetAdu, tolerance, minExposure, maxExposure, binning }` |
+| POST | `/api/flatwizard/abort` | Abort |
+| GET | `/api/flatwizard/status` | Live progress + per-filter results |
+| GET | `/api/flatwizard/trained` | Persisted (filter+binning → exposure) dictionary |
+
+### Alpaca (ASCOM HTTP)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/alpaca/discover?timeoutMs=3000` | UDP-broadcast discovery on port 32227 + per-server `/management/v1/configureddevices` enrichment |
+| GET | `/api/alpaca/devices?host=&port=` | Direct device list query (skip discovery) |
+| GET | `/api/alpaca/camera/info?host=&port=&device=` | Camera probe (sensor, cooler, binning) |
+| GET | `/api/alpaca/telescope/info?host=&port=&device=` | Telescope probe (pointing, tracking, pier side) |
+| POST | `/api/alpaca/{camera,telescope}/connect?host=&port=&device=&connect=` | Connect / disconnect |
+
+### Stellarium
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/stellarium/target?host=&port=` | Pull currently-selected object from Stellarium Remote Control plugin |
+| GET | `/api/stellarium/view?host=&port=` | Current view direction (alt / az / fov) |
 
 ### Live Stacking
 
@@ -337,17 +490,28 @@ ENTRYPOINT ["./NINA.Headless"]
 |--------|----------|-------------|
 | GET | `/api/sky/catalog/search?query=M31` | Search embedded DSO catalog |
 | GET | `/api/sky/catalog/{name}` | Get object by exact name |
+| GET | `/api/sky/catalog/types` | Distinct object types (for filter dropdowns) |
+| GET | `/api/sky/catalog/filter?query&type&minMag&maxMag&minDec&maxDec&limit` | Filtered catalog query |
+| GET | `/api/sky/altitude?ra&dec&stepMinutes` | Target altitude track across tonight's window + twilight transitions |
 | GET | `/api/sky/fov` | Current FOV based on optics config |
 | GET | `/api/sky/solver/status` | Plate solver availability |
 | POST | `/api/sky/slew-and-center` | Start slew & center job `{ ra, dec, toleranceArcsec }` |
 | GET | `/api/sky/slew-and-center/{id}/status` | Job progress |
 | POST | `/api/sky/slew-and-center/{id}/cancel` | Cancel job |
 
+### Sequence (Dither)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/sequence/dither` | Current dither settings |
+| PUT | `/api/sequence/dither` | Update dither settings `{ enabled, pixels, everyNFrames, raOnly, settle* }` |
+
 ### System
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/system/status` | System info (CPU, RAM, uptime) |
+| GET | `/api/system/geocode?query=&limit=` | Address geocoding via Nominatim (rate-limited, User-Agent set) |
 | GET | `/api/system/profiles` | List profiles |
 | GET | `/api/system/profile` | Active profile |
 | PUT | `/api/system/profile` | Update settings |
@@ -422,38 +586,68 @@ ENTRYPOINT ["./NINA.Headless"]
 
 ### Implemented
 
+**Core**
 - [x] ASP.NET Core Minimal API with Kestrel
 - [x] Full INDI protocol client (TCP/XML, async, auto-reconnect)
 - [x] 9 INDI device types (Camera, Telescope, Focuser, FilterWheel, Guider, Dome, Rotator, Weather, FlatDevice)
-- [x] WebSocket image streaming (JPEG + raw LZ4 dual mode)
-- [x] Client-side canvas rendering with auto-stretch
+- [x] WebSocket image streaming (JPEG + raw LZ4 dual mode, adaptive)
 - [x] Live stacking with star-based alignment
-- [x] Plate solving via ASTAP
-- [x] Slew & Center automated workflow
+- [x] Plate solving via ASTAP + Slew & Center automated workflow
 - [x] Embedded DSO catalog (200+ objects)
-- [x] Sequence engine with target list execution
-- [x] Responsive Web UI with night mode
+- [x] Sequence engine with target list execution + on-disk FITS archive
+- [x] Responsive Web UI with night mode + first-run location setup
 - [x] Profile management (JSON persistence)
-- [x] Network resilience (reconnect, dedup, backpressure)
-- [x] BLOB receiver with file-based streaming
-- [x] Connection manager with device type inference
-- [x] systemd service + deploy scripts (Linux ARM64, Windows x64)
-- [x] 64 unit tests
+- [x] Network resilience (reconnect, dedup, backpressure, adaptive bandwidth)
+- [x] systemd + Docker (linux/amd64 + linux/arm64) + Windows publish scripts
+- [x] 114 unit tests
+
+**Acquisition essentials (Phase A)**
+- [x] PHD2 guider integration (TCP/JSON-RPC, RMS, dither, settle, alerts)
+- [x] Auto-focus V-curve (parabola fit, backlash compensation, confirmation frame)
+- [x] Meridian flip automation (LST math, full pause→flip→recenter→AF→resume loop)
+- [x] Dithering between frames (configurable cadence, settle integration)
+- [x] Equipment cards for Rotator / Flat Panel / Dome / Weather
+
+**UI/UX (Phase B)**
+- [x] Chart.js for guiding / focus / HFR history / temperature / histogram / altitude
+- [x] Aladin Lite sky map (HiPS surveys + camera FOV overlay + click-to-pick)
+- [x] OpenSeadragon full-resolution image viewer
+- [x] WebGL2 shader pipeline (GPU debayer + MTF stretch, CPU fallback)
+- [x] Image statistics panel + histogram endpoint
+- [x] Manual stretch controls (real-time re-render via shader uniforms)
+- [x] Image history thumbnail gallery
+- [x] Star annotations overlay + crosshair + 3x3 grid + pixel ADU readout
+
+**Nice-to-have (Phase D — partial)**
+- [x] D1 Alpaca HTTP device support (discovery + Camera + Telescope)
+- [x] D2 mDNS announcer (`nina-<hostname>.local`)
+- [x] D3 Adaptive bandwidth (raw ↔ JPEG auto-switch per client)
+- [x] D4 Docker image + multi-arch buildx script + compose
+- [x] D6 Flat Wizard (binary-search ADU, trained exposure cache)
+- [x] D7 Extended FITS headers (30+ keywords per N.I.N.A. manual spec)
+- [x] D10 Sky Atlas filters + tonight's altitude chart with twilight bands
+- [x] D11 Stellarium Remote Control sync
+
+**Extras**
+- [x] First-run observatory location modal with browser geolocation
+- [x] Address geocoder (OpenStreetMap/Nominatim) — search by city/address/observatory name
 
 ### Planned
 
-- [ ] Aladin Lite sky map integration (WebGL sky viewer)
-- [ ] OpenSeadragon full-resolution zoom viewer
-- [ ] WebGL shader pipeline (debayer, stretch, histogram)
-- [ ] Chart.js graphs (guiding error, focus curve, temperature)
-- [ ] PHD2 guider integration (TCP client)
-- [ ] Auto-focus V-curve routine
-- [ ] Mosaic planner with grid overlay
-- [ ] Alpaca HTTP device support
-- [ ] mDNS/Avahi discovery (`nina.local`)
-- [ ] Adaptive bandwidth (raw vs JPEG auto-switch)
-- [ ] Docker image for easy deployment
-- [ ] Plugin system
+**Phase C — Advanced Sequencer** (not started, largest remaining gap)
+- [ ] C1: Tree-based container / instruction / condition / trigger model
+- [ ] C2: 30+ instructions library (mount, camera, focuser, filter, guider, dome, flat, rotator, flow control, external)
+- [ ] C3: Conditions (Loop Until Time / Altitude / N Exposures / Duration / Moon Sets / While Safe)
+- [ ] C4: Triggers (Auto Focus on Temp / HFR / Time / Filter, Meridian Flip, Dither, Center After Drift, Safety)
+- [ ] C5: JSON serialisation + templates
+- [ ] C6: Drag-drop tree editor UI
+- [ ] C7: Migration path from current Simple Sequencer
+
+**Phase D — Remaining**
+- [ ] D5: Mosaic planner with grid overlay
+- [ ] D8: XISF format support (PixInsight)
+- [ ] D9: Additional plate solvers (PlateSolve3, Astrometry.net online/local, All Sky Plate Solver)
+- [ ] D12: Plugin system (extension API for custom instructions / UI panels / device types)
 
 ## Contributing
 
