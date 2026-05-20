@@ -584,6 +584,51 @@ select.input-sm {
     min-height: 150px;
 }
 
+/* OpenSeadragon image-viewer modal */
+.image-viewer-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+}
+
+.image-viewer-frame {
+    background: #0a0a14;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    width: 96vw;
+    height: 92vh;
+    max-width: 1600px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.image-viewer-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.image-viewer-header > :first-child { flex: 1; }
+
+.image-viewer-canvas {
+    flex: 1;
+    background: #000;
+    position: relative;
+}
+
+[x-cloak] { display: none !important; }
+
 /* Chart.js containers — fixed height, canvas fills it */
 .chart-container {
     position: relative;

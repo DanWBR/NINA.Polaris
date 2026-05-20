@@ -113,6 +113,7 @@
                             <span x-text="liveStackEnabled ? 'Stack ON (' + liveStackFrames + ')' : 'Stack'"></span>
                         </button>
                         <button class="btn" @click="resetLiveStack()" x-show="liveStackEnabled">Reset</button>
+                        <button class="btn" @click="openImageViewer()" :disabled="!selectedCamera" title="Full-resolution zoom/pan viewer">⛶ View</button>
                     </div>
                 </div>
                 <div class="stats-bar">
@@ -1135,6 +1136,19 @@
         <span>Connection to server lost. Reconnecting...</span>
     </div>
 
+    <!-- Image Viewer Modal (OpenSeadragon) -->
+    <div class="image-viewer-modal" x-show="imageViewerOpen" x-cloak
+         @click.self="closeImageViewer()" @keydown.escape.window="closeImageViewer()">
+        <div class="image-viewer-frame">
+            <div class="image-viewer-header">
+                <span>Image Viewer — full resolution</span>
+                <button class="btn btn-sm" @click="reloadImageViewer()">↻ Reload latest</button>
+                <button class="btn btn-sm btn-danger" @click="closeImageViewer()">✕</button>
+            </div>
+            <div id="osd-viewer" class="image-viewer-canvas"></div>
+        </div>
+    </div>
+
     <!-- Toast notifications -->
     <div class="toast-container">
         <template x-for="t in toasts" :key="t.id">
@@ -1146,6 +1160,7 @@
 
     <script src="/js/lib/chart.umd.min.js"></script>
     <script src="/js/lib/aladin.min.js" type="text/javascript" charset="utf-8"></script>
+    <script src="/js/lib/openseadragon/openseadragon.min.js"></script>
     <script src="/js/lib/alpine.min.js" defer></script>
     <script src="/js/app.js"></script>
 </body>

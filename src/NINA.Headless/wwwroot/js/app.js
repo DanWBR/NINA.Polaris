@@ -148,6 +148,10 @@ function ninaApp() {
         aladinShowFov: true,
         _aladinFovOverlay: null,
 
+        // OpenSeadragon image viewer
+        imageViewerOpen: false,
+        _osdViewer: null,
+
         // Temperature history (sensor temp samples for chart)
         tempHistory: [],     // [{t: msEpoch, temp: °C, power: %}]
         _tempLastSample: 0,
@@ -735,6 +739,60 @@ function ninaApp() {
                 overlay.add(A.polygon(corners));
                 this._aladinFovOverlay = overlay;
             } catch (e) { console.warn('FOV overlay failed', e); }
+        },
+
+        // ---- OpenSeadragon image viewer ----
+        openImageViewer() {
+            this.imageViewerOpen = true;
+            this.$nextTick(() => this._initOsdViewer());
+        },
+
+        closeImageViewer() {
+            this.imageViewerOpen = false;
+            if (this._osdViewer) {
+                try { this._osdViewer.destroy(); } catch (e) { }
+                this._osdViewer = null;
+            }
+        },
+
+        reloadImageViewer() {
+            if (this._osdViewer) {
+                this._osdViewer.open({
+                    type: 'image',
+                    url: '/api/image/latest/preview?t=' + Date.now()
+                });
+            }
+        },
+
+        _initOsdViewer() {
+            if (typeof OpenSeadragon === 'undefined') {
+                console.warn('OpenSeadragon not loaded');
+                this.toast('Image viewer library not ready', 'error');
+                return;
+            }
+            if (this._osdViewer) {
+                try { this._osdViewer.destroy(); } catch (e) { }
+                this._osdViewer = null;
+            }
+            this._osdViewer = OpenSeadragon({
+                id: 'osd-viewer',
+                tileSources: {
+                    type: 'image',
+                    url: '/api/image/latest/preview?t=' + Date.now()
+                },
+                showNavigationControl: false,
+                showNavigator: true,
+                navigatorPosition: 'BOTTOM_RIGHT',
+                navigatorHeight: '90px',
+                navigatorWidth: '120px',
+                visibilityRatio: 0.5,
+                minZoomImageRatio: 0.8,
+                maxZoomPixelRatio: 4.0,
+                gestureSettingsMouse: { clickToZoom: false },
+                gestureSettingsTouch: { clickToZoom: false },
+                animationTime: 0.4,
+                springStiffness: 8
+            });
         },
 
         // When a sky target is selected via search, also re-center Aladin on it.
