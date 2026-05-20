@@ -142,6 +142,14 @@
                         </template>
                     </div>
                 </div>
+
+                <!-- HFR History chart -->
+                <div class="image-history" x-show="imageHistory.length >= 2">
+                    <div class="history-header">HFR &amp; Star Count History</div>
+                    <div class="chart-container chart-container-sm">
+                        <canvas x-ref="hfrChart" id="hfrChart"></canvas>
+                    </div>
+                </div>
             </div>
 
             <!-- MOUNT CONTROL -->
@@ -272,25 +280,11 @@
                         </div>
                     </div>
 
-                    <!-- V-curve chart -->
+                    <!-- V-curve chart (Chart.js) -->
                     <div class="af-chart" x-show="(autoFocus.points || []).length > 0">
-                        <svg :viewBox="`0 0 ${afChartW} ${afChartH}`" preserveAspectRatio="none">
-                            <!-- horizontal grid -->
-                            <line :x1="0" :x2="afChartW" :y1="afChartH/2" :y2="afChartH/2" stroke="#333" stroke-width="0.3" stroke-dasharray="2,2"/>
-                            <!-- fitted parabola -->
-                            <path :d="buildAfFitPath()" fill="none" stroke="#888" stroke-width="0.8" stroke-dasharray="3,2" x-show="afChartHasFit"/>
-                            <!-- sample points -->
-                            <template x-for="(pt, i) in (autoFocus.points || [])" :key="'afpt-'+i">
-                                <circle :cx="afPointX(pt.position)" :cy="afPointY(pt.hfr)" r="3"
-                                        :fill="pt.starCount > 0 ? '#64b5f6' : '#666'"/>
-                            </template>
-                            <!-- best position marker -->
-                            <line x-show="autoFocus.bestPosition"
-                                  :x1="afPointX(autoFocus.bestPosition)" :x2="afPointX(autoFocus.bestPosition)"
-                                  :y1="0" :y2="afChartH" stroke="#4caf50" stroke-width="1.2" stroke-dasharray="4,3"/>
-                            <text x="4" y="12" fill="#888" font-size="9" x-text="'max HFR: ' + (afChartHfrMax.toFixed(1))"></text>
-                            <text :x="4" :y="afChartH - 4" fill="#888" font-size="9">HFR 0</text>
-                        </svg>
+                        <div class="chart-container">
+                            <canvas x-ref="afChart" id="afChart"></canvas>
+                        </div>
                         <div class="af-chart-legend">
                             <span><span class="legend-dot" style="background:#64b5f6;"></span>Sample</span>
                             <span x-show="autoFocus.bestPosition"><span class="legend-dot" style="background:#4caf50;"></span>Best position: <strong x-text="autoFocus.bestPosition"></strong></span>
@@ -330,21 +324,11 @@
                     <div class="info-row" x-show="guider.lastAlert"><span class="text-danger">Alert:</span><strong class="text-danger" x-text="guider.lastAlert"></strong></div>
                 </div>
 
-                <!-- Inline SVG error graph (Chart.js comes in Phase B1) -->
+                <!-- Chart.js error graph -->
                 <div x-show="guider.connected" class="guide-chart">
-                    <svg :viewBox="`0 0 ${guideChartW} ${guideChartH}`" preserveAspectRatio="none">
-                        <!-- grid -->
-                        <line :x1="0" :x2="guideChartW" :y1="guideChartH/2" :y2="guideChartH/2" stroke="#444" stroke-width="0.5"/>
-                        <line :x1="0" :x2="guideChartW" :y1="guideChartH/4" :y2="guideChartH/4" stroke="#333" stroke-width="0.3" stroke-dasharray="2,2"/>
-                        <line :x1="0" :x2="guideChartW" :y1="3*guideChartH/4" :y2="3*guideChartH/4" stroke="#333" stroke-width="0.3" stroke-dasharray="2,2"/>
-                        <!-- RA path (red) -->
-                        <polyline :points="buildGuidePath('ra')" fill="none" stroke="#e57373" stroke-width="1.2"/>
-                        <!-- Dec path (blue) -->
-                        <polyline :points="buildGuidePath('dec')" fill="none" stroke="#64b5f6" stroke-width="1.2"/>
-                        <!-- axes labels -->
-                        <text x="4" y="12" fill="#888" font-size="9">+<tspan x-text="(guideChartScale).toFixed(1)"></tspan>&quot;</text>
-                        <text :x="4" :y="guideChartH-4" fill="#888" font-size="9">-<tspan x-text="(guideChartScale).toFixed(1)"></tspan>&quot;</text>
-                    </svg>
+                    <div class="chart-container">
+                        <canvas x-ref="guideChart" id="guideChart"></canvas>
+                    </div>
                     <div class="guide-chart-legend">
                         <span><span class="legend-dot" style="background:#e57373;"></span>RA</span>
                         <span><span class="legend-dot" style="background:#64b5f6;"></span>Dec</span>
@@ -438,6 +422,9 @@
                                         <span>&deg;C</span>
                                     </label>
                                     <button class="btn btn-sm" @click="setCooler(true, equipCoolerTarget)">Set</button>
+                                </div>
+                                <div class="chart-container chart-container-xs" x-show="tempHistory.length >= 2">
+                                    <canvas x-ref="tempChart" id="tempChart"></canvas>
                                 </div>
                             </div>
                         </div>
@@ -1140,6 +1127,7 @@
         </template>
     </div>
 
+    <script src="/js/lib/chart.umd.min.js"></script>
     <script src="/js/lib/alpine.min.js" defer></script>
     <script src="/js/app.js"></script>
 </body>

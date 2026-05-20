@@ -141,6 +141,13 @@ function ninaApp() {
         guideChartH: 160,
         guideChartScale: 2.0, // arcsec range each direction (auto-expands)
 
+        // Temperature history (sensor temp samples for chart)
+        tempHistory: [],     // [{t: msEpoch, temp: °C, power: %}]
+        _tempLastSample: 0,
+
+        // Chart.js instances (created lazily when canvas is visible)
+        _charts: { guide: null, af: null, hfr: null, temp: null },
+
         // Auto-Focus
         autoFocus: {
             state: 'idle',
@@ -672,6 +679,184 @@ function ninaApp() {
             return `${m}m`;
         },
 
+        // ---- Chart.js helpers ----
+
+        // Common dark theme for all charts
+        _chartTheme() {
+            return {
+                color: '#aaa',
+                grid: 'rgba(255,255,255,0.08)',
+                tick: '#888',
+                titleColor: '#ddd'
+            };
+        },
+
+        _ensureChart(refName, key, type, makeConfig) {
+            if (this._charts[key]) return this._charts[key];
+            if (typeof Chart === 'undefined') return null;
+            const canvas = this.$refs[refName];
+            if (!canvas) return null;
+            this._charts[key] = new Chart(canvas, makeConfig());
+            return this._charts[key];
+        },
+
+        // Guider chart: RA (red) + Dec (blue) vs sample index
+        updateGuideChart() {
+            const t = this._chartTheme();
+            const c = this._ensureChart('guideChart', 'guide', 'line', () => ({
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        { label: 'RA', data: [], borderColor: '#e57373', backgroundColor: 'transparent',
+                          tension: 0.2, pointRadius: 0, borderWidth: 1.5 },
+                        { label: 'Dec', data: [], borderColor: '#64b5f6', backgroundColor: 'transparent',
+                          tension: 0.2, pointRadius: 0, borderWidth: 1.5 }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    animation: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { display: false, grid: { color: t.grid } },
+                        y: { ticks: { color: t.tick, font: { size: 10 } }, grid: { color: t.grid },
+                             title: { display: true, text: 'arcsec', color: t.tick, font: { size: 10 } } }
+                    }
+                }
+            }));
+            if (!c) return;
+            const steps = this.guider.recentSteps || [];
+            c.data.labels = steps.map((_, i) => i);
+            c.data.datasets[0].data = steps.map(s => s.ra);
+            c.data.datasets[1].data = steps.map(s => s.dec);
+            c.update('none');
+        },
+
+        // Auto-Focus V-curve: HFR vs Position, scatter + fit overlay
+        updateAfChart() {
+            const t = this._chartTheme();
+            const c = this._ensureChart('afChart', 'af', 'scatter', () => ({
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        { label: 'Samples', data: [], pointBackgroundColor: '#64b5f6', pointRadius: 5 },
+                        { label: 'Fit', data: [], showLine: true, borderColor: '#aaa',
+                          borderDash: [4, 3], backgroundColor: 'transparent', pointRadius: 0, borderWidth: 1 },
+                        { label: 'Best', data: [], pointBackgroundColor: '#4caf50', pointRadius: 8,
+                          pointStyle: 'crossRot', pointBorderWidth: 2 }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, animation: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: t.tick, font: { size: 10 } }, grid: { color: t.grid },
+                             title: { display: true, text: 'Focuser position', color: t.tick, font: { size: 10 } } },
+                        y: { beginAtZero: true, ticks: { color: t.tick, font: { size: 10 } }, grid: { color: t.grid },
+                             title: { display: true, text: 'HFR', color: t.tick, font: { size: 10 } } }
+                    }
+                }
+            }));
+            if (!c) return;
+            const pts = this.autoFocus.points || [];
+            c.data.datasets[0].data = pts.map(p => ({ x: p.position, y: p.hfr }));
+            // Generate fitted parabola curve if we have a best position
+            if (this.autoFocus.bestPosition && pts.length >= 3) {
+                const bestX = this.autoFocus.bestPosition;
+                const bestY = this.autoFocus.bestHfr || 0;
+                const minP = Math.min(...pts.map(p => p.position));
+                const maxP = Math.max(...pts.map(p => p.position));
+                const halfRange = Math.max(bestX - minP, maxP - bestX, 1);
+                const leftMax = pts.filter(p => p.position < bestX).reduce((m, p) => Math.max(m, p.hfr), 0);
+                const rightMax = pts.filter(p => p.position > bestX).reduce((m, p) => Math.max(m, p.hfr), 0);
+                const a = Math.max(0, (Math.max(leftMax, rightMax) - bestY) / (halfRange * halfRange));
+                const fit = [];
+                for (let i = 0; i <= 40; i++) {
+                    const x = minP + (maxP - minP) * i / 40;
+                    fit.push({ x, y: a * (x - bestX) * (x - bestX) + bestY });
+                }
+                c.data.datasets[1].data = fit;
+                c.data.datasets[2].data = [{ x: bestX, y: bestY }];
+            } else {
+                c.data.datasets[1].data = [];
+                c.data.datasets[2].data = [];
+            }
+            c.update('none');
+        },
+
+        // HFR History: HFR + StarCount on two y-axes, indexed by image #
+        updateHfrChart() {
+            const t = this._chartTheme();
+            const c = this._ensureChart('hfrChart', 'hfr', 'line', () => ({
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        { label: 'HFR', data: [], borderColor: '#ffb74d', backgroundColor: 'transparent',
+                          yAxisID: 'y', tension: 0.2, pointRadius: 2, borderWidth: 1.5 },
+                        { label: 'Stars', data: [], borderColor: '#81c784', backgroundColor: 'transparent',
+                          yAxisID: 'y1', tension: 0.2, pointRadius: 2, borderWidth: 1.5 }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, animation: false,
+                    plugins: { legend: { labels: { color: t.color, font: { size: 10 } } } },
+                    scales: {
+                        x: { ticks: { color: t.tick, font: { size: 10 } }, grid: { color: t.grid } },
+                        y: { position: 'left', beginAtZero: true,
+                             ticks: { color: '#ffb74d', font: { size: 10 } }, grid: { color: t.grid },
+                             title: { display: true, text: 'HFR', color: '#ffb74d', font: { size: 10 } } },
+                        y1: { position: 'right', beginAtZero: true,
+                              ticks: { color: '#81c784', font: { size: 10 } }, grid: { display: false },
+                              title: { display: true, text: 'Stars', color: '#81c784', font: { size: 10 } } }
+                    }
+                }
+            }));
+            if (!c) return;
+            // imageHistory is newest-first → reverse for chronological order
+            const hist = (this.imageHistory || []).slice().reverse();
+            c.data.labels = hist.map((_, i) => i + 1);
+            c.data.datasets[0].data = hist.map(h => parseFloat(h.hfr) || 0);
+            c.data.datasets[1].data = hist.map(h => parseInt(h.stars) || 0);
+            c.update('none');
+        },
+
+        // Temperature chart: sensor temp + cooler power vs time
+        updateTempChart() {
+            const t = this._chartTheme();
+            const c = this._ensureChart('tempChart', 'temp', 'line', () => ({
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        { label: 'Temp', data: [], borderColor: '#64b5f6', backgroundColor: 'transparent',
+                          yAxisID: 'y', tension: 0.3, pointRadius: 0, borderWidth: 1.5 },
+                        { label: 'Power', data: [], borderColor: '#ef5350', backgroundColor: 'transparent',
+                          yAxisID: 'y1', tension: 0.3, pointRadius: 0, borderWidth: 1, borderDash: [3, 2] }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, animation: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { display: false },
+                        y: { position: 'left', ticks: { color: '#64b5f6', font: { size: 9 } }, grid: { color: t.grid },
+                             title: { display: true, text: '°C', color: '#64b5f6', font: { size: 9 } } },
+                        y1: { position: 'right', min: 0, max: 100, ticks: { color: '#ef5350', font: { size: 9 } },
+                              grid: { display: false },
+                              title: { display: true, text: '%', color: '#ef5350', font: { size: 9 } } }
+                    }
+                }
+            }));
+            if (!c) return;
+            const samples = this.tempHistory;
+            c.data.labels = samples.map((_, i) => i);
+            c.data.datasets[0].data = samples.map(s => s.temp);
+            c.data.datasets[1].data = samples.map(s => s.power);
+            c.update('none');
+        },
+
         async loadDitherSettings() {
             try {
                 const data = await this.apiGet('/api/sequence/dither');
@@ -808,6 +993,8 @@ function ninaApp() {
                     hfr: data.stats?.hfr?.toFixed(2) || '--'
                 });
                 if (this.imageHistory.length > 50) this.imageHistory.pop();
+                // Refresh HFR history chart
+                this.$nextTick(() => this.updateHfrChart());
                 if (this.looping) {
                     this.capture();
                 }
@@ -1717,6 +1904,18 @@ function ninaApp() {
                     binY: eq.camera.binY || 0,
                     bitDepth: eq.camera.bitDepth || 0
                 };
+                // Sample temperature history at most once every 5s
+                const now = Date.now();
+                if (eq.camera.temperature !== null && eq.camera.temperature !== undefined
+                    && now - this._tempLastSample > 5000) {
+                    this.tempHistory.push({
+                        t: now,
+                        temp: eq.camera.temperature,
+                        power: eq.camera.coolerOn ? (eq.camera.coolerPower || 0) : 0
+                    });
+                    if (this.tempHistory.length > 120) this.tempHistory.shift(); // ~10 min @ 5s
+                    this._tempLastSample = now;
+                }
             }
             if (eq.telescope) {
                 Object.assign(this.mount, {
@@ -1871,6 +2070,14 @@ function ninaApp() {
                     this.toast('Sequence completed!', 'ok', 6000);
                 }
             }
+
+            // Refresh charts once per status frame (1Hz) — only if their canvas
+            // is currently in the DOM, otherwise Chart.js skips silently.
+            this.$nextTick(() => {
+                if (this.guider.connected && this.tab === 'guide') this.updateGuideChart();
+                if ((this.autoFocus.points || []).length > 0 && this.tab === 'focus') this.updateAfChart();
+                if (this.tempHistory.length >= 2 && this.tab === 'equip') this.updateTempChart();
+            });
         },
 
         // --- Formatters ---

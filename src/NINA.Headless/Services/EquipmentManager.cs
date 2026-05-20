@@ -89,8 +89,10 @@ public class EquipmentManager : IDisposable {
                 state = Camera.State.ToString(),
                 temperature = Safe(Camera.Temperature),
                 coolerOn = Camera.CoolerOn,
+                coolerPower = Safe(Camera.CoolerPower),
                 binX = Camera.BinX,
-                binY = Camera.BinY
+                binY = Camera.BinY,
+                bitDepth = Camera.BitDepth
             };
         }
 

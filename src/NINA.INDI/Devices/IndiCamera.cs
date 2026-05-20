@@ -31,6 +31,7 @@ public class IndiCamera {
     public int BinX => (int)_client.GetNumber(DeviceName, "CCD_BINNING", "HOR_BIN");
     public int BinY => (int)_client.GetNumber(DeviceName, "CCD_BINNING", "VER_BIN");
     public bool CoolerOn => _client.GetSwitch(DeviceName, "CCD_COOLER", "COOLER_ON");
+    public double CoolerPower => _client.GetNumber(DeviceName, "CCD_COOLER_POWER", "CCD_COOLER_VALUE");
     public int MaxX => (int)_client.GetNumber(DeviceName, "CCD_INFO", "CCD_MAX_X");
     public int MaxY => (int)_client.GetNumber(DeviceName, "CCD_INFO", "CCD_MAX_Y");
     public double PixelSizeX => _client.GetNumber(DeviceName, "CCD_INFO", "CCD_PIXEL_SIZE_X");
