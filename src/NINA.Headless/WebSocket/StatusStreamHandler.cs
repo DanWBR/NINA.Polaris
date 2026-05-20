@@ -23,6 +23,7 @@ public static class StatusStreamHandler {
         var liveStack = context.RequestServices.GetRequiredService<LiveStackingService>();
         var sequence = context.RequestServices.GetRequiredService<SequenceEngine>();
         var phd2 = context.RequestServices.GetRequiredService<PHD2Client>();
+        var autoFocus = context.RequestServices.GetRequiredService<AutoFocusService>();
         var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
 
         using var ws = await context.WebSockets.AcceptWebSocketAsync(new WebSocketAcceptContext {
@@ -76,12 +77,25 @@ public static class StatusStreamHandler {
                         guiderPayload = new { connected = false, appState = "Stopped" };
                     }
 
+                    var autoFocusPayload = new {
+                        state = autoFocus.State.ToString().ToLowerInvariant(),
+                        currentSampleIndex = autoFocus.Progress.CurrentSampleIndex,
+                        steps = autoFocus.Progress.Steps,
+                        lastHfr = autoFocus.Progress.LastHfr,
+                        lastStarCount = autoFocus.Progress.LastStarCount,
+                        points = autoFocus.Progress.Points,
+                        bestPosition = autoFocus.LastResult?.BestPosition,
+                        bestHfr = autoFocus.LastResult?.BestPredictedHfr,
+                        success = autoFocus.LastResult?.Success
+                    };
+
                     var status = new {
                         type = "status",
                         timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                         equipment = equip.GetEquipmentStatus(),
                         liveStack = liveStack.GetStatus(),
                         guider = guiderPayload,
+                        autoFocus = autoFocusPayload,
                         sequence = new {
                             state = seqStatus.State,
                             currentItemIndex = seqStatus.CurrentItemIndex,

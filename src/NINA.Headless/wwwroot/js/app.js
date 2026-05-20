@@ -141,6 +141,28 @@ function ninaApp() {
         guideChartH: 160,
         guideChartScale: 2.0, // arcsec range each direction (auto-expands)
 
+        // Auto-Focus
+        autoFocus: {
+            state: 'idle',
+            currentSampleIndex: -1,
+            steps: 0,
+            lastHfr: 0,
+            lastStarCount: 0,
+            points: [],
+            bestPosition: null,
+            bestHfr: null,
+            success: null
+        },
+        afParams: {
+            steps: 9,
+            stepSize: 50,
+            exposureSeconds: 2.0,
+            minStars: 5,
+            backlashSteps: 0
+        },
+        afChartW: 600,
+        afChartH: 180,
+
         // Dither settings (mirrors server-side DitherSettings)
         ditherSettings: {
             enabled: false,
@@ -878,8 +900,91 @@ function ninaApp() {
             try { await this.apiPost('/api/focuser/abort'); } catch (e) { }
         },
 
-        async autoFocus() {
-            this.toast('Auto focus not yet implemented', 'warn');
+        async startAutoFocus() {
+            try {
+                await this.apiPost('/api/autofocus/start', {
+                    steps: this.afParams.steps,
+                    stepSize: this.afParams.stepSize,
+                    exposureSeconds: this.afParams.exposureSeconds,
+                    minStars: this.afParams.minStars,
+                    backlashSteps: this.afParams.backlashSteps,
+                    takeConfirmationFrame: true
+                });
+                this.toast('Auto-focus started', 'ok');
+            } catch (e) {
+                this.toast('AF start failed: ' + e.message, 'error');
+            }
+        },
+        async abortAutoFocus() {
+            try {
+                await this.apiPost('/api/autofocus/abort');
+                this.toast('Auto-focus abort requested', 'warn');
+            } catch (e) { this.toast('AF abort failed', 'error'); }
+        },
+
+        // ---- AF chart helpers ----
+        get afChartXRange() {
+            const pts = this.autoFocus.points || [];
+            if (pts.length === 0) return { min: 0, max: 1 };
+            let lo = Infinity, hi = -Infinity;
+            for (const p of pts) { if (p.position < lo) lo = p.position; if (p.position > hi) hi = p.position; }
+            if (this.autoFocus.bestPosition) {
+                if (this.autoFocus.bestPosition < lo) lo = this.autoFocus.bestPosition;
+                if (this.autoFocus.bestPosition > hi) hi = this.autoFocus.bestPosition;
+            }
+            if (hi === lo) hi = lo + 1;
+            const pad = (hi - lo) * 0.05;
+            return { min: lo - pad, max: hi + pad };
+        },
+        get afChartHfrMax() {
+            const pts = this.autoFocus.points || [];
+            let max = 1;
+            for (const p of pts) { if (p.hfr > max) max = p.hfr; }
+            return max * 1.15;
+        },
+        get afChartHasFit() {
+            return this.autoFocus.bestPosition !== null && this.autoFocus.bestPosition !== undefined;
+        },
+        afPointX(pos) {
+            const r = this.afChartXRange;
+            return ((pos - r.min) / (r.max - r.min)) * this.afChartW;
+        },
+        afPointY(hfr) {
+            const max = this.afChartHfrMax;
+            const clamped = Math.max(0, Math.min(max, hfr));
+            // hfr=0 → bottom (y=h); hfr=max → top (y=0)
+            return this.afChartH - (clamped / max) * this.afChartH;
+        },
+        // Draw fitted parabola sampled at 30 x-values across the range
+        buildAfFitPath() {
+            const result = this.autoFocus;
+            // We don't get a/b/c on the status stream — derive from points if absent.
+            // For the live chart we just draw a smooth quadratic going through best
+            // position (vertex) and the two extreme samples.
+            if (!result || !result.bestPosition || (result.points || []).length < 3) return '';
+            const pts = result.points;
+            const minP = pts[0].position, maxP = pts[pts.length - 1].position;
+            const bestX = result.bestPosition;
+            const bestY = result.bestHfr || 0;
+            // Solve a*(x-bestX)^2 + bestY = sample HFR using extremes
+            // Use the average of two extreme samples to estimate "a"
+            const leftHfr = pts.reduce((m, p) => p.position < bestX && p.hfr > m ? p.hfr : m, 0);
+            const rightHfr = pts.reduce((m, p) => p.position > bestX && p.hfr > m ? p.hfr : m, 0);
+            const extremeHfr = Math.max(leftHfr, rightHfr);
+            const halfRange = Math.max(bestX - minP, maxP - bestX, 1);
+            const a = Math.max(0, (extremeHfr - bestY) / (halfRange * halfRange));
+
+            const steps = 40;
+            const r = this.afChartXRange;
+            let d = '';
+            for (let i = 0; i <= steps; i++) {
+                const x = r.min + (r.max - r.min) * i / steps;
+                const y = a * (x - bestX) * (x - bestX) + bestY;
+                const sx = this.afPointX(x).toFixed(1);
+                const sy = this.afPointY(y).toFixed(1);
+                d += (i === 0 ? 'M' : 'L') + sx + ',' + sy + ' ';
+            }
+            return d.trim();
         },
 
         // --- Filter Wheel ---
@@ -1616,6 +1721,20 @@ function ninaApp() {
                     cloudCover: eq.weather.cloudCover,
                     rainRate: eq.weather.rainRate,
                     skyQuality: eq.weather.skyQuality
+                };
+            }
+            if (msg.autoFocus) {
+                const af = msg.autoFocus;
+                this.autoFocus = {
+                    state: af.state || 'idle',
+                    currentSampleIndex: af.currentSampleIndex ?? -1,
+                    steps: af.steps || 0,
+                    lastHfr: af.lastHfr || 0,
+                    lastStarCount: af.lastStarCount || 0,
+                    points: af.points || [],
+                    bestPosition: af.bestPosition ?? null,
+                    bestHfr: af.bestHfr ?? null,
+                    success: af.success ?? null
                 };
             }
             if (msg.guider) {
