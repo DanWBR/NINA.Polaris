@@ -944,6 +944,58 @@ function ninaApp() {
             } catch (e) { console.warn('FOV overlay failed', e); }
         },
 
+        // ---- Image history thumbnails ----
+
+        // Snapshot the current live canvas to a small JPEG dataURL
+        _captureThumbnail() {
+            try {
+                const src = document.getElementById('liveCanvas');
+                if (!src || src.width === 0 || src.height === 0) return null;
+                const tw = 100;
+                const th = Math.round(tw * src.height / src.width);
+                const off = document.createElement('canvas');
+                off.width = tw; off.height = th;
+                const ctx = off.getContext('2d');
+                ctx.drawImage(src, 0, 0, tw, th);
+                return off.toDataURL('image/jpeg', 0.65);
+            } catch (e) {
+                console.warn('thumbnail capture failed:', e);
+                return null;
+            }
+        },
+
+        clearImageHistory() {
+            this.imageHistory = [];
+            this.$nextTick(() => this.updateHfrChart());
+        },
+
+        openHistoryItem(item) {
+            // No full image archive (yet) — best we can do is open OSD with the
+            // current latest preview if the user clicked the most recent thumb,
+            // otherwise show the cached thumbnail.
+            if (item === this.imageHistory[0]) {
+                this.openImageViewer();
+                return;
+            }
+            if (item.thumb) {
+                // Show standalone thumb in OSD modal
+                this.imageViewerOpen = true;
+                this.$nextTick(() => {
+                    if (this._osdViewer) { try { this._osdViewer.destroy(); } catch (e) {} }
+                    this._osdViewer = OpenSeadragon({
+                        id: 'osd-viewer',
+                        tileSources: { type: 'image', url: item.thumb },
+                        showNavigationControl: false,
+                        showNavigator: false,
+                        visibilityRatio: 0.5,
+                        minZoomImageRatio: 0.5,
+                        maxZoomPixelRatio: 4.0,
+                        animationTime: 0.3
+                    });
+                });
+            }
+        },
+
         // ---- Image statistics + histogram ----
 
         async loadFullStats(withStars = false) {
@@ -1410,12 +1462,14 @@ function ninaApp() {
                     this.stats.mean = data.stats.mean?.toFixed(0);
                 }
                 this.imageHistory.unshift({
+                    id: 'h-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
                     time: new Date().toLocaleTimeString('en-GB'),
                     exposure: this.exposure,
                     gain: this.gain,
                     filter: this.filterWheel.connected ? this.filterWheel.currentFilter : null,
                     stars: data.stats?.starCount || '--',
-                    hfr: data.stats?.hfr?.toFixed(2) || '--'
+                    hfr: data.stats?.hfr?.toFixed(2) || '--',
+                    thumb: this._captureThumbnail()
                 });
                 if (this.imageHistory.length > 50) this.imageHistory.pop();
                 // Refresh HFR history chart

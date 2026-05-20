@@ -187,13 +187,27 @@
                     </div>
                 </div>
 
-                <!-- Image History (collapsible) -->
+                <!-- Image History gallery (thumbnails + collapsible details) -->
                 <div class="image-history" x-show="imageHistory.length > 0">
                     <div class="history-header" @click="$refs.historyList.classList.toggle('collapsed')">
                         Image History (<span x-text="imageHistory.length"></span>)
+                        <button class="btn btn-sm" @click.stop="clearImageHistory()"
+                                style="margin-left: auto;">Clear</button>
+                    </div>
+                    <div class="history-thumbs">
+                        <template x-for="(img, i) in imageHistory.slice(0, 20)" :key="img.id || i">
+                            <div class="history-thumb" @click="openHistoryItem(img)" :title="img.time + ' • ' + img.exposure + 's • G' + img.gain">
+                                <img :src="img.thumb || ''" :alt="img.time" x-show="img.thumb"
+                                     loading="lazy">
+                                <div class="history-thumb-meta">
+                                    <span x-text="img.time"></span>
+                                    <span x-show="img.hfr !== '--'">HFR <span x-text="img.hfr"></span></span>
+                                </div>
+                            </div>
+                        </template>
                     </div>
                     <div class="history-list" x-ref="historyList">
-                        <template x-for="(img, i) in imageHistory.slice(0, 10)" :key="i">
+                        <template x-for="(img, i) in imageHistory.slice(0, 10)" :key="img.id || i">
                             <div class="history-item">
                                 <span class="history-time" x-text="img.time"></span>
                                 <span x-text="img.exposure + 's'"></span>
