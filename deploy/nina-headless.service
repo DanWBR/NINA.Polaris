@@ -1,0 +1,21 @@
+[Unit]
+Description=NINA Headless Astronomy Controller
+After=network-online.target indiserver.service
+Wants=network-online.target
+
+[Service]
+Type=notify
+ExecStart=/opt/nina-headless/NINA.Headless
+WorkingDirectory=/opt/nina-headless
+Environment=DOTNET_gcServer=0
+Environment=ASPNETCORE_URLS=http://0.0.0.0:5000
+Environment=DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+Restart=always
+RestartSec=10
+User=nina
+LimitNOFILE=65536
+# Watchdog
+WatchdogSec=60
+
+[Install]
+WantedBy=multi-user.target

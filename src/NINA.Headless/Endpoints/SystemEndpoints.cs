@@ -1,45 +1,91 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using NINA.Headless.Services;
 
 namespace NINA.Headless.Endpoints;
 
-public static class SystemEndpoints
-{
-    public static void MapSystemEndpoints(this WebApplication app)
-    {
+public static class SystemEndpoints {
+    public static void MapSystemEndpoints(this WebApplication app) {
         var group = app.MapGroup("/api/system");
 
-        group.MapGet("/status", () =>
-        {
+        group.MapGet("/status", (EquipmentManager equip) => {
             var process = Process.GetCurrentProcess();
-            return Results.Ok(new
-            {
+            return Results.Ok(new {
                 version = "0.1.0-alpha",
                 platform = RuntimeInformation.OSDescription,
                 architecture = RuntimeInformation.ProcessArchitecture.ToString(),
                 memoryMb = process.WorkingSet64 / (1024 * 1024),
                 uptime = (DateTime.UtcNow - process.StartTime.ToUniversalTime()).ToString(@"d\.hh\:mm\:ss"),
-                dotnetVersion = RuntimeInformation.FrameworkDescription
+                dotnetVersion = RuntimeInformation.FrameworkDescription,
+                equipment = equip.GetEquipmentStatus()
             });
         });
 
-        group.MapGet("/profiles", () =>
-        {
-            return Results.Ok(new { profiles = new[] { new { id = "default", name = "Default", active = true } } });
+        // Profiles
+        group.MapGet("/profiles", (ProfileService profiles) => {
+            var list = profiles.ListProfiles();
+            return Results.Ok(new {
+                active = profiles.Active.Name,
+                profiles = list
+            });
         });
 
-        group.MapGet("/settings", () =>
-        {
-            return Results.Ok(new
-            {
-                observatoryLatitude = 0.0,
-                observatoryLongitude = 0.0,
-                observatoryAltitude = 0.0,
-                imageFormat = "FITS",
+        group.MapGet("/profile", (ProfileService profiles) => {
+            return Results.Ok(profiles.Active);
+        });
+
+        group.MapPut("/profile", (UserProfile update, ProfileService profiles) => {
+            profiles.UpdateSettings(p => {
+                p.Latitude = update.Latitude;
+                p.Longitude = update.Longitude;
+                p.Altitude = update.Altitude;
+                p.SensorWidthMm = update.SensorWidthMm;
+                p.SensorHeightMm = update.SensorHeightMm;
+                p.FocalLengthMm = update.FocalLengthMm;
+                p.SensorPixelsX = update.SensorPixelsX;
+                p.SensorPixelsY = update.SensorPixelsY;
+                p.DefaultExposure = update.DefaultExposure;
+                p.DefaultGain = update.DefaultGain;
+                p.DefaultBinning = update.DefaultBinning;
+                p.IndiHost = update.IndiHost;
+                p.IndiPort = update.IndiPort;
+                p.AstapPath = update.AstapPath;
+                p.SolveToleranceArcsec = update.SolveToleranceArcsec;
+                p.ImageOutputDir = update.ImageOutputDir;
+                p.ImageNamePattern = update.ImageNamePattern;
+                p.ImageFormat = update.ImageFormat;
+            });
+            return Results.Ok(new { message = "Profile saved" });
+        });
+
+        group.MapPost("/profile/save-as", (SaveAsRequest request, ProfileService profiles) => {
+            profiles.SaveAs(request.Name);
+            return Results.Ok(new { message = $"Profile saved as '{request.Name}'" });
+        });
+
+        group.MapPost("/profile/load/{id}", (string id, ProfileService profiles) => {
+            if (profiles.LoadProfile(id))
+                return Results.Ok(new { message = "Profile loaded", name = profiles.Active.Name });
+            return Results.NotFound(new { error = "Profile not found" });
+        });
+
+        // Legacy settings (redirect to profile)
+        group.MapGet("/settings", (ProfileService profiles) => {
+            var p = profiles.Active;
+            return Results.Ok(new {
+                observatoryLatitude = p.Latitude,
+                observatoryLongitude = p.Longitude,
+                observatoryAltitude = p.Altitude,
+                sensorWidthMm = p.SensorWidthMm,
+                sensorHeightMm = p.SensorHeightMm,
+                focalLengthMm = p.FocalLengthMm,
+                imageFormat = p.ImageFormat,
                 plateSolver = "ASTAP",
-                indiHost = "localhost",
-                indiPort = 7624
+                indiHost = p.IndiHost,
+                indiPort = p.IndiPort
             });
         });
     }
+
+    record SaveAsRequest(string Name);
 }

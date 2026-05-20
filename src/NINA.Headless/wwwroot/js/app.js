@@ -9,54 +9,89 @@ function ninaApp() {
         binning: '1',
         liveActive: false,
         looping: false,
-        stats: {
-            starCount: '--',
-            hfr: null,
-            mean: null
-        },
+        capturing: false,
+        stats: { starCount: '--', hfr: null, mean: null },
         currentTime: '--:--:--',
         cameraTemp: null,
+        sessionCaptures: 0,
+        imageHistory: [],
+
+        // Live stacking
+        liveStackEnabled: false,
+        liveStackFrames: 0,
 
         // Mount
         mount: {
-            ra: null,
-            dec: null,
-            alt: null,
-            az: null,
-            tracking: false
+            ra: null, dec: null, alt: null, az: null,
+            tracking: false, slewing: false, parked: false,
+            pierSide: 'unknown', connected: false
         },
 
         // Focus
         focusPosition: 0,
         focusStep: 50,
+        focusTemp: null,
+        focusMoving: false,
+        focusConnected: false,
+
+        // Filter Wheel
+        filterWheel: {
+            connected: false,
+            position: 0,
+            currentFilter: '',
+            filters: [],
+            moving: false
+        },
+        selectedFilterWheel: null,
 
         // Sky
         skySearch: '',
         skyTarget: null,
-        fov: {
-            width: 2.82,
-            height: 1.88
-        },
+        skyResults: [],
+        skyShowResults: false,
+        slewCenterJobId: null,
+        slewCenterStatus: null,
+        _slewCenterTimer: null,
+        fov: { width: 2.82, height: 1.88 },
 
         // Sequence
         sequence: [],
+        seqState: 'idle',
+        seqStatus: null,
+        _seqPollTimer: null,
 
         // Settings
         settings: {
             indiHost: 'localhost',
             indiPort: 7624,
-            latitude: 0,
-            longitude: 0,
-            altitude: 0,
-            sensorWidth: 23.5,
-            sensorHeight: 15.7,
-            focalLength: 478
+            latitude: 0, longitude: 0, altitude: 0,
+            sensorWidth: 23.5, sensorHeight: 15.7, focalLength: 478
         },
 
         // Connection state
         indiConnected: false,
+        serverReachable: true,
+        devices: [],
+        selectedCamera: null,
+        selectedTelescope: null,
+        selectedFocuser: null,
+
+        // WebSocket state
         statusWs: null,
         imageWs: null,
+        _statusWsAttempt: 0,
+        _imageWsAttempt: 0,
+        _statusWsTimer: null,
+        _imageWsTimer: null,
+
+        // Toast notifications
+        toasts: [],
+        _toastId: 0,
+
+        // In-flight request tracking
+        _pending: {},
+        _previewFetching: false,
+        _imageClientId: null,
 
         init() {
             this.updateClock();
@@ -65,10 +100,7 @@ function ninaApp() {
 
             const saved = localStorage.getItem('nina-settings');
             if (saved) {
-                try {
-                    const parsed = JSON.parse(saved);
-                    Object.assign(this.settings, parsed);
-                } catch (e) { /* ignore */ }
+                try { Object.assign(this.settings, JSON.parse(saved)); } catch (e) { }
             }
 
             const nightSaved = localStorage.getItem('nina-night-mode');
@@ -81,17 +113,380 @@ function ninaApp() {
                 this.updateFov();
                 this.saveSettings();
             });
+
+            this.connectStatusWs();
+            this.connectImageWs();
+            this.loadSettingsFromServer();
         },
 
+        // --- Network helpers ---
+
+        // Fetch with timeout and deduplication
+        async apiFetch(url, options = {}) {
+            const method = options.method || 'GET';
+            const key = method + ' ' + url;
+
+            // Deduplicate: if same request is already in flight, return its promise
+            if (this._pending[key]) return this._pending[key];
+
+            const timeout = options.timeout || 15000;
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeout);
+
+            const promise = fetch(url, {
+                ...options,
+                signal: controller.signal
+            }).then(resp => {
+                clearTimeout(timer);
+                delete this._pending[key];
+
+                if (!this.serverReachable) {
+                    this.serverReachable = true;
+                    this.toast('Server reconnected', 'ok');
+                }
+
+                if (!resp.ok) {
+                    return resp.text().then(body => {
+                        throw new ApiError(resp.status, body);
+                    });
+                }
+                return resp;
+            }).catch(err => {
+                clearTimeout(timer);
+                delete this._pending[key];
+
+                if (err.name === 'AbortError') {
+                    this.serverReachable = false;
+                    throw new Error('Request timed out');
+                }
+                if (err instanceof TypeError && err.message.includes('fetch')) {
+                    this.serverReachable = false;
+                }
+                throw err;
+            });
+
+            this._pending[key] = promise;
+            return promise;
+        },
+
+        // POST JSON shorthand
+        async apiPost(url, body = null, opts = {}) {
+            const options = {
+                method: 'POST',
+                ...opts
+            };
+            if (body !== null) {
+                options.headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+                options.body = JSON.stringify(body);
+            }
+            return this.apiFetch(url, options);
+        },
+
+        // GET JSON shorthand
+        async apiGet(url, opts = {}) {
+            const resp = await this.apiFetch(url, opts);
+            return resp.json();
+        },
+
+        // Toast notification (auto-dismiss)
+        toast(message, type = 'info', duration = 4000) {
+            const id = ++this._toastId;
+            this.toasts.push({ id, message, type });
+            if (this.toasts.length > 5) this.toasts.shift();
+            setTimeout(() => {
+                this.toasts = this.toasts.filter(t => t.id !== id);
+            }, duration);
+        },
+
+        dismissToast(id) {
+            this.toasts = this.toasts.filter(t => t.id !== id);
+        },
+
+        // --- WebSocket with exponential backoff + jitter ---
+
+        connectStatusWs() {
+            if (this._statusWsTimer) {
+                clearTimeout(this._statusWsTimer);
+                this._statusWsTimer = null;
+            }
+            if (this.statusWs && this.statusWs.readyState <= 1) {
+                this.statusWs.close();
+            }
+
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const ws = new WebSocket(`${protocol}//${location.host}/ws/status`);
+
+            ws.onopen = () => {
+                this._statusWsAttempt = 0;
+                this.serverReachable = true;
+            };
+
+            ws.onmessage = (evt) => {
+                try {
+                    this.handleStatusMessage(JSON.parse(evt.data));
+                } catch (e) { }
+            };
+
+            ws.onclose = () => {
+                this.scheduleReconnect('status');
+            };
+
+            ws.onerror = () => { };
+
+            this.statusWs = ws;
+        },
+
+        connectImageWs() {
+            if (this._imageWsTimer) {
+                clearTimeout(this._imageWsTimer);
+                this._imageWsTimer = null;
+            }
+            if (this.imageWs && this.imageWs.readyState <= 1) {
+                this.imageWs.close();
+            }
+
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const ws = new WebSocket(`${protocol}//${location.host}/ws/image-stream`);
+
+            ws.binaryType = 'arraybuffer';
+
+            ws.onopen = () => {
+                this._imageWsAttempt = 0;
+                // Request JPEG mode (universally supported); send {"mode":"raw"} for LZ4+uint16
+                ws.send(JSON.stringify({ mode: 'jpeg' }));
+            };
+
+            ws.onmessage = (evt) => {
+                if (typeof evt.data === 'string') {
+                    // Welcome or control message
+                    try {
+                        const msg = JSON.parse(evt.data);
+                        if (msg.type === 'connected') {
+                            this._imageClientId = msg.clientId;
+                        }
+                    } catch (e) { }
+                    return;
+                }
+                this.handleImageFrame(evt.data);
+            };
+
+            ws.onclose = () => {
+                this.scheduleReconnect('image');
+            };
+
+            ws.onerror = () => { };
+
+            this.imageWs = ws;
+        },
+
+        scheduleReconnect(type) {
+            const isStatus = type === 'status';
+            const attempt = isStatus ? this._statusWsAttempt : this._imageWsAttempt;
+
+            // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 30s max
+            const baseDelay = Math.min(1000 * Math.pow(2, attempt), 30000);
+            // Add jitter: +/- 20%
+            const jitter = baseDelay * 0.2 * (Math.random() * 2 - 1);
+            const delay = Math.max(500, baseDelay + jitter);
+
+            if (isStatus) {
+                this._statusWsAttempt++;
+                this._statusWsTimer = setTimeout(() => this.connectStatusWs(), delay);
+            } else {
+                this._imageWsAttempt++;
+                this._imageWsTimer = setTimeout(() => this.connectImageWs(), delay);
+            }
+        },
+
+        // Render a received binary image frame to the live canvas.
+        // In JPEG mode, the frame is a raw JPEG blob — draw via Image element.
+        // In raw mode, the frame is: [4B headerLen][header][LZ4 compressed uint16 pixels].
+        handleImageFrame(arrayBuffer) {
+            this.liveActive = true;
+
+            // Detect format: JPEG files always start with 0xFF 0xD8 (SOI marker)
+            const view = new Uint8Array(arrayBuffer);
+            if (view.length >= 2 && view[0] === 0xFF && view[1] === 0xD8) {
+                this._renderJpegFrame(arrayBuffer);
+            } else {
+                this._renderRawFrame(arrayBuffer);
+            }
+        },
+
+        // JPEG mode: create blob URL, draw to canvas via Image element
+        _renderJpegFrame(arrayBuffer) {
+            const blob = new Blob([arrayBuffer], { type: 'image/jpeg' });
+            const url = URL.createObjectURL(blob);
+
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.getElementById('liveCanvas');
+                if (!canvas) { URL.revokeObjectURL(url); return; }
+
+                // Resize canvas to match image aspect ratio within container
+                const container = canvas.parentElement;
+                const containerW = container.clientWidth;
+                const containerH = container.clientHeight;
+                const scale = Math.min(containerW / img.width, containerH / img.height, 1);
+                canvas.width = Math.round(img.width * scale);
+                canvas.height = Math.round(img.height * scale);
+
+                const ctx = canvas.getContext('2d');
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                URL.revokeObjectURL(url);
+
+                // Draw crosshair overlay
+                this._drawCrosshair(ctx, canvas.width, canvas.height);
+            };
+            img.onerror = () => URL.revokeObjectURL(url);
+            img.src = url;
+        },
+
+        // Raw LZ4 mode: parse header, decompress, auto-stretch, render grayscale
+        _renderRawFrame(arrayBuffer) {
+            const dv = new DataView(arrayBuffer);
+            if (arrayBuffer.byteLength < 24) return; // too small
+
+            const headerLen = dv.getInt32(0, true); // little-endian
+            const width = dv.getInt32(4, true);
+            const height = dv.getInt32(8, true);
+            const bitDepth = dv.getInt32(12, true);
+            const bayerPattern = dv.getInt32(16, true);
+            const uncompressedSize = dv.getInt32(20, true);
+
+            // LZ4 decompression requires lz4.min.js — fallback to REST JPEG if unavailable
+            if (typeof LZ4 === 'undefined') {
+                // No LZ4 library loaded: fetch latest preview via REST as fallback
+                this._fetchPreviewFallback();
+                return;
+            }
+
+            const compressedData = new Uint8Array(arrayBuffer, 4 + headerLen);
+            const decompressed = new Uint8Array(uncompressedSize);
+
+            try {
+                LZ4.decompress(compressedData, decompressed);
+            } catch (e) {
+                console.warn('LZ4 decompress failed, using JPEG fallback');
+                this._fetchPreviewFallback();
+                return;
+            }
+
+            // Convert to uint16 array
+            const pixels = new Uint16Array(decompressed.buffer);
+            const maxVal = (1 << bitDepth) - 1;
+
+            // Auto-stretch: compute median and MAD for MTF stretch
+            const sorted = Float32Array.from(pixels).sort();
+            const median = sorted[Math.floor(sorted.length * 0.5)];
+            const deviations = Float32Array.from(sorted, v => Math.abs(v - median)).sort();
+            const mad = deviations[Math.floor(deviations.length * 0.5)] * 1.4826;
+
+            // Stretch parameters (Midtone Transfer Function)
+            const shadow = Math.max(0, median - 2.8 * mad);
+            const scaleFactor = maxVal > shadow ? 1.0 / (maxVal - shadow) : 1.0;
+
+            // Render to canvas
+            const canvas = document.getElementById('liveCanvas');
+            if (!canvas) return;
+
+            const container = canvas.parentElement;
+            const containerW = container.clientWidth;
+            const containerH = container.clientHeight;
+            const scale = Math.min(containerW / width, containerH / height, 1);
+            canvas.width = Math.round(width * scale);
+            canvas.height = Math.round(height * scale);
+
+            const ctx = canvas.getContext('2d');
+            const imgData = ctx.createImageData(width, height);
+            const data = imgData.data;
+
+            for (let i = 0; i < pixels.length; i++) {
+                const normalized = Math.max(0, (pixels[i] - shadow) * scaleFactor);
+                // MTF stretch curve
+                const mtf = normalized > 0 ? (normalized * 0.25) / ((0.25 - 1) * normalized + 1) : 0;
+                const val = Math.min(255, Math.round(mtf * 255));
+                const j = i * 4;
+                data[j] = val;
+                data[j + 1] = val;
+                data[j + 2] = val;
+                data[j + 3] = 255;
+            }
+
+            // If canvas is scaled, draw via offscreen canvas
+            if (scale < 1) {
+                const offscreen = document.createElement('canvas');
+                offscreen.width = width;
+                offscreen.height = height;
+                offscreen.getContext('2d').putImageData(imgData, 0, 0);
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                ctx.drawImage(offscreen, 0, 0, canvas.width, canvas.height);
+            } else {
+                ctx.putImageData(imgData, 0, 0);
+            }
+
+            this._drawCrosshair(ctx, canvas.width, canvas.height);
+        },
+
+        // Fallback: fetch JPEG preview via REST endpoint
+        _fetchPreviewFallback() {
+            if (this._previewFetching) return;
+            this._previewFetching = true;
+
+            fetch('/api/image/latest/preview')
+                .then(resp => {
+                    if (!resp.ok) throw new Error('No preview');
+                    return resp.blob();
+                })
+                .then(blob => {
+                    const url = URL.createObjectURL(blob);
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.getElementById('liveCanvas');
+                        if (canvas) {
+                            const container = canvas.parentElement;
+                            const scale = Math.min(container.clientWidth / img.width, container.clientHeight / img.height, 1);
+                            canvas.width = Math.round(img.width * scale);
+                            canvas.height = Math.round(img.height * scale);
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                            this._drawCrosshair(ctx, canvas.width, canvas.height);
+                        }
+                        URL.revokeObjectURL(url);
+                        this._previewFetching = false;
+                    };
+                    img.onerror = () => { URL.revokeObjectURL(url); this._previewFetching = false; };
+                    img.src = url;
+                })
+                .catch(() => { this._previewFetching = false; });
+        },
+
+        // Draw a subtle crosshair in the center of the preview
+        _drawCrosshair(ctx, w, h) {
+            const cx = w / 2, cy = h / 2;
+            const len = Math.min(w, h) * 0.03;
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255, 50, 50, 0.5)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(cx - len, cy); ctx.lineTo(cx + len, cy);
+            ctx.moveTo(cx, cy - len); ctx.lineTo(cx, cy + len);
+            ctx.stroke();
+            ctx.restore();
+        },
+
+        // --- Clock and FOV ---
+
         updateClock() {
-            const now = new Date();
-            this.currentTime = now.toLocaleTimeString('en-GB');
+            this.currentTime = new Date().toLocaleTimeString('en-GB');
         },
 
         updateFov() {
-            const sw = this.settings.sensorWidth;
-            const sh = this.settings.sensorHeight;
-            const fl = this.settings.focalLength;
+            const { sensorWidth: sw, sensorHeight: sh, focalLength: fl } = this.settings;
             if (fl > 0) {
                 this.fov.width = 2 * Math.atan(sw / (2 * fl)) * (180 / Math.PI);
                 this.fov.height = 2 * Math.atan(sh / (2 * fl)) * (180 / Math.PI);
@@ -100,6 +495,46 @@ function ninaApp() {
 
         saveSettings() {
             localStorage.setItem('nina-settings', JSON.stringify(this.settings));
+            this.saveSettingsToServer();
+        },
+
+        async loadSettingsFromServer() {
+            try {
+                const data = await this.apiGet('/api/system/profile');
+                if (data) {
+                    this.settings.indiHost = data.indiHost || 'localhost';
+                    this.settings.indiPort = data.indiPort || 7624;
+                    this.settings.latitude = data.latitude || 0;
+                    this.settings.longitude = data.longitude || 0;
+                    this.settings.altitude = data.altitude || 0;
+                    this.settings.sensorWidth = data.sensorWidthMm || 23.5;
+                    this.settings.sensorHeight = data.sensorHeightMm || 15.7;
+                    this.settings.focalLength = data.focalLengthMm || 478;
+                    this.updateFov();
+                }
+            } catch (e) { }
+        },
+
+        async saveSettingsToServer() {
+            try {
+                await this.apiPost('/api/system/profile', null, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        latitude: this.settings.latitude,
+                        longitude: this.settings.longitude,
+                        altitude: this.settings.altitude,
+                        sensorWidthMm: this.settings.sensorWidth,
+                        sensorHeightMm: this.settings.sensorHeight,
+                        focalLengthMm: this.settings.focalLength,
+                        indiHost: this.settings.indiHost,
+                        indiPort: this.settings.indiPort,
+                        defaultExposure: this.exposure,
+                        defaultGain: this.gain,
+                        defaultBinning: parseInt(this.binning)
+                    })
+                });
+            } catch (e) { }
         },
 
         toggleNightMode() {
@@ -108,24 +543,95 @@ function ninaApp() {
             localStorage.setItem('nina-night-mode', this.nightMode.toString());
         },
 
-        // Camera
-        async capture() {
+        // --- INDI Connection ---
+
+        async connectIndi() {
+            this.saveSettings();
             try {
-                const resp = await fetch('/api/camera/capture', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        exposure: this.exposure,
-                        gain: this.gain,
-                        binning: parseInt(this.binning),
-                        filter: null
-                    })
+                const resp = await this.apiPost('/api/indi/connect', {
+                    host: this.settings.indiHost,
+                    port: this.settings.indiPort
                 });
                 if (resp.ok) {
-                    this.liveActive = true;
+                    this.indiConnected = true;
+                    this.toast('Connected to INDI server', 'ok');
+                    setTimeout(() => this.refreshDevices(), 2000);
                 }
             } catch (e) {
-                console.error('Capture failed:', e);
+                this.indiConnected = false;
+                this.toast('INDI connection failed: ' + e.message, 'error');
+            }
+        },
+
+        async disconnectIndi() {
+            try { await this.apiPost('/api/indi/disconnect'); } catch (e) { }
+            this.indiConnected = false;
+            this.toast('Disconnected from INDI', 'warn');
+        },
+
+        async refreshDevices() {
+            try {
+                const data = await this.apiGet('/api/equipment/devices');
+                this.devices = data.devices || [];
+            } catch (e) {
+                this.toast('Failed to refresh devices', 'error');
+            }
+        },
+
+        // --- Camera ---
+
+        async selectCamera(name) {
+            try {
+                await this.apiPost(`/api/camera/select/${encodeURIComponent(name)}`);
+                await this.apiPost('/api/camera/connect');
+                this.selectedCamera = name;
+                this.toast('Camera connected: ' + name, 'ok');
+            } catch (e) {
+                this.toast('Camera connection failed: ' + e.message, 'error');
+            }
+        },
+
+        async capture() {
+            this.capturing = true;
+            try {
+                const resp = await this.apiPost('/api/camera/capture', {
+                    exposure: this.exposure,
+                    gain: this.gain,
+                    binning: parseInt(this.binning),
+                    filter: null
+                }, { timeout: (this.exposure + 30) * 1000 });
+
+                const data = await resp.json();
+                this.liveActive = true;
+                this.sessionCaptures++;
+                if (data.stats) {
+                    this.stats.starCount = data.stats.starCount;
+                    this.stats.hfr = data.stats.hfr?.toFixed(2);
+                    this.stats.mean = data.stats.mean?.toFixed(0);
+                }
+                this.imageHistory.unshift({
+                    time: new Date().toLocaleTimeString('en-GB'),
+                    exposure: this.exposure,
+                    gain: this.gain,
+                    filter: this.filterWheel.connected ? this.filterWheel.currentFilter : null,
+                    stars: data.stats?.starCount || '--',
+                    hfr: data.stats?.hfr?.toFixed(2) || '--'
+                });
+                if (this.imageHistory.length > 50) this.imageHistory.pop();
+                if (this.looping) {
+                    this.capture();
+                }
+            } catch (e) {
+                if (this.looping) {
+                    this.toast('Capture error, retrying...', 'warn');
+                    setTimeout(() => {
+                        if (this.looping) this.capture();
+                    }, 2000);
+                } else {
+                    this.toast('Capture failed: ' + e.message, 'error');
+                }
+            } finally {
+                if (!this.looping) this.capturing = false;
             }
         },
 
@@ -134,171 +640,490 @@ function ninaApp() {
             await this.capture();
         },
 
-        stopCapture() {
+        async stopCapture() {
             this.looping = false;
-            this.liveActive = false;
+            this.capturing = false;
+            try { await this.apiPost('/api/camera/abort'); } catch (e) { }
         },
 
-        // Mount
-        async mountMove(direction) {
+        async setCooler(enabled, temp) {
             try {
-                if (direction === 'stop') {
-                    return;
-                }
-                const dirMap = { n: [0, 1], s: [0, -1], e: [1, 0], w: [-1, 0] };
-                const [raDelta, decDelta] = dirMap[direction] || [0, 0];
-                console.log('Mount move:', direction, raDelta, decDelta);
+                await this.apiPost('/api/camera/cooler', {
+                    enabled, targetTemperature: temp || null
+                });
             } catch (e) {
-                console.error('Mount move failed:', e);
+                this.toast('Cooler command failed', 'error');
             }
+        },
+
+        // --- Live Stacking ---
+
+        async toggleLiveStack() {
+            this.liveStackEnabled = !this.liveStackEnabled;
+            try {
+                if (this.liveStackEnabled) {
+                    await this.apiPost('/api/livestack/start');
+                    this.toast('Live stacking started', 'ok');
+                } else {
+                    await this.apiPost('/api/livestack/stop');
+                    this.toast('Live stacking stopped', 'warn');
+                }
+            } catch (e) {
+                this.toast('Live stack toggle failed', 'error');
+            }
+        },
+
+        async resetLiveStack() {
+            try {
+                await this.apiPost('/api/livestack/reset');
+                this.liveStackFrames = 0;
+            } catch (e) {
+                this.toast('Live stack reset failed', 'error');
+            }
+        },
+
+        // --- Telescope/Mount ---
+
+        async selectTelescope(name) {
+            try {
+                await this.apiPost(`/api/telescope/select/${encodeURIComponent(name)}`);
+                await this.apiPost('/api/telescope/connect');
+                this.selectedTelescope = name;
+                this.mount.connected = true;
+                this.toast('Mount connected: ' + name, 'ok');
+            } catch (e) {
+                this.toast('Mount connection failed: ' + e.message, 'error');
+            }
+        },
+
+        async mountMove(direction) {
+            const dirMap = { n: 'north', s: 'south', e: 'east', w: 'west', stop: 'stop' };
+            try {
+                await this.apiPost(`/api/telescope/move/${dirMap[direction] || direction}`);
+            } catch (e) {
+                this.toast('Mount move failed', 'error');
+            }
+        },
+
+        async mountStop() {
+            try { await this.apiPost('/api/telescope/abort'); } catch (e) { }
         },
 
         async parkMount() {
             try {
-                await fetch('/api/telescope/park', { method: 'POST' });
+                await this.apiPost('/api/telescope/park');
+                this.toast('Parking mount...', 'info');
             } catch (e) {
-                console.error('Park failed:', e);
+                this.toast('Park failed', 'error');
             }
         },
 
         async unparkMount() {
             try {
-                await fetch('/api/telescope/unpark', { method: 'POST' });
+                await this.apiPost('/api/telescope/unpark');
+                this.toast('Unparking mount...', 'info');
             } catch (e) {
-                console.error('Unpark failed:', e);
+                this.toast('Unpark failed', 'error');
             }
         },
 
-        // Focus
+        async toggleTracking() {
+            try {
+                await this.apiPost('/api/telescope/tracking', { enabled: !this.mount.tracking });
+            } catch (e) {
+                this.toast('Tracking toggle failed', 'error');
+            }
+        },
+
+        async slewTo(ra, dec) {
+            try {
+                await this.apiPost('/api/telescope/slew', { ra, dec });
+                this.toast('Slewing...', 'info');
+            } catch (e) {
+                this.toast('Slew failed: ' + e.message, 'error');
+            }
+        },
+
+        // --- Focuser ---
+
+        async selectFocuser(name) {
+            try {
+                await this.apiPost(`/api/focuser/select/${encodeURIComponent(name)}`);
+                await this.apiPost('/api/focuser/connect');
+                this.selectedFocuser = name;
+                this.focusConnected = true;
+                this.toast('Focuser connected: ' + name, 'ok');
+            } catch (e) {
+                this.toast('Focuser connection failed: ' + e.message, 'error');
+            }
+        },
+
         async focusMove(steps) {
-            this.focusPosition += steps;
-            console.log('Focus move to:', this.focusPosition);
+            try {
+                await this.apiPost('/api/focuser/move/relative', { steps });
+            } catch (e) {
+                this.toast('Focus move failed', 'error');
+            }
+        },
+
+        async focusMoveTo(position) {
+            try {
+                await this.apiPost('/api/focuser/move/absolute', { position });
+            } catch (e) {
+                this.toast('Focus move failed', 'error');
+            }
+        },
+
+        async focusAbort() {
+            try { await this.apiPost('/api/focuser/abort'); } catch (e) { }
         },
 
         async autoFocus() {
-            console.log('Auto focus started');
+            this.toast('Auto focus not yet implemented', 'warn');
         },
 
-        // Sky
+        // --- Filter Wheel ---
+
+        async selectFilterWheel(name) {
+            try {
+                await this.apiPost(`/api/filterwheel/select/${encodeURIComponent(name)}`);
+                await this.apiPost('/api/filterwheel/connect');
+                this.selectedFilterWheel = name;
+                this.filterWheel.connected = true;
+                this.toast('Filter wheel connected: ' + name, 'ok');
+            } catch (e) {
+                this.toast('Filter wheel connection failed: ' + e.message, 'error');
+            }
+        },
+
+        async setFilter(filterName) {
+            try {
+                await this.apiPost(`/api/filterwheel/filter/${encodeURIComponent(filterName)}`);
+                this.toast('Moving to filter: ' + filterName, 'info');
+            } catch (e) {
+                this.toast('Filter change failed: ' + e.message, 'error');
+            }
+        },
+
+        async setFilterPosition(slot) {
+            try {
+                await this.apiPost(`/api/filterwheel/position/${slot}`);
+            } catch (e) {
+                this.toast('Filter change failed', 'error');
+            }
+        },
+
+        // --- Sky ---
+
         async searchSky() {
             if (!this.skySearch.trim()) return;
             try {
-                const resp = await fetch(`/api/sky/catalog/search?query=${encodeURIComponent(this.skySearch)}`);
-                if (resp.ok) {
-                    const data = await resp.json();
-                    if (data.results && data.results.length > 0) {
-                        this.skyTarget = data.results[0];
-                    } else {
-                        this.skyTarget = {
-                            name: this.skySearch,
-                            type: 'Unknown',
-                            ra: '--',
-                            dec: '--'
-                        };
-                    }
+                const data = await this.apiGet(
+                    `/api/sky/catalog/search?query=${encodeURIComponent(this.skySearch)}`);
+                this.skyResults = data.results || [];
+                if (this.skyResults.length === 1) {
+                    this.selectSkyTarget(this.skyResults[0]);
+                    this.skyShowResults = false;
+                } else if (this.skyResults.length > 1) {
+                    this.skyShowResults = true;
+                } else {
+                    this.skyTarget = null;
+                    this.skyShowResults = false;
+                    this.toast('No objects found for "' + this.skySearch + '"', 'warn');
                 }
             } catch (e) {
-                console.error('Sky search failed:', e);
+                this.toast('Sky search failed', 'error');
             }
+        },
+
+        selectSkyTarget(obj) {
+            this.skyTarget = obj;
+            this.skyShowResults = false;
         },
 
         async slewAndCenter() {
             if (!this.skyTarget) return;
             try {
-                const resp = await fetch('/api/sky/slew-and-center', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        ra: parseFloat(this.skyTarget.ra) || 0,
-                        dec: parseFloat(this.skyTarget.dec) || 0,
-                        toleranceArcsec: 30
-                    })
+                const resp = await this.apiPost('/api/sky/slew-and-center', {
+                    ra: this.skyTarget.ra,
+                    dec: this.skyTarget.dec,
+                    toleranceArcsec: 30
                 });
-                if (resp.ok) {
-                    const data = await resp.json();
-                    console.log('Slew job started:', data.jobId);
-                }
+                const data = await resp.json();
+                this.slewCenterJobId = data.jobId;
+                this.slewCenterStatus = { state: 'pending', iteration: 0 };
+                this.toast('Slew & center started', 'ok');
+                this.startSlewCenterPolling();
             } catch (e) {
-                console.error('Slew failed:', e);
+                this.toast('Slew & center failed: ' + e.message, 'error');
             }
+        },
+
+        startSlewCenterPolling() {
+            this.stopSlewCenterPolling();
+            this._slewCenterTimer = setInterval(() => this.pollSlewCenter(), 2000);
+        },
+
+        stopSlewCenterPolling() {
+            if (this._slewCenterTimer) {
+                clearInterval(this._slewCenterTimer);
+                this._slewCenterTimer = null;
+            }
+        },
+
+        async pollSlewCenter() {
+            if (!this.slewCenterJobId) return;
+            try {
+                const data = await this.apiGet(
+                    `/api/sky/slew-and-center/${this.slewCenterJobId}/status`);
+                this.slewCenterStatus = data;
+
+                if (data.state === 'centered') {
+                    this.stopSlewCenterPolling();
+                    this.toast(`Centered! Error: ${data.errorArcsec?.toFixed(1)}"`, 'ok', 6000);
+                    this.slewCenterJobId = null;
+                } else if (data.state === 'failed') {
+                    this.stopSlewCenterPolling();
+                    this.toast('Centering failed: ' + (data.error || 'unknown'), 'error', 6000);
+                    this.slewCenterJobId = null;
+                } else if (data.state === 'cancelled') {
+                    this.stopSlewCenterPolling();
+                    this.slewCenterJobId = null;
+                }
+            } catch (e) { }
+        },
+
+        async cancelSlewCenter() {
+            if (!this.slewCenterJobId) return;
+            try {
+                await this.apiPost(`/api/sky/slew-and-center/${this.slewCenterJobId}/cancel`);
+                this.stopSlewCenterPolling();
+                this.slewCenterJobId = null;
+                this.slewCenterStatus = null;
+                this.toast('Slew & center cancelled', 'warn');
+            } catch (e) { }
         },
 
         addToSequence() {
             if (!this.skyTarget) return;
-            this.sequence.push({
+            const item = {
                 name: this.skyTarget.name,
                 exposure: this.exposure,
-                count: 10
+                gain: this.gain,
+                binning: parseInt(this.binning),
+                count: 10,
+                filter: null,
+                ra: parseFloat(this.skyTarget.ra) || null,
+                dec: parseFloat(this.skyTarget.dec) || null
+            };
+            this.sequence.push(item);
+            this.syncSequenceToServer();
+        },
+
+        // --- Sequence ---
+
+        addSequenceItem() {
+            this.sequence.push({
+                name: 'Target ' + (this.sequence.length + 1),
+                exposure: this.exposure,
+                gain: this.gain,
+                binning: parseInt(this.binning),
+                count: 10,
+                filter: null,
+                ra: null, dec: null
             });
         },
 
-        // Sequence
+        removeSequenceItem(index) {
+            if (this.seqState === 'running') {
+                this.toast('Cannot modify while running', 'warn');
+                return;
+            }
+            this.sequence.splice(index, 1);
+        },
+
+        async syncSequenceToServer() {
+            try {
+                await this.apiPost('/api/sequence', this.sequence);
+            } catch (e) {
+                this.toast('Failed to sync sequence', 'error');
+            }
+        },
+
+        async loadSequenceFromServer() {
+            try {
+                const data = await this.apiGet('/api/sequence');
+                if (data.items) this.sequence = data.items;
+                this.seqState = data.state || 'idle';
+            } catch (e) { }
+        },
+
         async startSequence() {
             try {
-                await fetch('/api/sequence/start', { method: 'POST' });
+                await this.apiPost('/api/sequence', this.sequence);
+                await this.apiPost('/api/sequence/start');
+                this.seqState = 'running';
+                this.toast('Sequence started', 'ok');
             } catch (e) {
-                console.error('Start sequence failed:', e);
+                this.toast('Start failed: ' + e.message, 'error');
             }
         },
 
         async pauseSequence() {
             try {
-                await fetch('/api/sequence/pause', { method: 'POST' });
+                if (this.seqState === 'paused') {
+                    await this.apiPost('/api/sequence/resume');
+                    this.seqState = 'running';
+                    this.toast('Sequence resumed', 'ok');
+                } else {
+                    await this.apiPost('/api/sequence/pause');
+                    this.seqState = 'paused';
+                    this.toast('Sequence paused', 'info');
+                }
             } catch (e) {
-                console.error('Pause sequence failed:', e);
+                this.toast('Pause/resume failed', 'error');
             }
         },
 
         async stopSequence() {
             try {
-                await fetch('/api/sequence/stop', { method: 'POST' });
+                await this.apiPost('/api/sequence/stop');
+                this.seqState = 'idle';
+                this.toast('Sequence stopped', 'warn');
             } catch (e) {
-                console.error('Stop sequence failed:', e);
+                this.toast('Stop failed', 'error');
             }
         },
 
-        // INDI connection
-        async connectIndi() {
-            this.saveSettings();
+        startSeqPolling() {
+            this.stopSeqPolling();
+            this._seqPollTimer = setInterval(() => this.pollSeqStatus(), 2000);
+        },
+
+        stopSeqPolling() {
+            if (this._seqPollTimer) {
+                clearInterval(this._seqPollTimer);
+                this._seqPollTimer = null;
+            }
+        },
+
+        async pollSeqStatus() {
             try {
-                const resp = await fetch('/api/system/status');
-                if (resp.ok) {
-                    this.indiConnected = true;
-                    this.connectStatusWs();
+                const status = await this.apiGet('/api/sequence/status');
+                this.seqStatus = status;
+                this.seqState = status.state || 'idle';
+                if (status.state === 'idle' && this._seqPollTimer) {
+                    this.stopSeqPolling();
+                    if (status.totalFramesCompleted > 0 && !status.lastError) {
+                        this.toast('Sequence completed!', 'ok', 6000);
+                    }
                 }
-            } catch (e) {
-                this.indiConnected = false;
-                console.error('INDI connection failed:', e);
-            }
+            } catch (e) { }
         },
 
-        connectStatusWs() {
-            if (this.statusWs) {
-                this.statusWs.close();
-            }
-            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            this.statusWs = new WebSocket(`${protocol}//${location.host}/ws/status`);
-            this.statusWs.onmessage = (evt) => {
-                try {
-                    const msg = JSON.parse(evt.data);
-                    this.handleStatusMessage(msg);
-                } catch (e) { /* ignore */ }
-            };
-            this.statusWs.onclose = () => {
-                this.indiConnected = false;
-            };
+        seqProgress() {
+            if (!this.seqStatus || !this.seqStatus.totalFrames) return 0;
+            return Math.round((this.seqStatus.totalFramesCompleted / this.seqStatus.totalFrames) * 100);
         },
+
+        formatTime(seconds) {
+            if (!seconds || seconds <= 0) return '--:--';
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = Math.floor(seconds % 60);
+            if (h > 0) return `${h}h ${m.toString().padStart(2, '0')}m`;
+            return `${m}m ${s.toString().padStart(2, '0')}s`;
+        },
+
+        // --- Status WebSocket handler ---
 
         handleStatusMessage(msg) {
-            if (msg.type === 'mount') {
-                Object.assign(this.mount, msg.data);
-            } else if (msg.type === 'camera') {
-                if (msg.data.temperature !== undefined) {
-                    this.cameraTemp = msg.data.temperature;
-                }
-            } else if (msg.type === 'stats') {
-                Object.assign(this.stats, msg.data);
+            if (msg.type !== 'status') return;
+
+            const eq = msg.equipment || {};
+
+            if (eq.indi) {
+                this.indiConnected = eq.indi.connected;
             }
+            if (eq.camera) {
+                this.cameraTemp = eq.camera.temperature;
+                this.selectedCamera = eq.camera.name;
+            }
+            if (eq.telescope) {
+                Object.assign(this.mount, {
+                    ra: eq.telescope.ra, dec: eq.telescope.dec,
+                    alt: eq.telescope.alt, az: eq.telescope.az,
+                    tracking: eq.telescope.tracking, slewing: eq.telescope.slewing,
+                    parked: eq.telescope.parked, pierSide: eq.telescope.pierSide,
+                    connected: eq.telescope.connected
+                });
+                this.selectedTelescope = eq.telescope.name;
+            }
+            if (eq.focuser) {
+                this.focusPosition = eq.focuser.position;
+                this.focusTemp = eq.focuser.temperature;
+                this.focusMoving = eq.focuser.moving;
+                this.focusConnected = true;
+                this.selectedFocuser = eq.focuser.name;
+            }
+            if (eq.filterWheel) {
+                this.filterWheel = {
+                    connected: true,
+                    position: eq.filterWheel.position,
+                    currentFilter: eq.filterWheel.currentFilter,
+                    filters: eq.filterWheel.filters || [],
+                    moving: eq.filterWheel.moving
+                };
+                this.selectedFilterWheel = eq.filterWheel.name;
+            }
+            if (msg.liveStack) {
+                this.liveStackEnabled = msg.liveStack.isRunning;
+                this.liveStackFrames = msg.liveStack.frameCount;
+            }
+            if (msg.sequence) {
+                this.seqStatus = msg.sequence;
+                var newState = msg.sequence.state || 'idle';
+                var oldState = this.seqState;
+                this.seqState = newState;
+
+                if (oldState === 'running' && newState === 'idle' &&
+                    msg.sequence.totalFramesCompleted > 0 && !msg.sequence.lastError) {
+                    this.toast('Sequence completed!', 'ok', 6000);
+                }
+            }
+        },
+
+        // --- Formatters ---
+
+        formatRA(hours) {
+            if (hours == null || isNaN(hours)) return '--h --m --s';
+            const h = Math.floor(hours);
+            const m = Math.floor((hours - h) * 60);
+            const s = ((hours - h) * 60 - m) * 60;
+            return `${h}h ${m.toString().padStart(2, '0')}m ${s.toFixed(1).padStart(4, '0')}s`;
+        },
+
+        formatDec(degrees) {
+            if (degrees == null || isNaN(degrees)) return "--° --' --\"";
+            const sign = degrees >= 0 ? '+' : '-';
+            const abs = Math.abs(degrees);
+            const d = Math.floor(abs);
+            const m = Math.floor((abs - d) * 60);
+            const s = ((abs - d) * 60 - m) * 60;
+            return `${sign}${d}° ${m.toString().padStart(2, '0')}' ${s.toFixed(0).padStart(2, '0')}"`;
+        },
+
+        formatDeg(val, digits) {
+            if (val == null || isNaN(val)) return '--';
+            return val.toFixed(digits || 1) + '°';
         }
     };
+}
+
+class ApiError extends Error {
+    constructor(status, body) {
+        super(`HTTP ${status}: ${body.substring(0, 200)}`);
+        this.status = status;
+        this.body = body;
+    }
 }

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.*" />
+    <PackageReference Include="NUnit" Version="4.*" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.*" />
+    <PackageReference Include="Moq" Version="4.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\NINA.Headless\NINA.Headless.csproj" />
+    <ProjectReference Include="..\..\src\NINA.INDI\NINA.INDI.csproj" />
+    <ProjectReference Include="..\..\src\NINA.Image.Portable\NINA.Image.Portable.csproj" />
+    <ProjectReference Include="..\..\src\NINA.Core.Portable\NINA.Core.Portable.csproj" />
+  </ItemGroup>
+</Project>

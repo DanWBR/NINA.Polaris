@@ -24,6 +24,10 @@
                 <span class="chip-icon">T</span>
                 <span x-text="cameraTemp !== null ? cameraTemp.toFixed(1) + '&deg;C' : '--'"></span>
             </span>
+            <span class="status-chip" x-show="liveStackEnabled">
+                <span class="chip-icon">S</span>
+                <span x-text="liveStackFrames + ' frames'"></span>
+            </span>
             <button class="btn-icon" @click="toggleNightMode()" :title="nightMode ? 'Day Mode' : 'Night Mode'">
                 <span x-text="nightMode ? 'DAY' : 'NIGHT'"></span>
             </button>
@@ -71,8 +75,8 @@
                 <div class="preview-area">
                     <canvas id="liveCanvas" class="preview-canvas"></canvas>
                     <div class="preview-overlay" x-show="!liveActive">
-                        <p>No camera connected</p>
-                        <p class="hint">Connect a camera in Settings to start imaging</p>
+                        <p x-text="selectedCamera ? 'Ready - ' + selectedCamera : 'No camera connected'"></p>
+                        <p class="hint" x-show="!selectedCamera">Connect a camera in Settings to start imaging</p>
                     </div>
                 </div>
                 <div class="quick-controls">
@@ -84,66 +88,130 @@
                             <option value="2">2x2</option>
                             <option value="4">4x4</option>
                         </select></label>
+                        <label x-show="filterWheel.connected">Filter<select class="input-sm"
+                            @change="setFilter($event.target.value)"
+                            :value="filterWheel.currentFilter">
+                            <template x-for="f in filterWheel.filters" :key="f">
+                                <option :value="f" x-text="f" :selected="f === filterWheel.currentFilter"></option>
+                            </template>
+                        </select></label>
                     </div>
                     <div class="control-row actions">
-                        <button class="btn btn-primary" @click="capture()">Capture</button>
-                        <button class="btn" @click="loopCapture()">Loop</button>
-                        <button class="btn btn-danger" @click="stopCapture()">Stop</button>
+                        <button class="btn btn-primary" @click="capture()" :disabled="capturing || !selectedCamera">
+                            <span x-text="capturing ? 'Exposing...' : 'Capture'"></span>
+                        </button>
+                        <button class="btn" @click="loopCapture()" :disabled="looping || !selectedCamera">Loop</button>
+                        <button class="btn btn-danger" @click="stopCapture()" :disabled="!looping && !capturing">Stop</button>
+                        <button class="btn" :class="liveStackEnabled ? 'btn-active' : ''" @click="toggleLiveStack()">
+                            <span x-text="liveStackEnabled ? 'Stack ON (' + liveStackFrames + ')' : 'Stack'"></span>
+                        </button>
+                        <button class="btn" @click="resetLiveStack()" x-show="liveStackEnabled">Reset</button>
                     </div>
                 </div>
                 <div class="stats-bar">
                     <span>Stars: <strong x-text="stats.starCount">--</strong></span>
-                    <span>HFR: <strong x-text="stats.hfr ? stats.hfr.toFixed(2) + '\"' : '--'">--</strong></span>
-                    <span>Mean: <strong x-text="stats.mean ? Math.round(stats.mean) : '--'">--</strong></span>
+                    <span>HFR: <strong x-text="stats.hfr || '--'">--</strong></span>
+                    <span>Mean: <strong x-text="stats.mean || '--'">--</strong></span>
+                    <span x-show="filterWheel.connected" class="text-ok" x-text="filterWheel.currentFilter"></span>
+                    <span>Frames: <strong x-text="sessionCaptures"></strong></span>
                     <span x-text="currentTime"></span>
+                </div>
+
+                <!-- Image History (collapsible) -->
+                <div class="image-history" x-show="imageHistory.length > 0">
+                    <div class="history-header" @click="$refs.historyList.classList.toggle('collapsed')">
+                        Image History (<span x-text="imageHistory.length"></span>)
+                    </div>
+                    <div class="history-list" x-ref="historyList">
+                        <template x-for="(img, i) in imageHistory.slice(0, 10)" :key="i">
+                            <div class="history-item">
+                                <span class="history-time" x-text="img.time"></span>
+                                <span x-text="img.exposure + 's'"></span>
+                                <span x-text="'G' + img.gain"></span>
+                                <span x-show="img.filter" x-text="img.filter"></span>
+                                <span>Stars: <strong x-text="img.stars"></strong></span>
+                                <span>HFR: <strong x-text="img.hfr"></strong></span>
+                            </div>
+                        </template>
+                    </div>
                 </div>
             </div>
 
             <!-- MOUNT CONTROL -->
             <div x-show="tab === 'mount'" class="tab-panel">
-                <div class="panel-header">Mount Control</div>
+                <div class="panel-header">
+                    Mount Control
+                    <span class="status-indicator-sm" :class="mount.connected ? 'ok' : 'error'"
+                          x-text="selectedTelescope || 'Not connected'"></span>
+                </div>
                 <div class="mount-layout">
                     <div class="dpad-container">
-                        <button class="dpad-btn dpad-n" @click="mountMove('n')">N</button>
-                        <button class="dpad-btn dpad-w" @click="mountMove('w')">W</button>
-                        <button class="dpad-btn dpad-stop" @click="mountMove('stop')">STOP</button>
-                        <button class="dpad-btn dpad-e" @click="mountMove('e')">E</button>
-                        <button class="dpad-btn dpad-s" @click="mountMove('s')">S</button>
+                        <button class="dpad-btn dpad-n" @click="mountMove('n')" :disabled="!mount.connected">N</button>
+                        <button class="dpad-btn dpad-w" @click="mountMove('w')" :disabled="!mount.connected">W</button>
+                        <button class="dpad-btn dpad-stop" @click="mountStop()">STOP</button>
+                        <button class="dpad-btn dpad-e" @click="mountMove('e')" :disabled="!mount.connected">E</button>
+                        <button class="dpad-btn dpad-s" @click="mountMove('s')" :disabled="!mount.connected">S</button>
                     </div>
                     <div class="mount-info">
-                        <div class="info-row"><span>RA:</span><strong x-text="mount.ra || '--'"></strong></div>
-                        <div class="info-row"><span>Dec:</span><strong x-text="mount.dec || '--'"></strong></div>
-                        <div class="info-row"><span>Alt:</span><strong x-text="mount.alt || '--'"></strong></div>
-                        <div class="info-row"><span>Az:</span><strong x-text="mount.az || '--'"></strong></div>
-                        <div class="info-row"><span>Tracking:</span><strong x-text="mount.tracking ? 'ON' : 'OFF'"></strong></div>
+                        <div class="info-row"><span>RA:</span><strong x-text="formatRA(mount.ra)"></strong></div>
+                        <div class="info-row"><span>Dec:</span><strong x-text="formatDec(mount.dec)"></strong></div>
+                        <div class="info-row"><span>Alt:</span><strong x-text="formatDeg(mount.alt)"></strong></div>
+                        <div class="info-row"><span>Az:</span><strong x-text="formatDeg(mount.az)"></strong></div>
+                        <div class="info-row"><span>Tracking:</span>
+                            <strong :class="mount.tracking ? 'text-ok' : 'text-warn'"
+                                    x-text="mount.tracking ? 'ON' : 'OFF'"></strong>
+                        </div>
+                        <div class="info-row"><span>Pier:</span><strong x-text="mount.pierSide"></strong></div>
+                        <div class="info-row" x-show="mount.slewing">
+                            <span>Status:</span><strong class="text-warn">SLEWING</strong>
+                        </div>
+                        <div class="info-row" x-show="mount.parked">
+                            <span>Status:</span><strong class="text-warn">PARKED</strong>
+                        </div>
                     </div>
                 </div>
                 <div class="control-row actions" style="margin-top: 1rem;">
-                    <button class="btn" @click="parkMount()">Park</button>
-                    <button class="btn" @click="unparkMount()">Unpark</button>
-                    <button class="btn btn-primary" @click="tab = 'sky'">GoTo (Sky Explorer)</button>
+                    <button class="btn" @click="toggleTracking()" :disabled="!mount.connected">
+                        <span x-text="mount.tracking ? 'Stop Tracking' : 'Start Tracking'"></span>
+                    </button>
+                    <button class="btn" @click="parkMount()" :disabled="!mount.connected || mount.parked">Park</button>
+                    <button class="btn" @click="unparkMount()" :disabled="!mount.connected || !mount.parked">Unpark</button>
+                    <button class="btn btn-primary" @click="tab = 'sky'">GoTo (Sky)</button>
                 </div>
             </div>
 
             <!-- FOCUS -->
             <div x-show="tab === 'focus'" class="tab-panel">
-                <div class="panel-header">Focus Control</div>
+                <div class="panel-header">
+                    Focus Control
+                    <span class="status-indicator-sm" :class="focusConnected ? 'ok' : 'error'"
+                          x-text="selectedFocuser || 'Not connected'"></span>
+                </div>
                 <div class="focus-controls">
                     <div class="stepper">
-                        <button class="btn btn-lg" @click="focusMove(-focusStep)">&lt;&lt;</button>
-                        <button class="btn" @click="focusMove(-1)">&lt;</button>
+                        <button class="btn btn-lg" @click="focusMove(-focusStep)" :disabled="!focusConnected">&lt;&lt;</button>
+                        <button class="btn" @click="focusMove(-1)" :disabled="!focusConnected">&lt;</button>
                         <span class="stepper-value" x-text="focusPosition">0</span>
-                        <button class="btn" @click="focusMove(1)">&gt;</button>
-                        <button class="btn btn-lg" @click="focusMove(focusStep)">&gt;&gt;</button>
+                        <button class="btn" @click="focusMove(1)" :disabled="!focusConnected">&gt;</button>
+                        <button class="btn btn-lg" @click="focusMove(focusStep)" :disabled="!focusConnected">&gt;&gt;</button>
                     </div>
                     <label class="slider-control">
                         Step Size
                         <input type="range" min="1" max="500" x-model.number="focusStep">
                         <span x-text="focusStep"></span>
                     </label>
+                    <div class="focus-info" x-show="focusConnected">
+                        <div class="info-row" x-show="focusTemp !== null">
+                            <span>Temperature:</span><strong x-text="focusTemp !== null ? focusTemp.toFixed(1) + ' C' : '--'"></strong>
+                        </div>
+                        <div class="info-row" x-show="focusMoving">
+                            <span>Status:</span><strong class="text-warn">MOVING</strong>
+                        </div>
+                    </div>
                 </div>
                 <div class="control-row actions" style="margin-top: 1rem;">
-                    <button class="btn btn-primary" @click="autoFocus()">Auto Focus</button>
+                    <button class="btn btn-primary" @click="autoFocus()" :disabled="!focusConnected">Auto Focus</button>
+                    <button class="btn btn-danger" @click="focusAbort()" :disabled="!focusConnected || !focusMoving">Abort</button>
                 </div>
                 <div class="chart-placeholder">
                     <p>Focus curve will appear here during auto-focus</p>
@@ -171,71 +239,206 @@
             <!-- SKY EXPLORER -->
             <div x-show="tab === 'sky'" class="tab-panel tab-panel-sky">
                 <div class="sky-toolbar">
-                    <input type="text" class="search-input" placeholder="Search object (M31, NGC 7000...)"
-                           x-model="skySearch" @keyup.enter="searchSky()">
+                    <input type="text" class="search-input" placeholder="Search object (M31, NGC 7000, Orion...)"
+                           x-model="skySearch" @keyup.enter="searchSky()" @input="skyShowResults = false">
                     <button class="btn btn-sm" @click="searchSky()">Search</button>
                 </div>
+
+                <!-- Search results dropdown -->
+                <div class="sky-results" x-show="skyShowResults && skyResults.length > 1">
+                    <template x-for="obj in skyResults" :key="obj.name">
+                        <div class="sky-result-item" @click="selectSkyTarget(obj)">
+                            <strong x-text="obj.name"></strong>
+                            <span class="sky-result-type" x-text="obj.type"></span>
+                            <span class="sky-result-common" x-show="obj.commonName" x-text="obj.commonName"></span>
+                            <span class="sky-result-mag">mag <span x-text="obj.magnitude"></span></span>
+                        </div>
+                    </template>
+                </div>
+
                 <div id="aladin-lite-div" class="sky-viewer">
                     <div class="sky-placeholder">
                         <p>Aladin Lite sky viewer</p>
-                        <p class="hint">Will load when Aladin Lite JS is integrated</p>
+                        <p class="hint">Interactive sky map will load when Aladin Lite JS is integrated</p>
                     </div>
                 </div>
+
+                <!-- Slew & Center progress -->
+                <div class="sky-slew-progress" x-show="slewCenterStatus && slewCenterJobId">
+                    <div class="slew-progress-row">
+                        <span class="slew-state" x-text="slewCenterStatus?.state?.toUpperCase()"></span>
+                        <span>Iteration: <strong x-text="slewCenterStatus?.iteration || 0"></strong></span>
+                        <span x-show="slewCenterStatus?.errorArcsec">
+                            Error: <strong x-text="(slewCenterStatus?.errorArcsec || 0).toFixed(1) + '&quot;'"></strong>
+                        </span>
+                        <button class="btn btn-sm btn-danger" @click="cancelSlewCenter()">Cancel</button>
+                    </div>
+                </div>
+
                 <div class="sky-info-panel">
                     <div class="sky-target" x-show="skyTarget">
-                        <strong x-text="skyTarget?.name || 'No target'"></strong>
-                        <span x-text="skyTarget?.type || ''"></span>
+                        <div class="sky-target-header">
+                            <strong x-text="skyTarget?.name || 'No target'"></strong>
+                            <span class="sky-target-type" x-text="skyTarget?.type || ''"></span>
+                        </div>
+                        <div class="sky-target-common" x-show="skyTarget?.commonName"
+                             x-text="skyTarget?.commonName"></div>
+                        <div class="sky-target-aliases" x-show="skyTarget?.aliases?.length > 0">
+                            <span class="text-muted" x-text="'Also: ' + (skyTarget?.aliases || []).join(', ')"></span>
+                        </div>
                     </div>
                     <div class="sky-coords" x-show="skyTarget">
-                        <span>RA: <strong x-text="skyTarget?.ra || '--'"></strong></span>
-                        <span>Dec: <strong x-text="skyTarget?.dec || '--'"></strong></span>
+                        <span>RA: <strong x-text="skyTarget?.raFormatted || formatRA(skyTarget?.ra)"></strong></span>
+                        <span>Dec: <strong x-text="skyTarget?.decFormatted || formatDec(skyTarget?.dec)"></strong></span>
+                        <span x-show="skyTarget?.magnitude">Mag: <strong x-text="skyTarget?.magnitude"></strong></span>
                         <span>FOV: <strong x-text="fov.width.toFixed(2) + '&deg; x ' + fov.height.toFixed(2) + '&deg;'"></strong></span>
                     </div>
                     <div class="control-row actions">
-                        <button class="btn btn-primary" @click="slewAndCenter()" :disabled="!skyTarget">Slew &amp; Center</button>
+                        <button class="btn btn-primary" @click="slewAndCenter()"
+                                :disabled="!skyTarget || !mount.connected || slewCenterJobId">Slew &amp; Center</button>
+                        <button class="btn" @click="slewTo(skyTarget?.ra, skyTarget?.dec)"
+                                :disabled="!skyTarget || !mount.connected">Slew Only</button>
                         <button class="btn" @click="addToSequence()" :disabled="!skyTarget">Add to Sequence</button>
                     </div>
+                </div>
+
+                <!-- No target selected -->
+                <div class="sky-empty" x-show="!skyTarget && !skyShowResults">
+                    <p class="hint">Search for a deep sky object above to get started</p>
                 </div>
             </div>
 
             <!-- SEQUENCE -->
             <div x-show="tab === 'sequence'" class="tab-panel">
-                <div class="panel-header">Sequence</div>
+                <div class="panel-header">
+                    Sequence
+                    <span class="status-indicator-sm" :class="{
+                        'ok': seqState === 'running',
+                        'warn': seqState === 'paused',
+                        'error': seqState === 'idle'
+                    }" x-text="seqState.toUpperCase()"></span>
+                </div>
+
+                <!-- Progress bar (visible when running or paused) -->
+                <div class="seq-progress-section" x-show="seqState !== 'idle' && seqStatus">
+                    <div class="seq-progress-bar">
+                        <div class="seq-progress-fill" :style="'width: ' + seqProgress() + '%'"></div>
+                    </div>
+                    <div class="seq-progress-info">
+                        <span x-text="seqProgress() + '%'"></span>
+                        <span x-text="(seqStatus?.totalFramesCompleted || 0) + ' / ' + (seqStatus?.totalFrames || 0) + ' frames'"></span>
+                        <span x-show="seqStatus?.estimatedRemainingSeconds > 0">
+                            ETA: <strong x-text="formatTime(seqStatus?.estimatedRemainingSeconds)"></strong>
+                        </span>
+                        <span x-show="seqStatus?.elapsedSeconds > 0">
+                            Elapsed: <strong x-text="formatTime(seqStatus?.elapsedSeconds)"></strong>
+                        </span>
+                    </div>
+                    <div class="seq-error" x-show="seqStatus?.lastError">
+                        <span x-text="seqStatus?.lastError"></span>
+                    </div>
+                </div>
+
+                <!-- Empty state -->
                 <div class="sequence-empty" x-show="sequence.length === 0">
                     <p>No sequence loaded</p>
-                    <p class="hint">Add targets from Sky Explorer or load a sequence file</p>
+                    <p class="hint">Add targets from Sky Explorer or use the + button below</p>
                 </div>
+
+                <!-- Sequence item list -->
                 <div class="sequence-list" x-show="sequence.length > 0">
                     <template x-for="(item, i) in sequence" :key="i">
-                        <div class="sequence-item">
+                        <div class="sequence-item" :class="{
+                            'seq-active': seqStatus && seqStatus.currentItemIndex === i && seqState === 'running',
+                            'seq-done': seqStatus && i < seqStatus.currentItemIndex
+                        }">
                             <span class="seq-num" x-text="i + 1"></span>
-                            <span class="seq-name" x-text="item.name"></span>
-                            <span class="seq-detail" x-text="item.exposure + 's x ' + item.count"></span>
+                            <div class="seq-item-body">
+                                <input type="text" class="seq-input seq-input-name" x-model="item.name"
+                                       :disabled="seqState === 'running'" placeholder="Target name">
+                                <div class="seq-item-params">
+                                    <label>Exp<input type="number" class="seq-input seq-input-num"
+                                        x-model.number="item.exposure" step="1" min="0.001"
+                                        :disabled="seqState === 'running'">s</label>
+                                    <label>x<input type="number" class="seq-input seq-input-num"
+                                        x-model.number="item.count" step="1" min="1"
+                                        :disabled="seqState === 'running'"></label>
+                                    <label>G<input type="number" class="seq-input seq-input-num"
+                                        x-model.number="item.gain" step="10" min="0"
+                                        :disabled="seqState === 'running'"></label>
+                                    <label>Bin<select class="seq-input" x-model.number="item.binning"
+                                        :disabled="seqState === 'running'">
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="4">4</option>
+                                    </select></label>
+                                </div>
+                                <!-- Per-item progress when running -->
+                                <div class="seq-item-progress" x-show="seqStatus && seqStatus.items && seqStatus.items[i]">
+                                    <span x-text="(seqStatus?.items?.[i]?.completed || 0) + '/' + item.count"></span>
+                                </div>
+                            </div>
+                            <button class="btn btn-sm btn-icon-only" @click="removeSequenceItem(i)"
+                                    :disabled="seqState === 'running'" title="Remove">&times;</button>
                         </div>
                     </template>
                 </div>
+
+                <!-- Controls -->
                 <div class="control-row actions" style="margin-top: 1rem;">
-                    <button class="btn btn-primary" @click="startSequence()">Start</button>
-                    <button class="btn" @click="pauseSequence()">Pause</button>
-                    <button class="btn btn-danger" @click="stopSequence()">Stop</button>
+                    <button class="btn" @click="addSequenceItem()" :disabled="seqState === 'running'">+ Add</button>
+                    <button class="btn btn-primary" @click="startSequence()"
+                            :disabled="seqState === 'running' || sequence.length === 0">Start</button>
+                    <button class="btn" @click="pauseSequence()"
+                            :disabled="seqState === 'idle'"
+                            x-text="seqState === 'paused' ? 'Resume' : 'Pause'"></button>
+                    <button class="btn btn-danger" @click="stopSequence()"
+                            :disabled="seqState === 'idle'">Stop</button>
                 </div>
             </div>
 
             <!-- SETTINGS -->
             <div x-show="tab === 'settings'" class="tab-panel">
                 <div class="panel-header">Settings</div>
+
                 <div class="settings-section">
                     <h3>INDI Server</h3>
                     <label>Host<input type="text" x-model="settings.indiHost" class="input-md"></label>
                     <label>Port<input type="number" x-model.number="settings.indiPort" class="input-sm"></label>
-                    <button class="btn btn-primary" @click="connectIndi()">Connect</button>
+                    <div class="control-row actions">
+                        <button class="btn btn-primary" @click="connectIndi()" x-show="!indiConnected">Connect</button>
+                        <button class="btn btn-danger" @click="disconnectIndi()" x-show="indiConnected">Disconnect</button>
+                        <button class="btn" @click="refreshDevices()" x-show="indiConnected">Refresh Devices</button>
+                    </div>
                 </div>
+
+                <div class="settings-section" x-show="indiConnected && devices.length > 0">
+                    <h3>Devices (<span x-text="devices.length"></span> found)</h3>
+                    <template x-for="dev in devices" :key="dev.name">
+                        <div class="device-card">
+                            <div class="device-name" x-text="dev.name"></div>
+                            <div class="device-driver" x-text="dev.driver || 'Unknown driver'"></div>
+                            <div class="device-actions">
+                                <button class="btn btn-sm" @click="selectCamera(dev.name)"
+                                        :class="selectedCamera === dev.name ? 'btn-active' : ''">Camera</button>
+                                <button class="btn btn-sm" @click="selectTelescope(dev.name)"
+                                        :class="selectedTelescope === dev.name ? 'btn-active' : ''">Mount</button>
+                                <button class="btn btn-sm" @click="selectFocuser(dev.name)"
+                                        :class="selectedFocuser === dev.name ? 'btn-active' : ''">Focuser</button>
+                                <button class="btn btn-sm" @click="selectFilterWheel(dev.name)"
+                                        :class="selectedFilterWheel === dev.name ? 'btn-active' : ''">Filter</button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
                 <div class="settings-section">
                     <h3>Observatory</h3>
                     <label>Latitude<input type="number" x-model.number="settings.latitude" step="0.001" class="input-md"></label>
                     <label>Longitude<input type="number" x-model.number="settings.longitude" step="0.001" class="input-md"></label>
                     <label>Altitude (m)<input type="number" x-model.number="settings.altitude" step="1" class="input-sm"></label>
                 </div>
+
                 <div class="settings-section">
                     <h3>Camera Optics</h3>
                     <label>Sensor Width (mm)<input type="number" x-model.number="settings.sensorWidth" step="0.1" class="input-sm"></label>
@@ -245,6 +448,20 @@
             </div>
 
         </main>
+    </div>
+
+    <!-- Connection lost banner -->
+    <div class="connection-banner" x-show="!serverReachable" x-transition>
+        <span>Connection to server lost. Reconnecting...</span>
+    </div>
+
+    <!-- Toast notifications -->
+    <div class="toast-container">
+        <template x-for="t in toasts" :key="t.id">
+            <div class="toast" :class="'toast-' + t.type" @click="dismissToast(t.id)" x-transition>
+                <span x-text="t.message"></span>
+            </div>
+        </template>
     </div>
 
     <script src="/js/lib/alpine.min.js" defer></script>

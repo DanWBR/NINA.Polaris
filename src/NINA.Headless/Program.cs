@@ -13,6 +13,12 @@ builder.WebHost.ConfigureKestrel(options =>
 // Services
 builder.Services.AddSingleton<ImageRelayService>();
 builder.Services.AddSingleton<LiveStackingService>();
+builder.Services.AddSingleton<EquipmentManager>();
+builder.Services.AddSingleton<SequenceEngine>();
+builder.Services.AddSingleton<SkyCatalogService>();
+builder.Services.AddSingleton<PlateSolveService>();
+builder.Services.AddSingleton<SlewCenterService>();
+builder.Services.AddSingleton<ProfileService>();
 builder.Services.AddSingleton(sp =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
@@ -27,10 +33,12 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseWebSockets();
 
-// Equipment endpoints (stub)
+// Equipment endpoints
 app.MapEquipmentEndpoints();
 app.MapCameraEndpoints();
 app.MapTelescopeEndpoints();
+app.MapFocuserEndpoints();
+app.MapFilterWheelEndpoints();
 app.MapSequenceEndpoints();
 app.MapSkyEndpoints();
 app.MapSystemEndpoints();

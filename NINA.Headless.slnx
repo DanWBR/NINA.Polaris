@@ -5,4 +5,7 @@
     <Project Path="src/NINA.Image.Portable/NINA.Image.Portable.csproj" />
     <Project Path="src/NINA.INDI/NINA.INDI.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/NINA.Headless.Test/NINA.Headless.Test.csproj" />
+  </Folder>
 </Solution>
