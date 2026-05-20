@@ -79,7 +79,9 @@
 
             <!-- LIVE VIEW -->
             <div x-show="tab === 'live'" class="tab-panel">
-                <div class="preview-area">
+                <div class="preview-area"
+                     @mousemove="onPreviewMouseMove($event)"
+                     @mouseleave="hoverPixel = null">
                     <canvas id="liveCanvas" class="preview-canvas"></canvas>
                     <canvas id="overlayCanvas" class="preview-overlay-canvas"></canvas>
                     <div class="preview-overlay" x-show="!liveActive">
@@ -96,9 +98,19 @@
                         <button class="btn btn-sm" @click="showGrid = !showGrid; redrawOverlay()"
                                 :class="showGrid ? 'btn-active' : ''"
                                 title="Toggle 3x3 grid">▦</button>
+                        <button class="btn btn-sm" @click="showPixelReadout = !showPixelReadout"
+                                :class="showPixelReadout ? 'btn-active' : ''"
+                                title="Toggle pixel value readout on hover">⊞</button>
                     </div>
-                    <div class="preview-overlay-info" x-show="hoverPixel">
-                        <span x-text="'x=' + hoverPixel?.x + ' y=' + hoverPixel?.y"></span>
+                    <div class="preview-overlay-info" x-show="showPixelReadout && hoverPixel">
+                        <span>x=<strong x-text="hoverPixel?.x"></strong></span>
+                        <span>y=<strong x-text="hoverPixel?.y"></strong></span>
+                        <span x-show="hoverPixel?.adu !== null">
+                            ADU=<strong x-text="hoverPixel?.adu"></strong>
+                        </span>
+                        <span x-show="hoverPixel?.rgb">
+                            <span x-text="hoverPixel?.rgb"></span>
+                        </span>
                     </div>
                 </div>
                 <div class="quick-controls">

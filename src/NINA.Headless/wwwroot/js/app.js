@@ -160,8 +160,9 @@ function ninaApp() {
         showStarOverlay: false,
         showCrosshair: true,
         showGrid: false,
+        showPixelReadout: false,
         lastStars: null,        // { width, height, stars: [{x,y,hfr,...}] }
-        hoverPixel: null,       // { x, y } in image coords
+        hoverPixel: null,       // { x, y, adu, rgb } in source-image coords
 
         // Manual stretch controls
         stretchAuto: true,
@@ -950,6 +951,51 @@ function ninaApp() {
                 overlay.add(A.polygon(corners));
                 this._aladinFovOverlay = overlay;
             } catch (e) { console.warn('FOV overlay failed', e); }
+        },
+
+        // Pixel readout: convert mouse event coords to source-image coords +
+        // read raw ADU when available, otherwise sample the canvas RGB.
+        onPreviewMouseMove(evt) {
+            if (!this.showPixelReadout) {
+                this.hoverPixel = null;
+                return;
+            }
+            const live = document.getElementById('liveCanvas');
+            if (!live || !live.width) { this.hoverPixel = null; return; }
+            const rect = live.getBoundingClientRect();
+            const cx = evt.clientX - rect.left;
+            const cy = evt.clientY - rect.top;
+            if (cx < 0 || cy < 0 || cx >= rect.width || cy >= rect.height) {
+                this.hoverPixel = null;
+                return;
+            }
+            // Mouse → canvas pixel coords
+            const canvasX = Math.floor(cx * live.width / rect.width);
+            const canvasY = Math.floor(cy * live.height / rect.height);
+
+            // Source-image coords (raw mode) or just canvas coords (JPEG mode)
+            let srcX = canvasX, srcY = canvasY, adu = null, rgb = null;
+            if (this._lastRawFrame) {
+                const f = this._lastRawFrame;
+                srcX = Math.floor(canvasX * f.width / live.width);
+                srcY = Math.floor(canvasY * f.height / live.height);
+                if (srcX >= 0 && srcX < f.width && srcY >= 0 && srcY < f.height) {
+                    adu = f.pixels[srcY * f.width + srcX];
+                }
+            } else {
+                // JPEG path: read RGB from canvas at the displayed pixel
+                try {
+                    const gl = this._gl;
+                    if (gl) {
+                        // WebGL renders aren't readable via 2D getImageData; skip
+                    } else {
+                        const ctx = live.getContext('2d');
+                        const p = ctx.getImageData(canvasX, canvasY, 1, 1).data;
+                        rgb = `RGB ${p[0]},${p[1]},${p[2]}`;
+                    }
+                } catch (e) { /* security or context type mismatch */ }
+            }
+            this.hoverPixel = { x: srcX, y: srcY, adu, rgb };
         },
 
         // ---- Visual overlays (stars, crosshair, grid, pixel readout) ----

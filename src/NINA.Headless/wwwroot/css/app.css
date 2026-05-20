@@ -235,12 +235,19 @@ html, body {
     position: absolute;
     bottom: 8px;
     left: 8px;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.7);
     color: var(--text-secondary);
     font-size: 11px;
     padding: 3px 8px;
     border-radius: 3px;
     pointer-events: none;
+    display: flex;
+    gap: 10px;
+    font-family: monospace;
+}
+
+.preview-overlay-info strong {
+    color: var(--text-primary);
 }
 
 .preview-overlay {
