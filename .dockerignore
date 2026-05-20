@@ -1,0 +1,32 @@
+# Build/IDE noise that should never ship inside the image
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+**/.idea/
+publish/
+*.user
+*.suo
+
+# Tests (built in CI, not needed in the runtime image)
+tests/
+
+# Local reference materials
+docs/
+
+# Git
+.git/
+.github/
+.gitignore
+.gitattributes
+
+# Docker scaffolding itself
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Editor / OS
+*.log
+*.tmp
+Thumbs.db
+.DS_Store

@@ -1,0 +1,56 @@
+# docker-compose for NINA Headless + optional INDI server sidecar.
+#
+# Run:
+#     docker compose up -d
+#
+# The default profile starts just NINA Headless. Add `--profile indi` to
+# also start an indiserver sidecar (good for self-contained simulator
+# setups). Add `--profile astap` to mount the plate solver into the
+# container (requires the host to have it installed at /opt/astap).
+#
+# mDNS announcer + INDI client need host networking to reach LAN devices
+# and to reply to multicast queries, so the default uses `network_mode:
+# host`. Override with `network_mode: bridge` if you don't need either.
+
+services:
+  nina:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/danwbr/nina-headless:latest
+    container_name: nina-headless
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - ASPNETCORE_URLS=http://0.0.0.0:5000
+      - DOTNET_gcServer=0
+      - Indi__Host=localhost
+      - Indi__Port=7624
+      - Mdns__Enabled=true
+      # Override to point at a separate Windows mini-PC running indiserver:
+      # - Indi__Host=192.168.1.50
+    volumes:
+      # User profiles + trained-flat exposures persist here
+      - nina-data:/data
+      # Where captured FITS files land (point at a real disk in production)
+      - ./images:/images
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5000/api/system/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # Optional INDI server with the included simulators. Useful for testing
+  # the whole stack on a machine with no astro hardware attached.
+  indiserver:
+    image: jamzy/indi-rpi:latest
+    container_name: nina-indiserver
+    restart: unless-stopped
+    profiles: ["indi"]
+    network_mode: host
+    command: indi_simulator_telescope indi_simulator_ccd indi_simulator_focus indi_simulator_wheel
+    privileged: false
+
+volumes:
+  nina-data:
