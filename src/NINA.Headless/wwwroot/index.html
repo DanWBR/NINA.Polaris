@@ -1298,6 +1298,30 @@
                 meridian-flip timing, and twilight calculations. You can change this any time in Settings.
             </p>
 
+            <!-- Address search (OpenStreetMap / Nominatim) -->
+            <div class="location-search-row">
+                <input type="text" placeholder="🔍 Search city, address, observatory..."
+                       x-model="locSetup.searchQuery"
+                       @keyup.enter="geocodeAddress()"
+                       @input="locSetup.searchResults = []">
+                <button class="btn btn-sm" @click="geocodeAddress()"
+                        :disabled="locSetup.searching || !locSetup.searchQuery">
+                    <span x-text="locSetup.searching ? 'Searching…' : 'Search'"></span>
+                </button>
+            </div>
+            <div class="location-search-results" x-show="locSetup.searchResults.length > 0" x-cloak>
+                <template x-for="r in locSetup.searchResults" :key="r.displayName">
+                    <div class="location-search-result" @click="pickGeocodeResult(r)">
+                        <div class="location-search-name" x-text="r.displayName"></div>
+                        <div class="text-muted" style="font-size: 10px;">
+                            <span x-text="r.type || r.class"></span>
+                            ·
+                            <span x-text="r.latitude.toFixed(4) + '°, ' + r.longitude.toFixed(4) + '°'"></span>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
             <div class="location-setup-row">
                 <label>Latitude (°)
                     <input type="number" x-model.number="locSetup.lat" step="0.0001" min="-90" max="90"

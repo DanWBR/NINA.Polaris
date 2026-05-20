@@ -8,6 +8,23 @@ public static class SystemEndpoints {
     public static void MapSystemEndpoints(this WebApplication app) {
         var group = app.MapGroup("/api/system");
 
+        group.MapGet("/geocode", async (string query, int? limit, GeocodingService geo) => {
+            if (string.IsNullOrWhiteSpace(query))
+                return Results.BadRequest(new { error = "query parameter required" });
+            try {
+                var results = await geo.SearchAsync(query, limit ?? 5);
+                return Results.Ok(new {
+                    query,
+                    count = results.Count,
+                    results
+                });
+            } catch (TimeoutException ex) {
+                return Results.Problem(ex.Message, statusCode: 504);
+            } catch (InvalidOperationException ex) {
+                return Results.Problem(ex.Message, statusCode: 502);
+            }
+        });
+
         group.MapGet("/status", (EquipmentManager equip) => {
             var process = Process.GetCurrentProcess();
             return Results.Ok(new {

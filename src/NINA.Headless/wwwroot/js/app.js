@@ -163,7 +163,11 @@ function ninaApp() {
 
         // First-run location setup modal
         showLocationSetup: false,
-        locSetup: { lat: null, lon: null, alt: 0, locating: false, error: null },
+        locSetup: {
+            lat: null, lon: null, alt: 0,
+            locating: false, error: null,
+            searchQuery: '', searching: false, searchResults: []
+        },
 
         // Full image statistics + histogram
         fullStats: null,
@@ -882,11 +886,40 @@ function ninaApp() {
                         lat: this.settings.latitude || null,
                         lon: this.settings.longitude || null,
                         alt: this.settings.altitude || 0,
-                        locating: false, error: null
+                        locating: false, error: null,
+                        searchQuery: '', searching: false, searchResults: []
                     };
                     this.showLocationSetup = true;
                 });
             }
+        },
+
+        async geocodeAddress() {
+            const q = (this.locSetup.searchQuery || '').trim();
+            if (!q) return;
+            this.locSetup.searching = true;
+            this.locSetup.error = null;
+            this.locSetup.searchResults = [];
+            try {
+                const data = await this.apiGet(
+                    `/api/system/geocode?query=${encodeURIComponent(q)}&limit=8`);
+                this.locSetup.searchResults = data.results || [];
+                if (this.locSetup.searchResults.length === 0) {
+                    this.locSetup.error = 'No matches found';
+                }
+            } catch (e) {
+                this.locSetup.error = 'Address search failed: ' + (e.message || 'unknown');
+            } finally {
+                this.locSetup.searching = false;
+            }
+        },
+
+        pickGeocodeResult(r) {
+            this.locSetup.lat = +r.latitude.toFixed(4);
+            this.locSetup.lon = +r.longitude.toFixed(4);
+            this.locSetup.error = null;
+            this.locSetup.searchResults = [];
+            this.locSetup.searchQuery = r.displayName;
         },
 
         useBrowserGeolocation() {
