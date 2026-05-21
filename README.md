@@ -109,6 +109,66 @@ Hands-off pier-side change during a sequence:
 - Live "Meridian in 1h 23m" countdown in the Sequence tab
 - Safe failure paths: errors and cancels always try to resume guiding
 
+### Advanced Sequencer (tree-based)
+
+A full conditional-execution engine alongside (not replacing) the legacy
+Simple Sequencer. Toggle the default tab via **Settings → Sequencer →
+"Use Advanced Sequencer by default"** — both stay available either way.
+
+**Tree model:**
+- **Containers** group children: `Sequential` (run in order), `Parallel`
+  (run concurrently, fail-fast on any child), `DeepSkyObject` (slew &
+  plate-solve-center on a target before running children),
+  `Templated` (paste-in a saved reusable fragment)
+- **Instructions** are atomic actions; 30+ shipping:
+  - Mount: Slew, Center (plate-solve), Park / Unpark, SetTracking, SolveAndSync
+  - Camera: TakeExposure (N frames + filter / gain / binning / image type),
+    CoolCamera (setpoint + tolerance), WarmCamera (gradual ramp at °C/min)
+  - Focuser: AutoFocus (V-curve), MoveFocuser, MoveToFilterOffset
+  - Filter wheel: SwitchFilter (by name or position)
+  - Guider: StartGuiding, StopGuiding, Dither, AutoSelectStar
+  - Dome: Open / Close shutter, Park, SlewToAzimuth, SyncToScope (Alt/Az math)
+  - Flat panel: Open/Close cover, SetBrightness, ToggleLight
+  - Rotator: RotateToAngle
+  - Flow control: WaitForTime, WaitUntilTime (UTC), WaitUntilAltitude,
+    WaitForSunBelowHorizon (low-precision sun alt for twilight),
+    WaitForMoon (Above / Below altitude)
+  - External: RunExternalScript (stdout/stderr captured, exit-code aware),
+    SendHttpRequest (webhooks for Discord / Slack / dashboards)
+- **Conditions** are loop predicates (containers with `isLoop=true` keep
+  iterating while every condition holds): Until Time / Altitude / N Exposures
+  / Duration / Moon Sets / While Safe (cloud cover + wind from weather device)
+- **Triggers** fire between every child step:
+  - Auto-focus on Temperature Change / HFR Increase / Every N Minutes / Filter Change
+  - Meridian Flip (delegates to the existing service)
+  - Dither After N Exposures (skipped silently when PHD2 isn't guiding)
+  - Center After Drift (periodic plate-solve check against pinned coords)
+  - Safety (cloud cover / wind / mount disconnect → graceful abort with reason)
+
+**Persistence + execution:**
+- Polymorphic JSON format with `$type` discriminator and `Version` field;
+  every entity carries a stable Id so the editor can reference nodes
+  across edits
+- Validate() bubbles up errors with breadcrumb paths
+  (`[DSO 'M31'/Lights] Exposure must be positive`); the engine refuses
+  Start on a failing tree
+- File-based template store (`Sequencer:TemplateDir`,
+  default `./sequencer-templates/`) for reusable fragments hydrated
+  into `TemplatedContainer` at load time
+- Background runner with cancellation that propagates to every child;
+  containers honour an `AbortRequested` flag (set by the Safety trigger)
+  between every step
+
+**Tree editor UI:**
+- New "Adv" tab opens a tri-pane layout: palette (categorised by device),
+  tree (status colour-coded per node), properties (auto-generated form
+  by field type)
+- Sortable.js drag-handle on the type badge to reorder siblings
+- Save / Download JSON / Upload JSON / Validate / Start / Stop in the toolbar
+- Live status mirroring — during a run the tree colours update every 2s
+  showing what's Running / Completed / Failed / Skipped, plus the
+  Safety-trigger abort reason if one fires
+
 ### Dithering
 
 Random pixel-offset between frames to defeat fixed-pattern noise:
@@ -601,7 +661,7 @@ Persistence:
 | POST | `/api/livestack/reset` | Reset stack buffer |
 | GET | `/api/livestack/status` | Stack frame count and state |
 
-### Sequence
+### Simple Sequence (flat list)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -612,6 +672,23 @@ Persistence:
 | POST | `/api/sequence/resume` | Resume from pause |
 | POST | `/api/sequence/stop` | Stop execution |
 | GET | `/api/sequence/status` | Detailed progress |
+
+### Advanced Sequencer (tree-based)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/sequencer/document` | Current `SequenceDocument` + state + lastError + abortReason |
+| POST | `/api/sequencer/document` | Load a `SequenceDocument` (JSON object) |
+| GET | `/api/sequencer/document/json` | Raw JSON download for "save sequence to file" |
+| POST | `/api/sequencer/document/json` | Accept raw JSON body — "load sequence from file" |
+| POST | `/api/sequencer/start` | Validate + run the tree in the background |
+| POST | `/api/sequencer/stop` | Cancel the run via the engine's CTS |
+| POST | `/api/sequencer/validate` | Walk Validate() across the tree, return errors |
+| GET | `/api/sequencer/types` | Palette listing — every known `(type, category, kind)` |
+| GET | `/api/sequencer/templates` | List saved templates + their store dir |
+| GET | `/api/sequencer/templates/{name}` | Load a named template |
+| POST | `/api/sequencer/templates/{name}` | Save a `SequenceDocument` as a named template |
+| DELETE | `/api/sequencer/templates/{name}` | Delete a template |
 
 ### Sky & Plate Solving
 
@@ -705,6 +782,7 @@ Persistence:
 | `PHD2__Host` / `PHD2__Port` | `localhost` / `4400` | PHD2 event server endpoint |
 | `PHD2__InstanceNumber` | `1` | PHD2 `-i N` instance number |
 | `PHD2__AutoStart` | `false` | Fallback for `PHD2AutoStart` profile flag. UI checkbox in Guider tab is the normal way to set this |
+| `Sequencer__TemplateDir` | `sequencer-templates` | Folder where Advanced Sequencer templates are stored (one JSON file per template) |
 | `PlateSolve__PrimarySolver` | `astap` | One of `astap`, `platesolve3`, `astrometry-net-online`, `astrometry-net-local` |
 | `PlateSolve__BlindSolver` | `astrometry-net-online` | Fallback when primary fails |
 | `PlateSolve__UseBlindFallback` | `true` | Disable to lock to the primary only |
@@ -788,6 +866,15 @@ Relay **server** side (different process, same `Relay__*` prefix in `appsettings
 - [x] Image history thumbnail gallery
 - [x] Star annotations overlay + crosshair + 3x3 grid + pixel ADU readout
 
+**Advanced Sequencer (Phase C — complete)**
+- [x] C1 Tree-based entity model (containers, instructions, conditions, triggers)
+- [x] C2 30+ instructions library (mount, camera, focuser, filter, guider, dome, flat, rotator, flow control, external)
+- [x] C3 6 loop conditions (Until Time / Altitude / N Exposures / Duration / Moon Sets / While Safe)
+- [x] C4 8 event triggers (Auto-focus on Temp / HFR / Time / Filter, Meridian Flip, Dither, Center After Drift, Safety abort)
+- [x] C5 Polymorphic JSON IO + persistent template store + execution engine + REST endpoints
+- [x] C6 Tri-pane tree editor UI with palette / tree / properties + Sortable.js drag-reorder
+- [x] C7 Coexistence with the legacy Simple Sequencer — both tabs always available, `preferAdvancedSequencer` profile flag toggles the default
+
 **Nice-to-have (Phase D — almost complete)**
 - [x] D1 Alpaca HTTP device support (discovery + Camera + Telescope)
 - [x] D2 mDNS announcer (`nina-<hostname>.local`)
@@ -818,15 +905,6 @@ Relay **server** side (different process, same `Relay__*` prefix in `appsettings
 - [x] Relay mTLS for tunnel auth — per-tenant `clientCertThumbprint` pins the X.509 cert the client must present (bearer token still required)
 
 ### Planned
-
-**Phase C — Advanced Sequencer** (not started, largest remaining gap)
-- [ ] C1: Tree-based container / instruction / condition / trigger model
-- [ ] C2: 30+ instructions library (mount, camera, focuser, filter, guider, dome, flat, rotator, flow control, external)
-- [ ] C3: Conditions (Loop Until Time / Altitude / N Exposures / Duration / Moon Sets / While Safe)
-- [ ] C4: Triggers (Auto Focus on Temp / HFR / Time / Filter, Meridian Flip, Dither, Center After Drift, Safety)
-- [ ] C5: JSON serialisation + templates
-- [ ] C6: Drag-drop tree editor UI
-- [ ] C7: Migration path from current Simple Sequencer
 
 **Phase D — Remaining**
 - [ ] D5: Mosaic planner with grid overlay

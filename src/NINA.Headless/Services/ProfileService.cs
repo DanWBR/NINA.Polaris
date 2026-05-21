@@ -290,6 +290,15 @@ public class UserProfile {
     // PHD2AutoStartService launches PHD2 (and connects the JSON-RPC client)
     // as soon as the Headless app starts.
     public bool PHD2AutoStart { get; set; } = false;
+
+    /// <summary>
+    /// Which sequencer to surface as the default in the UI. The Simple
+    /// Sequencer (legacy, A4-era) is a flat list of items; the Advanced
+    /// Sequencer (Phase C) is a tree with containers, conditions, and
+    /// triggers. Both run side-by-side; this flag only picks which tab
+    /// the UI lands on first.
+    /// </summary>
+    public bool PreferAdvancedSequencer { get; set; } = false;
 }
 
 /// <summary>

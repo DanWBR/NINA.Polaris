@@ -68,7 +68,8 @@ function ninaApp() {
             sensorWidth: 23.5, sensorHeight: 15.7, focalLength: 478,
             imageFormat: 'fits',
             stellariumHost: 'localhost',
-            stellariumPort: 8090
+            stellariumPort: 8090,
+            preferAdvancedSequencer: false
         },
 
         // Connection state
@@ -900,6 +901,17 @@ function ninaApp() {
                     this.settings.sensorHeight = data.sensorHeightMm || 15.7;
                     this.settings.focalLength = data.focalLengthMm || 478;
                     this.settings.imageFormat = data.imageFormat || 'fits';
+                    this.settings.preferAdvancedSequencer = !!data.preferAdvancedSequencer;
+                    // First time the app boots, honour the user's preferred sequencer flavour.
+                    if (!this._sequencerTabBootHandled) {
+                        this._sequencerTabBootHandled = true;
+                        if (this.settings.preferAdvancedSequencer && this.tab === 'live') {
+                            // Don't ambush the user — only switch from the initial 'live' tab
+                            // and only if they explicitly opted in. Pre-fetch the doc so the
+                            // Adv tab is responsive when they navigate there.
+                            this.loadAdvSeq();
+                        }
+                    }
                     this.updateFov();
                     this._maybeShowLocationSetup();
                 }
@@ -1806,7 +1818,9 @@ function ninaApp() {
                         indiPort: this.settings.indiPort,
                         defaultExposure: this.exposure,
                         defaultGain: this.gain,
-                        defaultBinning: parseInt(this.binning)
+                        defaultBinning: parseInt(this.binning),
+                        imageFormat: this.settings.imageFormat,
+                        preferAdvancedSequencer: this.settings.preferAdvancedSequencer
                     })
                 });
             } catch (e) { }

@@ -77,6 +77,7 @@ public static class SystemEndpoints {
                 p.ImageOutputDir = update.ImageOutputDir;
                 p.ImageNamePattern = update.ImageNamePattern;
                 p.ImageFormat = update.ImageFormat;
+                p.PreferAdvancedSequencer = update.PreferAdvancedSequencer;
             });
             return Results.Ok(new { message = "Profile saved" });
         });

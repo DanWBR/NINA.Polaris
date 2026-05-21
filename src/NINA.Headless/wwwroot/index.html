@@ -1489,6 +1489,18 @@
                         </select>
                     </label>
                 </div>
+
+                <div class="settings-section">
+                    <h3>Sequencer</h3>
+                    <label class="checkbox-label" title="Land on the Advanced (tree-based) sequencer tab by default. Both sequencers stay available regardless.">
+                        <input type="checkbox" x-model="settings.preferAdvancedSequencer" @change="saveSettingsToServer()">
+                        Use Advanced Sequencer by default
+                    </label>
+                    <p class="hint" style="margin-top:6px">
+                        <strong>Simple:</strong> flat list of (filter, exposure, count) items — quick to set up, no triggers.<br>
+                        <strong>Advanced:</strong> tree with containers, loop conditions, and event triggers (auto-focus on temp/HFR/time, meridian flip, dither, safety abort).
+                    </p>
+                </div>
             </div>
 
         </main>
