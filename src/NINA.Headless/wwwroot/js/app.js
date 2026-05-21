@@ -1149,7 +1149,12 @@ function ninaApp() {
                         galactic:   { show: false }
                     },
                     horizon: { show: isLive, stroke: '#ff5566', fill: '#0a0a14', opacity: 0.55 },
-                    daylight: { show: isLive, fill: '#1a2030', opacity: 0.30 }
+                    // Daylight overlay disabled — d3-celestial's built-in
+                    // daytime sky tint is a bright blue that washes out the
+                    // stars + constellation lines. For an astrophotography
+                    // planning view we always want a night-mode render even
+                    // if the sun is up, so the user can find their target now.
+                    daylight: { show: false }
                 });
 
                 if (isLive) {
