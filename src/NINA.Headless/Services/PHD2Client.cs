@@ -367,6 +367,36 @@ public class PHD2Client : IDisposable {
 
     public Task<JsonElement?> ClearCalibrationAsync() => CallAsync("clear_calibration");
 
+    /// <summary>
+    /// Asks PHD2 which equipment it is currently using (guide camera, mount,
+    /// AO, aux mount). Returns null if PHD2 isn't connected.
+    /// </summary>
+    public async Task<PHD2Equipment?> GetCurrentEquipmentAsync(CancellationToken ct = default) {
+        if (!IsConnected) return null;
+        try {
+            var result = await CallAsync("get_current_equipment", ct: ct);
+            if (!result.HasValue) return null;
+            var root = result.Value;
+            return new PHD2Equipment {
+                Camera = ParseDevice(root, "camera"),
+                Mount = ParseDevice(root, "mount"),
+                AuxMount = ParseDevice(root, "aux_mount"),
+                AO = ParseDevice(root, "AO")
+            };
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "get_current_equipment failed");
+            return null;
+        }
+    }
+
+    private static PHD2Device? ParseDevice(JsonElement root, string key) {
+        if (!root.TryGetProperty(key, out var dev) || dev.ValueKind != JsonValueKind.Object) return null;
+        return new PHD2Device {
+            Name = TryGetString(dev, "name") ?? "",
+            Connected = dev.TryGetProperty("connected", out var c) && c.ValueKind == JsonValueKind.True
+        };
+    }
+
     // ----- JSON helpers -----
 
     private static double TryGetDouble(JsonElement obj, string prop) {
@@ -425,4 +455,16 @@ public record CalibrationData {
     public double YAngle { get; init; }
     public double YRate { get; init; }
     public double Declination { get; init; }
+}
+
+public record PHD2Equipment {
+    public PHD2Device? Camera { get; init; }
+    public PHD2Device? Mount { get; init; }
+    public PHD2Device? AuxMount { get; init; }
+    public PHD2Device? AO { get; init; }
+}
+
+public record PHD2Device {
+    public string Name { get; init; } = "";
+    public bool Connected { get; init; }
 }

@@ -143,6 +143,7 @@ function ninaApp() {
         guideChartW: 600,
         guideChartH: 160,
         guideChartScale: 2.0, // arcsec range each direction (auto-expands)
+        guiderEquipment: { camera: null, mount: null, auxMount: null, ao: null },
 
         // Sky Atlas filters + altitude chart
         showAtlasFilters: false,
@@ -2289,9 +2290,24 @@ function ninaApp() {
                 this.guider.host = this.guiderHost;
                 this.guider.port = this.guiderPort;
                 this.toast(`PHD2 connected at ${this.guiderHost}:${this.guiderPort}`, 'ok');
+                this.fetchGuiderEquipment();
             } catch (e) {
                 this.toast('PHD2 connect failed: ' + e.message, 'error');
             }
+        },
+
+        async fetchGuiderEquipment() {
+            try {
+                const e = await this.apiGet('/api/guider/equipment');
+                if (e && e.connected) {
+                    this.guiderEquipment = {
+                        camera: e.camera || null,
+                        mount: e.mount || null,
+                        auxMount: e.auxMount || null,
+                        ao: e.ao || null
+                    };
+                }
+            } catch (err) { /* ignore */ }
         },
         async guiderDisconnect() {
             try {
@@ -2732,8 +2748,24 @@ function ninaApp() {
                     coolerOn: eq.camera.coolerOn || false,
                     binX: eq.camera.binX || 0,
                     binY: eq.camera.binY || 0,
-                    bitDepth: eq.camera.bitDepth || 0
+                    bitDepth: eq.camera.bitDepth || 0,
+                    sensorWidthMm: eq.camera.sensorWidthMm || 0,
+                    sensorHeightMm: eq.camera.sensorHeightMm || 0,
+                    pixelSizeUm: eq.camera.pixelSizeX || 0,
+                    maxX: eq.camera.maxX || 0,
+                    maxY: eq.camera.maxY || 0
                 };
+                // Auto-derive sensor dimensions from the connected camera. These
+                // drive the FOV calculation and are only fallback-stored on the
+                // profile when there's no live camera.
+                if (eq.camera.sensorWidthMm > 0 && eq.camera.sensorHeightMm > 0) {
+                    if (Math.abs(this.settings.sensorWidth - eq.camera.sensorWidthMm) > 0.05 ||
+                        Math.abs(this.settings.sensorHeight - eq.camera.sensorHeightMm) > 0.05) {
+                        this.settings.sensorWidth = eq.camera.sensorWidthMm;
+                        this.settings.sensorHeight = eq.camera.sensorHeightMm;
+                        this.updateFov();
+                    }
+                }
                 // Sample temperature history at most once every 5s
                 const now = Date.now();
                 if (eq.camera.temperature !== null && eq.camera.temperature !== undefined

@@ -416,6 +416,16 @@
                 <!-- Live metrics -->
                 <div x-show="guider.connected" class="guide-info">
                     <div class="info-row"><span>State:</span><strong x-text="guider.appState"></strong></div>
+                    <div class="info-row" x-show="guiderEquipment.camera">
+                        <span>Guide Camera:</span>
+                        <strong x-text="guiderEquipment.camera?.name"
+                                :class="guiderEquipment.camera?.connected ? 'text-ok' : 'text-warn'"></strong>
+                    </div>
+                    <div class="info-row" x-show="guiderEquipment.mount">
+                        <span>Mount (PHD2):</span>
+                        <strong x-text="guiderEquipment.mount?.name"
+                                :class="guiderEquipment.mount?.connected ? 'text-ok' : 'text-warn'"></strong>
+                    </div>
                     <div class="info-row"><span>Pixel Scale:</span><strong x-text="guider.pixelScale ? guider.pixelScale.toFixed(3) + '&quot;/px' : '--'"></strong></div>
                     <div class="info-row"><span>RMS RA:</span><strong x-text="guider.rmsRA?.toFixed(2) + '&quot;'" :class="guider.rmsRA < 1 ? 'text-ok' : 'text-warn'"></strong></div>
                     <div class="info-row"><span>RMS Dec:</span><strong x-text="guider.rmsDec?.toFixed(2) + '&quot;'" :class="guider.rmsDec < 1 ? 'text-ok' : 'text-warn'"></strong></div>
@@ -1273,10 +1283,16 @@
                 </div>
 
                 <div class="settings-section">
-                    <h3>Camera Optics</h3>
-                    <label>Sensor Width (mm)<input type="number" x-model.number="settings.sensorWidth" step="0.1" class="input-sm"></label>
-                    <label>Sensor Height (mm)<input type="number" x-model.number="settings.sensorHeight" step="0.1" class="input-sm"></label>
-                    <label>Focal Length (mm)<input type="number" x-model.number="settings.focalLength" step="1" class="input-sm"></label>
+                    <h3>Optics</h3>
+                    <label>Focal Length (mm)
+                        <input type="number" x-model.number="settings.focalLength" step="1" class="input-sm">
+                    </label>
+                    <p class="text-muted" style="font-size: 11px; margin-top: 4px;">
+                        Sensor dimensions are read automatically from the connected camera
+                        (currently
+                        <strong x-text="settings.sensorWidth?.toFixed(2) + ' × ' + settings.sensorHeight?.toFixed(2) + ' mm'"></strong>).
+                        Used together with the focal length for FOV calculations.
+                    </p>
                 </div>
 
                 <div class="settings-section">

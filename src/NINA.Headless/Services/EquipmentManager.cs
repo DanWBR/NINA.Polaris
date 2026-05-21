@@ -83,6 +83,13 @@ public class EquipmentManager : IDisposable {
         };
 
         if (Camera != null) {
+            // Sensor dimensions: pixel size is in micrometres, resolution in
+            // pixels. width_mm = MaxX * PixelSizeX / 1000.
+            var pxX = Camera.PixelSizeX;
+            var pxY = Camera.PixelSizeY;
+            var sensorWmm = Camera.MaxX > 0 && pxX > 0 ? Camera.MaxX * pxX / 1000.0 : 0;
+            var sensorHmm = Camera.MaxY > 0 && pxY > 0 ? Camera.MaxY * pxY / 1000.0 : 0;
+
             status["camera"] = new {
                 name = Camera.DeviceName,
                 connected = Camera.IsConnected,
@@ -92,7 +99,13 @@ public class EquipmentManager : IDisposable {
                 coolerPower = Safe(Camera.CoolerPower),
                 binX = Camera.BinX,
                 binY = Camera.BinY,
-                bitDepth = Camera.BitDepth
+                bitDepth = Camera.BitDepth,
+                maxX = Camera.MaxX,
+                maxY = Camera.MaxY,
+                pixelSizeX = Safe(pxX),
+                pixelSizeY = Safe(pxY),
+                sensorWidthMm = Safe(sensorWmm),
+                sensorHeightMm = Safe(sensorHmm)
             };
         }
 

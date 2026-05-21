@@ -37,6 +37,19 @@ public static class GuiderEndpoints {
             });
         });
 
+        group.MapGet("/equipment", async (PHD2Client phd2) => {
+            if (!phd2.IsConnected)
+                return Results.Ok(new { connected = false });
+            var equip = await phd2.GetCurrentEquipmentAsync();
+            return Results.Ok(new {
+                connected = true,
+                camera = equip?.Camera,
+                mount = equip?.Mount,
+                auxMount = equip?.AuxMount,
+                ao = equip?.AO
+            });
+        });
+
         group.MapGet("/steps", (PHD2Client phd2, int? limit) => {
             var snapshot = phd2.SnapshotSteps();
             var take = limit.HasValue && limit.Value > 0 ? Math.Min(limit.Value, snapshot.Count) : snapshot.Count;
