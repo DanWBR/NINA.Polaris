@@ -1237,8 +1237,11 @@
                         </select>
                     </label>
                     <label>FOV
-                        <input type="number" class="input-sm" x-model.number="aladinFov" min="1" max="180" step="1"
-                               @change="setSkyFov()">°
+                        <span style="display:inline-flex;align-items:center;gap:4px">
+                            <input type="number" class="input-sm" x-model.number="aladinFov" min="1" max="180" step="1"
+                                   @change="setSkyFov()">
+                            <span>°</span>
+                        </span>
                     </label>
                     <label class="seq-dither-checkbox">
                         <input type="checkbox" x-model="aladinShowFov" @change="updateSkyCameraFov()">
