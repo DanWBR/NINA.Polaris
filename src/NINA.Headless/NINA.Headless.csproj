@@ -12,6 +12,7 @@
     <ProjectReference Include="..\NINA.Core.Portable\NINA.Core.Portable.csproj" />
     <ProjectReference Include="..\NINA.Image.Portable\NINA.Image.Portable.csproj" />
     <ProjectReference Include="..\NINA.INDI\NINA.INDI.csproj" />
+    <ProjectReference Include="..\NINA.Relay.Protocol\NINA.Relay.Protocol.csproj" />
   </ItemGroup>
 
   <ItemGroup>

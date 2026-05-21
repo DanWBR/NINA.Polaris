@@ -25,6 +25,12 @@ public static class SystemEndpoints {
             }
         });
 
+        group.MapGet("/relay", (RelayClient relay) => Results.Ok(new {
+            state = relay.State.ToString().ToLowerInvariant(),
+            hostname = relay.AssignedHostname,
+            lastError = relay.LastError
+        }));
+
         group.MapGet("/status", (EquipmentManager equip) => {
             var process = Process.GetCurrentProcess();
             return Results.Ok(new {

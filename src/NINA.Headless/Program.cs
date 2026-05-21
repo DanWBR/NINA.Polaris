@@ -33,6 +33,8 @@ builder.Services.AddSingleton<StellariumClient>();
 builder.Services.AddSingleton<AltitudeService>();
 builder.Services.AddSingleton<GeocodingService>();
 builder.Services.AddHostedService<MdnsService>();
+builder.Services.AddSingleton<RelayClient>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<RelayClient>());
 builder.Services.AddSingleton(sp =>
 {
     var config = sp.GetRequiredService<IConfiguration>();

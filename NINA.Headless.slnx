@@ -4,6 +4,8 @@
     <Project Path="src/NINA.Headless/NINA.Headless.csproj" />
     <Project Path="src/NINA.Image.Portable/NINA.Image.Portable.csproj" />
     <Project Path="src/NINA.INDI/NINA.INDI.csproj" />
+    <Project Path="src/NINA.Relay.Protocol/NINA.Relay.Protocol.csproj" />
+    <Project Path="src/NINA.Relay.Server/NINA.Relay.Server.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/NINA.Headless.Test/NINA.Headless.Test.csproj" />
