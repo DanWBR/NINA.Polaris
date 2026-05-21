@@ -87,6 +87,7 @@ public static class EquipmentEndpoints {
                 r.FocuserStepSize = update.FocuserStepSize;
                 r.FocuserBacklashSteps = update.FocuserBacklashSteps;
                 r.FocalLengthMm = update.FocalLengthMm;
+                r.GuiderFocalLengthMm = update.GuiderFocalLengthMm;
                 r.PHD2Host = update.PHD2Host;
                 r.PHD2Port = update.PHD2Port;
             });

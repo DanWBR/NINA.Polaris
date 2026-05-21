@@ -754,7 +754,39 @@ select.input-sm {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 6px;
+}
+
+.rig-name-line {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.rig-devices {
+    display: flex;
+    gap: 10px;
+    font-size: 11px;
+    flex-wrap: wrap;
+}
+
+.rig-optics {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+
+.rig-optics label {
+    display: flex;
+    flex-direction: column;
+    font-size: 10px;
+    color: var(--text-secondary);
+    gap: 2px;
+}
+
+.rig-optics input {
+    width: 110px;
 }
 
 .rig-row-actions {

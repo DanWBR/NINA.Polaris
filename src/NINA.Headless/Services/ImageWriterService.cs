@@ -115,12 +115,16 @@ public class ImageWriterService {
         // Camera (some fields are populated by IndiCamera, fill gaps)
         if (m.Camera.Gain == 0 && gain > 0) m.Camera.Gain = gain;
 
-        // Telescope
+        // Telescope — focal length comes from the *active rig* (a per-rig
+        // optic property), falling back to the legacy profile value only if
+        // no rigs have been set up.
         if (_equip.Telescope != null && _equip.Telescope.IsConnected) {
+            var rigFocalLen = _profile.ActiveEquipmentProfile.FocalLengthMm;
+            var focalLength = rigFocalLen > 0 ? rigFocalLen : profile.FocalLengthMm;
             m.Telescope.Name = _equip.Telescope.DeviceName;
-            m.Telescope.FocalLength = profile.FocalLengthMm;
-            if (profile.FocalLengthMm > 0 && profile.SensorWidthMm > 0)
-                m.Telescope.FocalRatio = profile.FocalLengthMm /
+            m.Telescope.FocalLength = focalLength;
+            if (focalLength > 0 && profile.SensorWidthMm > 0)
+                m.Telescope.FocalRatio = focalLength /
                     Math.Max(profile.SensorWidthMm, 1);
             m.Telescope.RightAscension = Safe(_equip.Telescope.RightAscension);
             m.Telescope.Declination = Safe(_equip.Telescope.Declination);

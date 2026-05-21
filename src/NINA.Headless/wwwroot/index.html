@@ -1340,14 +1340,17 @@
 
                 <div class="settings-section">
                     <h3>Optics</h3>
-                    <label>Focal Length (mm)
-                        <input type="number" x-model.number="settings.focalLength" step="1" class="input-sm">
-                    </label>
-                    <p class="text-muted" style="font-size: 11px; margin-top: 4px;">
+                    <p class="text-muted" style="font-size: 12px;">
                         Sensor dimensions are read automatically from the connected camera
                         (currently
                         <strong x-text="settings.sensorWidth?.toFixed(2) + ' × ' + settings.sensorHeight?.toFixed(2) + ' mm'"></strong>).
-                        Used together with the focal length for FOV calculations.
+                        <br>
+                        Focal length is a per-rig setting — manage it in the
+                        <a href="#" @click.prevent="tab='equip'; setTimeout(() => rigModalOpen = true, 100)">
+                            Equipment → Manage rigs
+                        </a>
+                        modal. Active rig's main scope is currently
+                        <strong x-text="settings.focalLength + ' mm'"></strong>.
                     </p>
                 </div>
 
@@ -1466,25 +1469,45 @@
                 <template x-for="r in rigs" :key="r.id">
                     <div class="rig-row" :class="r.id === activeRigId ? 'active' : ''">
                         <div class="rig-row-main">
-                            <input type="text" x-model="r.name"
-                                   @change="renameRig(r.id, r.name)"
-                                   class="input-md">
-                            <span class="text-muted" style="font-size: 11px;">
+                            <div class="rig-name-line">
+                                <input type="text" x-model="r.name"
+                                       @change="saveRig(r)"
+                                       class="input-md">
+                                <span class="text-ok" style="font-size: 11px;"
+                                      x-show="r.id === activeRigId">● ACTIVE</span>
+                            </div>
+                            <div class="rig-devices text-muted">
                                 <span x-show="r.camera">📷 <span x-text="r.camera"></span></span>
-                                <span x-show="r.telescope" style="margin-left: 6px;">🔭 <span x-text="r.telescope"></span></span>
-                                <span x-show="r.focalLengthMm" style="margin-left: 6px;">
-                                    fl=<span x-text="r.focalLengthMm"></span>mm
-                                </span>
-                            </span>
+                                <span x-show="r.telescope">🔭 <span x-text="r.telescope"></span></span>
+                                <span x-show="r.focuser">🔍 <span x-text="r.focuser"></span></span>
+                                <span x-show="r.filterWheel">⚙️ <span x-text="r.filterWheel"></span></span>
+                            </div>
+                            <div class="rig-optics">
+                                <label>Main focal length (mm)
+                                    <input type="number" min="50" max="10000" step="1"
+                                           x-model.number="r.focalLengthMm"
+                                           @change="saveRig(r)" class="input-sm">
+                                </label>
+                                <label>Guide scope focal length (mm)
+                                    <input type="number" min="50" max="2000" step="1"
+                                           x-model.number="r.guiderFocalLengthMm"
+                                           @change="saveRig(r)" class="input-sm">
+                                </label>
+                                <label>Cooler target (°C)
+                                    <input type="number" min="-40" max="20" step="1"
+                                           x-model.number="r.coolerTargetTemperature"
+                                           @change="saveRig(r)" class="input-sm">
+                                </label>
+                            </div>
                         </div>
                         <div class="rig-row-actions">
                             <button class="btn btn-sm btn-primary"
                                     x-show="r.id !== activeRigId"
                                     @click="switchRig(r.id)">Activate</button>
-                            <span class="text-ok" style="font-size: 11px;" x-show="r.id === activeRigId">● ACTIVE</span>
                             <button class="btn btn-sm btn-danger"
                                     @click="deleteRig(r.id)"
-                                    :disabled="rigs.length <= 1">✕</button>
+                                    :disabled="rigs.length <= 1"
+                                    title="Delete this rig">✕</button>
                         </div>
                     </div>
                 </template>

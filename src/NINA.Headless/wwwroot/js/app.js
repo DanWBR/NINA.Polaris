@@ -1627,7 +1627,10 @@ function ninaApp() {
             this.equipWeatherChoice = rig.weather || '';
             if (rig.coolerTargetTemperature != null) this.equipCoolerTarget = rig.coolerTargetTemperature;
             if (rig.focuserStepSize) this.focusStep = rig.focuserStepSize;
-            if (rig.focalLengthMm) this.settings.focalLength = rig.focalLengthMm;
+            if (rig.focalLengthMm) {
+                this.settings.focalLength = rig.focalLengthMm;
+                this.updateFov();
+            }
             if (rig.phd2Host) this.guiderHost = rig.phd2Host;
             if (rig.phd2Port) this.guiderPort = rig.phd2Port;
         },
@@ -1669,13 +1672,32 @@ function ninaApp() {
         async renameRig(id, newName) {
             const rig = this.rigs.find(r => r.id === id);
             if (!rig) return;
-            try {
-                await this.apiPost(`/api/equipment/rigs/${id}`, rig, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ...rig, name: newName })
-                });
-            } catch (e) { this.toast('Rename failed', 'error'); }
+            rig.name = newName;
+            await this.saveRig(rig);
+        },
+
+        // Debounced PUT — covers focal length / cooler target / etc. inline edits
+        _rigSaveTimers: {},
+        saveRig(rig) {
+            if (!rig?.id) return;
+            if (this._rigSaveTimers[rig.id]) clearTimeout(this._rigSaveTimers[rig.id]);
+            this._rigSaveTimers[rig.id] = setTimeout(async () => {
+                try {
+                    await this.apiPost(`/api/equipment/rigs/${rig.id}`, null, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(rig)
+                    });
+                    // If saving the active rig, push focal length into the
+                    // settings cache so updateFov() picks it up immediately.
+                    if (rig.id === this.activeRigId) {
+                        this.settings.focalLength = rig.focalLengthMm;
+                        this.updateFov();
+                    }
+                } catch (e) {
+                    this.toast('Failed to save rig: ' + e.message, 'error');
+                }
+            }, 400);
         },
 
         async deleteRig(id) {

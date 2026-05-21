@@ -171,6 +171,7 @@ public class ProfileService {
             FocuserStepSize = src.FocuserStepSize,
             FocuserBacklashSteps = src.FocuserBacklashSteps,
             FocalLengthMm = src.FocalLengthMm,
+            GuiderFocalLengthMm = src.GuiderFocalLengthMm,
             PHD2Host = src.PHD2Host, PHD2Port = src.PHD2Port
         };
         _activeProfile.EquipmentProfiles.Add(copy);
@@ -316,9 +317,16 @@ public class EquipmentProfile {
     public int FocuserStepSize { get; set; } = 50;
     public int FocuserBacklashSteps { get; set; }
 
-    // Optics specific to this rig (cameras share the OTA's focal length when
-    // physically swapped, but you may have multiple OTAs/reducers).
+    // Optics specific to this rig — focal length of the *main* imaging OTA
+    // (with reducer / barlow already factored in). Pure rig-level setting:
+    // change OTA → change rig.
     public double FocalLengthMm { get; set; } = 478;
+
+    // Focal length of the guide scope. Used for record-keeping and as a
+    // sanity-check reference against PHD2's reported pixel scale. PHD2 itself
+    // computes its pixel scale from its own configuration; we just track what
+    // the user *thinks* the guide scope is.
+    public double GuiderFocalLengthMm { get; set; } = 200;
 
     // Per-rig PHD2 settings
     public string PHD2Host { get; set; } = "localhost";
