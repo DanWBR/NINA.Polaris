@@ -1033,11 +1033,30 @@ function ninaApp() {
 
         // ---- Aladin Lite (Sky Explorer) ----
 
-        async initAladin() {
-            if (this.aladinInstance) return; // already created
+        async initAladin(fromTabClick) {
+            // Aladin Lite needs a *visible* container with non-zero dimensions
+            // at the time of A.aladin() — otherwise the canvas is 0×0 and stays
+            // black even after the tab becomes visible. So we defer init until
+            // the user opens the Sky tab (lazy) and ping window.dispatchEvent
+            // 'resize' afterwards in case the layout shifted.
+            if (this.aladinInstance) {
+                // Already initialised — just kick a resize so the canvas
+                // refits whatever the current pane size is.
+                try { window.dispatchEvent(new Event('resize')); } catch {}
+                return;
+            }
+            const el = document.getElementById('aladin-lite-div');
+            if (!el || el.clientWidth === 0 || el.clientHeight === 0) {
+                if (fromTabClick) {
+                    // Retry shortly — the tab just became visible and the
+                    // layout may not have settled yet.
+                    setTimeout(() => this.initAladin(true), 100);
+                }
+                return;
+            }
             if (typeof A === 'undefined' || !A.init) {
                 console.warn('Aladin Lite not loaded yet');
-                setTimeout(() => this.initAladin(), 500);
+                setTimeout(() => this.initAladin(fromTabClick), 500);
                 return;
             }
             try {

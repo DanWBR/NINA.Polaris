@@ -10,6 +10,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
     <link rel="stylesheet" href="/css/app.css">
+    <!-- Aladin Lite v3 CSS (required for controls + canvas layout). The script
+         is loaded later as plain JS; CSS has to be in <head> to take effect
+         before the first paint of the Sky tab. -->
+    <link rel="stylesheet" href="https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.min.css">
     <link rel="stylesheet" href="/css/night-mode.css">
 </head>
 <body x-data="ninaApp()" x-init="init()">
@@ -60,7 +64,7 @@
                 <svg viewBox="0 0 24 24" width="22" height="22"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a3 3 0 0 1-4.2 4.2L7 20a2 2 0 0 1-2.8-2.8l10.3-10.3a3 3 0 0 1 4.2-4.2l-3.8 3.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <span class="nav-label">Equip</span>
             </button>
-            <button class="nav-btn" :class="{ active: tab === 'sky' }" @click="tab = 'sky'" title="Sky Explorer">
+            <button class="nav-btn" :class="{ active: tab === 'sky' }" @click="tab = 'sky'; $nextTick(() => initAladin(true))" title="Sky Explorer">
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><ellipse cx="12" cy="12" rx="10" ry="4" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="12" y1="2" x2="12" y2="22" stroke="currentColor" stroke-width="1.5"/></svg>
                 <span class="nav-label">Sky</span>
             </button>
@@ -1031,8 +1035,7 @@
                     </template>
                 </div>
 
-                <div id="aladin-lite-div" class="sky-viewer"
-                     x-init="$nextTick(() => initAladin())"></div>
+                <div id="aladin-lite-div" class="sky-viewer"></div>
                 <div class="sky-survey-row">
                     <label>Survey
                         <select class="input-md" x-model="aladinSurvey" @change="changeAladinSurvey()">
