@@ -1403,8 +1403,9 @@
                                 <img :src="tonight.thumbs[item.name]?.url || ''"
                                      :alt="item.name"
                                      loading="lazy"
+                                     referrerpolicy="no-referrer"
                                      x-show="tonight.thumbs[item.name]?.url"
-                                     @error="tonight.thumbs[item.name] = { url: null, missing: true }">
+                                     @error="tonightThumbFailed(item)">
                                 <div class="tonight-thumb-placeholder"
                                      x-show="!tonight.thumbs[item.name]?.url"
                                      x-text="tonight.thumbs[item.name]?.missing ? '·' : '…'"></div>

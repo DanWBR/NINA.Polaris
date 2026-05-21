@@ -1823,6 +1823,17 @@ function ninaApp() {
             });
         },
 
+        // Helper: mark a card's thumb as failed-to-load (broken URL,
+        // CORS, hot-link block). Reassigns the whole `thumbs` dict so
+        // Alpine actually picks up the change — direct property writes
+        // on a tracked object don't always trigger re-render in v3.
+        tonightThumbFailed(item) {
+            this.tonight.thumbs = {
+                ...this.tonight.thumbs,
+                [item.name]: { url: null, missing: true }
+            };
+        },
+
         // Lazy-load thumbnails one at a time so we don't fire 30 parallel
         // /api/sky/image requests on tab open. Sequential is plenty fast
         // for a list of this size and is much kinder to NASA / Wikipedia.
@@ -1838,6 +1849,8 @@ function ninaApp() {
         // keys to a plain {}. To force a render, we reassign the whole
         // `thumbs` object after each update so the template re-evaluates.
         async _kickTonightThumbs() {
+            console.log(`[tonight] thumbnails: fetching for ${this.tonight.items.length} items`);
+            let hits = 0, misses = 0;
             for (const item of this.tonight.items) {
                 if (this.tonight.thumbs[item.name]?.url || this.tonight.thumbs[item.name]?.missing) continue;
 
@@ -1850,7 +1863,9 @@ function ninaApp() {
                     try {
                         const r = await this.apiGet(`/api/sky/image?name=${encodeURIComponent(q)}`);
                         if (r?.available) { found = r; break; }
-                    } catch { /* keep trying remaining variants */ }
+                    } catch (e) {
+                        console.warn(`[tonight] image fetch error for "${q}":`, e);
+                    }
                 }
 
                 this.tonight.thumbs = {
@@ -1862,7 +1877,9 @@ function ninaApp() {
                         missing: false
                     } : { url: null, missing: true }
                 };
+                if (found) { hits++; } else { misses++; }
             }
+            console.log(`[tonight] thumbnails done: ${hits} hits, ${misses} misses`);
         },
 
         // Mini per-card altitude chart (~12 h window). Can't use
