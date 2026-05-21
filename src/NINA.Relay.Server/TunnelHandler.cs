@@ -14,10 +14,12 @@ namespace NINA.Relay.Server;
 /// </summary>
 public class TunnelHandler {
     private readonly TenantRegistry _registry;
+    private readonly TenantUsageStore _usage;
     private readonly ILogger<TunnelHandler> _logger;
 
-    public TunnelHandler(TenantRegistry registry, ILogger<TunnelHandler> logger) {
+    public TunnelHandler(TenantRegistry registry, TenantUsageStore usage, ILogger<TunnelHandler> logger) {
         _registry = registry;
+        _usage = usage;
         _logger = logger;
     }
 
@@ -39,16 +41,31 @@ public class TunnelHandler {
             return;
         }
         var token = Encoding.UTF8.GetString(payload.Span).Trim();
-        if (!_registry.TryAuthenticate(token, out var hostname, out var config)) {
-            _logger.LogWarning("Tunnel auth rejected for token prefix {Prefix}", Truncate(token, 8));
-            await SendAsync(ws, RelayFrame.Build(RelayFrame.AuthFail, 0, "Unknown or disabled token"), CancellationToken.None);
+        if (!_registry.TryAuthenticate(token, out var hostname, out var config, out var reject)) {
+            _logger.LogWarning("Tunnel auth rejected for token prefix {Prefix}: {Reason}", Truncate(token, 8), reject);
+            await SendAsync(ws, RelayFrame.Build(RelayFrame.AuthFail, 0, reject ?? "Auth failed"), CancellationToken.None);
             return;
+        }
+
+        // Block at the door if the tenant has already burned through this
+        // month's byte quota — saves us holding an open tunnel that would
+        // 402 on every proxied request.
+        if (config != null && config.MonthlyBytes > 0) {
+            var used = _usage.BytesThisMonth(token);
+            if (used >= config.MonthlyBytes) {
+                _logger.LogWarning("Tunnel auth rejected for {Host}: monthly quota exhausted ({Used}/{Quota} bytes)",
+                    hostname, used, config.MonthlyBytes);
+                await SendAsync(ws, RelayFrame.Build(RelayFrame.AuthFail, 0,
+                    $"Monthly transfer quota exhausted ({used:N0} / {config.MonthlyBytes:N0} bytes)"),
+                    CancellationToken.None);
+                return;
+            }
         }
 
         var limiter = config != null && (config.RequestsPerSecond > 0 || config.BytesPerSecond > 0)
             ? new TenantRateLimiter(config)
             : null;
-        var tunnel = new TenantTunnel(token, hostname, ws, limiter);
+        var tunnel = new TenantTunnel(token, hostname, ws, limiter, config);
         _registry.TryRegister(tunnel);
         _logger.LogInformation("Tunnel registered: {Hostname} (token prefix {Prefix})", hostname, Truncate(token, 8));
         await SendAsync(ws, RelayFrame.Build(RelayFrame.AuthOk, 0, hostname), CancellationToken.None);

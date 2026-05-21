@@ -35,6 +35,20 @@ public class TenantConfig {
     /// <summary>Bucket capacity for byte bursts; 0 = unlimited.</summary>
     public long BurstBytes { get; set; } = 0;
 
+    /// <summary>
+    /// Hard monthly transfer cap in bytes (request + response counted together).
+    /// 0 = no cap. Counter resets on the 1st of each UTC month. Once exceeded,
+    /// new HTTP requests get 402 Payment Required and new tunnel connections
+    /// are refused until the next reset.
+    /// </summary>
+    public long MonthlyBytes { get; set; } = 0;
+
+    /// <summary>
+    /// Optional token expiry. Auth is refused after this UTC timestamp.
+    /// Useful for trial / temporary access. Null = never expires.
+    /// </summary>
+    public DateTime? ExpiresAt { get; set; }
+
     /// <summary>Optional free-form note (owner/email/description).</summary>
     public string? Note { get; set; }
 }
@@ -151,6 +165,28 @@ public class JsonTenantStore : IDisposable {
     }
 
     public IReadOnlyCollection<TenantConfig> All => _byToken.Values;
+
+    /// <summary>
+    /// Atomically replace the whole tenant set and persist to disk. Used by the
+    /// admin API/UI to add/edit/remove tenants without hand-editing the file.
+    /// </summary>
+    public void Save(IEnumerable<TenantConfig> tenants) {
+        if (string.IsNullOrEmpty(_path))
+            throw new InvalidOperationException("Cannot save: no Relay:TenantsFile configured (using legacy appsettings)");
+        var list = tenants.Where(t => !string.IsNullOrWhiteSpace(t.Token) && !string.IsNullOrWhiteSpace(t.Hostname)).ToList();
+        var file = new TenantConfigFile { Tenants = list };
+        var json = JsonSerializer.Serialize(file, new JsonSerializerOptions {
+            WriteIndented = true,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        });
+        var tmp = _path + ".tmp";
+        File.WriteAllText(tmp, json);
+        File.Move(tmp, _path, overwrite: true);
+        // FileSystemWatcher will catch this and call Reload(); call it eagerly
+        // anyway so the change is observable immediately to the caller.
+        Reload();
+        Changed?.Invoke();
+    }
 
     public void Dispose() {
         try { _watcher?.Dispose(); } catch { }

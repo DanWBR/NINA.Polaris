@@ -9,4 +9,9 @@
   <ItemGroup>
     <ProjectReference Include="..\NINA.Relay.Protocol\NINA.Relay.Protocol.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Built-in Let's Encrypt automation. Production-ready ACME client maintained
+         by Nate McMaster / community; small and dependency-light. -->
+    <PackageReference Include="LettuceEncrypt" Version="1.3.*" />
+  </ItemGroup>
 </Project>

@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relay Admin</title>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<style>
+:root {
+  --bg: #0f172a;
+  --panel: #1e293b;
+  --border: #334155;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --accent: #38bdf8;
+  --ok: #22c55e;
+  --warn: #f59e0b;
+  --danger: #ef4444;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+header {
+  padding: 12px 20px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+.health { display: flex; gap: 16px; color: var(--muted); font-size: 13px; }
+.health span strong { color: var(--text); }
+main { padding: 20px; max-width: 1400px; margin: 0 auto; }
+.section-title { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 24px 0 8px; }
+.section-title:first-child { margin-top: 0; }
+table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 6px; overflow: hidden; }
+th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+th { background: rgba(0,0,0,0.2); font-weight: 600; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(255,255,255,0.02); }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; background: rgba(0,0,0,0.3); padding: 1px 6px; border-radius: 3px; }
+.btn { padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; font-size: 13px; }
+.btn:hover { border-color: var(--accent); }
+.btn-primary { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+.btn-danger { color: var(--danger); border-color: var(--danger); }
+.btn-sm { padding: 3px 8px; font-size: 12px; }
+.toolbar { display: flex; gap: 8px; margin-bottom: 12px; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.dot.ok { background: var(--ok); }
+.dot.warn { background: var(--warn); }
+.dot.error { background: var(--danger); }
+.dot.off { background: var(--muted); }
+.quota-bar { display: inline-block; width: 80px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; vertical-align: middle; margin-right: 6px; }
+.quota-bar > div { height: 100%; transition: width 0.3s; }
+.quota-bar > div.ok { background: var(--ok); }
+.quota-bar > div.warn { background: var(--warn); }
+.quota-bar > div.danger { background: var(--danger); }
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.modal { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 20px; width: min(560px, 92vw); max-height: 92vh; overflow-y: auto; }
+.modal h2 { margin: 0 0 16px; font-size: 16px; }
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.field label { font-size: 12px; color: var(--muted); }
+.field input, .field textarea { padding: 6px 10px; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 4px; font-size: 13px; font-family: inherit; }
+.field textarea { resize: vertical; min-height: 60px; }
+.field-row { display: flex; gap: 12px; }
+.field-row .field { flex: 1; }
+.field-help { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.toast { position: fixed; bottom: 20px; right: 20px; padding: 10px 16px; background: var(--panel); border-left: 3px solid var(--ok); border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 200; }
+.toast.error { border-left-color: var(--danger); }
+.muted { color: var(--muted); }
+.token { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); }
+.checkbox-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+</style>
+</head>
+<body x-data="admin()" x-init="init()">
+
+<header>
+  <h1>NINA Relay — Admin</h1>
+  <div class="health" x-show="health">
+    <span><span class="dot" :class="health?.status === 'ok' ? 'ok' : 'error'"></span>
+      <strong x-text="health?.activeTunnels ?? 0"></strong> active tunnel(s)</span>
+    <span>Uptime: <strong x-text="health?.uptime ?? '—'"></strong></span>
+  </div>
+</header>
+
+<main>
+
+<!-- TENANTS -->
+<div class="section-title">Tenants</div>
+<div class="toolbar">
+  <button class="btn btn-primary" @click="openCreate()">+ New tenant</button>
+  <button class="btn" @click="reload()">↻ Reload from disk</button>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th>Hostname</th>
+      <th>Token</th>
+      <th>Status</th>
+      <th>Rate</th>
+      <th>Monthly quota</th>
+      <th>Expires</th>
+      <th>Note</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <template x-for="t in tenants" :key="t.token">
+      <tr>
+        <td><code x-text="t.hostname"></code></td>
+        <td><span class="token" x-text="t.token.slice(0, 12) + '…'" :title="t.token"></span></td>
+        <td>
+          <template x-if="!t.enabled"><span><span class="dot off"></span>disabled</span></template>
+          <template x-if="t.enabled && t.expired"><span><span class="dot error"></span>expired</span></template>
+          <template x-if="t.enabled && !t.expired"><span><span class="dot ok"></span>active</span></template>
+        </td>
+        <td>
+          <span x-text="t.requestsPerSecond ? t.requestsPerSecond + ' rps' : '—'"></span>
+          /
+          <span x-text="t.bytesPerSecond ? fmtRate(t.bytesPerSecond) : '—'"></span>
+        </td>
+        <td>
+          <template x-if="t.monthlyBytes > 0">
+            <span>
+              <span class="quota-bar">
+                <div :class="quotaClass(t.quotaUsedPercent)" :style="'width:' + Math.min(100, t.quotaUsedPercent) + '%'"></div>
+              </span>
+              <span x-text="fmtBytes(t.bytesThisMonth) + ' / ' + fmtBytes(t.monthlyBytes)"></span>
+            </span>
+          </template>
+          <template x-if="!t.monthlyBytes"><span class="muted">unlimited</span></template>
+        </td>
+        <td>
+          <span x-text="t.expiresAt ? new Date(t.expiresAt).toISOString().slice(0,10) : 'never'"></span>
+        </td>
+        <td><span class="muted" x-text="t.note || ''"></span></td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="btn btn-sm" @click="resetUsage(t.token)" title="Reset monthly counter">↻ Usage</button>
+          <button class="btn btn-sm" @click="openEdit(t)">Edit</button>
+          <button class="btn btn-sm btn-danger" @click="del(t)">Delete</button>
+        </td>
+      </tr>
+    </template>
+    <tr x-show="tenants.length === 0">
+      <td colspan="8" class="muted" style="text-align:center;padding:24px">
+        No tenants configured. Click <strong>+ New tenant</strong> to add one.
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ACTIVE TUNNELS -->
+<div class="section-title">Active tunnels</div>
+<table>
+  <thead>
+    <tr>
+      <th>Hostname</th>
+      <th>Connected</th>
+      <th>Bytes in</th>
+      <th>Bytes out</th>
+      <th>Rate config</th>
+    </tr>
+  </thead>
+  <tbody>
+    <template x-for="t in tunnelsLive" :key="t.hostname">
+      <tr>
+        <td><code x-text="t.hostname"></code></td>
+        <td x-text="new Date(t.connectedAt).toLocaleString()"></td>
+        <td x-text="fmtBytes(t.bytesIn)"></td>
+        <td x-text="fmtBytes(t.bytesOut)"></td>
+        <td x-text="t.rateLimited ? (t.requestsPerSecond + ' rps, ' + fmtRate(t.bytesPerSecond)) : 'unlimited'"></td>
+      </tr>
+    </template>
+    <tr x-show="tunnelsLive.length === 0">
+      <td colspan="5" class="muted" style="text-align:center;padding:24px">No connected tunnels right now.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- EDIT/CREATE MODAL -->
+<div class="modal-backdrop" x-show="editing" @click.self="editing = null" x-cloak>
+  <div class="modal" x-show="editing">
+    <h2 x-text="isNew ? 'New tenant' : 'Edit ' + draft.hostname"></h2>
+    <div class="field-row">
+      <div class="field">
+        <label>Hostname slug</label>
+        <input type="text" x-model="draft.hostname" placeholder="alice">
+      </div>
+      <div class="field">
+        <label>Token</label>
+        <input type="text" x-model="draft.token" :disabled="!isNew">
+        <span class="field-help" x-show="isNew">
+          <a href="#" @click.prevent="genToken()">Generate random token</a>
+        </span>
+      </div>
+    </div>
+    <div class="checkbox-row">
+      <input type="checkbox" id="enabled" x-model="draft.enabled">
+      <label for="enabled">Enabled</label>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Requests / sec (0 = unlimited)</label>
+        <input type="number" min="0" step="0.1" x-model.number="draft.requestsPerSecond">
+      </div>
+      <div class="field">
+        <label>Burst requests (default: 2× rate)</label>
+        <input type="number" min="0" x-model.number="draft.burstRequests">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Bytes / sec (0 = unlimited)</label>
+        <input type="number" min="0" x-model.number="draft.bytesPerSecond">
+        <span class="field-help">e.g. 5242880 = 5 MB/s</span>
+      </div>
+      <div class="field">
+        <label>Burst bytes (default: 2× rate)</label>
+        <input type="number" min="0" x-model.number="draft.burstBytes">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Monthly quota in bytes (0 = unlimited)</label>
+        <input type="number" min="0" x-model.number="draft.monthlyBytes">
+        <span class="field-help">e.g. 53687091200 = 50 GB. Resets on the 1st of each UTC month.</span>
+      </div>
+      <div class="field">
+        <label>Expires at (UTC, optional)</label>
+        <input type="datetime-local" x-model="draft.expiresAtLocal">
+      </div>
+    </div>
+    <div class="field">
+      <label>Note (optional)</label>
+      <textarea x-model="draft.note" placeholder="Owner email, contract ref, etc."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" @click="editing = null">Cancel</button>
+      <button class="btn btn-primary" @click="save()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" :class="toast?.type === 'error' ? 'error' : ''" x-show="toast" x-cloak x-text="toast?.msg"></div>
+
+</main>
+
+<script>
+function admin() {
+  return {
+    tenants: [],
+    tunnelsLive: [],
+    health: null,
+    editing: null,
+    isNew: false,
+    draft: {},
+    toast: null,
+
+    async init() {
+      await this.loadAll();
+      setInterval(() => this.loadAll(), 5000);
+    },
+
+    async loadAll() {
+      try {
+        const [tenants, tunnels, health] = await Promise.all([
+          this.api('GET', '/_admin/tenants'),
+          this.api('GET', '/_tunnels'),
+          this.api('GET', '/_health')
+        ]);
+        this.tenants = tenants;
+        this.tunnelsLive = tunnels;
+        this.health = health;
+      } catch (e) {
+        this.showToast(e.message, 'error');
+      }
+    },
+
+    async api(method, url, body) {
+      const opts = { method, headers: {} };
+      if (body !== undefined) {
+        opts.headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(body);
+      }
+      const r = await fetch(url, opts);
+      if (r.status === 401) throw new Error('Unauthorized — refresh and enter the admin password');
+      if (!r.ok) {
+        const text = await r.text().catch(() => '');
+        throw new Error(`${r.status}: ${text || r.statusText}`);
+      }
+      return r.status === 204 ? null : r.json();
+    },
+
+    openCreate() {
+      this.isNew = true;
+      this.draft = {
+        token: '', hostname: '', enabled: true,
+        requestsPerSecond: 0, burstRequests: 0,
+        bytesPerSecond: 0, burstBytes: 0,
+        monthlyBytes: 0, expiresAtLocal: '', note: ''
+      };
+      this.editing = true;
+    },
+
+    openEdit(t) {
+      this.isNew = false;
+      this.draft = {
+        token: t.token,
+        hostname: t.hostname,
+        enabled: t.enabled,
+        requestsPerSecond: t.requestsPerSecond || 0,
+        burstRequests: t.burstRequests || 0,
+        bytesPerSecond: t.bytesPerSecond || 0,
+        burstBytes: t.burstBytes || 0,
+        monthlyBytes: t.monthlyBytes || 0,
+        expiresAtLocal: t.expiresAt ? t.expiresAt.slice(0, 16) : '',
+        note: t.note || ''
+      };
+      this.editing = true;
+    },
+
+    async genToken() {
+      const r = await this.api('GET', '/_admin/generate-token');
+      this.draft.token = r.token;
+    },
+
+    async save() {
+      const payload = {
+        token: this.draft.token,
+        hostname: this.draft.hostname,
+        enabled: this.draft.enabled,
+        requestsPerSecond: Number(this.draft.requestsPerSecond) || 0,
+        burstRequests: Number(this.draft.burstRequests) || 0,
+        bytesPerSecond: Number(this.draft.bytesPerSecond) || 0,
+        burstBytes: Number(this.draft.burstBytes) || 0,
+        monthlyBytes: Number(this.draft.monthlyBytes) || 0,
+        expiresAt: this.draft.expiresAtLocal ? new Date(this.draft.expiresAtLocal).toISOString() : null,
+        note: this.draft.note || null
+      };
+      try {
+        await this.api('POST', '/_admin/tenants', payload);
+        this.editing = null;
+        this.showToast('Tenant saved');
+        await this.loadAll();
+      } catch (e) { this.showToast('Save failed: ' + e.message, 'error'); }
+    },
+
+    async del(t) {
+      if (!confirm(`Delete tenant "${t.hostname}"? Its active tunnel will be disconnected on next reload.`)) return;
+      try {
+        await this.api('DELETE', '/_admin/tenants/' + encodeURIComponent(t.token));
+        this.showToast('Tenant deleted');
+        await this.loadAll();
+      } catch (e) { this.showToast('Delete failed: ' + e.message, 'error'); }
+    },
+
+    async resetUsage(token) {
+      if (!confirm('Reset this tenant\'s monthly byte counter to zero?')) return;
+      try {
+        await this.api('POST', '/_admin/usage/' + encodeURIComponent(token) + '/reset');
+        this.showToast('Usage counter reset');
+        await this.loadAll();
+      } catch (e) { this.showToast('Reset failed: ' + e.message, 'error'); }
+    },
+
+    async reload() {
+      try {
+        const r = await this.api('POST', '/_admin/reload-tenants');
+        this.showToast(`Reloaded ${r.count} tenants from disk`);
+        await this.loadAll();
+      } catch (e) { this.showToast('Reload failed: ' + e.message, 'error'); }
+    },
+
+    showToast(msg, type = 'ok') {
+      this.toast = { msg, type };
+      setTimeout(() => this.toast = null, 3500);
+    },
+
+    fmtBytes(n) {
+      if (!n) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+      let i = 0;
+      while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+      return n.toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
+    },
+    fmtRate(bps) { return this.fmtBytes(bps) + '/s'; },
+    quotaClass(pct) {
+      if (pct == null) return 'ok';
+      if (pct >= 90) return 'danger';
+      if (pct >= 70) return 'warn';
+      return 'ok';
+    }
+  };
+}
+</script>
+
+</body>
+</html>

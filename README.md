@@ -240,8 +240,19 @@ companion **NINA.Relay.Server** project that acts as a reverse tunnel.
   bytes/sec (request + response counted together), with configurable burst.
   Exceeding either bucket returns HTTP 429 with a `Retry-After` header
   naming which bucket tripped
+- **Monthly byte quotas** + **expiring tokens** — per-tenant `monthlyBytes`
+  cap (counter persists across restarts in `tenant-state.json`, auto-resets
+  on the 1st UTC, HTTP 402 when exhausted) and `expiresAt` timestamp
+  (auth refused after expiry — useful for trials)
+- **Built-in TLS** — `Tls:Mode=letsencrypt` (LettuceEncrypt fetches +
+  renews certs from Let's Encrypt automatically) or `Tls:Mode=pfx` (load a
+  static `.pfx`). No reverse proxy required
+- **Web admin UI** at `/admin/` — gated by `Admin:Password` (HTTP Basic);
+  add/edit/delete tenants, view live tunnels + monthly usage bars,
+  generate cryptographically-random tokens, reset usage counters
 - Admin endpoints: `/_health`, `/_tunnels` (with per-tunnel byte counters),
-  `/_admin/tenants`, `/_admin/reload-tenants`
+  `/_admin/tenants` (full CRUD), `/_admin/generate-token`,
+  `/_admin/usage/{token}/reset`, `/_admin/reload-tenants`
 - Two deployment models — self-host on a $5 VPS, or use a hosted instance
 - See [`src/NINA.Relay.Server/README.md`](src/NINA.Relay.Server/README.md) for
   deployment instructions, Caddy reverse-proxy example, full `tenants.json`
@@ -286,7 +297,7 @@ nina-headless/
 │   └── NINA.Relay.Server/          ← Standalone reverse-tunnel relay (ASP.NET Core)
 │
 ├── tests/
-│   └── NINA.Headless.Test/         ← 146 unit tests (NUnit)
+│   └── NINA.Headless.Test/         ← 152 unit tests (NUnit)
 │
 ├── deploy/                         ← Deployment scripts
 │   ├── nina-headless.service        ← systemd unit file
@@ -702,8 +713,17 @@ Relay **server** side (different process, same `Relay__*` prefix in `appsettings
 | Key | Default | Purpose |
 |-----|---------|---------|
 | `Relay__TenantsFile` | `tenants.json` | Path to the JSON tenant store; hot-reloaded on change. Falls back to the legacy `Tenants:` section if empty/missing |
+| `Relay__UsageStateFile` | `tenant-state.json` | Persistent monthly-byte counter file |
 | `Proxy__TimeoutSeconds` | `60` | Per-request timeout (long enough for plate-solving uploads) |
 | `Proxy__HostnameSuffix` | (none) | e.g. `.relay.example.com` to enable subdomain routing |
+| `Admin__Password` | (empty) | Password for `/_admin/*` and the `/admin/` Web UI. Empty = admin API disabled (returns 503) |
+| `Tls__Mode` | `off` | `off` / `pfx` / `letsencrypt` |
+| `Tls__HttpsPort` | `443` | HTTPS bind port when TLS is enabled |
+| `Tls__RedirectHttpToHttps` | `false` | 308-redirect plain HTTP to HTTPS |
+| `Tls__PfxPath` / `Tls__PfxPassword` | — | Static cert when `Tls:Mode=pfx` |
+| `Tls__LetsEncrypt__Domains` | — | string[] of domains for ACME issuance |
+| `Tls__LetsEncrypt__EmailAddress` | — | Contact email for Let's Encrypt |
+| `Tls__LetsEncrypt__UseStaging` | `false` | Use Let's Encrypt staging API while testing |
 
 ## Performance Targets
 
@@ -733,7 +753,7 @@ Relay **server** side (different process, same `Relay__*` prefix in `appsettings
 - [x] Profile management (JSON persistence)
 - [x] Network resilience (reconnect, dedup, backpressure, adaptive bandwidth)
 - [x] systemd + Docker (linux/amd64 + linux/arm64) + Windows publish scripts
-- [x] 146 unit tests
+- [x] 152 unit tests
 
 **Acquisition essentials (Phase A)**
 - [x] PHD2 guider integration (TCP/JSON-RPC, RMS, dither, settle, alerts)
@@ -775,6 +795,9 @@ Relay **server** side (different process, same `Relay__*` prefix in `appsettings
 - [x] Per-rig main + guide-scope focal length (drives FOV + FITS headers from the active rig)
 - [x] Reverse-tunnel relay server for remote internet access — full HTTP **and** WebSocket forwarding (image stream + status broadcasts work end-to-end through the relay)
 - [x] Relay JSON tenant store (`tenants.json`) with hot-reload + per-tenant rate limiting (request + bandwidth token-buckets, HTTP 429 on exceed)
+- [x] Relay monthly byte quotas + expiring tokens (HTTP 402 on quota, auto-reset 1st UTC, persistent counter)
+- [x] Relay built-in TLS — LettuceEncrypt for automatic Let's Encrypt, or static `.pfx`
+- [x] Relay web admin UI at `/admin/` — full tenant CRUD, live tunnel + quota dashboard, token generator
 
 ### Planned
 
@@ -792,9 +815,8 @@ Relay **server** side (different process, same `Relay__*` prefix in `appsettings
 - [ ] D12: Plugin system (extension API for custom instructions / UI panels / device types)
 
 **Relay server — follow-ups**
-- [ ] TLS termination built-in (today: deploy behind nginx / Caddy / Traefik)
-- [ ] Monthly byte quotas + expiring tokens
-- [ ] Web admin UI (today: JSON admin endpoints + file-edit `tenants.json`)
+- [ ] Per-tenant request logs / audit trail
+- [ ] mTLS for tunnel auth (today: bearer token only)
 
 ## Support the project
 

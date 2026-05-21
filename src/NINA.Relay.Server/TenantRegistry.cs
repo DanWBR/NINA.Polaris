@@ -17,6 +17,7 @@ public class TenantTunnel {
     public SemaphoreSlim SendLock { get; } = new(1, 1);
     public DateTime ConnectedAt { get; } = DateTime.UtcNow;
     public TenantRateLimiter? RateLimiter { get; }
+    public TenantConfig? Config { get; }
 
     // Cumulative byte counters across this tunnel's lifetime (display/telemetry only)
     private long _bytesIn;
@@ -31,11 +32,13 @@ public class TenantTunnel {
     private readonly ConcurrentDictionary<uint, TaskCompletionSource<WsOpenResult>> _pendingWsOpens = new();
     private uint _nextStreamId = 1;
 
-    public TenantTunnel(string token, string hostname, WebSocket socket, TenantRateLimiter? limiter = null) {
+    public TenantTunnel(string token, string hostname, WebSocket socket,
+        TenantRateLimiter? limiter = null, TenantConfig? config = null) {
         Token = token;
         Hostname = hostname;
         Socket = socket;
         RateLimiter = limiter;
+        Config = config;
     }
 
     public uint AllocateStreamId() => Interlocked.Increment(ref _nextStreamId);
@@ -129,15 +132,30 @@ public class TenantRegistry {
         _store = store;
     }
 
-    public bool TryAuthenticate(string token, out string hostname, out TenantConfig? config) {
-        if (_store.TryGet(token, out var c) && c.Enabled) {
-            hostname = c.Hostname;
-            config = c;
-            return true;
+    public bool TryAuthenticate(string token, out string hostname, out TenantConfig? config, out string? rejectReason) {
+        rejectReason = null;
+        if (!_store.TryGet(token, out var c)) {
+            hostname = ""; config = null;
+            rejectReason = "Unknown token";
+            return false;
         }
-        hostname = "";
-        config = null;
-        return false;
+        if (!c.Enabled) {
+            hostname = ""; config = null;
+            rejectReason = "Tenant disabled";
+            return false;
+        }
+        if (c.ExpiresAt.HasValue && DateTime.UtcNow >= c.ExpiresAt.Value) {
+            hostname = ""; config = null;
+            rejectReason = $"Token expired on {c.ExpiresAt.Value:yyyy-MM-dd}";
+            return false;
+        }
+        hostname = c.Hostname;
+        config = c;
+        return true;
+    }
+
+    public bool TryAuthenticate(string token, out string hostname, out TenantConfig? config) {
+        return TryAuthenticate(token, out hostname, out config, out _);
     }
 
     // Backward-compatible overload used by older callers (no rate-limit config needed)

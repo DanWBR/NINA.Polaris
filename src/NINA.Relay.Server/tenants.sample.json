@@ -11,7 +11,8 @@
       "burstRequests": 30,
       "bytesPerSecond": 5242880,
       "burstBytes": 20971520,
-      "note": "Alice's rig — 5 MB/s sustained, 20 MB burst"
+      "monthlyBytes": 53687091200,
+      "note": "Alice's rig — 5 MB/s sustained, 20 MB burst, 50 GB / month"
     },
     {
       "token": "REPLACE-WITH-A-LONG-RANDOM-TOKEN-FOR-BOB",
@@ -19,7 +20,18 @@
       "enabled": true,
       "requestsPerSecond": 0,
       "bytesPerSecond": 0,
+      "monthlyBytes": 0,
       "note": "Bob — unlimited (trusted)"
+    },
+    {
+      "token": "TRIAL-TOKEN-EXAMPLE",
+      "hostname": "trial",
+      "enabled": true,
+      "requestsPerSecond": 5,
+      "bytesPerSecond": 1048576,
+      "monthlyBytes": 1073741824,
+      "expiresAt": "2026-12-31T23:59:59Z",
+      "note": "Trial — 1 MB/s, 1 GB / month, expires end of year"
     },
     {
       "token": "DISABLED-TOKEN-EXAMPLE",

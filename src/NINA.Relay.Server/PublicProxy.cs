@@ -16,12 +16,15 @@ namespace NINA.Relay.Server;
 /// </summary>
 public class PublicProxy {
     private readonly TenantRegistry _registry;
+    private readonly TenantUsageStore _usage;
     private readonly ILogger<PublicProxy> _logger;
     private readonly TimeSpan _requestTimeout;
     private readonly string? _hostnameSuffix; // e.g. ".relay.example.com"
 
-    public PublicProxy(TenantRegistry registry, ILogger<PublicProxy> logger, IConfiguration config) {
+    public PublicProxy(TenantRegistry registry, TenantUsageStore usage,
+        ILogger<PublicProxy> logger, IConfiguration config) {
         _registry = registry;
+        _usage = usage;
         _logger = logger;
         _requestTimeout = TimeSpan.FromSeconds(config.GetValue("Proxy:TimeoutSeconds", 60));
         _hostnameSuffix = config.GetValue<string?>("Proxy:HostnameSuffix");
@@ -66,7 +69,23 @@ public class PublicProxy {
             await ctx.Response.WriteAsync($"Rate limit exceeded ({rl.LimitedBy}). Retry after {retryAfter:F0}s.\n");
             return;
         }
+
+        // ---- Enforce monthly transfer quota (resets on the 1st UTC) ----
+        if (tunnel.Config != null && tunnel.Config.MonthlyBytes > 0) {
+            var used = _usage.BytesThisMonth(tunnel.Token);
+            if (used >= tunnel.Config.MonthlyBytes) {
+                ctx.Response.StatusCode = 402; // Payment Required
+                ctx.Response.ContentType = "text/plain";
+                ctx.Response.Headers["X-Quota-Used"] = used.ToString();
+                ctx.Response.Headers["X-Quota-Limit"] = tunnel.Config.MonthlyBytes.ToString();
+                await ctx.Response.WriteAsync(
+                    $"Monthly transfer quota exhausted ({used:N0} / {tunnel.Config.MonthlyBytes:N0} bytes). Resets on the 1st UTC.\n");
+                return;
+            }
+        }
+
         tunnel.AddBytesIn(body.Length);
+        _usage.Charge(tunnel.Token, body.Length);
 
         // ---- Serialise + send ----
         var headers = ctx.Request.Headers
@@ -119,6 +138,7 @@ public class PublicProxy {
         // negative and the next request gets rejected until the bucket refills.
         tunnel.AddBytesOut(resp.Body.LongLength);
         tunnel.RateLimiter?.ChargeBytes(resp.Body.LongLength);
+        _usage.Charge(tunnel.Token, resp.Body.LongLength);
         await ctx.Response.Body.WriteAsync(resp.Body, ctx.RequestAborted);
     }
 
