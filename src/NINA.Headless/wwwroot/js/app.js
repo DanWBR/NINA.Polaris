@@ -1154,10 +1154,18 @@ function ninaApp() {
                                      lat: { pos: ['center'], fill: '#aac', font: '10px sans-serif' } },
                         equatorial: { show: !isLive, stroke: '#aaffaa', width: 1, opacity: 0.4 },
                         ecliptic:   { show: true, stroke: '#ffcc66', width: 1, opacity: 0.4 },
-                        horizon:    { show: isLive, stroke: '#ff5566', width: 1.5, dash: [4, 4], opacity: 0.7 },
+                        // Horizon shown in BOTH modes now — in live mode it's the
+                        // observer's actual horizon for the current UTC time; in
+                        // equatorial mode it still anchors to the geopos so the
+                        // user can tell which part of the sky is reachable from
+                        // their location right now.
+                        horizon:    { show: true, stroke: '#ff5566', width: 1.5, dash: [4, 4], opacity: 0.5 },
                         galactic:   { show: false }
                     },
-                    horizon: { show: isLive, stroke: '#ff5566', fill: '#0a0a14', opacity: 0.55 },
+                    // Filled below-horizon region (the "ground"). Opacity 0.5 so
+                    // the sky underneath stays partly visible (you can still see
+                    // which constellations are below the horizon, just dimmed).
+                    horizon: { show: true, stroke: '#ff5566', fill: '#0a0a14', opacity: 0.5 },
                     // Daylight overlay disabled — d3-celestial's built-in
                     // daytime sky tint is a bright blue that washes out the
                     // stars + constellation lines. For an astrophotography
