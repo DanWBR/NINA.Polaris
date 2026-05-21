@@ -55,23 +55,37 @@ Real-time stacking for electronically assisted astronomy:
 
 ### Plate Solving & Centering
 
-ASTAP-based plate solving with automated centering workflow:
+Strategy-based plate-solving dispatcher with four interchangeable backends and
+a primary + blind-fallback pipeline:
 
+- **ASTAP** — fast offline solver, hint-driven, the default primary
+- **PlateSolve3** — PlaneWave's CLI, excellent at long focal lengths and small FOVs (≤10 stars), requires hints
+- **Astrometry.net online** — REST API at nova.astrometry.net, truly blind, slow but robust (API key required)
+- **Astrometry.net local** — `solve-field` wrapper with ±20% pixel-scale window, blind-capable
+- Configurable per-installation: `PlateSolve:PrimarySolver`, `PlateSolve:BlindSolver`, `PlateSolve:UseBlindFallback`
 - **Slew & Center** — Automated loop: slew to target → capture → solve → compute error → sync → re-slew (converges in 2-3 iterations, ~30-60s total)
-- Configurable tolerance (default: 30 arcsec)
-- Async job tracking with real-time status polling
-- Supports search radius, FOV, and downsample configuration
+- Configurable tolerance (default: 30 arcsec), async job tracking with real-time status polling
+- Result carries `SolverUsed` so the UI knows which backend produced it
 
-### Guiding (PHD2)
+### Guiding (PHD2) — full management
 
-Full PHD2 event-server integration over TCP (port 4400):
+PHD2 is a first-class managed device, not just a black box we send commands to.
 
-- JSON-RPC 2.0 line-framed protocol with async event loop
+**Connection + telemetry:**
+- JSON-RPC 2.0 line-framed protocol with async event loop on TCP (default port 4400)
 - Ring buffer of last 300 GuideSteps with running RMS RA / RMS Dec / total RMS + peak values
 - Live RA/Dec error chart (Chart.js) with auto-scaling Y-axis
-- Commands: connect / start guiding / stop / loop / pause / resume / dither (with settle pixels + time + timeout) / auto-select star / clear calibration / clear history
 - Calibration data captured automatically after a successful CalibrationComplete event
 - Alert + settle status surfaced in the UI as toasts and banners
+- Shows which guide camera + mount PHD2 is actually using (via `get_current_equipment`)
+
+**Management — control PHD2 itself from the Web UI:**
+- **Profile switcher** — list every PHD2 profile, switch with one click (auto-disconnects equipment first as PHD2 requires)
+- **Equipment connect/disconnect** — tell PHD2 to wire up its own gear
+- **Exposure** — dropdown populated from `get_exposure_durations` (e.g. "1.0s" / "100ms")
+- **Dec guide mode** — Auto / North / South / Off
+- **Launch / Shutdown PHD2 process** — when configured with `PHD2:ExecutablePath`, NINA Headless can spawn PHD2 on the same host (loopback only) and gracefully shut it down via the `shutdown` RPC (falls back to process kill only if we own the process)
+- Commands: start guiding / stop / loop / pause / resume / dither (with settle pixels + time + timeout) / auto-select star / clear calibration / clear history
 
 ### Auto-Focus (V-Curve)
 
@@ -121,7 +135,7 @@ Embedded WebGL sky viewer for visual target selection:
 - Click-to-pick targets, "Center on mount" button
 - Stellarium Remote Control sync — pull the currently-selected object from Stellarium with one click
 
-### Sequence Engine + FITS Output
+### Sequence Engine + Image Persistence
 
 Target list execution with automated imaging:
 
@@ -129,9 +143,12 @@ Target list execution with automated imaging:
 - Automatic slew-to-target before capture
 - Pause/resume with SemaphoreSlim gate
 - Real-time progress tracking via WebSocket (1Hz status broadcast)
-- **Persisted FITS output** with extended headers (camera, telescope, focuser, rotator, filter, weather, observer, target — 30+ keywords per the N.I.N.A. manual spec)
+- **Persisted output** in two formats, selectable per profile:
+  - **FITS** — extended headers (camera / telescope / focuser / rotator / filter / weather / observer / target — 30+ keywords per the N.I.N.A. manual spec)
+  - **XISF** (PixInsight native) — UInt16 monochrome with optional LZ4 compression (~3-10× smaller than FITS); native `<Property>` elements alongside `<FITSKeyword>` mirrors so any downstream tool works
 - Configurable filename pattern (`{target}_{filter}_{exposure}s_{date}_{seq}` etc.)
 - Optional dithering between frames + automatic meridian flip
+- Focal length / focal ratio come from the **active equipment rig** (see below), not a global setting
 
 ### Flat Wizard
 
@@ -146,29 +163,77 @@ Automated flat-field acquisition:
 Responsive, dark-themed interface inspired by ASIAIR:
 
 - **Live View** — Real-time camera preview with WebGL2 GPU rendering (debayer + MTF stretch on GPU), star annotations overlay, crosshair + 3x3 grid, hover pixel readout (raw ADU or RGB), manual stretch sliders, image-history thumbnail strip, HFR + star-count history chart, detailed statistics panel + histogram, full-resolution zoom viewer (OpenSeadragon)
-- **Equipment** — Cards for Camera (with temperature + cooler power chart), Mount, Focuser, Filter Wheel, Rotator, Flat Panel, Dome, Weather, Guider (PHD2). Per-device select / connect / disconnect plus quick controls.
+- **Equipment** — Rig selector bar at the top, then cards for Camera (with auto-detected sensor dimensions + temperature + cooler power chart), Mount, Focuser, Filter Wheel, Rotator, Flat Panel, Dome, Weather, Guider (PHD2). Per-device select / connect / disconnect plus quick controls. "💾 Save selections" button captures the current dropdown picks into the active rig. "Manage rigs…" opens a modal with inline editing of focal lengths, cooler target, and per-rig device assignments
 - **Mount Control** — NSEW directional pad, tracking toggle, park/unpark, GoTo via Sky Explorer
 - **Focus** — Manual stepper + full Auto-Focus V-curve panel (start/abort, live progress bar, fitted parabola chart, best-position marker)
-- **Guider** — PHD2 connection panel, live RA/Dec error chart with RMS readouts, settle parameters, full control buttons (Guide / Loop / Auto-select Star / Pause / Resume / Stop / Dither)
+- **Guider** — PHD2 connection panel + **Launch PHD2** button (spawns the process when configured), PHD2-management bar (profile dropdown, exposure dropdown, Dec-mode, connect-equipment toggle, Shutdown), live RA/Dec error chart with RMS readouts, settle parameters, full control buttons (Guide / Loop / Auto-select Star / Pause / Resume / Stop / Dither). Surfaces PHD2's own guide camera + mount names
 - **Sky Explorer** — Aladin Lite sky map with HiPS surveys + camera FOV overlay. Object search, filtered catalog browser (type / magnitude / Dec), "Tonight's altitude" chart with twilight bands, Stellarium sync, Slew & Center, Add to Sequence
 - **Sequence** — Target list editor with progress bars, collapsible Meridian Flip + Dithering panels, start/pause/resume/stop
-- **Settings** — INDI connection, device selection, observatory location, sensor/optics config, profile management
+- **Settings** — INDI connection, observatory location, image output (format: FITS or XISF), profile management. Sensor dimensions are auto-read from the connected camera; focal length lives per-rig (Equipment → Manage rigs)
 - **First-run** — Location-setup modal with **address geocoder** (OpenStreetMap/Nominatim), browser geolocation, or manual lat/lon entry
 
 **Night Mode** — Red-on-black theme that preserves dark adaptation (critical for field use).
 
 **Mobile Responsive** — Full functionality on phones and tablets with bottom tab navigation.
 
+### Equipment Rigs (multi-rig support)
+
+One physical NINA Headless host frequently serves multiple physical setups —
+"backyard SCT", "travel APO", "remote site mono camera + AO". Each user
+profile carries a list of named **rigs**; switch in one click and every device
+selector + per-rig default (cooler temperature, focuser step size, focal
+length, PHD2 host/port) is reapplied automatically.
+
+Per-rig stored data:
+- Device names: Camera / Telescope / Focuser / FilterWheel / Rotator / FlatDevice / Dome / Weather (INDI names as returned by getProperties)
+- Cooler target temperature, default gain / offset / binning
+- Focuser step size + backlash
+- **Main scope focal length** (drives FOV calculation + FITS FOCALLEN)
+- **Guide scope focal length** (record-keeping + PHD2 pixel-scale sanity check)
+- PHD2 endpoint (host + port)
+
+CRUD via `/api/equipment/rigs/*`. UI: dropdown in the Equipment tab header
+plus a manage-rigs modal with inline editing (rename, focal lengths,
+cooler target) and quick actions (Activate, Duplicate, Delete, Save current
+device selections).
+
+Existing profiles auto-migrate on first load — the pre-existing
+`LastCamera` / `LastTelescope` / etc. fields become the rig named "Default".
+
 ### Profile Management
 
 JSON-based settings persistence with multi-profile support:
 
-- Observatory location, sensor dimensions, focal length
-- Default imaging parameters (exposure, gain, binning)
+- Observatory location
 - INDI connection settings
-- Plate solver configuration
-- Image output directory and naming patterns
+- Plate solver configuration (primary, blind fallback, paths, API keys)
+- Image output directory, naming pattern, format (FITS / XISF)
+- List of equipment rigs (see above)
 - Save, load, and rename profiles
+
+### Remote Access (Relay Server)
+
+For accessing a NINA Headless host on a remote LAN (observatory site, friend's
+house) without inbound port-forwarding or dynamic DNS, this repo ships a
+companion **NINA.Relay.Server** project that acts as a reverse tunnel.
+
+```
+ Browser  ──HTTPS──►  relay.example.com  ──reverse WebSocket──►  Raspberry Pi
+                       (NINA.Relay.Server)                        (NINA Headless,
+                                                                   no public IP)
+```
+
+- NINA Headless opens an **outbound** WebSocket to the relay (firewall-friendly)
+- Multiplexed binary protocol: many concurrent HTTP requests on one socket
+- Auto-reconnect on the client side with exponential backoff (2s → 60s)
+- Subdomain routing (`alice.relay.example.com`) OR path-prefix (`/t/alice/...`)
+- Multi-tenant: each headless host has its own bearer token
+- Two deployment models — self-host on a $5 VPS, or use a hosted instance
+- **Status**: HTTP request/response works end-to-end (REST API + static UI);
+  WebSocket forwarding (image stream / status broadcasts) is reserved in the
+  protocol but not yet implemented
+- See [`src/NINA.Relay.Server/README.md`](src/NINA.Relay.Server/README.md) for
+  deployment instructions, Caddy reverse-proxy example, and protocol details
 
 ### Network Resilience
 
@@ -205,8 +270,11 @@ nina-headless/
 │       ├── Client/                 ← TCP client, blob receiver, connection manager
 │       └── Devices/                ← 9 device type implementations
 │
+│   ├── NINA.Relay.Protocol/        ← Shared multiplexed frame format (net10.0)
+│   └── NINA.Relay.Server/          ← Standalone reverse-tunnel relay (ASP.NET Core)
+│
 ├── tests/
-│   └── NINA.Headless.Test/         ← 114 unit tests (NUnit)
+│   └── NINA.Headless.Test/         ← 135 unit tests (NUnit)
 │
 ├── deploy/                         ← Deployment scripts
 │   ├── nina-headless.service        ← systemd unit file
@@ -234,10 +302,12 @@ nina-headless/
 | Image rendering | WebGL2 shaders | GPU debayer + MTF stretch (CPU fallback) |
 | Image encoding | SkiaSharp | Cross-platform JPEG encoding |
 | FITS I/O | Custom FITSWriter | Extended headers per N.I.N.A. manual spec |
+| XISF I/O | Custom XISFWriter | PixInsight native, LZ4-compressed, FITSKeyword mirrored |
 | Compression | K4os.Compression.LZ4 | Fast image compression (~2GB/s) |
 | Equipment drivers | INDI protocol (TCP/XML) + Alpaca (HTTP) | 400+ Linux drivers + ASCOM over network |
-| Plate solving | ASTAP (external process) | Offline astrometric solver |
-| Guiding | PHD2 (TCP/JSON-RPC, port 4400) | Industry-standard guider |
+| Plate solving | ASTAP / PlateSolve3 / Astrometry.net (online + local) | Strategy dispatcher with primary + blind fallback |
+| Guiding | PHD2 (TCP/JSON-RPC, port 4400) — fully managed | Profile switch, equipment connect, process launch/shutdown |
+| Remote access | NINA.Relay.Server reverse tunnel | Public access without inbound port-forwarding |
 | Discovery | Makaretu.Dns.Multicast | mDNS announcer for `nina.local` |
 | Geocoding | Nominatim (OpenStreetMap, proxied) | Address → coordinates for location setup |
 | Stellarium sync | HTTP (Remote Control plugin, port 8090) | Pull selected object as target |
@@ -353,6 +423,19 @@ Persistence:
 | GET | `/api/equipment/devices` | List all discovered INDI devices |
 | POST | `/api/equipment/connect` | Connect to all selected devices |
 | POST | `/api/equipment/disconnect` | Disconnect all devices |
+| GET | `/api/equipment/status` | Aggregated status of every selected device (includes auto-derived sensor dimensions) |
+
+### Equipment Rigs (multi-rig profiles)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/equipment/rigs` | All rigs + active id |
+| GET | `/api/equipment/rigs/active` | Active rig (full payload) |
+| POST | `/api/equipment/rigs` | Create empty rig `{ name }` |
+| POST | `/api/equipment/rigs/clone` | Duplicate the active rig `{ newName }` |
+| PUT | `/api/equipment/rigs/{id}` | Update a rig (selections, defaults, focal lengths, PHD2 endpoint) |
+| POST | `/api/equipment/rigs/{id}/activate` | Switch to this rig |
+| DELETE | `/api/equipment/rigs/{id}` | Delete a rig (refuses to delete the last one) |
 
 ### Camera
 
@@ -412,11 +495,23 @@ Persistence:
 | POST | `/api/guider/connect` | Connect to PHD2 `{ host, port }` |
 | POST | `/api/guider/disconnect` | Disconnect |
 | GET | `/api/guider/status` | App state, RMS, peak, settle, pixel scale, last alert |
+| GET | `/api/guider/equipment` | Guide camera + mount + aux mount + AO names (`get_current_equipment`) |
 | GET | `/api/guider/steps?limit=N` | Recent GuideStep history |
 | POST | `/api/guider/guide` | Start guiding `{ settlePixels, settleTime, settleTimeout, recalibrate }` |
 | POST | `/api/guider/dither` | Dither `{ pixels, raOnly, settle* }` |
 | POST | `/api/guider/stop` / `/loop` / `/pause` / `/resume` | State changes |
 | POST | `/api/guider/find-star` / `/clear-calibration` / `/clear-history` | Maintenance |
+| GET | `/api/guider/profiles` | List PHD2 profiles + current one |
+| POST | `/api/guider/profile/{id}` | Switch PHD2 profile (auto-disconnects equipment first) |
+| GET | `/api/guider/equipment/connected` | Whether PHD2's own equipment is connected |
+| POST | `/api/guider/equipment/{connect,disconnect}` | Toggle PHD2's own equipment |
+| GET | `/api/guider/exposure` | Current exposure ms + list of available durations |
+| POST | `/api/guider/exposure/set/{ms}` | Set guide exposure |
+| GET | `/api/guider/dec-mode` | Current Dec guide mode |
+| POST | `/api/guider/dec-mode/{Auto\|North\|South\|Off}` | Set Dec mode |
+| GET | `/api/guider/process/status` | Is PHD2 running? did we launch it? path configured? |
+| POST | `/api/guider/process/launch` | Spawn PHD2 (loopback only, polls port 4400 for up to 30s) |
+| POST | `/api/guider/process/shutdown` | Graceful JSON-RPC shutdown, falls back to kill only if we own it |
 
 ### Auto-Focus
 
@@ -494,7 +589,8 @@ Persistence:
 | GET | `/api/sky/catalog/filter?query&type&minMag&maxMag&minDec&maxDec&limit` | Filtered catalog query |
 | GET | `/api/sky/altitude?ra&dec&stepMinutes` | Target altitude track across tonight's window + twilight transitions |
 | GET | `/api/sky/fov` | Current FOV based on optics config |
-| GET | `/api/sky/solver/status` | Plate solver availability |
+| GET | `/api/sky/solver/status` | Primary + blind solver availability and identity |
+| GET | `/api/sky/solver/list` | All four plate-solver backends with id / name / available / blind flag |
 | POST | `/api/sky/slew-and-center` | Start slew & center job `{ ra, dec, toleranceArcsec }` |
 | GET | `/api/sky/slew-and-center/{id}/status` | Job progress |
 | POST | `/api/sky/slew-and-center/{id}/cancel` | Cancel job |
@@ -512,6 +608,7 @@ Persistence:
 |--------|----------|-------------|
 | GET | `/api/system/status` | System info (CPU, RAM, uptime) |
 | GET | `/api/system/geocode?query=&limit=` | Address geocoding via Nominatim (rate-limited, User-Agent set) |
+| GET | `/api/system/relay` | Relay tunnel status (`state`, `hostname`, `lastError`) |
 | GET | `/api/system/profiles` | List profiles |
 | GET | `/api/system/profile` | Active profile |
 | PUT | `/api/system/profile` | Update settings |
@@ -570,6 +667,20 @@ Persistence:
 | `DOTNET_gcServer` | `0` | Use Workstation GC (saves RAM on RPi) |
 | `Indi__Host` | `localhost` | INDI server hostname |
 | `Indi__Port` | `7624` | INDI server port |
+| `PHD2__ExecutablePath` | (auto) | Path to phd2.exe / phd2 binary (enables Launch button) |
+| `PHD2__Host` / `PHD2__Port` | `localhost` / `4400` | PHD2 event server endpoint |
+| `PHD2__InstanceNumber` | `1` | PHD2 `-i N` instance number |
+| `PlateSolve__PrimarySolver` | `astap` | One of `astap`, `platesolve3`, `astrometry-net-online`, `astrometry-net-local` |
+| `PlateSolve__BlindSolver` | `astrometry-net-online` | Fallback when primary fails |
+| `PlateSolve__UseBlindFallback` | `true` | Disable to lock to the primary only |
+| `PlateSolve__AstapPath` | (auto) | ASTAP CLI path |
+| `PlateSolve__PlateSolve3Path` | (none) | PlateSolve3.exe path |
+| `PlateSolve__SolveFieldPath` | `/usr/bin/solve-field` | Local Astrometry.net binary |
+| `PlateSolve__AstrometryApiKey` | (none) | nova.astrometry.net API key |
+| `Mdns__Enabled` / `Mdns__InstanceName` | `true` / `nina-<hostname>` | mDNS announcer |
+| `Relay__Enabled` | `false` | Enable reverse-tunnel client |
+| `Relay__ServerUrl` | (none) | e.g. `wss://relay.example.com/_tunnel` |
+| `Relay__Token` | (none) | Bearer token matching the relay server's `Tenants` map |
 
 ## Performance Targets
 
@@ -599,7 +710,7 @@ Persistence:
 - [x] Profile management (JSON persistence)
 - [x] Network resilience (reconnect, dedup, backpressure, adaptive bandwidth)
 - [x] systemd + Docker (linux/amd64 + linux/arm64) + Windows publish scripts
-- [x] 114 unit tests
+- [x] 135 unit tests
 
 **Acquisition essentials (Phase A)**
 - [x] PHD2 guider integration (TCP/JSON-RPC, RMS, dither, settle, alerts)
@@ -618,19 +729,27 @@ Persistence:
 - [x] Image history thumbnail gallery
 - [x] Star annotations overlay + crosshair + 3x3 grid + pixel ADU readout
 
-**Nice-to-have (Phase D — partial)**
+**Nice-to-have (Phase D — almost complete)**
 - [x] D1 Alpaca HTTP device support (discovery + Camera + Telescope)
 - [x] D2 mDNS announcer (`nina-<hostname>.local`)
 - [x] D3 Adaptive bandwidth (raw ↔ JPEG auto-switch per client)
 - [x] D4 Docker image + multi-arch buildx script + compose
 - [x] D6 Flat Wizard (binary-search ADU, trained exposure cache)
 - [x] D7 Extended FITS headers (30+ keywords per N.I.N.A. manual spec)
+- [x] D8 XISF format support (PixInsight native, LZ4-compressed)
+- [x] D9 Additional plate solvers (PlateSolve3, Astrometry.net online/local) + primary+blind dispatcher
 - [x] D10 Sky Atlas filters + tonight's altitude chart with twilight bands
 - [x] D11 Stellarium Remote Control sync
 
-**Extras**
+**Extras (beyond original plan)**
 - [x] First-run observatory location modal with browser geolocation
 - [x] Address geocoder (OpenStreetMap/Nominatim) — search by city/address/observatory name
+- [x] Auto-derived sensor dimensions from connected camera (no more manual entry)
+- [x] PHD2 guide-camera / mount surfaced from `get_current_equipment`
+- [x] Equipment Rigs — multi-rig profiles with one-click switching, per-rig defaults, inline editing
+- [x] Full PHD2 management — profile switcher, equipment connect/disconnect, exposure, Dec mode, process launch/shutdown
+- [x] Per-rig main + guide-scope focal length (drives FOV + FITS headers from the active rig)
+- [x] Reverse-tunnel relay server for remote internet access (HTTP forwarding; WS forwarding TODO)
 
 ### Planned
 
@@ -645,9 +764,11 @@ Persistence:
 
 **Phase D — Remaining**
 - [ ] D5: Mosaic planner with grid overlay
-- [ ] D8: XISF format support (PixInsight)
-- [ ] D9: Additional plate solvers (PlateSolve3, Astrometry.net online/local, All Sky Plate Solver)
 - [ ] D12: Plugin system (extension API for custom instructions / UI panels / device types)
+
+**Relay server — follow-ups**
+- [ ] WebSocket-over-tunnel (image stream + status broadcast through the relay)
+- [ ] Per-tenant rate limiting + persistent DB-backed tenant store
 
 ## Contributing
 
