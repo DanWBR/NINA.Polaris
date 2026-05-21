@@ -1,3 +1,5 @@
+using System.Net.WebSockets;
+using System.Text;
 using NINA.Relay.Protocol;
 
 namespace NINA.Relay.Server;
@@ -38,6 +40,12 @@ public class PublicProxy {
             ctx.Response.StatusCode = 502;
             ctx.Response.ContentType = "text/plain";
             await ctx.Response.WriteAsync($"Tenant '{tenantName}' is not currently connected to the relay.\n");
+            return;
+        }
+
+        // Branch: WebSocket upgrade requests use the WS-over-tunnel path.
+        if (ctx.WebSockets.IsWebSocketRequest) {
+            await HandleWebSocketAsync(ctx, tunnel, forwardPath);
             return;
         }
 
@@ -128,5 +136,79 @@ public class PublicProxy {
         return name.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase)
             || name.Equals("Connection", StringComparison.OrdinalIgnoreCase)
             || name.Equals("Content-Length", StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ---- WebSocket-over-tunnel ----
+
+    /// <summary>
+    /// Accept the browser's WS upgrade, then ask the tunnel client to open a
+    /// matching local WS via the WsOpen frame. Wait for WsOpenAck, then run
+    /// the bidirectional pump until either side closes.
+    /// </summary>
+    private async Task HandleWebSocketAsync(HttpContext ctx, TenantTunnel tunnel, string forwardPath) {
+        using var browserWs = await ctx.WebSockets.AcceptWebSocketAsync();
+        var streamId = tunnel.AllocateStreamId();
+        var stream = new WsTunnelStream(browserWs);
+        tunnel.RegisterWsStream(streamId, stream);
+
+        // 1. Ask the tunnel client to open the local WS for us
+        var openFrame = RelayFrame.Build(RelayFrame.WsOpen, streamId, WsOpenFrame.Serialise(forwardPath));
+        try {
+            await TunnelHandler.SendSafelyAsync(tunnel, openFrame, ctx.RequestAborted);
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "WS-open send failed for {Path}", forwardPath);
+            tunnel.RemoveWsStream(streamId);
+            try { await browserWs.CloseAsync(WebSocketCloseStatus.InternalServerError, "Tunnel unreachable", CancellationToken.None); } catch { }
+            return;
+        }
+
+        // 2. Wait for WsOpenAck (up to 15s)
+        using var openCts = CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
+        openCts.CancelAfter(TimeSpan.FromSeconds(15));
+        WsOpenResult ack;
+        try { ack = await tunnel.AwaitWsOpenAckAsync(streamId, openCts.Token); }
+        catch (OperationCanceledException) {
+            tunnel.RemoveWsStream(streamId);
+            try { await browserWs.CloseAsync(WebSocketCloseStatus.PolicyViolation, "Tunnel did not ack WS open in time", CancellationToken.None); } catch { }
+            return;
+        }
+        if (!ack.Success) {
+            tunnel.RemoveWsStream(streamId);
+            try { await browserWs.CloseAsync(WebSocketCloseStatus.PolicyViolation, ack.Error ?? "Tunnel rejected WS open", CancellationToken.None); } catch { }
+            return;
+        }
+
+        // 3. Pump browser → tunnel until browser closes
+        try {
+            var buffer = new byte[64 * 1024];
+            while (browserWs.State == WebSocketState.Open && !ctx.RequestAborted.IsCancellationRequested) {
+                WebSocketReceiveResult r;
+                using var ms = new MemoryStream();
+                do {
+                    r = await browserWs.ReceiveAsync(buffer, ctx.RequestAborted);
+                    if (r.MessageType == WebSocketMessageType.Close) break;
+                    ms.Write(buffer, 0, r.Count);
+                    if (ms.Length > 8 * 1024 * 1024) throw new InvalidDataException("WS frame too large (>8MB)");
+                } while (!r.EndOfMessage);
+
+                if (r.MessageType == WebSocketMessageType.Close) break;
+
+                var msgType = r.MessageType == WebSocketMessageType.Text ? WsMessageFrame.TypeText : WsMessageFrame.TypeBinary;
+                var payload = WsMessageFrame.Serialise(msgType, ms.ToArray());
+                var frame = RelayFrame.Build(RelayFrame.WsMessage, streamId, payload);
+                await TunnelHandler.SendSafelyAsync(tunnel, frame, ctx.RequestAborted);
+            }
+        } catch (Exception ex) when (ex is OperationCanceledException or WebSocketException) {
+            // Normal disconnect
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "Browser→tunnel WS pump crashed on stream {Sid}", streamId);
+        } finally {
+            // Tell the tunnel client to close its local WS too
+            try {
+                var closeFrame = RelayFrame.BuildEmpty(RelayFrame.WsClose, streamId);
+                await TunnelHandler.SendSafelyAsync(tunnel, closeFrame, CancellationToken.None);
+            } catch { }
+            tunnel.RemoveWsStream(streamId);
+        }
     }
 }

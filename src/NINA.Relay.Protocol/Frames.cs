@@ -153,6 +153,43 @@ public static class HttpRequestFrame {
     }
 }
 
+/// <summary>
+/// WebSocket open request (relay → client). Payload is just the path-and-query
+/// string the browser hit. The client opens a local WebSocket against
+/// http://127.0.0.1:5000&lt;path&gt; and reports back with WsOpenAck.
+/// Subprotocols are not negotiated through the tunnel — keep WS endpoints
+/// simple (no Sec-WebSocket-Protocol).
+/// </summary>
+public static class WsOpenFrame {
+    public static byte[] Serialise(string pathAndQuery) =>
+        System.Text.Encoding.UTF8.GetBytes(pathAndQuery);
+
+    public static string Parse(ReadOnlyMemory<byte> payload) =>
+        System.Text.Encoding.UTF8.GetString(payload.Span);
+}
+
+/// <summary>
+/// Single WebSocket message (either direction). 1-byte type prefix:
+///   0x01 = Text   (UTF-8 payload)
+///   0x02 = Binary
+/// </summary>
+public static class WsMessageFrame {
+    public const byte TypeText = 0x01;
+    public const byte TypeBinary = 0x02;
+
+    public static byte[] Serialise(byte messageType, ReadOnlyMemory<byte> body) {
+        var buf = new byte[1 + body.Length];
+        buf[0] = messageType;
+        body.Span.CopyTo(buf.AsSpan(1));
+        return buf;
+    }
+
+    public static (byte type, ReadOnlyMemory<byte> body) Parse(ReadOnlyMemory<byte> payload) {
+        if (payload.Length < 1) throw new InvalidDataException("WS message frame too short");
+        return (payload.Span[0], payload.Slice(1));
+    }
+}
+
 /// <summary>HTTP response: status line + headers + body, same shape as request.</summary>
 public static class HttpResponseFrame {
     public static byte[] Serialise(int status,

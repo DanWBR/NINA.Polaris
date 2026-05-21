@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using System.Text;
 using NINA.Relay.Protocol;
@@ -28,6 +29,9 @@ public class RelayClient : IHostedService, IDisposable {
 
     private CancellationTokenSource? _cts;
     private Task? _runner;
+
+    // streamId → local ClientWebSocket bridging that browser-side WS through the tunnel
+    private readonly ConcurrentDictionary<uint, LocalWsBridge> _localWs = new();
 
     public RelayClientState State { get; private set; } = RelayClientState.Disabled;
     public string? AssignedHostname { get; private set; }
@@ -109,11 +113,19 @@ public class RelayClient : IHostedService, IDisposable {
 
         // ---- Receive loop ----
         var sendLock = new SemaphoreSlim(1, 1);
-        while (!ct.IsCancellationRequested && ws.State == WebSocketState.Open) {
-            var frame = await ReadFrameAsync(ws, ct);
-            if (frame == null) break;
-            var (rop, sid, rpayload) = RelayFrame.Parse(frame.Value);
-            _ = HandleFrameAsync(ws, sendLock, rop, sid, rpayload, ct);
+        try {
+            while (!ct.IsCancellationRequested && ws.State == WebSocketState.Open) {
+                var frame = await ReadFrameAsync(ws, ct);
+                if (frame == null) break;
+                var (rop, sid, rpayload) = RelayFrame.Parse(frame.Value);
+                _ = HandleFrameAsync(ws, sendLock, rop, sid, rpayload, ct);
+            }
+        } finally {
+            // Tear down any local WS bridges that were tied to this tunnel
+            foreach (var kv in _localWs.ToArray()) {
+                try { kv.Value.Local.Abort(); } catch { }
+            }
+            _localWs.Clear();
         }
     }
 
@@ -123,6 +135,15 @@ public class RelayClient : IHostedService, IDisposable {
             switch (op) {
                 case RelayFrame.HttpRequest:
                     await ForwardHttpAsync(ws, sendLock, sid, payload, ct);
+                    break;
+                case RelayFrame.WsOpen:
+                    await OpenLocalWsAsync(ws, sendLock, sid, payload, ct);
+                    break;
+                case RelayFrame.WsMessage:
+                    await ForwardWsMessageToLocalAsync(sid, payload);
+                    break;
+                case RelayFrame.WsClose:
+                    await CloseLocalWsAsync(sid, payload);
                     break;
                 case RelayFrame.Ping:
                     await SendAsync(ws, sendLock, RelayFrame.BuildEmpty(RelayFrame.Pong), ct);
@@ -176,6 +197,116 @@ public class RelayClient : IHostedService, IDisposable {
         resp.Dispose();
     }
 
+    // ---- WebSocket-over-tunnel: tunnel → local Kestrel ----
+
+    /// <summary>
+    /// Open a local WebSocket to ws://127.0.0.1:5000&lt;path&gt; for a streamId
+    /// requested by the relay, send WsOpenAck (empty payload = success, otherwise
+    /// error text), and start pumping messages local→tunnel until either side
+    /// closes.
+    /// </summary>
+    private async Task OpenLocalWsAsync(ClientWebSocket tunnel, SemaphoreSlim sendLock,
+        uint sid, ReadOnlyMemory<byte> payload, CancellationToken ct) {
+        var path = WsOpenFrame.Parse(payload);
+        var localWs = new ClientWebSocket();
+        // Use a derived ws:// URI from the local HTTP base address
+        var localUri = new Uri($"ws://127.0.0.1:5000{path}");
+        try {
+            await localWs.ConnectAsync(localUri, ct);
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "Local WS connect failed for {Path}", path);
+            // WsOpenAck with non-empty payload = failure reason
+            await SendAsync(tunnel, sendLock,
+                RelayFrame.Build(RelayFrame.WsOpenAck, sid, ex.Message), ct);
+            try { localWs.Dispose(); } catch { }
+            return;
+        }
+
+        var bridge = new LocalWsBridge(localWs);
+        _localWs[sid] = bridge;
+
+        // Acknowledge success (empty payload)
+        await SendAsync(tunnel, sendLock,
+            RelayFrame.BuildEmpty(RelayFrame.WsOpenAck, sid), ct);
+
+        // Start local → tunnel pump in the background
+        _ = Task.Run(() => PumpLocalToTunnelAsync(tunnel, sendLock, sid, bridge, ct));
+    }
+
+    private async Task PumpLocalToTunnelAsync(ClientWebSocket tunnel, SemaphoreSlim sendLock,
+        uint sid, LocalWsBridge bridge, CancellationToken ct) {
+        try {
+            var buffer = new byte[64 * 1024];
+            while (bridge.Local.State == WebSocketState.Open && !ct.IsCancellationRequested) {
+                WebSocketReceiveResult r;
+                using var ms = new MemoryStream();
+                do {
+                    r = await bridge.Local.ReceiveAsync(buffer, ct);
+                    if (r.MessageType == WebSocketMessageType.Close) break;
+                    ms.Write(buffer, 0, r.Count);
+                    if (ms.Length > 8 * 1024 * 1024) throw new InvalidDataException("WS frame too large (>8MB)");
+                } while (!r.EndOfMessage);
+
+                if (r.MessageType == WebSocketMessageType.Close) break;
+
+                var msgType = r.MessageType == WebSocketMessageType.Text
+                    ? WsMessageFrame.TypeText
+                    : WsMessageFrame.TypeBinary;
+                var payload = WsMessageFrame.Serialise(msgType, ms.ToArray());
+                await SendAsync(tunnel, sendLock,
+                    RelayFrame.Build(RelayFrame.WsMessage, sid, payload), ct);
+            }
+        } catch (Exception ex) when (ex is OperationCanceledException or WebSocketException) {
+            // Normal disconnect
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "Local→tunnel WS pump crashed on stream {Sid}", sid);
+        } finally {
+            // Tell the relay our local WS closed
+            try {
+                await SendAsync(tunnel, sendLock,
+                    RelayFrame.BuildEmpty(RelayFrame.WsClose, sid), CancellationToken.None);
+            } catch { }
+            _localWs.TryRemove(sid, out _);
+            try { bridge.Local.Dispose(); } catch { }
+        }
+    }
+
+    private async Task ForwardWsMessageToLocalAsync(uint sid, ReadOnlyMemory<byte> payload) {
+        if (!_localWs.TryGetValue(sid, out var bridge)) return;
+        try {
+            var (type, body) = WsMessageFrame.Parse(payload);
+            var msgType = type == WsMessageFrame.TypeText
+                ? WebSocketMessageType.Text
+                : WebSocketMessageType.Binary;
+            await bridge.SendLock.WaitAsync();
+            try {
+                if (bridge.Local.State == WebSocketState.Open) {
+                    await bridge.Local.SendAsync(body.ToArray(), msgType, true, CancellationToken.None);
+                }
+            } finally {
+                bridge.SendLock.Release();
+            }
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "Forward tunnel→local WS failed on stream {Sid}", sid);
+            _localWs.TryRemove(sid, out _);
+            try { bridge.Local.Abort(); } catch { }
+        }
+    }
+
+    private Task CloseLocalWsAsync(uint sid, ReadOnlyMemory<byte> payload) {
+        if (!_localWs.TryRemove(sid, out var bridge)) return Task.CompletedTask;
+        var reason = payload.Length > 0 ? Encoding.UTF8.GetString(payload.Span) : "Relay closed stream";
+        return Task.Run(async () => {
+            try {
+                if (bridge.Local.State == WebSocketState.Open || bridge.Local.State == WebSocketState.CloseReceived) {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                    await bridge.Local.CloseAsync(WebSocketCloseStatus.NormalClosure, reason, cts.Token);
+                }
+            } catch { }
+            try { bridge.Local.Dispose(); } catch { }
+        });
+    }
+
     private static async Task SendHttpErrorAsync(ClientWebSocket ws, SemaphoreSlim sendLock,
         uint sid, int status, string message, CancellationToken ct) {
         var bytes = Encoding.UTF8.GetBytes(message);
@@ -222,4 +353,14 @@ public enum RelayClientState {
     Connected,
     Reconnecting,
     AuthFailed
+}
+
+/// <summary>
+/// One local-side WebSocket whose frames are bridged through the relay tunnel
+/// for a particular stream ID.
+/// </summary>
+internal class LocalWsBridge {
+    public ClientWebSocket Local { get; }
+    public SemaphoreSlim SendLock { get; } = new(1, 1);
+    public LocalWsBridge(ClientWebSocket local) { Local = local; }
 }

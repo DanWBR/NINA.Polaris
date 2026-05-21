@@ -89,8 +89,24 @@ public class TunnelHandler {
                     tunnel.CompleteResponse(sid, new ResponseMessage(502, new(), Array.Empty<byte>()));
                 }
                 break;
+            case RelayFrame.WsOpenAck:
+                var reason = payload.Length > 0 ? Encoding.UTF8.GetString(payload.Span) : null;
+                tunnel.CompleteWsOpen(sid, new WsOpenResult(string.IsNullOrEmpty(reason), reason));
+                break;
+            case RelayFrame.WsMessage:
+                // Forward the message to the browser side of this stream
+                _ = ForwardWsMessageToBrowser(tunnel, sid, payload);
+                break;
+            case RelayFrame.WsClose: {
+                var s = tunnel.GetWsStream(sid);
+                if (s != null) {
+                    var closeReason = payload.Length > 0 ? Encoding.UTF8.GetString(payload.Span) : "Tunnel closed stream";
+                    _ = CloseBrowserWsAsync(s, closeReason);
+                    tunnel.RemoveWsStream(sid);
+                }
+                break;
+            }
             case RelayFrame.Pong:
-                // No-op, just proves liveness
                 break;
             case RelayFrame.Ping:
                 _ = SendSafelyAsync(tunnel, RelayFrame.BuildEmpty(RelayFrame.Pong));
@@ -99,6 +115,38 @@ public class TunnelHandler {
                 _logger.LogDebug("Tunnel {Host} unknown opcode 0x{Op:X2}", tunnel.Hostname, op);
                 break;
         }
+    }
+
+    private async Task ForwardWsMessageToBrowser(TenantTunnel tunnel, uint streamId, ReadOnlyMemory<byte> payload) {
+        var stream = tunnel.GetWsStream(streamId);
+        if (stream == null) return;
+        try {
+            var (type, body) = WsMessageFrame.Parse(payload);
+            var msgType = type == WsMessageFrame.TypeText
+                ? WebSocketMessageType.Text
+                : WebSocketMessageType.Binary;
+            await stream.BrowserSendLock.WaitAsync();
+            try {
+                if (stream.Browser.State == WebSocketState.Open) {
+                    await stream.Browser.SendAsync(body.ToArray(), msgType, true, CancellationToken.None);
+                }
+            } finally {
+                stream.BrowserSendLock.Release();
+            }
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "Forward WS→browser failed on stream {Sid}", streamId);
+            tunnel.RemoveWsStream(streamId);
+            try { stream.Browser.Abort(); } catch { }
+        }
+    }
+
+    private static async Task CloseBrowserWsAsync(WsTunnelStream s, string reason) {
+        try {
+            if (s.Browser.State == WebSocketState.Open || s.Browser.State == WebSocketState.CloseReceived) {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                await s.Browser.CloseAsync(WebSocketCloseStatus.NormalClosure, reason, cts.Token);
+            }
+        } catch { }
     }
 
     private async Task TryPingAsync(TenantTunnel tunnel) {

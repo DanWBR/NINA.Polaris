@@ -18,6 +18,8 @@ public class TenantTunnel {
     public DateTime ConnectedAt { get; } = DateTime.UtcNow;
 
     private readonly ConcurrentDictionary<uint, TaskCompletionSource<ResponseMessage>> _pendingHttp = new();
+    private readonly ConcurrentDictionary<uint, WsTunnelStream> _wsStreams = new();
+    private readonly ConcurrentDictionary<uint, TaskCompletionSource<WsOpenResult>> _pendingWsOpens = new();
     private uint _nextStreamId = 1;
 
     public TenantTunnel(string token, string hostname, WebSocket socket) {
@@ -28,7 +30,8 @@ public class TenantTunnel {
 
     public uint AllocateStreamId() => Interlocked.Increment(ref _nextStreamId);
 
-    /// <summary>Register a pending HTTP request and await the matching response.</summary>
+    // ---- HTTP request/response correlation ----
+
     public Task<ResponseMessage> AwaitResponseAsync(uint streamId, CancellationToken ct) {
         var tcs = new TaskCompletionSource<ResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
         _pendingHttp[streamId] = tcs;
@@ -44,13 +47,61 @@ public class TenantTunnel {
             tcs.TrySetResult(message);
     }
 
+    // ---- WebSocket open handshake ----
+
+    public Task<WsOpenResult> AwaitWsOpenAckAsync(uint streamId, CancellationToken ct) {
+        var tcs = new TaskCompletionSource<WsOpenResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _pendingWsOpens[streamId] = tcs;
+        ct.Register(() => {
+            if (_pendingWsOpens.TryRemove(streamId, out var t))
+                t.TrySetCanceled();
+        });
+        return tcs.Task;
+    }
+
+    public void CompleteWsOpen(uint streamId, WsOpenResult result) {
+        if (_pendingWsOpens.TryRemove(streamId, out var tcs))
+            tcs.TrySetResult(result);
+    }
+
+    // ---- WebSocket forwarding streams ----
+
+    public bool RegisterWsStream(uint streamId, WsTunnelStream stream) =>
+        _wsStreams.TryAdd(streamId, stream);
+
+    public WsTunnelStream? GetWsStream(uint streamId) =>
+        _wsStreams.TryGetValue(streamId, out var s) ? s : null;
+
+    public void RemoveWsStream(uint streamId) => _wsStreams.TryRemove(streamId, out _);
+
+    public IEnumerable<KeyValuePair<uint, WsTunnelStream>> ActiveWsStreams => _wsStreams;
+
     public void FailAllPending(string reason) {
-        foreach (var kv in _pendingHttp) {
-            kv.Value.TrySetException(new IOException(reason));
-        }
+        foreach (var kv in _pendingHttp) kv.Value.TrySetException(new IOException(reason));
         _pendingHttp.Clear();
+        foreach (var kv in _pendingWsOpens) kv.Value.TrySetResult(new WsOpenResult(false, reason));
+        _pendingWsOpens.Clear();
+        foreach (var kv in _wsStreams) {
+            try { kv.Value.Browser.Abort(); } catch { }
+        }
+        _wsStreams.Clear();
     }
 }
+
+/// <summary>
+/// One active browser-side WebSocket whose frames are being shuttled through
+/// the tunnel. Holds a reference to the browser socket and a send-lock so
+/// concurrent inbound tunnel messages don't interleave.
+/// </summary>
+public class WsTunnelStream {
+    public WebSocket Browser { get; }
+    public SemaphoreSlim BrowserSendLock { get; } = new(1, 1);
+    public DateTime OpenedAt { get; } = DateTime.UtcNow;
+
+    public WsTunnelStream(WebSocket browser) { Browser = browser; }
+}
+
+public record WsOpenResult(bool Success, string? Error);
 
 public record ResponseMessage(int Status, List<KeyValuePair<string, string>> Headers, byte[] Body);
 
