@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NINA Headless — browser-controlled astrophotography for any device</title>
+<meta name="description" content="A lightweight, browser-controlled astrophotography control system on ASP.NET Core. Runs on Raspberry Pi, mini PCs, and Windows. INDI + ASCOM/Alpaca, PHD2 guiding, plate solving, live stacking, advanced sequencer, and a relay server for remote access.">
+<meta property="og:title" content="NINA Headless">
+<meta property="og:description" content="Browser-controlled astrophotography rig — RPi or Windows. Free & open-source.">
+<meta property="og:image" content="assets/horsehead.jpg">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- HERO -->
+<header class="hero">
+    <nav class="nav">
+        <div class="brand">
+            <span class="brand-mark">NINA</span>
+            <span class="brand-sub">Headless</span>
+        </div>
+        <div class="nav-links">
+            <a href="#features">Features</a>
+            <a href="#getting-started">Get started</a>
+            <a href="#stack">Stack</a>
+            <a href="https://github.com/DanWBR/NINA.Headless" target="_blank" rel="noopener">GitHub ↗</a>
+        </div>
+    </nav>
+
+    <div class="hero-content">
+        <span class="hero-eyebrow">Browser-controlled astrophotography · open-source</span>
+        <h1 class="hero-title">
+            Your rig.<br>
+            Any device.<br>
+            <span class="accent">No display required.</span>
+        </h1>
+        <p class="hero-lede">
+            A complete imaging session — equipment, guiding, plate-solving, sequencer —
+            running on a Raspberry Pi, a Windows mini PC, or anywhere else,
+            controlled from the browser of your phone, laptop, or warm-room tablet.
+        </p>
+        <div class="hero-cta">
+            <a class="btn btn-primary" href="https://github.com/DanWBR/NINA.Headless" target="_blank" rel="noopener">
+                <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor">
+                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+                </svg>
+                Source on GitHub
+            </a>
+            <a class="btn btn-ghost" href="#getting-started">Quick start →</a>
+            <a class="btn btn-ghost" href="https://buy.stripe.com/9B68wPeoLcMSgOz2iJbMQ02" target="_blank" rel="noopener">❤ Donate</a>
+        </div>
+
+        <div class="hero-stats">
+            <div><strong>181</strong><span>unit tests</span></div>
+            <div><strong>30+</strong><span>sequencer instructions</span></div>
+            <div><strong>9</strong><span>device types</span></div>
+            <div><strong>0</strong><span>cloud dependencies</span></div>
+        </div>
+    </div>
+
+    <div class="hero-credit">
+        IC&nbsp;434 / Horsehead &amp; Flame · M.&nbsp;Pugh — used by permission
+    </div>
+</header>
+
+<!-- FEATURES -->
+<section id="features" class="section">
+    <div class="container">
+        <h2 class="section-title">Built for the field</h2>
+        <p class="section-sub">
+            Everything you'd run on a desktop NINA install, packaged for headless
+            machines and a Web UI that loads in 50&nbsp;ms on a tethered phone.
+        </p>
+
+        <div class="features-grid">
+            <article class="feature">
+                <div class="feature-icon">⚙️</div>
+                <h3>9 device types</h3>
+                <p>Camera, mount, focuser, filter wheel, rotator, dome, flat panel, weather, guider — over INDI or ASCOM/Alpaca, with auto-discovery on the LAN.</p>
+            </article>
+            <article class="feature">
+                <div class="feature-icon">🎯</div>
+                <h3>Plate-solve &amp; Slew-and-Center</h3>
+                <p>ASTAP, PlateSolve3, Astrometry.net (online + local) — primary + blind fallback. Auto-pushes the solved focal length back into the rig.</p>
+            </article>
+            <article class="feature">
+                <div class="feature-icon">📡</div>
+                <h3>PHD2 guiding, fully managed</h3>
+                <p>JSON-RPC client with live RA/Dec chart, dither, settle params, profile switcher. Auto-launches PHD2 at startup if you opt in.</p>
+            </article>
+            <article class="feature">
+                <div class="feature-icon">🌲</div>
+                <h3>Advanced Sequencer (tree)</h3>
+                <p>Containers, loop conditions, event triggers (auto-focus on temp/HFR, meridian flip, dither, safety abort). Drag-drop tree editor in the browser.</p>
+            </article>
+            <article class="feature">
+                <div class="feature-icon">🧩</div>
+                <h3>Mosaic planner</h3>
+                <p>N×M grid with cos(δ) correction + serpentine slew order. One click lowers the plan into a runnable sequence.</p>
+            </article>
+            <article class="feature">
+                <div class="feature-icon">📸</div>
+                <h3>Live stack &amp; bandwidth-adaptive stream</h3>
+                <p>EAA-style live stacking over WebSocket with LZ4 compression. Auto-downgrades raw → JPEG when WiFi gets flaky.</p>
+            </article>
+            <article class="feature">
+                <div class="feature-icon">🌐</div>
+                <h3>Remote relay (no port-forward)</h3>
+                <p>Outbound WebSocket to a tiny relay server gives you internet access without DDNS. Per-tenant quotas, mTLS, web admin, built-in Let's Encrypt.</p>
+            </article>
+            <article class="feature">
+                <div class="feature-icon">🔌</div>
+                <h3>Plugin system</h3>
+                <p>Drop a .NET .dll into <code>plugins/</code>, ship custom sequencer instructions. Isolated load context — bad plugins can't take the host down.</p>
+            </article>
+            <article class="feature">
+                <div class="feature-icon">🛰️</div>
+                <h3>Offline sky viewer</h3>
+                <p>Canvas-based starfield with 150 brightest stars + constellations + DSO catalog. Works without internet — perfect for dark-site observatories.</p>
+            </article>
+        </div>
+    </div>
+</section>
+
+<!-- GETTING STARTED -->
+<section id="getting-started" class="section section-alt">
+    <div class="container">
+        <h2 class="section-title">Get started in 30 seconds</h2>
+        <p class="section-sub">
+            One static binary, no runtime install. Pick your platform.
+        </p>
+
+        <div class="start-grid">
+            <article class="start-card">
+                <header><span class="start-tag">RPi</span><h3>Raspberry Pi 4 / 5</h3></header>
+                <pre><code>git clone https://github.com/DanWBR/NINA.Headless.git
+cd NINA.Headless
+./deploy/publish-linux-arm64.sh
+./publish/linux-arm64/NINA.Headless</code></pre>
+                <p>Then point any browser at <code>http://nina-&lt;hostname&gt;.local:5000</code>. mDNS announcer ships built-in.</p>
+            </article>
+
+            <article class="start-card">
+                <header><span class="start-tag">Windows</span><h3>Windows mini PC</h3></header>
+                <pre><code>git clone https://github.com/DanWBR/NINA.Headless.git
+cd NINA.Headless
+.\deploy\publish-win-x64.ps1
+.\publish\win-x64\NINA.Headless.exe</code></pre>
+                <p>Or <code>-InstallService</code> for a Windows Service that survives reboots. Discovers ASCOM Remote (Alpaca) drivers on the LAN automatically.</p>
+            </article>
+
+            <article class="start-card">
+                <header><span class="start-tag">Docker</span><h3>Container</h3></header>
+                <pre><code>docker run -d --network host \
+  -v $(pwd)/config:/config \
+  -v $(pwd)/images:/images \
+  ghcr.io/danwbr/nina-headless:latest</code></pre>
+                <p>Multi-arch image (arm64 + amd64). Compose file in the repo includes indiserver in the same stack.</p>
+            </article>
+        </div>
+    </div>
+</section>
+
+<!-- STACK -->
+<section id="stack" class="section">
+    <div class="container">
+        <h2 class="section-title">Built on the same stuff you'd choose yourself</h2>
+        <ul class="stack-list">
+            <li><strong>ASP.NET Core 10</strong> · Minimal API, single-binary publish, runs on Linux ARM64 / x64 / Windows</li>
+            <li><strong>Alpine.js</strong> + plain JS · the UI is ~3700 lines, no build step, hot-editable</li>
+            <li><strong>WebSockets</strong> · binary image relay (LZ4 frames) + status broadcast at 1 Hz</li>
+            <li><strong>INDI</strong> over TCP/XML + <strong>ASCOM Alpaca</strong> over HTTP — auto-discovery for both</li>
+            <li><strong>Chart.js</strong> for guiding / focus / HFR / temperature plots</li>
+            <li><strong>WebGL2</strong> shader pipeline for client-side debayer + MTF stretch (with CPU fallback)</li>
+            <li><strong>LettuceEncrypt</strong> for the relay server's built-in Let's Encrypt</li>
+            <li><strong>Zero cloud dependencies</strong> — every byte of catalog, FITS writing, plate-solve dispatch, sequencer engine lives in the binary</li>
+        </ul>
+    </div>
+</section>
+
+<!-- CTA -->
+<section class="section section-cta">
+    <div class="container">
+        <h2 class="section-title">Free, open-source, and waiting to image something.</h2>
+        <p class="section-sub">MIT-style license inherited from upstream N.I.N.A. — bring your own scope.</p>
+        <div class="hero-cta" style="justify-content:center;margin-top:24px">
+            <a class="btn btn-primary" href="https://github.com/DanWBR/NINA.Headless" target="_blank" rel="noopener">Source &amp; releases</a>
+            <a class="btn btn-ghost" href="https://buy.stripe.com/9B68wPeoLcMSgOz2iJbMQ02" target="_blank" rel="noopener">❤ Donate</a>
+        </div>
+    </div>
+</section>
+
+<footer class="site-footer">
+    <div class="container footer-grid">
+        <div>
+            <strong>NINA Headless</strong>
+            <p>Browser-controlled astrophotography on any device.</p>
+        </div>
+        <div>
+            <strong>Project</strong>
+            <ul>
+                <li><a href="https://github.com/DanWBR/NINA.Headless" target="_blank" rel="noopener">GitHub repo</a></li>
+                <li><a href="https://github.com/DanWBR/NINA.Headless/blob/master/README.md" target="_blank" rel="noopener">README</a></li>
+                <li><a href="https://github.com/DanWBR/NINA.Headless/issues" target="_blank" rel="noopener">Issues / requests</a></li>
+            </ul>
+        </div>
+        <div>
+            <strong>Related</strong>
+            <ul>
+                <li><a href="https://github.com/isbeorn/nina" target="_blank" rel="noopener">N.I.N.A. (desktop, upstream)</a></li>
+                <li><a href="https://indilib.org/" target="_blank" rel="noopener">INDI library</a></li>
+                <li><a href="https://ascom-standards.org/" target="_blank" rel="noopener">ASCOM / Alpaca</a></li>
+                <li><a href="https://openphdguiding.org/" target="_blank" rel="noopener">PHD2 guiding</a></li>
+            </ul>
+        </div>
+    </div>
+    <div class="container footer-fine">
+        Background: IC&nbsp;434 (Horsehead) and NGC&nbsp;2024 (Flame) — Orion molecular cloud complex.
+    </div>
+</footer>
+
+</body>
+</html>
