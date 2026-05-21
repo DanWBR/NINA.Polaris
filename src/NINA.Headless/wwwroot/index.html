@@ -22,8 +22,38 @@
             <span class="version">Headless v0.1</span>
         </div>
         <div class="status-bar-right">
-            <span class="status-indicator" :class="indiConnected ? 'ok' : 'error'"
-                  x-text="indiConnected ? 'INDI' : 'INDI OFF'"></span>
+            <!-- Discovery / connection method badges. Click to jump to the
+                 Equipment tab focused on that source. Each badge shows
+                 ON / OFF / a count, and uses ok (green) / warn (amber) /
+                 error (red) / off (grey) colour states. -->
+            <span class="status-indicator" :class="indiConnected ? 'ok' : 'off'"
+                  @click="tab='equip'; equipSource='indi'"
+                  :title="indiConnected ? 'INDI connected' : 'INDI not connected — click to open Equipment'">
+                <span x-text="indiConnected ? 'INDI' : 'INDI OFF'"></span>
+            </span>
+            <span class="status-indicator"
+                  :class="(alpaca.servers && alpaca.servers.length) ? 'ok' : 'off'"
+                  @click="tab='equip'; equipSource='alpaca'"
+                  :title="(alpaca.servers && alpaca.servers.length)
+                          ? alpaca.servers.length + ' Alpaca server(s) discovered — click to open Equipment'
+                          : 'No Alpaca servers found — click to open Equipment'">
+                <span>ALPACA</span>
+                <span x-show="alpaca.servers && alpaca.servers.length"
+                      x-text="alpaca.servers.length"
+                      style="margin-left:4px;opacity:0.85"></span>
+            </span>
+            <span class="status-indicator"
+                  :class="phd2Process.running
+                          ? (phd2EquipmentConnected ? 'ok' : 'warn')
+                          : 'off'"
+                  @click="tab='guide'"
+                  :title="phd2Process.running
+                          ? (phd2EquipmentConnected
+                             ? 'PHD2 running, equipment connected — click for Guider'
+                             : 'PHD2 running, no equipment connected — click for Guider')
+                          : 'PHD2 not running — click for Guider'">
+                <span x-text="phd2Process.running ? 'PHD2' : 'PHD2 OFF'"></span>
+            </span>
             <span class="status-chip" x-show="cameraTemp !== null">
                 <span class="chip-icon">T</span>
                 <span x-text="cameraTemp !== null ? cameraTemp.toFixed(1) + '&deg;C' : '--'"></span>

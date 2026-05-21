@@ -81,6 +81,12 @@ html, body {
     border-radius: 10px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    cursor: pointer;
+    user-select: none;
+    transition: filter 0.12s ease;
+}
+.status-indicator:hover {
+    filter: brightness(1.18);
 }
 
 .status-indicator.ok {
@@ -91,6 +97,21 @@ html, body {
 .status-indicator.error {
     background: rgba(244, 67, 54, 0.15);
     color: var(--danger);
+}
+
+/* Amber — running but not fully connected (e.g. PHD2 process up but
+   no camera/mount equipment hooked up yet). */
+.status-indicator.warn {
+    background: rgba(255, 152, 0, 0.18);
+    color: #ffb74d;
+}
+
+/* Grey — feature is disabled / not running. Less alarming than red:
+   "INDI OFF" or "no Alpaca servers found" isn't necessarily a bug,
+   the user may simply not be using that discovery method. */
+.status-indicator.off {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-secondary);
 }
 
 .status-chip {
