@@ -56,6 +56,18 @@ public class PublicProxy {
             body = ms.ToArray();
         }
 
+        // ---- Enforce per-tenant rate limit (request + byte buckets) ----
+        if (tunnel.RateLimiter != null &&
+            !tunnel.RateLimiter.TryAcquire(body.Length, out var rl)) {
+            ctx.Response.StatusCode = 429; // Too Many Requests
+            var retryAfter = double.IsInfinity(rl.RetryAfterSeconds) ? 60 : Math.Ceiling(rl.RetryAfterSeconds);
+            ctx.Response.Headers["Retry-After"] = retryAfter.ToString("F0");
+            ctx.Response.ContentType = "text/plain";
+            await ctx.Response.WriteAsync($"Rate limit exceeded ({rl.LimitedBy}). Retry after {retryAfter:F0}s.\n");
+            return;
+        }
+        tunnel.AddBytesIn(body.Length);
+
         // ---- Serialise + send ----
         var headers = ctx.Request.Headers
             .Select(h => new KeyValuePair<string, string>(h.Key, h.Value.ToString()))
@@ -102,6 +114,11 @@ public class PublicProxy {
             if (IsRestrictedResponseHeader(h.Key)) continue;
             ctx.Response.Headers[h.Key] = h.Value;
         }
+        // Track outbound bytes against the tenant's bandwidth bucket. We don't
+        // refuse mid-response (clients hate that), but the tokens will go
+        // negative and the next request gets rejected until the bucket refills.
+        tunnel.AddBytesOut(resp.Body.LongLength);
+        tunnel.RateLimiter?.ChargeBytes(resp.Body.LongLength);
         await ctx.Response.Body.WriteAsync(resp.Body, ctx.RequestAborted);
     }
 

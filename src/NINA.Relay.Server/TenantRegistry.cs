@@ -16,16 +16,26 @@ public class TenantTunnel {
     public WebSocket Socket { get; }
     public SemaphoreSlim SendLock { get; } = new(1, 1);
     public DateTime ConnectedAt { get; } = DateTime.UtcNow;
+    public TenantRateLimiter? RateLimiter { get; }
+
+    // Cumulative byte counters across this tunnel's lifetime (display/telemetry only)
+    private long _bytesIn;
+    private long _bytesOut;
+    public long BytesIn => Interlocked.Read(ref _bytesIn);
+    public long BytesOut => Interlocked.Read(ref _bytesOut);
+    public void AddBytesIn(long n) => Interlocked.Add(ref _bytesIn, n);
+    public void AddBytesOut(long n) => Interlocked.Add(ref _bytesOut, n);
 
     private readonly ConcurrentDictionary<uint, TaskCompletionSource<ResponseMessage>> _pendingHttp = new();
     private readonly ConcurrentDictionary<uint, WsTunnelStream> _wsStreams = new();
     private readonly ConcurrentDictionary<uint, TaskCompletionSource<WsOpenResult>> _pendingWsOpens = new();
     private uint _nextStreamId = 1;
 
-    public TenantTunnel(string token, string hostname, WebSocket socket) {
+    public TenantTunnel(string token, string hostname, WebSocket socket, TenantRateLimiter? limiter = null) {
         Token = token;
         Hostname = hostname;
         Socket = socket;
+        RateLimiter = limiter;
     }
 
     public uint AllocateStreamId() => Interlocked.Increment(ref _nextStreamId);
@@ -113,17 +123,26 @@ public record ResponseMessage(int Status, List<KeyValuePair<string, string>> Hea
 public class TenantRegistry {
     private readonly ConcurrentDictionary<string, TenantTunnel> _activeByToken = new();
     private readonly ConcurrentDictionary<string, TenantTunnel> _activeByHostname = new();
-    private readonly Dictionary<string, string> _tokenToHostname; // token → hostname slug
+    private readonly JsonTenantStore _store;
 
-    public TenantRegistry(IConfiguration config) {
-        // Tenants:<token> = <hostname-slug>
-        // e.g. Tenants:abc123 = "alice"
-        _tokenToHostname = config.GetSection("Tenants").GetChildren()
-            .ToDictionary(c => c.Key, c => c.Value!, StringComparer.OrdinalIgnoreCase);
+    public TenantRegistry(JsonTenantStore store) {
+        _store = store;
     }
 
+    public bool TryAuthenticate(string token, out string hostname, out TenantConfig? config) {
+        if (_store.TryGet(token, out var c) && c.Enabled) {
+            hostname = c.Hostname;
+            config = c;
+            return true;
+        }
+        hostname = "";
+        config = null;
+        return false;
+    }
+
+    // Backward-compatible overload used by older callers (no rate-limit config needed)
     public bool TryAuthenticate(string token, out string hostname) {
-        return _tokenToHostname.TryGetValue(token, out hostname!);
+        return TryAuthenticate(token, out hostname, out _);
     }
 
     public bool TryRegister(TenantTunnel tunnel) {

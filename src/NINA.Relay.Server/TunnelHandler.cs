@@ -39,13 +39,16 @@ public class TunnelHandler {
             return;
         }
         var token = Encoding.UTF8.GetString(payload.Span).Trim();
-        if (!_registry.TryAuthenticate(token, out var hostname)) {
+        if (!_registry.TryAuthenticate(token, out var hostname, out var config)) {
             _logger.LogWarning("Tunnel auth rejected for token prefix {Prefix}", Truncate(token, 8));
-            await SendAsync(ws, RelayFrame.Build(RelayFrame.AuthFail, 0, "Unknown token"), CancellationToken.None);
+            await SendAsync(ws, RelayFrame.Build(RelayFrame.AuthFail, 0, "Unknown or disabled token"), CancellationToken.None);
             return;
         }
 
-        var tunnel = new TenantTunnel(token, hostname, ws);
+        var limiter = config != null && (config.RequestsPerSecond > 0 || config.BytesPerSecond > 0)
+            ? new TenantRateLimiter(config)
+            : null;
+        var tunnel = new TenantTunnel(token, hostname, ws, limiter);
         _registry.TryRegister(tunnel);
         _logger.LogInformation("Tunnel registered: {Hostname} (token prefix {Prefix})", hostname, Truncate(token, 8));
         await SendAsync(ws, RelayFrame.Build(RelayFrame.AuthOk, 0, hostname), CancellationToken.None);

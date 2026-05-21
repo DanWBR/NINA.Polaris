@@ -21,21 +21,19 @@ Implemented:
 - [x] Outbound WebSocket registration + authentication
 - [x] Multiplexed binary framing (multiple concurrent HTTP requests on one tunnel)
 - [x] HTTP request/response forwarding (GET / POST / PUT / DELETE / PATCH / HEAD / OPTIONS)
+- [x] **WebSocket-over-tunnel** forwarding (image stream, status stream, any browser-side WS endpoint)
 - [x] Subdomain routing (`alice.relay.example.com`) **and** path-prefix routing (`/t/alice/...`)
 - [x] Auto-reconnect with exponential backoff on the client side
 - [x] Ping/pong keepalive (30 s)
 - [x] Per-request timeout (default 60 s)
-- [x] `/_health` and `/_tunnels` admin endpoints
+- [x] **JSON tenant store** (`tenants.json`) with hot-reload on file change
+- [x] **Per-tenant rate limiting** (token-bucket: requests/sec + bytes/sec, with burst)
+- [x] `/_health`, `/_tunnels`, `/_admin/tenants`, `/_admin/reload-tenants` endpoints
 
 Not yet:
-- [ ] WebSocket forwarding (image stream / status stream won't work over the
-  relay yet — REST API and static UI do). Sketch: opcodes `WsOpen` / `WsMessage`
-  / `WsClose` are already reserved in the protocol; the server-side proxy
-  needs an upgrade detector + the client needs to open a local WS and proxy
-  messages bidirectionally.
 - [ ] TLS termination (run it behind nginx / Caddy / Traefik for HTTPS)
-- [ ] Persistent tenant store (currently in-memory from `appsettings.json`)
-- [ ] Per-tenant rate limiting & quotas
+- [ ] Quotas (monthly byte caps, expiring tokens)
+- [ ] Web admin UI
 
 ## Configuration
 
@@ -51,12 +49,59 @@ Not yet:
     // Set to null/empty to use only path-prefix routing.
     "HostnameSuffix": ".relay.example.com"
   },
+  "Relay": {
+    // Path to tenants.json (preferred). If omitted/missing, falls back
+    // to the legacy "Tenants" section below.
+    "TenantsFile": "tenants.json"
+  },
   "Tenants": {
-    // <token>: <hostname-slug>
+    // Legacy in-config tenants: <token>: <hostname-slug>. Still supported
+    // for trivial single-user setups; for anything bigger use tenants.json.
     "REPLACE-WITH-LONG-RANDOM-TOKEN-PER-USER": "alice"
   }
 }
 ```
+
+### `tenants.json` (preferred)
+
+Per-tenant config in a separate file so you can edit / add / remove
+tenants without redeploying. The file is **watched and hot-reloaded** on
+change, or you can `POST /_admin/reload-tenants` to force a reload.
+
+```jsonc
+// tenants.json (copy from tenants.sample.json)
+{
+  "tenants": [
+    {
+      "token": "REPLACE-WITH-A-LONG-RANDOM-TOKEN-FOR-ALICE",
+      "hostname": "alice",
+      "enabled": true,
+      "requestsPerSecond": 10,    // 0 = unlimited
+      "burstRequests": 30,        // bucket capacity; defaults to 2x the rate
+      "bytesPerSecond": 5242880,  // 5 MB/s sustained; 0 = unlimited
+      "burstBytes": 20971520,     // 20 MB burst
+      "note": "Alice's rig"
+    },
+    {
+      "token": "REPLACE-WITH-A-LONG-RANDOM-TOKEN-FOR-BOB",
+      "hostname": "bob",
+      "enabled": true,
+      "requestsPerSecond": 0,     // unlimited (trusted)
+      "bytesPerSecond": 0
+    },
+    {
+      "token": "DISABLED-TOKEN-EXAMPLE",
+      "hostname": "old-rig",
+      "enabled": false            // tunnel auth refused
+    }
+  ]
+}
+```
+
+Rate-limited requests get back `HTTP 429 Too Many Requests` with a
+`Retry-After` header. Both buckets are checked: a tenant under their
+request rate but over their bandwidth budget still gets a 429
+(`Rate limit exceeded (bandwidth). Retry after 12s.`).
 
 Generate tokens with any source of entropy:
 ```bash
@@ -132,10 +177,10 @@ Every relay frame on the tunnel WebSocket is binary:
 | 0x03   | S → C     | AuthFail     | reason (UTF-8)                            |
 | 0x10   | S → C     | HttpRequest  | textual header block + body bytes         |
 | 0x11   | C → S     | HttpResponse | textual header block + body bytes         |
-| 0x20   | S → C     | WsOpen       | reserved (not implemented)                |
-| 0x21   | C → S     | WsOpenAck    | reserved                                  |
-| 0x22   | both      | WsMessage    | reserved                                  |
-| 0x23   | both      | WsClose      | reserved                                  |
+| 0x20   | S → C     | WsOpen       | path-and-query (UTF-8) of browser WS      |
+| 0x21   | C → S     | WsOpenAck    | empty = success; UTF-8 reason = failure   |
+| 0x22   | both      | WsMessage    | 1-byte type (1=text, 2=binary) + body     |
+| 0x23   | both      | WsClose      | optional UTF-8 reason                     |
 | 0xF0   | both      | Ping         | empty                                     |
 | 0xF1   | both      | Pong         | empty                                     |
 

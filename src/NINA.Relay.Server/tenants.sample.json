@@ -1,0 +1,31 @@
+{
+  // Sample tenants.json — copy to tenants.json and edit.
+  // Hot-reloaded on file change (no server restart needed).
+  // A rate limit of 0 means unlimited; burst defaults to 2× the rate.
+  "tenants": [
+    {
+      "token": "REPLACE-WITH-A-LONG-RANDOM-TOKEN-FOR-ALICE",
+      "hostname": "alice",
+      "enabled": true,
+      "requestsPerSecond": 10,
+      "burstRequests": 30,
+      "bytesPerSecond": 5242880,
+      "burstBytes": 20971520,
+      "note": "Alice's rig — 5 MB/s sustained, 20 MB burst"
+    },
+    {
+      "token": "REPLACE-WITH-A-LONG-RANDOM-TOKEN-FOR-BOB",
+      "hostname": "bob",
+      "enabled": true,
+      "requestsPerSecond": 0,
+      "bytesPerSecond": 0,
+      "note": "Bob — unlimited (trusted)"
+    },
+    {
+      "token": "DISABLED-TOKEN-EXAMPLE",
+      "hostname": "old-rig",
+      "enabled": false,
+      "note": "Decommissioned"
+    }
+  ]
+}
