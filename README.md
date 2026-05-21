@@ -1,8 +1,10 @@
-# NINA Headless
+# N.I.N.A. Polaris
 
 **Cross-platform headless astronomy controller for Raspberry Pi, ARM64 SBCs, and Windows mini PCs.**
 
-NINA Headless is a lightweight, browser-controlled astrophotography system built on ASP.NET Core. It brings the power of [N.I.N.A.](https://nighttime-imaging.eu/) (Nighttime Imaging 'N' Astronomy) to single-board computers and small-form-factor PCs, with a responsive Web UI accessible from any device on the network.
+> Repo and .NET projects are still named `nina-headless` / `NINA.Headless.*` — the product / UI is **N.I.N.A. Polaris** (the headless edition of NINA, named after the guiding star). All URLs, build paths, and namespaces continue to use the original names; only the user-facing branding changed.
+
+N.I.N.A. Polaris is a lightweight, browser-controlled astrophotography system built on ASP.NET Core. It brings the power of [N.I.N.A.](https://nighttime-imaging.eu/) (Nighttime Imaging 'N' Astronomy) to single-board computers and small-form-factor PCs, with a responsive Web UI accessible from any device on the network.
 
 The Raspberry Pi (or Windows mini PC) acts as a data broker — controlling hardware, saving FITS files, and streaming images — while your laptop, tablet, or phone handles all the heavy rendering in the browser.
 
@@ -85,7 +87,7 @@ PHD2 is a first-class managed device, not just a black box we send commands to.
 - **Exposure** — dropdown populated from `get_exposure_durations` (e.g. "1.0s" / "100ms")
 - **Dec guide mode** — Auto / North / South / Off
 - **Auto-detect install location** — walks the well-known PHD2 install paths per OS (Windows: Program Files / Program Files (x86) / `%LocalAppData%\Programs`; macOS: `/Applications/PHD2.app`; Linux: `/usr/bin`, `/usr/local/bin`, `/opt/phd2/bin`, `/snap/bin`, plus a `$PATH` walk). When not detected the Guider tab surfaces an inline "Download PHD2" banner with a direct link
-- **Launch / Shutdown PHD2 process** — when an executable is detected (or `PHD2:ExecutablePath` is set), NINA Headless can spawn PHD2 on the same host (loopback only) and gracefully shut it down via the `shutdown` RPC (falls back to process kill only if we own the process)
+- **Launch / Shutdown PHD2 process** — when an executable is detected (or `PHD2:ExecutablePath` is set), N.I.N.A. Polaris can spawn PHD2 on the same host (loopback only) and gracefully shut it down via the `shutdown` RPC (falls back to process kill only if we own the process)
 - **Auto-start on boot** — a single checkbox in the Guider tab makes the headless app launch PHD2 and connect the JSON-RPC client ~2s after every startup. Persisted per profile; survives restarts. Backed by a hosted service that retries the connect 5× in case PHD2's event server is slow to come up
 - Commands: start guiding / stop / loop / pause / resume / dither (with settle pixels + time + timeout) / auto-select star / clear calibration / clear history
 
@@ -286,7 +288,7 @@ Responsive, dark-themed interface inspired by ASIAIR:
 
 ### Equipment Rigs (multi-rig support)
 
-One physical NINA Headless host frequently serves multiple physical setups —
+One physical N.I.N.A. Polaris host frequently serves multiple physical setups —
 "backyard SCT", "travel APO", "remote site mono camera + AO". Each user
 profile carries a list of named **rigs**; switch in one click and every device
 selector + per-rig default (cooler temperature, focuser step size, focal
@@ -321,17 +323,17 @@ JSON-based settings persistence with multi-profile support:
 
 ### Remote Access (Relay Server)
 
-For accessing a NINA Headless host on a remote LAN (observatory site, friend's
+For accessing a N.I.N.A. Polaris host on a remote LAN (observatory site, friend's
 house) without inbound port-forwarding or dynamic DNS, this repo ships a
 companion **NINA.Relay.Server** project that acts as a reverse tunnel.
 
 ```
  Browser  ──HTTPS──►  relay.example.com  ──reverse WebSocket──►  Raspberry Pi
-                       (NINA.Relay.Server)                        (NINA Headless,
+                       (NINA.Relay.Server)                        (N.I.N.A. Polaris,
                                                                    no public IP)
 ```
 
-- NINA Headless opens an **outbound** WebSocket to the relay (firewall-friendly)
+- N.I.N.A. Polaris opens an **outbound** WebSocket to the relay (firewall-friendly)
 - Multiplexed binary protocol: many concurrent HTTP requests on one socket
 - Auto-reconnect on the client side with exponential backoff (2s → 60s)
 - Subdomain routing (`alice.relay.example.com`) OR path-prefix (`/t/alice/...`)
@@ -363,7 +365,7 @@ companion **NINA.Relay.Server** project that acts as a reverse tunnel.
   `/_admin/audit?tenant=&limit=` and the admin UI
 - **mTLS for tunnel auth** — per-tenant `clientCertThumbprint` pins the
   X.509 cert the tunnel client must present. Bearer token alone is the
-  default; mTLS is opt-in per tenant. NINA Headless client points at a
+  default; mTLS is opt-in per tenant. N.I.N.A. Polaris client points at a
   `.pfx` via `Relay:ClientCertPath` (+ optional password)
 - Admin endpoints: `/_health`, `/_tunnels` (with per-tunnel byte counters),
   `/_admin/tenants` (full CRUD), `/_admin/generate-token`,
@@ -979,7 +981,7 @@ open for new ideas — please file an issue or discussion.
 
 ## Support the project
 
-If NINA Headless saves you an evening of fiddling with rigs and you want to
+If N.I.N.A. Polaris saves you an evening of fiddling with rigs and you want to
 chip in for hosting / a coffee / dark-sky travel:
 
 [**❤️ Donate via Stripe**](https://buy.stripe.com/9B68wPeoLcMSgOz2iJbMQ02)
