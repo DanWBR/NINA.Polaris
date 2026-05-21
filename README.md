@@ -84,7 +84,9 @@ PHD2 is a first-class managed device, not just a black box we send commands to.
 - **Equipment connect/disconnect** — tell PHD2 to wire up its own gear
 - **Exposure** — dropdown populated from `get_exposure_durations` (e.g. "1.0s" / "100ms")
 - **Dec guide mode** — Auto / North / South / Off
-- **Launch / Shutdown PHD2 process** — when configured with `PHD2:ExecutablePath`, NINA Headless can spawn PHD2 on the same host (loopback only) and gracefully shut it down via the `shutdown` RPC (falls back to process kill only if we own the process)
+- **Auto-detect install location** — walks the well-known PHD2 install paths per OS (Windows: Program Files / Program Files (x86) / `%LocalAppData%\Programs`; macOS: `/Applications/PHD2.app`; Linux: `/usr/bin`, `/usr/local/bin`, `/opt/phd2/bin`, `/snap/bin`, plus a `$PATH` walk). When not detected the Guider tab surfaces an inline "Download PHD2" banner with a direct link
+- **Launch / Shutdown PHD2 process** — when an executable is detected (or `PHD2:ExecutablePath` is set), NINA Headless can spawn PHD2 on the same host (loopback only) and gracefully shut it down via the `shutdown` RPC (falls back to process kill only if we own the process)
+- **Auto-start on boot** — a single checkbox in the Guider tab makes the headless app launch PHD2 and connect the JSON-RPC client ~2s after every startup. Persisted per profile; survives restarts. Backed by a hosted service that retries the connect 5× in case PHD2's event server is slow to come up
 - Commands: start guiding / stop / loop / pause / resume / dither (with settle pixels + time + timeout) / auto-select star / clear calibration / clear history
 
 ### Auto-Focus (V-Curve)
@@ -166,7 +168,7 @@ Responsive, dark-themed interface inspired by ASIAIR:
 - **Equipment** — Rig selector bar at the top, then cards for Camera (with auto-detected sensor dimensions + temperature + cooler power chart), Mount, Focuser, Filter Wheel, Rotator, Flat Panel, Dome, Weather, Guider (PHD2). Per-device select / connect / disconnect plus quick controls. "💾 Save selections" button captures the current dropdown picks into the active rig. "Manage rigs…" opens a modal with inline editing of focal lengths, cooler target, and per-rig device assignments
 - **Mount Control** — NSEW directional pad, tracking toggle, park/unpark, GoTo via Sky Explorer
 - **Focus** — Manual stepper + full Auto-Focus V-curve panel (start/abort, live progress bar, fitted parabola chart, best-position marker)
-- **Guider** — PHD2 connection panel + **Launch PHD2** button (spawns the process when configured), PHD2-management bar (profile dropdown, exposure dropdown, Dec-mode, connect-equipment toggle, Shutdown), live RA/Dec error chart with RMS readouts, settle parameters, full control buttons (Guide / Loop / Auto-select Star / Pause / Resume / Stop / Dither). Surfaces PHD2's own guide camera + mount names
+- **Guider** — PHD2 connection panel + **Launch PHD2** button (spawns the auto-detected install) + **Auto-start on boot** checkbox (persists in profile, launches PHD2 on every Headless start), inline "Download PHD2" banner when not installed, PHD2-management bar (profile dropdown, exposure dropdown, Dec-mode, connect-equipment toggle, Shutdown), live RA/Dec error chart with RMS readouts, settle parameters, full control buttons (Guide / Loop / Auto-select Star / Pause / Resume / Stop / Dither). Surfaces PHD2's own guide camera + mount names
 - **Sky Explorer** — Aladin Lite sky map with HiPS surveys + camera FOV overlay. Object search, filtered catalog browser (type / magnitude / Dec), "Tonight's altitude" chart with twilight bands, Stellarium sync, Slew & Center, Add to Sequence
 - **Sequence** — Target list editor with progress bars, collapsible Meridian Flip + Dithering panels, start/pause/resume/stop
 - **Settings** — INDI connection, observatory location, image output (format: FITS or XISF), profile management. Sensor dimensions are auto-read from the connected camera; focal length lives per-rig (Equipment → Manage rigs)
@@ -522,6 +524,8 @@ Persistence:
 | GET | `/api/guider/process/status` | Is PHD2 running? did we launch it? path configured? |
 | POST | `/api/guider/process/launch` | Spawn PHD2 (loopback only, polls port 4400 for up to 30s) |
 | POST | `/api/guider/process/shutdown` | Graceful JSON-RPC shutdown, falls back to kill only if we own it |
+| GET | `/api/guider/install-info` | Detected install (`installed`, `resolvedPath`, `downloadUrl`, `os`, `searchedPaths`) — UI uses this to surface "Download PHD2" when missing |
+| POST | `/api/guider/auto-start/{true\|false}` | Persist auto-start-on-boot preference in the user profile |
 
 ### Auto-Focus
 
@@ -677,9 +681,10 @@ Persistence:
 | `DOTNET_gcServer` | `0` | Use Workstation GC (saves RAM on RPi) |
 | `Indi__Host` | `localhost` | INDI server hostname |
 | `Indi__Port` | `7624` | INDI server port |
-| `PHD2__ExecutablePath` | (auto) | Path to phd2.exe / phd2 binary (enables Launch button) |
+| `PHD2__ExecutablePath` | (auto-detected) | Override the path to phd2.exe / phd2 binary. By default the app walks the standard install paths per OS — only set this for non-standard installs |
 | `PHD2__Host` / `PHD2__Port` | `localhost` / `4400` | PHD2 event server endpoint |
 | `PHD2__InstanceNumber` | `1` | PHD2 `-i N` instance number |
+| `PHD2__AutoStart` | `false` | Fallback for `PHD2AutoStart` profile flag. UI checkbox in Guider tab is the normal way to set this |
 | `PlateSolve__PrimarySolver` | `astap` | One of `astap`, `platesolve3`, `astrometry-net-online`, `astrometry-net-local` |
 | `PlateSolve__BlindSolver` | `astrometry-net-online` | Fallback when primary fails |
 | `PlateSolve__UseBlindFallback` | `true` | Disable to lock to the primary only |
@@ -766,6 +771,7 @@ Relay **server** side (different process, same `Relay__*` prefix in `appsettings
 - [x] PHD2 guide-camera / mount surfaced from `get_current_equipment`
 - [x] Equipment Rigs — multi-rig profiles with one-click switching, per-rig defaults, inline editing
 - [x] Full PHD2 management — profile switcher, equipment connect/disconnect, exposure, Dec mode, process launch/shutdown
+- [x] PHD2 auto-detect + auto-start on boot — walks per-OS install paths, inline "Download PHD2" banner when missing, one-click checkbox to launch + connect at every Headless startup
 - [x] Per-rig main + guide-scope focal length (drives FOV + FITS headers from the active rig)
 - [x] Reverse-tunnel relay server for remote internet access — full HTTP **and** WebSocket forwarding (image stream + status broadcasts work end-to-end through the relay)
 - [x] Relay JSON tenant store (`tenants.json`) with hot-reload + per-tenant rate limiting (request + bandwidth token-buckets, HTTP 429 on exceed)
