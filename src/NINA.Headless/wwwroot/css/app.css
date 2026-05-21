@@ -1172,18 +1172,22 @@ select.input-sm {
 .tab-panel-sky > .sky-slew-progress {
     flex: 0 0 auto;
 }
-.sky-viewer {
-    /* Hard cap based on viewport — .content above has overflow-y:auto and
-       no definite height, so flex:1 alone lets the SVG inflate the parent.
-       The 240 px reserve covers: top bar (50) + search row (60) + projection
-       row (60) + action row (60) + a touch of padding. */
+/* d3-celestial ships its own #celestial-map { overflow:visible; height:auto;
+   display:inline-block; min-width:720px } which (ID selector) wins over a
+   plain .sky-viewer rule and lets the SVG inflate the layout. Override with
+   matching ID+class specificity AND !important on the properties that
+   directly fight celestial.css. */
+.sky-viewer,
+#celestial-map.sky-viewer {
     flex: 0 0 auto;
-    height: calc(100vh - 240px);
-    min-height: 280px;
-    width: 100%;
+    height: calc(100vh - 240px) !important;
+    min-height: 280px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    display: block !important;
     background: #000;
-    position: relative;  /* anchor for the absolutely-positioned SVG */
-    overflow: hidden;    /* clip the top/bottom of the over-tall circle */
+    position: relative !important;
+    overflow: hidden !important;
 }
 /* The SVG d3-celestial injects sizes to width × width (the projection is
    circular). Pulling it OUT of normal flow with absolute positioning is
