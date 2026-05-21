@@ -1067,9 +1067,11 @@ function ninaApp() {
                 return;
             }
             if (this._celestialReady) {
-                // Container is now square (CSS aspect-ratio 1/1) with a max-width cap,
-// so width == height. Use the rendered width as the render size.
-const size = Math.max(300, el.clientWidth);
+                // Pick the smaller dimension so the circular projection
+                // fits entirely within the available area (the flex layout
+                // hands us whatever's left between the toolbar above and
+                // the action row below).
+                const size = Math.max(300, Math.min(el.clientWidth, el.clientHeight));
                 try { Celestial.resize({ width: size }); } catch {}
                 return;
             }
@@ -1096,10 +1098,10 @@ const size = Math.max(300, el.clientWidth);
                 const lat = this.settings.latitude  || 0;
                 const lng = this.settings.longitude || 0;
 
-                // The .sky-viewer container is square (CSS aspect-ratio 1/1)
-                // capped at max-width 1200px, so width == height. Pass the
-                // rendered width and let the circular SVG fill the box.
-                const renderSize = Math.max(300, el.clientWidth);
+                // Render the circle at the smaller of the two dimensions
+                // so it fits entirely within the area the flex layout
+                // hands us (between the toolbar above and the actions below).
+                const renderSize = Math.max(300, Math.min(el.clientWidth, el.clientHeight));
 
                 Celestial.display({
                     container: 'celestial-map',
@@ -1188,9 +1190,7 @@ const size = Math.max(300, el.clientWidth);
                 }
 
                 window.addEventListener('resize', () => {
-                    // Container is now square (CSS aspect-ratio 1/1) with a max-width cap,
-// so width == height. Use the rendered width as the render size.
-const size = Math.max(300, el.clientWidth);
+                    const size = Math.max(300, Math.min(el.clientWidth, el.clientHeight));
                     try { Celestial.resize({ width: size }); } catch {}
                 });
 

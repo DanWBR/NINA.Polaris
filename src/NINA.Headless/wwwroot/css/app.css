@@ -1156,29 +1156,41 @@ select.input-sm {
     border-bottom: 1px solid var(--border);
 }
 
+/* Sky tab is a flex column: search bar / map / toolbar / actions. The map
+   takes whatever vertical space is left after the rest of the rows are
+   placed, and never extends past it. */
+.tab-panel-sky {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+.tab-panel-sky > .sky-toolbar,
+.tab-panel-sky > .sky-survey-row,
+.tab-panel-sky > .sky-info-panel,
+.tab-panel-sky > .sky-results,
+.tab-panel-sky > .sky-slew-progress {
+    flex: 0 0 auto;
+}
 .sky-viewer {
-    /* Fill the full width of the sky tab. Height matches width (the celestial
-       projection is circular) — the tab itself scrolls vertically when the
-       circle is bigger than the viewport. */
-    width: 100%;
-    aspect-ratio: 1 / 1;
-    /* Sanity cap so the circle doesn't blow up to 3000 px on ultrawide
-       monitors. Pick whichever is smaller. */
-    max-width: 1200px;
+    flex: 1 1 auto;
+    min-height: 0;       /* allow shrinking inside flex */
     background: #000;
     position: relative;
     overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
+/* d3-celestial renders the SVG inline-sized to its `width` config.
+   We forcibly cap it to the parent so a tall circle never hides behind
+   the toolbar / action row below. */
 .sky-viewer svg {
-    width: 100% !important;
-    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    width: auto !important;
+    height: auto !important;
     display: block;
-}
-
-/* Make the sky tab itself the scroll container so the controls (FOV row +
-   action buttons) stay below the map rather than overlapping it. */
-.tab-panel-sky {
-    overflow-y: auto;
 }
 
 .sky-survey-row {
