@@ -169,6 +169,46 @@ Simple Sequencer. Toggle the default tab via **Settings → Sequencer →
   showing what's Running / Completed / Failed / Skipped, plus the
   Safety-trigger abort reason if one fires
 
+### Mosaic Planner
+
+Build a multi-panel mosaic centred on any selected sky target. The
+**🧩 Plan mosaic** button in the Sky tab opens a modal where you set
+cols × rows + overlap %, with the per-panel FOV auto-filled from the
+active rig (sensor + focal length). A live yellow grid overlay appears
+on the Aladin map showing where each panel will land — adjust until it
+covers your target.
+
+- cos(δ) correction on RA, so the grid sits true at any declination
+- Serpentine column order on alternating rows minimises slew distance
+- Time estimate (slew + plate-solve + N × exposure) from configurable
+  per-knob defaults
+- **Export to Advanced Sequencer** lowers the whole grid into a
+  `SequentialContainer` with one `DeepSkyObjectContainer` per panel
+  (each plate-solves + centers + takes N exposures). "Export & load now"
+  jumps straight into the Adv tab with the tree loaded and ready to run.
+
+### Plugin System
+
+Drop a third-party `.dll` into `./plugins/` (or
+`Plugins:Directory`) and on next startup the host loads it into its
+own `AssemblyLoadContext`, scans for `INinaHeadlessPlugin`
+implementations, and registers their contributed sequencer entities
+into the polymorphic JSON converter + palette. From the user's point
+of view the plugin's entities appear in the Advanced Sequencer
+palette under whatever category the plugin chose.
+
+- Isolated load context per plugin — failures don't take the host down
+- Plugin assemblies reference the host's existing types (`ISequenceEntity`,
+  `SequenceContext`, `ILogger`) directly — no SDK package to publish
+- Contract surface in `Services/Plugins/`:
+  - `INinaHeadlessPlugin` — `Name`/`Version`/`Description`/`Author` +
+    `Register(IPluginRegistry)`
+  - `IPluginRegistry` — `RegisterSequencerEntity<T>(category)`
+- `GET /api/plugins` lists what loaded + the entity discriminators each
+  plugin contributed
+- Sample plugin in [`samples/sample-plugin/`](samples/sample-plugin/README.md)
+  with build + drop-in instructions
+
 ### Dithering
 
 Random pixel-offset between frames to defeat fixed-pattern noise:
@@ -366,7 +406,7 @@ nina-headless/
 │   └── NINA.Relay.Server/          ← Standalone reverse-tunnel relay (ASP.NET Core)
 │
 ├── tests/
-│   └── NINA.Headless.Test/         ← 160 unit tests (NUnit)
+│   └── NINA.Headless.Test/         ← 178 unit tests (NUnit)
 │
 ├── deploy/                         ← Deployment scripts
 │   ├── nina-headless.service        ← systemd unit file
@@ -690,6 +730,19 @@ Persistence:
 | POST | `/api/sequencer/templates/{name}` | Save a `SequenceDocument` as a named template |
 | DELETE | `/api/sequencer/templates/{name}` | Delete a template |
 
+### Mosaic Planner
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/mosaic/plan` | Compute panels + time estimate from `MosaicRequest` (for the UI overlay preview) |
+| POST | `/api/mosaic/to-sequence` | Build the plan + lower to a `SequenceDocument`; optionally load into the engine via `loadIntoEngine=true` |
+
+### Plugins
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/plugins` | List loaded plugins with name / version / author / discriminators they contributed |
+
 ### Sky & Plate Solving
 
 | Method | Endpoint | Description |
@@ -783,6 +836,8 @@ Persistence:
 | `PHD2__InstanceNumber` | `1` | PHD2 `-i N` instance number |
 | `PHD2__AutoStart` | `false` | Fallback for `PHD2AutoStart` profile flag. UI checkbox in Guider tab is the normal way to set this |
 | `Sequencer__TemplateDir` | `sequencer-templates` | Folder where Advanced Sequencer templates are stored (one JSON file per template) |
+| `Plugins__Enabled` | `true` | Set to false to skip the plugin scan entirely |
+| `Plugins__Directory` | `plugins` | Folder scanned at startup for plugin `.dll` files |
 | `PlateSolve__PrimarySolver` | `astap` | One of `astap`, `platesolve3`, `astrometry-net-online`, `astrometry-net-local` |
 | `PlateSolve__BlindSolver` | `astrometry-net-online` | Fallback when primary fails |
 | `PlateSolve__UseBlindFallback` | `true` | Disable to lock to the primary only |
@@ -847,7 +902,7 @@ Relay **server** side (different process, same `Relay__*` prefix in `appsettings
 - [x] Profile management (JSON persistence)
 - [x] Network resilience (reconnect, dedup, backpressure, adaptive bandwidth)
 - [x] systemd + Docker (linux/amd64 + linux/arm64) + Windows publish scripts
-- [x] 160 unit tests
+- [x] 178 unit tests
 
 **Acquisition essentials (Phase A)**
 - [x] PHD2 guider integration (TCP/JSON-RPC, RMS, dither, settle, alerts)
@@ -885,7 +940,9 @@ Relay **server** side (different process, same `Relay__*` prefix in `appsettings
 - [x] D8 XISF format support (PixInsight native, LZ4-compressed)
 - [x] D9 Additional plate solvers (PlateSolve3, Astrometry.net online/local) + primary+blind dispatcher
 - [x] D10 Sky Atlas filters + tonight's altitude chart with twilight bands
+- [x] D5 Mosaic planner — N×M grid + Aladin overlay + export to Advanced Sequencer
 - [x] D11 Stellarium Remote Control sync
+- [x] D12 Plugin system — AssemblyLoadContext-isolated `.dll` plugins extend the sequencer palette at startup
 
 **Extras (beyond original plan)**
 - [x] First-run observatory location modal with browser geolocation
@@ -906,9 +963,8 @@ Relay **server** side (different process, same `Relay__*` prefix in `appsettings
 
 ### Planned
 
-**Phase D — Remaining**
-- [ ] D5: Mosaic planner with grid overlay
-- [ ] D12: Plugin system (extension API for custom instructions / UI panels / device types)
+**All originally-planned features are implemented.** Future work is
+open for new ideas — please file an issue or discussion.
 
 **Relay server**
 - Feature-complete for now — open a discussion if you want a new follow-up

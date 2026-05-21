@@ -122,10 +122,49 @@ public class SequenceEntityJsonConverter : JsonConverter<ISequenceEntity> {
     };
 
     /// <summary>
+    /// Plugin-contributed entities — populated at startup by the plugin
+    /// loader before the HTTP listener accepts requests. Read-only after
+    /// startup so we don't need to lock on every Resolve call.
+    /// </summary>
+    private static readonly Dictionary<string, Type> _pluginTypes = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly List<(string Type, string Category, string Class)> _pluginKnown = new();
+
+    /// <summary>
+    /// Called by the plugin registry to add a new entity discriminator.
+    /// Returns the discriminator that was used so the caller can log it.
+    /// </summary>
+    public static string RegisterPluginEntity(Type entityType, string category) {
+        if (!typeof(ISequenceEntity).IsAssignableFrom(entityType))
+            throw new ArgumentException($"{entityType} does not implement ISequenceEntity", nameof(entityType));
+        // Probe the discriminator by instantiating once (parameterless ctor required).
+        var sample = (ISequenceEntity?)Activator.CreateInstance(entityType)
+            ?? throw new InvalidOperationException($"Could not instantiate {entityType}");
+        var type = sample.Type;
+        if (string.IsNullOrWhiteSpace(type))
+            throw new InvalidOperationException($"{entityType}.Type is empty — plugins must return a stable discriminator");
+        if (Resolve(type) != null && Resolve(type) != entityType)
+            throw new InvalidOperationException($"Sequencer entity discriminator '{type}' already registered by another type");
+        _pluginTypes[type] = entityType;
+        var kindName = sample switch {
+            SequenceContainer => "Container",
+            SequenceTrigger   => "Trigger",
+            SequenceCondition => "Condition",
+            _                 => "Instruction"
+        };
+        _pluginKnown.Add((type, category, kindName));
+        return type;
+    }
+
+    /// <summary>
     /// String discriminator → CLR type. Add new entities here; the rest of
     /// the engine + UI auto-pick them up via the existing Type property.
     /// </summary>
-    public static Type? Resolve(string type) => type switch {
+    public static Type? Resolve(string type) {
+        if (_pluginTypes.TryGetValue(type, out var plug)) return plug;
+        return ResolveBuiltIn(type);
+    }
+
+    private static Type? ResolveBuiltIn(string type) => type switch {
         // Containers
         "Sequential"     => typeof(SequentialContainer),
         "Parallel"       => typeof(ParallelContainer),
@@ -207,8 +246,9 @@ public class SequenceEntityJsonConverter : JsonConverter<ISequenceEntity> {
         _ => null
     };
 
-    /// <summary>Discoverable list for the UI palette / API.</summary>
-    public static IReadOnlyList<(string Type, string Category, string Class)> KnownTypes => _known;
+    /// <summary>Discoverable list for the UI palette / API. Merges built-in + plugin entries.</summary>
+    public static IReadOnlyList<(string Type, string Category, string Class)> KnownTypes =>
+        _known.Concat(_pluginKnown).ToList();
 
     internal static JsonSerializerOptions InnerOptions => _innerOptions;
 

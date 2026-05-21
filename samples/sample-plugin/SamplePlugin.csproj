@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>SamplePlugin</RootNamespace>
+    <AssemblyName>SamplePlugin</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Don't copy the host's assemblies into our build output — at runtime
+         we ride on top of the host's already-loaded copies via the
+         PluginLoadContext fallback. -->
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Point this at wherever you built or installed NINA.Headless.dll. -->
+    <Reference Include="NINA.Headless">
+      <HintPath>..\..\src\NINA.Headless\bin\Debug\net10.0\NINA.Headless.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.Logging.Abstractions">
+      <HintPath>$(NuGetPackageRoot)\microsoft.extensions.logging.abstractions\10.0.0\lib\net10.0\Microsoft.Extensions.Logging.Abstractions.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>
