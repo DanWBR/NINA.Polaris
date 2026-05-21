@@ -1148,20 +1148,16 @@ function ninaApp() {
                     // naturally rotates around the zenith because it's
                     // the centred point.
                     transform: 'equatorial',
-                    // follow: 'zenith' tells d3-celestial to compute the
-                    // zenith from geopos + current date and centre the
-                    // projection there natively — much cleaner than us
-                    // doing the LST math ourselves. Requires location:true
-                    // (which enables location-aware features) and a valid
-                    // geopos. If a mount is connected we still call
-                    // Celestial.rotate({center: [ra*15, dec, 0]}) after
-                    // display() to override, since follow only triggers at
-                    // init / on date changes.
-                    follow: 'zenith',
+                    // follow: 'center' leaves the projection centred on
+                    // whatever we pass via `center`. We pick the celestial
+                    // pole matching the observer's hemisphere by default
+                    // (NCP if lat ≥ 0, SCP if lat < 0); if a mount is
+                    // connected, we sync to its RA/Dec instead — see
+                    // _computeInitialCentre below.
+                    follow: 'center',
                     center: initialCentre,
-                    // Observer position — used to draw the horizon line,
-                    // compute the zenith for follow:'zenith', and place
-                    // sun/moon correctly above/below the horizon.
+                    // Observer position — used to draw the horizon line
+                    // and place sun/moon correctly above/below it.
                     geopos: [lat, lng],
                     location: true,
                     zoomlevel: null,
@@ -1278,12 +1274,12 @@ function ninaApp() {
         },
 
         // Returns the [RA_deg, Dec_deg, orientation_deg] tuple to use as
-        // the projection centre on initial load. The transform is
-        // equatorial (the only one d3-celestial actually supports), so
-        // these are RA/Dec degrees. To centre on the *local zenith* we
-        // express it in equatorial coords: at the observer's location
-        // the zenith has RA = LST and Dec = latitude. Dec is clamped to
-        // ±89.5° to dodge d3.geo's stereographic pole singularity.
+        // the projection centre on initial load:
+        //   - mount connected → sync to its RA/Dec
+        //   - otherwise → celestial pole matching the observer's
+        //     hemisphere (NCP if lat ≥ 0, SCP if lat < 0)
+        // Dec is clamped to ±89.5° because d3.geo's stereographic rotate
+        // hits a singularity at exactly ±90° and silently no-ops.
         _computeInitialCentre(lat, lng) {
             const mountRa = this.mount?.ra;
             const mountDec = this.mount?.dec;
@@ -1292,11 +1288,8 @@ function ninaApp() {
             if (mountConnected) {
                 return [mountRa * 15, Math.max(-89.5, Math.min(89.5, mountDec)), 0];
             }
-            // Zenith in equatorial coords.
-            const lstHours = this._localSiderealTime(new Date(), lng);
-            const raDeg = (lstHours * 15) % 360;
-            const decDeg = Math.max(-89.5, Math.min(89.5, lat));
-            return [raDeg, decDeg, 0];
+            const poleDec = lat >= 0 ? 89.5 : -89.5;
+            return [0, poleDec, 0];
         },
 
         // Convert equatorial (RA in hours, Dec in degrees) to horizontal
