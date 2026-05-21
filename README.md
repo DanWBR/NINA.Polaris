@@ -228,12 +228,22 @@ companion **NINA.Relay.Server** project that acts as a reverse tunnel.
 - Auto-reconnect on the client side with exponential backoff (2s → 60s)
 - Subdomain routing (`alice.relay.example.com`) OR path-prefix (`/t/alice/...`)
 - Multi-tenant: each headless host has its own bearer token
+- **WebSocket-over-tunnel forwarding** — image stream + status broadcasts +
+  any other browser-side WS endpoint now work end-to-end through the relay
+  (browser ↔ relay ↔ tunnel client ↔ local Kestrel WS, bidirectional pump)
+- **JSON tenant store** (`tenants.json`) — hot-reloaded on file change; no
+  server restart needed when adding or revoking tokens (legacy
+  `appsettings.json` `Tenants:` section still works for trivial setups)
+- **Per-tenant rate limiting** — token-bucket on both HTTP requests/sec and
+  bytes/sec (request + response counted together), with configurable burst.
+  Exceeding either bucket returns HTTP 429 with a `Retry-After` header
+  naming which bucket tripped
+- Admin endpoints: `/_health`, `/_tunnels` (with per-tunnel byte counters),
+  `/_admin/tenants`, `/_admin/reload-tenants`
 - Two deployment models — self-host on a $5 VPS, or use a hosted instance
-- **Status**: HTTP request/response works end-to-end (REST API + static UI);
-  WebSocket forwarding (image stream / status broadcasts) is reserved in the
-  protocol but not yet implemented
 - See [`src/NINA.Relay.Server/README.md`](src/NINA.Relay.Server/README.md) for
-  deployment instructions, Caddy reverse-proxy example, and protocol details
+  deployment instructions, Caddy reverse-proxy example, full `tenants.json`
+  schema, and protocol details
 
 ### Network Resilience
 
@@ -274,7 +284,7 @@ nina-headless/
 │   └── NINA.Relay.Server/          ← Standalone reverse-tunnel relay (ASP.NET Core)
 │
 ├── tests/
-│   └── NINA.Headless.Test/         ← 135 unit tests (NUnit)
+│   └── NINA.Headless.Test/         ← 146 unit tests (NUnit)
 │
 ├── deploy/                         ← Deployment scripts
 │   ├── nina-headless.service        ← systemd unit file
@@ -680,7 +690,15 @@ Persistence:
 | `Mdns__Enabled` / `Mdns__InstanceName` | `true` / `nina-<hostname>` | mDNS announcer |
 | `Relay__Enabled` | `false` | Enable reverse-tunnel client |
 | `Relay__ServerUrl` | (none) | e.g. `wss://relay.example.com/_tunnel` |
-| `Relay__Token` | (none) | Bearer token matching the relay server's `Tenants` map |
+| `Relay__Token` | (none) | Bearer token matching a tenant entry on the relay server |
+
+Relay **server** side (different process, same `Relay__*` prefix in `appsettings.json`):
+
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `Relay__TenantsFile` | `tenants.json` | Path to the JSON tenant store; hot-reloaded on change. Falls back to the legacy `Tenants:` section if empty/missing |
+| `Proxy__TimeoutSeconds` | `60` | Per-request timeout (long enough for plate-solving uploads) |
+| `Proxy__HostnameSuffix` | (none) | e.g. `.relay.example.com` to enable subdomain routing |
 
 ## Performance Targets
 
@@ -710,7 +728,7 @@ Persistence:
 - [x] Profile management (JSON persistence)
 - [x] Network resilience (reconnect, dedup, backpressure, adaptive bandwidth)
 - [x] systemd + Docker (linux/amd64 + linux/arm64) + Windows publish scripts
-- [x] 135 unit tests
+- [x] 146 unit tests
 
 **Acquisition essentials (Phase A)**
 - [x] PHD2 guider integration (TCP/JSON-RPC, RMS, dither, settle, alerts)
@@ -749,7 +767,8 @@ Persistence:
 - [x] Equipment Rigs — multi-rig profiles with one-click switching, per-rig defaults, inline editing
 - [x] Full PHD2 management — profile switcher, equipment connect/disconnect, exposure, Dec mode, process launch/shutdown
 - [x] Per-rig main + guide-scope focal length (drives FOV + FITS headers from the active rig)
-- [x] Reverse-tunnel relay server for remote internet access (HTTP forwarding; WS forwarding TODO)
+- [x] Reverse-tunnel relay server for remote internet access — full HTTP **and** WebSocket forwarding (image stream + status broadcasts work end-to-end through the relay)
+- [x] Relay JSON tenant store (`tenants.json`) with hot-reload + per-tenant rate limiting (request + bandwidth token-buckets, HTTP 429 on exceed)
 
 ### Planned
 
@@ -767,8 +786,9 @@ Persistence:
 - [ ] D12: Plugin system (extension API for custom instructions / UI panels / device types)
 
 **Relay server — follow-ups**
-- [ ] WebSocket-over-tunnel (image stream + status broadcast through the relay)
-- [ ] Per-tenant rate limiting + persistent DB-backed tenant store
+- [ ] TLS termination built-in (today: deploy behind nginx / Caddy / Traefik)
+- [ ] Monthly byte quotas + expiring tokens
+- [ ] Web admin UI (today: JSON admin endpoints + file-edit `tenants.json`)
 
 ## Support the project
 
