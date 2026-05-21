@@ -173,6 +173,16 @@ function ninaApp() {
         },
         advSeqDirty: false,
 
+        // Equipment source picker (INDI vs Alpaca/ASCOM)
+        equipSource: 'indi',
+        alpaca: {
+            discovering: false,
+            servers: [],        // [{ host, port, serverName, manufacturer, serverVersion, devices: [...] }]
+            connected: {},      // key: host:port:type:num → true
+            manualHost: '',
+            manualPort: 11111
+        },
+
         // Mosaic planner
         mosaicOpen: false,
         mosaic: {
@@ -3632,6 +3642,97 @@ function ninaApp() {
                 await this.loadAdvSeq();
             } catch (e) { this.toast(e.message, 'error'); }
             ev.target.value = '';
+        },
+
+        // ============================================================
+        //                 Alpaca / ASCOM Remote
+        // ============================================================
+        async discoverAlpaca() {
+            this.alpaca.discovering = true;
+            try {
+                const r = await this.apiGet('/api/alpaca/discover?timeoutMs=3000');
+                this.alpaca.servers = (r.servers || []).map(s => ({
+                    host: s.host, port: s.port,
+                    serverName: s.serverName, manufacturer: s.manufacturer,
+                    manufacturerVersion: s.manufacturerVersion,
+                    devices: s.devices || null, _probe: null
+                }));
+                if (this.alpaca.servers.length === 0) {
+                    this.toast('No Alpaca servers found. Try manual entry or check that ASCOM Remote Server is running.', 'warn');
+                } else {
+                    this.toast(`Found ${this.alpaca.servers.length} Alpaca server(s)`, 'ok');
+                    // Auto-enumerate devices on each discovered server
+                    for (const srv of this.alpaca.servers) await this.alpacaQueryServer(srv);
+                }
+            } catch (e) {
+                this.toast('Alpaca discovery failed: ' + e.message, 'error');
+            } finally {
+                this.alpaca.discovering = false;
+            }
+        },
+
+        async alpacaQueryServer(srv) {
+            try {
+                const r = await this.apiGet(`/api/alpaca/devices?host=${encodeURIComponent(srv.host)}&port=${srv.port}`);
+                srv.devices = r.devices || [];
+            } catch (e) {
+                this.toast(`Could not list devices on ${srv.host}:${srv.port}: ${e.message}`, 'error');
+            }
+        },
+
+        async alpacaQueryManual() {
+            if (!this.alpaca.manualHost || !this.alpaca.manualPort) return;
+            // Add or update the manual server in the list, then enumerate
+            let srv = this.alpaca.servers.find(s => s.host === this.alpaca.manualHost && s.port === this.alpaca.manualPort);
+            if (!srv) {
+                srv = { host: this.alpaca.manualHost, port: this.alpaca.manualPort,
+                        serverName: 'Manual entry', devices: null };
+                this.alpaca.servers.push(srv);
+            }
+            await this.alpacaQueryServer(srv);
+        },
+
+        alpacaIsConnected(srv, d) {
+            return !!this.alpaca.connected[`${srv.host}:${srv.port}:${d.deviceType}:${d.deviceNumber}`];
+        },
+
+        async alpacaConnectDevice(srv, d) {
+            const type = (d.deviceType || '').toLowerCase();
+            const path = type === 'camera' ? 'camera'
+                       : type === 'telescope' ? 'telescope'
+                       : null;
+            if (!path) {
+                this.toast(`Direct connect for "${d.deviceType}" not wired yet — POST /api/alpaca/${type}/connect is the pattern; copy it for the rest.`, 'warn');
+                return;
+            }
+            const already = this.alpacaIsConnected(srv, d);
+            const targetConnect = !already;
+            try {
+                const r = await this.apiPost(
+                    `/api/alpaca/${path}/connect?host=${encodeURIComponent(srv.host)}&port=${srv.port}&device=${d.deviceNumber}&connect=${targetConnect}`);
+                this.alpaca.connected[`${srv.host}:${srv.port}:${d.deviceType}:${d.deviceNumber}`] = !!r.connected;
+                this.toast(`${d.deviceName} ${r.connected ? 'connected' : 'disconnected'}`, 'ok');
+            } catch (e) {
+                this.toast(`Connect failed: ${e.message}`, 'error');
+            }
+        },
+
+        async alpacaProbe(srv, d) {
+            const type = (d.deviceType || '').toLowerCase();
+            const path = type === 'camera' ? 'camera'
+                       : type === 'telescope' ? 'telescope'
+                       : null;
+            if (!path) {
+                srv._probe = `No probe endpoint for ${d.deviceType} yet.`;
+                return;
+            }
+            try {
+                const info = await this.apiGet(
+                    `/api/alpaca/${path}/info?host=${encodeURIComponent(srv.host)}&port=${srv.port}&device=${d.deviceNumber}`);
+                srv._probe = JSON.stringify(info, null, 2);
+            } catch (e) {
+                srv._probe = 'Probe failed: ' + e.message;
+            }
         },
 
         // ============================================================

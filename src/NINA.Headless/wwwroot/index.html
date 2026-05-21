@@ -560,15 +560,107 @@
                             title="Save current device selections into this rig">💾 Save selections</button>
                 </div>
 
-                <!-- INDI not connected prompt -->
+                <!-- Driver-source picker (INDI vs ASCOM Alpaca) -->
                 <div class="equip-connect-prompt" x-show="!indiConnected">
-                    <p>Connect to INDI server to discover devices</p>
-                    <div class="control-row" style="margin-top: 10px;">
-                        <label>Host<input type="text" x-model="settings.indiHost" class="input-md"></label>
-                        <label>Port<input type="number" x-model.number="settings.indiPort" class="input-sm"></label>
+                    <div class="equip-source-tabs">
+                        <button class="btn" :class="equipSource === 'indi' ? 'btn-active' : ''"
+                                @click="equipSource = 'indi'">INDI</button>
+                        <button class="btn" :class="equipSource === 'alpaca' ? 'btn-active' : ''"
+                                @click="equipSource = 'alpaca'; if (alpaca.servers.length === 0) discoverAlpaca()">ASCOM / Alpaca</button>
                     </div>
-                    <div class="control-row actions" style="margin-top: 8px;">
-                        <button class="btn btn-primary" @click="connectIndi()">Connect INDI</button>
+
+                    <!-- INDI panel -->
+                    <div x-show="equipSource === 'indi'" style="margin-top:12px">
+                        <p>Connect to INDI server to discover devices. Typical on Linux / RPi
+                           or WSL2 on Windows.</p>
+                        <div class="control-row" style="margin-top: 10px;">
+                            <label>Host<input type="text" x-model="settings.indiHost" class="input-md"></label>
+                            <label>Port<input type="number" x-model.number="settings.indiPort" class="input-sm"></label>
+                        </div>
+                        <div class="control-row actions" style="margin-top: 8px;">
+                            <button class="btn btn-primary" @click="connectIndi()">Connect INDI</button>
+                        </div>
+                    </div>
+
+                    <!-- Alpaca panel -->
+                    <div x-show="equipSource === 'alpaca'" style="margin-top:12px">
+                        <p>
+                            Discover Alpaca / ASCOM Remote devices on this LAN.
+                            On Windows, install
+                            <a href="https://ascom-standards.org/Downloads/Index.htm" target="_blank" rel="noopener">ASCOM Platform 6.6+</a>
+                            and the
+                            <a href="https://github.com/ASCOMInitiative/ASCOMRemote/releases" target="_blank" rel="noopener">ASCOM Remote Server</a>,
+                            pick your ASCOM drivers, click "Start Server", then hit Discover here.
+                        </p>
+                        <div class="control-row actions" style="margin-top:8px">
+                            <button class="btn btn-primary" @click="discoverAlpaca()" :disabled="alpaca.discovering">
+                                <span x-show="!alpaca.discovering">🔍 Discover</span>
+                                <span x-show="alpaca.discovering">Scanning…</span>
+                            </button>
+                            <span class="muted" x-show="alpaca.servers.length > 0"
+                                  x-text="alpaca.servers.length + ' server(s) found'"></span>
+                        </div>
+
+                        <!-- Manual entry fallback (server behind NAT, port-forwarded, etc.) -->
+                        <div class="control-row" style="margin-top:10px;align-items:end">
+                            <label>Manual host<input type="text" x-model="alpaca.manualHost" placeholder="192.168.1.50" class="input-md"></label>
+                            <label>Port<input type="number" x-model.number="alpaca.manualPort" placeholder="11111" class="input-sm"></label>
+                            <button class="btn btn-sm" @click="alpacaQueryManual()"
+                                    :disabled="!alpaca.manualHost || !alpaca.manualPort">List devices</button>
+                        </div>
+
+                        <!-- Server list with devices -->
+                        <div x-show="alpaca.servers.length > 0" style="margin-top:14px;display:flex;flex-direction:column;gap:10px">
+                            <template x-for="srv in alpaca.servers" :key="srv.host + ':' + srv.port">
+                                <div class="equip-card">
+                                    <div class="equip-card-header">
+                                        <span class="equip-card-icon">🌐</span>
+                                        <span class="equip-card-title" x-text="srv.serverName || (srv.host + ':' + srv.port)"></span>
+                                        <button class="btn btn-sm" @click="alpacaQueryServer(srv)"
+                                                style="margin-left:auto">List devices</button>
+                                    </div>
+                                    <div class="equip-card-body">
+                                        <div class="muted" style="font-size:12px;margin-bottom:6px">
+                                            <code x-text="srv.host + ':' + srv.port"></code>
+                                            <span x-show="srv.manufacturer" x-text="' · ' + srv.manufacturer"></span>
+                                            <span x-show="srv.manufacturerVersion" x-text="' v' + srv.manufacturerVersion"></span>
+                                        </div>
+                                        <table x-show="srv.devices && srv.devices.length > 0"
+                                               style="width:100%;font-size:12px;border-collapse:collapse">
+                                            <thead>
+                                                <tr style="color:var(--text-muted);text-transform:uppercase;font-size:10px">
+                                                    <th style="text-align:left;padding:4px">Device</th>
+                                                    <th style="text-align:left;padding:4px">Type</th>
+                                                    <th style="text-align:left;padding:4px">#</th>
+                                                    <th></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <template x-for="d in srv.devices" :key="d.deviceType + d.deviceNumber">
+                                                    <tr>
+                                                        <td style="padding:4px"><code x-text="d.deviceName"></code></td>
+                                                        <td style="padding:4px"><span class="tree-type-badge" x-text="d.deviceType"></span></td>
+                                                        <td style="padding:4px" x-text="d.deviceNumber"></td>
+                                                        <td style="padding:4px;text-align:right">
+                                                            <button class="btn btn-sm" @click="alpacaConnectDevice(srv, d)"
+                                                                    :class="alpacaIsConnected(srv, d) ? 'btn-active' : ''"
+                                                                    x-text="alpacaIsConnected(srv, d) ? '✓ Connected' : 'Connect'"></button>
+                                                            <button class="btn btn-sm" @click="alpacaProbe(srv, d)"
+                                                                    title="Show device info">ℹ</button>
+                                                        </td>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                        <div x-show="!srv.devices || srv.devices.length === 0" class="muted"
+                                             style="font-size:12px">Click "List devices" to enumerate.</div>
+                                        <pre x-show="srv._probe" class="muted"
+                                             style="font-size:11px;background:rgba(0,0,0,0.3);padding:6px;border-radius:3px;margin-top:6px;overflow-x:auto"
+                                             x-text="srv._probe"></pre>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
                     </div>
                 </div>
 

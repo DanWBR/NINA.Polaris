@@ -1403,6 +1403,17 @@ select.input-sm {
     }
 }
 
+/* ----------------------------- Equipment source picker (INDI vs Alpaca) ------- */
+.equip-source-tabs {
+    display: flex; gap: 4px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border, #334155);
+    margin-bottom: 6px;
+}
+.equip-source-tabs .btn-active {
+    background: var(--accent, #38bdf8); color: #000;
+    border-color: var(--accent, #38bdf8); font-weight: 600;
+}
+
 /* ----------------------------- Advanced Sequencer tab ----------------------------- */
 .advseq-toolbar {
     display: flex; gap: 8px; align-items: center;
