@@ -1175,22 +1175,23 @@ select.input-sm {
 .sky-viewer {
     flex: 1 1 auto;
     min-height: 0;       /* allow shrinking inside flex */
+    width: 100%;
     background: #000;
     position: relative;
-    overflow: hidden;
+    overflow: hidden;    /* clip the top/bottom of the over-tall circle */
     display: flex;
-    align-items: center;
+    align-items: center; /* centre the SVG vertically — clipped halves above/below */
     justify-content: center;
 }
-/* d3-celestial renders the SVG inline-sized to its `width` config.
-   We forcibly cap it to the parent so a tall circle never hides behind
-   the toolbar / action row below. */
+/* d3-celestial sizes the SVG to its configured `width`. We feed it the
+   full container width so the circle spans edge-to-edge horizontally; the
+   resulting square SVG is taller than the container, and the centring +
+   overflow:hidden above show only the middle horizontal band. */
 .sky-viewer svg {
-    max-width: 100% !important;
-    max-height: 100% !important;
-    width: auto !important;
+    width: 100% !important;
     height: auto !important;
     display: block;
+    flex-shrink: 0;      /* don't let the flex layout shrink the SVG */
 }
 
 .sky-survey-row {

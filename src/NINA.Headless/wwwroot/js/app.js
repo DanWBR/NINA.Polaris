@@ -1067,11 +1067,9 @@ function ninaApp() {
                 return;
             }
             if (this._celestialReady) {
-                // Pick the smaller dimension so the circular projection
-                // fits entirely within the available area (the flex layout
-                // hands us whatever's left between the toolbar above and
-                // the action row below).
-                const size = Math.max(300, Math.min(el.clientWidth, el.clientHeight));
+                // Use the full container width — CSS clips the over-tall
+                // SVG vertically so the circle spans edge-to-edge.
+                const size = Math.max(300, el.clientWidth);
                 try { Celestial.resize({ width: size }); } catch {}
                 return;
             }
@@ -1098,10 +1096,11 @@ function ninaApp() {
                 const lat = this.settings.latitude  || 0;
                 const lng = this.settings.longitude || 0;
 
-                // Render the circle at the smaller of the two dimensions
-                // so it fits entirely within the area the flex layout
-                // hands us (between the toolbar above and the actions below).
-                const renderSize = Math.max(300, Math.min(el.clientWidth, el.clientHeight));
+                // Use the full container width so the circle spans
+                // edge-to-edge horizontally. CSS clips the over-tall SVG
+                // vertically (overflow:hidden + flex centring), showing
+                // only the middle band of the sphere.
+                const renderSize = Math.max(300, el.clientWidth);
 
                 Celestial.display({
                     container: 'celestial-map',
@@ -1190,7 +1189,7 @@ function ninaApp() {
                 }
 
                 window.addEventListener('resize', () => {
-                    const size = Math.max(300, Math.min(el.clientWidth, el.clientHeight));
+                    const size = Math.max(300, el.clientWidth);
                     try { Celestial.resize({ width: size }); } catch {}
                 });
 
