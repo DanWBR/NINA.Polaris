@@ -1,3 +1,5 @@
+using NINA.Image.ImageAnalysis;
+
 namespace NINA.Headless.Services.Sequencer.Instructions;
 
 /// <summary>
@@ -55,6 +57,23 @@ public class TakeExposureInstruction : SequenceInstruction {
                 await ctx.LiveStack.AddFrameAsync(image, ct);
             } else {
                 await ctx.Relay.RelayImageAsync(image, ct);
+            }
+
+            // Measure HFR + star count and stash in Scratch so the
+            // AutoFocusOnHfrIncrease trigger has something to compare against.
+            // Failures are non-fatal — a bad frame shouldn't kill the run.
+            try {
+                var stars = new StarDetector().Detect(image.Data,
+                    image.Properties.Width, image.Properties.Height);
+                if (stars.Count > 0) {
+                    var hfrs = stars.Select(s => s.HFR).OrderBy(h => h).ToArray();
+                    var median = hfrs[hfrs.Length / 2];
+                    ctx.Scratch["Frame:LastHfr"] = median;
+                    ctx.Scratch["Frame:StarCount"] = stars.Count;
+                    ctx.Logger.LogDebug("Frame HFR={Hfr:0.00} ({Count} stars)", median, stars.Count);
+                }
+            } catch (Exception ex) {
+                ctx.Logger.LogDebug(ex, "Star detection failed on captured frame (continuing)");
             }
 
             ctx.FramesCompleted++;

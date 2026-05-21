@@ -124,7 +124,9 @@ Simple Sequencer. Toggle the default tab via **Settings → Sequencer →
   - Mount: Slew, Center (plate-solve), Park / Unpark, SetTracking, SolveAndSync
   - Camera: TakeExposure (N frames + filter / gain / binning / image type),
     CoolCamera (setpoint + tolerance), WarmCamera (gradual ramp at °C/min)
-  - Focuser: AutoFocus (V-curve), MoveFocuser, MoveToFilterOffset
+  - Focuser: AutoFocus (V-curve), MoveFocuser, MoveToFilterOffset (looks up
+    the active rig's per-filter offset table; safe no-op when the filter
+    isn't configured)
   - Filter wheel: SwitchFilter (by name or position)
   - Guider: StartGuiding, StopGuiding, Dither, AutoSelectStar
   - Dome: Open / Close shutter, Park, SlewToAzimuth, SyncToScope (Alt/Az math)
@@ -140,6 +142,9 @@ Simple Sequencer. Toggle the default tab via **Settings → Sequencer →
   / Duration / Moon Sets / While Safe (cloud cover + wind from weather device)
 - **Triggers** fire between every child step:
   - Auto-focus on Temperature Change / HFR Increase / Every N Minutes / Filter Change
+    (HFR trigger reads the median HFR from a StarDetector run that
+    `TakeExposureInstruction` performs after every successful frame and
+    parks in `ctx.Scratch["Frame:LastHfr"]`)
   - Meridian Flip (delegates to the existing service)
   - Dither After N Exposures (skipped silently when PHD2 isn't guiding)
   - Center After Drift (periodic plate-solve check against pinned coords)
@@ -406,7 +411,7 @@ nina-headless/
 │   └── NINA.Relay.Server/          ← Standalone reverse-tunnel relay (ASP.NET Core)
 │
 ├── tests/
-│   └── NINA.Headless.Test/         ← 178 unit tests (NUnit)
+│   └── NINA.Headless.Test/         ← 181 unit tests (NUnit)
 │
 ├── deploy/                         ← Deployment scripts
 │   ├── nina-headless.service        ← systemd unit file
@@ -902,7 +907,7 @@ Relay **server** side (different process, same `Relay__*` prefix in `appsettings
 - [x] Profile management (JSON persistence)
 - [x] Network resilience (reconnect, dedup, backpressure, adaptive bandwidth)
 - [x] systemd + Docker (linux/amd64 + linux/arm64) + Windows publish scripts
-- [x] 178 unit tests
+- [x] 181 unit tests
 
 **Acquisition essentials (Phase A)**
 - [x] PHD2 guider integration (TCP/JSON-RPC, RMS, dither, settle, alerts)

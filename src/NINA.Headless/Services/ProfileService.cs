@@ -172,7 +172,8 @@ public class ProfileService {
             FocuserBacklashSteps = src.FocuserBacklashSteps,
             FocalLengthMm = src.FocalLengthMm,
             GuiderFocalLengthMm = src.GuiderFocalLengthMm,
-            PHD2Host = src.PHD2Host, PHD2Port = src.PHD2Port
+            PHD2Host = src.PHD2Host, PHD2Port = src.PHD2Port,
+            FilterOffsets = new Dictionary<string, int>(src.FilterOffsets)
         };
         _activeProfile.EquipmentProfiles.Add(copy);
         Save();
@@ -345,6 +346,15 @@ public class EquipmentProfile {
     // Per-rig PHD2 settings
     public string PHD2Host { get; set; } = "localhost";
     public int PHD2Port { get; set; } = 4400;
+
+    /// <summary>
+    /// Per-filter focuser offset in steps, relative to the rig's reference
+    /// filter (typically the L filter). Consumed by
+    /// <c>MoveToFilterOffsetInstruction</c>: when an instruction names a filter
+    /// here, it moves the focuser to <c>currentPos + offset</c>. Filters not
+    /// in the table are treated as 0.
+    /// </summary>
+    public Dictionary<string, int> FilterOffsets { get; set; } = new();
 }
 
 public class ProfileSummary {

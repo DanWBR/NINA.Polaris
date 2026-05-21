@@ -1740,6 +1740,33 @@ function ninaApp() {
             }, 400);
         },
 
+        // ---- Per-rig filter offsets ----
+        setFilterOffset(rig, filterName, valueStr) {
+            const v = parseInt(valueStr, 10);
+            if (isNaN(v)) return;
+            rig.filterOffsets = rig.filterOffsets || {};
+            rig.filterOffsets[filterName] = v;
+            this.saveRig(rig);
+        },
+        addFilterOffset(rig) {
+            const nameInput = document.getElementById('newFilter-' + rig.id);
+            const offsetInput = document.getElementById('newOffset-' + rig.id);
+            const name = nameInput?.value?.trim();
+            const offset = parseInt(offsetInput?.value, 10);
+            if (!name) { this.toast('Filter name required', 'warn'); return; }
+            if (isNaN(offset)) { this.toast('Offset must be an integer', 'warn'); return; }
+            rig.filterOffsets = rig.filterOffsets || {};
+            rig.filterOffsets[name] = offset;
+            this.saveRig(rig);
+            nameInput.value = '';
+            offsetInput.value = '';
+        },
+        removeFilterOffset(rig, filterName) {
+            if (!rig.filterOffsets) return;
+            delete rig.filterOffsets[filterName];
+            this.saveRig(rig);
+        },
+
         async deleteRig(id) {
             if (this.rigs.length <= 1) {
                 this.toast('Cannot delete the last rig', 'warn');

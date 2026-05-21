@@ -30,16 +30,42 @@ public class AutoFocusInstruction : SequenceInstruction {
 }
 
 /// <summary>
-/// Move the focuser by a per-filter offset relative to the active rig's
-/// reference filter. Today: simple Δsteps from the active focuser position.
-/// (Filter-offset table lives in the rig profile in a later commit.)
+/// Move the focuser by the per-filter offset configured in the active rig.
+/// When <see cref="FilterName"/> is set the instruction looks up
+/// <c>EquipmentProfile.FilterOffsets[FilterName]</c> on the active rig and
+/// applies that as a relative step move. Filters absent from the table are
+/// treated as 0 (the focuser doesn't move) so it's safe to drop one of these
+/// after every filter change without curating offsets for every filter.
+///
+/// As a fallback, callers may set <see cref="OffsetSteps"/> directly to bypass
+/// the table — useful for ad-hoc tweaks that don't deserve a profile entry.
 /// </summary>
 public class MoveToFilterOffsetInstruction : SequenceInstruction {
     public override string Type => "MoveToFilterOffset";
+
+    /// <summary>Filter name to look up in the active rig's FilterOffsets table.</summary>
+    public string? FilterName { get; set; }
+
+    /// <summary>Explicit fallback when no FilterName / no table entry.</summary>
     public int OffsetSteps { get; set; }
 
     public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
         var f = ctx.Equipment.Focuser ?? throw new InvalidOperationException("No focuser connected");
-        await f.MoveRelativeAsync(OffsetSteps, ct);
+
+        int delta = OffsetSteps;
+        if (!string.IsNullOrEmpty(FilterName)) {
+            var rig = ctx.Profiles.ActiveEquipmentProfile;
+            if (rig.FilterOffsets.TryGetValue(FilterName, out var configured)) {
+                delta = configured;
+                ctx.Logger.LogInformation("Filter offset for {Filter} → {Delta} steps (from rig '{Rig}')",
+                    FilterName, delta, rig.Name);
+            } else {
+                ctx.Logger.LogDebug("No filter offset configured for {Filter} on rig '{Rig}', moving 0",
+                    FilterName, rig.Name);
+                delta = 0;
+            }
+        }
+
+        if (delta != 0) await f.MoveRelativeAsync(delta, ct);
     }
 }

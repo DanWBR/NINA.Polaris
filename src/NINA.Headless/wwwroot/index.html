@@ -1718,6 +1718,36 @@
                                            @change="saveRig(r)" class="input-sm">
                                 </label>
                             </div>
+
+                            <!-- Per-rig filter offset table -->
+                            <div class="rig-filter-offsets" style="margin-top:8px">
+                                <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">
+                                    Filter offsets (steps, relative to reference filter)
+                                </div>
+                                <table style="width:100%;font-size:12px;border-collapse:collapse">
+                                    <template x-for="(steps, filterName) in (r.filterOffsets || {})" :key="filterName">
+                                        <tr>
+                                            <td style="padding:2px 4px"><code x-text="filterName"></code></td>
+                                            <td style="padding:2px 4px">
+                                                <input type="number" step="1" :value="steps"
+                                                       @input="setFilterOffset(r, filterName, $event.target.value)"
+                                                       class="input-sm" style="width:80px">
+                                            </td>
+                                            <td style="padding:2px 4px">
+                                                <button class="btn btn-sm btn-danger"
+                                                        @click="removeFilterOffset(r, filterName)" title="Remove">✕</button>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </table>
+                                <div style="display:flex;gap:4px;margin-top:4px">
+                                    <input type="text" :id="'newFilter-' + r.id" placeholder="Filter name (e.g. R)"
+                                           class="input-sm" style="flex:1">
+                                    <input type="number" :id="'newOffset-' + r.id" placeholder="Δ steps"
+                                           class="input-sm" style="width:80px">
+                                    <button class="btn btn-sm" @click="addFilterOffset(r)">+ Add</button>
+                                </div>
+                            </div>
                         </div>
                         <div class="rig-row-actions">
                             <button class="btn btn-sm btn-primary"

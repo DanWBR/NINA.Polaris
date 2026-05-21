@@ -90,6 +90,7 @@ public static class EquipmentEndpoints {
                 r.GuiderFocalLengthMm = update.GuiderFocalLengthMm;
                 r.PHD2Host = update.PHD2Host;
                 r.PHD2Port = update.PHD2Port;
+                r.FilterOffsets = update.FilterOffsets ?? new();
             });
             return ok ? Results.Ok(new { message = "Rig updated" })
                       : Results.NotFound(new { error = "Rig not found" });
