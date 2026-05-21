@@ -64,9 +64,13 @@
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><ellipse cx="12" cy="12" rx="10" ry="4" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="12" y1="2" x2="12" y2="22" stroke="currentColor" stroke-width="1.5"/></svg>
                 <span class="nav-label">Sky</span>
             </button>
-            <button class="nav-btn" :class="{ active: tab === 'sequence' }" @click="tab = 'sequence'" title="Sequence">
+            <button class="nav-btn" :class="{ active: tab === 'sequence' }" @click="tab = 'sequence'" title="Simple Sequence">
                 <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="3" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="10" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="17" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Seq</span>
+            </button>
+            <button class="nav-btn" :class="{ active: tab === 'seqadv' }" @click="tab = 'seqadv'; loadAdvSeq()" title="Advanced Sequencer">
+                <svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 4h6v6H3V4zm0 10h6v6H3v-6zm10-10h8m-8 4h6m-6 10h8m-8 4h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                <span class="nav-label">Adv</span>
             </button>
             <button class="nav-btn" :class="{ active: tab === 'settings' }" @click="tab = 'settings'" title="Settings">
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 1v3m0 16v3m-9-11h3m16 0h3m-3.3-7.7l-2.1 2.1M6.4 17.6l-2.1 2.1m0-15.4l2.1 2.1m11.2 11.2l2.1 2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -1321,6 +1325,115 @@
                 </div>
             </div>
 
+            <!-- ADVANCED SEQUENCER -->
+            <div x-show="tab === 'seqadv'" class="tab-panel">
+                <div class="panel-header">
+                    Advanced Sequencer
+                    <span class="status-indicator-sm" :class="advSeq.state === 'Running' ? 'ok' : (advSeq.lastError ? 'error' : 'warn')"
+                          x-text="advSeq.state || 'Idle'"></span>
+                </div>
+
+                <!-- Toolbar -->
+                <div class="advseq-toolbar">
+                    <input type="text" x-model="advSeq.doc.name" placeholder="Sequence name" class="input-md">
+                    <button class="btn btn-primary" @click="advSeqStart()" :disabled="advSeq.state === 'Running'">▶ Start</button>
+                    <button class="btn" @click="advSeqStop()" :disabled="advSeq.state !== 'Running'">⏹ Stop</button>
+                    <button class="btn" @click="advSeqValidate()">✓ Validate</button>
+                    <button class="btn" @click="advSeqSaveDoc()">💾 Save tree</button>
+                    <button class="btn" @click="advSeqDownloadJson()">⬇ Download JSON</button>
+                    <label class="btn" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
+                        ⬆ Upload JSON
+                        <input type="file" accept=".json,application/json" @change="advSeqUploadJson($event)" style="display:none">
+                    </label>
+                    <span class="muted" style="margin-left:auto;font-size:12px"
+                          x-show="advSeq.abortReason"
+                          x-text="'Aborted: ' + advSeq.abortReason"></span>
+                </div>
+
+                <!-- Validation errors -->
+                <div x-show="advSeq.errors.length > 0" class="warn-banner" style="margin-bottom:8px">
+                    <strong>Validation:</strong>
+                    <ul style="margin:4px 0 0 18px;padding:0">
+                        <template x-for="e in advSeq.errors" :key="e"><li x-text="e"></li></template>
+                    </ul>
+                </div>
+
+                <!-- Main tri-pane -->
+                <div class="advseq-layout">
+                    <!-- Palette -->
+                    <div class="advseq-palette">
+                        <div class="advseq-panel-title">Palette</div>
+                        <template x-for="cat in advSeqCategories()" :key="cat">
+                            <div class="palette-category">
+                                <div class="palette-category-name" x-text="cat"></div>
+                                <template x-for="t in advSeqByCategory(cat)" :key="t.type">
+                                    <button class="palette-item" @click="advSeqAddToSelected(t)"
+                                            :title="'Add ' + t.type + ' to selected container'"
+                                            :disabled="!advSeqSelectedIsContainer()">
+                                        <span class="palette-kind" :data-kind="t.kind" x-text="t.kind[0]"></span>
+                                        <span x-text="t.type"></span>
+                                    </button>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Tree -->
+                    <div class="advseq-tree">
+                        <div class="advseq-panel-title">Tree</div>
+                        <div class="advseq-tree-body">
+                            <template x-if="advSeq.doc.root">
+                                <div x-html="advSeqRenderTree(advSeq.doc.root, 0)"></div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Properties -->
+                    <div class="advseq-props">
+                        <div class="advseq-panel-title">Properties</div>
+                        <template x-if="advSeqSelectedNode()">
+                            <div>
+                                <div class="prop-row">
+                                    <label>Type</label>
+                                    <code x-text="advSeqSelectedNode().$type"></code>
+                                </div>
+                                <div class="prop-row">
+                                    <label>Name</label>
+                                    <input type="text" x-model="advSeqSelectedNode().name" @input="advSeqDirty = true">
+                                </div>
+                                <div class="prop-row">
+                                    <label>Description</label>
+                                    <input type="text" x-model="advSeqSelectedNode().description" @input="advSeqDirty = true">
+                                </div>
+                                <template x-for="field in advSeqEditableFields()" :key="field.key">
+                                    <div class="prop-row">
+                                        <label x-text="field.key"></label>
+                                        <template x-if="field.kind === 'bool'">
+                                            <input type="checkbox" :checked="advSeqSelectedNode()[field.key]"
+                                                   @change="advSeqSelectedNode()[field.key] = $event.target.checked; advSeqDirty = true">
+                                        </template>
+                                        <template x-if="field.kind === 'number'">
+                                            <input type="number" step="any" :value="advSeqSelectedNode()[field.key]"
+                                                   @input="advSeqSelectedNode()[field.key] = Number($event.target.value); advSeqDirty = true">
+                                        </template>
+                                        <template x-if="field.kind === 'string'">
+                                            <input type="text" :value="advSeqSelectedNode()[field.key] || ''"
+                                                   @input="advSeqSelectedNode()[field.key] = $event.target.value; advSeqDirty = true">
+                                        </template>
+                                    </div>
+                                </template>
+                                <hr style="margin:12px 0;border-color:var(--border)">
+                                <button class="btn btn-danger btn-sm" @click="advSeqDeleteSelected()"
+                                        x-show="advSeq.selectedId !== advSeq.doc.root.id">🗑 Delete</button>
+                            </div>
+                        </template>
+                        <div x-show="!advSeqSelectedNode()" class="muted">
+                            Click a tree node to edit its properties.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- SETTINGS -->
             <div x-show="tab === 'settings'" class="tab-panel">
                 <div class="panel-header">Settings</div>
@@ -1549,6 +1662,7 @@
     <script src="/js/lib/chart.umd.min.js"></script>
     <script src="/js/lib/aladin.min.js" type="text/javascript" charset="utf-8"></script>
     <script src="/js/lib/openseadragon/openseadragon.min.js"></script>
+    <script src="/js/lib/sortable.min.js"></script>
     <script src="/js/lib/alpine.min.js" defer></script>
     <script src="/js/app.js"></script>
 </body>

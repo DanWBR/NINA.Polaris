@@ -162,6 +162,16 @@ function ninaApp() {
         phd2Install: null,      // /install-info response: { installed, resolvedPath, downloadUrl, os, ... }
         phd2AutoStart: false,   // bound to checkbox, posted to /api/guider/auto-start/{bool}
 
+        // Advanced Sequencer state
+        advSeq: {
+            doc: { name: 'Untitled', root: null },
+            state: 'Idle', lastError: null, abortReason: null,
+            errors: [],
+            types: [],              // [{type, category, kind}]
+            selectedId: null
+        },
+        advSeqDirty: false,
+
         // Sky Atlas filters + altitude chart
         showAtlasFilters: false,
         atlasFilter: { type: '', minMag: null, maxMag: null, minDec: null, maxDec: null },
@@ -3256,9 +3266,300 @@ function ninaApp() {
         formatDeg(val, digits) {
             if (val == null || isNaN(val)) return '--';
             return val.toFixed(digits || 1) + '°';
+        },
+
+        // ============================================================
+        //                   Advanced Sequencer
+        // ============================================================
+        // Fields shadowed in the entity JSON we don't want to expose in the
+        // generic property editor (they're handled elsewhere or read-only).
+        _advSeqHiddenFields: new Set(['id', '$type', 'type', 'name', 'description', 'items',
+                                       'triggers', 'conditions', 'status', 'error', 'startedAt', 'finishedAt']),
+
+        async loadAdvSeq() {
+            try {
+                const [doc, types] = await Promise.all([
+                    this.apiGet('/api/sequencer/document'),
+                    this.apiGet('/api/sequencer/types')
+                ]);
+                this.advSeq.types = types;
+                this._advSeqRehydrate(doc.document);
+                this.advSeq.state = doc.state;
+                this.advSeq.lastError = doc.lastError;
+                this.advSeq.abortReason = doc.abortReason;
+                // Poll while running so the UI shows live status
+                if (this._advSeqPoll) clearInterval(this._advSeqPoll);
+                this._advSeqPoll = setInterval(() => this._advSeqRefresh(), 2000);
+                // Init Sortable.js after the tree DOM lands (next tick)
+                setTimeout(() => this._advSeqInitSortable(), 100);
+            } catch (e) { this.toast('Adv seq load failed: ' + e.message, 'error'); }
+        },
+
+        _advSeqInitSortable() {
+            if (typeof Sortable === 'undefined') return;
+            document.querySelectorAll('.advseq-tree .tree-children').forEach(el => {
+                if (el._sortable) return;
+                el._sortable = Sortable.create(el, {
+                    animation: 150,
+                    handle: '.tree-type-badge',
+                    onEnd: (evt) => {
+                        // Find parent container in our model by the first child id, then
+                        // reorder its items[] in place.
+                        const ids = Array.from(el.querySelectorAll(':scope > .tree-node[data-id]'))
+                            .map(n => n.dataset.id);
+                        if (ids.length === 0) return;
+                        const found = this.advSeqFindParent(ids[0]);
+                        if (!found) return;
+                        const parent = found.parent;
+                        if (!parent.items) return;
+                        parent.items = ids.map(id => parent.items.find(c => c.id === id)).filter(Boolean);
+                        this.advSeqDirty = true;
+                    }
+                });
+            });
+        },
+
+        async _advSeqRefresh() {
+            if (this.tab !== 'seqadv') return;
+            try {
+                const doc = await this.apiGet('/api/sequencer/document');
+                this.advSeq.state = doc.state;
+                this.advSeq.lastError = doc.lastError;
+                this.advSeq.abortReason = doc.abortReason;
+                // If the server is running, mirror its live status into the local tree
+                if (doc.state === 'Running' && doc.document?.root) {
+                    this._advSeqMergeStatus(this.advSeq.doc.root, doc.document.root);
+                }
+            } catch (e) { /* keep last state on transient errors */ }
+        },
+
+        _advSeqMergeStatus(local, remote) {
+            if (!local || !remote) return;
+            local.status = remote.status; local.error = remote.error;
+            local.startedAt = remote.startedAt; local.finishedAt = remote.finishedAt;
+            if (local.items && remote.items) {
+                for (let i = 0; i < local.items.length && i < remote.items.length; i++)
+                    this._advSeqMergeStatus(local.items[i], remote.items[i]);
+            }
+        },
+
+        _advSeqRehydrate(doc) {
+            // The server emits $type at the top level of every entity; copy it
+            // into a plain 'type' field for Alpine binding (Alpine can't bind to keys with $).
+            const fix = (e) => {
+                if (!e) return e;
+                if (e['$type'] && !e.type) e.type = e['$type'];
+                if (!e.id) e.id = 'ent-' + Math.random().toString(36).slice(2);
+                (e.items || []).forEach(fix);
+                (e.triggers || []).forEach(fix);
+                (e.conditions || []).forEach(fix);
+                return e;
+            };
+            this.advSeq.doc = doc;
+            if (this.advSeq.doc.root) fix(this.advSeq.doc.root);
+        },
+
+        advSeqCategories() {
+            return [...new Set((this.advSeq.types || []).map(t => t.category))];
+        },
+        advSeqByCategory(cat) {
+            return (this.advSeq.types || []).filter(t => t.category === cat);
+        },
+
+        advSeqWalk(node, cb) {
+            if (!node) return;
+            cb(node);
+            (node.items || []).forEach(c => this.advSeqWalk(c, cb));
+            (node.triggers || []).forEach(c => this.advSeqWalk(c, cb));
+            (node.conditions || []).forEach(c => this.advSeqWalk(c, cb));
+        },
+        advSeqFind(id, root) {
+            let found = null;
+            this.advSeqWalk(root || this.advSeq.doc.root, n => { if (n.id === id) found = n; });
+            return found;
+        },
+        advSeqFindParent(id, root) {
+            let parent = null;
+            const walk = (n) => {
+                for (const list of [n.items || [], n.triggers || [], n.conditions || []]) {
+                    for (const c of list) {
+                        if (c.id === id) { parent = { parent: n, list, child: c }; return; }
+                        walk(c);
+                        if (parent) return;
+                    }
+                }
+            };
+            walk(root || this.advSeq.doc.root);
+            return parent;
+        },
+        advSeqSelectedNode() {
+            return this.advSeq.selectedId ? this.advSeqFind(this.advSeq.selectedId) : null;
+        },
+        advSeqSelectedIsContainer() {
+            const n = this.advSeqSelectedNode();
+            if (!n) return false;
+            return ['Sequential', 'Parallel', 'DeepSkyObject', 'Templated'].includes(n.type);
+        },
+        advSeqSelect(id) {
+            this.advSeq.selectedId = id;
+        },
+
+        advSeqAddToSelected(t) {
+            const target = this.advSeqSelectedNode();
+            if (!target) { this.toast('Select a container first', 'warn'); return; }
+            const child = this._advSeqNewEntity(t);
+            const bucket = t.kind === 'Trigger' ? 'triggers'
+                         : t.kind === 'Condition' ? 'conditions'
+                         : 'items';
+            (target[bucket] = target[bucket] || []).push(child);
+            this.advSeq.selectedId = child.id;
+            this.advSeqDirty = true;
+            setTimeout(() => this._advSeqInitSortable(), 50);
+        },
+
+        _advSeqNewEntity(t) {
+            return {
+                id: 'ent-' + Math.random().toString(36).slice(2),
+                type: t.type, $type: t.type,
+                name: t.type,
+                items: ['Sequential', 'Parallel', 'DeepSkyObject', 'Templated'].includes(t.type) ? [] : undefined,
+                triggers: ['Sequential', 'Parallel', 'DeepSkyObject', 'Templated'].includes(t.type) ? [] : undefined,
+                conditions: ['Sequential', 'Parallel', 'DeepSkyObject', 'Templated'].includes(t.type) ? [] : undefined
+            };
+        },
+
+        advSeqDeleteSelected() {
+            if (!this.advSeq.selectedId || this.advSeq.selectedId === this.advSeq.doc.root.id) return;
+            const found = this.advSeqFindParent(this.advSeq.selectedId);
+            if (!found) return;
+            const idx = found.list.indexOf(found.child);
+            if (idx >= 0) found.list.splice(idx, 1);
+            this.advSeq.selectedId = null;
+            this.advSeqDirty = true;
+        },
+
+        advSeqEditableFields() {
+            const n = this.advSeqSelectedNode();
+            if (!n) return [];
+            const out = [];
+            for (const k of Object.keys(n)) {
+                if (this._advSeqHiddenFields.has(k)) continue;
+                const v = n[k];
+                if (Array.isArray(v)) continue;
+                if (typeof v === 'object' && v !== null) continue;
+                let kind = 'string';
+                if (typeof v === 'boolean') kind = 'bool';
+                else if (typeof v === 'number') kind = 'number';
+                out.push({ key: k, kind });
+            }
+            return out;
+        },
+
+        advSeqRenderTree(node, depth) {
+            // Renders as innerHTML for speed. Click handlers wired via x-on:click on the
+            // wrapper using event delegation.
+            if (!node) return '';
+            const sel = node.id === this.advSeq.selectedId ? 'selected' : '';
+            const status = 'status-' + (node.status || 'Idle');
+            const kid = (node.items || []).map(c => this.advSeqRenderTree(c, depth + 1)).join('');
+            const trig = (node.triggers || []).map(t => `<div class="tree-aux"><span class="tree-aux-label">Trigger:</span> ${this._advSeqLeaf(t)}</div>`).join('');
+            const cond = (node.conditions || []).map(c => `<div class="tree-aux"><span class="tree-aux-label">Cond:</span> ${this._advSeqLeaf(c)}</div>`).join('');
+            const errHtml = node.error ? `<span class="tree-error">⚠ ${this._esc(node.error)}</span>` : '';
+            return `
+                <div class="tree-node ${sel} ${status}" data-id="${node.id}" onclick="event.stopPropagation(); window.__alpineRoot.advSeqSelect('${node.id}')">
+                    <span class="tree-type-badge">${node.type}</span>
+                    <span class="tree-name">${this._esc(node.name || node.type)}</span>
+                    ${errHtml}
+                </div>
+                ${trig}
+                ${cond}
+                ${kid ? `<div class="tree-children">${kid}</div>` : ''}
+            `;
+        },
+        _advSeqLeaf(n) {
+            const sel = n.id === this.advSeq.selectedId ? 'selected' : '';
+            return `<span class="tree-node ${sel} status-${n.status || 'Idle'}" data-id="${n.id}" style="display:inline-flex"
+                     onclick="event.stopPropagation(); window.__alpineRoot.advSeqSelect('${n.id}')">
+                <span class="tree-type-badge">${n.type}</span>
+                <span class="tree-name">${this._esc(n.name || n.type)}</span>
+              </span>`;
+        },
+        _esc(s) { return (s || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); },
+
+        async advSeqStart() {
+            await this.advSeqSaveDoc();
+            const r = await this.apiPost('/api/sequencer/start');
+            this.advSeq.state = r.state;
+            this.advSeq.lastError = r.error;
+            if (r.error) this.toast('Start failed: ' + r.error, 'error');
+        },
+        async advSeqStop() {
+            await this.apiPost('/api/sequencer/stop');
+        },
+        async advSeqValidate() {
+            const r = await this.apiPost('/api/sequencer/validate');
+            this.advSeq.errors = r.errors || [];
+            this.toast(this.advSeq.errors.length === 0 ? 'No issues' : (this.advSeq.errors.length + ' issue(s)'),
+                this.advSeq.errors.length === 0 ? 'ok' : 'warn');
+        },
+        async advSeqSaveDoc() {
+            const payload = this._advSeqPrepareForServer(this.advSeq.doc);
+            const r = await this.apiPost('/api/sequencer/document', payload);
+            this.advSeq.errors = r.validation || [];
+            this.advSeqDirty = false;
+        },
+        _advSeqPrepareForServer(doc) {
+            // Strip the helper 'type' duplicate and runtime fields, write $type back
+            const clean = (e) => {
+                if (!e) return e;
+                const out = {};
+                for (const [k, v] of Object.entries(e)) {
+                    if (['type', 'status', 'error', 'startedAt', 'finishedAt'].includes(k)) continue;
+                    if (Array.isArray(v)) {
+                        out[k] = v.map(clean);
+                    } else if (typeof v === 'object' && v !== null) {
+                        out[k] = clean(v);
+                    } else {
+                        out[k] = v;
+                    }
+                }
+                if (e.type && !out['$type']) out['$type'] = e.type;
+                return out;
+            };
+            return { ...doc, root: clean(doc.root) };
+        },
+        advSeqDownloadJson() {
+            const blob = new Blob([JSON.stringify(this._advSeqPrepareForServer(this.advSeq.doc), null, 2)],
+                { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = (this.advSeq.doc.name || 'sequence') + '.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        },
+        async advSeqUploadJson(ev) {
+            const f = ev.target.files[0]; if (!f) return;
+            const text = await f.text();
+            try {
+                const r = await fetch('/api/sequencer/document/json', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'}, body: text
+                });
+                if (!r.ok) throw new Error('upload failed: ' + r.status);
+                this.toast('Sequence loaded from file', 'ok');
+                await this.loadAdvSeq();
+            } catch (e) { this.toast(e.message, 'error'); }
+            ev.target.value = '';
         }
     };
 }
+
+// Expose the Alpine root reference globally so HTML-rendered tree click handlers
+// can call back into the component (innerHTML strings can't use Alpine directives).
+document.addEventListener('alpine:initialized', () => {
+    const root = document.querySelector('[x-data]');
+    if (root) window.__alpineRoot = Alpine.$data(root);
+});
 
 class ApiError extends Error {
     constructor(status, body) {
