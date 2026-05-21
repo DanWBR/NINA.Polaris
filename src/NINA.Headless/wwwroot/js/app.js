@@ -206,10 +206,15 @@ function ninaApp() {
         altitudeData: null,
 
         // d3-celestial Sky Viewer (offline, BSD-3-Clause).
-        // _celestialReady is set once Celestial.display() succeeds; other
-        // bits (aladin* names kept for backwards-compat with x-model bindings).
+        // skyMode = 'horizontal' shows the live sky as seen from the observer's
+        // location at the current UTC time (horizon, alt-az); 'equatorial'
+        // shows the full celestial sphere (RA/Dec) for planning targets that
+        // are currently below the horizon.
         _celestialReady: false,
         _fovLayerId: null,
+        _skyTicker: null,                // setInterval handle for datetime refresh
+        skyMode: 'horizontal',           // 'horizontal' | 'equatorial'
+        skyClock: '',                    // displayed in the toolbar (HH:MM:SS UTC)
         aladinFov: 90,                  // initial FOV in degrees (wide field)
         aladinShowFov: true,             // toggle camera-FOV overlay
 
@@ -1048,10 +1053,6 @@ function ninaApp() {
         // bundled under /js/lib/celestial — zero network required.
 
         initSkyViewer() {
-            if (this._celestialReady) {
-                Celestial.resize();
-                return;
-            }
             const el = document.getElementById('celestial-map');
             if (!el || el.clientWidth === 0 || el.clientHeight === 0) {
                 setTimeout(() => this.initSkyViewer(), 100);
@@ -1061,26 +1062,56 @@ function ninaApp() {
                 setTimeout(() => this.initSkyViewer(), 200);
                 return;
             }
+            if (this._celestialReady) {
+                try { Celestial.resize({ width: el.clientWidth }); } catch {}
+                return;
+            }
+            this._buildCelestial(el);
+        },
+
+        // Tears down + rebuilds the celestial widget. Called when the user
+        // switches projection (live ↔ equatorial) or when the observer
+        // location changes via Settings.
+        rebuildSky() {
+            this._stopSkyTicker();
+            const el = document.getElementById('celestial-map');
+            if (!el) return;
+            // d3-celestial doesn't expose a clean teardown — wipe the
+            // SVG container ourselves before re-displaying.
+            el.innerHTML = '';
+            this._celestialReady = false;
+            this._buildCelestial(el);
+        },
+
+        _buildCelestial(el) {
             try {
-                const fovDeg = Math.max(1, Math.min(180, this.aladinFov || 90));
+                const isLive = this.skyMode === 'horizontal';
+                const lat = this.settings.latitude  || 0;
+                const lng = this.settings.longitude || 0;
+
                 Celestial.display({
                     container: 'celestial-map',
                     datapath: '/js/lib/celestial/data/',
                     width: el.clientWidth,
+                    // Stereographic for both modes; the projection is the same,
+                    // what changes is the *frame* (equatorial vs horizontal)
+                    // and the centre.
                     projection: 'stereographic',
-                    transform: 'equatorial',
+                    transform: isLive ? 'equatorial' : 'equatorial',
                     follow: 'center',
+                    // In horizontal mode we centre on the zenith for that lat/lng
+                    // at the current UTC time, then rotate so North is up.
+                    geopos: [lat, lng],
+                    location: false,
                     zoomlevel: null,
                     zoomextend: 10,
                     interactive: true,
                     form: false,
-                    location: false,
                     controls: true,
                     advanced: false,
                     disableAnimations: true,
                     background: { fill: '#0b1226', stroke: '#1f2a44', opacity: 1 },
-                    stars: { show: true, limit: 6, colors: true, designation: false,
-                             designationStyle: { fill: '#888', font: '10px sans-serif' },
+                    stars: { show: true, limit: 6, colors: true,
                              propername: true, propernameType: 'name',
                              propernameStyle: { fill: '#bcd', font: '11px sans-serif', align: 'left', baseline: 'top' },
                              propernameLimit: 2.5,
@@ -1099,30 +1130,41 @@ function ninaApp() {
                         graticule: { show: true, stroke: '#506080', width: 0.6, opacity: 0.5,
                                      lon: { pos: ['center'], fill: '#aac', font: '10px sans-serif' },
                                      lat: { pos: ['center'], fill: '#aac', font: '10px sans-serif' } },
-                        equatorial: { show: true, stroke: '#aaffaa', width: 1, opacity: 0.4 },
+                        equatorial: { show: !isLive, stroke: '#aaffaa', width: 1, opacity: 0.4 },
                         ecliptic:   { show: true, stroke: '#ffcc66', width: 1, opacity: 0.4 },
+                        horizon:    { show: isLive, stroke: '#ff5566', width: 1.5, dash: [4, 4], opacity: 0.7 },
                         galactic:   { show: false }
                     },
-                    horizon: { show: false }
+                    horizon: { show: isLive, stroke: '#ff5566', fill: '#0a0a14', opacity: 0.55 },
+                    daylight: { show: isLive, fill: '#1a2030', opacity: 0.30 }
                 });
 
-                // Initial centring on mount/target. d3-celestial expects [lon, lat]
-                // where lon = RA degrees (0-360, wrapping).
-                this.skyGoToMount();
+                if (isLive) {
+                    // Push the current UTC date into Celestial, then point the
+                    // centre at the zenith — that's the most natural live view.
+                    const now = new Date();
+                    try { Celestial.date(now); } catch {}
+                    this._centreOnZenith(lat, lng, now);
+                    this._startSkyTicker(lat, lng);
+                } else {
+                    // Equatorial: centre on mount / target / origin.
+                    this.skyGoToMount();
+                }
+
                 this.setSkyFov();
                 this.updateSkyCameraFov();
 
-                // Click-to-pick: convert mouse position to celestial coords via
-                // the projection's invert and update the host target.
+                // Click-to-pick. In equatorial mode the invert gives RA/Dec
+                // directly; in horizontal we still invert to whatever frame
+                // Celestial is currently rotated to (so the user can pick a
+                // star they see on screen and it ends up with the right
+                // celestial coords).
                 const svg = el.querySelector('svg');
                 if (svg) {
                     svg.addEventListener('click', (e) => {
                         const rect = svg.getBoundingClientRect();
-                        const x = e.clientX - rect.left;
-                        const y = e.clientY - rect.top;
-                        const coords = Celestial.mapProjection.invert([x, y]);
+                        const coords = Celestial.mapProjection.invert([e.clientX - rect.left, e.clientY - rect.top]);
                         if (!coords || isNaN(coords[0])) return;
-                        // coords = [raDeg, decDeg]
                         let raHours = coords[0] / 15;
                         if (raHours < 0) raHours += 24;
                         const decDeg = coords[1];
@@ -1133,16 +1175,60 @@ function ninaApp() {
                     });
                 }
 
-                // Auto-resize when parent layout shifts
                 window.addEventListener('resize', () => {
                     try { Celestial.resize({ width: el.clientWidth }); } catch {}
                 });
 
                 this._celestialReady = true;
-                console.log('d3-celestial ready');
+                this._updateSkyClock();
+                console.log(`d3-celestial ready (${this.skyMode} mode)`);
             } catch (e) {
                 console.error('d3-celestial init failed', e);
             }
+        },
+
+        // Local-sidereal-time-aware zenith centring. At the observer's location,
+        // the zenith's RA = LST and Dec = latitude.
+        _centreOnZenith(lat, lng, when) {
+            const lstHours = this._localSiderealTime(when, lng);
+            const raDeg = (lstHours * 15) % 360;
+            try { Celestial.rotate({ center: [raDeg, lat, 0] }); } catch {}
+        },
+
+        // Meeus low-precision LST (good to a few seconds — fine for orientation).
+        _localSiderealTime(utc, longitudeDeg) {
+            const jd = utc.getTime() / 86400000 + 2440587.5;
+            const t = (jd - 2451545.0) / 36525;
+            let gmst = 280.46061837 + 360.98564736629 * (jd - 2451545.0)
+                     + 0.000387933 * t * t - (t * t * t) / 38710000;
+            gmst = ((gmst % 360) + 360) % 360;
+            const lst = (gmst + longitudeDeg + 360) % 360;
+            return lst / 15;
+        },
+
+        _startSkyTicker(lat, lng) {
+            // Refresh the sky every 30 s — stars drift ~0.125° in that window
+            // which is barely visible at FOV ≥ 30°. Adjust if you want it
+            // smoother (5 s is plenty cheap, but burns more CPU).
+            this._stopSkyTicker();
+            this._skyTicker = setInterval(() => {
+                if (this.tab !== 'sky') return; // pause when hidden
+                const now = new Date();
+                try { Celestial.date(now); } catch {}
+                this._centreOnZenith(lat, lng, now);
+                this._updateSkyClock();
+            }, 30_000);
+            this._updateSkyClock();
+        },
+
+        _stopSkyTicker() {
+            if (this._skyTicker) { clearInterval(this._skyTicker); this._skyTicker = null; }
+        },
+
+        _updateSkyClock() {
+            const d = new Date();
+            const pad = n => n.toString().padStart(2, '0');
+            this.skyClock = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
         },
 
         setSkyFov() {

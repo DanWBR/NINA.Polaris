@@ -1127,6 +1127,12 @@
                 <!-- d3-celestial renders into this div. Sized via the .sky-viewer CSS rule. -->
                 <div id="celestial-map" class="sky-viewer"></div>
                 <div class="sky-survey-row">
+                    <label>Projection
+                        <select class="input-sm" x-model="skyMode" @change="rebuildSky()">
+                            <option value="horizontal">Live local sky (now)</option>
+                            <option value="equatorial">Equatorial chart</option>
+                        </select>
+                    </label>
                     <label>FOV
                         <input type="number" class="input-sm" x-model.number="aladinFov" min="1" max="180" step="1"
                                @change="setSkyFov()">°
@@ -1137,7 +1143,13 @@
                     </label>
                     <button class="btn btn-sm" @click="skyGoToMount()" :disabled="!mount.connected">Center on mount</button>
                     <span class="muted" style="font-size:11px;margin-left:auto">
-                        Offline sky — d3-celestial (Hipparcos + DSO + Milky Way), drag to pan, click to set target
+                        <span x-show="skyMode === 'horizontal'">
+                            Live · <span x-text="settings.latitude.toFixed(2) + '°, ' + settings.longitude.toFixed(2) + '°'"></span>
+                            · <span x-text="skyClock"></span> UTC
+                        </span>
+                        <span x-show="skyMode === 'equatorial'">
+                            Equatorial chart — drag to pan, click to set target
+                        </span>
                     </span>
                 </div>
 
