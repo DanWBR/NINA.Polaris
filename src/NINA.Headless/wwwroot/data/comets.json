@@ -1,0 +1,115 @@
+{
+  "_comment": "Curated periodic comets with JPL Keplerian elements. q in AU, angles in degrees, T_p as ISO date in TT. Update when JPL publishes refined elements (https://ssd.jpl.nasa.gov/sbdb.cgi).",
+  "comets": [
+    {
+      "name": "1P/Halley",
+      "tperi": "2061-07-28",
+      "q": 0.5860,
+      "e": 0.96714,
+      "i": 162.262,
+      "omega_node": 58.420,
+      "arg_periapsis": 111.332,
+      "h": 4.0,
+      "n": 4.0
+    },
+    {
+      "name": "2P/Encke",
+      "tperi": "2027-02-10",
+      "q": 0.3360,
+      "e": 0.8483,
+      "i": 11.343,
+      "omega_node": 334.568,
+      "arg_periapsis": 186.546,
+      "h": 9.8,
+      "n": 4.0
+    },
+    {
+      "name": "9P/Tempel 1",
+      "tperi": "2027-02-21",
+      "q": 1.5421,
+      "e": 0.5117,
+      "i": 10.474,
+      "omega_node": 68.745,
+      "arg_periapsis": 179.215,
+      "h": 5.5,
+      "n": 25.0
+    },
+    {
+      "name": "19P/Borrelly",
+      "tperi": "2029-02-02",
+      "q": 1.3528,
+      "e": 0.6242,
+      "i": 29.305,
+      "omega_node": 75.157,
+      "arg_periapsis": 353.358,
+      "h": 8.0,
+      "n": 9.0
+    },
+    {
+      "name": "21P/Giacobini-Zinner",
+      "tperi": "2025-03-25",
+      "q": 1.0125,
+      "e": 0.7068,
+      "i": 31.989,
+      "omega_node": 195.401,
+      "arg_periapsis": 172.929,
+      "h": 9.0,
+      "n": 7.5
+    },
+    {
+      "name": "22P/Kopff",
+      "tperi": "2028-08-08",
+      "q": 1.5641,
+      "e": 0.5414,
+      "i": 4.737,
+      "omega_node": 120.913,
+      "arg_periapsis": 162.991,
+      "h": 7.5,
+      "n": 12.0
+    },
+    {
+      "name": "46P/Wirtanen",
+      "tperi": "2029-05-18",
+      "q": 1.0567,
+      "e": 0.659,
+      "i": 11.749,
+      "omega_node": 82.165,
+      "arg_periapsis": 356.341,
+      "h": 9.0,
+      "n": 7.5
+    },
+    {
+      "name": "67P/Churyumov-Gerasimenko",
+      "tperi": "2028-12-21",
+      "q": 1.2432,
+      "e": 0.6411,
+      "i": 7.044,
+      "omega_node": 50.147,
+      "arg_periapsis": 12.795,
+      "h": 9.0,
+      "n": 6.0
+    },
+    {
+      "name": "81P/Wild 2",
+      "tperi": "2029-02-15",
+      "q": 1.5984,
+      "e": 0.5374,
+      "i": 3.236,
+      "omega_node": 136.142,
+      "arg_periapsis": 41.815,
+      "h": 6.5,
+      "n": 10.0
+    },
+    {
+      "name": "103P/Hartley 2",
+      "tperi": "2030-05-06",
+      "q": 1.0644,
+      "e": 0.694,
+      "i": 13.604,
+      "omega_node": 219.747,
+      "arg_periapsis": 181.327,
+      "h": 9.5,
+      "n": 8.0
+    }
+  ]
+}

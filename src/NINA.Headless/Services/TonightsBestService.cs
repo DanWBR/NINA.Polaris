@@ -33,6 +33,7 @@ public class TonightsBestService {
     private readonly AltitudeService      _altitude;
     private readonly EquipmentManager     _equip;
     private readonly ProfileService       _profile;
+    private readonly CometEphemerisService? _comets;
     private readonly ILogger<TonightsBestService> _logger;
 
     public TonightsBestService(
@@ -40,11 +41,13 @@ public class TonightsBestService {
             AltitudeService altitude,
             EquipmentManager equip,
             ProfileService profile,
-            ILogger<TonightsBestService> logger) {
+            ILogger<TonightsBestService> logger,
+            CometEphemerisService? comets = null) {
         _catalog  = catalog;
         _altitude = altitude;
         _equip    = equip;
         _profile  = profile;
+        _comets   = comets;
         _logger   = logger;
     }
 
@@ -110,8 +113,21 @@ public class TonightsBestService {
                 minPeakAlt: 15, baseBoost: 0);
         }
 
-        // Sort + cap
+        // Cap DSOs + planets + Moon by score first…
         var ordered = items.OrderByDescending(i => i.Score).Take(limit).ToList();
+
+        // …then append comets unconditionally. They share their own
+        // category-filter chip in the UI, so cutting them by the global
+        // limit (DSOs dominate the top of the list and would always
+        // win the slot fight) would mean the "Comets" tab silently empty.
+        // Curated list is small (~10), so the append cost is trivial.
+        var cometItems = new List<TonightCandidate>();
+        if (_comets != null) {
+            foreach (var comet in _comets.AllComets) {
+                AddComet(comet, observer, nightStart, nightEnd, lat, lng, fov, cometItems);
+            }
+        }
+        ordered.AddRange(cometItems.OrderByDescending(i => i.Score));
         return new TonightsBestResult(
             ComputedAtUtc:     nowUtc,
             NightStartUtc:     nightStart,
@@ -175,6 +191,66 @@ public class TonightsBestService {
             ));
         } catch (Exception ex) {
             _logger.LogDebug(ex, "Skipping body {Name} (AstronomyEngine error)", name);
+        }
+    }
+
+    private void AddComet(CometElements c, Observer observer,
+                          DateTime nightStart, DateTime nightEnd,
+                          double lat, double lng,
+                          CameraFov? fov, List<TonightCandidate> items) {
+        try {
+            // Sample position at peak-search points (every 30 min through
+            // the night). We track the best altitude AND remember the
+            // closest-to-now position for the "current" RA/Dec.
+            var nowUtc = DateTime.UtcNow;
+            var nowPos = _comets!.Compute(c, nowUtc);
+            // Don't gate on magnitude — every curated periodic comet is
+            // worth knowing about, and the score formula naturally pushes
+            // dim ones (mag 15+) to the bottom of the list. Users who
+            // care about brightness can read the magnitude on the card.
+
+            double peakAlt = -90;
+            DateTime peakUtc = nightStart;
+            for (var t = nightStart; t <= nightEnd; t = t.AddMinutes(30)) {
+                var p = _comets.Compute(c, t);
+                var (alt, _) = AltitudeService.RaDecToAltAz(p.RaHours, p.DecDeg, t, lat, lng);
+                if (alt > peakAlt) { peakAlt = alt; peakUtc = t; }
+            }
+            if (peakAlt < 15) return;
+
+            var (curAlt, curAz) = AltitudeService.RaDecToAltAz(
+                nowPos.RaHours, nowPos.DecDeg, nowUtc, lat, lng);
+
+            // Comets get a small boost on score so an actually-bright apparition
+            // outranks a mediocre DSO with the same magnitude — they're event-
+            // worthy targets the user probably wants to plan around.
+            var score = (int)Math.Round(
+                (8 - Math.Clamp(nowPos.EstimatedMagnitude, -5, 13)) * 7
+                + peakAlt / 90.0 * 20
+                + 5);
+
+            items.Add(new TonightCandidate(
+                Category:        "Comet",
+                Name:            c.Name,
+                CommonName:      null,
+                Type:            "Periodic comet",
+                RaHours:         nowPos.RaHours,
+                DecDeg:          nowPos.DecDeg,
+                Magnitude:       Math.Round(nowPos.EstimatedMagnitude, 2),
+                Size:            null,
+                SizeMajorArcmin: null,
+                SizeMinorArcmin: null,
+                CurrentAltDeg:   Math.Round(curAlt, 1),
+                CurrentAzDeg:    Math.Round(curAz,  1),
+                PeakAltDeg:      Math.Round(peakAlt, 1),
+                PeakUtc:         peakUtc,
+                Score:           score,
+                FitsCameraFov:   null,
+                CameraFovWidthArcmin:  fov?.WidthArcmin,
+                CameraFovHeightArcmin: fov?.HeightArcmin
+            ));
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "Skipping comet {Name}", c.Name);
         }
     }
 

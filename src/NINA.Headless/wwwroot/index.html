@@ -1381,7 +1381,7 @@
 
                 <!-- Filter chips -->
                 <div class="tonight-filters" x-show="!tonight.error && tonight.items.length">
-                    <template x-for="f in ['all','dso','planet','moon']" :key="f">
+                    <template x-for="f in ['all','dso','planet','moon','comet']" :key="f">
                         <button class="tonight-filter-chip"
                                 :class="{ active: tonight.filter === f }"
                                 @click="tonight.filter = f"
