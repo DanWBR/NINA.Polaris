@@ -157,17 +157,25 @@ public class CelestialImageService {
     /// </summary>
     public string? GetLocalFilePath(string slug) {
         if (string.IsNullOrWhiteSpace(slug)) return null;
-        // Whitelist: slug came from Slugify which is alphanum-only,
-        // so no traversal risk; but extension comes from the cached
-        // entry, restrict to a known set.
-        if (!_mem.TryGetValue(slug, out var entry)) {
-            // Try loading from disk first
+        // Whitelist: slug came from Slugify which is alphanum-only, so
+        // no traversal risk; the extension comes from the cached entry
+        // and is restricted to a known set below.
+        _mem.TryGetValue(slug, out var entry);
+
+        // If we have no in-memory entry, OR the in-memory entry is from
+        // an older session and doesn't know about the downloaded file
+        // (LocalFileExt = null), re-load the disk JSON. A previous run
+        // may have populated it.
+        if (entry == null || entry.LocalFileExt == null) {
             var jsonPath = Path.Combine(_cacheDir, slug + ".json");
             if (File.Exists(jsonPath)) {
                 try {
-                    entry = JsonSerializer.Deserialize<CelestialImage>(File.ReadAllText(jsonPath));
-                    if (entry != null) _mem[slug] = entry;
-                } catch { return null; }
+                    var disk = JsonSerializer.Deserialize<CelestialImage>(File.ReadAllText(jsonPath));
+                    if (disk != null) {
+                        entry = disk;
+                        _mem[slug] = disk;
+                    }
+                } catch { /* keep whatever _mem had */ }
             }
         }
         if (entry?.LocalFileExt == null) return null;
