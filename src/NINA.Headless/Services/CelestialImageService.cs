@@ -31,7 +31,7 @@ public class CelestialImageService {
     // Bump when the lookup pipeline materially changes (e.g. relevance
     // filter added). Cached entries with an older version are ignored
     // and re-fetched, so users don't keep getting stale irrelevant hits.
-    private const int CacheSchemaVersion = 3;
+    private const int CacheSchemaVersion = 4;
 
     private readonly ILogger<CelestialImageService> _logger;
     private readonly string _cacheDir;
@@ -72,13 +72,14 @@ public class CelestialImageService {
 
         // Live lookup. NASA Library is great for common names ("Carina
         // Nebula", "Andromeda Galaxy") but a mess for raw catalogue
-        // codes — "M 4" matches an STS-109 shuttle photo because the
-        // mission description mentions Hubble. For codes, go straight
-        // to Wikipedia (which has a reliable article per Messier / NGC /
-        // IC / Caldwell / Sh2 entry), and skip NASA entirely.
+        // codes and for major solar-system bodies — "M 4" matches an
+        // STS-109 shuttle photo, "Moon" matches a Mineralogy Mapper
+        // diagram. For both cases, prefer Wikipedia (which has a
+        // reliable article + iconic lead image per entry) and use
+        // NASA only as the fallback.
         CelestialImage result;
         try {
-            if (LooksLikeCatalogueCode(name)) {
+            if (LooksLikeCatalogueCode(name) || WikipediaFirstBodies.Contains(name.Trim())) {
                 result = await TryWikipediaAsync(name, ct);
                 if (!result.Available) result = await TryNasaAsync(name, ct);
             } else {
@@ -379,6 +380,18 @@ public class CelestialImageService {
             @"^(M(essier)?|NGC|IC|Caldwell|C|Sh2|Cr|Mel|Abell)\s*-?\s*\d+",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
     }
+
+    // Solar-system bodies whose NASA Image Library first-page results are
+    // dominated by science illustrations and data products (the Moon's
+    // first hit is the Moon Mineralogy Mapper's Albedo / Water-Signature
+    // diagram, Jupiter's is occasionally a probe rendering, etc.).
+    // Wikipedia lead images for these articles are reliably iconic photos,
+    // so prefer Wikipedia and use NASA only as a fallback.
+    private static readonly HashSet<string> WikipediaFirstBodies = new(StringComparer.OrdinalIgnoreCase) {
+        "Moon", "Mercury", "Venus", "Earth", "Mars",
+        "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto",
+        "Sun"
+    };
 
     public static string Slugify(string name) {
         var chars = name.ToLowerInvariant()
