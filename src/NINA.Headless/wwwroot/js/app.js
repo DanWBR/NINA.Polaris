@@ -205,12 +205,12 @@ function ninaApp() {
         atlasTypes: [],
         altitudeData: null,
 
-        // Aladin Lite (Sky Explorer)
-        aladinInstance: null,
-        aladinFov: 2.0,
-        aladinSurvey: 'P/DSS2/color',
-        aladinShowFov: true,
-        _aladinFovOverlay: null,
+        // Offline canvas-based Sky Viewer
+        // (state field names kept with the aladin* prefix for x-model bindings
+        // that already exist in the markup — purely cosmetic)
+        skyViewer: null,
+        aladinFov: 90,                  // initial FOV in degrees (wide field)
+        aladinShowFov: true,             // toggle camera-FOV overlay
 
         // OpenSeadragon image viewer
         imageViewerOpen: false,
@@ -1041,122 +1041,78 @@ function ninaApp() {
             }
         },
 
-        // ---- Aladin Lite (Sky Explorer) ----
+        // ---- Offline canvas-based Sky Viewer ----
 
-        async initAladin(fromTabClick) {
-            // Aladin Lite needs a *visible* container with non-zero dimensions
-            // at the time of A.aladin() — otherwise the canvas is 0×0 and stays
-            // black even after the tab becomes visible. So we defer init until
-            // the user opens the Sky tab (lazy) and ping window.dispatchEvent
-            // 'resize' afterwards in case the layout shifted.
-            if (this.aladinInstance) {
-                // Already initialised — just kick a resize so the canvas
-                // refits whatever the current pane size is.
-                try { window.dispatchEvent(new Event('resize')); } catch {}
+        initSkyViewer() {
+            // Lazy init: only when the Sky tab is visible AND the canvas has
+            // non-zero CSS dimensions. Retries on next tick if not yet sized.
+            if (this.skyViewer) {
+                // Already created — just trigger a redraw in case the pane resized
+                this.skyViewer.redraw();
                 return;
             }
-            const el = document.getElementById('aladin-lite-div');
-            if (!el || el.clientWidth === 0 || el.clientHeight === 0) {
-                if (fromTabClick) {
-                    // Retry shortly — the tab just became visible and the
-                    // layout may not have settled yet.
-                    setTimeout(() => this.initAladin(true), 100);
-                }
+            const canvas = document.getElementById('sky-viewer-canvas');
+            if (!canvas) return;
+            const rect = canvas.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) {
+                setTimeout(() => this.initSkyViewer(), 100);
                 return;
             }
-            if (typeof A === 'undefined' || !A.init) {
-                console.warn('Aladin Lite not loaded yet');
-                setTimeout(() => this.initAladin(fromTabClick), 500);
-                return;
-            }
+            // Give the canvas an explicit height (it's inside a flex column so
+            // it'd otherwise collapse to its content)
+            if (!canvas.style.height) canvas.style.height = '500px';
             try {
-                await A.init;
-                const initialRa = this.mount.ra ? this.mount.ra * 15 : 0; // hours → deg
-                const initialDec = this.mount.dec ?? 0;
-                this.aladinInstance = A.aladin('#aladin-lite-div', {
-                    survey: this.aladinSurvey,
-                    fov: this.aladinFov,
-                    target: `${initialRa} ${initialDec}`,
-                    cooFrame: 'ICRSd',
-                    reticleColor: '#88f',
-                    showReticle: true,
-                    showZoomControl: true,
-                    showFullscreenControl: true,
-                    showLayersControl: true,
-                    showGotoControl: true,
-                    showShareControl: false,
-                    showSimbadPointerControl: true,
-                    showFrame: true,
-                    fullScreen: false
-                });
-                // Click handler to set as target
-                this.aladinInstance.on('click', (obj) => {
-                    if (obj && obj.ra !== undefined && obj.dec !== undefined) {
-                        const raHours = obj.ra / 15;
-                        const decDeg = obj.dec;
+                this.skyViewer = new OfflineSkyViewer(canvas, {
+                    centerRaHours: this.mount.ra ?? 0,
+                    centerDecDeg:  this.mount.dec ?? 0,
+                    fovDeg: this.aladinFov || 90,
+                    onClick: (raHours, decDeg) => {
                         this.skyTarget = {
-                            name: obj.name || `RA ${raHours.toFixed(2)}h Dec ${decDeg.toFixed(2)}°`,
-                            ra: raHours,
-                            dec: decDeg,
-                            type: 'click',
-                            magnitude: ''
+                            name: `RA ${raHours.toFixed(3)}h Dec ${decDeg.toFixed(2)}°`,
+                            ra: raHours, dec: decDeg, type: 'click', magnitude: ''
                         };
+                        this.skyViewer.setTarget({ raHours, decDeg, name: this.skyTarget.name });
                     }
                 });
-                this.updateAladinFov();
-                console.log('Aladin Lite ready');
+                this.updateSkyCameraFov();
+                console.log('Offline SkyViewer ready');
             } catch (e) {
-                console.error('Aladin init failed', e);
+                console.error('SkyViewer init failed', e);
             }
         },
 
-        changeAladinSurvey() {
-            if (this.aladinInstance) {
-                this.aladinInstance.setImageSurvey(this.aladinSurvey);
-            }
+        setSkyFov() {
+            if (this.skyViewer) this.skyViewer.setFov(this.aladinFov);
         },
 
-        setAladinFov() {
-            if (this.aladinInstance) {
-                this.aladinInstance.setFov(Math.max(0.05, Math.min(60, this.aladinFov)));
-            }
+        skyGoToMount() {
+            if (!this.skyViewer || this.mount.ra == null || this.mount.dec == null) return;
+            this.skyViewer.setCenter(this.mount.ra, this.mount.dec);
         },
 
-        aladinGoToMount() {
-            if (!this.aladinInstance) return;
-            if (this.mount.ra == null || this.mount.dec == null) return;
-            this.aladinInstance.gotoRaDec(this.mount.ra * 15, this.mount.dec); // deg
+        updateSkyCameraFov() {
+            if (!this.skyViewer) return;
+            this.skyViewer.setCameraFov(this.aladinShowFov
+                ? { widthDeg: this.fov.width, heightDeg: this.fov.height }
+                : null);
         },
 
-        // Draw / update the camera-FOV rectangle overlay
-        updateAladinFov() {
-            if (!this.aladinInstance) return;
-            // Remove old overlay
-            if (this._aladinFovOverlay) {
-                try { this.aladinInstance.removeLayer(this._aladinFovOverlay); } catch (e) { }
-                this._aladinFovOverlay = null;
-            }
-            if (!this.aladinShowFov) return;
-
-            const center = this.aladinInstance.getRaDec(); // [raDeg, decDeg]
-            const wDeg = this.fov.width;
-            const hDeg = this.fov.height;
-            // Compensate Dec for the cosine factor when offsetting in RA
-            const cosDec = Math.cos(center[1] * Math.PI / 180);
-            const dRa = (wDeg / 2) / Math.max(0.001, cosDec);
-            const dDec = hDeg / 2;
-            const corners = [
-                [center[0] - dRa, center[1] - dDec],
-                [center[0] + dRa, center[1] - dDec],
-                [center[0] + dRa, center[1] + dDec],
-                [center[0] - dRa, center[1] + dDec]
-            ];
+        async skyLoadDsoMarkers() {
+            // Pulls the catalog (filtered to mag <= 10 by default) and feeds the
+            // markers to the viewer. Works fully offline since the DSO catalog
+            // is server-side embedded.
+            if (!this.skyViewer) return;
             try {
-                const overlay = A.graphicOverlay({ color: '#4caf50', lineWidth: 2 });
-                this.aladinInstance.addOverlay(overlay);
-                overlay.add(A.polygon(corners));
-                this._aladinFovOverlay = overlay;
-            } catch (e) { console.warn('FOV overlay failed', e); }
+                const r = await this.apiGet('/api/sky/catalog/filter?maxMag=10&limit=300');
+                const list = (r.results || r || []).map(o => ({
+                    ra: o.ra ?? o.raHours, dec: o.dec ?? o.decDeg,
+                    name: o.name, type: o.type, magnitude: o.magnitude
+                }));
+                this.skyViewer.setDsoMarkers(list);
+                this.toast(`Loaded ${list.length} DSO markers`, 'ok');
+            } catch (e) {
+                this.toast('DSO markers failed: ' + e.message, 'error');
+            }
         },
 
         // Pixel readout: convert mouse event coords to source-image coords +
@@ -1436,13 +1392,15 @@ function ninaApp() {
             });
         },
 
-        // When a sky target is selected via search, also re-center Aladin on it.
+        // When a sky target is selected via search, also re-center the sky
+        // viewer on it and update its reticle marker.
         _goToSelectedTarget() {
-            if (!this.aladinInstance || !this.skyTarget) return;
-            const raDeg = (this.skyTarget.ra || 0) * 15;
-            const decDeg = this.skyTarget.dec || 0;
-            this.aladinInstance.gotoRaDec(raDeg, decDeg);
-            this.$nextTick(() => this.updateAladinFov());
+            if (!this.skyViewer || !this.skyTarget) return;
+            const ra = this.skyTarget.ra ?? this.skyTarget.raHours;
+            const dec = this.skyTarget.dec ?? this.skyTarget.decDeg;
+            if (ra == null || dec == null) return;
+            this.skyViewer.setCenter(ra, dec);
+            this.skyViewer.setTarget({ raHours: ra, decDeg: dec, name: this.skyTarget.name });
         },
 
         async loadMfSettings() {
@@ -3771,33 +3729,10 @@ function ninaApp() {
         },
 
         _mosaicDrawOverlay(plan) {
-            if (typeof window.aladin === 'undefined' || !window.aladin) return;
-            try {
-                // Remove our previous mosaic overlay if any
-                if (this._mosaicOverlay && window.aladin.removeOverlay)
-                    window.aladin.removeOverlay(this._mosaicOverlay);
-                const A = window.A;
-                if (!A) return;
-                const ov = A.graphicOverlay({color: '#fbbf24', lineWidth: 2});
-                window.aladin.addOverlay(ov);
-                this._mosaicOverlay = ov;
-                for (const p of plan.panels) {
-                    const halfW = plan.panelFovWidthDeg  / 2;
-                    const halfH = plan.panelFovHeightDeg / 2;
-                    const raDeg = p.raHours * 15;
-                    const decDeg = p.decDeg;
-                    const cosDec = Math.cos(decDeg * Math.PI / 180) || 1e-6;
-                    // Four corners; cos(dec) correction on RA
-                    const corners = [
-                        [raDeg - halfW/cosDec, decDeg - halfH],
-                        [raDeg + halfW/cosDec, decDeg - halfH],
-                        [raDeg + halfW/cosDec, decDeg + halfH],
-                        [raDeg - halfW/cosDec, decDeg + halfH],
-                        [raDeg - halfW/cosDec, decDeg - halfH]
-                    ];
-                    ov.add(A.polyline(corners));
-                }
-            } catch (e) { console.warn('Mosaic overlay draw failed', e); }
+            // Hand the plan to the offline SkyViewer — it knows how to render
+            // each panel as a polygon in the same stereographic projection it
+            // uses for stars/grid.
+            if (this.skyViewer) this.skyViewer.setMosaic(plan);
         },
 
         mosaicTimeFormat(seconds) {
