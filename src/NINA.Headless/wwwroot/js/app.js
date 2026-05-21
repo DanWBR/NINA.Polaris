@@ -1149,8 +1149,19 @@ function ninaApp() {
                     location: false,
                     zoomlevel: null,
                     zoomextend: 10,
-                    interactive: true,
+                    // Disable d3-celestial's built-in d3.geo.zoom drag —
+                    // it does mathematically-correct "grab a point, rotate
+                    // sphere to keep it under cursor" via Euler rotation,
+                    // which near the celestial equator (where the zenith
+                    // sits for low-latitude observers) reduces to rotation
+                    // around the polar axis and *feels* like the sky is
+                    // spinning around N/S regardless of where you grab.
+                    // We re-add our own drag below that updates the roll
+                    // component instead, so horizontal drag rotates the
+                    // compass around the zenith.
+                    interactive: false,
                     form: false,
+                    // Keep the +/- zoom buttons (they're separate from drag).
                     controls: true,
                     advanced: false,
                     disableAnimations: true,
@@ -1217,6 +1228,8 @@ function ninaApp() {
                 const svg = el.querySelector('svg');
                 if (svg) {
                     svg.addEventListener('click', (e) => {
+                        // Skip click if it came right after a drag.
+                        if (this._skySuppressClick) { this._skySuppressClick = false; return; }
                         const rect = svg.getBoundingClientRect();
                         const coords = Celestial.mapProjection.invert([e.clientX - rect.left, e.clientY - rect.top]);
                         if (!coords || isNaN(coords[0])) return;
@@ -1230,6 +1243,8 @@ function ninaApp() {
                         };
                     });
                 }
+
+                this._attachCustomDrag(el);
 
                 window.addEventListener('resize', () => {
                     const size = Math.max(300, el.clientWidth);
@@ -1395,6 +1410,79 @@ function ninaApp() {
             const dec = this.mount?.dec ?? (this.skyTarget?.dec) ?? 0;
             const decClamped = Math.max(-89.5, Math.min(89.5, dec));
             try { Celestial.rotate({ center: [ra * 15, decClamped, 0] }); } catch {}
+        },
+
+        // Custom drag handler — replaces d3-celestial's d3.geo.zoom drag so
+        // that horizontal drag rotates the sky around the *zenith axis*
+        // (the projection's roll/γ component), and vertical drag pans the
+        // declination of the centre. This gives the "rotate the compass
+        // around overhead" feel the user wants instead of the polar-axis
+        // spin that d3.geo.zoom produces near the equator.
+        _attachCustomDrag(el) {
+            // The lib draws into both <canvas> (sky raster) and <svg>
+            // (overlays). We attach to the parent div so we catch pointer
+            // events over either child.
+            const target = el;
+            let dragging = false;
+            let lastX = 0, lastY = 0;
+            let totalMove = 0;
+
+            const PIX_PER_DEG = 3; // drag sensitivity — tweak to taste
+
+            const onDown = (e) => {
+                // Only react to primary button / touch.
+                if (e.button != null && e.button !== 0) return;
+                dragging = true;
+                lastX = e.clientX;
+                lastY = e.clientY;
+                totalMove = 0;
+                try { target.setPointerCapture(e.pointerId); } catch {}
+                target.style.cursor = 'grabbing';
+            };
+            const onMove = (e) => {
+                if (!dragging) return;
+                const dx = e.clientX - lastX;
+                const dy = e.clientY - lastY;
+                lastX = e.clientX;
+                lastY = e.clientY;
+                totalMove += Math.abs(dx) + Math.abs(dy);
+
+                // Read current centre from the projection's rotate, which
+                // is [-RA°, -Dec°, -γ°] in d3.geo convention (Celestial
+                // stores its 'center' as the un-negated form).
+                let centre;
+                try {
+                    const r = Celestial.mapProjection.rotate();
+                    centre = [-r[0], -r[1], -(r[2] || 0)];
+                } catch { centre = [0, 0, 0]; }
+
+                // Horizontal drag → roll the sky around the centred point
+                // (rotates the compass orientation around the zenith axis).
+                // Vertical drag → shift the centre's declination, so the
+                // user can look further north or south of the zenith.
+                const dGamma = -dx / PIX_PER_DEG;
+                const dDec   = -dy / PIX_PER_DEG;
+                const newGamma = ((centre[2] || 0) + dGamma + 540) % 360 - 180;
+                const newDec   = Math.max(-89.5, Math.min(89.5, centre[1] + dDec));
+
+                try { Celestial.rotate({ center: [centre[0], newDec, newGamma] }); } catch {}
+            };
+            const onUp = (e) => {
+                if (!dragging) return;
+                dragging = false;
+                try { target.releasePointerCapture(e.pointerId); } catch {}
+                target.style.cursor = 'grab';
+                // Suppress the click that fires immediately after a drag,
+                // otherwise the user accidentally sets a new target every
+                // time they let go of the mouse.
+                if (totalMove > 4) this._skySuppressClick = true;
+            };
+
+            target.style.cursor = 'grab';
+            target.addEventListener('pointerdown', onDown);
+            target.addEventListener('pointermove', onMove);
+            target.addEventListener('pointerup', onUp);
+            target.addEventListener('pointercancel', onUp);
         },
 
         updateSkyCameraFov() {
