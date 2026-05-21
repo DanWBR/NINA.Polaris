@@ -1827,6 +1827,12 @@ function ninaApp() {
         // /api/sky/image requests on tab open. Sequential is plenty fast
         // for a list of this size and is much kinder to NASA / Wikipedia.
         //
+        // For each candidate we try a few name variants in order of
+        // search-friendliness — NASA Image Library is indexed by popular
+        // names ("Carina Nebula"), much less by raw catalogue codes
+        // ("NGC 3372"). Common name first, then catalogue name as the
+        // fallback. Backend caches each lookup independently.
+        //
         // Alpine 3 reactivity tracks property assignments on tracked
         // objects but doesn't reliably pick up additions of brand-new
         // keys to a plain {}. To force a render, we reassign the whole
@@ -1834,23 +1840,28 @@ function ninaApp() {
         async _kickTonightThumbs() {
             for (const item of this.tonight.items) {
                 if (this.tonight.thumbs[item.name]?.url || this.tonight.thumbs[item.name]?.missing) continue;
-                try {
-                    const r = await this.apiGet(`/api/sky/image?name=${encodeURIComponent(item.name)}`);
-                    this.tonight.thumbs = {
-                        ...this.tonight.thumbs,
-                        [item.name]: {
-                            url:     r.available ? r.thumbnailUrl : null,
-                            title:   r.title,
-                            credit:  r.credit,
-                            missing: !r.available
-                        }
-                    };
-                } catch {
-                    this.tonight.thumbs = {
-                        ...this.tonight.thumbs,
-                        [item.name]: { url: null, missing: true }
-                    };
+
+                const tryNames = [];
+                if (item.commonName) tryNames.push(item.commonName);
+                tryNames.push(item.name);
+
+                let found = null;
+                for (const q of tryNames) {
+                    try {
+                        const r = await this.apiGet(`/api/sky/image?name=${encodeURIComponent(q)}`);
+                        if (r?.available) { found = r; break; }
+                    } catch { /* keep trying remaining variants */ }
                 }
+
+                this.tonight.thumbs = {
+                    ...this.tonight.thumbs,
+                    [item.name]: found ? {
+                        url:     found.thumbnailUrl,
+                        title:   found.title,
+                        credit:  found.credit,
+                        missing: false
+                    } : { url: null, missing: true }
+                };
             }
         },
 
