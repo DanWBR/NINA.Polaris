@@ -1223,6 +1223,25 @@ select.input-sm {
     flex-direction: column;
     gap: 3px;
 }
+/* The Projection dropdown needs to fit "Live local sky (now)" — the bare
+   .input-sm width truncates it to "Live loc". */
+.sky-survey-row select.input-sm {
+    min-width: 160px;
+    width: auto;
+}
+/* Strip the browser's number-input spinner arrows on the FOV input — they
+   look out of place at this size and the user can type / wheel anyway. */
+.sky-survey-row input[type="number"].input-sm {
+    -moz-appearance: textfield;
+    appearance: textfield;
+    min-width: 64px;
+}
+.sky-survey-row input[type="number"].input-sm::-webkit-outer-spin-button,
+.sky-survey-row input[type="number"].input-sm::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+}
 
 .sky-placeholder {
     position: absolute;
