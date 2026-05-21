@@ -212,6 +212,13 @@ function ninaApp() {
         weather: { forecast: null, loading: false, error: '', lastFetched: null },
         _weatherLastKey: '',
 
+        // Observatory location helpers (Settings → Observatory)
+        obsAddressQuery: '',
+        obsAddressLoading: false,
+        obsAddressError: '',
+        obsAddressResults: [],
+        obsGpsLoading: false,
+
         // Tonight's Best — ranked list from /api/sky/tonights-best, plus
         // a per-name thumbnail cache filled on demand by _kickTonightThumbs.
         tonight: {
@@ -1470,6 +1477,75 @@ function ninaApp() {
             } catch (e) {
                 // Offline or blocked — silent fallback to coords.
             }
+        },
+
+        // ─── Observatory location helpers (Settings → Observatory) ───────
+
+        // Look up the user-typed address via the backend Nominatim proxy
+        // and render the top results as clickable cards. Picking one
+        // writes its lat/lng into settings, persists, and refreshes the
+        // home-page location label.
+        async lookupObservatoryAddress() {
+            const q = (this.obsAddressQuery || '').trim();
+            if (!q) return;
+            this.obsAddressLoading = true;
+            this.obsAddressError = '';
+            this.obsAddressResults = [];
+            try {
+                const r = await this.apiGet(`/api/system/geocode?query=${encodeURIComponent(q)}&limit=5`);
+                this.obsAddressResults = Array.isArray(r) ? r : [];
+                if (!this.obsAddressResults.length) {
+                    this.obsAddressError = 'No matches — try a more specific search (city, state, country).';
+                }
+            } catch (e) {
+                this.obsAddressError = 'Address lookup failed: ' + (e.message || 'unknown error');
+            } finally {
+                this.obsAddressLoading = false;
+            }
+        },
+
+        adoptObservatoryResult(r) {
+            this.settings.latitude  = Number(r.latitude.toFixed(4));
+            this.settings.longitude = Number(r.longitude.toFixed(4));
+            this.obsAddressResults  = [];
+            this.obsAddressQuery    = r.displayName;
+            this.saveSettings();
+            this._refreshLocationLabel();
+        },
+
+        // Use the browser's Geolocation API. Requires user permission
+        // and a secure context (localhost is fine, plain-HTTP LAN
+        // hosts are NOT — modern browsers gate this on https://).
+        useBrowserLocation() {
+            if (!('geolocation' in navigator)) {
+                this.obsAddressError = 'Geolocation is not supported by this browser.';
+                return;
+            }
+            this.obsGpsLoading = true;
+            this.obsAddressError = '';
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    this.settings.latitude  = Number(pos.coords.latitude.toFixed(4));
+                    this.settings.longitude = Number(pos.coords.longitude.toFixed(4));
+                    if (pos.coords.altitude != null) {
+                        this.settings.altitude = Math.round(pos.coords.altitude);
+                    }
+                    this.obsGpsLoading = false;
+                    this.saveSettings();
+                    this._refreshLocationLabel();
+                },
+                (err) => {
+                    this.obsGpsLoading = false;
+                    const map = {
+                        1: 'Permission denied — allow location in the browser address bar.',
+                        2: 'Position unavailable. GPS / Wi-Fi positioning may be off.',
+                        3: 'Timed out waiting for a location fix.'
+                    };
+                    this.obsAddressError = map[err.code]
+                        || ('Geolocation error: ' + err.message);
+                },
+                { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+            );
         },
 
         // ─── Weather forecast (7Timer via /api/weather/forecast) ──────────

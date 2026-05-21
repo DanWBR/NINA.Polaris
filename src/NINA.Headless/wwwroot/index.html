@@ -1941,6 +1941,45 @@
 
                 <div class="settings-section">
                     <h3>Observatory</h3>
+
+                    <!-- Two helpers above the raw lat/lng inputs: address
+                         search (geocoded via Nominatim) and "use my
+                         location" (browser Geolocation API). Both write
+                         directly into settings.latitude / longitude. -->
+                    <div class="obs-location-tools">
+                        <div class="obs-location-row">
+                            <input type="text" class="input-md"
+                                   x-model="obsAddressQuery"
+                                   @keyup.enter="lookupObservatoryAddress()"
+                                   placeholder="Search address or city (e.g. Mossoró, RN, Brazil)"
+                                   style="flex:1">
+                            <button class="btn btn-sm"
+                                    @click="lookupObservatoryAddress()"
+                                    :disabled="obsAddressLoading || !obsAddressQuery">
+                                <span x-show="!obsAddressLoading">Search</span>
+                                <span x-show="obsAddressLoading">…</span>
+                            </button>
+                            <button class="btn btn-sm"
+                                    @click="useBrowserLocation()"
+                                    :disabled="obsGpsLoading"
+                                    title="Use your device's GPS / Wi-Fi positioning">
+                                <span x-show="!obsGpsLoading">📍 Use my location</span>
+                                <span x-show="obsGpsLoading">…</span>
+                            </button>
+                        </div>
+                        <div class="obs-location-error" x-show="obsAddressError" x-text="obsAddressError"></div>
+                        <div class="obs-location-results" x-show="obsAddressResults.length">
+                            <template x-for="r in obsAddressResults" :key="r.displayName">
+                                <button class="obs-location-result"
+                                        @click="adoptObservatoryResult(r)">
+                                    <strong x-text="r.displayName"></strong>
+                                    <span class="muted"
+                                          x-text="r.latitude.toFixed(4) + ', ' + r.longitude.toFixed(4)"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+
                     <label>Latitude<input type="number" x-model.number="settings.latitude" step="0.001" class="input-md"></label>
                     <label>Longitude<input type="number" x-model.number="settings.longitude" step="0.001" class="input-md"></label>
                     <label>Altitude (m)<input type="number" x-model.number="settings.altitude" step="1" class="input-sm"></label>

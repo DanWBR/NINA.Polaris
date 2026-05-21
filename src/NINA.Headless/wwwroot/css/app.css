@@ -3023,3 +3023,46 @@ select.input-sm {
     .tonight-compass { grid-area: compass; }
     .tonight-actions { grid-area: actions; justify-content: flex-end; }
 }
+
+/* Observatory location helpers — address search + Use my location */
+.obs-location-tools {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+.obs-location-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.obs-location-error {
+    font-size: 11px;
+    color: #ffb74d;
+}
+.obs-location-results {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px;
+}
+.obs-location-result {
+    text-align: left;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    padding: 6px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.obs-location-result:hover {
+    background: rgba(33, 150, 243, 0.12);
+}
