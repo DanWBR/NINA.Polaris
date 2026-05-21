@@ -68,6 +68,56 @@ html, body {
     color: var(--text-muted);
 }
 
+/* New brand block — star icon + gradient wordmark + pill + version. */
+.brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    color: inherit;
+    padding: 2px 4px;
+    border-radius: 6px;
+    transition: background 0.12s ease;
+}
+.brand:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+.brand-mark {
+    width: 22px;
+    height: 22px;
+    fill: var(--accent);
+    filter: drop-shadow(0 0 4px rgba(33, 150, 243, 0.5));
+    flex-shrink: 0;
+}
+.brand-name {
+    font-weight: 800;
+    font-size: 17px;
+    letter-spacing: 2.5px;
+    line-height: 1;
+    background: linear-gradient(90deg, #4fc3f7 0%, #2196f3 60%, #7e57c2 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+}
+.brand-tag {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: var(--accent);
+    padding: 2px 6px;
+    border: 1px solid rgba(33, 150, 243, 0.4);
+    border-radius: 4px;
+    line-height: 1;
+    background: rgba(33, 150, 243, 0.08);
+}
+.brand-version {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    margin-left: -2px;
+}
+
 .status-bar-right {
     display: flex;
     align-items: center;

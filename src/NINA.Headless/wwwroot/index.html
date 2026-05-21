@@ -18,8 +18,17 @@
     <!-- Status Bar -->
     <header class="status-bar">
         <div class="status-bar-left">
-            <span class="logo">NINA</span>
-            <span class="version">Headless v0.1</span>
+            <a href="#" @click.prevent="tab='home'" class="brand" title="Home">
+                <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+                    <!-- Four-point star "twinkle" -->
+                    <path d="M12 2 L13.5 10.5 L22 12 L13.5 13.5 L12 22 L10.5 13.5 L2 12 L10.5 10.5 Z"/>
+                    <circle cx="19" cy="5" r="1.2" opacity="0.9"/>
+                    <circle cx="5" cy="18" r="0.8" opacity="0.7"/>
+                </svg>
+                <span class="brand-name">NINA</span>
+                <span class="brand-tag">HEADLESS</span>
+                <span class="brand-version">v0.1</span>
+            </a>
         </div>
         <div class="status-bar-right">
             <!-- Discovery / connection method badges. Click to jump to the
