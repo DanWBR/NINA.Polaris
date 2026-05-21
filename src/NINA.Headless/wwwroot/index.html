@@ -10,6 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
     <link rel="stylesheet" href="/css/app.css">
+    <link rel="stylesheet" href="/js/lib/celestial/celestial.css">
     <link rel="stylesheet" href="/css/night-mode.css">
 </head>
 <body x-data="ninaApp()" x-init="init()">
@@ -1123,11 +1124,11 @@
                     </template>
                 </div>
 
-                <canvas id="sky-viewer-canvas" class="sky-viewer"
-                        style="display:block;width:100%;cursor:crosshair"></canvas>
+                <!-- d3-celestial renders into this div. Sized via the .sky-viewer CSS rule. -->
+                <div id="celestial-map" class="sky-viewer"></div>
                 <div class="sky-survey-row">
                     <label>FOV
-                        <input type="number" class="input-sm" x-model.number="aladinFov" min="0.5" max="180" step="1"
+                        <input type="number" class="input-sm" x-model.number="aladinFov" min="1" max="180" step="1"
                                @change="setSkyFov()">°
                     </label>
                     <label class="seq-dither-checkbox">
@@ -1135,9 +1136,8 @@
                         Show camera FOV
                     </label>
                     <button class="btn btn-sm" @click="skyGoToMount()" :disabled="!mount.connected">Center on mount</button>
-                    <button class="btn btn-sm" @click="skyLoadDsoMarkers()" title="Load nearby DSO markers from catalog">Load DSOs</button>
                     <span class="muted" style="font-size:11px;margin-left:auto">
-                        Offline starfield — drag to pan, wheel to zoom, click to set target
+                        Offline sky — d3-celestial (Hipparcos + DSO + Milky Way), drag to pan, click to set target
                     </span>
                 </div>
 
@@ -1871,8 +1871,9 @@
     <script src="/js/lib/chart.umd.min.js"></script>
     <script src="/js/lib/openseadragon/openseadragon.min.js"></script>
     <script src="/js/lib/sortable.min.js"></script>
-    <script src="/js/lib/bright-stars.js"></script>
-    <script src="/js/sky-viewer.js"></script>
+    <script src="/js/lib/celestial/d3.min.js"></script>
+    <script src="/js/lib/celestial/d3.geo.projection.min.js"></script>
+    <script src="/js/lib/celestial/celestial.min.js"></script>
     <script src="/js/lib/alpine.min.js" defer></script>
     <script src="/js/app.js"></script>
 </body>

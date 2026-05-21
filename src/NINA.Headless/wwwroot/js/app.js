@@ -205,10 +205,11 @@ function ninaApp() {
         atlasTypes: [],
         altitudeData: null,
 
-        // Offline canvas-based Sky Viewer
-        // (state field names kept with the aladin* prefix for x-model bindings
-        // that already exist in the markup — purely cosmetic)
-        skyViewer: null,
+        // d3-celestial Sky Viewer (offline, BSD-3-Clause).
+        // _celestialReady is set once Celestial.display() succeeds; other
+        // bits (aladin* names kept for backwards-compat with x-model bindings).
+        _celestialReady: false,
+        _fovLayerId: null,
         aladinFov: 90,                  // initial FOV in degrees (wide field)
         aladinShowFov: true,             // toggle camera-FOV overlay
 
@@ -1041,78 +1042,176 @@ function ninaApp() {
             }
         },
 
-        // ---- Offline canvas-based Sky Viewer ----
+        // ---- d3-celestial Sky Viewer (offline, BSD-3) ----
+        // Renders Hipparcos catalogue (mag ≤ 6), Stellarium constellation lines,
+        // Milky Way contours, and a Messier+NGC DSO overlay. Everything is
+        // bundled under /js/lib/celestial — zero network required.
 
         initSkyViewer() {
-            // Lazy init: only when the Sky tab is visible AND the canvas has
-            // non-zero CSS dimensions. Retries on next tick if not yet sized.
-            if (this.skyViewer) {
-                // Already created — just trigger a redraw in case the pane resized
-                this.skyViewer.redraw();
+            if (this._celestialReady) {
+                Celestial.resize();
                 return;
             }
-            const canvas = document.getElementById('sky-viewer-canvas');
-            if (!canvas) return;
-            const rect = canvas.getBoundingClientRect();
-            if (rect.width === 0 || rect.height === 0) {
+            const el = document.getElementById('celestial-map');
+            if (!el || el.clientWidth === 0 || el.clientHeight === 0) {
                 setTimeout(() => this.initSkyViewer(), 100);
                 return;
             }
-            // Give the canvas an explicit height (it's inside a flex column so
-            // it'd otherwise collapse to its content)
-            if (!canvas.style.height) canvas.style.height = '500px';
+            if (typeof Celestial === 'undefined') {
+                setTimeout(() => this.initSkyViewer(), 200);
+                return;
+            }
             try {
-                this.skyViewer = new OfflineSkyViewer(canvas, {
-                    centerRaHours: this.mount.ra ?? 0,
-                    centerDecDeg:  this.mount.dec ?? 0,
-                    fovDeg: this.aladinFov || 90,
-                    onClick: (raHours, decDeg) => {
+                const fovDeg = Math.max(1, Math.min(180, this.aladinFov || 90));
+                Celestial.display({
+                    container: 'celestial-map',
+                    datapath: '/js/lib/celestial/data/',
+                    width: el.clientWidth,
+                    projection: 'stereographic',
+                    transform: 'equatorial',
+                    follow: 'center',
+                    zoomlevel: null,
+                    zoomextend: 10,
+                    interactive: true,
+                    form: false,
+                    location: false,
+                    controls: true,
+                    advanced: false,
+                    disableAnimations: true,
+                    background: { fill: '#0b1226', stroke: '#1f2a44', opacity: 1 },
+                    stars: { show: true, limit: 6, colors: true, designation: false,
+                             designationStyle: { fill: '#888', font: '10px sans-serif' },
+                             propername: true, propernameType: 'name',
+                             propernameStyle: { fill: '#bcd', font: '11px sans-serif', align: 'left', baseline: 'top' },
+                             propernameLimit: 2.5,
+                             size: 7, exponent: -0.28, data: 'stars.6.json' },
+                    dsos: { show: true, limit: 6, names: true,
+                            namesType: 'name', nameLimit: 6,
+                            namesStyle: { fill: '#cca', font: '10px sans-serif', align: 'left', baseline: 'top' },
+                            data: 'dsos.bright.json' },
+                    constellations: { show: true,
+                                      names: true, namesType: 'iau',
+                                      nameStyle: { fill: '#cce', align: 'center', baseline: 'middle', font: '12px sans-serif', opacity: 0.7 },
+                                      lines: true,
+                                      lineStyle: { stroke: '#cccccc', width: 1.2, opacity: 0.45 } },
+                    mw: { show: true, style: { fill: '#ffffff', opacity: 0.12 } },
+                    lines: {
+                        graticule: { show: true, stroke: '#506080', width: 0.6, opacity: 0.5,
+                                     lon: { pos: ['center'], fill: '#aac', font: '10px sans-serif' },
+                                     lat: { pos: ['center'], fill: '#aac', font: '10px sans-serif' } },
+                        equatorial: { show: true, stroke: '#aaffaa', width: 1, opacity: 0.4 },
+                        ecliptic:   { show: true, stroke: '#ffcc66', width: 1, opacity: 0.4 },
+                        galactic:   { show: false }
+                    },
+                    horizon: { show: false }
+                });
+
+                // Initial centring on mount/target. d3-celestial expects [lon, lat]
+                // where lon = RA degrees (0-360, wrapping).
+                this.skyGoToMount();
+                this.setSkyFov();
+                this.updateSkyCameraFov();
+
+                // Click-to-pick: convert mouse position to celestial coords via
+                // the projection's invert and update the host target.
+                const svg = el.querySelector('svg');
+                if (svg) {
+                    svg.addEventListener('click', (e) => {
+                        const rect = svg.getBoundingClientRect();
+                        const x = e.clientX - rect.left;
+                        const y = e.clientY - rect.top;
+                        const coords = Celestial.mapProjection.invert([x, y]);
+                        if (!coords || isNaN(coords[0])) return;
+                        // coords = [raDeg, decDeg]
+                        let raHours = coords[0] / 15;
+                        if (raHours < 0) raHours += 24;
+                        const decDeg = coords[1];
                         this.skyTarget = {
                             name: `RA ${raHours.toFixed(3)}h Dec ${decDeg.toFixed(2)}°`,
                             ra: raHours, dec: decDeg, type: 'click', magnitude: ''
                         };
-                        this.skyViewer.setTarget({ raHours, decDeg, name: this.skyTarget.name });
-                    }
+                    });
+                }
+
+                // Auto-resize when parent layout shifts
+                window.addEventListener('resize', () => {
+                    try { Celestial.resize({ width: el.clientWidth }); } catch {}
                 });
-                this.updateSkyCameraFov();
-                console.log('Offline SkyViewer ready');
+
+                this._celestialReady = true;
+                console.log('d3-celestial ready');
             } catch (e) {
-                console.error('SkyViewer init failed', e);
+                console.error('d3-celestial init failed', e);
             }
         },
 
         setSkyFov() {
-            if (this.skyViewer) this.skyViewer.setFov(this.aladinFov);
+            if (!this._celestialReady) return;
+            // d3-celestial 'zoomlevel' isn't a public FOV setter; the cleanest
+            // way to set field is to reconfigure with a new 'center' that
+            // implies a zoom. We use Celestial.zoomBy with a heuristic
+            // converting degrees → zoom multiplier (max FOV ~180° → zoom 1).
+            const fov = Math.max(1, Math.min(180, this.aladinFov || 90));
+            try {
+                const targetZoom = Math.max(1, 180 / fov);
+                Celestial.zoomBy(targetZoom / Celestial.zoomBy());
+            } catch {}
         },
 
         skyGoToMount() {
-            if (!this.skyViewer || this.mount.ra == null || this.mount.dec == null) return;
-            this.skyViewer.setCenter(this.mount.ra, this.mount.dec);
+            if (!this._celestialReady) return;
+            const ra  = this.mount?.ra  ?? (this.skyTarget?.ra)  ?? 0;
+            const dec = this.mount?.dec ?? (this.skyTarget?.dec) ?? 0;
+            try {
+                Celestial.rotate({ center: [ra * 15, dec, 0] });
+            } catch {}
         },
 
         updateSkyCameraFov() {
-            if (!this.skyViewer) return;
-            this.skyViewer.setCameraFov(this.aladinShowFov
-                ? { widthDeg: this.fov.width, heightDeg: this.fov.height }
-                : null);
-        },
-
-        async skyLoadDsoMarkers() {
-            // Pulls the catalog (filtered to mag <= 10 by default) and feeds the
-            // markers to the viewer. Works fully offline since the DSO catalog
-            // is server-side embedded.
-            if (!this.skyViewer) return;
-            try {
-                const r = await this.apiGet('/api/sky/catalog/filter?maxMag=10&limit=300');
-                const list = (r.results || r || []).map(o => ({
-                    ra: o.ra ?? o.raHours, dec: o.dec ?? o.decDeg,
-                    name: o.name, type: o.type, magnitude: o.magnitude
-                }));
-                this.skyViewer.setDsoMarkers(list);
-                this.toast(`Loaded ${list.length} DSO markers`, 'ok');
-            } catch (e) {
-                this.toast('DSO markers failed: ' + e.message, 'error');
+            if (!this._celestialReady) return;
+            // Camera-FOV rectangle is drawn as a custom JSON object added to the
+            // map (d3-celestial supports user-supplied GeoJSON layers).
+            // Clear any previous overlay then add the new one centred on the
+            // current target.
+            if (!this.aladinShowFov || !this.skyTarget) {
+                if (this._fovLayerId) try { Celestial.remove(this._fovLayerId); } catch {}
+                this._fovLayerId = null;
+                Celestial.redraw();
+                return;
             }
+            const ra  = this.skyTarget.ra ?? this.skyTarget.raHours;
+            const dec = this.skyTarget.dec ?? this.skyTarget.decDeg;
+            if (ra == null || dec == null) return;
+            const w = this.fov.width / 2;
+            const h = this.fov.height / 2;
+            const cosDec = Math.cos(dec * Math.PI / 180) || 1e-6;
+            const raDeg = ra * 15;
+            const ring = [
+                [raDeg - w / cosDec, dec - h], [raDeg + w / cosDec, dec - h],
+                [raDeg + w / cosDec, dec + h], [raDeg - w / cosDec, dec + h],
+                [raDeg - w / cosDec, dec - h]
+            ];
+            const geo = {
+                type: 'FeatureCollection',
+                features: [{ type: 'Feature', properties: { name: 'FOV' },
+                             geometry: { type: 'LineString', coordinates: ring } }]
+            };
+            try {
+                Celestial.add({
+                    type: 'line',
+                    callback: (err, json) => Celestial.container.selectAll('.fov').remove(),
+                    redraw: () => {
+                        Celestial.container.selectAll('.fov').remove();
+                        Celestial.container.selectAll('.fov')
+                            .data(geo.features).enter().append('path')
+                            .attr('class', 'fov')
+                            .attr('d', Celestial.map(geo))
+                            .style('stroke', '#22c55e').style('stroke-width', 2)
+                            .style('fill', 'none');
+                    }
+                });
+                Celestial.redraw();
+            } catch (e) { console.warn('FOV overlay failed', e); }
         },
 
         // Pixel readout: convert mouse event coords to source-image coords +
@@ -1392,15 +1491,16 @@ function ninaApp() {
             });
         },
 
-        // When a sky target is selected via search, also re-center the sky
-        // viewer on it and update its reticle marker.
+        // When a sky target is selected via search, also re-center the celestial
+        // map on it. The FOV overlay redraws automatically since it reads from
+        // this.skyTarget on each updateSkyCameraFov() call.
         _goToSelectedTarget() {
-            if (!this.skyViewer || !this.skyTarget) return;
+            if (!this._celestialReady || !this.skyTarget) return;
             const ra = this.skyTarget.ra ?? this.skyTarget.raHours;
             const dec = this.skyTarget.dec ?? this.skyTarget.decDeg;
             if (ra == null || dec == null) return;
-            this.skyViewer.setCenter(ra, dec);
-            this.skyViewer.setTarget({ raHours: ra, decDeg: dec, name: this.skyTarget.name });
+            try { Celestial.rotate({ center: [ra * 15, dec, 0] }); } catch {}
+            this.updateSkyCameraFov();
         },
 
         async loadMfSettings() {
@@ -3729,10 +3829,40 @@ function ninaApp() {
         },
 
         _mosaicDrawOverlay(plan) {
-            // Hand the plan to the offline SkyViewer — it knows how to render
-            // each panel as a polygon in the same stereographic projection it
-            // uses for stars/grid.
-            if (this.skyViewer) this.skyViewer.setMosaic(plan);
+            // Add a GeoJSON polyline-per-panel overlay to d3-celestial. Each
+            // panel becomes one LineString in equatorial coords. The overlay
+            // is keyed by .mosaic so subsequent re-draws replace it cleanly.
+            if (!this._celestialReady || !plan?.panels) return;
+            const halfW = plan.panelFovWidthDeg / 2;
+            const halfH = plan.panelFovHeightDeg / 2;
+            const features = plan.panels.map(p => {
+                const raDeg = p.raHours * 15;
+                const cosDec = Math.cos(p.decDeg * Math.PI / 180) || 1e-6;
+                const ring = [
+                    [raDeg - halfW/cosDec, p.decDeg - halfH],
+                    [raDeg + halfW/cosDec, p.decDeg - halfH],
+                    [raDeg + halfW/cosDec, p.decDeg + halfH],
+                    [raDeg - halfW/cosDec, p.decDeg + halfH],
+                    [raDeg - halfW/cosDec, p.decDeg - halfH]
+                ];
+                return { type: 'Feature', properties: { name: p.name },
+                         geometry: { type: 'LineString', coordinates: ring } };
+            });
+            try {
+                Celestial.add({
+                    type: 'line',
+                    redraw: () => {
+                        Celestial.container.selectAll('.mosaic').remove();
+                        Celestial.container.selectAll('.mosaic')
+                            .data(features).enter().append('path')
+                            .attr('class', 'mosaic')
+                            .attr('d', f => Celestial.map({ type: 'FeatureCollection', features: [f] }))
+                            .style('stroke', '#fbbf24').style('stroke-width', 1.5)
+                            .style('fill', 'none');
+                    }
+                });
+                Celestial.redraw();
+            } catch (e) { console.warn('Mosaic overlay failed', e); }
         },
 
         mosaicTimeFormat(seconds) {
