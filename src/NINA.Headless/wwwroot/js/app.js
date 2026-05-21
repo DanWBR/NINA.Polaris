@@ -1102,6 +1102,14 @@ function ninaApp() {
                 // only the middle band of the sphere.
                 const renderSize = Math.max(300, el.clientWidth);
 
+                // Compute the initial centre so that whatever point we want
+                // to be "in the middle of the visible viewport" is passed
+                // to Celestial at display() time. Calling rotate() AFTER
+                // display() is racy and silently fails near the celestial
+                // poles, so we set centre up-front and avoid the exact
+                // pole singularity by clamping to ±89.5°.
+                const initialCentre = this._computeInitialCentre(lat, lng);
+
                 Celestial.display({
                     container: 'celestial-map',
                     datapath: '/js/lib/celestial/data/',
@@ -1112,6 +1120,7 @@ function ninaApp() {
                     projection: 'stereographic',
                     transform: isLive ? 'equatorial' : 'equatorial',
                     follow: 'center',
+                    center: initialCentre,
                     // In horizontal mode we centre on the zenith for that lat/lng
                     // at the current UTC time, then rotate so North is up.
                     geopos: [lat, lng],
@@ -1163,7 +1172,13 @@ function ninaApp() {
                     // change with time so we don't need to re-render those.
                     try { Celestial.date(new Date()); } catch {}
                 }
-                this._centreInitial(lat, lng);
+                // Re-apply the centre after display() — belt-and-braces
+                // against any internal reset during initial draw. Wrapped
+                // in a microtask so it runs after Celestial finishes its
+                // synchronous initialisation.
+                Promise.resolve().then(() => {
+                    try { Celestial.rotate({ center: initialCentre }); } catch {}
+                });
                 if (isLive) this._startSkyTicker(lat, lng);
 
                 this.setSkyFov();
@@ -1211,18 +1226,21 @@ function ninaApp() {
             try { Celestial.rotate({ center: [raDeg, lat, 0] }); } catch {}
         },
 
-        // Initial centring: if a mount is connected and reporting coords,
-        // sync to it; otherwise point at the celestial pole appropriate for
-        // the observer's hemisphere (north pole if lat >= 0, south otherwise).
-        _centreInitial(lat, lng) {
+        // Returns the [lonDeg, latDeg, orientationDeg] tuple to use as the
+        // projection centre on initial load. If a mount is connected and
+        // reporting coords, follow it; otherwise point at the celestial
+        // pole appropriate for the observer's hemisphere (clamped to
+        // ±89.5° to avoid d3.geo's pole singularity, which would otherwise
+        // cause rotate() to silently no-op and leave the view stuck at
+        // wherever the projection initialised).
+        _computeInitialCentre(lat, lng) {
             const mountRa = this.mount?.ra;
             const mountDec = this.mount?.dec;
             if (this.mount?.connected && mountRa != null && mountDec != null) {
-                try { Celestial.rotate({ center: [mountRa * 15, mountDec, 0] }); } catch {}
-                return;
+                return [mountRa * 15, mountDec, 0];
             }
-            const poleDec = lat >= 0 ? 90 : -90;
-            try { Celestial.rotate({ center: [0, poleDec, 0] }); } catch {}
+            const poleDec = lat >= 0 ? 89.5 : -89.5;
+            return [0, poleDec, 0];
         },
 
         // Meeus low-precision LST (good to a few seconds — fine for orientation).
