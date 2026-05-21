@@ -1158,16 +1158,13 @@ function ninaApp() {
                 });
 
                 if (isLive) {
-                    // Push the current UTC date into Celestial, then point the
-                    // centre at the zenith — that's the most natural live view.
-                    const now = new Date();
-                    try { Celestial.date(now); } catch {}
-                    this._centreOnZenith(lat, lng, now);
-                    this._startSkyTicker(lat, lng);
-                } else {
-                    // Equatorial: centre on mount / target / origin.
-                    this.skyGoToMount();
+                    // Push the current UTC date into Celestial so horizon,
+                    // sun and moon positions are accurate. Star RA/Dec don't
+                    // change with time so we don't need to re-render those.
+                    try { Celestial.date(new Date()); } catch {}
                 }
+                this._centreInitial(lat, lng);
+                if (isLive) this._startSkyTicker(lat, lng);
 
                 this.setSkyFov();
                 this.updateSkyCameraFov();
@@ -1214,6 +1211,20 @@ function ninaApp() {
             try { Celestial.rotate({ center: [raDeg, lat, 0] }); } catch {}
         },
 
+        // Initial centring: if a mount is connected and reporting coords,
+        // sync to it; otherwise point at the celestial pole appropriate for
+        // the observer's hemisphere (north pole if lat >= 0, south otherwise).
+        _centreInitial(lat, lng) {
+            const mountRa = this.mount?.ra;
+            const mountDec = this.mount?.dec;
+            if (this.mount?.connected && mountRa != null && mountDec != null) {
+                try { Celestial.rotate({ center: [mountRa * 15, mountDec, 0] }); } catch {}
+                return;
+            }
+            const poleDec = lat >= 0 ? 90 : -90;
+            try { Celestial.rotate({ center: [0, poleDec, 0] }); } catch {}
+        },
+
         // Meeus low-precision LST (good to a few seconds — fine for orientation).
         _localSiderealTime(utc, longitudeDeg) {
             const jd = utc.getTime() / 86400000 + 2440587.5;
@@ -1229,12 +1240,21 @@ function ninaApp() {
             // Refresh the sky every 30 s — stars drift ~0.125° in that window
             // which is barely visible at FOV ≥ 30°. Adjust if you want it
             // smoother (5 s is plenty cheap, but burns more CPU).
+            //
+            // We deliberately do NOT re-centre on the zenith here — that would
+            // override whatever the user panned to. If a mount is connected
+            // and reporting coordinates, follow it; otherwise just advance the
+            // date layer so star/planet positions stay current.
             this._stopSkyTicker();
             this._skyTicker = setInterval(() => {
                 if (this.tab !== 'sky') return; // pause when hidden
                 const now = new Date();
                 try { Celestial.date(now); } catch {}
-                this._centreOnZenith(lat, lng, now);
+                const mountRa = this.mount?.ra;
+                const mountDec = this.mount?.dec;
+                if (this.mount?.connected && mountRa != null && mountDec != null) {
+                    try { Celestial.rotate({ center: [mountRa * 15, mountDec, 0] }); } catch {}
+                }
                 this._updateSkyClock();
             }, 30_000);
             this._updateSkyClock();
