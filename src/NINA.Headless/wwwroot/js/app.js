@@ -3696,13 +3696,26 @@ function ninaApp() {
             return !!this.alpaca.connected[`${srv.host}:${srv.port}:${d.deviceType}:${d.deviceNumber}`];
         },
 
+        // Maps Alpaca's DeviceType (PascalCase, e.g. "FilterWheel") to the
+        // URL slug we registered under /api/alpaca/{slug}/...
+        _alpacaPathFor(deviceType) {
+            const t = (deviceType || '').toLowerCase();
+            return ({
+                camera: 'camera',
+                telescope: 'telescope',
+                focuser: 'focuser',
+                filterwheel: 'filterwheel',
+                rotator: 'rotator',
+                dome: 'dome',
+                covercalibrator: 'covercalibrator',
+                observingconditions: 'observingconditions'
+            })[t] || null;
+        },
+
         async alpacaConnectDevice(srv, d) {
-            const type = (d.deviceType || '').toLowerCase();
-            const path = type === 'camera' ? 'camera'
-                       : type === 'telescope' ? 'telescope'
-                       : null;
+            const path = this._alpacaPathFor(d.deviceType);
             if (!path) {
-                this.toast(`Direct connect for "${d.deviceType}" not wired yet — POST /api/alpaca/${type}/connect is the pattern; copy it for the rest.`, 'warn');
+                this.toast(`No connect endpoint for "${d.deviceType}" yet`, 'warn');
                 return;
             }
             const already = this.alpacaIsConnected(srv, d);
@@ -3718,10 +3731,7 @@ function ninaApp() {
         },
 
         async alpacaProbe(srv, d) {
-            const type = (d.deviceType || '').toLowerCase();
-            const path = type === 'camera' ? 'camera'
-                       : type === 'telescope' ? 'telescope'
-                       : null;
+            const path = this._alpacaPathFor(d.deviceType);
             if (!path) {
                 srv._probe = `No probe endpoint for ${d.deviceType} yet.`;
                 return;
