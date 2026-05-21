@@ -182,7 +182,25 @@ public class CelestialImageService {
         var allowed = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
         if (!allowed.Contains(entry.LocalFileExt.ToLowerInvariant())) return null;
         var path = Path.Combine(_cacheDir, slug + entry.LocalFileExt);
-        return File.Exists(path) ? path : null;
+        if (File.Exists(path)) return path;
+
+        // The in-memory entry says LocalFileExt=X but the file isn't
+        // there at that extension. Could be a stale session entry from
+        // before the disk download succeeded. Re-read the disk JSON and
+        // try again with whatever extension it now records.
+        var jsonReload = Path.Combine(_cacheDir, slug + ".json");
+        if (File.Exists(jsonReload)) {
+            try {
+                var disk = JsonSerializer.Deserialize<CelestialImage>(File.ReadAllText(jsonReload));
+                if (disk?.LocalFileExt != null
+                    && allowed.Contains(disk.LocalFileExt.ToLowerInvariant())) {
+                    _mem[slug] = disk;
+                    var diskPath = Path.Combine(_cacheDir, slug + disk.LocalFileExt);
+                    if (File.Exists(diskPath)) return diskPath;
+                }
+            } catch { /* fall through */ }
+        }
+        return null;
     }
 
     private async Task<string?> TryDownloadThumbAsync(string url, string slug, CancellationToken ct) {
