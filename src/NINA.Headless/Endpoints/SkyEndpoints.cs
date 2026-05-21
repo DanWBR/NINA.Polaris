@@ -201,6 +201,49 @@ public static class SkyEndpoints {
             return Results.Ok(img);
         });
 
+        // Serve a cached thumbnail blob from disk. Pairs with the
+        // pre-fetch endpoint to give the UI a fully-offline catalogue:
+        // the UI can prefer /api/sky/image/file/{slug} over the remote
+        // URL and never hit NASA / Wikipedia at view time.
+        group.MapGet("/image/file/{slug}", (string slug, CelestialImageService svc) => {
+            var path = svc.GetLocalFilePath(slug);
+            if (path == null) return Results.NotFound();
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            var mime = ext switch {
+                ".png"  => "image/png",
+                ".gif"  => "image/gif",
+                ".webp" => "image/webp",
+                _       => "image/jpeg"
+            };
+            return Results.File(path, mime);
+        });
+
+        // Walk the local DSO catalogue + Moon + planets + curated comets
+        // and warm the on-disk image cache for each. After this runs,
+        // the Tonight tab works fully offline. Sequential lookups —
+        // takes a couple of minutes on first run, then is instant.
+        group.MapPost("/image/prefetch", async (
+            CelestialImageService imgs,
+            SkyCatalogService catalog,
+            CometEphemerisService comets,
+            CancellationToken ct) => {
+            var names = new List<string>();
+            // DSOs: prefer the common name (better hit rate on NASA),
+            // also include the catalogue code so both cache files exist
+            // and the frontend's two-shot lookup always finds something.
+            foreach (var dso in catalog.AllObjects) {
+                if (!string.IsNullOrEmpty(dso.CommonName)) names.Add(dso.CommonName);
+                names.Add(dso.Name);
+            }
+            names.AddRange(new[] {
+                "Moon",
+                "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune"
+            });
+            foreach (var c in comets.AllComets) names.Add(c.Name);
+            var summary = await imgs.PrefetchAsync(names, ct);
+            return Results.Ok(summary);
+        });
+
         // Ranked list of objects best positioned for observation tonight
         // from the active profile's location. Includes DSOs (from the
         // local catalog) + Moon + visible planets.

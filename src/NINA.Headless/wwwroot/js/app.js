@@ -1867,15 +1867,45 @@ function ninaApp() {
                     } catch { /* keep trying remaining variants */ }
                 }
 
+                // Prefer the local cached-on-disk URL when the backend
+                // downloaded the bytes (PrefetchAsync or a previous
+                // lazy fetch). Falls back to the remote NASA/Wikipedia
+                // URL if local isn't available, so even un-prefetched
+                // sessions keep working with internet.
                 this.tonight.thumbs = {
                     ...this.tonight.thumbs,
                     [item.name]: found ? {
-                        url:     found.thumbnailUrl,
+                        url:     found.localUrl || found.thumbnailUrl,
                         title:   found.title,
                         credit:  found.credit,
                         missing: false
                     } : { url: null, missing: true }
                 };
+            }
+        },
+
+        // Trigger the prefetch endpoint that walks the whole catalogue +
+        // planets + comets and downloads every thumbnail to the backend's
+        // disk cache. After this completes, the Tonight tab works fully
+        // offline. Surfaced from the Settings page as a one-click action.
+        async prefetchCelestialImages() {
+            if (this.tonight._prefetching) return;
+            this.tonight._prefetching = true;
+            try {
+                this.toast?.('Downloading object thumbnails — may take a couple of minutes…', 'info');
+                const r = await this.apiPost('/api/sky/image/prefetch', {});
+                this.toast?.(
+                    `Prefetch done · ${r.foundCount}/${r.attemptedCount} images, ` +
+                    `${(r.downloadedBytes / 1024 / 1024).toFixed(1)} MB downloaded`,
+                    'ok'
+                );
+                // Force a thumb re-fetch on next Tonight tab open so the
+                // local URLs (where available) get picked up.
+                this.tonight.thumbs = {};
+            } catch (e) {
+                this.toast?.('Prefetch failed: ' + (e.message || 'unknown error'), 'error');
+            } finally {
+                this.tonight._prefetching = false;
             }
         },
 

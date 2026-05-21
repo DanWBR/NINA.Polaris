@@ -1374,6 +1374,12 @@
                           x-show="tonight.lastFetched"
                           x-text="'Updated ' + tonight.lastFetched?.toLocaleTimeString()"></span>
                     <button class="btn btn-sm" @click="loadTonightsBest(true)" :disabled="tonight.loading">Refresh</button>
+                    <button class="btn btn-sm" @click="prefetchCelestialImages()"
+                            :disabled="tonight._prefetching"
+                            title="Download every object's thumbnail to local cache for offline use">
+                        <span x-show="!tonight._prefetching">⇩ Prefetch images</span>
+                        <span x-show="tonight._prefetching">Downloading…</span>
+                    </button>
                 </div>
 
                 <!-- Error / no-location -->

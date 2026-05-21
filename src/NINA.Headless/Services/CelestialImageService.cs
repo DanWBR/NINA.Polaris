@@ -90,7 +90,23 @@ public class CelestialImageService {
             result = CelestialImage.NotAvailable("Lookup failed");
         }
 
-        result = result with { FetchedAt = DateTime.UtcNow, SchemaVersion = CacheSchemaVersion };
+        // Download the thumbnail bytes too. With offline-mode in mind
+        // (RPi at a dark-sky site without internet), having the actual
+        // JPEG on disk lets the UI serve them via /api/sky/image/file/
+        // {slug} instead of relying on NASA / Wikipedia CDNs at view
+        // time. Best-effort: a failed download doesn't poison the
+        // metadata entry, the URL is still usable when online.
+        string? localExt = null;
+        if (result.Available && !string.IsNullOrEmpty(result.ThumbnailUrl)) {
+            localExt = await TryDownloadThumbAsync(result.ThumbnailUrl, slug, ct);
+        }
+
+        result = result with {
+            FetchedAt     = DateTime.UtcNow,
+            SchemaVersion = CacheSchemaVersion,
+            LocalFileExt  = localExt,
+            LocalUrl      = localExt != null ? $"/api/sky/image/file/{slug}" : null
+        };
         _mem[slug] = result;
         try {
             await File.WriteAllTextAsync(path, JsonSerializer.Serialize(result), ct);
@@ -98,6 +114,87 @@ public class CelestialImageService {
             _logger.LogDebug(ex, "Could not persist cache file {Path}", path);
         }
         return result;
+    }
+
+    /// <summary>
+    /// Iterate a set of names and warm the cache for each. Used by the
+    /// prefetch endpoint to build a fully-offline catalogue of object
+    /// thumbnails. Sequential (one request per second-ish, throttled by
+    /// HTTP latency) to be polite to NASA / Wikipedia.
+    /// </summary>
+    public async Task<PrefetchSummary> PrefetchAsync(IEnumerable<string> names, CancellationToken ct = default) {
+        var attempted = 0;
+        var found = 0;
+        var missing = 0;
+        var alreadyCached = 0;
+        var bytes = 0L;
+        foreach (var n in names.Distinct(StringComparer.OrdinalIgnoreCase)) {
+            if (ct.IsCancellationRequested) break;
+            attempted++;
+            var slug = Slugify(n);
+            var beforePath = Path.Combine(_cacheDir, slug + ".json");
+            var wasCached = File.Exists(beforePath);
+            var r = await GetImageAsync(n, ct);
+            if (r.Available) {
+                found++;
+                if (!wasCached && !string.IsNullOrEmpty(r.LocalFileExt)) {
+                    var localPath = Path.Combine(_cacheDir, slug + r.LocalFileExt);
+                    if (File.Exists(localPath)) bytes += new FileInfo(localPath).Length;
+                } else if (wasCached) {
+                    alreadyCached++;
+                }
+            } else {
+                missing++;
+            }
+        }
+        return new PrefetchSummary(attempted, found, missing, alreadyCached, bytes);
+    }
+
+    /// <summary>
+    /// Path to the local JPEG/PNG for a slug, or null if we haven't
+    /// downloaded one. Used by the static-file endpoint.
+    /// </summary>
+    public string? GetLocalFilePath(string slug) {
+        if (string.IsNullOrWhiteSpace(slug)) return null;
+        // Whitelist: slug came from Slugify which is alphanum-only,
+        // so no traversal risk; but extension comes from the cached
+        // entry, restrict to a known set.
+        if (!_mem.TryGetValue(slug, out var entry)) {
+            // Try loading from disk first
+            var jsonPath = Path.Combine(_cacheDir, slug + ".json");
+            if (File.Exists(jsonPath)) {
+                try {
+                    entry = JsonSerializer.Deserialize<CelestialImage>(File.ReadAllText(jsonPath));
+                    if (entry != null) _mem[slug] = entry;
+                } catch { return null; }
+            }
+        }
+        if (entry?.LocalFileExt == null) return null;
+        var allowed = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+        if (!allowed.Contains(entry.LocalFileExt.ToLowerInvariant())) return null;
+        var path = Path.Combine(_cacheDir, slug + entry.LocalFileExt);
+        return File.Exists(path) ? path : null;
+    }
+
+    private async Task<string?> TryDownloadThumbAsync(string url, string slug, CancellationToken ct) {
+        try {
+            using var resp = await Http.GetAsync(url, ct);
+            if (!resp.IsSuccessStatusCode) return null;
+            var ct2 = resp.Content.Headers.ContentType?.MediaType ?? "image/jpeg";
+            var ext = ct2 switch {
+                "image/png"  => ".png",
+                "image/gif"  => ".gif",
+                "image/webp" => ".webp",
+                _            => ".jpg"
+            };
+            var path = Path.Combine(_cacheDir, slug + ext);
+            await using var fs = File.Create(path);
+            await resp.Content.CopyToAsync(fs, ct);
+            return ext;
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "Thumb download failed for {Url}", url);
+            return null;
+        }
     }
 
     // NASA Image Library — public, no API key. Returns a JSON envelope
@@ -265,8 +362,17 @@ public record CelestialImage(
     string? Credit,
     string? Error,
     DateTime FetchedAt,
-    int SchemaVersion = 0) {
+    int SchemaVersion = 0,
+    string? LocalFileExt = null,
+    string? LocalUrl = null) {
 
     public static CelestialImage NotAvailable(string error) =>
-        new(false, null, null, null, null, null, error, DateTime.UtcNow, 0);
+        new(false, null, null, null, null, null, error, DateTime.UtcNow, 0, null, null);
 }
+
+public record PrefetchSummary(
+    int AttemptedCount,
+    int FoundCount,
+    int MissingCount,
+    int AlreadyCachedCount,
+    long DownloadedBytes);
