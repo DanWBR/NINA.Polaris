@@ -1,6 +1,6 @@
 function ninaApp() {
     return {
-        tab: 'live',
+        tab: 'home',
         nightMode: false,
 
         // Live View
@@ -904,6 +904,10 @@ function ninaApp() {
 
         updateClock() {
             this.currentTime = new Date().toLocaleTimeString('en-GB');
+            // Always keep the Home tab's UTC clock alive too — the Sky-tab
+            // ticker only fires when that tab is open, but the Home hero
+            // wants the time even on first paint.
+            this._updateSkyClock();
         },
 
         updateFov() {
@@ -936,7 +940,7 @@ function ninaApp() {
                     // First time the app boots, honour the user's preferred sequencer flavour.
                     if (!this._sequencerTabBootHandled) {
                         this._sequencerTabBootHandled = true;
-                        if (this.settings.preferAdvancedSequencer && this.tab === 'live') {
+                        if (this.settings.preferAdvancedSequencer && this.tab === 'home') {
                             // Don't ambush the user — only switch from the initial 'live' tab
                             // and only if they explicitly opted in. Pre-fetch the doc so the
                             // Adv tab is responsive when they navigate there.

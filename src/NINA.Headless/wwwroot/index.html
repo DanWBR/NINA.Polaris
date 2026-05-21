@@ -41,6 +41,10 @@
     <div class="app-layout">
         <!-- Sidebar (desktop) / Bottom tabs (mobile) -->
         <nav class="sidebar">
+            <button class="nav-btn" :class="{ active: tab === 'home' }" @click="tab = 'home'" title="Home">
+                <svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 12l9-9 9 9v9a2 2 0 01-2 2h-4v-7H10v7H6a2 2 0 01-2-2v-9z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+                <span class="nav-label">Home</span>
+            </button>
             <button class="nav-btn" :class="{ active: tab === 'live' }" @click="tab = 'live'" title="Live View">
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
                 <span class="nav-label">Live</span>
@@ -81,6 +85,105 @@
 
         <!-- Main content area -->
         <main class="content">
+
+            <!-- HOME / dashboard landing -->
+            <div x-show="tab === 'home'" class="tab-panel home-panel">
+                <div class="home-hero">
+                    <div class="home-hero-text">
+                        <span class="home-eyebrow">NINA Headless · v0.1</span>
+                        <h1 class="home-title">Ready when you are.</h1>
+                        <p class="home-lede" x-show="!indiConnected">
+                            Nothing connected yet. Pick a starting point below — the rest of the
+                            tabs come alive once your equipment is online.
+                        </p>
+                        <p class="home-lede" x-show="indiConnected">
+                            Equipment is up. Plan a target, queue a sequence, or jump into the live view.
+                        </p>
+                        <div class="home-clock" x-text="skyClock ? (skyClock + ' UTC') : ''"></div>
+                    </div>
+                </div>
+
+                <!-- Status strip -->
+                <section class="home-status">
+                    <div class="home-status-card" :class="indiConnected ? 'ok' : 'idle'">
+                        <span class="home-status-label">Equipment</span>
+                        <strong x-text="indiConnected ? 'Connected' : 'Not connected'"></strong>
+                        <span class="home-status-sub" x-show="indiConnected">
+                            <span x-text="selectedCamera ? '📷 ' + selectedCamera : ''"></span>
+                            <span x-text="selectedTelescope ? ' · 🔭 ' + selectedTelescope : ''"></span>
+                        </span>
+                    </div>
+                    <div class="home-status-card" :class="guider.connected ? (guider.guiding ? 'ok' : 'warn') : 'idle'">
+                        <span class="home-status-label">Guider (PHD2)</span>
+                        <strong x-text="guider.connected ? guider.appState : 'Offline'"></strong>
+                        <span class="home-status-sub" x-show="guider.connected && guider.rmsTotal">
+                            RMS <span x-text="guider.rmsTotal?.toFixed(2) + '&quot;'"></span>
+                        </span>
+                    </div>
+                    <div class="home-status-card" :class="seqState === 'running' ? 'ok' : 'idle'">
+                        <span class="home-status-label">Sequence</span>
+                        <strong x-text="(seqState || 'idle').toUpperCase()"></strong>
+                        <span class="home-status-sub" x-show="seqStatus?.totalFramesCompleted">
+                            <span x-text="(seqStatus?.totalFramesCompleted || 0) + ' / ' + (seqStatus?.totalFrames || 0) + ' frames'"></span>
+                        </span>
+                    </div>
+                    <div class="home-status-card" :class="serverReachable ? 'ok' : 'error'">
+                        <span class="home-status-label">Server</span>
+                        <strong x-text="serverReachable ? 'Online' : 'Reconnecting…'"></strong>
+                        <span class="home-status-sub" x-show="activeRig" x-text="'Rig: ' + activeRig"></span>
+                    </div>
+                </section>
+
+                <!-- Quick actions -->
+                <section class="home-quick">
+                    <h2 class="home-section-title">Get started</h2>
+                    <div class="home-quick-grid">
+                        <button class="home-quick-card" @click="tab = 'equip'">
+                            <span class="home-quick-icon">🔌</span>
+                            <strong>Connect equipment</strong>
+                            <p>INDI or ASCOM/Alpaca discovery. Active rig: <code x-text="activeRig || 'Default'"></code>.</p>
+                        </button>
+                        <button class="home-quick-card" @click="tab = 'sky'; $nextTick(() => initSkyViewer())">
+                            <span class="home-quick-icon">🌌</span>
+                            <strong>Plan a target</strong>
+                            <p>Live local sky · click any star to pick coords · plate-solve and slew.</p>
+                        </button>
+                        <button class="home-quick-card" @click="tab = 'guide'">
+                            <span class="home-quick-icon">📡</span>
+                            <strong>Launch PHD2</strong>
+                            <p>Auto-detected install. Live RA/Dec chart, dither, profile switcher.</p>
+                        </button>
+                        <button class="home-quick-card" @click="tab = 'seqadv'; $nextTick(() => loadAdvSeq())">
+                            <span class="home-quick-icon">🌲</span>
+                            <strong>Build a sequence</strong>
+                            <p>Tree editor with auto-focus / meridian-flip / dither triggers.</p>
+                        </button>
+                        <button class="home-quick-card" @click="tab = 'focus'">
+                            <span class="home-quick-icon">🎯</span>
+                            <strong>Auto-focus</strong>
+                            <p>V-curve sweep with HFR plot. Re-runs on temperature drift.</p>
+                        </button>
+                        <button class="home-quick-card" @click="tab = 'live'">
+                            <span class="home-quick-icon">📸</span>
+                            <strong>Open live view</strong>
+                            <p>Real-time stream from the camera with stretch + overlay controls.</p>
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Project / footer info -->
+                <section class="home-footer">
+                    <div>
+                        <strong>NINA Headless</strong> ·
+                        browser-controlled astrophotography on any device ·
+                        <a href="https://github.com/DanWBR/NINA.Headless" target="_blank" rel="noopener">source on GitHub</a> ·
+                        <a href="https://buy.stripe.com/9B68wPeoLcMSgOz2iJbMQ02" target="_blank" rel="noopener">❤ donate</a>
+                    </div>
+                    <div class="home-credit">
+                        Background: IC&nbsp;434 + NGC&nbsp;2024 (Horsehead &amp; Flame)
+                    </div>
+                </section>
+            </div>
 
             <!-- LIVE VIEW -->
             <div x-show="tab === 'live'" class="tab-panel">
