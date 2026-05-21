@@ -1400,12 +1400,19 @@
                     <template x-for="item in tonightFiltered()" :key="item.category + '/' + item.name">
                         <div class="tonight-card" :class="'tonight-card--' + item.category.toLowerCase()">
                             <div class="tonight-thumb" :data-name="item.name">
-                                <img :src="tonight.thumbs[item.name]?.url || ''"
-                                     :alt="item.name"
-                                     loading="lazy"
-                                     referrerpolicy="no-referrer"
-                                     x-show="tonight.thumbs[item.name]?.url"
-                                     @error="tonightThumbFailed(item)">
+                                <!-- x-if (not x-show) — only stamp the <img>
+                                     once we have a real URL. An <img src="">
+                                     fires the `error` event even when
+                                     display:none'd, which would mark every
+                                     row as missing before the lazy fetch
+                                     even gets a chance to populate the dict. -->
+                                <template x-if="tonight.thumbs[item.name]?.url">
+                                    <img :src="tonight.thumbs[item.name].url"
+                                         :alt="item.name"
+                                         loading="lazy"
+                                         referrerpolicy="no-referrer"
+                                         @error="tonightThumbFailed(item)">
+                                </template>
                                 <div class="tonight-thumb-placeholder"
                                      x-show="!tonight.thumbs[item.name]?.url"
                                      x-text="tonight.thumbs[item.name]?.missing ? '·' : '…'"></div>
