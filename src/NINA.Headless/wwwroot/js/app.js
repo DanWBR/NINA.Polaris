@@ -1509,6 +1509,44 @@ function ninaApp() {
             return 'weather-slot--bad';
         },
 
+        // Pick a weather emoji that summarises a single slot. Precipitation
+        // trumps everything; otherwise we map the cloudcover bucket to a
+        // sun-and-clouds icon. We always use the "sun" variants (even for
+        // night slots) because they're the universally recognised weather
+        // glyphs — astrophotographers read these as cloud-cover indicators,
+        // not literal sun-up/sun-down state.
+        _weatherIconFor(cloud, prec) {
+            const p = (prec || 'none').toLowerCase();
+            if (p === 'snow')                       return '🌨️';
+            if (p === 'icep' || p === 'frzr')       return '🧊';
+            if (p === 'rain' && cloud >= 8)         return '⛈️';
+            if (p === 'rain')                       return '🌧️';
+            if (cloud <= 2)  return '☀️';   // 0–13% cloud
+            if (cloud <= 4)  return '🌤️';   // 13–50%
+            if (cloud <= 6)  return '⛅';    // 50–81%
+            if (cloud <= 8)  return '🌥️';   // 81–94%
+            return '☁️';                    // 94–100%
+        },
+
+        // Day-average summary icon: average cloud cover bucket across all
+        // slots, and the worst precip type that occurred. Lets the user
+        // glance at the per-day header and immediately know "tomorrow is
+        // mostly cloudy" without parsing 8 numbers.
+        _summariseDayWeather(slots) {
+            if (!slots?.length) return { icon: '', avgCloud: 0 };
+            const avgBucket = Math.round(
+                slots.reduce((a, s) => a + s.raw.cloudCover, 0) / slots.length);
+            // Worst precip wins. Order matters: snow/ice > rain > none.
+            const precRank = { 'none': 0, '': 0, 'rain': 1, 'snow': 2, 'icep': 2, 'frzr': 2 };
+            const worstPrec = slots
+                .map(s => (s.raw.precType || 'none').toLowerCase())
+                .reduce((a, b) => (precRank[b] ?? 0) > (precRank[a] ?? 0) ? b : a, 'none');
+            return {
+                icon: this._weatherIconFor(avgBucket, worstPrec),
+                avgCloud: this._cloudPercent(avgBucket)
+            };
+        },
+
         _moonIconForPhase(phase) {
             // SunCalc returns moon phase in [0,1]: 0=new, 0.25=first qtr,
             // 0.5=full, 0.75=last qtr. Pick the closest emoji bucket.
@@ -1549,6 +1587,7 @@ function ninaApp() {
                     score:      raw.observationScore,
                     scoreClass: this._scoreClass(raw.observationScore),
                     cloudLabel: this._cloudPercent(raw.cloudCover) + '%',
+                    icon:       this._weatherIconFor(raw.cloudCover, raw.precType),
                     tooltip:    `${this._fmtLocalTime(slotDate)}  · score ${raw.observationScore}\n`
                               + `Cloud ${this._cloudPercent(raw.cloudCover)}%`
                               + `  · Seeing ${raw.seeing}/8  · Transp ${raw.transparency}/8\n`
@@ -1579,10 +1618,13 @@ function ninaApp() {
                     moon      = SunCalc.getMoonTimes(noon, lat, lng);
                     moonIllum = SunCalc.getMoonIllumination(noon);
                 }
+                const summary = this._summariseDayWeather(slots);
                 out.push({
                     dateKey:           key,
                     headerName, headerDate,
                     slots,
+                    weatherIcon:       summary.icon,
+                    avgCloudLabel:     summary.avgCloud + '% avg cloud',
                     sunset:            sun.sunset,
                     sunrise:           sun.sunriseEnd || sun.sunrise,
                     sunsetLabel:       sun.sunset    ? this._fmtLocalTime(sun.sunset)    : '',

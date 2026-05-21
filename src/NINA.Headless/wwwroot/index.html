@@ -1400,9 +1400,13 @@
                     <template x-for="day in weatherDays()" :key="day.dateKey">
                         <div class="weather-day-card">
                             <div class="weather-day-header">
-                                <div>
-                                    <div class="weather-day-name" x-text="day.headerName"></div>
-                                    <div class="weather-day-sub" x-text="day.headerDate"></div>
+                                <div class="weather-day-title">
+                                    <span class="weather-day-icon" x-text="day.weatherIcon"
+                                          :title="day.avgCloudLabel"></span>
+                                    <div>
+                                        <div class="weather-day-name" x-text="day.headerName"></div>
+                                        <div class="weather-day-sub" x-text="day.headerDate"></div>
+                                    </div>
                                 </div>
                                 <div class="weather-day-celestial">
                                     <div x-show="day.sunset && day.sunrise">
@@ -1426,6 +1430,7 @@
                                          :class="slot.scoreClass"
                                          :title="slot.tooltip">
                                         <div class="weather-slot-time" x-text="slot.localTime"></div>
+                                        <div class="weather-slot-icon" x-text="slot.icon"></div>
                                         <div class="weather-slot-score" x-text="slot.score"></div>
                                         <div class="weather-slot-cloud" x-text="slot.cloudLabel"></div>
                                     </div>

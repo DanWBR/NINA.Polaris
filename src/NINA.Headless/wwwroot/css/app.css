@@ -2741,6 +2741,25 @@ select.input-sm {
     font-size: 10px;
     opacity: 0.7;
 }
+/* Per-slot weather glyph. Emoji sit awkwardly small in this dense grid
+   — bump them up a notch so they're scannable. */
+.weather-slot-icon {
+    font-size: 16px;
+    line-height: 1.1;
+    margin: 1px 0 -1px;
+}
+/* Big day-summary glyph in the card header. Lets the user read the
+   day at a glance without parsing the slot grid. */
+.weather-day-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.weather-day-icon {
+    font-size: 28px;
+    line-height: 1;
+    flex-shrink: 0;
+}
 .weather-slot--good {
     background: rgba(76, 175, 80, 0.25);
     color: #c8e6c9;
