@@ -1895,8 +1895,15 @@ function ninaApp() {
                         responsive: true, maintainAspectRatio: false, animation: false,
                         plugins: { legend: { display: false }, tooltip: { enabled: false } },
                         scales: {
-                            x: { display: false },
-                            y: { min: 0, max: 90, ticks: { display: false }, grid: { color: t.grid } }
+                            x: { display: true,
+                                 ticks: {
+                                     color: t.tick, font: { size: 9 },
+                                     maxRotation: 0, autoSkip: true, maxTicksLimit: 6
+                                 },
+                                 grid: { color: t.grid, drawTicks: false } },
+                            y: { min: 0, max: 90,
+                                 ticks: { display: false },
+                                 grid: { color: t.grid } }
                         }
                     }
                 });

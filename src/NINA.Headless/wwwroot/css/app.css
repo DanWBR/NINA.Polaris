@@ -2945,13 +2945,13 @@ select.input-sm {
 .tonight-badge--peak  { background: rgba(255, 255, 255, 0.06); color: var(--text-secondary); }
 
 .tonight-chart-cell {
-    height: 64px;
-    min-width: 180px;
+    height: 78px;          /* bumped to fit the x-axis time ticks */
+    min-width: 200px;
     position: relative;
 }
 .tonight-chart {
     width: 100% !important;
-    height: 64px !important;
+    height: 78px !important;
 }
 
 .tonight-compass {
