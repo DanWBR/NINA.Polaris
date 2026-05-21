@@ -1131,7 +1131,14 @@ function ninaApp() {
                     // Stereographic for both modes; the projection is the same,
                     // what changes is the *frame* (equatorial vs horizontal)
                     // and the centre.
-                    projection: 'stereographic',
+                    // All-sky projection (Aitoff). d3-celestial flags
+                    // stereographic / orthographic / azimuthal* as
+                    // clip:true (hemisphere-only) — the horizon marker
+                    // only draws correctly in non-clipped, all-sky
+                    // projections. Aitoff is the standard astronomy
+                    // all-sky projection (oval, equal-area-ish, both
+                    // celestial hemispheres visible at once).
+                    projection: 'aitoff',
                     // d3-celestial only ships an 'equatorial' transform
                     // (and a useless 'supergalactic'); there is NO
                     // 'horizontal' transform. Setting it silently fell
