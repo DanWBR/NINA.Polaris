@@ -1,3 +1,4 @@
+using System.Net.Sockets;
 using NINA.INDI.Client;
 
 namespace NINA.Headless.Endpoints;
@@ -14,8 +15,29 @@ public static class IndiEndpoints {
                     host = client.Host,
                     port = client.Port
                 });
+            } catch (SocketException ex) when (ex.SocketErrorCode == SocketError.ConnectionRefused
+                                            || ex.SocketErrorCode == SocketError.HostNotFound
+                                            || ex.SocketErrorCode == SocketError.HostUnreachable
+                                            || ex.SocketErrorCode == SocketError.NetworkUnreachable) {
+                // 502 Bad Gateway — the most common case: indiserver isn't running
+                // at the configured host:port. Translate to a user-facing message
+                // instead of leaking the raw localised OS error as a 500.
+                return Results.Json(new {
+                    error = "indi_unreachable",
+                    detail = $"INDI server not reachable at {client.Host}:{client.Port}. " +
+                             "Start indiserver on that host or update Indi:Host / Indi:Port (or the rig's INDI endpoint).",
+                    socketError = ex.SocketErrorCode.ToString()
+                }, statusCode: 502);
+            } catch (TimeoutException ex) {
+                return Results.Json(new {
+                    error = "indi_timeout",
+                    detail = ex.Message
+                }, statusCode: 504);
             } catch (Exception ex) {
-                return Results.Problem(ex.Message);
+                return Results.Json(new {
+                    error = "indi_connect_failed",
+                    detail = ex.Message
+                }, statusCode: 502);
             }
         });
 

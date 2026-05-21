@@ -1890,7 +1890,14 @@ function ninaApp() {
                 }
             } catch (e) {
                 this.indiConnected = false;
-                this.toast('INDI connection failed: ' + e.message, 'error');
+                // Prefer the structured 'detail' the backend ships in the JSON body;
+                // fall back to the raw error string for non-JSON failures.
+                let msg = e.message;
+                try {
+                    const body = JSON.parse(e.body || '{}');
+                    if (body.detail) msg = body.detail;
+                } catch { /* not JSON; keep raw message */ }
+                this.toast('INDI connection failed: ' + msg, 'error');
             }
         },
 
