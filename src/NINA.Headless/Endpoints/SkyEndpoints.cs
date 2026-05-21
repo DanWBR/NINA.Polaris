@@ -105,8 +105,23 @@ public static class SkyEndpoints {
         group.MapGet("/solver/status", (PlateSolveService solver) => {
             return Results.Ok(new {
                 available = solver.IsAvailable,
+                primaryId = solver.PrimarySolver.Id,
+                primaryName = solver.PrimarySolver.DisplayName,
+                primaryAvailable = solver.PrimarySolver.IsAvailable,
+                blindId = solver.BlindSolver?.Id,
+                blindName = solver.BlindSolver?.DisplayName,
+                blindAvailable = solver.BlindSolver?.IsAvailable ?? false,
                 path = solver.SolverPath
             });
+        });
+
+        group.MapGet("/solver/list", (PlateSolveService solver) => {
+            return Results.Ok(solver.AllSolvers.Select(s => new {
+                id = s.Id,
+                name = s.DisplayName,
+                available = s.IsAvailable,
+                blind = s.SupportsBlindSolve
+            }));
         });
 
         // ---- Catalog filters (Sky Atlas) ----

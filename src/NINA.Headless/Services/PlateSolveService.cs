@@ -1,175 +1,91 @@
-using System.Diagnostics;
-using System.Globalization;
+using NINA.Headless.Services.PlateSolving;
 
 namespace NINA.Headless.Services;
 
+/// <summary>
+/// Dispatcher that picks a plate-solving backend based on configuration and
+/// falls back to a blind-capable solver if the primary fails.
+///
+/// Selection priority:
+///   1. Primary solver: <c>PlateSolve:PrimarySolver</c> (default "astap")
+///   2. If primary fails AND <c>PlateSolve:UseBlindFallback</c> is true,
+///      try <c>PlateSolve:BlindSolver</c> (default "astrometry-net-online")
+///
+/// All implementations live under <see cref="PlateSolving"/>; this class is
+/// just routing + result aggregation, so the rest of the app can keep
+/// calling <c>SolveAsync</c> without knowing which backend is in use.
+/// </summary>
 public class PlateSolveService {
     private readonly IConfiguration _config;
     private readonly ILogger<PlateSolveService> _logger;
+    private readonly IReadOnlyDictionary<string, IPlateSolver> _solvers;
 
-    public PlateSolveService(IConfiguration config, ILogger<PlateSolveService> logger) {
+    public PlateSolveService(IConfiguration config, ILogger<PlateSolveService> logger,
+        AstapSolver astap, PlateSolve3Solver ps3,
+        AstrometryNetOnlineSolver netOnline, AstrometryNetLocalSolver netLocal) {
         _config = config;
         _logger = logger;
+        _solvers = new Dictionary<string, IPlateSolver>(StringComparer.OrdinalIgnoreCase) {
+            [astap.Id] = astap,
+            [ps3.Id] = ps3,
+            [netOnline.Id] = netOnline,
+            [netLocal.Id] = netLocal
+        };
     }
 
-    public string SolverPath =>
-        _config.GetValue("PlateSolve:AstapPath", GetDefaultAstapPath())!;
+    /// <summary>Backwards-compat constructor for tests that only need ASTAP.</summary>
+    public PlateSolveService(IConfiguration config, ILogger<PlateSolveService> logger)
+        : this(config, logger,
+              new AstapSolver(config, new Microsoft.Extensions.Logging.Abstractions.NullLogger<AstapSolver>()),
+              new PlateSolve3Solver(config, new Microsoft.Extensions.Logging.Abstractions.NullLogger<PlateSolve3Solver>()),
+              new AstrometryNetOnlineSolver(config, new Microsoft.Extensions.Logging.Abstractions.NullLogger<AstrometryNetOnlineSolver>()),
+              new AstrometryNetLocalSolver(config, new Microsoft.Extensions.Logging.Abstractions.NullLogger<AstrometryNetLocalSolver>())) { }
 
-    public bool IsAvailable => File.Exists(SolverPath);
+    public IEnumerable<IPlateSolver> AllSolvers => _solvers.Values;
 
-    public async Task<PlateSolveResult> SolveAsync(string fitsPath, PlateSolveOptions options,
-        CancellationToken ct = default) {
-        if (!IsAvailable) {
-            return PlateSolveResult.Failed("ASTAP not found at: " + SolverPath);
-        }
-
-        if (!File.Exists(fitsPath)) {
-            return PlateSolveResult.Failed("FITS file not found: " + fitsPath);
-        }
-
-        var args = BuildArgs(fitsPath, options);
-        _logger.LogInformation("Plate solving {File} with ASTAP: {Args}", fitsPath, args);
-
-        try {
-            var psi = new ProcessStartInfo {
-                FileName = SolverPath,
-                Arguments = args,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            };
-
-            using var proc = new Process { StartInfo = psi };
-            proc.Start();
-
-            var stdout = await proc.StandardOutput.ReadToEndAsync(ct);
-            var stderr = await proc.StandardError.ReadToEndAsync(ct);
-
-            var timeout = TimeSpan.FromSeconds(
-                _config.GetValue("PlateSolve:TimeoutSeconds", 120));
-
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(timeout);
-
-            try {
-                await proc.WaitForExitAsync(cts.Token);
-            } catch (OperationCanceledException) {
-                try { proc.Kill(entireProcessTree: true); } catch { }
-                return PlateSolveResult.Failed("Plate solve timed out");
-            }
-
-            _logger.LogDebug("ASTAP exit code: {Code}, stdout: {Out}", proc.ExitCode, stdout);
-
-            if (proc.ExitCode != 0 && proc.ExitCode != 2) {
-                return PlateSolveResult.Failed(
-                    $"ASTAP failed (exit {proc.ExitCode}): {stderr.Trim()}");
-            }
-
-            return ParseIniResult(fitsPath);
-        } catch (OperationCanceledException) {
-            throw;
-        } catch (Exception ex) {
-            _logger.LogError(ex, "Plate solve failed");
-            return PlateSolveResult.Failed(ex.Message);
+    public IPlateSolver PrimarySolver {
+        get {
+            var id = _config.GetValue("PlateSolve:PrimarySolver", "astap")!;
+            return _solvers.TryGetValue(id, out var s) ? s : _solvers["astap"];
         }
     }
 
-    private string BuildArgs(string fitsPath, PlateSolveOptions options) {
-        var args = $"-f \"{fitsPath}\"";
-
-        if (options.SearchRadiusDeg > 0 && options.HintRa.HasValue && options.HintDec.HasValue) {
-            args += $" -ra {options.HintRa.Value.ToString(CultureInfo.InvariantCulture)}";
-            args += $" -spd {(options.HintDec.Value + 90).ToString(CultureInfo.InvariantCulture)}";
-            args += $" -r {options.SearchRadiusDeg.ToString(CultureInfo.InvariantCulture)}";
-        }
-
-        if (options.FovDeg > 0) {
-            args += $" -fov {options.FovDeg.ToString(CultureInfo.InvariantCulture)}";
-        }
-
-        if (options.Downsample > 0) {
-            args += $" -z {options.Downsample}";
-        }
-
-        args += " -update";
-
-        return args;
-    }
-
-    private PlateSolveResult ParseIniResult(string fitsPath) {
-        var iniPath = Path.ChangeExtension(fitsPath, ".ini");
-
-        if (!File.Exists(iniPath)) {
-            return PlateSolveResult.Failed("ASTAP .ini result file not found");
-        }
-
-        try {
-            var lines = File.ReadAllLines(iniPath);
-            var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var line in lines) {
-                var eqIdx = line.IndexOf('=');
-                if (eqIdx <= 0) continue;
-                var key = line[..eqIdx].Trim();
-                var val = line[(eqIdx + 1)..].Trim();
-                dict[key] = val;
-            }
-
-            if (!dict.TryGetValue("PLTSOLVD", out var solved) ||
-                !solved.Equals("T", StringComparison.OrdinalIgnoreCase)) {
-                return PlateSolveResult.Failed("Plate solve did not converge");
-            }
-
-            var result = new PlateSolveResult { Success = true };
-
-            if (dict.TryGetValue("CRVAL1", out var raStr) &&
-                double.TryParse(raStr, CultureInfo.InvariantCulture, out var raDeg)) {
-                result.RaDeg = raDeg;
-                result.RaHours = raDeg / 15.0;
-            }
-
-            if (dict.TryGetValue("CRVAL2", out var decStr) &&
-                double.TryParse(decStr, CultureInfo.InvariantCulture, out var decDeg)) {
-                result.DecDeg = decDeg;
-            }
-
-            if (dict.TryGetValue("CDELT1", out var scaleStr) &&
-                double.TryParse(scaleStr, CultureInfo.InvariantCulture, out var scale)) {
-                result.ScaleArcsecPerPixel = Math.Abs(scale) * 3600;
-            }
-
-            if (dict.TryGetValue("CROTA1", out var rotStr) &&
-                double.TryParse(rotStr, CultureInfo.InvariantCulture, out var rot)) {
-                result.RotationDeg = rot;
-            }
-
-            _logger.LogInformation(
-                "Plate solve succeeded: RA={Ra:F4}h, Dec={Dec:F4}°, Scale={Scale:F2}\"/px, Rot={Rot:F1}°",
-                result.RaHours, result.DecDeg, result.ScaleArcsecPerPixel, result.RotationDeg);
-
-            CleanupTempFiles(fitsPath);
-
-            return result;
-        } catch (Exception ex) {
-            return PlateSolveResult.Failed("Failed to parse ASTAP result: " + ex.Message);
+    public IPlateSolver? BlindSolver {
+        get {
+            if (!_config.GetValue("PlateSolve:UseBlindFallback", true)) return null;
+            var id = _config.GetValue("PlateSolve:BlindSolver", "astrometry-net-online")!;
+            return _solvers.TryGetValue(id, out var s) && s.SupportsBlindSolve ? s : null;
         }
     }
 
-    private void CleanupTempFiles(string fitsPath) {
-        var basePath = Path.ChangeExtension(fitsPath, null);
-        foreach (var ext in new[] { ".ini", ".wcs" }) {
-            try {
-                var path = basePath + ext;
-                if (File.Exists(path)) File.Delete(path);
-            } catch { }
-        }
-    }
+    /// <summary>True if at least one configured backend is ready.</summary>
+    public bool IsAvailable => PrimarySolver.IsAvailable || (BlindSolver?.IsAvailable ?? false);
 
-    private static string GetDefaultAstapPath() {
-        if (OperatingSystem.IsWindows())
-            return @"C:\Program Files\astap\astap_cli.exe";
-        return "/usr/bin/astap_cli";
+    /// <summary>Path of the primary solver (back-compat for existing tests).</summary>
+    public string SolverPath => PrimarySolver is AstapSolver a ? a.SolverPath : "";
+
+    public async Task<PlateSolveResult> SolveAsync(string fitsPath, PlateSolveOptions options, CancellationToken ct = default) {
+        var primary = PrimarySolver;
+        if (primary.IsAvailable) {
+            var result = await primary.SolveAsync(fitsPath, options, ct);
+            if (result.Success) return result;
+            _logger.LogWarning("Primary solver {Name} failed: {Err}", primary.DisplayName, result.Error);
+        } else {
+            _logger.LogInformation("Primary solver {Name} not available", primary.DisplayName);
+        }
+
+        var blind = BlindSolver;
+        if (blind != null && blind.IsAvailable && blind.Id != primary.Id) {
+            _logger.LogInformation("Falling back to blind solver {Name}", blind.DisplayName);
+            var blindResult = await blind.SolveAsync(fitsPath, options, ct);
+            if (blindResult.Success) return blindResult;
+            return PlateSolveResult.Failed(
+                $"Primary ({primary.DisplayName}) and blind fallback ({blind.DisplayName}) both failed");
+        }
+
+        return PlateSolveResult.Failed(
+            primary.IsAvailable ? $"{primary.DisplayName} failed and no blind fallback configured"
+                                : $"Primary solver {primary.DisplayName} is not available");
     }
 }
 
@@ -179,6 +95,8 @@ public class PlateSolveOptions {
     public double SearchRadiusDeg { get; set; } = 30;
     public double FovDeg { get; set; }
     public int Downsample { get; set; } = 2;
+    /// <summary>Approximate pixel scale in arcsec/pixel — required by PlateSolve3, optional hint for others.</summary>
+    public double ScaleArcsecPerPixel { get; set; }
 }
 
 public class PlateSolveResult {
@@ -189,6 +107,8 @@ public class PlateSolveResult {
     public double DecDeg { get; set; }
     public double ScaleArcsecPerPixel { get; set; }
     public double RotationDeg { get; set; }
+    /// <summary>Id of the solver that produced this result (or attempted to).</summary>
+    public string? SolverUsed { get; set; }
 
     public static PlateSolveResult Failed(string error) =>
         new() { Success = false, Error = error };
