@@ -1141,12 +1141,22 @@ function ninaApp() {
                     // naturally rotates around the zenith because it's
                     // the centred point.
                     transform: 'equatorial',
-                    follow: 'center',
+                    // follow: 'zenith' tells d3-celestial to compute the
+                    // zenith from geopos + current date and centre the
+                    // projection there natively — much cleaner than us
+                    // doing the LST math ourselves. Requires location:true
+                    // (which enables location-aware features) and a valid
+                    // geopos. If a mount is connected we still call
+                    // Celestial.rotate({center: [ra*15, dec, 0]}) after
+                    // display() to override, since follow only triggers at
+                    // init / on date changes.
+                    follow: 'zenith',
                     center: initialCentre,
-                    // In horizontal mode we centre on the zenith for that lat/lng
-                    // at the current UTC time, then rotate so North is up.
+                    // Observer position — used to draw the horizon line,
+                    // compute the zenith for follow:'zenith', and place
+                    // sun/moon correctly above/below the horizon.
                     geopos: [lat, lng],
-                    location: false,
+                    location: true,
                     zoomlevel: null,
                     zoomextend: 10,
                     interactive: true,
