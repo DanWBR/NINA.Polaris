@@ -139,9 +139,21 @@
                             Equipment is up. Plan a target, queue a sequence, or jump into the live view.
                         </p>
                         <div class="home-clock">
-                            <span x-text="skyClock ? (skyClock + ' UTC') : ''"></span>
-                            <span class="home-clock-sep" x-show="locationLabel">·</span>
-                            <span class="home-clock-loc" x-text="locationLabel"></span>
+                            <span class="home-clock-chip" x-show="skyClock">
+                                <svg class="home-clock-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                    <circle cx="12" cy="12" r="9"/>
+                                    <path d="M12 7 V12 L15.5 14"/>
+                                </svg>
+                                <span x-text="skyClock + ' UTC'"></span>
+                            </span>
+                            <span class="home-clock-sep" x-show="skyClock && locationLabel">·</span>
+                            <span class="home-clock-chip" x-show="locationLabel">
+                                <svg class="home-clock-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M12 2 C8.13 2 5 5.13 5 9 c0 5.25 7 13 7 13 s7-7.75 7-13 c0-3.87-3.13-7-7-7 z"/>
+                                    <circle cx="12" cy="9" r="2.5"/>
+                                </svg>
+                                <span class="home-clock-loc" x-text="locationLabel"></span>
+                            </span>
                         </div>
                     </div>
                 </div>
