@@ -269,12 +269,13 @@ Automated flat-field acquisition:
 
 Responsive, dark-themed interface inspired by ASIAIR:
 
+- **Home** — Cold-start landing with a Horsehead/Flame nebula hero. 4 colour-coded status cards (Equipment / Guider / Sequence / Server) react in real time to the rest of the app, plus 6 quick-action tiles that jump straight into the relevant tab (Connect / Plan / Launch PHD2 / Build sequence / Auto-focus / Live view). Live UTC clock in the hero
 - **Live View** — Real-time camera preview with WebGL2 GPU rendering (debayer + MTF stretch on GPU), star annotations overlay, crosshair + 3x3 grid, hover pixel readout (raw ADU or RGB), manual stretch sliders, image-history thumbnail strip, HFR + star-count history chart, detailed statistics panel + histogram, full-resolution zoom viewer (OpenSeadragon)
 - **Equipment** — Rig selector bar at the top, then cards for Camera (with auto-detected sensor dimensions + temperature + cooler power chart), Mount, Focuser, Filter Wheel, Rotator, Flat Panel, Dome, Weather, Guider (PHD2). Per-device select / connect / disconnect plus quick controls. "💾 Save selections" button captures the current dropdown picks into the active rig. "Manage rigs…" opens a modal with inline editing of focal lengths, cooler target, and per-rig device assignments
 - **Mount Control** — NSEW directional pad, tracking toggle, park/unpark, GoTo via Sky Explorer
 - **Focus** — Manual stepper + full Auto-Focus V-curve panel (start/abort, live progress bar, fitted parabola chart, best-position marker)
 - **Guider** — PHD2 connection panel + **Launch PHD2** button (spawns the auto-detected install) + **Auto-start on boot** checkbox (persists in profile, launches PHD2 on every Headless start), inline "Download PHD2" banner when not installed, PHD2-management bar (profile dropdown, exposure dropdown, Dec-mode, connect-equipment toggle, Shutdown), live RA/Dec error chart with RMS readouts, settle parameters, full control buttons (Guide / Loop / Auto-select Star / Pause / Resume / Stop / Dither). Surfaces PHD2's own guide camera + mount names
-- **Sky Explorer** — Aladin Lite sky map with HiPS surveys + camera FOV overlay. Object search, filtered catalog browser (type / magnitude / Dec), "Tonight's altitude" chart with twilight bands, Stellarium sync, Slew & Center, Add to Sequence
+- **Sky Explorer** — d3-celestial-powered fully-offline sky map (Hipparcos to mag 6, Stellarium constellation lines, IAU names, DSO catalog, Milky Way contours). Defaults to **live local sky** from the observer's lat/lng at the current UTC time, with horizon mask + a 30 s ticker that re-centres on the zenith; switch to **Equatorial chart** mode for planning below-horizon targets. Object search, filtered catalog browser, "Tonight's altitude" chart with twilight bands, Stellarium sync, Slew & Center, "Plan mosaic" (panel grid with cos(δ) correction), Add to Sequence
 - **Sequence** — Target list editor with progress bars, collapsible Meridian Flip + Dithering panels, start/pause/resume/stop
 - **Settings** — INDI connection, observatory location, image output (format: FITS or XISF), profile management. Sensor dimensions are auto-read from the connected camera; focal length lives per-rig (Equipment → Manage rigs)
 - **First-run** — Location-setup modal with **address geocoder** (OpenStreetMap/Nominatim), browser geolocation, or manual lat/lon entry
@@ -963,6 +964,8 @@ Relay **server** side (different process, same `Relay__*` prefix in `appsettings
 - [x] Relay monthly byte quotas + expiring tokens (HTTP 402 on quota, auto-reset 1st UTC, persistent counter)
 - [x] Relay built-in TLS — LettuceEncrypt for automatic Let's Encrypt, or static `.pfx`
 - [x] Relay web admin UI at `/admin/` — full tenant CRUD, live tunnel + quota dashboard, token generator, audit-log browser with per-tenant filter
+- [x] Home tab — cold-start landing with nebula hero, 4 live status cards, 6 quick-action tiles (replaces the empty Live view on first open)
+- [x] Sky Explorer rewritten on d3-celestial (BSD-3, MPL-compatible) — fully offline, defaults to live local sky from observer's location at current UTC, 30 s ticker, equatorial-chart toggle for planning
 - [x] Relay per-request audit log (JSON-lines `audit.log`, auto-rotated 50 MB, outcome reasons, in-memory ring buffer + `/_admin/audit` API)
 - [x] Relay mTLS for tunnel auth — per-tenant `clientCertThumbprint` pins the X.509 cert the client must present (bearer token still required)
 
