@@ -34,6 +34,13 @@
       "note": "Trial — 1 MB/s, 1 GB / month, expires end of year"
     },
     {
+      "token": "MTLS-TOKEN-EXAMPLE",
+      "hostname": "secure",
+      "enabled": true,
+      "clientCertThumbprint": "A1B2C3D4E5F60718293A4B5C6D7E8F9001020304",
+      "note": "Hardened tenant — must present a client cert matching this thumbprint on tunnel auth"
+    },
+    {
       "token": "DISABLED-TOKEN-EXAMPLE",
       "hostname": "old-rig",
       "enabled": false,

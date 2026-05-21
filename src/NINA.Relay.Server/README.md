@@ -31,12 +31,13 @@ Implemented:
 - [x] **Monthly byte quotas** with persistent counter (`tenant-state.json`) — auto-reset on 1st UTC, HTTP 402 when exhausted
 - [x] **Expiring tokens** (per-tenant `expiresAt`) — auth refused after expiry
 - [x] **Built-in TLS** (Let's Encrypt via LettuceEncrypt, or manual `.pfx`) so the relay can terminate HTTPS directly without a reverse proxy
-- [x] **Web admin UI** at `/admin/` — add/edit/delete tenants, view live tunnels + monthly usage, generate tokens, reset counters. Gated by `Admin:Password` (HTTP Basic)
-- [x] `/_health`, `/_tunnels`, `/_admin/tenants` (CRUD), `/_admin/generate-token`, `/_admin/usage/{token}/reset`, `/_admin/reload-tenants`
+- [x] **Web admin UI** at `/admin/` — add/edit/delete tenants, view live tunnels + monthly usage, generate tokens, reset counters, **browse the audit log with per-tenant filter**. Gated by `Admin:Password` (HTTP Basic)
+- [x] **Per-request audit log** — JSON-lines file (`audit.log`) of every proxied request: timestamp, tenant, method, path, status, bytes in/out, duration, source IP, outcome reason. Auto-rotates at `Audit:MaxFileBytes` (default 50 MB). In-memory ring buffer (default 5000) surfaced via `/_admin/audit?tenant=&limit=`
+- [x] **mTLS for tunnel auth** — per-tenant `clientCertThumbprint` pins the X.509 cert the tunnel client must present on the TLS handshake. Bearer token alone is still the default; mTLS is opt-in per tenant. Toggle Kestrel's `ClientCertificateMode` via `Tls:ClientCertificateMode` (`none` / `request` / `require`)
+- [x] `/_health`, `/_tunnels`, `/_admin/tenants` (CRUD), `/_admin/generate-token`, `/_admin/usage/{token}/reset`, `/_admin/audit`, `/_admin/reload-tenants`
 
 Not yet:
-- [ ] Per-tenant request logs / audit trail
-- [ ] mTLS for tunnel auth (today: bearer token)
+- (nothing planned — open a discussion if you want a new feature)
 
 ## Configuration
 
@@ -166,6 +167,74 @@ For Let's Encrypt to work, the relay's HTTP listener must be reachable
 on port 80 (HTTP-01 ACME challenges). Once issued, certs are persisted
 to `Tls:LetsEncrypt:StorePath` and renewed automatically. Use
 `UseStaging: true` while testing to avoid Let's Encrypt's strict rate limits.
+
+### mTLS for tunnel auth
+
+For hardened tenants, in addition to the bearer token you can require
+the tunnel client to present a specific X.509 certificate on the TLS
+handshake. The relay matches the cert's **SHA-1 thumbprint** against
+the tenant's `clientCertThumbprint` field (case-insensitive, spaces /
+colons / dashes ignored). The browser admin UI is unaffected because
+the cert is *requested* but not *required* by Kestrel.
+
+```jsonc
+// tenants.json
+{
+  "token": "MTLS-TOKEN-EXAMPLE",
+  "hostname": "secure",
+  "enabled": true,
+  "clientCertThumbprint": "A1B2C3D4E5F60718293A4B5C6D7E8F9001020304"
+}
+```
+
+On the **NINA Headless** side, point the client at a `.pfx`:
+
+```jsonc
+{
+  "Relay": {
+    "Enabled": true,
+    "ServerUrl": "wss://relay.example.com/_tunnel",
+    "Token": "the-same-bearer-token",
+    "ClientCertPath": "/etc/nina/relay-client.pfx",
+    "ClientCertPassword": "optional-pfx-password"
+  }
+}
+```
+
+Get the thumbprint of a `.pfx` with PowerShell or OpenSSL:
+
+```powershell
+(New-Object Security.Cryptography.X509Certificates.X509Certificate2 -ArgumentList 'relay-client.pfx', 'pw').Thumbprint
+```
+
+```bash
+openssl pkcs12 -in relay-client.pfx -nokeys -nodes | \
+  openssl x509 -fingerprint -sha1 -noout
+```
+
+Tenants **without** `clientCertThumbprint` are unaffected — bearer token
+alone still works for them. Set `Tls:ClientCertificateMode=require` if
+you want every TLS handshake to demand a cert (which will break the
+browser admin UI).
+
+### Audit log
+
+Every proxied HTTP request is appended (when `Audit:Enabled=true`,
+default) to `audit.log` as one JSON object per line:
+
+```json
+{"Timestamp":"2026-05-21T19:41:02.5Z","Tenant":"alice","Method":"POST",
+ "Path":"/api/sequence/start","Status":200,"BytesIn":412,"BytesOut":58,
+ "DurationMs":47,"RemoteIp":"203.0.113.10","UserAgent":"Mozilla/5.0…"}
+```
+
+Non-2xx outcomes carry an `Outcome` reason: `no_tenant`, `tunnel_down`,
+`rate_limited:bandwidth`, `rate_limited:request rate`, `quota_exhausted`,
+`send_failed`, `timeout`, `tunnel_error`.
+
+The log file rotates at `Audit:MaxFileBytes` (default 50 MB) to
+`audit.log.1` — previous rotation is overwritten. The admin UI shows
+the last ~100 records refreshed every 5 s with a tenant filter.
 
 Generate tokens with any source of entropy:
 ```bash

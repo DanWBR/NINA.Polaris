@@ -37,16 +37,29 @@ if (tlsMode == "letsencrypt") {
 }
 
 if (tlsMode == "pfx" || tlsMode == "letsencrypt") {
+    // Client-cert mode: "none" (default, browsers welcome), "request"
+    // (offer; verify if presented — recommended when some tenants enable mTLS),
+    // or "require" (mandate for every TLS handshake; breaks browser admin UI).
+    var clientCertMode = (builder.Configuration["Tls:ClientCertificateMode"] ?? "request").ToLowerInvariant();
     builder.WebHost.ConfigureKestrel(k => {
         k.ListenAnyIP(httpsPort, listen => {
+            Action<Microsoft.AspNetCore.Server.Kestrel.Https.HttpsConnectionAdapterOptions> configure = h => {
+                h.ClientCertificateMode = clientCertMode switch {
+                    "none"    => Microsoft.AspNetCore.Server.Kestrel.Https.ClientCertificateMode.NoCertificate,
+                    "require" => Microsoft.AspNetCore.Server.Kestrel.Https.ClientCertificateMode.RequireCertificate,
+                    _         => Microsoft.AspNetCore.Server.Kestrel.Https.ClientCertificateMode.AllowCertificate
+                };
+                // Don't auto-reject self-signed; per-tenant thumbprint is what we actually check
+                h.ClientCertificateValidation = (cert, chain, errors) => true;
+            };
             if (tlsMode == "pfx") {
                 var pfx = builder.Configuration["Tls:PfxPath"]
                     ?? throw new InvalidOperationException("Tls:Mode=pfx requires Tls:PfxPath");
                 var pw = builder.Configuration["Tls:PfxPassword"];
-                listen.UseHttps(pfx, pw);
+                listen.UseHttps(pfx, pw, configure);
             } else {
-                // LettuceEncrypt hooks in via UseHttps() with no static cert
-                listen.UseHttps(h => { /* LettuceEncrypt populates ServerCertificateSelector */ });
+                // LettuceEncrypt populates ServerCertificateSelector via UseHttps
+                listen.UseHttps(configure);
             }
         });
     });
@@ -54,6 +67,7 @@ if (tlsMode == "pfx" || tlsMode == "letsencrypt") {
 
 builder.Services.AddSingleton<JsonTenantStore>();
 builder.Services.AddSingleton<TenantUsageStore>();
+builder.Services.AddSingleton<AuditLog>();
 builder.Services.AddSingleton<TenantRegistry>();
 builder.Services.AddSingleton<TunnelHandler>();
 builder.Services.AddSingleton<PublicProxy>();
@@ -149,6 +163,7 @@ app.MapGet("/_admin/tenants", (JsonTenantStore store, TenantUsageStore usage) =>
             : (double?)null,
         expiresAt = t.ExpiresAt,
         expired = t.ExpiresAt.HasValue && DateTime.UtcNow >= t.ExpiresAt.Value,
+        clientCertThumbprint = t.ClientCertThumbprint,
         note = t.Note
     })));
 
@@ -189,6 +204,13 @@ app.MapPost("/_admin/usage/{token}/reset", (string token, TenantUsageStore usage
     usage.Reset(token);
     return Results.Ok(new { token = token.Length > 8 ? token[..8] + "…" : token, reset = true });
 });
+
+// Read recent audit records. Optional ?tenant= filter and ?limit= cap.
+app.MapGet("/_admin/audit", (AuditLog audit, string? tenant, int? limit) => Results.Ok(new {
+    enabled = audit.Enabled,
+    path = audit.Path,
+    records = audit.Snapshot(tenant, limit ?? 200)
+}));
 
 
 // Tunnel registration WebSocket (from NINA Headless instances)

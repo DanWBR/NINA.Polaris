@@ -49,6 +49,14 @@ public class TenantConfig {
     /// </summary>
     public DateTime? ExpiresAt { get; set; }
 
+    /// <summary>
+    /// Optional SHA-1 thumbprint of the X.509 client certificate this tenant
+    /// must present (hex, case-insensitive, no spaces or colons). When set,
+    /// tunnel auth requires both the bearer token AND a matching client cert
+    /// on the TLS connection. Null = bearer token alone.
+    /// </summary>
+    public string? ClientCertThumbprint { get; set; }
+
     /// <summary>Optional free-form note (owner/email/description).</summary>
     public string? Note { get; set; }
 }

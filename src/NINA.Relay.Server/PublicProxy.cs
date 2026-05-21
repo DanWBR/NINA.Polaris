@@ -17,24 +17,33 @@ namespace NINA.Relay.Server;
 public class PublicProxy {
     private readonly TenantRegistry _registry;
     private readonly TenantUsageStore _usage;
+    private readonly AuditLog _audit;
     private readonly ILogger<PublicProxy> _logger;
     private readonly TimeSpan _requestTimeout;
     private readonly string? _hostnameSuffix; // e.g. ".relay.example.com"
 
-    public PublicProxy(TenantRegistry registry, TenantUsageStore usage,
+    public PublicProxy(TenantRegistry registry, TenantUsageStore usage, AuditLog audit,
         ILogger<PublicProxy> logger, IConfiguration config) {
         _registry = registry;
         _usage = usage;
+        _audit = audit;
         _logger = logger;
         _requestTimeout = TimeSpan.FromSeconds(config.GetValue("Proxy:TimeoutSeconds", 60));
         _hostnameSuffix = config.GetValue<string?>("Proxy:HostnameSuffix");
     }
 
     public async Task HandleAsync(HttpContext ctx) {
+        var started = System.Diagnostics.Stopwatch.StartNew();
         var (tenantName, forwardPath) = ResolveTenant(ctx);
         if (tenantName == null) {
             ctx.Response.StatusCode = 404;
             await ctx.Response.WriteAsync("No tenant matched (use subdomain or /t/<tenant>/...)\n");
+            _audit.Record(new AuditRecord {
+                Tenant = "-", Method = ctx.Request.Method, Path = ctx.Request.Path,
+                Status = 404, RemoteIp = ctx.Connection.RemoteIpAddress?.ToString(),
+                UserAgent = ctx.Request.Headers.UserAgent.ToString(),
+                Outcome = "no_tenant", DurationMs = (int)started.ElapsedMilliseconds
+            });
             return;
         }
 
@@ -43,6 +52,12 @@ public class PublicProxy {
             ctx.Response.StatusCode = 502;
             ctx.Response.ContentType = "text/plain";
             await ctx.Response.WriteAsync($"Tenant '{tenantName}' is not currently connected to the relay.\n");
+            _audit.Record(new AuditRecord {
+                Tenant = tenantName, Method = ctx.Request.Method, Path = ctx.Request.Path,
+                Status = 502, RemoteIp = ctx.Connection.RemoteIpAddress?.ToString(),
+                UserAgent = ctx.Request.Headers.UserAgent.ToString(),
+                Outcome = "tunnel_down", DurationMs = (int)started.ElapsedMilliseconds
+            });
             return;
         }
 
@@ -67,6 +82,14 @@ public class PublicProxy {
             ctx.Response.Headers["Retry-After"] = retryAfter.ToString("F0");
             ctx.Response.ContentType = "text/plain";
             await ctx.Response.WriteAsync($"Rate limit exceeded ({rl.LimitedBy}). Retry after {retryAfter:F0}s.\n");
+            _audit.Record(new AuditRecord {
+                Tenant = tenantName, Method = ctx.Request.Method, Path = forwardPath,
+                Status = 429, BytesIn = body.Length,
+                RemoteIp = ctx.Connection.RemoteIpAddress?.ToString(),
+                UserAgent = ctx.Request.Headers.UserAgent.ToString(),
+                Outcome = "rate_limited:" + rl.LimitedBy,
+                DurationMs = (int)started.ElapsedMilliseconds
+            });
             return;
         }
 
@@ -80,6 +103,14 @@ public class PublicProxy {
                 ctx.Response.Headers["X-Quota-Limit"] = tunnel.Config.MonthlyBytes.ToString();
                 await ctx.Response.WriteAsync(
                     $"Monthly transfer quota exhausted ({used:N0} / {tunnel.Config.MonthlyBytes:N0} bytes). Resets on the 1st UTC.\n");
+                _audit.Record(new AuditRecord {
+                    Tenant = tenantName, Method = ctx.Request.Method, Path = forwardPath,
+                    Status = 402, BytesIn = body.Length,
+                    RemoteIp = ctx.Connection.RemoteIpAddress?.ToString(),
+                    UserAgent = ctx.Request.Headers.UserAgent.ToString(),
+                    Outcome = "quota_exhausted",
+                    DurationMs = (int)started.ElapsedMilliseconds
+                });
                 return;
             }
         }
@@ -110,6 +141,13 @@ public class PublicProxy {
             _logger.LogWarning(ex, "Failed to send frame to tunnel {Host}", tenantName);
             ctx.Response.StatusCode = 502;
             await ctx.Response.WriteAsync($"Failed to deliver request to tunnel: {ex.Message}\n");
+            _audit.Record(new AuditRecord {
+                Tenant = tenantName, Method = ctx.Request.Method, Path = forwardPath,
+                Status = 502, BytesIn = body.Length,
+                RemoteIp = ctx.Connection.RemoteIpAddress?.ToString(),
+                UserAgent = ctx.Request.Headers.UserAgent.ToString(),
+                Outcome = "send_failed", DurationMs = (int)started.ElapsedMilliseconds
+            });
             return;
         }
 
@@ -119,10 +157,24 @@ public class PublicProxy {
         } catch (OperationCanceledException) when (!ctx.RequestAborted.IsCancellationRequested) {
             ctx.Response.StatusCode = 504;
             await ctx.Response.WriteAsync($"Tunnel response timed out after {_requestTimeout.TotalSeconds}s\n");
+            _audit.Record(new AuditRecord {
+                Tenant = tenantName, Method = ctx.Request.Method, Path = forwardPath,
+                Status = 504, BytesIn = body.Length,
+                RemoteIp = ctx.Connection.RemoteIpAddress?.ToString(),
+                UserAgent = ctx.Request.Headers.UserAgent.ToString(),
+                Outcome = "timeout", DurationMs = (int)started.ElapsedMilliseconds
+            });
             return;
         } catch (Exception ex) {
             ctx.Response.StatusCode = 502;
             await ctx.Response.WriteAsync($"Tunnel error: {ex.Message}\n");
+            _audit.Record(new AuditRecord {
+                Tenant = tenantName, Method = ctx.Request.Method, Path = forwardPath,
+                Status = 502, BytesIn = body.Length,
+                RemoteIp = ctx.Connection.RemoteIpAddress?.ToString(),
+                UserAgent = ctx.Request.Headers.UserAgent.ToString(),
+                Outcome = "tunnel_error", DurationMs = (int)started.ElapsedMilliseconds
+            });
             return;
         }
 
@@ -140,6 +192,14 @@ public class PublicProxy {
         tunnel.RateLimiter?.ChargeBytes(resp.Body.LongLength);
         _usage.Charge(tunnel.Token, resp.Body.LongLength);
         await ctx.Response.Body.WriteAsync(resp.Body, ctx.RequestAborted);
+
+        _audit.Record(new AuditRecord {
+            Tenant = tenantName, Method = ctx.Request.Method, Path = forwardPath,
+            Status = resp.Status, BytesIn = body.Length, BytesOut = resp.Body.LongLength,
+            RemoteIp = ctx.Connection.RemoteIpAddress?.ToString(),
+            UserAgent = ctx.Request.Headers.UserAgent.ToString(),
+            DurationMs = (int)started.ElapsedMilliseconds
+        });
     }
 
     private (string? tenant, string path) ResolveTenant(HttpContext ctx) {

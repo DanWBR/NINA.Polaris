@@ -32,6 +32,10 @@ public class TunnelHandler {
         using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
 
+        // Snapshot the presented client cert (if any) before the WS upgrade
+        // loses easy access to it via the connection feature.
+        var clientCert = ctx.Connection.ClientCertificate;
+
         // ---- 1. Receive the Auth frame ----
         var first = await ReadFrameAsync(ws, lifetime.Token);
         if (first == null) return;
@@ -45,6 +49,26 @@ public class TunnelHandler {
             _logger.LogWarning("Tunnel auth rejected for token prefix {Prefix}: {Reason}", Truncate(token, 8), reject);
             await SendAsync(ws, RelayFrame.Build(RelayFrame.AuthFail, 0, reject ?? "Auth failed"), CancellationToken.None);
             return;
+        }
+
+        // mTLS check: if this tenant pinned a client-cert thumbprint, the cert
+        // presented during the TLS handshake must match. SHA-1 thumbprints
+        // (X509.Thumbprint) compared case-insensitively, stripping spaces/colons.
+        if (config != null && !string.IsNullOrWhiteSpace(config.ClientCertThumbprint)) {
+            var expected = NormaliseThumbprint(config.ClientCertThumbprint);
+            var presented = clientCert is null ? null : NormaliseThumbprint(clientCert.Thumbprint);
+            if (presented == null) {
+                _logger.LogWarning("Tunnel auth rejected for {Host}: tenant requires client cert but none presented", hostname);
+                await SendAsync(ws, RelayFrame.Build(RelayFrame.AuthFail, 0,
+                    "Tenant requires client certificate (mTLS) but none was presented"), CancellationToken.None);
+                return;
+            }
+            if (!string.Equals(presented, expected, StringComparison.OrdinalIgnoreCase)) {
+                _logger.LogWarning("Tunnel auth rejected for {Host}: client cert thumbprint mismatch", hostname);
+                await SendAsync(ws, RelayFrame.Build(RelayFrame.AuthFail, 0,
+                    "Client certificate thumbprint does not match the tenant's pinned cert"), CancellationToken.None);
+                return;
+            }
         }
 
         // Block at the door if the tenant has already burned through this
@@ -206,4 +230,7 @@ public class TunnelHandler {
 
     private static string Truncate(string s, int n) =>
         s.Length <= n ? s : s.Substring(0, n) + "…";
+
+    private static string NormaliseThumbprint(string raw) =>
+        new string(raw.Where(c => !char.IsWhiteSpace(c) && c != ':' && c != '-').ToArray()).ToLowerInvariant();
 }

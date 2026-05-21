@@ -249,10 +249,19 @@ companion **NINA.Relay.Server** project that acts as a reverse tunnel.
   static `.pfx`). No reverse proxy required
 - **Web admin UI** at `/admin/` — gated by `Admin:Password` (HTTP Basic);
   add/edit/delete tenants, view live tunnels + monthly usage bars,
-  generate cryptographically-random tokens, reset usage counters
+  generate cryptographically-random tokens, reset usage counters,
+  browse the audit log with per-tenant filter
+- **Per-request audit log** (JSON-lines `audit.log`) — timestamp, tenant,
+  method, path, status, bytes in/out, duration, source IP, outcome
+  reason. Auto-rotates at 50 MB. In-memory ring buffer surfaced via
+  `/_admin/audit?tenant=&limit=` and the admin UI
+- **mTLS for tunnel auth** — per-tenant `clientCertThumbprint` pins the
+  X.509 cert the tunnel client must present. Bearer token alone is the
+  default; mTLS is opt-in per tenant. NINA Headless client points at a
+  `.pfx` via `Relay:ClientCertPath` (+ optional password)
 - Admin endpoints: `/_health`, `/_tunnels` (with per-tunnel byte counters),
   `/_admin/tenants` (full CRUD), `/_admin/generate-token`,
-  `/_admin/usage/{token}/reset`, `/_admin/reload-tenants`
+  `/_admin/usage/{token}/reset`, `/_admin/audit`, `/_admin/reload-tenants`
 - Two deployment models — self-host on a $5 VPS, or use a hosted instance
 - See [`src/NINA.Relay.Server/README.md`](src/NINA.Relay.Server/README.md) for
   deployment instructions, Caddy reverse-proxy example, full `tenants.json`
@@ -297,7 +306,7 @@ nina-headless/
 │   └── NINA.Relay.Server/          ← Standalone reverse-tunnel relay (ASP.NET Core)
 │
 ├── tests/
-│   └── NINA.Headless.Test/         ← 152 unit tests (NUnit)
+│   └── NINA.Headless.Test/         ← 160 unit tests (NUnit)
 │
 ├── deploy/                         ← Deployment scripts
 │   ├── nina-headless.service        ← systemd unit file
@@ -707,6 +716,8 @@ Persistence:
 | `Relay__Enabled` | `false` | Enable reverse-tunnel client |
 | `Relay__ServerUrl` | (none) | e.g. `wss://relay.example.com/_tunnel` |
 | `Relay__Token` | (none) | Bearer token matching a tenant entry on the relay server |
+| `Relay__ClientCertPath` | (none) | Path to a `.pfx` to present on tunnel TLS handshake (mTLS) |
+| `Relay__ClientCertPassword` | (none) | Password for the `.pfx` (optional) |
 
 Relay **server** side (different process, same `Relay__*` prefix in `appsettings.json`):
 
@@ -717,7 +728,12 @@ Relay **server** side (different process, same `Relay__*` prefix in `appsettings
 | `Proxy__TimeoutSeconds` | `60` | Per-request timeout (long enough for plate-solving uploads) |
 | `Proxy__HostnameSuffix` | (none) | e.g. `.relay.example.com` to enable subdomain routing |
 | `Admin__Password` | (empty) | Password for `/_admin/*` and the `/admin/` Web UI. Empty = admin API disabled (returns 503) |
+| `Audit__Enabled` | `true` | Set to false to disable the audit log |
+| `Audit__Path` | `audit.log` | JSON-lines audit log path |
+| `Audit__MaxFileBytes` | `52428800` | Rotate at this size (default 50 MB) |
+| `Audit__RingBufferSize` | `5000` | In-memory ring for `/_admin/audit` |
 | `Tls__Mode` | `off` | `off` / `pfx` / `letsencrypt` |
+| `Tls__ClientCertificateMode` | `request` | `none` / `request` / `require` — Kestrel client-cert behaviour (mTLS) |
 | `Tls__HttpsPort` | `443` | HTTPS bind port when TLS is enabled |
 | `Tls__RedirectHttpToHttps` | `false` | 308-redirect plain HTTP to HTTPS |
 | `Tls__PfxPath` / `Tls__PfxPassword` | — | Static cert when `Tls:Mode=pfx` |
@@ -753,7 +769,7 @@ Relay **server** side (different process, same `Relay__*` prefix in `appsettings
 - [x] Profile management (JSON persistence)
 - [x] Network resilience (reconnect, dedup, backpressure, adaptive bandwidth)
 - [x] systemd + Docker (linux/amd64 + linux/arm64) + Windows publish scripts
-- [x] 152 unit tests
+- [x] 160 unit tests
 
 **Acquisition essentials (Phase A)**
 - [x] PHD2 guider integration (TCP/JSON-RPC, RMS, dither, settle, alerts)
@@ -797,7 +813,9 @@ Relay **server** side (different process, same `Relay__*` prefix in `appsettings
 - [x] Relay JSON tenant store (`tenants.json`) with hot-reload + per-tenant rate limiting (request + bandwidth token-buckets, HTTP 429 on exceed)
 - [x] Relay monthly byte quotas + expiring tokens (HTTP 402 on quota, auto-reset 1st UTC, persistent counter)
 - [x] Relay built-in TLS — LettuceEncrypt for automatic Let's Encrypt, or static `.pfx`
-- [x] Relay web admin UI at `/admin/` — full tenant CRUD, live tunnel + quota dashboard, token generator
+- [x] Relay web admin UI at `/admin/` — full tenant CRUD, live tunnel + quota dashboard, token generator, audit-log browser with per-tenant filter
+- [x] Relay per-request audit log (JSON-lines `audit.log`, auto-rotated 50 MB, outcome reasons, in-memory ring buffer + `/_admin/audit` API)
+- [x] Relay mTLS for tunnel auth — per-tenant `clientCertThumbprint` pins the X.509 cert the client must present (bearer token still required)
 
 ### Planned
 
@@ -814,9 +832,8 @@ Relay **server** side (different process, same `Relay__*` prefix in `appsettings
 - [ ] D5: Mosaic planner with grid overlay
 - [ ] D12: Plugin system (extension API for custom instructions / UI panels / device types)
 
-**Relay server — follow-ups**
-- [ ] Per-tenant request logs / audit trail
-- [ ] mTLS for tunnel auth (today: bearer token only)
+**Relay server**
+- Feature-complete for now — open a discussion if you want a new follow-up
 
 ## Support the project
 

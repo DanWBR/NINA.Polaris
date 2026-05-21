@@ -94,6 +94,25 @@ public class RelayClient : IHostedService, IDisposable {
 
     private async Task RunOnceAsync(string url, string token, CancellationToken ct) {
         using var ws = new ClientWebSocket();
+
+        // Optional client certificate (mTLS). The relay matches the cert's
+        // SHA-1 thumbprint against the tenant's ClientCertThumbprint field.
+        var certPath = _config.GetValue<string?>("Relay:ClientCertPath");
+        var certPw = _config.GetValue<string?>("Relay:ClientCertPassword");
+        if (!string.IsNullOrEmpty(certPath) && File.Exists(certPath)) {
+            try {
+                var cert = string.IsNullOrEmpty(certPw)
+                    ? System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadPkcs12FromFile(certPath, null)
+                    : System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadPkcs12FromFile(certPath, certPw);
+                ws.Options.ClientCertificates ??= new System.Security.Cryptography.X509Certificates.X509CertificateCollection();
+                ws.Options.ClientCertificates.Add(cert);
+                _logger.LogInformation("Loaded relay client certificate {Subject} (thumbprint {Tp})",
+                    cert.Subject, cert.Thumbprint);
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "Could not load Relay:ClientCertPath {Path}", certPath);
+            }
+        }
+
         await ws.ConnectAsync(new Uri(url), ct);
         _logger.LogInformation("Relay tunnel WebSocket connected to {Url}", url);
 

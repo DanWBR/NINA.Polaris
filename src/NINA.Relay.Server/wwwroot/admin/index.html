@@ -184,6 +184,60 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   </tbody>
 </table>
 
+<!-- AUDIT LOG -->
+<div class="section-title">Recent requests (audit log)</div>
+<div class="toolbar">
+  <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px">
+    Filter tenant:
+    <select x-model="auditFilter" @change="loadAudit()" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 8px">
+      <option value="">(all)</option>
+      <template x-for="t in tenants" :key="t.token">
+        <option :value="t.hostname" x-text="t.hostname"></option>
+      </template>
+    </select>
+  </label>
+  <button class="btn btn-sm" @click="loadAudit()">↻ Refresh</button>
+  <span class="muted" style="margin-left:auto;font-size:12px">
+    <span x-show="!audit.enabled">disabled — set Audit:Enabled=true</span>
+    <span x-show="audit.enabled" x-text="'logging to ' + audit.path"></span>
+  </span>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th>Time (UTC)</th>
+      <th>Tenant</th>
+      <th>Method</th>
+      <th>Path</th>
+      <th>Status</th>
+      <th>In / Out</th>
+      <th>ms</th>
+      <th>Source IP</th>
+      <th>Outcome</th>
+    </tr>
+  </thead>
+  <tbody>
+    <template x-for="(r, i) in audit.records.slice().reverse()" :key="i">
+      <tr>
+        <td x-text="new Date(r.timestamp).toISOString().slice(11, 19)"></td>
+        <td><code x-text="r.tenant"></code></td>
+        <td x-text="r.method"></td>
+        <td><code x-text="r.path.length > 40 ? r.path.slice(0, 40) + '…' : r.path" :title="r.path"></code></td>
+        <td>
+          <span :style="'color:' + statusColor(r.status)" x-text="r.status"></span>
+        </td>
+        <td x-text="fmtBytes(r.bytesIn) + ' / ' + fmtBytes(r.bytesOut)"></td>
+        <td x-text="r.durationMs"></td>
+        <td class="muted" x-text="r.remoteIp || '—'"></td>
+        <td><span class="muted" x-text="r.outcome || ''"></span></td>
+      </tr>
+    </template>
+    <tr x-show="audit.records.length === 0">
+      <td colspan="9" class="muted" style="text-align:center;padding:24px">No requests yet.</td>
+    </tr>
+  </tbody>
+</table>
+
 <!-- EDIT/CREATE MODAL -->
 <div class="modal-backdrop" x-show="editing" @click.self="editing = null" x-cloak>
   <div class="modal" x-show="editing">
@@ -238,6 +292,11 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
       </div>
     </div>
     <div class="field">
+      <label>Client cert thumbprint (mTLS, optional)</label>
+      <input type="text" x-model="draft.clientCertThumbprint" placeholder="A1B2C3...  (SHA-1 hex, case-insensitive)">
+      <span class="field-help">When set, tunnel auth requires both the bearer token AND a TLS client cert with this thumbprint.</span>
+    </div>
+    <div class="field">
       <label>Note (optional)</label>
       <textarea x-model="draft.note" placeholder="Owner email, contract ref, etc."></textarea>
     </div>
@@ -259,6 +318,8 @@ function admin() {
     tenants: [],
     tunnelsLive: [],
     health: null,
+    audit: { enabled: false, path: '', records: [] },
+    auditFilter: '',
     editing: null,
     isNew: false,
     draft: {},
@@ -271,17 +332,26 @@ function admin() {
 
     async loadAll() {
       try {
-        const [tenants, tunnels, health] = await Promise.all([
+        const [tenants, tunnels, health, audit] = await Promise.all([
           this.api('GET', '/_admin/tenants'),
           this.api('GET', '/_tunnels'),
-          this.api('GET', '/_health')
+          this.api('GET', '/_health'),
+          this.api('GET', '/_admin/audit?limit=100' + (this.auditFilter ? '&tenant=' + encodeURIComponent(this.auditFilter) : ''))
         ]);
         this.tenants = tenants;
         this.tunnelsLive = tunnels;
         this.health = health;
+        this.audit = audit;
       } catch (e) {
         this.showToast(e.message, 'error');
       }
+    },
+
+    async loadAudit() {
+      try {
+        this.audit = await this.api('GET', '/_admin/audit?limit=100' +
+          (this.auditFilter ? '&tenant=' + encodeURIComponent(this.auditFilter) : ''));
+      } catch (e) { this.showToast(e.message, 'error'); }
     },
 
     async api(method, url, body) {
@@ -305,7 +375,8 @@ function admin() {
         token: '', hostname: '', enabled: true,
         requestsPerSecond: 0, burstRequests: 0,
         bytesPerSecond: 0, burstBytes: 0,
-        monthlyBytes: 0, expiresAtLocal: '', note: ''
+        monthlyBytes: 0, expiresAtLocal: '',
+        clientCertThumbprint: '', note: ''
       };
       this.editing = true;
     },
@@ -322,6 +393,7 @@ function admin() {
         burstBytes: t.burstBytes || 0,
         monthlyBytes: t.monthlyBytes || 0,
         expiresAtLocal: t.expiresAt ? t.expiresAt.slice(0, 16) : '',
+        clientCertThumbprint: t.clientCertThumbprint || '',
         note: t.note || ''
       };
       this.editing = true;
@@ -343,6 +415,7 @@ function admin() {
         burstBytes: Number(this.draft.burstBytes) || 0,
         monthlyBytes: Number(this.draft.monthlyBytes) || 0,
         expiresAt: this.draft.expiresAtLocal ? new Date(this.draft.expiresAtLocal).toISOString() : null,
+        clientCertThumbprint: this.draft.clientCertThumbprint || null,
         note: this.draft.note || null
       };
       try {
@@ -397,6 +470,12 @@ function admin() {
       if (pct >= 90) return 'danger';
       if (pct >= 70) return 'warn';
       return 'ok';
+    },
+    statusColor(s) {
+      if (s >= 500) return 'var(--danger)';
+      if (s >= 400) return 'var(--warn)';
+      if (s >= 300) return 'var(--accent)';
+      return 'var(--ok)';
     }
   };
 }
