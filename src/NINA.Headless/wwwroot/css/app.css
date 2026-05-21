@@ -2799,3 +2799,200 @@ select.input-sm {
     text-decoration: none;
 }
 .weather-legend a:hover { text-decoration: underline; }
+
+/* ─── Tonight's Best tab ────────────────────────────────────────────────
+   ASIAIR-style ranked list. Each row is a card containing:
+     thumb (left) │ name + coords + badges │ mini altitude chart │ compass │ Go to
+*/
+.tonight-panel {
+    padding: 16px;
+    overflow-y: auto;
+    gap: 14px;
+    display: flex;
+    flex-direction: column;
+}
+
+.tonight-filters {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.tonight-filter-chip {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+.tonight-filter-chip:hover { background: rgba(255, 255, 255, 0.08); }
+.tonight-filter-chip.active {
+    background: rgba(33, 150, 243, 0.18);
+    color: #90caf9;
+    border-color: rgba(33, 150, 243, 0.5);
+}
+.tonight-filter-chip.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.tonight-filter-toggle {
+    margin-left: 6px;
+}
+
+.tonight-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.tonight-card {
+    display: grid;
+    grid-template-columns: 80px minmax(220px, 1fr) minmax(180px, 2fr) 78px auto;
+    gap: 12px;
+    align-items: center;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    transition: border-color 0.12s ease;
+}
+.tonight-card:hover { border-color: rgba(79, 195, 247, 0.4); }
+/* Coloured left edge to distinguish categories at a glance */
+.tonight-card--moon   { border-left: 3px solid #c8e6c9; }
+.tonight-card--planet { border-left: 3px solid #ffe082; }
+.tonight-card--dso    { border-left: 3px solid #90caf9; }
+.tonight-card--comet  { border-left: 3px solid #ce93d8; }
+
+.tonight-thumb {
+    width: 80px;
+    height: 80px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #0c1226;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.tonight-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.tonight-thumb-placeholder {
+    color: var(--text-muted);
+    font-size: 20px;
+}
+
+.tonight-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+.tonight-name-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.tonight-name {
+    color: #4fc3f7;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 14px;
+}
+.tonight-name:hover { text-decoration: underline; }
+.tonight-common {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+.tonight-score {
+    margin-left: auto;
+    color: var(--text-muted);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.5px;
+}
+.tonight-coords {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+.tonight-badges {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.tonight-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+.tonight-badge--fits  { background: rgba(76, 175, 80, 0.22); color: #c8e6c9; }
+.tonight-badge--big   { background: rgba(255, 152, 0, 0.22); color: #ffe0b2; }
+.tonight-badge--peak  { background: rgba(255, 255, 255, 0.06); color: var(--text-secondary); }
+
+.tonight-chart-cell {
+    height: 64px;
+    min-width: 180px;
+    position: relative;
+}
+.tonight-chart {
+    width: 100% !important;
+    height: 64px !important;
+}
+
+.tonight-compass {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+}
+.tonight-compass-svg {
+    width: 60px;
+    height: 60px;
+}
+.tonight-compass-label {
+    font-size: 10px;
+    color: #4fc3f7;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.tonight-alt-now {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.tonight-actions {
+    display: flex;
+    align-items: center;
+}
+
+@media (max-width: 900px) {
+    .tonight-card {
+        grid-template-columns: 64px 1fr auto;
+        grid-template-areas:
+            "thumb info compass"
+            "thumb chart  chart"
+            "thumb actions actions";
+    }
+    .tonight-thumb { width: 64px; height: 64px; grid-area: thumb; }
+    .tonight-info { grid-area: info; }
+    .tonight-chart-cell { grid-area: chart; height: 48px; min-width: 0; }
+    .tonight-chart { height: 48px !important; }
+    .tonight-compass { grid-area: compass; }
+    .tonight-actions { grid-area: actions; justify-content: flex-end; }
+}

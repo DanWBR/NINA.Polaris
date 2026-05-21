@@ -108,6 +108,10 @@
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><ellipse cx="12" cy="12" rx="10" ry="4" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="12" y1="2" x2="12" y2="22" stroke="currentColor" stroke-width="1.5"/></svg>
                 <span class="nav-label">Sky</span>
             </button>
+            <button class="nav-btn" :class="{ active: tab === 'tonight' }" @click="tab = 'tonight'; loadTonightsBest()" title="Tonight's Best">
+                <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2 L13.5 10.5 L22 12 L13.5 13.5 L12 22 L10.5 13.5 L2 12 L10.5 10.5 Z" fill="currentColor"/></svg>
+                <span class="nav-label">Tonight</span>
+            </button>
             <button class="nav-btn" :class="{ active: tab === 'weather' }" @click="tab = 'weather'; loadWeatherForecast()" title="Weather forecast">
                 <svg viewBox="0 0 24 24" width="22" height="22"><path d="M7 18h11a4 4 0 1 0-.7-7.95A6 6 0 0 0 6.2 12.04 4.5 4.5 0 0 0 7 18z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="6" cy="6" r="1.5" fill="currentColor"/><circle cx="19" cy="5" r="1" fill="currentColor"/></svg>
                 <span class="nav-label">Weather</span>
@@ -1356,6 +1360,121 @@
                 <!-- No target selected -->
                 <div class="sky-empty" x-show="!skyTarget && !skyShowResults">
                     <p class="hint">Search for a deep sky object above to get started</p>
+                </div>
+            </div>
+
+            <!-- TONIGHT'S BEST -->
+            <div x-show="tab === 'tonight'" class="tab-panel tonight-panel">
+                <div class="panel-header">
+                    Tonight's Best
+                    <span class="status-indicator-sm"
+                          :class="tonight.loading ? 'warn' : (tonight.items.length ? 'ok' : 'idle')"
+                          x-text="tonight.loading ? 'loading' : (tonight.items.length ? tonight.items.length + ' visible' : 'idle')"></span>
+                    <span class="muted" style="font-size:11px;margin-left:auto"
+                          x-show="tonight.lastFetched"
+                          x-text="'Updated ' + tonight.lastFetched?.toLocaleTimeString()"></span>
+                    <button class="btn btn-sm" @click="loadTonightsBest(true)" :disabled="tonight.loading">Refresh</button>
+                </div>
+
+                <!-- Error / no-location -->
+                <div x-show="tonight.error" class="weather-message" x-text="tonight.error"></div>
+
+                <!-- Filter chips -->
+                <div class="tonight-filters" x-show="!tonight.error && tonight.items.length">
+                    <template x-for="f in ['all','dso','planet','moon']" :key="f">
+                        <button class="tonight-filter-chip"
+                                :class="{ active: tonight.filter === f }"
+                                @click="tonight.filter = f"
+                                x-text="f === 'all' ? 'All' : f === 'dso' ? 'DSOs' : f.charAt(0).toUpperCase() + f.slice(1) + 's'"></button>
+                    </template>
+                    <label class="tonight-filter-chip tonight-filter-toggle"
+                           :class="{ active: tonight.fitsFovOnly, disabled: !tonightHasFovData() }"
+                           :title="tonightHasFovData() ? 'Show only objects that fit your current camera FOV' : 'Connect a camera to enable this filter'">
+                        <input type="checkbox" x-model="tonight.fitsFovOnly" :disabled="!tonightHasFovData()" style="display:none">
+                        Fits my FOV
+                    </label>
+                </div>
+
+                <!-- Card list -->
+                <div class="tonight-list" x-show="!tonight.loading && tonightFiltered().length">
+                    <template x-for="item in tonightFiltered()" :key="item.category + '/' + item.name">
+                        <div class="tonight-card" :class="'tonight-card--' + item.category.toLowerCase()">
+                            <div class="tonight-thumb" :data-name="item.name">
+                                <img :src="tonight.thumbs[item.name]?.url || ''"
+                                     :alt="item.name"
+                                     loading="lazy"
+                                     x-show="tonight.thumbs[item.name]?.url"
+                                     @error="tonight.thumbs[item.name] = { url: null, missing: true }">
+                                <div class="tonight-thumb-placeholder"
+                                     x-show="!tonight.thumbs[item.name]?.url"
+                                     x-text="tonight.thumbs[item.name]?.missing ? '·' : '…'"></div>
+                            </div>
+                            <div class="tonight-info">
+                                <div class="tonight-name-row">
+                                    <a href="#" @click.prevent="tonightPickTarget(item)"
+                                       class="tonight-name" x-text="item.name"></a>
+                                    <span class="tonight-common" x-show="item.commonName"
+                                          x-text="' (' + item.commonName + ')'"></span>
+                                    <span class="tonight-score" x-text="'score ' + item.score"></span>
+                                </div>
+                                <div class="tonight-coords">
+                                    <span>RA <span x-text="formatRA(item.raHours)"></span></span>
+                                    <span>Dec <span x-text="formatDec(item.decDeg)"></span></span>
+                                    <span x-show="item.magnitude != null">Mag <span x-text="item.magnitude"></span></span>
+                                    <span x-show="item.type" x-text="item.type" class="muted"></span>
+                                </div>
+                                <div class="tonight-badges">
+                                    <span class="tonight-badge tonight-badge--fits"
+                                          x-show="item.fitsCameraFov === true"
+                                          x-text="'✓ Fits FOV'"></span>
+                                    <span class="tonight-badge tonight-badge--big"
+                                          x-show="item.fitsCameraFov === false"
+                                          x-text="'⊘ Larger than FOV'"></span>
+                                    <span class="tonight-badge tonight-badge--peak"
+                                          x-text="'Peak ' + item.peakAltDeg + '° @ ' + new Date(item.peakUtc).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})"></span>
+                                </div>
+                            </div>
+                            <div class="tonight-chart-cell">
+                                <canvas :id="'tonightChart_' + tonightSafeKey(item)"
+                                        class="tonight-chart"></canvas>
+                            </div>
+                            <div class="tonight-compass">
+                                <svg viewBox="0 0 60 60" class="tonight-compass-svg">
+                                    <circle cx="30" cy="30" r="26" fill="none" stroke="#445" stroke-width="1"/>
+                                    <text x="30" y="9"  text-anchor="middle" fill="#aab" font-size="8">N</text>
+                                    <text x="30" y="56" text-anchor="middle" fill="#aab" font-size="8">S</text>
+                                    <text x="6"  y="33" text-anchor="middle" fill="#aab" font-size="8">W</text>
+                                    <text x="54" y="33" text-anchor="middle" fill="#aab" font-size="8">E</text>
+                                    <line x1="30" y1="30"
+                                          :x2="30 + 18 * Math.sin(item.currentAzDeg * Math.PI / 180)"
+                                          :y2="30 - 18 * Math.cos(item.currentAzDeg * Math.PI / 180)"
+                                          stroke="#4fc3f7" stroke-width="2.5" stroke-linecap="round"/>
+                                    <circle cx="30" cy="30" r="2.5" fill="#4fc3f7"/>
+                                </svg>
+                                <div class="tonight-compass-label" x-text="Math.round(item.currentAzDeg) + '° ' + azCardinal(item.currentAzDeg)"></div>
+                                <div class="tonight-alt-now" x-text="item.currentAltDeg + '° alt'"></div>
+                            </div>
+                            <div class="tonight-actions" x-show="mount.connected">
+                                <button class="btn btn-sm btn-primary"
+                                        @click="tonightGoTo(item)"
+                                        :disabled="slewCenterJobId">Go to</button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="weather-message" x-show="!tonight.loading && tonight.items.length && !tonightFiltered().length">
+                    No objects match the current filter.
+                </div>
+
+                <div class="weather-legend" x-show="tonight.items.length">
+                    <strong>Categories</strong>
+                    <span class="weather-legend-chip" style="background:rgba(76,175,80,0.18);color:#c8e6c9">Moon</span>
+                    <span class="weather-legend-chip" style="background:rgba(255,193,7,0.18);color:#ffe082">Planet</span>
+                    <span class="weather-legend-chip" style="background:rgba(33,150,243,0.18);color:#90caf9">DSO</span>
+                    <span class="muted" style="margin-left:auto">
+                        Catalog: local 200 DSOs · Planets: <a href="https://github.com/cosinekitty/astronomy" target="_blank" rel="noopener">AstronomyEngine</a> · Images: <a href="https://images.nasa.gov/" target="_blank" rel="noopener">NASA</a> / <a href="https://en.wikipedia.org" target="_blank" rel="noopener">Wikipedia</a>
+                    </span>
                 </div>
             </div>
 

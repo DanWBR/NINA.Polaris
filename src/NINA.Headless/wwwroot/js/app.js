@@ -212,6 +212,15 @@ function ninaApp() {
         weather: { forecast: null, loading: false, error: '', lastFetched: null },
         _weatherLastKey: '',
 
+        // Tonight's Best — ranked list from /api/sky/tonights-best, plus
+        // a per-name thumbnail cache filled on demand by _kickTonightThumbs.
+        tonight: {
+            items: [], envelope: null, loading: false, error: '',
+            lastFetched: null, filter: 'all', fitsFovOnly: false,
+            thumbs: {}      // { [name]: { url, title, credit, missing } }
+        },
+        _tonightLastKey: '',
+
         // d3-celestial Sky Viewer (offline, BSD-3-Clause).
         // Always renders the live sky from the observer's location at the
         // current UTC time, in horizontal projection — same convention as
@@ -1720,6 +1729,155 @@ function ninaApp() {
             })
             .sort((a, b) => b._rank - a._rank)
             .slice(0, 3);
+        },
+
+        // ─── Tonight's Best (/api/sky/tonights-best) ─────────────────────
+
+        async loadTonightsBest(force = false) {
+            const lat = this.settings.latitude;
+            const lng = this.settings.longitude;
+            if (lat == null || lng == null
+                || (Math.abs(lat) < 0.01 && Math.abs(lng) < 0.01)) {
+                this.tonight.error = 'Set your observing location in Settings first.';
+                this.tonight.items = [];
+                return;
+            }
+            // Refresh once per UI mount; force=true bypasses (e.g. button).
+            if (!force && this.tonight.items.length && this._tonightLastKey === lat + ',' + lng) return;
+            this._tonightLastKey = lat + ',' + lng;
+            this.tonight.loading = true;
+            this.tonight.error = '';
+            try {
+                const r = await this.apiGet('/api/sky/tonights-best?limit=30');
+                this.tonight.items = r.items || [];
+                this.tonight.envelope = r;
+                this.tonight.lastFetched = new Date();
+                // Kick off thumbnail + per-card chart rendering after Alpine
+                // commits the DOM with the new template instances.
+                this.$nextTick(() => {
+                    this.tonight.items.forEach(i => this._renderTonightChart(i));
+                    this._kickTonightThumbs();
+                });
+            } catch (e) {
+                this.tonight.error = 'Failed to load Tonight\'s Best: ' + (e.message || 'unknown error');
+                this.tonight.items = [];
+            } finally {
+                this.tonight.loading = false;
+            }
+        },
+
+        // Subset honoured by the chip row at the top of the panel.
+        tonightFiltered() {
+            let xs = this.tonight.items;
+            if (this.tonight.filter && this.tonight.filter !== 'all') {
+                const cap = this.tonight.filter.charAt(0).toUpperCase() + this.tonight.filter.slice(1);
+                xs = xs.filter(i => i.category.toLowerCase() === this.tonight.filter);
+            }
+            if (this.tonight.fitsFovOnly && this.tonightHasFovData()) {
+                xs = xs.filter(i => i.fitsCameraFov === true);
+            }
+            return xs;
+        },
+
+        tonightHasFovData() {
+            return this.tonight.items.some(i => i.fitsCameraFov !== null);
+        },
+
+        // Used in `:key` / `:id` bindings — has to be DOM-safe (no slashes,
+        // colons, parens). Comet names like "22P/Kopff" would otherwise
+        // produce invalid IDs.
+        tonightSafeKey(item) {
+            return (item.category + '_' + item.name).replace(/[^a-zA-Z0-9_]/g, '_');
+        },
+
+        azCardinal(az) {
+            const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+            return dirs[Math.round((az % 360) / 45) % 8];
+        },
+
+        // Click the name → set as the current Sky target, jump to Sky tab,
+        // recentre the map. Doesn't move the mount — that's the Go to btn.
+        tonightPickTarget(item) {
+            this.skyTarget = {
+                name:    item.name,
+                ra:      item.raHours,
+                dec:     item.decDeg,
+                type:    item.type,
+                magnitude: item.magnitude != null ? item.magnitude : ''
+            };
+            this.tab = 'sky';
+            this.$nextTick(() => {
+                if (typeof this.skyGoToMount === 'function') this.skyGoToMount();
+                if (typeof this.updateSkyCameraFov === 'function') this.updateSkyCameraFov();
+            });
+        },
+
+        // Mount-connected click → slew + plate solve + centre, same workflow
+        // the existing Sky tab Slew & Center button uses.
+        async tonightGoTo(item) {
+            this.tonightPickTarget(item);
+            this.$nextTick(() => {
+                if (typeof this.slewAndCenter === 'function') {
+                    this.slewAndCenter();
+                }
+            });
+        },
+
+        // Lazy-load thumbnails one at a time so we don't fire 30 parallel
+        // /api/sky/image requests on tab open. Sequential is plenty fast
+        // for a list of this size and is much kinder to NASA / Wikipedia.
+        async _kickTonightThumbs() {
+            for (const item of this.tonight.items) {
+                if (this.tonight.thumbs[item.name]) continue;
+                this.tonight.thumbs[item.name] = { url: null, missing: false };
+                try {
+                    const r = await this.apiGet(`/api/sky/image?name=${encodeURIComponent(item.name)}`);
+                    this.tonight.thumbs[item.name] = {
+                        url:     r.available ? r.thumbnailUrl : null,
+                        title:   r.title,
+                        credit:  r.credit,
+                        missing: !r.available
+                    };
+                } catch {
+                    this.tonight.thumbs[item.name] = { url: null, missing: true };
+                }
+            }
+        },
+
+        // Mini per-card altitude chart (~12 h window). Reuses the
+        // _ensureChart() helper so charts get destroyed cleanly on
+        // refresh.
+        async _renderTonightChart(item) {
+            const key = 'tonight_' + this.tonightSafeKey(item);
+            const canvasId = 'tonightChart_' + this.tonightSafeKey(item);
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            try {
+                const data = await this.apiGet(
+                    `/api/sky/altitude?ra=${item.raHours}&dec=${item.decDeg}&stepMinutes=30`);
+                const t = this._chartTheme();
+                const chart = this._ensureChart(canvasId, key, 'line', () => ({
+                    type: 'line',
+                    data: { labels: [], datasets: [
+                        { label: 'Altitude', data: [],
+                          borderColor: '#4fc3f7', backgroundColor: 'rgba(79,195,247,0.12)',
+                          tension: 0.25, pointRadius: 0, borderWidth: 1.5, fill: true }
+                    ] },
+                    options: {
+                        responsive: true, maintainAspectRatio: false, animation: false,
+                        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                        scales: {
+                            x: { display: false },
+                            y: { min: 0, max: 90, ticks: { display: false }, grid: { color: t.grid } }
+                        }
+                    }
+                }));
+                if (!chart) return;
+                const samples = data.samples || [];
+                chart.data.labels = samples.map(s => new Date(s.utc).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+                chart.data.datasets[0].data = samples.map(s => Math.max(0, s.altitudeDeg));
+                chart.update('none');
+            } catch { /* leave canvas blank */ }
         },
 
         _updateSkyClock() {
