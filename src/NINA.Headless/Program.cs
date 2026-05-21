@@ -39,6 +39,7 @@ builder.Services.AddSingleton<NINA.Headless.Services.Alpaca.AlpacaDiscovery>();
 builder.Services.AddSingleton<StellariumClient>();
 builder.Services.AddSingleton<AltitudeService>();
 builder.Services.AddSingleton<GeocodingService>();
+builder.Services.AddSingleton<WeatherForecastService>();
 builder.Services.AddHostedService<MdnsService>();
 builder.Services.AddSingleton<RelayClient>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<RelayClient>());

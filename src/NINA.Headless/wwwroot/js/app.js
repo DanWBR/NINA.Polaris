@@ -205,6 +205,13 @@ function ninaApp() {
         atlasTypes: [],
         altitudeData: null,
 
+        // Weather forecast (7Timer via /api/weather/forecast).
+        // forecast is the raw DTO from the backend. weatherDays() /
+        // weatherBestWindows() (declared below) derive view-model data
+        // on the fly, using SunCalc for sun + moon ephemeris.
+        weather: { forecast: null, loading: false, error: '', lastFetched: null },
+        _weatherLastKey: '',
+
         // d3-celestial Sky Viewer (offline, BSD-3-Clause).
         // Always renders the live sky from the observer's location at the
         // current UTC time, in horizontal projection — same convention as
@@ -1454,6 +1461,201 @@ function ninaApp() {
             } catch (e) {
                 // Offline or blocked — silent fallback to coords.
             }
+        },
+
+        // ─── Weather forecast (7Timer via /api/weather/forecast) ──────────
+
+        async loadWeatherForecast(force = false) {
+            const lat = this.settings.latitude;
+            const lng = this.settings.longitude;
+            if (lat == null || lng == null
+                || (Math.abs(lat) < 0.01 && Math.abs(lng) < 0.01)) {
+                this.weather.error = 'Set your observing location in Settings first.';
+                this.weather.forecast = null;
+                return;
+            }
+            const key = `${lat.toFixed(2)},${lng.toFixed(2)}`;
+            // Skip refetch within the cache window unless the caller wants
+            // to force (e.g. Refresh button). Backend has its own 15 min
+            // cache so even a force-refresh storm is harmless.
+            if (!force && key === this._weatherLastKey && this.weather.forecast?.available) return;
+            this._weatherLastKey = key;
+            this.weather.loading = true;
+            this.weather.error = '';
+            try {
+                const r = await this.apiGet(`/api/weather/forecast?lat=${lat}&lon=${lng}`);
+                this.weather.forecast = r;
+                this.weather.lastFetched = new Date();
+                if (!r?.available) {
+                    this.weather.error = r?.error || 'Forecast unavailable';
+                }
+            } catch (e) {
+                this.weather.error = 'Could not reach forecast service';
+                this.weather.forecast = null;
+            } finally {
+                this.weather.loading = false;
+            }
+        },
+
+        // 7Timer cloudcover: 1 (0–6%) → 9 (94–100%). Convert to mid-bucket %.
+        _cloudPercent(bucket) {
+            const map = { 1: 3, 2: 13, 3: 31, 4: 50, 5: 68, 6: 81, 7: 88, 8: 94, 9: 98 };
+            return map[bucket] ?? 0;
+        },
+
+        _scoreClass(score) {
+            if (score >= 70) return 'weather-slot--good';
+            if (score >= 40) return 'weather-slot--meh';
+            return 'weather-slot--bad';
+        },
+
+        _moonIconForPhase(phase) {
+            // SunCalc returns moon phase in [0,1]: 0=new, 0.25=first qtr,
+            // 0.5=full, 0.75=last qtr. Pick the closest emoji bucket.
+            if (phase < 0.0625 || phase >= 0.9375) return '🌑';
+            if (phase < 0.1875) return '🌒';
+            if (phase < 0.3125) return '🌓';
+            if (phase < 0.4375) return '🌔';
+            if (phase < 0.5625) return '🌕';
+            if (phase < 0.6875) return '🌖';
+            if (phase < 0.8125) return '🌗';
+            return '🌘';
+        },
+
+        _fmtLocalTime(d) {
+            return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+        },
+
+        // Group raw forecast slots into per-local-day buckets, attaching
+        // sun + moon ephemeris (SunCalc) and pre-formatted display strings
+        // so the template stays declarative.
+        weatherDays() {
+            const f = this.weather.forecast;
+            if (!f?.available || !f.slots?.length) return [];
+            const lat = this.settings.latitude || 0;
+            const lng = this.settings.longitude || 0;
+            const todayMs = new Date().setHours(0, 0, 0, 0);
+            // Bucket by local date string.
+            const buckets = new Map();
+            for (const raw of f.slots) {
+                const utc = new Date(raw.utcStart);
+                const localKey = utc.toLocaleDateString();
+                if (!buckets.has(localKey)) buckets.set(localKey, []);
+                const slotDate = utc;
+                buckets.get(localKey).push({
+                    raw,
+                    utcMs:      utc.getTime(),
+                    localTime:  this._fmtLocalTime(slotDate),
+                    score:      raw.observationScore,
+                    scoreClass: this._scoreClass(raw.observationScore),
+                    cloudLabel: this._cloudPercent(raw.cloudCover) + '%',
+                    tooltip:    `${this._fmtLocalTime(slotDate)}  · score ${raw.observationScore}\n`
+                              + `Cloud ${this._cloudPercent(raw.cloudCover)}%`
+                              + `  · Seeing ${raw.seeing}/8  · Transp ${raw.transparency}/8\n`
+                              + `${raw.temp2m.toFixed(1)}°C  · RH ${raw.rh2m}%`
+                              + `  · Wind ${raw.windSpeed} (${raw.windDirection})`
+                              + (raw.precType && raw.precType !== 'none' ? `\nPrecip: ${raw.precType}` : '')
+                });
+            }
+            // Order by date key (chronological).
+            const out = [];
+            for (const [key, slots] of buckets) {
+                const refDate = new Date(slots[0].utcMs);
+                const dayStart = new Date(refDate); dayStart.setHours(0, 0, 0, 0);
+                const dayOffset = (dayStart.getTime() - todayMs) / 86400000;
+                let headerName;
+                if (Math.abs(dayOffset) < 0.5) headerName = 'Tonight';
+                else if (Math.abs(dayOffset - 1) < 0.5) headerName = 'Tomorrow';
+                else headerName = refDate.toLocaleDateString(undefined, { weekday: 'long' });
+                const headerDate = refDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+                // Sun/moon ephemeris. SunCalc takes Date in local time but
+                // computes everything in UTC under the hood — we feed it
+                // the date at local noon to avoid edge cases at midnight.
+                const noon = new Date(refDate); noon.setHours(12, 0, 0, 0);
+                let sun = {}, moon = {}, moonIllum = {};
+                if (typeof SunCalc !== 'undefined') {
+                    sun       = SunCalc.getTimes(noon, lat, lng);
+                    moon      = SunCalc.getMoonTimes(noon, lat, lng);
+                    moonIllum = SunCalc.getMoonIllumination(noon);
+                }
+                out.push({
+                    dateKey:           key,
+                    headerName, headerDate,
+                    slots,
+                    sunset:            sun.sunset,
+                    sunrise:           sun.sunriseEnd || sun.sunrise,
+                    sunsetLabel:       sun.sunset    ? this._fmtLocalTime(sun.sunset)    : '',
+                    sunriseLabel:      sun.sunrise   ? this._fmtLocalTime(sun.sunrise)   : '',
+                    duskAstro:         sun.nightEnd ? sun.night : null,
+                    dawnAstro:         sun.nightEnd,
+                    duskAstroLabel:    sun.night     ? this._fmtLocalTime(sun.night)     : '—',
+                    dawnAstroLabel:    sun.nightEnd  ? this._fmtLocalTime(sun.nightEnd)  : '—',
+                    moonIcon:          this._moonIconForPhase(moonIllum.phase ?? 0),
+                    moonIllumination:  Math.round((moonIllum.fraction ?? 0) * 100),
+                });
+            }
+            return out;
+        },
+
+        // Find continuous runs of slots (in chronological order) with
+        // score ≥ 70 that fall between sunset and sunrise of tonight.
+        // Returns top 3 by total duration × average score.
+        weatherBestWindows() {
+            const days = this.weatherDays();
+            if (!days.length) return [];
+            const lat = this.settings.latitude || 0;
+            const lng = this.settings.longitude || 0;
+            const slots = this.weather.forecast.slots
+                .map(s => ({ ...s, utc: new Date(s.utcStart) }))
+                .sort((a, b) => a.utc - b.utc);
+            // "Tonight" = first sunset onward through next sunrise.
+            const now = new Date();
+            let sunsetT = null, sunriseT = null;
+            if (typeof SunCalc !== 'undefined') {
+                const today = SunCalc.getTimes(now, lat, lng);
+                sunsetT  = today.sunset;
+                const tomorrow = SunCalc.getTimes(new Date(now.getTime() + 86400000), lat, lng);
+                sunriseT = tomorrow.sunrise;
+                // Edge case: it's already past sunset.
+                if (sunsetT < now) sunsetT = now;
+            }
+            const nightSlots = slots.filter(s => {
+                if (!sunsetT || !sunriseT) return true;
+                return s.utc >= sunsetT && s.utc <= sunriseT;
+            });
+            // Group consecutive good slots into runs.
+            const runs = [];
+            let run = null;
+            for (const s of nightSlots) {
+                if (s.observationScore >= 70) {
+                    if (!run) run = { start: s.utc, end: s.utc, scores: [], slots: [] };
+                    run.end = new Date(s.utc.getTime() + 3 * 3600 * 1000);
+                    run.scores.push(s.observationScore);
+                    run.slots.push(s);
+                } else if (run) {
+                    runs.push(run); run = null;
+                }
+            }
+            if (run) runs.push(run);
+            return runs.map(r => {
+                const durMs = r.end - r.start;
+                const hours = durMs / 3600000;
+                const avg = Math.round(r.scores.reduce((a, b) => a + b, 0) / r.scores.length);
+                const avgCloud = Math.round(
+                    r.slots.reduce((a, s) => a + this._cloudPercent(s.cloudCover), 0) / r.slots.length);
+                return {
+                    startMs:        r.start.getTime(),
+                    startLocal:     this._fmtLocalTime(r.start),
+                    endLocal:       this._fmtLocalTime(r.end),
+                    durationLabel:  hours >= 1 ? `${hours.toFixed(0)} h` : `${Math.round(hours * 60)} min`,
+                    avgScore:       avg,
+                    summary:        `${avgCloud}% cloud avg`,
+                    _rank:          hours * avg
+                };
+            })
+            .sort((a, b) => b._rank - a._rank)
+            .slice(0, 3);
         },
 
         _updateSkyClock() {

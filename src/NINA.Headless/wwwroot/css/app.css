@@ -2617,3 +2617,166 @@ select.input-sm {
         gap: 4px;
     }
 }
+
+/* ─── Weather forecast tab ──────────────────────────────────────────────
+   3-day astronomy forecast pulled from 7Timer via /api/weather/forecast.
+   Layout: callout strip → per-day cards (3 across on desktop, stacked on
+   narrow) → legend. Each card carries a 8-slot grid (3-hour buckets)
+   colour-coded by composite observation score. */
+
+.weather-panel {
+    padding: 16px;
+    overflow-y: auto;
+    gap: 16px;
+    display: flex;
+    flex-direction: column;
+}
+.weather-message {
+    background: rgba(255, 152, 0, 0.12);
+    border: 1px solid rgba(255, 152, 0, 0.35);
+    color: #ffb74d;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+}
+.weather-window-callout {
+    background: rgba(76, 175, 80, 0.10);
+    border: 1px solid rgba(76, 175, 80, 0.35);
+    border-radius: 8px;
+    padding: 12px 16px;
+    box-shadow: 0 0 18px rgba(76, 175, 80, 0.08) inset;
+}
+.weather-window-callout strong { color: #81c784; }
+.weather-window-callout ul {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0 0;
+    font-size: 13px;
+    line-height: 1.7;
+}
+.weather-window-callout--meh {
+    background: rgba(255, 152, 0, 0.08);
+    border-color: rgba(255, 152, 0, 0.3);
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+.weather-day-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 16px;
+}
+.weather-day-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.weather-day-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.weather-day-name {
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--text, #e6ecf5);
+}
+.weather-day-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+.weather-day-celestial {
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-align: right;
+    line-height: 1.6;
+}
+.weather-icon {
+    margin-right: 4px;
+    font-size: 13px;
+}
+.weather-moon {
+    margin-top: 2px;
+    color: #ffd180;
+}
+
+/* 8-slot grid (24 h ÷ 3 h). On narrow viewports we let it wrap to two
+   rows of 4 instead of squishing the slots flat. */
+.weather-slot-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 4px;
+}
+@media (max-width: 480px) {
+    .weather-slot-grid { grid-template-columns: repeat(4, 1fr); }
+}
+.weather-slot {
+    border-radius: 4px;
+    padding: 8px 4px;
+    text-align: center;
+    cursor: default;
+    transition: transform 0.08s ease;
+    font-variant-numeric: tabular-nums;
+}
+.weather-slot:hover { transform: scale(1.04); }
+.weather-slot-time {
+    font-size: 10px;
+    opacity: 0.7;
+    letter-spacing: 0.5px;
+}
+.weather-slot-score {
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.1;
+    margin: 2px 0;
+}
+.weather-slot-cloud {
+    font-size: 10px;
+    opacity: 0.7;
+}
+.weather-slot--good {
+    background: rgba(76, 175, 80, 0.25);
+    color: #c8e6c9;
+}
+.weather-slot--meh {
+    background: rgba(255, 152, 0, 0.22);
+    color: #ffe0b2;
+}
+.weather-slot--bad {
+    background: rgba(244, 67, 54, 0.18);
+    color: #ffcdd2;
+}
+
+.weather-legend {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 11px;
+    color: var(--text-secondary);
+    padding: 8px 0 4px;
+    border-top: 1px solid var(--border);
+}
+.weather-legend strong {
+    color: var(--text, #e6ecf5);
+    margin-right: 4px;
+}
+.weather-legend-chip {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.4px;
+}
+.weather-legend a {
+    color: var(--accent);
+    text-decoration: none;
+}
+.weather-legend a:hover { text-decoration: underline; }

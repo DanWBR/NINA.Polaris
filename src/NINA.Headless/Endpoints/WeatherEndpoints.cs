@@ -57,6 +57,22 @@ public static class WeatherEndpoints {
             await equip.Weather.DisconnectAsync();
             return Results.Ok(new { status = "disconnected" });
         });
+
+        // 7Timer astronomical forecast (3-day, 3-hour slots). Lat/lon come
+        // from the query string so the same endpoint can serve different
+        // sites without requiring profile changes. Backend caches per coord
+        // for 15 minutes, so even a tab refresh loop won't hammer 7Timer.
+        group.MapGet("/forecast", async (
+            WeatherForecastService svc,
+            double lat,
+            double lon,
+            CancellationToken ct) => {
+            if (lat is < -90 or > 90 || lon is < -180 or > 180) {
+                return Results.BadRequest(new { error = "lat must be in [-90, 90] and lon in [-180, 180]" });
+            }
+            var forecast = await svc.GetForecastAsync(lat, lon, ct);
+            return Results.Ok(forecast);
+        });
     }
 
     static double? Safe(double v) => double.IsNaN(v) || double.IsInfinity(v) ? null : v;
