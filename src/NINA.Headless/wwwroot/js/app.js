@@ -206,14 +206,15 @@ function ninaApp() {
         altitudeData: null,
 
         // d3-celestial Sky Viewer (offline, BSD-3-Clause).
-        // skyMode = 'horizontal' shows the live sky as seen from the observer's
-        // location at the current UTC time (horizon, alt-az); 'equatorial'
-        // shows the full celestial sphere (RA/Dec) for planning targets that
-        // are currently below the horizon.
+        // Always renders the live sky from the observer's location at the
+        // current UTC time, in horizontal projection — same convention as
+        // ASIAIR. No mode toggle: we only support equatorial mounts, so an
+        // alternate "equatorial chart" view would just duplicate this one
+        // with a different rotation axis and worse UX (drag pivoting
+        // around the celestial pole feels wildly off-axis).
         _celestialReady: false,
         _fovLayerId: null,
         _skyTicker: null,                // setInterval handle for datetime refresh
-        skyMode: 'horizontal',           // 'horizontal' | 'equatorial'
         skyClock: '',                    // displayed in the toolbar (HH:MM:SS UTC)
         aladinFov: 90,                  // initial FOV in degrees (wide field)
         aladinShowFov: true,             // toggle camera-FOV overlay
@@ -1106,7 +1107,6 @@ function ninaApp() {
 
         _buildCelestial(el) {
             try {
-                const isLive = this.skyMode === 'horizontal';
                 const lat = this.settings.latitude  || 0;
                 const lng = this.settings.longitude || 0;
 
@@ -1173,13 +1173,11 @@ function ninaApp() {
                         graticule: { show: true, stroke: '#506080', width: 0.6, opacity: 0.5,
                                      lon: { pos: ['center'], fill: '#aac', font: '10px sans-serif' },
                                      lat: { pos: ['center'], fill: '#aac', font: '10px sans-serif' } },
-                        equatorial: { show: !isLive, stroke: '#aaffaa', width: 1, opacity: 0.4 },
+                        // Show the equatorial grid (RA/Dec lines) on top of the
+                        // horizontal projection — useful for an equatorial
+                        // mount user to relate the live sky to RA/Dec coords.
+                        equatorial: { show: true, stroke: '#aaffaa', width: 1, opacity: 0.35 },
                         ecliptic:   { show: true, stroke: '#ffcc66', width: 1, opacity: 0.4 },
-                        // Horizon shown in BOTH modes now — in live mode it's the
-                        // observer's actual horizon for the current UTC time; in
-                        // equatorial mode it still anchors to the geopos so the
-                        // user can tell which part of the sky is reachable from
-                        // their location right now.
                         horizon:    { show: true, stroke: '#ff5566', width: 1.5, dash: [4, 4], opacity: 0.5 },
                         galactic:   { show: false }
                     },
@@ -1195,12 +1193,9 @@ function ninaApp() {
                     daylight: { show: false }
                 });
 
-                if (isLive) {
-                    // Push the current UTC date into Celestial so horizon,
-                    // sun and moon positions are accurate. Star RA/Dec don't
-                    // change with time so we don't need to re-render those.
-                    try { Celestial.date(new Date()); } catch {}
-                }
+                // Push current UTC date so horizon, sun and moon positions
+                // are accurate for the live view.
+                try { Celestial.date(new Date()); } catch {}
                 // Re-apply the centre after display() — belt-and-braces
                 // against any internal reset during initial draw. Wrapped
                 // in a microtask so it runs after Celestial finishes its
@@ -1208,7 +1203,7 @@ function ninaApp() {
                 Promise.resolve().then(() => {
                     try { Celestial.rotate({ center: initialCentre }); } catch {}
                 });
-                if (isLive) this._startSkyTicker(lat, lng);
+                this._startSkyTicker(lat, lng);
 
                 this.setSkyFov();
                 this.updateSkyCameraFov();
@@ -1224,9 +1219,12 @@ function ninaApp() {
                         const rect = svg.getBoundingClientRect();
                         const coords = Celestial.mapProjection.invert([e.clientX - rect.left, e.clientY - rect.top]);
                         if (!coords || isNaN(coords[0])) return;
-                        let raHours = coords[0] / 15;
-                        if (raHours < 0) raHours += 24;
-                        const decDeg = coords[1];
+                        // Projection is in 'horizontal' frame, so invert returns
+                        // [azimuth, altitude]. Convert back to RA/Dec so the
+                        // user's pick becomes a real celestial target the rest
+                        // of the app can slew to / store / sequence on.
+                        const [raHours, decDeg] = this._horizontalToEquatorial(
+                            coords[0], coords[1], lat, lng, new Date());
                         this.skyTarget = {
                             name: `RA ${raHours.toFixed(3)}h Dec ${decDeg.toFixed(2)}°`,
                             ra: raHours, dec: decDeg, type: 'click', magnitude: ''
@@ -1241,7 +1239,7 @@ function ninaApp() {
 
                 this._celestialReady = true;
                 this._updateSkyClock();
-                console.log(`d3-celestial ready (${this.skyMode} mode)`);
+                console.log('d3-celestial ready (live horizontal projection)');
             } catch (e) {
                 console.error('d3-celestial init failed', e);
             }
@@ -1302,6 +1300,33 @@ function ninaApp() {
             return [((az * 180 / Math.PI) + 360) % 360, alt * 180 / Math.PI];
         },
 
+        // Inverse of _equatorialToHorizontal: convert observed [az, alt] back
+        // to [raHours, decDeg] for the given observer/UTC. Used when the user
+        // clicks somewhere on the horizontal-projection sky map and we need
+        // to know which celestial coords they picked.
+        _horizontalToEquatorial(azDeg, altDeg, latDeg, lngDeg, when) {
+            const azRad  = azDeg  * Math.PI / 180;
+            const altRad = altDeg * Math.PI / 180;
+            const latRad = latDeg * Math.PI / 180;
+            const sinDec = Math.sin(altRad) * Math.sin(latRad)
+                         + Math.cos(altRad) * Math.cos(latRad) * Math.cos(azRad);
+            const dec = Math.asin(Math.max(-1, Math.min(1, sinDec)));
+            const cosDec = Math.cos(dec);
+            if (Math.abs(cosDec) < 1e-9) {
+                // At the celestial pole RA is undefined; return LST so the
+                // pick is at least self-consistent (HA = 0).
+                return [this._localSiderealTime(when, lngDeg), dec * 180 / Math.PI];
+            }
+            const sinHA = -Math.sin(azRad) * Math.cos(altRad) / cosDec;
+            const cosHA = (Math.sin(altRad) - Math.sin(latRad) * sinDec)
+                        / (Math.cos(latRad) * cosDec);
+            const haRad = Math.atan2(sinHA, cosHA);
+            const haHours = ((haRad * 180 / Math.PI) / 15 + 24) % 24;
+            const lstHours = this._localSiderealTime(when, lngDeg);
+            const raHours = ((lstHours - haHours) + 24) % 24;
+            return [raHours, dec * 180 / Math.PI];
+        },
+
         // Meeus low-precision LST (good to a few seconds — fine for orientation).
         _localSiderealTime(utc, longitudeDeg) {
             const jd = utc.getTime() / 86400000 + 2440587.5;
@@ -1339,6 +1364,12 @@ function ninaApp() {
                     const altClamped = Math.max(-89.5, Math.min(89.5, alt));
                     try { Celestial.rotate({ center: [az, altClamped, 0] }); } catch {}
                 }
+                // Recompute the FOV box — its corner Az/Alt drift with
+                // sidereal time (parallactic-angle rotation), so the green
+                // rectangle slowly rotates on screen as the night
+                // progresses, matching how the actual camera frame would
+                // appear on the sky for an equatorial mount.
+                if (this.aladinShowFov && this.skyTarget) this.updateSkyCameraFov();
                 this._updateSkyClock();
             }, 30_000);
             this._updateSkyClock();
@@ -1382,10 +1413,8 @@ function ninaApp() {
 
         updateSkyCameraFov() {
             if (!this._celestialReady) return;
-            // Camera-FOV rectangle is drawn as a custom JSON object added to the
-            // map (d3-celestial supports user-supplied GeoJSON layers).
-            // Clear any previous overlay then add the new one centred on the
-            // current target.
+            // Camera-FOV rectangle is drawn as a custom GeoJSON layer
+            // (d3-celestial supports user-supplied overlays via add()).
             if (!this.aladinShowFov || !this.skyTarget) {
                 if (this._fovLayerId) try { Celestial.remove(this._fovLayerId); } catch {}
                 this._fovLayerId = null;
@@ -1395,15 +1424,32 @@ function ninaApp() {
             const ra  = this.skyTarget.ra ?? this.skyTarget.raHours;
             const dec = this.skyTarget.dec ?? this.skyTarget.decDeg;
             if (ra == null || dec == null) return;
+
+            // Build the FOV rectangle as 4 corner offsets in RA/Dec from the
+            // target, then convert each corner to horizontal (Az/Alt) coords
+            // for the current observer/time. Because the map is in horizontal
+            // projection, this naturally bakes in the *parallactic angle* —
+            // the rectangle's tilt on screen reflects how an equatorial-mount
+            // camera frame actually projects onto the sky for a given target,
+            // which is the same behaviour ASIAIR shows.
             const w = this.fov.width / 2;
             const h = this.fov.height / 2;
             const cosDec = Math.cos(dec * Math.PI / 180) || 1e-6;
-            const raDeg = ra * 15;
-            const ring = [
-                [raDeg - w / cosDec, dec - h], [raDeg + w / cosDec, dec - h],
-                [raDeg + w / cosDec, dec + h], [raDeg - w / cosDec, dec + h],
-                [raDeg - w / cosDec, dec - h]
+            const lat = this.settings.latitude  || 0;
+            const lng = this.settings.longitude || 0;
+            const now = new Date();
+            // RA in hours for the conversion helper.
+            const cornersEq = [
+                [ra - (w / cosDec) / 15, dec - h],
+                [ra + (w / cosDec) / 15, dec - h],
+                [ra + (w / cosDec) / 15, dec + h],
+                [ra - (w / cosDec) / 15, dec + h],
+                [ra - (w / cosDec) / 15, dec - h]
             ];
+            const ring = cornersEq.map(([rh, dd]) => {
+                const [az, alt] = this._equatorialToHorizontal(rh, dd, lat, lng, now);
+                return [az, alt];
+            });
             const geo = {
                 type: 'FeatureCollection',
                 features: [{ type: 'Feature', properties: { name: 'FOV' },
@@ -1412,7 +1458,7 @@ function ninaApp() {
             try {
                 Celestial.add({
                     type: 'line',
-                    callback: (err, json) => Celestial.container.selectAll('.fov').remove(),
+                    callback: () => Celestial.container.selectAll('.fov').remove(),
                     redraw: () => {
                         Celestial.container.selectAll('.fov').remove();
                         Celestial.container.selectAll('.fov')
