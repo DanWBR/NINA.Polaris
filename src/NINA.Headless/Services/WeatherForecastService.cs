@@ -150,16 +150,12 @@ public class WeatherForecastService {
         return (int)Math.Round(Math.Clamp(score, 0, 100));
     }
 
-    private static int ParseRh(string? rh2m) {
-        if (string.IsNullOrEmpty(rh2m)) return 0;
-        // 7Timer returns rh2m as strings like "-4" through "16" — these are
-        // bucket indices, not actual percentages. Mapping per their docs:
-        // -4 = 0%, -3 = 5%, ..., 16 = 99%.
-        if (int.TryParse(rh2m, out var bucket)) {
-            // Approximate centre of each bucket (linear).
-            return Math.Clamp(0 + (bucket + 4) * 5, 0, 100);
-        }
-        return 0;
+    private static int ParseRh(int rh2m) {
+        // 7Timer rh2m is a bucket index from -4 (0% RH) up to 16 (99% RH).
+        // Their docs describe it as a string but the live API returns it as
+        // a number. Map linearly to an approximate percentage at the centre
+        // of each bucket.
+        return Math.Clamp((rh2m + 4) * 5, 0, 100);
     }
 
     private static DateTime ParseInitUtc(string? init) {
@@ -215,7 +211,7 @@ public class SevenTimerSlot {
     [JsonPropertyName("seeing")]       public int      Seeing       { get; set; }
     [JsonPropertyName("transparency")] public int      Transparency { get; set; }
     [JsonPropertyName("lifted_index")] public int      LiftedIndex  { get; set; }
-    [JsonPropertyName("rh2m")]         public string?  Rh2m         { get; set; }
+    [JsonPropertyName("rh2m")]         public int      Rh2m         { get; set; }
     [JsonPropertyName("temp2m")]       public double   Temp2m       { get; set; }
     [JsonPropertyName("prec_type")]    public string?  PrecType     { get; set; }
     [JsonPropertyName("wind10m")]      public SevenTimerWind? Wind10m { get; set; }

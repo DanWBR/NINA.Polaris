@@ -19,7 +19,7 @@ namespace NINA.Headless.Test;
 [TestFixture]
 public class WeatherForecastServiceTests {
     private static SevenTimerSlot Slot(int cloud, int seeing, int trans,
-                                       string? prec = "none", string rh = "0") {
+                                       string? prec = "none", int rh = 0) {
         return new SevenTimerSlot {
             Cloudcover   = cloud,
             Seeing       = seeing,
@@ -62,8 +62,8 @@ public class WeatherForecastServiceTests {
     [Test]
     public void ScoreSlot_HighHumidity_PenalisedHeavily() {
         // 7Timer rh2m bucket 16 ≈ ~99% humidity.
-        var dry  = Slot(cloud: 1, seeing: 2, trans: 2, rh: "0");   // ~20%
-        var dewy = Slot(cloud: 1, seeing: 2, trans: 2, rh: "16");  // ~99%
+        var dry  = Slot(cloud: 1, seeing: 2, trans: 2, rh: 0);   // ~20%
+        var dewy = Slot(cloud: 1, seeing: 2, trans: 2, rh: 16);  // ~99%
         var dryScore  = WeatherForecastService.ScoreSlot(dry);
         var dewyScore = WeatherForecastService.ScoreSlot(dewy);
         Assert.That(dewyScore, Is.LessThan(dryScore * 0.5),
