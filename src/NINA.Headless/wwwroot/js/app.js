@@ -1067,7 +1067,8 @@ function ninaApp() {
                 return;
             }
             if (this._celestialReady) {
-                try { Celestial.resize({ width: el.clientWidth }); } catch {}
+                const size = Math.max(300, Math.min(el.clientWidth, el.clientHeight));
+                try { Celestial.resize({ width: size }); } catch {}
                 return;
             }
             this._buildCelestial(el);
@@ -1093,10 +1094,16 @@ function ninaApp() {
                 const lat = this.settings.latitude  || 0;
                 const lng = this.settings.longitude || 0;
 
+                // d3-celestial draws a roughly circular projection — width
+                // equals height. If we passed el.clientWidth on a wide pane
+                // the SVG would inflate vertically and burst out of the
+                // container. Clamp to the smaller dimension so it fits.
+                const renderSize = Math.max(300, Math.min(el.clientWidth, el.clientHeight));
+
                 Celestial.display({
                     container: 'celestial-map',
                     datapath: '/js/lib/celestial/data/',
-                    width: el.clientWidth,
+                    width: renderSize,
                     // Stereographic for both modes; the projection is the same,
                     // what changes is the *frame* (equatorial vs horizontal)
                     // and the centre.
@@ -1180,7 +1187,8 @@ function ninaApp() {
                 }
 
                 window.addEventListener('resize', () => {
-                    try { Celestial.resize({ width: el.clientWidth }); } catch {}
+                    const size = Math.max(300, Math.min(el.clientWidth, el.clientHeight));
+                    try { Celestial.resize({ width: size }); } catch {}
                 });
 
                 this._celestialReady = true;
