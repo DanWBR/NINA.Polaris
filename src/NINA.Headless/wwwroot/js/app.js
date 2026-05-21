@@ -1079,15 +1079,29 @@ function ninaApp() {
         // Tears down + rebuilds the celestial widget. Called when the user
         // switches projection (live ↔ equatorial) or when the observer
         // location changes via Settings.
+        //
+        // d3-celestial keeps a fair bit of state on its global Celestial
+        // object (projection, transform, current center, zoom level, the
+        // SVG/canvas refs it injected). Calling display() a second time
+        // on the same container after just `innerHTML = ''` tends to leave
+        // the new render in a broken state — the map ends up blank when
+        // switching between live ↔ equatorial because the cached transform
+        // doesn't get fully reset. Replacing the entire container div
+        // forces Celestial to do a clean re-init.
         rebuildSky() {
             this._stopSkyTicker();
-            const el = document.getElementById('celestial-map');
-            if (!el) return;
-            // d3-celestial doesn't expose a clean teardown — wipe the
-            // SVG container ourselves before re-displaying.
-            el.innerHTML = '';
+            const old = document.getElementById('celestial-map');
+            if (!old) return;
+            const parent = old.parentElement;
+            if (!parent) return;
+            const fresh = document.createElement('div');
+            fresh.id = 'celestial-map';
+            fresh.className = old.className;
+            parent.replaceChild(fresh, old);
             this._celestialReady = false;
-            this._buildCelestial(el);
+            // Defer the build one frame so the new div is fully attached
+            // and laid out before Celestial measures it.
+            requestAnimationFrame(() => this._buildCelestial(fresh));
         },
 
         _buildCelestial(el) {
