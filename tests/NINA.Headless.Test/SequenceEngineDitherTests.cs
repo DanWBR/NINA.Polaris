@@ -17,8 +17,8 @@ public class SequenceEngineDitherTests {
         var autoFocus = new AutoFocusService(equip, NullLogger<AutoFocusService>.Instance);
         var emptyConfig = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
         var plateSolve = new PlateSolveService(emptyConfig, NullLogger<PlateSolveService>.Instance);
-        var slewCenter = new SlewCenterService(equip, plateSolve, NullLogger<SlewCenterService>.Instance);
         var profile = new ProfileService(emptyConfig, NullLogger<ProfileService>.Instance);
+        var slewCenter = new SlewCenterService(equip, plateSolve, profile, NullLogger<SlewCenterService>.Instance);
         var meridianFlip = new MeridianFlipService(equip, phd2, slewCenter, autoFocus, profile,
             NullLogger<MeridianFlipService>.Instance);
         var imageWriter = new ImageWriterService(equip, profile, NullLogger<ImageWriterService>.Instance);

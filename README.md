@@ -770,6 +770,16 @@ Persistence:
 - [ ] WebSocket-over-tunnel (image stream + status broadcast through the relay)
 - [ ] Per-tenant rate limiting + persistent DB-backed tenant store
 
+## Support the project
+
+If NINA Headless saves you an evening of fiddling with rigs and you want to
+chip in for hosting / a coffee / dark-sky travel:
+
+[**❤️ Donate via Stripe**](https://buy.stripe.com/9B68wPeoLcMSgOz2iJbMQ02)
+
+Donations are entirely optional — the project stays free and open-source
+either way. Bug reports and PRs are just as welcome (see below).
+
 ## Contributing
 
 Contributions are welcome! This project follows the same coding standards as the main [N.I.N.A. repository](https://bitbucket.org/Isbeorn/nina/).

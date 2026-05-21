@@ -7,14 +7,16 @@ namespace NINA.Headless.Services;
 public class SlewCenterService {
     private readonly EquipmentManager _equip;
     private readonly PlateSolveService _solver;
+    private readonly ProfileService _profiles;
     private readonly ILogger<SlewCenterService> _logger;
 
     private readonly ConcurrentDictionary<string, SlewCenterJob> _jobs = new();
 
     public SlewCenterService(EquipmentManager equip, PlateSolveService solver,
-        ILogger<SlewCenterService> logger) {
+        ProfileService profiles, ILogger<SlewCenterService> logger) {
         _equip = equip;
         _solver = solver;
+        _profiles = profiles;
         _logger = logger;
     }
 
@@ -136,6 +138,15 @@ public class SlewCenterService {
                     "Solve result: RA={Ra:F4}h Dec={Dec:F4}°, error={Err:F1}\" (tolerance={Tol:F0}\")",
                     solveResult.RaHours, solveResult.DecDeg, errorArcsec, job.ToleranceArcsec);
 
+                // Auto-update the active rig's focal length from the solve.
+                // Only runs once per job (on the first successful solve we have
+                // a reliable scale) and skipped if the camera doesn't report a
+                // pixel size or the derived value is wildly different (>50%
+                // off — likely a misidentification of the field).
+                if (job.DerivedFocalLengthMm == null) {
+                    TryUpdateFocalLengthFromSolve(solveResult.ScaleArcsecPerPixel, job);
+                }
+
                 // Step 5: Check convergence
                 if (errorArcsec <= job.ToleranceArcsec) {
                     job.State = SlewCenterState.Centered;
@@ -175,6 +186,58 @@ public class SlewCenterService {
         _logger.LogWarning("Slew did not complete within 5 minutes");
     }
 
+    /// <summary>
+    /// Compute focal length from the plate-solve scale + camera pixel size and
+    /// push it into the active rig. Skipped silently when:
+    /// - no camera connected / camera doesn't report pixel size
+    /// - scale is non-positive
+    /// - derived value is &gt;50% off from the current rig value (likely a
+    ///   misidentification — don't clobber the user's setting on bad data)
+    ///
+    /// Formula (standard plate-scale relation):
+    ///   scale (arcsec/px) = pixel_size (um) / focal_length (mm) × 206.265
+    ///   →  focal_length (mm) = pixel_size (um) × 206.265 / scale (arcsec/px)
+    /// </summary>
+    private void TryUpdateFocalLengthFromSolve(double scaleArcsecPerPx, SlewCenterJob job) {
+        if (scaleArcsecPerPx <= 0) return;
+        if (_equip.Camera == null) return;
+
+        var pixelSizeUm = _equip.Camera.PixelSizeX;
+        if (pixelSizeUm <= 0 || double.IsNaN(pixelSizeUm)) {
+            _logger.LogDebug("Camera does not report PixelSizeX — skipping focal-length auto-update");
+            return;
+        }
+
+        var derived = pixelSizeUm * 206.265 / scaleArcsecPerPx;
+        job.DerivedFocalLengthMm = derived;
+
+        var rig = _profiles.ActiveEquipmentProfile;
+        var previous = rig.FocalLengthMm;
+
+        // Sanity check: refuse if more than 50% different
+        if (previous > 0) {
+            var ratio = derived / previous;
+            if (ratio < 0.5 || ratio > 1.5) {
+                _logger.LogWarning(
+                    "Plate solve suggests focal length {New:F0}mm but rig has {Old:F0}mm " +
+                    "(ratio {Ratio:F2}) — refusing to auto-update; please verify manually",
+                    derived, previous, ratio);
+                return;
+            }
+        }
+
+        if (Math.Abs(derived - previous) < 1.0) {
+            _logger.LogDebug("Focal length already accurate ({FL:F0}mm) — no update", derived);
+            return;
+        }
+
+        _profiles.UpdateEquipmentProfile(rig.Id, r => r.FocalLengthMm = derived);
+        _logger.LogInformation(
+            "Auto-updated active rig '{Rig}' focal length: {Old:F0}mm → {New:F0}mm " +
+            "(from solve: {Px:F2}um/px × 206.265 / {Scale:F2}\"/px)",
+            rig.Name, previous, derived, pixelSizeUm, scaleArcsecPerPx);
+    }
+
 
     private static double AngularSeparationArcsec(double ra1Hours, double dec1Deg,
         double ra2Hours, double dec2Deg) {
@@ -205,6 +268,8 @@ public class SlewCenterJob {
     public double? ErrorArcsec { get; set; }
     public double? Rotation { get; set; }
     public double? Scale { get; set; }
+    /// <summary>Focal length (mm) derived from the first successful solve in this job, if any.</summary>
+    public double? DerivedFocalLengthMm { get; set; }
     public string? Error { get; set; }
     public DateTime CreatedAt { get; set; }
 
