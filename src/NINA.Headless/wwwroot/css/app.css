@@ -1223,10 +1223,11 @@ select.input-sm {
     flex-direction: column;
     gap: 3px;
 }
-/* The Projection dropdown needs to fit "Live local sky (now)" — the bare
-   .input-sm width truncates it to "Live loc". */
+/* The Sky-mode dropdown needs to fit its widest option ("Equatorial"
+   or "Live (now)") without truncating. ~110 px is enough for both
+   without forcing the row to wrap on narrow widths. */
 .sky-survey-row select.input-sm {
-    min-width: 160px;
+    min-width: 110px;
     width: auto;
 }
 /* Strip the browser's number-input spinner arrows on the FOV input — they
