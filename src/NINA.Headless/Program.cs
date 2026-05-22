@@ -47,6 +47,7 @@ builder.Services.AddSingleton<NINA.Headless.Services.Studio.FrameLibraryService>
 builder.Services.AddSingleton<NINA.Headless.Services.Studio.FrameProcessingService>();
 builder.Services.AddSingleton<NINA.Headless.Services.Studio.MasterFrameService>();
 builder.Services.AddSingleton<NINA.Headless.Services.Studio.CalibrationService>();
+builder.Services.AddSingleton<NINA.Headless.Services.Studio.BatchStackingService>();
 builder.Services.AddHostedService<MdnsService>();
 builder.Services.AddSingleton<RelayClient>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<RelayClient>());

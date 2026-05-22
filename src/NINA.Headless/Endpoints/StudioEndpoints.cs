@@ -142,6 +142,24 @@ public static class StudioEndpoints {
             var p = svc.GetStatus(jobId);
             return p == null ? Results.NotFound() : Results.Ok(p);
         });
+
+        // --- ST-5: batch stacking (offline integration) --------------
+
+        // Align + integrate N calibrated lights into a single master_light
+        // under {rig}/integrated/{target}/{filter}/. Body:
+        //   { frameIds: [1,2,...], method: "Mean"|"Median"|"SigmaClippedMean" }
+        g.MapPost("/integrate", (BatchStackingService svc,
+                                 BatchStackingService.IntegrationRequest req) => {
+            if (req?.FrameIds == null || req.FrameIds.Count < 2)
+                return Results.BadRequest(new { error = "Need at least 2 frames to integrate." });
+            var jobId = svc.StartJob(req);
+            return Results.Accepted(value: new { jobId });
+        });
+
+        g.MapGet("/integrate/{jobId}/status", (BatchStackingService svc, string jobId) => {
+            var p = svc.GetStatus(jobId);
+            return p == null ? Results.NotFound() : Results.Ok(p);
+        });
     }
 
     // POST body for /masters. Kept in the endpoints file (not the

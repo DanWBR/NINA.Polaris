@@ -255,6 +255,16 @@ function ninaApp() {
                 biasId: null,
                 masters: { darks: [], flats: [], biases: [] },
                 lastJob: null
+            },
+            // ST-5: batch stack (integrate). method drives the
+            // per-pixel reducer (same enum the master-frame service
+            // uses). lastJob carries job progress + final counts
+            // (combined/dropped/total exposure).
+            integrate: {
+                open: false,
+                running: false,
+                method: 'SigmaClippedMean',
+                lastJob: null
             }
         },
         _studioRescanPoll: null,
@@ -262,6 +272,7 @@ function ninaApp() {
         _studioHistogramChart: null,
         _studioMasterPoll: null,
         _studioCalibratePoll: null,
+        _studioIntegratePoll: null,
 
         // Observatory location helpers (Settings → Observatory)
         obsAddressQuery: '',
@@ -1931,6 +1942,73 @@ function ninaApp() {
                     done: 0, total: 0, succeeded: 0, failed: 0
                 };
                 this.toast?.('Calibration start failed: ' + e.message, 'error');
+            }
+        },
+
+        // ─── ST-5: Batch stack (integrate) ──────────────────────────────
+
+        studioOpenIntegrateDialog() {
+            this.studio.integrate.method = 'SigmaClippedMean';
+            this.studio.integrate.lastJob = null;
+            this.studio.integrate.open = true;
+        },
+
+        studioCloseIntegrateDialog() {
+            this.studio.integrate.open = false;
+            if (this._studioIntegratePoll) {
+                clearInterval(this._studioIntegratePoll);
+                this._studioIntegratePoll = null;
+            }
+        },
+
+        async studioStartIntegrate() {
+            if (this.studio.selectedIds.length < 2) return;
+            this.studio.integrate.running = true;
+            this.studio.integrate.lastJob = {
+                stage: 'queued',
+                done: 0,
+                total: this.studio.selectedIds.length,
+                combined: 0,
+                dropped: 0,
+                totalExposureSec: 0
+            };
+            try {
+                const resp = await this.apiPost('/api/studio/integrate', {
+                    frameIds: this.studio.selectedIds,
+                    method:   this.studio.integrate.method
+                });
+                const r = await resp.json();
+                // Long-running job: align + integrate of 20 × 20 MP can
+                // run for several minutes on a RPi. 1 Hz poll is fine.
+                this._studioIntegratePoll = setInterval(async () => {
+                    try {
+                        const s = await this.apiGet(`/api/studio/integrate/${r.jobId}/status`);
+                        this.studio.integrate.lastJob = s;
+                        if (!s.inProgress) {
+                            clearInterval(this._studioIntegratePoll);
+                            this._studioIntegratePoll = null;
+                            this.studio.integrate.running = false;
+                            if (s.stage === 'done') {
+                                this.toast?.(
+                                    `Stack done — ${s.combined} combined` +
+                                    (s.dropped > 0 ? `, ${s.dropped} dropped` : '') +
+                                    ` → ${s.outputPath}`,
+                                    s.dropped > 0 ? 'warning' : 'ok'
+                                );
+                                this.loadStudio();
+                            } else if (s.stage === 'error') {
+                                this.toast?.('Integration failed: ' + s.error, 'error');
+                            }
+                        }
+                    } catch { /* swallow transient failure */ }
+                }, 1000);
+            } catch (e) {
+                this.studio.integrate.running = false;
+                this.studio.integrate.lastJob = {
+                    stage: 'error', error: e.message,
+                    done: 0, total: 0, combined: 0, dropped: 0, totalExposureSec: 0
+                };
+                this.toast?.('Integration start failed: ' + e.message, 'error');
             }
         },
 

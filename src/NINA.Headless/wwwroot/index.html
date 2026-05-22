@@ -2009,6 +2009,14 @@
                             @click="studioOpenCalibrateDialog()">
                         ✦ Calibrate lights
                     </button>
+                    <!-- ST-5: Batch stack — align + integrate. Works
+                         on either raw lights or already-calibrated
+                         frames; either way we need ≥2. -->
+                    <button class="btn btn-sm btn-primary"
+                            :disabled="studio.selectedIds.length < 2"
+                            @click="studioOpenIntegrateDialog()">
+                        ✧ Integrate (stack)
+                    </button>
                 </div>
 
                 <!-- ST-3: Master integration modal -->
@@ -2179,6 +2187,82 @@
                                         :disabled="studio.calibrate.running || !studioHasLightSelected()">
                                     <span x-show="!studio.calibrate.running">▶ Calibrate</span>
                                     <span x-show="studio.calibrate.running">Working…</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ST-5: Integrate (batch stack) modal -->
+                <div class="studio-viewer-modal" x-show="studio.integrate.open"
+                     x-cloak @click.self="studioCloseIntegrateDialog()"
+                     @keydown.escape.window="studio.integrate.open && studioCloseIntegrateDialog()">
+                    <div class="studio-master-modal">
+                        <div class="studio-viewer-header">
+                            <div class="studio-viewer-title">
+                                <strong>Integrate frames into master light</strong>
+                                <span class="muted" x-text="studio.selectedIds.length + ' frames selected'"></span>
+                            </div>
+                            <button class="btn btn-sm" @click="studioCloseIntegrateDialog()" :disabled="studio.integrate.running">✕</button>
+                        </div>
+                        <div class="studio-master-body">
+                            <div class="muted" style="font-size:12px">
+                                Detects stars in each frame, picks the frame with the most
+                                stars as the alignment reference, fits an affine transform for
+                                every other frame, resamples, and reduces with the chosen
+                                method. Frames that fail to align are skipped (reported as
+                                <em>dropped</em>). Output goes to <code>{rig}/integrated/{target}/{filter}/</code>.
+                            </div>
+
+                            <label class="control-row">
+                                <span style="min-width:90px">Method</span>
+                                <select x-model="studio.integrate.method"
+                                        :disabled="studio.integrate.running" class="input-md">
+                                    <option value="SigmaClippedMean">Sigma-clipped mean (recommended)</option>
+                                    <option value="Median">Median</option>
+                                    <option value="Mean">Mean</option>
+                                </select>
+                            </label>
+
+                            <!-- Progress -->
+                            <div class="studio-master-progress"
+                                 x-show="studio.integrate.running || studio.integrate.lastJob">
+                                <div class="muted" style="font-size:12px;text-transform:uppercase;letter-spacing:0.05em">
+                                    Status: <span x-text="studio.integrate.lastJob?.stage || 'idle'"></span>
+                                </div>
+                                <div class="studio-master-bar" x-show="studio.integrate.lastJob?.total > 0">
+                                    <div class="studio-master-bar-fill"
+                                         :style="'width:' + Math.round(100 * (studio.integrate.lastJob?.done || 0) / (studio.integrate.lastJob?.total || 1)) + '%'"></div>
+                                </div>
+                                <div style="font-size:11px;color:var(--text-muted)" x-show="studio.integrate.lastJob">
+                                    <span x-text="(studio.integrate.lastJob?.done || 0) + ' / ' + (studio.integrate.lastJob?.total || 0)"></span>
+                                    <span x-show="studio.integrate.lastJob?.combined > 0">
+                                        · <span style="color:#88e088"
+                                                x-text="(studio.integrate.lastJob?.combined || 0) + ' combined'"></span>
+                                    </span>
+                                    <span x-show="studio.integrate.lastJob?.dropped > 0">
+                                        · <span style="color:#ffa44b"
+                                                x-text="(studio.integrate.lastJob?.dropped || 0) + ' dropped'"></span>
+                                    </span>
+                                    <span x-show="studio.integrate.lastJob?.totalExposureSec > 0">
+                                        · <span x-text="(studio.integrate.lastJob.totalExposureSec / 3600).toFixed(2) + ' h total'"></span>
+                                    </span>
+                                </div>
+                                <div style="color:#ff9c66;font-size:12px"
+                                     x-show="studio.integrate.lastJob?.error"
+                                     x-text="'⚠ ' + studio.integrate.lastJob?.error"></div>
+                                <div style="color:#88e088;font-size:12px;word-break:break-all"
+                                     x-show="studio.integrate.lastJob?.outputPath"
+                                     x-text="'→ ' + studio.integrate.lastJob?.outputPath"></div>
+                            </div>
+
+                            <div class="control-row actions" style="margin-top:14px">
+                                <button class="btn" @click="studioCloseIntegrateDialog()"
+                                        :disabled="studio.integrate.running">Close</button>
+                                <button class="btn btn-primary" @click="studioStartIntegrate()"
+                                        :disabled="studio.integrate.running || studio.selectedIds.length < 2">
+                                    <span x-show="!studio.integrate.running">▶ Integrate</span>
+                                    <span x-show="studio.integrate.running">Working…</span>
                                 </button>
                             </div>
                         </div>
