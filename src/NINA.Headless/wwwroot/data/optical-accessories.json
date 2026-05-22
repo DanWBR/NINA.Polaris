@@ -48,12 +48,30 @@
     },
     {
       "brand": "Askar",
-      "model": "0.7x Reducer",
+      "model": "0.7x Reducer (PHQ)",
       "type": "reducer",
       "factor": 0.7,
       "backspacingMm": 55.0,
-      "compatibleScopes": ["65PHQ", "71PHQ", "103APO", "120APO"],
-      "notes": "Confirm exact part number per OTA — Askar sells dedicated reducers per scope."
+      "compatibleScopes": ["65PHQ", "80PHQ", "107PHQ", "130PHQ", "151PHQ"],
+      "notes": "Dedicated reducer for the PHQ quadruplet line. Drops the native f/7 - f/7.7 down to f/4.9 - f/5.4 with a 700 - 740 mm working focal length on the 130/151PHQ. Confirm exact part number matches your OTA."
+    },
+    {
+      "brand": "Askar",
+      "model": "0.7x Reducer (APO)",
+      "type": "reducer",
+      "factor": 0.7,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["103APO", "120APO", "140APO", "160APO", "185APO", "203APO"],
+      "notes": "Dedicated reducer for the APO triplet line. Drops native f/7 to ~f/5."
+    },
+    {
+      "brand": "Askar",
+      "model": "0.7x Reducer (F-series)",
+      "type": "reducer",
+      "factor": 0.7,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["60F Flat-Field", "71F Flat-Field", "91F Flat-Field", "111F Flat-Field", "131F Flat-Field"],
+      "notes": "Optional reducer for the F-series quadruplets (they're self-flattening at native f, so the reducer is purely for speeding the system up)."
     },
     {
       "brand": "Takahashi",

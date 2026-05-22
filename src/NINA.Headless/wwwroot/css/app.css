@@ -467,6 +467,10 @@ html, body {
 
 select.input-sm {
     cursor: pointer;
+    /* 60px is fine for a 2-digit numeric input but cramps even the
+       shortest dropdown labels ("All types" overflows). Bump the
+       width 50% so the chevron + the longest option text both fit. */
+    width: 90px;
 }
 
 .search-input {

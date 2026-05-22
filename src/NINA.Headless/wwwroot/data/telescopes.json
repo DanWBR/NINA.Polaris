@@ -1,14 +1,42 @@
 {
   "_doc": "Curated catalogue of popular amateur astrophotography telescopes. Used by the Equipment rig editor's telescope picker to auto-fill aperture / focal length / F-ratio / required backspacing. Add to this list by PR — keep entries sorted by brand then aperture. backspacingMm is the camera-side back-focus required by the OTA out of the box (no accessory) in millimetres; null if it varies by configuration.",
   "telescopes": [
+    { "brand": "Askar",           "model": "SQA55",                 "type": "Quintuplet Petzval APO","apertureMm": 55,   "focalLengthMm": 264,  "backspacingMm": 55.0 },
+    { "brand": "Askar",           "model": "SQA60 Pro",             "type": "Quintuplet Petzval APO","apertureMm": 60,   "focalLengthMm": 276,  "backspacingMm": 55.0 },
+    { "brand": "Askar",           "model": "SQA70",                 "type": "Quintuplet Petzval APO","apertureMm": 70,   "focalLengthMm": 336,  "backspacingMm": 55.0 },
+    { "brand": "Askar",           "model": "SQA85",                 "type": "Quintuplet Petzval APO","apertureMm": 85,   "focalLengthMm": 408,  "backspacingMm": 55.0 },
+    { "brand": "Askar",           "model": "SQA106",                "type": "Quintuplet Petzval APO","apertureMm": 106,  "focalLengthMm": 509,  "backspacingMm": 55.0 },
+    { "brand": "Askar",           "model": "SQA130",                "type": "Quintuplet Petzval APO","apertureMm": 130,  "focalLengthMm": 624,  "backspacingMm": 55.0 },
+
+    { "brand": "Askar",           "model": "65PHQ",                 "type": "Quadruplet Petzval",   "apertureMm": 65,    "focalLengthMm": 416,  "backspacingMm": 55.0 },
+    { "brand": "Askar",           "model": "80PHQ",                 "type": "Quadruplet Petzval",   "apertureMm": 80,    "focalLengthMm": 600,  "backspacingMm": 55.0 },
+    { "brand": "Askar",           "model": "107PHQ",                "type": "Quadruplet Petzval",   "apertureMm": 107,   "focalLengthMm": 749,  "backspacingMm": 55.0 },
+    { "brand": "Askar",           "model": "130PHQ",                "type": "Quadruplet Petzval",   "apertureMm": 130,   "focalLengthMm": 1000, "backspacingMm": 55.0 },
+    { "brand": "Askar",           "model": "151PHQ",                "type": "Quadruplet Petzval",   "apertureMm": 151,   "focalLengthMm": 1057, "backspacingMm": 55.0 },
+
     { "brand": "Askar",           "model": "FRA300 Pro",            "type": "Quintuplet APO",       "apertureMm": 60,    "focalLengthMm": 300,  "backspacingMm": 55.0 },
     { "brand": "Askar",           "model": "FRA400",                "type": "Quintuplet APO",       "apertureMm": 72,    "focalLengthMm": 400,  "backspacingMm": 55.0 },
+    { "brand": "Askar",           "model": "FRA400C",               "type": "Quintuplet APO (Carbon)","apertureMm": 72,  "focalLengthMm": 400,  "backspacingMm": 55.0 },
     { "brand": "Askar",           "model": "FRA500",                "type": "Quintuplet APO",       "apertureMm": 90,    "focalLengthMm": 500,  "backspacingMm": 55.0 },
     { "brand": "Askar",           "model": "FRA600",                "type": "Quintuplet APO",       "apertureMm": 108,   "focalLengthMm": 600,  "backspacingMm": 55.0 },
-    { "brand": "Askar",           "model": "65PHQ",                 "type": "Petzval Quintuplet",   "apertureMm": 65,    "focalLengthMm": 416,  "backspacingMm": 55.0 },
-    { "brand": "Askar",           "model": "71PHQ",                 "type": "Petzval Quintuplet",   "apertureMm": 71,    "focalLengthMm": 490,  "backspacingMm": 55.0 },
+
     { "brand": "Askar",           "model": "103APO",                "type": "Triplet APO",          "apertureMm": 103,   "focalLengthMm": 700,  "backspacingMm": 55.0 },
     { "brand": "Askar",           "model": "120APO",                "type": "Triplet APO",          "apertureMm": 120,   "focalLengthMm": 840,  "backspacingMm": 55.0 },
+    { "brand": "Askar",           "model": "140APO",                "type": "Triplet APO",          "apertureMm": 140,   "focalLengthMm": 980,  "backspacingMm": 55.0 },
+    { "brand": "Askar",           "model": "160APO",                "type": "Triplet APO",          "apertureMm": 160,   "focalLengthMm": 1120, "backspacingMm": 55.0 },
+    { "brand": "Askar",           "model": "185APO",                "type": "Triplet APO",          "apertureMm": 185,   "focalLengthMm": 1295, "backspacingMm": 55.0 },
+    { "brand": "Askar",           "model": "203APO",                "type": "Triplet APO",          "apertureMm": 203,   "focalLengthMm": 1421, "backspacingMm": 55.0 },
+
+    { "brand": "Askar",           "model": "60F Flat-Field",        "type": "Quadruplet Flat-Field","apertureMm": 60,    "focalLengthMm": 408,  "backspacingMm": 55.0 },
+    { "brand": "Askar",           "model": "71F Flat-Field",        "type": "Quadruplet Flat-Field","apertureMm": 71,    "focalLengthMm": 490,  "backspacingMm": 55.0 },
+    { "brand": "Askar",           "model": "91F Flat-Field",        "type": "Quadruplet Flat-Field","apertureMm": 91,    "focalLengthMm": 609,  "backspacingMm": 55.0 },
+    { "brand": "Askar",           "model": "111F Flat-Field",       "type": "Quadruplet Flat-Field","apertureMm": 111,   "focalLengthMm": 766,  "backspacingMm": 55.0 },
+    { "brand": "Askar",           "model": "131F Flat-Field",       "type": "Quadruplet Flat-Field","apertureMm": 131,   "focalLengthMm": 983,  "backspacingMm": 55.0 },
+
+    { "brand": "Askar",           "model": "FMA135",                "type": "Triplet APO",          "apertureMm": 30,    "focalLengthMm": 135,  "backspacingMm": 55.0 },
+    { "brand": "Askar",           "model": "FMA180",                "type": "Triplet APO",          "apertureMm": 40,    "focalLengthMm": 220,  "backspacingMm": 55.0 },
+    { "brand": "Askar",           "model": "FMA180 Pro",            "type": "Sextuplet APO",        "apertureMm": 40,    "focalLengthMm": 180,  "backspacingMm": 55.0 },
+
     { "brand": "Askar",           "model": "V80",                   "type": "Doublet APO",          "apertureMm": 80,    "focalLengthMm": 500,  "backspacingMm": 55.0 },
 
     { "brand": "Astro-Physics",   "model": "130 GTX",               "type": "Triplet APO",          "apertureMm": 130,   "focalLengthMm": 819,  "backspacingMm": null },
