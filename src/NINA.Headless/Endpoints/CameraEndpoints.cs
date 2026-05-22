@@ -167,6 +167,52 @@ public static class CameraEndpoints {
             await equip.Camera.DisconnectAsync();
             return Results.Ok(new { status = "disconnected" });
         });
+
+        // ----- Video stream (continuous frame feed) -----
+        // Auto-picks native CCD_VIDEO_STREAM mode when the camera
+        // supports it; falls back to a tight server-side capture loop
+        // for any other backend. Frames bypass FITS save + stats and go
+        // straight to the existing /ws/image-stream channel.
+
+        group.MapPost("/stream/start", (EquipmentManager equip,
+                                        CameraStreamService stream,
+                                        StreamStartRequest? request) => {
+            if (equip.Camera == null)
+                return Results.BadRequest(new { error = "No camera connected" });
+            try {
+                stream.Start(new StreamConfig(
+                    ExposureSeconds: request?.Exposure ?? 0.1,
+                    Gain: request?.Gain,
+                    BinX: request?.Binning ?? 1,
+                    BinY: request?.Binning ?? 1,
+                    ForceLoop: request?.ForceLoop ?? false));
+                return Results.Ok(new {
+                    running = true,
+                    mode = stream.Mode,
+                    supportsNative = equip.Camera.Capabilities.SupportsVideoStream
+                });
+            } catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
+        });
+
+        group.MapPost("/stream/stop", async (CameraStreamService stream) => {
+            await stream.StopAsync();
+            return Results.Ok(new { running = false, frames = stream.FrameCount });
+        });
+
+        group.MapGet("/stream/status", (CameraStreamService stream, EquipmentManager equip) => Results.Ok(new {
+            running = stream.IsRunning,
+            mode = stream.Mode,
+            exposure = stream.ExposureSeconds,
+            gain = stream.Gain,
+            binX = stream.BinX,
+            binY = stream.BinY,
+            frames = stream.FrameCount,
+            fps = stream.Fps,
+            startedAt = stream.IsRunning ? stream.StartedAt : (DateTime?)null,
+            lastFrameAt = stream.IsRunning ? stream.LastFrameAt : (DateTime?)null,
+            lastError = stream.LastError,
+            supportsNative = equip.Camera?.Capabilities.SupportsVideoStream ?? false
+        }));
     }
 
     static double? NanToNull(double v) => double.IsNaN(v) ? null : v;
@@ -185,4 +231,12 @@ public static class CameraEndpoints {
         bool SaveToDisk = false,
         string? TargetName = null);
     public record CoolerRequest(bool Enabled, double? TargetTemperature = null);
+
+    /// <summary>Start-stream body. ForceLoop=true skips native streaming
+    /// even when the camera supports it (debugging the fallback).</summary>
+    public record StreamStartRequest(
+        double? Exposure = null,
+        int? Gain = null,
+        int? Binning = null,
+        bool? ForceLoop = null);
 }

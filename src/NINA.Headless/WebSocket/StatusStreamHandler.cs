@@ -20,6 +20,7 @@ public static class StatusStreamHandler {
         }
 
         var equip = context.RequestServices.GetRequiredService<EquipmentManager>();
+        var cameraStream = context.RequestServices.GetRequiredService<CameraStreamService>();
         var liveStack = context.RequestServices.GetRequiredService<LiveStackingService>();
         var sequence = context.RequestServices.GetRequiredService<SequenceEngine>();
         var phd2 = context.RequestServices.GetRequiredService<PHD2Client>();
@@ -199,6 +200,19 @@ public static class StatusStreamHandler {
                             dithersIssued = seqStatus.DithersIssued,
                             framesSinceDither = seqStatus.FramesSinceDither,
                             dither = seqStatus.Dither
+                        },
+                        // Camera video-stream lifecycle (PREVIEW tab Stream button).
+                        // Always present so the UI button can read mode/fps even
+                        // while idle.
+                        cameraStream = new {
+                            running = cameraStream.IsRunning,
+                            mode = cameraStream.Mode,
+                            exposure = cameraStream.ExposureSeconds,
+                            gain = cameraStream.Gain,
+                            frames = cameraStream.FrameCount,
+                            fps = cameraStream.Fps,
+                            lastError = cameraStream.LastError,
+                            supportsNative = equip.Camera?.Capabilities.SupportsVideoStream ?? false
                         },
                         // New blocks powering the bottom activity bar.
                         host = hostMetrics.Latest,
