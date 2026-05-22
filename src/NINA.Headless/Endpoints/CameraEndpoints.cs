@@ -88,10 +88,27 @@ public static class CameraEndpoints {
             return Results.Ok(new { coolerOn = request.Enabled, target = request.TargetTemperature });
         });
 
-        group.MapPost("/select/{deviceName}", (EquipmentManager equip, string deviceName) => {
-            equip.SelectCamera(deviceName);
-            return Results.Ok(new { selected = deviceName });
+        group.MapPost("/select/{deviceName}", (EquipmentManager equip, string deviceName, string? driver) => {
+            // Default driver is "indi" so existing clients (which only
+            // pass the device name) keep working untouched. DSLR / Alpaca
+            // callers add ?driver=canon-edsdk etc.
+            try {
+                equip.SelectCamera(driver ?? "indi", deviceName);
+                return Results.Ok(new {
+                    selected = deviceName,
+                    driver = driver ?? "indi"
+                });
+            } catch (NotSupportedException ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
         });
+
+        // Available camera driver kinds for the current host. Always
+        // includes 'indi'; vendor SDK entries are listed only on the
+        // platforms that can support them, with an `available` flag
+        // for whether the native dependency is actually present.
+        group.MapGet("/drivers", (EquipmentManager equip)
+            => Results.Ok(equip.GetAvailableCameraDrivers()));
 
         group.MapPost("/connect", async (EquipmentManager equip) => {
             if (equip.Camera == null)

@@ -7,7 +7,7 @@ using NINA.INDI.Protocol;
 
 namespace NINA.INDI.Devices;
 
-public class IndiCamera {
+public class IndiCamera : ICamera {
     private readonly IndiClient _client;
     private TaskCompletionSource<IImageData>? _exposureTcs;
 
@@ -37,6 +37,19 @@ public class IndiCamera {
     public double PixelSizeX => _client.GetNumber(DeviceName, "CCD_INFO", "CCD_PIXEL_SIZE_X");
     public double PixelSizeY => _client.GetNumber(DeviceName, "CCD_INFO", "CCD_PIXEL_SIZE_Y");
     public int BitDepth => (int)_client.GetNumber(DeviceName, "CCD_INFO", "CCD_BITSPERPIXEL");
+
+    // INDI cameras don't surface gain in a standardised property — the
+    // CCD_CONTROLS group varies by driver (gain / Gain / GAIN). Plumb a
+    // best-effort read here and return 0 when nothing matches.
+    public int Gain => (int)_client.GetNumber(DeviceName, "CCD_CONTROLS", "Gain");
+
+    // ISO is not part of the INDI CCD spec — astronomy cameras report
+    // analogue gain instead. Empty list signals the UI to hide the ISO
+    // dropdown for INDI cameras.
+    public IReadOnlyList<int> IsoOptions => Array.Empty<int>();
+    public int SelectedIso => 0;
+
+    public CameraCapabilities Capabilities => CameraCapabilities.Astro;
 
     public IndiCamera(IndiClient client, string deviceName) {
         _client = client;
@@ -72,10 +85,23 @@ public class IndiCamera {
             new Dictionary<string, bool> { ["COOLER_ON"] = on, ["COOLER_OFF"] = !on }, ct);
     }
 
-    public async Task<IImageData> CaptureAsync(double exposureSeconds, CancellationToken ct = default) {
+    /// <summary>INDI astronomy cameras don't expose ISO. No-op.</summary>
+    public Task SetIsoAsync(int iso, CancellationToken ct = default) => Task.CompletedTask;
+
+    public async Task<IImageData> CaptureAsync(double exposureSeconds, CaptureOptions? opts = null, CancellationToken ct = default) {
         _exposureTcs = new TaskCompletionSource<IImageData>();
 
         using var reg = ct.Register(() => _exposureTcs.TrySetCanceled());
+
+        // opts overrides honoured per-capture so the sequencer can set
+        // binning + gain inline without a separate round-trip.
+        if (opts?.BinX is int bx && opts.BinY is int by) {
+            await SetBinningAsync(bx, by, ct);
+        }
+        if (opts?.Gain is int g) {
+            await _client.SetNumberAsync(DeviceName, "CCD_CONTROLS",
+                new Dictionary<string, double> { ["Gain"] = g }, ct);
+        }
 
         await _client.SetNumberAsync(DeviceName, "CCD_EXPOSURE",
             new Dictionary<string, double> { ["CCD_EXPOSURE_VALUE"] = exposureSeconds }, ct);

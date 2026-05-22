@@ -162,7 +162,8 @@ public class ProfileService {
         var src = ActiveEquipmentProfile;
         var copy = new EquipmentProfile {
             Name = newName,
-            Camera = src.Camera, Telescope = src.Telescope, Focuser = src.Focuser,
+            Camera = src.Camera, CameraDriver = src.CameraDriver,
+            Telescope = src.Telescope, Focuser = src.Focuser,
             FilterWheel = src.FilterWheel, Rotator = src.Rotator,
             FlatDevice = src.FlatDevice, Dome = src.Dome, Weather = src.Weather,
             CoolerTargetTemperature = src.CoolerTargetTemperature,
@@ -314,8 +315,18 @@ public class EquipmentProfile {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Name { get; set; } = "Default";
 
-    // Device selections — INDI device names as returned by getProperties
+    // Device selections — INDI device names as returned by getProperties.
+    // Camera is special: it accepts multiple backend kinds via
+    // CameraDriver below. The Camera field carries the driver-specific
+    // device id (INDI name, or vendor SDK serial number, etc.); for
+    // legacy profiles that pre-date CameraDriver it's assumed to be an
+    // INDI device name.
     public string? Camera { get; set; }
+    /// <summary>Camera backend kind. One of: <c>indi</c>, <c>alpaca</c>,
+    /// <c>canon-edsdk</c>, <c>nikon-sdk</c>, <c>sony-sdk</c>. Defaults
+    /// to <c>indi</c> for backward compatibility with profiles created
+    /// before this field existed.</summary>
+    public string CameraDriver { get; set; } = "indi";
     public string? Telescope { get; set; }
     public string? Focuser { get; set; }
     public string? FilterWheel { get; set; }

@@ -1,3 +1,4 @@
+using NINA.Image.Interfaces;
 using NINA.INDI.Client;
 using NINA.INDI.Devices;
 
@@ -7,7 +8,19 @@ public class EquipmentManager : IDisposable {
     private readonly IndiClient _indiClient;
     private readonly ILogger<EquipmentManager> _logger;
 
-    public IndiCamera? Camera { get; private set; }
+    /// <summary>Currently-selected camera, regardless of backend.
+    /// Concrete implementations are <see cref="IndiCamera"/> for
+    /// astronomy CCDs over INDI and the per-vendor DSLR drivers
+    /// (CanonEdsdkCamera, NikonSdkCamera, SonySdkCamera) when those
+    /// land. The capture endpoints and status broadcaster only depend
+    /// on the <see cref="ICamera"/> contract.</summary>
+    public ICamera? Camera { get; private set; }
+
+    /// <summary>Camera driver kind currently bound to <see cref="Camera"/>.
+    /// Mirrors <c>EquipmentProfile.CameraDriver</c>. Null when no
+    /// camera is selected.</summary>
+    public string? CameraDriver { get; private set; }
+
     public IndiTelescope? Telescope { get; private set; }
     public IndiFocuser? Focuser { get; private set; }
     public IndiFilterWheel? FilterWheel { get; private set; }
@@ -24,10 +37,53 @@ public class EquipmentManager : IDisposable {
 
     public IEnumerable<string> GetDeviceNames() => _indiClient.GetDeviceNames();
 
-    public IndiCamera SelectCamera(string deviceName) {
-        Camera = new IndiCamera(_indiClient, deviceName);
-        _logger.LogInformation("Camera selected: {Name}", deviceName);
+    /// <summary>Legacy entry-point — assumes the INDI driver. Kept
+    /// for backwards compatibility with the existing capture-endpoint
+    /// route <c>POST /api/camera/select/{deviceName}</c>.</summary>
+    public ICamera SelectCamera(string deviceName)
+        => SelectCamera("indi", deviceName);
+
+    /// <summary>Select a camera by driver kind + driver-specific
+    /// device id. INDI cameras are addressed by INDI device name;
+    /// Alpaca cameras are addressed by <c>host:port:devnum</c>;
+    /// vendor SDK cameras (Canon/Nikon/Sony) are addressed by the
+    /// serial number reported by the SDK enumeration call.</summary>
+    public ICamera SelectCamera(string driver, string deviceId) {
+        driver = (driver ?? "indi").Trim().ToLowerInvariant();
+        Camera = driver switch {
+            "indi" => new IndiCamera(_indiClient, deviceId),
+            // Alpaca + vendor SDK drivers land in follow-up commits.
+            // For now the dispatch raises so the UI shows a clear error
+            // instead of silently doing nothing.
+            _      => throw new NotSupportedException(
+                $"Camera driver '{driver}' is not implemented yet. " +
+                "Use 'indi' (or install the matching vendor SDK)."),
+        };
+        CameraDriver = driver;
+        _logger.LogInformation("Camera selected: driver={Driver}, id={DeviceId}",
+            driver, deviceId);
         return Camera;
+    }
+
+    /// <summary>List of camera driver kinds the host can offer. Always
+    /// includes <c>indi</c>; vendor SDK drivers are listed only when
+    /// the matching native dependency is present on the current OS.</summary>
+    public IReadOnlyList<CameraDriverInfo> GetAvailableCameraDrivers() {
+        var list = new List<CameraDriverInfo> {
+            new("indi", "INDI", Available: true,
+                Description: "Standard astronomy cameras via INDI server."),
+            new("alpaca", "Alpaca (ASCOM)", Available: false,
+                Description: "ASCOM-over-HTTP cameras. Wiring pending."),
+        };
+        if (OperatingSystem.IsWindows()) {
+            list.Add(new("canon-edsdk", "Canon EOS (EDSDK)", Available: false,
+                Description: "Canon DSLR / mirrorless. Requires EDSDK DLLs."));
+            list.Add(new("nikon-sdk", "Nikon (Imaging SDK)", Available: false,
+                Description: "Nikon DSLR / Z mirrorless. Requires Nikon SDK DLLs."));
+            list.Add(new("sony-sdk", "Sony (Camera Remote SDK)", Available: false,
+                Description: "Sony α series. Requires Sony Camera Remote SDK."));
+        }
+        return list;
     }
 
     public IndiTelescope SelectTelescope(string deviceName) {
@@ -207,3 +263,8 @@ public class EquipmentManager : IDisposable {
         _indiClient.DeviceFound -= OnDeviceFound;
     }
 }
+
+/// <summary>Describes one camera-driver kind exposed by the host.
+/// Used by <c>GET /api/camera/drivers</c> so the UI can populate the
+/// driver dropdown with the matching availability badges.</summary>
+public record CameraDriverInfo(string Id, string Name, bool Available, string Description);

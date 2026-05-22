@@ -73,6 +73,11 @@ public static class EquipmentEndpoints {
             var ok = profiles.UpdateEquipmentProfile(id, r => {
                 r.Name = update.Name;
                 r.Camera = update.Camera;
+                // Empty/null camera driver from old clients is treated
+                // as the legacy default ("indi"), so untouched rig PUTs
+                // don't accidentally clear the driver field.
+                if (!string.IsNullOrWhiteSpace(update.CameraDriver))
+                    r.CameraDriver = update.CameraDriver;
                 r.Telescope = update.Telescope;
                 r.Focuser = update.Focuser;
                 r.FilterWheel = update.FilterWheel;
