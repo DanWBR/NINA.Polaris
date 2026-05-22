@@ -14,6 +14,13 @@ builder.WebHost.ConfigureKestrel(options =>
 // Services
 builder.Services.AddSingleton<ImageRelayService>();
 builder.Services.AddSingleton<CameraStreamService>();
+builder.Services.AddSingleton<NINA.Headless.Services.Planetary.VideoRecordingService>();
+builder.Services.AddSingleton<NINA.Headless.Services.Planetary.PlanetaryStackerService>();
+// Auto-shows live camera feed while mount is slewing (no-op when any
+// capture surface is active). Singleton + hosted service so the
+// background poll loop runs.
+builder.Services.AddSingleton<SlewPreviewService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<SlewPreviewService>());
 builder.Services.AddSingleton<LiveStackingService>();
 builder.Services.AddSingleton<EquipmentManager>();
 builder.Services.AddSingleton<SequenceEngine>();
@@ -145,6 +152,7 @@ app.Map("/phd2-gui/{**rest}", async (HttpContext ctx, Phd2GuiSessionService gui)
 // Equipment endpoints
 app.MapEquipmentEndpoints();
 app.MapCameraEndpoints();
+app.MapVideoEndpoints();
 app.MapTelescopeEndpoints();
 app.MapFocuserEndpoints();
 app.MapFilterWheelEndpoints();
