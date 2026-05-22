@@ -1,9 +1,8 @@
 using System.Collections.Concurrent;
 using Microsoft.Data.Sqlite;
 using NINA.Image.FileFormat.FITS;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
+using NINA.Image.ImageData;
+using SkiaSharp;
 
 namespace NINA.Headless.Services.Studio;
 
@@ -311,22 +310,51 @@ public class FrameLibraryService {
         var cachePath = Path.Combine(_thumbDir, $"{frameId}.jpg");
         if (File.Exists(cachePath)) return cachePath;
         try {
-            await using var fs = File.OpenRead(row.Path);
-            var img = FITSReader.Read(fs);
-            var stretched = NINA.Image.ImageAnalysis.AutoStretch.Apply(
-                img.Data, img.Properties.Width, img.Properties.Height, img.Properties.BitDepth);
-            // stretched is byte[] grayscale; wrap into ImageSharp + resize.
-            using var image = SixLabors.ImageSharp.Image.LoadPixelData<L8>(stretched, img.Properties.Width, img.Properties.Height);
-            image.Mutate(x => x.Resize(new ResizeOptions {
-                Size = new Size(256, 256),
-                Mode = ResizeMode.Max
-            }));
-            await image.SaveAsJpegAsync(cachePath, ct);
+            // Decode + stretch + encode is CPU-bound; push it onto the
+            // thread pool so the request thread isn't blocked. Skia's
+            // encoder is sync, so wrapping in Task.Run is the cleanest
+            // way to keep the endpoint async.
+            await Task.Run(() => GenerateThumbnail(row, cachePath), ct);
             return cachePath;
         } catch (Exception ex) {
             _logger.LogDebug(ex, "Thumbnail generation failed for frame {Id}", frameId);
             return null;
         }
+    }
+
+    private static void GenerateThumbnail(FrameRow row, string cachePath) {
+        BaseImageData img;
+        using (var fs = File.OpenRead(row.Path)) {
+            img = FITSReader.Read(fs);
+        }
+        var stretched = NINA.Image.ImageAnalysis.AutoStretch.Apply(
+            img.Data, img.Properties.Width, img.Properties.Height, img.Properties.BitDepth);
+
+        // Build a Gray8 SKBitmap from the stretched byte buffer, then
+        // resize down to 256 on the long side. JPEG decoders are flaky
+        // with Gray8, so round-trip via Rgba8888 before encoding.
+        using var gray = new SKBitmap(img.Properties.Width, img.Properties.Height,
+            SKColorType.Gray8, SKAlphaType.Opaque);
+        unsafe {
+            fixed (byte* p = stretched) {
+                gray.SetPixels((IntPtr)p);
+            }
+        }
+
+        // Copy so the backing buffer outlives the byte[] reference.
+        using var grayCopy = gray.Copy();
+        double scale = 256.0 / Math.Max(grayCopy.Width, grayCopy.Height);
+        int newW = Math.Max(1, (int)Math.Round(grayCopy.Width  * scale));
+        int newH = Math.Max(1, (int)Math.Round(grayCopy.Height * scale));
+        using var resized = grayCopy.Resize(
+            new SKImageInfo(newW, newH, SKColorType.Gray8, SKAlphaType.Opaque),
+            SKSamplingOptions.Default);
+
+        using var rgb = new SKBitmap(newW, newH, SKColorType.Rgba8888, SKAlphaType.Opaque);
+        using (var canvas = new SKCanvas(rgb)) canvas.DrawBitmap(resized, 0, 0);
+        using var data = rgb.Encode(SKEncodedImageFormat.Jpeg, 85);
+        using var outStream = File.Create(cachePath);
+        data?.SaveTo(outStream);
     }
 
     // --- Header helpers ---

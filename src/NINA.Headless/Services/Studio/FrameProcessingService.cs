@@ -1,16 +1,8 @@
-using System.Collections.Concurrent;
 using NINA.Image.FileFormat.FITS;
+using NINA.Image.FileFormat.TIFF;
 using NINA.Image.ImageAnalysis;
 using NINA.Image.ImageData;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.Formats.Png;
-using SixLabors.ImageSharp.Formats.Tiff;
-// `NINA.Image` (our namespace) shadows `SixLabors.ImageSharp.Image`, so
-// alias the ImageSharp class explicitly.
-using IsImage = SixLabors.ImageSharp.Image;
+using SkiaSharp;
 
 namespace NINA.Headless.Services.Studio;
 
@@ -18,12 +10,18 @@ namespace NINA.Headless.Services.Studio;
 /// On-demand image processing for STUDIO's single-frame viewer:
 ///   - render stretched JPEG/PNG previews (caller-supplied black/mid/white)
 ///   - compute full statistics + star detection
-///   - export TIFF/PNG/JPEG to the {rig}/processed/{target}/ tree
+///   - export TIFF / PNG / JPEG to the {rig}/processed/{target}/ tree
 ///
 /// Slider drags hit /preview many times per second, so the decoded FITS
 /// pixel buffer is kept in a small in-memory LRU keyed by frame id. The
-/// stretch itself is just an LUT pass — cheap enough that we don't bother
-/// caching the rendered bytes.
+/// stretch itself is just an LUT pass — cheap enough that we don't
+/// bother caching rendered bytes.
+///
+/// Encoding stack: SkiaSharp for JPEG + PNG (matches the rest of the
+/// codebase — NINA.Image.Portable.ImageAnalysis.JpegHelper, the live
+/// stream encoder, all use Skia). 16-bit linear TIFF goes through our
+/// own tiny <see cref="TiffWriter"/> because Skia doesn't ship a TIFF
+/// encoder and we don't want a parallel image stack just for that.
 /// </summary>
 public class FrameProcessingService {
     private readonly FrameLibraryService _library;
@@ -84,41 +82,25 @@ public class FrameProcessingService {
         }
     }
 
-    /// <summary>Stretch parameters used for a preview / export. Any field
-    /// left null is auto-computed.</summary>
+    /// <summary>Stretch parameters used for a preview / export. Any
+    /// field left null is auto-computed.</summary>
     public record StretchOptions(double? Black, double? Mid, double? White);
 
-    /// <summary>Render a stretched preview as JPEG bytes. maxSize caps the
-    /// long side in pixels (default 1600, plenty for a browser viewer).</summary>
-    public async Task<byte[]?> RenderJpegAsync(int frameId, StretchOptions opts,
-                                               int maxSize = 1600, int quality = 85,
-                                               CancellationToken ct = default) {
-        var img = LoadCached(frameId);
-        if (img == null) return null;
-        var stretched = ApplyStretch(img, opts);
-        using var image = IsImage.LoadPixelData<L8>(stretched, img.Properties.Width, img.Properties.Height);
-        ResizeIfNeeded(image, maxSize);
-        await using var ms = new MemoryStream();
-        await image.SaveAsJpegAsync(ms, new JpegEncoder { Quality = quality }, ct);
-        return ms.ToArray();
-    }
+    /// <summary>Render a stretched preview as JPEG bytes. maxSize caps
+    /// the long side in pixels (default 1600).</summary>
+    public Task<byte[]?> RenderJpegAsync(int frameId, StretchOptions opts,
+                                         int maxSize = 1600, int quality = 85,
+                                         CancellationToken ct = default)
+        => Task.Run<byte[]?>(() => RenderEncoded(frameId, opts, maxSize, SKEncodedImageFormat.Jpeg, quality), ct);
 
     /// <summary>Render a stretched preview as 8-bit PNG bytes.</summary>
-    public async Task<byte[]?> RenderPngAsync(int frameId, StretchOptions opts,
-                                              int maxSize = 1600, CancellationToken ct = default) {
-        var img = LoadCached(frameId);
-        if (img == null) return null;
-        var stretched = ApplyStretch(img, opts);
-        using var image = IsImage.LoadPixelData<L8>(stretched, img.Properties.Width, img.Properties.Height);
-        ResizeIfNeeded(image, maxSize);
-        await using var ms = new MemoryStream();
-        await image.SaveAsPngAsync(ms, ct);
-        return ms.ToArray();
-    }
+    public Task<byte[]?> RenderPngAsync(int frameId, StretchOptions opts,
+                                        int maxSize = 1600, CancellationToken ct = default)
+        => Task.Run<byte[]?>(() => RenderEncoded(frameId, opts, maxSize, SKEncodedImageFormat.Png, 100), ct);
 
     /// <summary>Compute the auto-stretch defaults the UI should seed
-    /// sliders with — black/mid/white normalised 0..1 — without applying
-    /// or rendering anything.</summary>
+    /// sliders with — black/mid/white normalised 0..1 — without
+    /// applying or rendering anything.</summary>
     public AutoStretch.StretchParams? AutoStretchDefaults(int frameId) {
         var img = LoadCached(frameId);
         if (img == null) return null;
@@ -128,7 +110,8 @@ public class FrameProcessingService {
 
     /// <summary>Full statistics + detected-star summary for the frame.
     /// The star list is capped at 500 entries — that's what StarDetector
-    /// returns by default and it's more than enough for a viewer overlay.</summary>
+    /// returns by default and it's more than enough for a viewer
+    /// overlay.</summary>
     public FrameStats? ComputeStats(int frameId, bool includeStars = true) {
         var img = LoadCached(frameId);
         if (img == null) return null;
@@ -165,11 +148,43 @@ public class FrameProcessingService {
     }
 
     /// <summary>Export the frame to {rig}/processed/{target}/ as TIFF
-    /// (16-bit, no stretch — preserves dynamic range), PNG (8-bit
-    /// stretched), or JPEG (8-bit stretched). Returns the absolute path
-    /// of the written file.</summary>
-    public async Task<string?> ExportAsync(int frameId, string format, StretchOptions opts,
-                                           bool stretched = true, CancellationToken ct = default) {
+    /// (16-bit when stretched=false — preserves dynamic range; 8-bit
+    /// when stretched=true), PNG (8-bit stretched), or JPEG (8-bit
+    /// stretched). Returns the absolute path of the written file.</summary>
+    public Task<string?> ExportAsync(int frameId, string format, StretchOptions opts,
+                                     bool stretched = true, CancellationToken ct = default)
+        => Task.Run<string?>(() => ExportSync(frameId, format, opts, stretched), ct);
+
+    // --- internals ---
+
+    private byte[]? RenderEncoded(int frameId, StretchOptions opts, int maxSize,
+                                  SKEncodedImageFormat fmt, int quality) {
+        var img = LoadCached(frameId);
+        if (img == null) return null;
+        var stretched = ApplyStretch(img, opts);
+
+        using var bitmap = LoadGray8Bitmap(stretched, img.Properties.Width, img.Properties.Height);
+        using var resized = MaybeResize(bitmap, maxSize);
+
+        // JPEG decoders don't all handle Gray8 reliably, so we round-trip
+        // through Rgba8888 for JPEG. PNG is fine with Gray8 directly.
+        SKBitmap forEncode = resized;
+        SKBitmap? rgbBuf = null;
+        try {
+            if (fmt == SKEncodedImageFormat.Jpeg && resized.ColorType == SKColorType.Gray8) {
+                rgbBuf = new SKBitmap(resized.Width, resized.Height,
+                    SKColorType.Rgba8888, SKAlphaType.Opaque);
+                using (var canvas = new SKCanvas(rgbBuf)) canvas.DrawBitmap(resized, 0, 0);
+                forEncode = rgbBuf;
+            }
+            using var data = forEncode.Encode(fmt, quality);
+            return data?.ToArray();
+        } finally {
+            rgbBuf?.Dispose();
+        }
+    }
+
+    private string? ExportSync(int frameId, string format, StretchOptions opts, bool stretched) {
         var row = _library.GetById(frameId);
         if (row == null) return null;
         var img = LoadCached(frameId);
@@ -187,9 +202,9 @@ public class FrameProcessingService {
         var fmt = (format ?? "tif").Trim().ToLowerInvariant();
         var ext = fmt switch {
             "tif" or "tiff" => ".tif",
-            "png" => ".png",
+            "png"           => ".png",
             "jpg" or "jpeg" => ".jpg",
-            _ => ".tif"
+            _               => ".tif"
         };
         var baseName = Path.GetFileNameWithoutExtension(row.FileName);
         var outPath = Path.Combine(processedDir, $"{baseName}{ext}");
@@ -197,33 +212,30 @@ public class FrameProcessingService {
         while (File.Exists(outPath)) outPath = Path.Combine(processedDir, $"{baseName}_{copy++}{ext}");
 
         try {
+            int w = img.Properties.Width;
+            int h = img.Properties.Height;
             switch (fmt) {
                 case "tif":
                 case "tiff": {
                     if (stretched) {
                         var bytes = ApplyStretch(img, opts);
-                        using var image = IsImage.LoadPixelData<L8>(bytes, img.Properties.Width, img.Properties.Height);
-                        await image.SaveAsTiffAsync(outPath, ct);
+                        TiffWriter.Write8(bytes, w, h, outPath);
                     } else {
-                        // 16-bit linear TIFF — preserves the full dynamic
-                        // range so the user can re-process in PixInsight
-                        // / Photoshop / Siril without baking in our stretch.
-                        using var image = LoadAs16BitLinear(img);
-                        await image.SaveAsTiffAsync(outPath, ct);
+                        // 16-bit linear — the whole point of TIFF export
+                        // for downstream PixInsight / Siril.
+                        TiffWriter.Write16(img.Data, w, h, outPath);
                     }
                     break;
                 }
                 case "png": {
                     var bytes = ApplyStretch(img, opts);
-                    using var image = IsImage.LoadPixelData<L8>(bytes, img.Properties.Width, img.Properties.Height);
-                    await image.SaveAsPngAsync(outPath, ct);
+                    WriteSkiaFile(bytes, w, h, outPath, SKEncodedImageFormat.Png, 100, wrapRgb: false);
                     break;
                 }
                 case "jpg":
                 case "jpeg": {
                     var bytes = ApplyStretch(img, opts);
-                    using var image = IsImage.LoadPixelData<L8>(bytes, img.Properties.Width, img.Properties.Height);
-                    await image.SaveAsJpegAsync(outPath, new JpegEncoder { Quality = 92 }, ct);
+                    WriteSkiaFile(bytes, w, h, outPath, SKEncodedImageFormat.Jpeg, 92, wrapRgb: true);
                     break;
                 }
                 default:
@@ -237,8 +249,6 @@ public class FrameProcessingService {
         }
     }
 
-    // --- internals ---
-
     private static byte[] ApplyStretch(BaseImageData img, StretchOptions opts) {
         var w = img.Properties.Width;
         var h = img.Properties.Height;
@@ -246,28 +256,59 @@ public class FrameProcessingService {
 
         if (opts.Black == null || opts.Mid == null || opts.White == null) {
             var auto = AutoStretch.ComputeAutoStretchParams(img.Data, w, h, bits);
-            var b = opts.Black ?? auto.Black;
-            var m = opts.Mid   ?? auto.Mid;
+            var b  = opts.Black ?? auto.Black;
+            var m  = opts.Mid   ?? auto.Mid;
             var wp = opts.White ?? auto.White;
             return AutoStretch.ApplyManual(img.Data, w, h, b, m, wp, bits);
         }
-        return AutoStretch.ApplyManual(img.Data, w, h, opts.Black.Value, opts.Mid.Value, opts.White.Value, bits);
+        return AutoStretch.ApplyManual(img.Data, w, h,
+            opts.Black.Value, opts.Mid.Value, opts.White.Value, bits);
     }
 
-    private static void ResizeIfNeeded<TPixel>(Image<TPixel> image, int maxSize)
-            where TPixel : unmanaged, IPixel<TPixel> {
-        if (image.Width <= maxSize && image.Height <= maxSize) return;
-        image.Mutate(x => x.Resize(new ResizeOptions {
-            Size = new Size(maxSize, maxSize),
-            Mode = ResizeMode.Max
-        }));
+    /// <summary>Wrap an existing grayscale byte buffer in an SKBitmap
+    /// without copying. The buffer must outlive the bitmap (or the
+    /// caller passes a fresh array each time, which is what we do).</summary>
+    private static SKBitmap LoadGray8Bitmap(byte[] pixels, int width, int height) {
+        var bitmap = new SKBitmap(width, height, SKColorType.Gray8, SKAlphaType.Opaque);
+        unsafe {
+            fixed (byte* p = pixels) {
+                bitmap.SetPixels((IntPtr)p);
+            }
+        }
+        // SetPixels with a raw pointer doesn't copy; copy now so the
+        // backing byte[] can be GC'd after this call returns.
+        return bitmap.Copy();
     }
 
-    private static Image<L16> LoadAs16BitLinear(BaseImageData img) {
-        // ImageSharp expects little-endian L16 — same memory layout as
-        // ushort[] on every platform we target.
-        var byteSpan = System.Runtime.InteropServices.MemoryMarshal.AsBytes(img.Data.AsSpan()).ToArray();
-        return IsImage.LoadPixelData<L16>(byteSpan, img.Properties.Width, img.Properties.Height);
+    private static SKBitmap MaybeResize(SKBitmap src, int maxSize) {
+        if (src.Width <= maxSize && src.Height <= maxSize) return src;
+        double scale = (double)maxSize / Math.Max(src.Width, src.Height);
+        int newW = (int)Math.Round(src.Width * scale);
+        int newH = (int)Math.Round(src.Height * scale);
+        var info = new SKImageInfo(newW, newH, src.ColorType, src.AlphaType);
+        // High-quality downsampling — slider previews don't drag this
+        // path on the hot loop (only on first open + format change),
+        // so the extra CPU is fine.
+        return src.Resize(info, SKSamplingOptions.Default);
+    }
+
+    private static void WriteSkiaFile(byte[] gray8, int width, int height, string path,
+                                      SKEncodedImageFormat fmt, int quality, bool wrapRgb) {
+        using var bitmap = LoadGray8Bitmap(gray8, width, height);
+        SKBitmap forEncode = bitmap;
+        SKBitmap? rgbBuf = null;
+        try {
+            if (wrapRgb) {
+                rgbBuf = new SKBitmap(width, height, SKColorType.Rgba8888, SKAlphaType.Opaque);
+                using (var canvas = new SKCanvas(rgbBuf)) canvas.DrawBitmap(bitmap, 0, 0);
+                forEncode = rgbBuf;
+            }
+            using var data = forEncode.Encode(fmt, quality);
+            using var fs = File.Create(path);
+            data?.SaveTo(fs);
+        } finally {
+            rgbBuf?.Dispose();
+        }
     }
 
     private static int[] BuildHistogram(ushort[] data, int bitDepth, int bins) {

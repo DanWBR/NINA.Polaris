@@ -6,6 +6,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>NINA.Headless</RootNamespace>
     <AssemblyName>NINA.Headless</AssemblyName>
+    <!-- Needed for the SkiaSharp.SetPixels(IntPtr) path in
+         FrameLibraryService / FrameProcessingService — same pattern as
+         NINA.Image.Portable.ImageAnalysis.JpegHelper. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,7 +23,6 @@
     <PackageReference Include="CosineKitty.AstronomyEngine" Version="2.1.19" />
     <PackageReference Include="Makaretu.Dns.Multicast" Version="0.27.*" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.8" />
-    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.6" />
   </ItemGroup>
 
 </Project>
