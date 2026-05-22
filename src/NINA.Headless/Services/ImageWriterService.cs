@@ -97,11 +97,19 @@ public class ImageWriterService {
             EnrichMetadata(imageData, profile, targetName, imageType, gain);
             _sessionFrameNumber++;
 
+            // DSLR / mirrorless drivers attach the camera-native RAW
+            // bytes via IHasRawFile. When present, the raw is the
+            // authoritative on-disk artefact — we save it verbatim
+            // instead of generating a FITS / XISF (which would only
+            // hold the embedded JPEG we use for the live preview).
+            var hasRaw = imageData is IHasRawFile rf
+                         && rf.RawFileBytes != null
+                         && !string.IsNullOrEmpty(rf.RawFileExtension);
+
             var format = (profile.ImageFormat ?? "fits").Trim().ToLowerInvariant();
-            var extension = format switch {
-                "xisf" => ".xisf",
-                _      => ".fits"
-            };
+            var extension = hasRaw
+                ? ((IHasRawFile)imageData).RawFileExtension!
+                : (format switch { "xisf" => ".xisf", _ => ".fits" });
 
             var pattern = string.IsNullOrWhiteSpace(profile.ImageNamePattern)
                 ? "{target}_{filter}_{exposure}s_{date}_{seq}"
@@ -138,7 +146,11 @@ public class ImageWriterService {
                 };
             }
 
-            if (format == "xisf") {
+            if (hasRaw) {
+                File.WriteAllBytes(fullPath, ((IHasRawFile)imageData).RawFileBytes!);
+                _logger.LogInformation("Saved RAW ({Ext}): {Path}",
+                    extension, fullPath);
+            } else if (format == "xisf") {
                 XISFWriter.Write(imageData, fullPath, rotator: rotMeta);
                 _logger.LogInformation("Saved XISF: {Path}", fullPath);
             } else {

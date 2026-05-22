@@ -362,6 +362,10 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 
-# Local reference materials (large binaries not for repo)
-docs/
+# Local reference materials (large binaries not for repo). The docs/
+# folder is tracked so we can ship Markdown alongside the code; the
+# heavy PDF / archive references that live next to them stay out.
+docs/*.pdf
+docs/*.zip
+docs/*.tar.gz
 publish/
