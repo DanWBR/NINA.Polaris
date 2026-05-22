@@ -77,6 +77,19 @@ public interface ICamera {
     Task SetSubframeAsync(int x, int y, int width, int height, CancellationToken ct = default)
         => Task.CompletedTask;
 
+    /// <summary>Current red / blue white-balance multipliers. Range is
+    /// driver-specific (often 0..100 with 50 = neutral). Default 50/50
+    /// for backends without WB exposure. Green is implicit reference.</summary>
+    double WhiteBalanceR => 50;
+    double WhiteBalanceB => 50;
+
+    /// <summary>Set R + B white-balance multipliers. No-op default for
+    /// mono cameras and backends that don't expose WB through a
+    /// programmable property. Check <see cref="CameraCapabilities.SupportsWhiteBalance"/>
+    /// to decide whether to expose UI controls.</summary>
+    Task SetWhiteBalanceAsync(double red, double blue, CancellationToken ct = default)
+        => Task.CompletedTask;
+
     // ----- Native video streaming (optional, gated by Capabilities.SupportsVideoStream) -----
     // Backends without driver-level streaming leave the defaults and
     // CameraStreamService falls back to a server-side capture loop.
@@ -136,7 +149,8 @@ public record CameraCapabilities(
     bool SupportsRoi,
     bool SupportsIso,
     bool SupportsBulb,
-    bool SupportsVideoStream = false) {
+    bool SupportsVideoStream = false,
+    bool SupportsWhiteBalance = false) {
     /// <summary>Typical astronomy-camera profile (INDI / Alpaca CCDs).</summary>
     public static readonly CameraCapabilities Astro = new(
         SupportsCooler: true, SupportsBinning: true, SupportsRoi: true,

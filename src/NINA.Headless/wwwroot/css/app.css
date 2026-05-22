@@ -4620,13 +4620,18 @@ label select.input-sm {
     min-height: 0;
     overflow-y: auto;
 }
-/* Cap the live-preview area inside VIDEO Capture so a tall sensor
-   readout doesn't try to push the surrounding controls off-screen.
-   The .preview-area class itself is shared with LIVE / PREVIEW, so
-   we only narrow it here. */
+/* Preview area inside VIDEO Capture fills the remaining space above
+   the .quick-controls row. The wrapping .video-pane has min-height:0
+   + overflow:auto so this flex:1 + min-height:200 doesn't push the
+   layout past the viewport (that was the bug we hit before). */
 .video-pane .preview-area {
+    flex: 1;
+    min-height: 200px;
+}
+/* Controls row docked at the bottom of the pane — never grows or
+   shrinks, always reserves its intrinsic height. */
+.video-pane .quick-controls {
     flex: 0 0 auto;
-    height: clamp(240px, 50vh, 520px);
 }
 
 /* SKY tab inset showing the live camera feed while the mount slews.

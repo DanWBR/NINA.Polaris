@@ -58,12 +58,47 @@ public class IndiCamera : ICamera {
 
     /// <summary>Per-instance capabilities — SupportsVideoStream gets
     /// recomputed lazily from whether the driver advertises
-    /// <c>CCD_VIDEO_STREAM</c> (most ZWO/QHY/gphoto drivers do).</summary>
+    /// <c>CCD_VIDEO_STREAM</c> (most ZWO/QHY/gphoto drivers do).
+    /// SupportsWhiteBalance flips on when CCD_CONTROLS exposes
+    /// <c>WB_R</c> + <c>WB_B</c> elements (typical for ZWO/QHY OSC
+    /// cameras, absent on mono).</summary>
     public CameraCapabilities Capabilities {
         get {
             var supportsStream = _client.GetProperty(DeviceName, "CCD_VIDEO_STREAM") != null;
-            return CameraCapabilities.Astro with { SupportsVideoStream = supportsStream };
+            var ctrl = _client.GetProperty(DeviceName, "CCD_CONTROLS") as IndiNumberProperty;
+            var supportsWb = ctrl?.Values.ContainsKey("WB_R") == true
+                          && ctrl.Values.ContainsKey("WB_B");
+            return CameraCapabilities.Astro with {
+                SupportsVideoStream = supportsStream,
+                SupportsWhiteBalance = supportsWb
+            };
         }
+    }
+
+    /// <summary>Live WB_R reading; 50 (driver-typical neutral) when not exposed.</summary>
+    public double WhiteBalanceR {
+        get {
+            var v = _client.GetNumber(DeviceName, "CCD_CONTROLS", "WB_R");
+            return v > 0 ? v : 50;
+        }
+    }
+    public double WhiteBalanceB {
+        get {
+            var v = _client.GetNumber(DeviceName, "CCD_CONTROLS", "WB_B");
+            return v > 0 ? v : 50;
+        }
+    }
+
+    /// <summary>Writes WB_R and WB_B into CCD_CONTROLS. Silent skip if
+    /// the driver doesn't have one of the keys.</summary>
+    public async Task SetWhiteBalanceAsync(double red, double blue, CancellationToken ct = default) {
+        var ctrl = _client.GetProperty(DeviceName, "CCD_CONTROLS") as IndiNumberProperty;
+        if (ctrl == null) return;
+        var values = new Dictionary<string, double>();
+        if (ctrl.Values.ContainsKey("WB_R")) values["WB_R"] = red;
+        if (ctrl.Values.ContainsKey("WB_B")) values["WB_B"] = blue;
+        if (values.Count == 0) return;
+        await _client.SetNumberAsync(DeviceName, "CCD_CONTROLS", values, ct);
     }
 
     public bool IsStreaming => _isStreaming;

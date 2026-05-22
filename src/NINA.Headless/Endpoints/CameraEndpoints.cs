@@ -107,8 +107,34 @@ public static class CameraEndpoints {
                 maxY = equip.Camera.MaxY,
                 pixelSizeX = NanToNull(equip.Camera.PixelSizeX),
                 pixelSizeY = NanToNull(equip.Camera.PixelSizeY),
-                bitDepth = equip.Camera.BitDepth
+                bitDepth = equip.Camera.BitDepth,
+                whiteBalanceR = equip.Camera.WhiteBalanceR,
+                whiteBalanceB = equip.Camera.WhiteBalanceB,
+                capabilities = new {
+                    cooler = equip.Camera.Capabilities.SupportsCooler,
+                    binning = equip.Camera.Capabilities.SupportsBinning,
+                    roi = equip.Camera.Capabilities.SupportsRoi,
+                    iso = equip.Camera.Capabilities.SupportsIso,
+                    bulb = equip.Camera.Capabilities.SupportsBulb,
+                    videoStream = equip.Camera.Capabilities.SupportsVideoStream,
+                    whiteBalance = equip.Camera.Capabilities.SupportsWhiteBalance
+                }
             });
+        });
+
+        // Live R/B white-balance writes for OSC color cameras (ZWO/QHY
+        // expose WB_R + WB_B under CCD_CONTROLS). 501 surfaces clearly
+        // when the active camera doesn't expose WB, so the UI can hide
+        // the slider when SupportsWhiteBalance is false instead of
+        // showing it and silently failing on writes.
+        group.MapPost("/white-balance", async (EquipmentManager equip, WhiteBalanceRequest req) => {
+            if (equip.Camera == null)
+                return Results.BadRequest(new { error = "No camera selected" });
+            if (!equip.Camera.Capabilities.SupportsWhiteBalance)
+                return Results.Json(new { error = "Camera does not support white balance" },
+                    statusCode: 501);
+            await equip.Camera.SetWhiteBalanceAsync(req.Red, req.Blue);
+            return Results.Ok(new { red = req.Red, blue = req.Blue });
         });
 
         group.MapPost("/cooler", async (EquipmentManager equip, CoolerRequest request) => {
@@ -231,6 +257,11 @@ public static class CameraEndpoints {
         bool SaveToDisk = false,
         string? TargetName = null);
     public record CoolerRequest(bool Enabled, double? TargetTemperature = null);
+
+    /// <summary>White-balance body. Range is driver-specific — ZWO/QHY
+    /// typically 0..100 with 50 = neutral; UI bounds the slider to that
+    /// per default and lets the user push outside.</summary>
+    public record WhiteBalanceRequest(double Red, double Blue);
 
     /// <summary>Start-stream body. ForceLoop=true skips native streaming
     /// even when the camera supports it (debugging the fallback).</summary>

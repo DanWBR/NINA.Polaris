@@ -217,11 +217,20 @@ function ninaApp() {
             binning: 1,
             targetName: 'planet',
             maxDurationSec: 60,
+            wbR: 50,
+            wbB: 50,
             // Process side
             processSerPath: '',
             serList: [],          // [{ path, label }]
             keepPercent: 50,
             outputName: 'stack'
+        },
+        // Per-camera capability flags loaded from /api/camera/status on
+        // tab open. Drives WB-slider visibility + future
+        // ROI / cooler / ISO conditional UI inside VIDEO Capture.
+        cameraCaps: {
+            cooler: false, binning: false, roi: false, iso: false,
+            bulb: false, videoStream: false, whiteBalance: false
         },
         videoRecording: {
             recording: false, path: null, frames: 0, bytes: 0,
@@ -4887,6 +4896,35 @@ function ninaApp() {
                 });
                 this.toast(`Recording → ${r.path}`, 'ok');
             } catch (e) { this.toast('Record failed: ' + (e.message || 'unknown'), 'error'); }
+        },
+
+        // Camera capability probe — populates cameraCaps so WB / ROI /
+        // ISO controls show/hide per-camera. Called on VIDEO tab open
+        // and after a camera swap. Tolerates 400 responses (no camera
+        // selected yet) by leaving the cached flags as-is.
+        async loadCameraCapabilities() {
+            try {
+                const r = await this.apiGet('/api/camera/status');
+                if (r && r.capabilities) {
+                    this.cameraCaps = Object.assign({}, this.cameraCaps, r.capabilities);
+                }
+                if (r && typeof r.whiteBalanceR === 'number') this.video.wbR = r.whiteBalanceR;
+                if (r && typeof r.whiteBalanceB === 'number') this.video.wbB = r.whiteBalanceB;
+            } catch (e) { /* no camera connected yet */ }
+        },
+        async videoSetWhiteBalance() {
+            try {
+                await this.apiPost('/api/camera/white-balance', {
+                    red: this.video.wbR, blue: this.video.wbB
+                });
+            } catch (e) {
+                this.toast('WB write failed: ' + (e.message || 'driver rejected'), 'warn');
+            }
+        },
+        videoResetWhiteBalance() {
+            this.video.wbR = 50;
+            this.video.wbB = 50;
+            this.videoSetWhiteBalance();
         },
 
         // Process side — enumerates SER files under {ImageOutputDir}/planetary
