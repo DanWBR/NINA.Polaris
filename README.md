@@ -136,6 +136,37 @@ Real-time stacking for electronically assisted astronomy:
 - Affine transform registration (translation + rotation + scale)
 - Running average accumulation buffer
 - Start/stop/reset controls with frame counter
+- Per-frame median HFR + star count piggy-backed on the alignment pass
+  (no extra detection cost) — surfaced in WebSocket status so the LIVE
+  tab can show drift over time
+
+**Auto re-focus + auto re-center triggers** (LSTR): two independent
+trigger axes that fire automatically during long EAA / comet-hunting
+sessions without leaving the LIVE tab.
+
+Re-focus triggers (any combination — first to cross fires):
+  - Every N integrated frames
+  - Every N minutes since last refocus
+  - Sensor temperature drift ≥ ±X°C
+  - HFR degradation ≥ Y% above HFR right after last AF run
+
+Re-center triggers (same OR-combine pattern):
+  - Every N integrated frames
+  - Every N minutes
+  - Plate-solve drift ≥ X arcsec (per-frame solve — heavy on RPi 4,
+    default off)
+
+Reference RA/Dec for re-center comes from a one-shot plate solve on
+the first integrated frame (true astrometric position, not the mount's
+report). Trigger handlers run sequentially inside `AddFrameAsync` —
+the upstream capture pipeline naturally pauses during AF / re-center
+since whoever's pushing frames is awaiting that call. Reentry guard
+prevents concurrent AF + re-center on overlapping triggers.
+
+Per-rig persistence via `EquipmentProfile.LiveStackTriggers` so each
+setup keeps its own thermal + drift policy. UI is a collapsible
+`<details>` panel inside the LIVE tab below the stack controls;
+▶ Now buttons bypass gates for manual fires.
 
 ### Plate Solving & Centering
 
