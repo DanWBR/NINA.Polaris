@@ -3127,6 +3127,49 @@
         </main>
     </div>
 
+    <!-- App-wide activity bar. Always visible, fixed to the viewport
+         bottom. Left side: chips per active operation (sequence,
+         auto-focus, slew, exposure, Siril job, GraXpert batch, ...).
+         Right side: host CPU + RAM. Both feed off the per-second
+         status WS message — no extra polling. -->
+    <footer class="activity-bar"
+            :class="{ 'has-activities': activityChips().length > 0 }">
+        <div class="activity-bar-ops">
+            <template x-for="chip in activityChips()" :key="chip.id">
+                <span class="activity-chip"
+                      :class="'activity-chip-' + (chip.kind || 'info')"
+                      :title="chip.label">
+                    <span class="activity-chip-icon" x-text="chip.icon"></span>
+                    <span class="activity-chip-label" x-text="chip.label"></span>
+                    <span class="activity-chip-progress" x-show="chip.progress != null">
+                        <span class="activity-chip-progress-bar">
+                            <span :style="'width: ' + (chip.progress || 0) + '%'"></span>
+                        </span>
+                    </span>
+                </span>
+            </template>
+        </div>
+        <span style="flex:1"></span>
+        <div class="activity-bar-host" x-show="host.cpuPercent != null" x-cloak>
+            <span class="activity-host-stat" title="System CPU usage">
+                <span class="activity-host-label">CPU</span>
+                <span class="activity-host-value" :class="hostCpuClass()"
+                      x-text="(host.cpuPercent || 0).toFixed(0) + '%'"></span>
+            </span>
+            <span class="activity-host-stat" title="System memory">
+                <span class="activity-host-label">RAM</span>
+                <span class="activity-host-value" :class="hostMemClass()"
+                      x-text="formatHostRam(host.memoryUsedMB, host.memoryTotalMB)"></span>
+            </span>
+            <span class="activity-host-stat" title="Polaris process CPU + memory"
+                  x-show="host.processCpuPercent != null">
+                <span class="activity-host-label">Polaris</span>
+                <span class="activity-host-value"
+                      x-text="(host.processCpuPercent || 0).toFixed(0) + '% · ' + (host.processMemoryMB || 0) + ' MB'"></span>
+            </span>
+        </div>
+    </footer>
+
     <!-- Connection lost banner -->
     <div class="connection-banner" x-show="!serverReachable" x-transition>
         <span>Connection to server lost. Reconnecting...</span>

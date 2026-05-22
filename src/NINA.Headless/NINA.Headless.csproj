@@ -33,6 +33,11 @@
     <PackageReference Include="CosineKitty.AstronomyEngine" Version="2.1.19" />
     <PackageReference Include="Makaretu.Dns.Multicast" Version="0.27.*" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.8" />
+    <!-- Cross-platform host CPU + memory metrics (cgroups on Linux,
+         Job Objects on Windows). Powers the bottom activity bar's
+         system-wide stats. macOS not supported by the package — fine,
+         Polaris has no mac build target. -->
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.ResourceMonitoring" Version="10.*" />
   </ItemGroup>
 
   <!-- Bundled Siril preprocessing scripts. SirilService extracts these

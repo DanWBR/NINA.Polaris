@@ -52,6 +52,14 @@ builder.Services.AddSingleton<NINA.Headless.Services.Studio.FrameOperationsServi
 builder.Services.AddSingleton<FileBrowserService>();
 builder.Services.AddSingleton<NINA.Headless.Services.External.SirilService>();
 builder.Services.AddSingleton<NINA.Headless.Services.External.GraXpertService>();
+// Host CPU + memory sampler. AddResourceMonitoring wires the
+// platform-specific provider (Job Objects on Windows, cgroups on
+// Linux). HostMetricsService loops in the background, exposes the
+// latest snapshot via the Latest property which StatusStreamHandler
+// folds into the per-second WS broadcast.
+builder.Services.AddResourceMonitoring();
+builder.Services.AddSingleton<HostMetricsService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<HostMetricsService>());
 builder.Services.AddHostedService<MdnsService>();
 builder.Services.AddSingleton<RelayClient>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<RelayClient>());

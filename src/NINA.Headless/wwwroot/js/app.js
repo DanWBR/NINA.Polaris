@@ -159,6 +159,19 @@ function ninaApp() {
         mountDriver: 'indi',
         mountDrivers: [],
 
+        // Activity bar (bottom). Populated from the status WS message
+        // each second. host comes from HostMetricsService; sirilActiveJobs
+        // and graXpertActiveJobs are compact summaries of the respective
+        // ActiveJobs surfaces. The chip row is computed locally via the
+        // activityChips() helper so we don't duplicate state.
+        host: {
+            cpuPercent: null, memoryPercent: null,
+            memoryUsedMB: 0, memoryTotalMB: 0,
+            processCpuPercent: 0, processMemoryMB: 0
+        },
+        sirilActiveJobs: [],
+        graXpertActiveJobs: [],
+
         // Rotator
         rotator: { connected: false, name: '', position: null, moving: false, reversed: false },
 
@@ -6152,6 +6165,139 @@ function ninaApp() {
             return `${m}m ${s.toString().padStart(2, '0')}s`;
         },
 
+        // --- Activity bar (bottom) helpers --------------------------
+
+        // Derive the chip list from the cached app state. Only
+        // transient operations show up — steady-state things like
+        // "INDI connected" or "mount tracking" live in the header
+        // and aren't duplicated here.
+        activityChips() {
+            const out = [];
+
+            // Sequence (Autorun)
+            if (this.seqState === 'running') {
+                const s = this.seqStatus;
+                const pct = s?.totalFrames
+                    ? Math.round(100 * (s.totalFramesCompleted || 0) / s.totalFrames)
+                    : 0;
+                out.push({
+                    id: 'seq', icon: '📑', kind: 'info',
+                    label: `Autorun ${s?.totalFramesCompleted || 0}/${s?.totalFrames || 0}`,
+                    progress: pct
+                });
+            }
+
+            // Auto-focus
+            if (this.autoFocus.state === 'running') {
+                const i = this.autoFocus.currentSampleIndex ?? 0;
+                const n = this.autoFocus.steps ?? 0;
+                out.push({
+                    id: 'af', icon: '🔄', kind: 'info',
+                    label: `Auto-focus ${Math.max(0, i + 1)}/${n}`,
+                    progress: n ? Math.round(100 * Math.max(0, i + 1) / n) : 0
+                });
+            }
+
+            // Meridian flip — any non-idle stage
+            if (this.mfState && this.mfState !== 'idle') {
+                out.push({
+                    id: 'mf', icon: '↔️', kind: 'warn',
+                    label: 'Meridian flip: ' + this.mfState
+                });
+            }
+
+            // Mount slewing
+            if (this.mount?.slewing) {
+                out.push({ id: 'slew', icon: '🔭', kind: 'info', label: 'Slewing' });
+            }
+
+            // Camera exposing / downloading. The state string comes
+            // straight from INDI (or vendor-driver State enum); regex
+            // covers the variants we've seen across backends.
+            const camState = this.equipCameraInfo?.state;
+            if (camState && /expos|download|reading/i.test(camState)) {
+                out.push({
+                    id: 'expose', icon: '📷', kind: 'info',
+                    label: 'Camera: ' + String(camState).toLowerCase()
+                });
+            }
+
+            // Focuser moving
+            if (this.focusMoving) {
+                out.push({ id: 'focuser', icon: '🎯', kind: 'info', label: 'Focuser moving' });
+            }
+
+            // Filter wheel
+            if (this.filterWheel?.moving) {
+                out.push({ id: 'fw', icon: '🎨', kind: 'info', label: 'Filter change' });
+            }
+
+            // PHD2 transient. Steady-state guiding is NOT shown —
+            // that's the normal background hum during a sequence.
+            // Only the eventful transitions matter for the chip row.
+            if (this.guider.calibrating) {
+                out.push({ id: 'phd2-cal', icon: '🌟', kind: 'warn', label: 'PHD2 calibrating' });
+            } else if (this.guider.settling) {
+                out.push({ id: 'phd2-set', icon: '🌟', kind: 'info', label: 'PHD2 settling' });
+            }
+
+            // Live stacking
+            if (this.liveStackEnabled) {
+                out.push({
+                    id: 'ls', icon: '💎', kind: 'info',
+                    label: `Live stack ${this.liveStackFrames || 0}f`
+                });
+            }
+
+            // Siril active jobs (one chip per job — usually 1)
+            for (const j of (this.sirilActiveJobs || [])) {
+                out.push({
+                    id: 'siril-' + j.jobId, icon: '⚡', kind: 'info',
+                    label: `Siril: ${(j.scriptName || '').replace(/\.ssf$/i, '')} ${j.stage || ''}`,
+                    progress: j.percentDone || 0
+                });
+            }
+
+            // GraXpert active jobs
+            for (const j of (this.graXpertActiveJobs || [])) {
+                const opIcon = j.operation === 'BackgroundExtraction' ? '🌅'
+                             : j.operation === 'Deconvolution'        ? '✨'
+                             : '🔇';
+                const total = j.total || 0;
+                const pct = total ? Math.round(100 * ((j.done || 0) + (j.failed || 0)) / total) : 0;
+                out.push({
+                    id: 'gx-' + j.jobId, icon: opIcon, kind: 'info',
+                    label: `GraXpert ${j.done || 0}/${total}` + (j.failed ? ` (${j.failed} failed)` : ''),
+                    progress: pct
+                });
+            }
+
+            return out;
+        },
+
+        // Red > 85%, amber 60-85%, green < 60% — same threshold for
+        // both CPU and RAM so the user reads "green/amber/red" the
+        // same way across both stats.
+        hostCpuClass() {
+            const p = this.host.cpuPercent;
+            if (p == null) return '';
+            return p > 85 ? 'host-red' : p > 60 ? 'host-amber' : 'host-green';
+        },
+        hostMemClass() {
+            const p = this.host.memoryPercent;
+            if (p == null) return '';
+            return p > 85 ? 'host-red' : p > 60 ? 'host-amber' : 'host-green';
+        },
+        formatHostRam(usedMB, totalMB) {
+            if (!totalMB || totalMB <= 0) return '— / —';
+            // Render in GB once we cross 1 GB total; below that
+            // (containers / cgroup limited), stay in MB for accuracy.
+            if (totalMB >= 1024) {
+                return `${(usedMB / 1024).toFixed(1)} / ${(totalMB / 1024).toFixed(1)} GB`;
+            }
+            return `${usedMB} / ${totalMB} MB`;
+        },
+
         // --- Status WebSocket handler ---
 
         handleStatusMessage(msg) {
@@ -6353,6 +6499,16 @@ function ninaApp() {
                     this.toast('Sequence completed!', 'ok', 6000);
                 }
             }
+
+            // Activity-bar inputs. host, sirilJobs, graXpertJobs are
+            // produced by HostMetricsService + the *.ActiveJobs surfaces
+            // on the Siril and GraXpert services. The chip-row in the
+            // activity bar derives its content purely from these (plus
+            // the equipment + sequence state that handlers above
+            // already populated).
+            if (msg.host) this.host = msg.host;
+            if (msg.sirilJobs) this.sirilActiveJobs = msg.sirilJobs;
+            if (msg.graXpertJobs) this.graXpertActiveJobs = msg.graXpertJobs;
 
             // Refresh charts once per status frame (1Hz) — only if their canvas
             // is currently in the DOM, otherwise Chart.js skips silently.

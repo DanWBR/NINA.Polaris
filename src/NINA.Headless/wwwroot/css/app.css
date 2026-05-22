@@ -4104,3 +4104,119 @@ select.input-sm {
     gap: 8px;
     margin-top: 14px;
 }
+
+/* ===========================================================
+   Activity bar — fixed bottom strip showing active operations
+   on the left and host CPU/RAM on the right.
+   ----------------------------------------------------------- */
+
+.activity-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 36px;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px;
+    background: rgba(5, 8, 16, 0.78);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-secondary);
+    user-select: none;
+}
+
+/* Operations row: horizontally scrollable when chips overflow,
+   so adding the 8th chip doesn't push the CPU/RAM block off-screen. */
+.activity-bar-ops {
+    display: flex;
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex: 0 1 auto;
+    min-width: 0;
+    /* Hide the scrollbar — most users have <5 chips at once. */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+.activity-bar-ops::-webkit-scrollbar { height: 4px; }
+.activity-bar-ops::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2); border-radius: 2px;
+}
+
+.activity-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    white-space: nowrap;
+    font-size: 11px;
+    line-height: 1.2;
+    cursor: default;
+}
+.activity-chip-warn { border-color: rgba(245, 158, 11, 0.55); }
+.activity-chip-error { border-color: rgba(239, 68, 68, 0.6); }
+
+.activity-chip-icon { font-size: 12px; }
+.activity-chip-label {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.activity-chip-progress { margin-left: 2px; }
+.activity-chip-progress-bar {
+    display: inline-block;
+    width: 48px;
+    height: 4px;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 2px;
+    overflow: hidden;
+    vertical-align: middle;
+}
+.activity-chip-progress-bar > span {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.3s ease;
+}
+
+/* Host metrics block on the right side. */
+.activity-bar-host {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    flex-shrink: 0;
+}
+.activity-host-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+.activity-host-label {
+    color: var(--text-muted);
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+}
+.activity-host-value {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+}
+.host-green { color: #86efac; }
+.host-amber { color: #fcd34d; }
+.host-red   { color: #fca5a5; font-weight: 600; }
+
+/* Push all tab content up so the fixed bar never tapes over the
+   last row of any panel. The home panel keeps its sticky footer
+   right above the activity bar thanks to the same offset. */
+.tab-panel  { padding-bottom: 40px !important; }
+.home-panel { padding-bottom: 40px !important; }

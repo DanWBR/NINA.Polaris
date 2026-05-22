@@ -26,6 +26,11 @@ public static class StatusStreamHandler {
         var autoFocus = context.RequestServices.GetRequiredService<AutoFocusService>();
         var meridianFlip = context.RequestServices.GetRequiredService<MeridianFlipService>();
         var profile = context.RequestServices.GetRequiredService<ProfileService>();
+        var hostMetrics = context.RequestServices.GetRequiredService<HostMetricsService>();
+        var siril = context.RequestServices
+            .GetRequiredService<NINA.Headless.Services.External.SirilService>();
+        var graxpert = context.RequestServices
+            .GetRequiredService<NINA.Headless.Services.External.GraXpertService>();
         var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
 
         using var ws = await context.WebSockets.AcceptWebSocketAsync(new WebSocketAcceptContext {
@@ -118,6 +123,19 @@ public static class StatusStreamHandler {
                         success = autoFocus.LastResult?.Success
                     };
 
+                    // Compact summaries for the activity bar. Full job
+                    // detail (lights paths, results, etc) lives on the
+                    // per-tool endpoints — only the surface needed for
+                    // chips makes it into the broadcast.
+                    var sirilJobsPayload = siril.ActiveJobs.Select(j => new {
+                        j.JobId, j.ScriptName, j.TargetName, j.Stage, j.PercentDone
+                    }).ToList();
+                    var graXpertJobsPayload = graxpert.ActiveJobs.Select(j => new {
+                        j.JobId,
+                        operation = j.Operation.ToString(),
+                        j.Done, j.Total, j.Failed
+                    }).ToList();
+
                     var status = new {
                         type = "status",
                         timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
@@ -139,7 +157,11 @@ public static class StatusStreamHandler {
                             dithersIssued = seqStatus.DithersIssued,
                             framesSinceDither = seqStatus.FramesSinceDither,
                             dither = seqStatus.Dither
-                        }
+                        },
+                        // New blocks powering the bottom activity bar.
+                        host = hostMetrics.Latest,
+                        sirilJobs = sirilJobsPayload,
+                        graXpertJobs = graXpertJobsPayload
                     };
 
                     await SendJsonAsync(ws, status, cts.Token);
