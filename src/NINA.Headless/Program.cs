@@ -32,6 +32,10 @@ builder.Services.AddSingleton<ImageWriterService>();
 builder.Services.AddSingleton<PHD2Client>();
 builder.Services.AddSingleton<PHD2ProcessManager>();
 builder.Services.AddHostedService<PHD2AutoStartService>();
+// Listens to ProfileService.EquipmentProfileActivated; keep singleton so
+// the event subscription survives request scopes.
+builder.Services.AddSingleton<PHD2ProfileSyncService>();
+builder.Services.AddSingleton<PHD2CalibrationOrchestrator>();
 builder.Services.AddSingleton<AutoFocusService>();
 builder.Services.AddSingleton<MeridianFlipService>();
 builder.Services.AddSingleton<FlatWizardService>();
@@ -72,6 +76,12 @@ builder.Services.AddSingleton(sp =>
 });
 
 var app = builder.Build();
+
+// Eagerly resolve PHD2ProfileSyncService so its constructor wires the
+// ProfileService.EquipmentProfileActivated event subscription. Without
+// this, the singleton would only be constructed on first /api/guider/*
+// request and rig activations before that would skip auto-sync.
+app.Services.GetRequiredService<PHD2ProfileSyncService>();
 
 app.UseDefaultFiles();
 app.UseStaticFiles();

@@ -294,9 +294,152 @@ public static class GuiderEndpoints {
                 return Results.Ok(new { stopped = ok });
             } catch (Exception ex) { return Results.Problem(ex.Message); }
         });
+
+        // ----- PH2X-3: rig <-> PHD2 profile sync -----
+
+        // Force a sync of a specific rig (or the active rig if rigId
+        // omitted) to PHD2. Used by the UI button "Sync now" and as a
+        // manual recovery after the user creates a profile in PHD2's GUI.
+        group.MapPost("/profile/sync", async (SyncProfileRequest? req,
+                                              PHD2ProfileSyncService sync,
+                                              ProfileService profiles) => {
+            var rigId = req?.RigId;
+            var rig = string.IsNullOrEmpty(rigId)
+                ? profiles.ActiveEquipmentProfile
+                : profiles.ListEquipmentProfiles().FirstOrDefault(r => r.Id == rigId);
+            if (rig == null) return Results.NotFound(new { error = "Rig not found" });
+            var result = await sync.SyncRigToProfileAsync(rig, CancellationToken.None);
+            return Results.Ok(result);
+        });
+
+        // Read-only — what's the last sync status? UI shows the indicator
+        // chip (ok/error/missing-profile) based on this.
+        group.MapGet("/profile/sync/status", (PHD2ProfileSyncService sync) =>
+            Results.Ok(sync.CurrentStatus));
+
+        // ----- PH2X-4: Smart calibration orchestrator -----
+
+        // Kick a fresh PHD2 calibration. Body is SmartCalibrateOptions
+        // (all fields optional with sensible defaults — see record).
+        group.MapPost("/calibrate/smart", (SmartCalibrateOptions? opts,
+                                          PHD2CalibrationOrchestrator orch) => {
+            var job = orch.StartJob(opts ?? new SmartCalibrateOptions());
+            return Results.Accepted($"/api/guider/calibrate/smart/{job.Id}",
+                new { jobId = job.Id, phase = job.State.ToString() });
+        });
+
+        group.MapGet("/calibrate/smart/{jobId}", (string jobId,
+                                                  PHD2CalibrationOrchestrator orch) => {
+            var job = orch.GetJob(jobId);
+            if (job == null) return Results.NotFound(new { error = "Job not found" });
+            return Results.Ok(new {
+                id = job.Id,
+                phase = job.State.ToString(),
+                pixelScale = job.PixelScale,
+                calibrationStepMs = job.CalibrationStepMs,
+                calibration = job.Calibration,
+                error = job.Error,
+                lastAlert = job.LastAlert,
+                warnings = job.Warnings,
+                startedAt = job.StartedAt,
+                completedAt = job.CompletedAt,
+                done = job.State == CalibrationPhase.Ok || job.State == CalibrationPhase.Fail
+            });
+        });
+
+        group.MapPost("/calibrate/smart/{jobId}/abort", (string jobId,
+                                                         PHD2CalibrationOrchestrator orch) => {
+            orch.Abort(jobId);
+            return Results.Ok(new { aborted = true });
+        });
+
+        // ----- PH2X-5: Algorithm presets + live param tuning -----
+
+        // Built-in presets table (Default / Reactive / Smooth). UI populates
+        // the preset pill from this. "Custom" is implicit — a rig with a
+        // populated PHD2CustomAlgoParams bag.
+        group.MapGet("/algo-presets", () => Results.Ok(new {
+            names = PHD2AlgoPresets.BuiltinNames,
+            presets = PHD2AlgoPresets.BuiltinNames.Select(n => {
+                var p = PHD2AlgoPresets.GetBuiltin(n)!;
+                return new {
+                    name = p.Name,
+                    description = p.Description,
+                    @params = p.Params.Select(x => new { axis = x.Axis, name = x.Name, value = x.Value })
+                };
+            })
+        }));
+
+        // Apply a preset to the live PHD2 + persist as the active rig's
+        // PHD2AlgoPreset. Works even when PHD2 is mid-guiding (preset
+        // tweaks take effect on the next correction).
+        group.MapPost("/algo-preset/{name}", async (string name,
+                                                    PHD2Client phd2,
+                                                    ProfileService profiles) => {
+            if (!phd2.IsConnected)
+                return Results.BadRequest(new { error = "PHD2 not connected" });
+            var rig = profiles.ActiveEquipmentProfile;
+            // "Custom" → apply the per-rig bag; built-in → apply curated table.
+            var warnings = new List<string>();
+            if (string.Equals(name, PHD2AlgoPresets.CustomPresetName, StringComparison.OrdinalIgnoreCase)) {
+                foreach (var kv in rig.PHD2CustomAlgoParams) {
+                    var sep = kv.Key.IndexOf(':');
+                    if (sep <= 0) continue;
+                    var ok = await phd2.SetAlgoParamAsync(kv.Key[..sep], kv.Key[(sep + 1)..], kv.Value);
+                    if (!ok) warnings.Add($"Skipped {kv.Key}");
+                }
+            } else {
+                var preset = PHD2AlgoPresets.GetBuiltin(name);
+                if (preset == null) return Results.BadRequest(new { error = $"Unknown preset '{name}'" });
+                foreach (var p in preset.Params) {
+                    var ok = await phd2.SetAlgoParamAsync(p.Axis, p.Name, p.Value);
+                    if (!ok) warnings.Add($"Skipped {p.Axis}/{p.Name}");
+                }
+            }
+            profiles.UpdateEquipmentProfile(rig.Id, r => r.PHD2AlgoPreset = name);
+            return Results.Ok(new { applied = name, warnings });
+        });
+
+        // Read live algorithm-parameter values from PHD2 for both axes.
+        // UI's Advanced disclosure lists these knobs with current values.
+        group.MapGet("/algo-params", async (PHD2Client phd2) => {
+            if (!phd2.IsConnected) return Results.Ok(new { connected = false });
+            var axes = new[] { "ra", "dec" };
+            var result = new Dictionary<string, Dictionary<string, double?>>();
+            foreach (var axis in axes) {
+                var names = await phd2.GetAlgoParamNamesAsync(axis);
+                var bag = new Dictionary<string, double?>();
+                foreach (var n in names) bag[n] = await phd2.GetAlgoParamAsync(axis, n);
+                result[axis] = bag;
+            }
+            return Results.Ok(new { connected = true, axes = result });
+        });
+
+        // Set a single live algo param + persist into the rig's custom bag
+        // (and flip preset to "Custom" so the user knows they've diverged
+        // from a built-in).
+        group.MapPut("/algo-params", async (AlgoParamRequest req,
+                                            PHD2Client phd2,
+                                            ProfileService profiles) => {
+            if (!phd2.IsConnected) return Results.BadRequest(new { error = "PHD2 not connected" });
+            if (string.IsNullOrEmpty(req.Axis) || string.IsNullOrEmpty(req.Name))
+                return Results.BadRequest(new { error = "axis + name required" });
+            var ok = await phd2.SetAlgoParamAsync(req.Axis, req.Name, req.Value);
+            if (!ok) return Results.BadRequest(new {
+                error = $"PHD2 rejected {req.Axis}/{req.Name} — algorithm may not expose it" });
+            var rig = profiles.ActiveEquipmentProfile;
+            profiles.UpdateEquipmentProfile(rig.Id, r => {
+                r.PHD2CustomAlgoParams[$"{req.Axis}:{req.Name}"] = req.Value;
+                r.PHD2AlgoPreset = PHD2AlgoPresets.CustomPresetName;
+            });
+            return Results.Ok(new { applied = true });
+        });
+
     }
 
     public record ConnectGuiderRequest(string? Host, int? Port);
     public record GuideRequest(double? SettlePixels, int? SettleTime, int? SettleTimeout, bool? Recalibrate);
     public record DitherRequest(double? Pixels, bool? RaOnly, double? SettlePixels, int? SettleTime, int? SettleTimeout);
+    public record SyncProfileRequest(string? RigId);
+    public record AlgoParamRequest(string Axis, string Name, double Value);
 }
