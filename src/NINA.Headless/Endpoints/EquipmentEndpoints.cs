@@ -114,6 +114,17 @@ public static class EquipmentEndpoints {
                 r.GuideTelescopeModel = update.GuideTelescopeModel;
                 r.PHD2Host = update.PHD2Host;
                 r.PHD2Port = update.PHD2Port;
+                // PHD2 deep-integration fields. Defensive defaults so an
+                // old client (pre-PH2X) PUT-ing a rig doesn't clobber the
+                // new state with zero/null.
+                if (update.PHD2ProfileId.HasValue) r.PHD2ProfileId = update.PHD2ProfileId;
+                if (!string.IsNullOrWhiteSpace(update.PHD2AlgoPreset))
+                    r.PHD2AlgoPreset = update.PHD2AlgoPreset;
+                if (update.PHD2CalibrationStepMsOverride.HasValue)
+                    r.PHD2CalibrationStepMsOverride = update.PHD2CalibrationStepMsOverride;
+                r.PHD2AutoSyncOnRigSwitch = update.PHD2AutoSyncOnRigSwitch;
+                if (update.PHD2CustomAlgoParams != null)
+                    r.PHD2CustomAlgoParams = update.PHD2CustomAlgoParams;
                 r.FilterOffsets = update.FilterOffsets ?? new();
             });
             return ok ? Results.Ok(new { message = "Rig updated" })

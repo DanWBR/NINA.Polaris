@@ -182,6 +182,14 @@ public class ProfileService {
             RequiredBackspacingMm = src.RequiredBackspacingMm,
             GuiderFocalLengthMm = src.GuiderFocalLengthMm,
             PHD2Host = src.PHD2Host, PHD2Port = src.PHD2Port,
+            // PHD2 deep-integration fields (cloned rig starts un-matched —
+            // it will run its own first-time profile lookup the first time
+            // it activates).
+            PHD2ProfileId = null,
+            PHD2AlgoPreset = src.PHD2AlgoPreset,
+            PHD2CalibrationStepMsOverride = src.PHD2CalibrationStepMsOverride,
+            PHD2AutoSyncOnRigSwitch = src.PHD2AutoSyncOnRigSwitch,
+            PHD2CustomAlgoParams = new Dictionary<string, double>(src.PHD2CustomAlgoParams),
             FilterOffsets = new Dictionary<string, int>(src.FilterOffsets)
         };
         _activeProfile.EquipmentProfiles.Add(copy);
@@ -214,12 +222,24 @@ public class ProfileService {
         return true;
     }
 
+    /// <summary>
+    /// Fired after a rig is successfully activated and persisted.
+    /// PHD2ProfileSyncService subscribes here to push the matching PHD2
+    /// profile + apply algo presets when AutoSyncOnRigSwitch is true.
+    /// Event handlers run on the calling thread — keep them fast (do
+    /// long work via Task.Run / fire-and-forget).
+    /// </summary>
+    public event Action<EquipmentProfile>? EquipmentProfileActivated;
+
     public bool ActivateEquipmentProfile(string id) {
         EnsureMigratedToEquipmentProfiles();
-        if (!_activeProfile.EquipmentProfiles.Any(e => e.Id == id)) return false;
+        var rig = _activeProfile.EquipmentProfiles.FirstOrDefault(e => e.Id == id);
+        if (rig == null) return false;
         _activeProfile.ActiveEquipmentProfileId = id;
         Save();
         _logger.LogInformation("Activated equipment profile {Id}", id);
+        try { EquipmentProfileActivated?.Invoke(rig); }
+        catch (Exception ex) { _logger.LogWarning(ex, "EquipmentProfileActivated handler threw"); }
         return true;
     }
 
@@ -431,6 +451,44 @@ public class EquipmentProfile {
     // Per-rig PHD2 settings
     public string PHD2Host { get; set; } = "localhost";
     public int PHD2Port { get; set; } = 4400;
+
+    // ----- PHD2 deep integration (xpra + RPC orchestration) -----
+
+    /// <summary>
+    /// Cached PHD2 profile id matched by name to this rig. Set the first
+    /// time PHD2ProfileSyncService finds a PHD2 profile whose name equals
+    /// this rig's Name. Null = not yet matched or PHD2 profile missing.
+    /// Don't rely on the value across PHD2 reinstalls — call
+    /// PHD2ProfileSyncService.SyncRigToProfileAsync to refresh.
+    /// </summary>
+    public int? PHD2ProfileId { get; set; }
+
+    /// <summary>
+    /// Guide-algorithm preset Polaris applies on rig activation. One of
+    /// "Default" / "Reactive" / "Smooth" / "Custom" — see PHD2AlgoPresets.
+    /// "Custom" means use the per-rig PHD2CustomAlgoParams bag.
+    /// </summary>
+    public string PHD2AlgoPreset { get; set; } = "Default";
+
+    /// <summary>
+    /// Per-rig override for PHD2 calibration step (ms). Null = let the
+    /// orchestrator auto-compute from pixel scale + guide rate.
+    /// </summary>
+    public int? PHD2CalibrationStepMsOverride { get; set; }
+
+    /// <summary>
+    /// When true (default), activating this rig automatically asks
+    /// PHD2ProfileSyncService to switch PHD2 to the matching profile.
+    /// Set false if the user wants manual control of PHD2 profile switching.
+    /// </summary>
+    public bool PHD2AutoSyncOnRigSwitch { get; set; } = true;
+
+    /// <summary>
+    /// Free-form algorithm-parameter overrides for the "Custom" preset.
+    /// Keys are in the format "axis:paramName" (e.g. "ra:Hysteresis"),
+    /// values are the raw doubles pushed via set_algo_param.
+    /// </summary>
+    public Dictionary<string, double> PHD2CustomAlgoParams { get; set; } = new();
 
     /// <summary>
     /// Per-filter focuser offset in steps, relative to the rig's reference
