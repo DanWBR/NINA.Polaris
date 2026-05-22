@@ -126,6 +126,10 @@
                 <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="4" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="11" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 17l6-5 4 3 5-4 3 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <span class="nav-label">Studio</span>
             </button>
+            <button class="nav-btn" :class="{ active: tab === 'files' }" @click="tab = 'files'; filesInit()" title="Files (server file explorer)">
+                <svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+                <span class="nav-label">Files</span>
+            </button>
             <button class="nav-btn" :class="{ active: tab === 'settings' }" @click="tab = 'settings'" title="Settings">
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 1v3m0 16v3m-9-11h3m16 0h3m-3.3-7.7l-2.1 2.1M6.4 17.6l-2.1 2.1m0-15.4l2.1 2.1m11.2 11.2l2.1 2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                 <span class="nav-label">Settings</span>
@@ -2664,6 +2668,157 @@
                 </div>
             </div>
 
+            <!-- FILES (server-side file explorer) -->
+            <div x-show="tab === 'files'" class="tab-panel files-panel">
+                <div class="panel-header">
+                    Files
+                    <span class="status-indicator-sm"
+                          :class="files.loading ? 'warn' : (files.error ? 'error' : 'ok')"
+                          x-text="files.loading ? 'loading…' : (files.error || files.cwd || 'no path')"></span>
+                </div>
+
+                <!-- Address bar: roots dropdown + path crumbs + reload -->
+                <div class="files-addr">
+                    <select class="input-sm files-roots" @change="filesCd($event.target.value)">
+                        <option value="" disabled selected>Jump to root…</option>
+                        <template x-for="r in files.roots" :key="r.name">
+                            <option :value="r.name" x-text="r.displayName"></option>
+                        </template>
+                    </select>
+                    <nav class="files-crumbs" aria-label="Path">
+                        <template x-for="(crumb, i) in filesCrumbs()" :key="i">
+                            <span>
+                                <a href="#" @click.prevent="filesCd(crumb.path)" x-text="crumb.label"></a>
+                                <span x-show="i < filesCrumbs().length - 1" class="files-crumb-sep">›</span>
+                            </span>
+                        </template>
+                    </nav>
+                    <label class="files-hidden-toggle" title="Show hidden files">
+                        <input type="checkbox" x-model="files.showHidden" @change="filesReload()">
+                        Hidden
+                    </label>
+                    <button class="btn btn-sm" @click="filesReload()" title="Reload">⟳</button>
+                </div>
+
+                <!-- Clipboard indicator (cut/copy pending) -->
+                <div class="files-clipboard" x-show="files.clipboard" x-cloak>
+                    <span x-text="(files.clipboard?.mode || '') + ' ' + (files.clipboard?.paths?.length || 0) + ' item(s)'"></span>
+                    <span class="text-muted" x-text="'from ' + (files.clipboard?.sourceDir || '')"></span>
+                    <button class="btn btn-sm" @click="files.clipboard = null">Clear</button>
+                </div>
+
+                <!-- Action toolbar -->
+                <div class="files-actions">
+                    <button class="btn btn-sm" @click="filesMkdir()">+ Folder</button>
+                    <label class="btn btn-sm" style="cursor:pointer">
+                        ⬆ Upload
+                        <input type="file" multiple style="display:none"
+                               @change="filesUpload($event.target.files); $event.target.value = ''">
+                    </label>
+                    <button class="btn btn-sm" @click="filesDownload()"
+                            :disabled="files.selectedPaths.length === 0">⬇ Download</button>
+                    <button class="btn btn-sm" @click="filesCopy()"
+                            :disabled="files.selectedPaths.length === 0">📋 Copy</button>
+                    <button class="btn btn-sm" @click="filesCut()"
+                            :disabled="files.selectedPaths.length === 0">✂ Cut</button>
+                    <button class="btn btn-sm" @click="filesPaste()"
+                            :disabled="!files.clipboard">📥 Paste</button>
+                    <button class="btn btn-sm" @click="filesRename()"
+                            :disabled="files.selectedPaths.length !== 1">✏ Rename</button>
+                    <button class="btn btn-sm btn-danger" @click="filesDelete()"
+                            :disabled="files.selectedPaths.length === 0">🗑 Delete</button>
+                    <span style="flex:1"></span>
+                    <button class="btn btn-sm btn-primary" @click="filesSetStudioRoot()"
+                            :disabled="!filesSelectedDir()"
+                            :title="filesSelectedDir() ? 'Make this folder the Studio scan root' : 'Select a single folder first'">
+                        ⭐ Set as Studio root
+                    </button>
+                </div>
+
+                <!-- File list -->
+                <div class="files-list-wrap">
+                    <table class="files-list">
+                        <thead>
+                            <tr>
+                                <th class="files-col-sel">
+                                    <input type="checkbox"
+                                           :checked="files.entries.length > 0 && files.selectedPaths.length === files.entries.length"
+                                           @change="filesToggleAll($event.target.checked)">
+                                </th>
+                                <th class="files-col-name">Name</th>
+                                <th class="files-col-size">Size</th>
+                                <th class="files-col-mod">Modified</th>
+                                <th class="files-col-type">Type</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Parent dir shortcut -->
+                            <tr class="files-row files-row-parent" x-show="filesParentPath()"
+                                @dblclick="filesCd(filesParentPath())">
+                                <td></td>
+                                <td colspan="4">
+                                    <a href="#" @click.prevent="filesCd(filesParentPath())">📁 ..</a>
+                                </td>
+                            </tr>
+                            <template x-for="entry in files.entries" :key="entry.fullPath">
+                                <tr class="files-row"
+                                    :class="{ selected: files.selectedPaths.includes(entry.fullPath),
+                                              'files-row-dir': entry.isDirectory,
+                                              'files-row-hidden': entry.isHidden }"
+                                    @click="filesToggleSelect(entry.fullPath, $event)"
+                                    @dblclick="entry.isDirectory ? filesCd(entry.fullPath) : filesOpenPreview(entry)">
+                                    <td class="files-col-sel">
+                                        <input type="checkbox"
+                                               :checked="files.selectedPaths.includes(entry.fullPath)"
+                                               @click.stop="filesToggleSelect(entry.fullPath, $event)">
+                                    </td>
+                                    <td class="files-col-name">
+                                        <span class="files-icon" x-text="filesIcon(entry)"></span>
+                                        <span x-text="entry.name"></span>
+                                    </td>
+                                    <td class="files-col-size"
+                                        x-text="entry.isDirectory ? '—' : filesFormatBytes(entry.sizeBytes)"></td>
+                                    <td class="files-col-mod" x-text="filesFormatDate(entry.modifiedUtc)"></td>
+                                    <td class="files-col-type" x-text="filesTypeLabel(entry)"></td>
+                                </tr>
+                            </template>
+                            <tr x-show="!files.loading && files.entries.length === 0">
+                                <td colspan="5" class="files-empty">(empty folder)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Status bar -->
+                <div class="files-statusbar">
+                    <span x-text="files.entries.length + ' item(s)'"></span>
+                    <span x-show="files.selectedPaths.length > 0">·
+                        <strong x-text="files.selectedPaths.length"></strong> selected
+                        <span x-show="filesSelectionSize() > 0">
+                            (<span x-text="filesFormatBytes(filesSelectionSize())"></span>)
+                        </span>
+                    </span>
+                    <span style="flex:1"></span>
+                    <span x-show="settings.imageOutputDir">
+                        ⭐ Studio root: <code x-text="settings.imageOutputDir"></code>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Files: text preview modal -->
+            <div class="files-text-modal" x-show="files.preview.open && files.preview.kind === 'text'" x-cloak
+                 @click.self="filesClosePreview()"
+                 @keydown.escape.window="filesClosePreview()">
+                <div class="files-text-modal-inner">
+                    <div class="files-text-modal-head">
+                        <strong x-text="files.preview.name"></strong>
+                        <button class="btn btn-sm" @click="filesDownloadOne(files.preview.path)">⬇ Download</button>
+                        <button class="btn btn-sm" @click="filesClosePreview()">Close</button>
+                    </div>
+                    <pre class="files-text-modal-body" x-text="files.preview.textContent || '(empty)'"></pre>
+                </div>
+            </div>
+
             <!-- SETTINGS -->
             <div x-show="tab === 'settings'" class="tab-panel">
                 <div class="panel-header">Settings</div>
@@ -2735,14 +2890,19 @@
 
                 <div class="settings-section">
                     <h3>Image Output</h3>
-                    <label>Directory
-                        <input type="text" class="input-md" style="width:100%;max-width:520px"
-                               x-model="settings.imageOutputDir"
-                               @change="saveSettingsToServer()"
-                               placeholder="e.g. C:\Astrophotos  or  /home/pi/astrophotos">
-                    </label>
+                    <!-- The actual root-picker moved to the FILES tab so the
+                         user can browse to the folder instead of typing it.
+                         Keep a read-only summary + jump-link here so the
+                         setting is still discoverable from Settings. -->
+                    <p class="hint" style="margin-top:0">
+                        Current root:
+                        <code x-text="settings.imageOutputDir || '(not set)'"></code>
+                    </p>
                     <p class="hint" style="margin-top:4px">
-                        Root folder for captured frames. The Studio panel scans this tree.
+                        Pick or change the capture root from the
+                        <a href="#" @click.prevent="tab='files'; filesInit()"
+                           style="color:var(--accent);text-decoration:underline">Files tab</a>:
+                        navigate to the folder, then click <em>Set as Studio root</em>.
                         Files are organised under
                         <code>{rig}/lights · calibration · calibrated · integrated · processed/...</code>
                         automatically.

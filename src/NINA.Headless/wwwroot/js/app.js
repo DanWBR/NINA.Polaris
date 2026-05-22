@@ -329,6 +329,25 @@ function ninaApp() {
         },
         _tonightLastKey: '',
 
+        // --- FILES tab state ---
+        // cwd lives in localStorage so a refresh keeps the user in the
+        // same folder. selectedPaths is a flat array of full paths
+        // (Alpine handles reactivity better with arrays than Sets).
+        // clipboard is null when there's nothing pending; { mode, paths,
+        // sourceDir } when the user has hit Cut or Copy.
+        files: {
+            cwd: '',
+            entries: [],
+            roots: [],
+            showHidden: false,
+            selectedPaths: [],
+            clipboard: null,
+            loading: false,
+            error: '',
+            preview: { open: false, path: '', name: '', kind: '', textContent: null }
+        },
+        _filesLastShiftIndex: -1,    // anchor for shift-click range selection
+
         // d3-celestial Sky Viewer (offline, BSD-3-Clause).
         // Always renders the live sky from the observer's location at the
         // current UTC time, in horizontal projection — same convention as
@@ -2471,6 +2490,465 @@ function ninaApp() {
             } finally {
                 this.tonight.loading = false;
             }
+        },
+
+        // --- FILES tab methods -----------------------------------------
+
+        // First entry into the FILES tab: load the platform roots and
+        // cd to either the persisted cwd, the current Studio root, or
+        // the first root as a last resort.
+        async filesInit() {
+            try {
+                this.files.roots = await this.apiGet('/api/files/roots');
+            } catch (e) {
+                this.files.roots = [];
+                this.files.error = 'Failed to enumerate roots: ' + (e.message || '');
+            }
+            const remembered = localStorage.getItem('filesCwd');
+            const target = remembered
+                || this.settings.imageOutputDir
+                || (this.files.roots[0]?.name ?? '');
+            if (target) await this.filesCd(target);
+        },
+
+        // Navigate. Always clears selection because shift-click anchors
+        // and per-row checkboxes assume the displayed list matches the
+        // selection set.
+        async filesCd(path) {
+            if (!path) return;
+            this.files.loading = true;
+            this.files.error = '';
+            try {
+                const r = await this.apiGet('/api/files/list?path='
+                    + encodeURIComponent(path)
+                    + '&hidden=' + (this.files.showHidden ? 'true' : 'false'));
+                this.files.cwd = r.path || path;
+                this.files.entries = (r.entries || []).slice().sort(this._filesSortCmp);
+                this.files.selectedPaths = [];
+                this._filesLastShiftIndex = -1;
+                localStorage.setItem('filesCwd', this.files.cwd);
+            } catch (e) {
+                this.files.entries = [];
+                this.files.error = e.message || 'List failed';
+                this.toast(this.files.error, 'error');
+            } finally {
+                this.files.loading = false;
+            }
+        },
+
+        filesReload() { return this.filesCd(this.files.cwd); },
+
+        // Folders first, then case-insensitive name order. Matches the
+        // convention every desktop file manager uses.
+        _filesSortCmp(a, b) {
+            if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+            return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+        },
+
+        // Build the parent path for the ".." row + the up button.
+        // Returns '' when we're at a root so the UI hides the shortcut.
+        filesParentPath() {
+            const cwd = this.files.cwd || '';
+            if (!cwd) return '';
+            // Strip trailing separator first, then drop the last segment.
+            const trimmed = cwd.replace(/[\\/]+$/, '');
+            const sep = trimmed.includes('\\') ? '\\' : '/';
+            const idx = trimmed.lastIndexOf(sep);
+            if (idx <= 0) {
+                // Already at a top-level root (e.g. "C:\" or "/").
+                return '';
+            }
+            const parent = trimmed.substring(0, idx);
+            // On Windows "C:" needs the trailing backslash to be valid.
+            if (/^[A-Za-z]:$/.test(parent)) return parent + '\\';
+            return parent || sep;
+        },
+
+        // Breadcrumbs split + accumulated paths for nav.
+        filesCrumbs() {
+            const cwd = this.files.cwd || '';
+            if (!cwd) return [];
+            const sep = cwd.includes('\\') ? '\\' : '/';
+            const parts = cwd.split(/[\\/]+/).filter((s, i) => s || i === 0);
+            const out = [];
+            let acc = '';
+            for (let i = 0; i < parts.length; i++) {
+                const p = parts[i];
+                if (i === 0) {
+                    // Anchor: drive letter on Windows ("C:") or "/" on Unix.
+                    acc = p === '' ? sep : p + (sep === '\\' ? '\\' : '');
+                    out.push({ label: p === '' ? '/' : p, path: acc });
+                } else {
+                    acc = acc.endsWith(sep) ? (acc + p) : (acc + sep + p);
+                    out.push({ label: p, path: acc });
+                }
+            }
+            return out;
+        },
+
+        // --- Selection -------------------------------------------------
+
+        // Ctrl-click toggles, shift-click selects range from anchor,
+        // plain click sets single-selection. Mirrors desktop conventions.
+        filesToggleSelect(path, ev) {
+            const idx = this.files.entries.findIndex(e => e.fullPath === path);
+            if (idx < 0) return;
+
+            const isMulti = ev && (ev.ctrlKey || ev.metaKey);
+            const isRange = ev && ev.shiftKey && this._filesLastShiftIndex >= 0;
+
+            if (isRange) {
+                const lo = Math.min(idx, this._filesLastShiftIndex);
+                const hi = Math.max(idx, this._filesLastShiftIndex);
+                this.files.selectedPaths = this.files.entries
+                    .slice(lo, hi + 1).map(e => e.fullPath);
+                return;
+            }
+
+            if (isMulti) {
+                const i = this.files.selectedPaths.indexOf(path);
+                if (i >= 0) this.files.selectedPaths.splice(i, 1);
+                else        this.files.selectedPaths.push(path);
+            } else {
+                // Plain click: if it's the only selection already, toggle off
+                // (so the user can clear by clicking the same row twice).
+                const already = this.files.selectedPaths.length === 1
+                             && this.files.selectedPaths[0] === path;
+                this.files.selectedPaths = already ? [] : [path];
+            }
+            this._filesLastShiftIndex = idx;
+        },
+
+        filesToggleAll(checked) {
+            this.files.selectedPaths = checked
+                ? this.files.entries.map(e => e.fullPath)
+                : [];
+        },
+
+        filesSelectionSize() {
+            const set = new Set(this.files.selectedPaths);
+            return this.files.entries
+                .filter(e => set.has(e.fullPath))
+                .reduce((s, e) => s + (e.sizeBytes || 0), 0);
+        },
+
+        // Used by the Studio-root button: enabled only when exactly one
+        // *folder* is selected.
+        filesSelectedDir() {
+            if (this.files.selectedPaths.length !== 1) return null;
+            const entry = this.files.entries
+                .find(e => e.fullPath === this.files.selectedPaths[0]);
+            return (entry && entry.isDirectory) ? entry : null;
+        },
+
+        // --- Clipboard + mutations ------------------------------------
+
+        filesCopy() {
+            if (this.files.selectedPaths.length === 0) return;
+            this.files.clipboard = {
+                mode: 'copy',
+                paths: this.files.selectedPaths.slice(),
+                sourceDir: this.files.cwd
+            };
+            this.toast(`Copied ${this.files.clipboard.paths.length} item(s)`, 'info');
+        },
+
+        filesCut() {
+            if (this.files.selectedPaths.length === 0) return;
+            this.files.clipboard = {
+                mode: 'cut',
+                paths: this.files.selectedPaths.slice(),
+                sourceDir: this.files.cwd
+            };
+            this.toast(`Cut ${this.files.clipboard.paths.length} item(s)`, 'info');
+        },
+
+        async filesPaste() {
+            const cb = this.files.clipboard;
+            if (!cb) return;
+            const dstDir = this.files.cwd;
+            // For each source path: join its leaf onto the dst dir.
+            const sep = dstDir.includes('\\') ? '\\' : '/';
+            let overwrite = false;
+            let okCount = 0, failCount = 0;
+            for (const src of cb.paths) {
+                const leaf = src.split(/[\\/]+/).filter(Boolean).pop() || 'item';
+                const dst = dstDir.endsWith(sep) ? (dstDir + leaf) : (dstDir + sep + leaf);
+                try {
+                    const url = '/api/files/' + (cb.mode === 'cut' ? 'move' : 'copy');
+                    await this.apiPost(url,
+                        { src, dst, overwrite },
+                        { method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ src, dst, overwrite }) });
+                    okCount++;
+                } catch (e) {
+                    // 409 means destination exists; ask once and retry the whole batch.
+                    if ((e.message || '').includes('Destination exists') && !overwrite) {
+                        if (window.confirm(
+                                `${leaf} already exists in the destination. Overwrite this and any subsequent conflicts?`)) {
+                            overwrite = true;
+                            // Retry this one and keep going.
+                            try {
+                                const url = '/api/files/' + (cb.mode === 'cut' ? 'move' : 'copy');
+                                await this.apiPost(url,
+                                    { src, dst, overwrite: true },
+                                    { method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ src, dst, overwrite: true }) });
+                                okCount++;
+                            } catch (e2) { failCount++; }
+                        } else {
+                            failCount++;
+                        }
+                    } else {
+                        failCount++;
+                    }
+                }
+            }
+            this.toast(
+                `Paste: ${okCount} ok, ${failCount} failed`,
+                failCount > 0 ? 'warn' : 'ok');
+            if (cb.mode === 'cut') this.files.clipboard = null;
+            await this.filesReload();
+        },
+
+        async filesDelete() {
+            if (this.files.selectedPaths.length === 0) return;
+            const n = this.files.selectedPaths.length;
+            if (!window.confirm(
+                    `Delete ${n} item(s)? This is permanent — folders are removed recursively.`)) return;
+            try {
+                await this.apiPost('/api/files/delete', null, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ paths: this.files.selectedPaths, confirmed: true })
+                });
+                this.toast(`Deleted ${n} item(s)`, 'ok');
+                await this.filesReload();
+            } catch (e) {
+                this.toast('Delete failed: ' + (e.message || ''), 'error');
+            }
+        },
+
+        async filesMkdir() {
+            const name = (window.prompt('New folder name:') || '').trim();
+            if (!name) return;
+            try {
+                await this.apiPost('/api/files/mkdir', null, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ parent: this.files.cwd, name })
+                });
+                this.toast(`Created ${name}`, 'ok');
+                await this.filesReload();
+            } catch (e) {
+                this.toast('mkdir failed: ' + (e.message || ''), 'error');
+            }
+        },
+
+        async filesRename() {
+            if (this.files.selectedPaths.length !== 1) return;
+            const path = this.files.selectedPaths[0];
+            const oldName = path.split(/[\\/]+/).filter(Boolean).pop() || '';
+            const newName = (window.prompt('Rename to:', oldName) || '').trim();
+            if (!newName || newName === oldName) return;
+            try {
+                await this.apiPost('/api/files/rename', null, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path, newName })
+                });
+                this.toast(`Renamed to ${newName}`, 'ok');
+                await this.filesReload();
+            } catch (e) {
+                this.toast('Rename failed: ' + (e.message || ''), 'error');
+            }
+        },
+
+        // --- Upload + download ----------------------------------------
+
+        // Upload via multipart POST per file. Server doesn't expose an
+        // upload endpoint yet (planned in FB-7); show a friendly message
+        // until then so the UI doesn't lie.
+        async filesUpload(_fileList) {
+            this.toast('Upload from client → server lands in a follow-up. ' +
+                'For now copy files into the folder server-side.', 'info');
+        },
+
+        // Single file = browser-native download via direct GET so the
+        // browser handles the Content-Disposition; multi = POST to the
+        // ZIP endpoint, follow the streamed response.
+        async filesDownload() {
+            const sel = this.files.selectedPaths;
+            if (sel.length === 0) return;
+            if (sel.length === 1 && !this._filesIsSelectionDir(sel[0])) {
+                this.filesDownloadOne(sel[0]);
+                return;
+            }
+            await this._filesDownloadZip(sel);
+        },
+
+        _filesIsSelectionDir(path) {
+            const e = this.files.entries.find(x => x.fullPath === path);
+            return !!(e && e.isDirectory);
+        },
+
+        filesDownloadOne(path) {
+            // window.location triggers the same dialog the user would
+            // get from a direct link; honours Content-Disposition.
+            window.location = '/api/files/download?path=' + encodeURIComponent(path);
+        },
+
+        async _filesDownloadZip(paths) {
+            try {
+                const fileName = (this.files.cwd.split(/[\\/]+/).filter(Boolean).pop()
+                                  || 'polaris') + '-files.zip';
+                const r = await fetch('/api/files/download-zip', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ paths, rootForNames: this.files.cwd, fileName })
+                });
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const blob = await r.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = fileName; document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                this.toast(`Downloaded ${paths.length} item(s) as ${fileName}`, 'ok');
+            } catch (e) {
+                this.toast('ZIP download failed: ' + (e.message || ''), 'error');
+            }
+        },
+
+        // --- Preview --------------------------------------------------
+
+        async filesOpenPreview(entry) {
+            if (!entry || entry.isDirectory) return;
+            const ext = (entry.name.toLowerCase().split('.').pop() || '');
+            const imgExts = ['fits','fit','fts','xisf','png','jpg','jpeg','gif','bmp','webp','tif','tiff'];
+            const textExts = ['txt','log','md','json','xml','csv'];
+
+            if (imgExts.includes(ext)) {
+                // Reuse the same OpenSeadragon viewer STUDIO uses. Set
+                // the URL to the FILES preview endpoint.
+                const url = '/api/files/preview?path=' + encodeURIComponent(entry.fullPath)
+                          + '&maxDim=2400&t=' + Date.now();
+                this._openImageViewerWithUrl(url, entry.name);
+                return;
+            }
+            if (textExts.includes(ext)) {
+                try {
+                    const r = await fetch('/api/files/preview?path=' + encodeURIComponent(entry.fullPath));
+                    const txt = r.ok ? await r.text() : `(preview failed: HTTP ${r.status})`;
+                    this.files.preview = {
+                        open: true, path: entry.fullPath, name: entry.name,
+                        kind: 'text', textContent: txt
+                    };
+                } catch (e) {
+                    this.toast('Preview failed: ' + (e.message || ''), 'error');
+                }
+                return;
+            }
+            // Unknown format: just offer download.
+            if (window.confirm(`No preview available for ${entry.name}. Download instead?`)) {
+                this.filesDownloadOne(entry.fullPath);
+            }
+        },
+
+        filesClosePreview() {
+            this.files.preview = { open: false, path: '', name: '', kind: '', textContent: null };
+        },
+
+        // Wrap the existing openImageViewer flow. STUDIO's version sets
+        // tileSources from a frameId-based URL; this variant takes any
+        // URL so the FILES tab can show any FITS/PNG/JPG/TIFF on disk.
+        _openImageViewerWithUrl(url, title) {
+            // The image viewer modal + osd-viewer container already exist
+            // in the DOM (created by STUDIO). Open it, then init OSD with
+            // our URL.
+            this.imageViewerOpen = true;
+            this.imageViewerTitle = title || '';
+            this.$nextTick(() => {
+                // Destroy any prior instance to avoid leaking the tile pyramid.
+                if (this._osdInstance) {
+                    try { this._osdInstance.destroy(); } catch {}
+                    this._osdInstance = null;
+                }
+                this._osdInstance = window.OpenSeadragon({
+                    id: 'osd-viewer',
+                    tileSources: { type: 'image', url },
+                    showNavigator: true,
+                    navigatorPosition: 'BOTTOM_RIGHT',
+                    minZoomImageRatio: 0.5,
+                    maxZoomPixelRatio: 4,
+                    visibilityRatio: 1,
+                    constrainDuringPan: true
+                });
+            });
+        },
+
+        // --- Studio root setter ---------------------------------------
+
+        async filesSetStudioRoot() {
+            const dir = this.filesSelectedDir();
+            if (!dir) {
+                this.toast('Select a single folder first', 'warn');
+                return;
+            }
+            if (!window.confirm(
+                    `Use this as the Studio root?\n\n${dir.fullPath}\n\n` +
+                    `Studio will rescan this tree on its next open.`)) return;
+            try {
+                const r = await this.apiPost('/api/files/studio-root', null, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: dir.fullPath })
+                });
+                this.settings.imageOutputDir = r.imageOutputDir || dir.fullPath;
+                this.toast('Studio root set to ' + this.settings.imageOutputDir, 'ok');
+            } catch (e) {
+                this.toast('Could not set Studio root: ' + (e.message || ''), 'error');
+            }
+        },
+
+        // --- Display helpers ------------------------------------------
+
+        filesIcon(e) {
+            if (e.isDirectory) return '📁';
+            const ext = (e.name.toLowerCase().split('.').pop() || '');
+            if (['fits','fit','fts','xisf'].includes(ext)) return '🔭';
+            if (['png','jpg','jpeg','gif','bmp','webp','tif','tiff'].includes(ext)) return '🖼';
+            if (['txt','log','md','json','xml','csv'].includes(ext)) return '📄';
+            if (['zip','tar','gz','7z','rar'].includes(ext)) return '🗜';
+            return '📦';
+        },
+
+        filesTypeLabel(e) {
+            if (e.isDirectory) return 'Folder';
+            const ext = (e.name.toLowerCase().split('.').pop() || '');
+            return ext ? ext.toUpperCase() : 'File';
+        },
+
+        filesFormatBytes(n) {
+            if (n == null || n < 0) return '—';
+            if (n < 1024) return n + ' B';
+            if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+            if (n < 1024 * 1024 * 1024) return (n / 1048576).toFixed(1) + ' MB';
+            return (n / 1073741824).toFixed(2) + ' GB';
+        },
+
+        filesFormatDate(iso) {
+            if (!iso) return '—';
+            const d = new Date(iso);
+            if (isNaN(d.getTime()) || d.getFullYear() < 1980) return '—';
+            return d.getFullYear() + '-' +
+                   String(d.getMonth() + 1).padStart(2, '0') + '-' +
+                   String(d.getDate()).padStart(2, '0') + ' ' +
+                   String(d.getHours()).padStart(2, '0') + ':' +
+                   String(d.getMinutes()).padStart(2, '0');
         },
 
         // Subset honoured by the chip row at the top of the panel.

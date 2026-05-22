@@ -827,6 +827,197 @@ select.input-sm {
     color: #fff;
 }
 
+/* ===========================================================
+   FILES tab — server-side file explorer
+   ----------------------------------------------------------- */
+
+.files-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* Address row: roots dropdown + breadcrumbs + hidden toggle. */
+.files-addr {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+.files-roots { min-width: 120px; }
+.files-crumbs {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+.files-crumbs a {
+    color: var(--accent);
+    text-decoration: none;
+}
+.files-crumbs a:hover { text-decoration: underline; }
+.files-crumb-sep {
+    margin: 0 4px;
+    color: var(--text-muted);
+}
+.files-hidden-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* Clipboard chip: shown while a cut/copy is pending. */
+.files-clipboard {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 14px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+}
+
+/* Action toolbar (mkdir, upload, copy, cut, paste, rename, delete, ⭐). */
+.files-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+}
+
+/* The list itself fills the rest of the panel and scrolls. */
+.files-list-wrap {
+    flex: 1 1 auto;
+    overflow: auto;
+    background: var(--bg-primary);
+}
+.files-list {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.files-list thead th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 10px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 12px;
+    z-index: 1;
+}
+.files-list tbody td {
+    padding: 6px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: var(--text-primary);
+    vertical-align: middle;
+}
+.files-row { cursor: default; }
+.files-row:hover { background: rgba(79, 195, 247, 0.05); }
+.files-row.selected { background: rgba(79, 195, 247, 0.18); }
+.files-row.selected td { color: var(--text-primary); }
+.files-row-dir td:nth-child(2) { font-weight: 500; }
+.files-row-hidden td { opacity: 0.55; }
+.files-row-parent td { color: var(--text-secondary); }
+
+.files-col-sel  { width: 32px; text-align: center; }
+.files-col-name { /* fills */ }
+.files-col-size { width: 100px; text-align: right; font-variant-numeric: tabular-nums; }
+.files-col-mod  { width: 160px; font-variant-numeric: tabular-nums; }
+.files-col-type { width: 80px; color: var(--text-muted); }
+
+.files-icon { display: inline-block; width: 18px; text-align: center; margin-right: 6px; }
+
+.files-empty {
+    text-align: center;
+    padding: 40px 16px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* Status bar pinned to the bottom of the panel. */
+.files-statusbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-secondary);
+    font-size: 11px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+.files-statusbar code {
+    background: rgba(255,255,255,0.06);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+}
+
+/* Text-preview modal (FITS/PNG/JPG reuse the OpenSeadragon viewer). */
+.files-text-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+.files-text-modal-inner {
+    width: min(900px, 100%);
+    max-height: 90vh;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.files-text-modal-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-tertiary);
+}
+.files-text-modal-head strong {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.files-text-modal-body {
+    flex: 1;
+    overflow: auto;
+    margin: 0;
+    padding: 14px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', Menlo, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 /* Focus Controls */
 .focus-controls {
     padding: 16px;
