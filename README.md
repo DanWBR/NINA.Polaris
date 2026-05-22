@@ -187,6 +187,7 @@ Automated focus point determination via symmetric sweep:
 - Least-squares parabola fit through valid samples; moves to the vertex
 - Configurable step size, point count, exposure, minimum stars, backlash compensation, post-focus confirmation frame
 - Live V-curve chart (Chart.js scatter) with fitted parabola and best-position marker
+- **Live frame preview** — every AF sweep exposure pipes through the same `/ws/image-stream` channel as LIVE, rendered into a dedicated canvas on the Focus tab with a HUD chip showing `pos {N} · HFR {x.xx} · ★ {stars}` per sample. Lets you watch the focuser converge in real time without switching tabs.
 - Restores starting position automatically on cancel or failure
 
 ### Meridian Flip Automation
@@ -597,10 +598,11 @@ Responsive, dark-themed interface inspired by ASIAIR:
 
 - **Home** — Cold-start landing with a Horsehead/Flame nebula hero. 4 colour-coded status cards (Equipment / Guider / Sequence / Server) react in real time to the rest of the app, plus 6 quick-action tiles that jump straight into the relevant tab (Connect / Plan / Launch PHD2 / Build sequence / Auto-focus / Live view). Live UTC clock in the hero
 - **Live View** — Real-time camera preview with WebGL2 GPU rendering (debayer + MTF stretch on GPU), star annotations overlay, crosshair + 3x3 grid, hover pixel readout (raw ADU or RGB), manual stretch sliders, image-history thumbnail strip, HFR + star-count history chart, detailed statistics panel + histogram, full-resolution zoom viewer (OpenSeadragon)
-- **Equipment** — Rig selector bar at the top, then cards for Camera (with auto-detected sensor dimensions + temperature + cooler power chart, plus a **camera-driver dropdown** for INDI / Canon EDSDK / Nikon / Sony with install-banner links when a vendor SDK isn't reachable), Mount, Focuser, Filter Wheel, Rotator, Flat Panel, Dome, Weather, Guider (PHD2). Per-device select / connect / disconnect plus quick controls. "💾 Save selections" button captures the current dropdown picks into the active rig. "Manage rigs…" opens a modal with inline editing of focal lengths, cooler target, per-rig device assignments, and a **telescope + accessory picker** that auto-fills aperture / focal length / f-ratio / required back-focus from a curated catalogue
+- **Preview** — Dedicated snap-shot tab (between Focus and Autorun) with exp/gain/bin/filter controls, single-shot + opt-in loop mode, "💾 Save to disk" toggle that routes captures to `{rig}/snaps/{filter}_{date}/` (separate from sequence lights so test snaps don't contaminate the science folder). Filter dropdown only appears when a filter wheel is connected; pre-capture filter swap happens automatically when chosen
+- **RIGS** (was "Equipment") — Reorganised by **role**: connection strip pinned to the top (compact when INDI/Alpaca is connected, expanded with the connect form when not), then a responsive role-based grid — Main Telescope (OTA optics + curated **catalogue picker** that auto-fills aperture / focal length / f-ratio / required back-focus), Camera (with auto-detected sensor + temperature + cooler power chart + **driver dropdown** for INDI / Canon EDSDK / Nikon / Sony / Alpaca with install-banner links when a vendor SDK isn't reachable), Mount, Focuser, Filter Wheel, Guidescope (metadata), Guide Camera (read-only — PHD2 owns it). Optional accessories (Rotator, Flat Panel, Dome, Weather) collapsed in a `<details>` block below, auto-expanded when at least one is configured. Rig selector + "💾 Save selections" in the header. "Manage rigs…" modal handles rename / activate / duplicate / delete + per-rig filter offsets (the device pickers + optics live on the cards now, no longer duplicated in the modal)
 - **Mount Control** — NSEW directional pad, tracking toggle, park/unpark, GoTo via Sky Explorer
-- **Focus** — Manual stepper + full Auto-Focus V-curve panel (start/abort, live progress bar, fitted parabola chart, best-position marker)
-- **Guider** — PHD2 connection panel + **Launch PHD2** button (spawns the auto-detected install) + **Auto-start on boot** checkbox (persists in profile, launches PHD2 on every Headless start), inline "Download PHD2" banner when not installed, PHD2-management bar (profile dropdown, exposure dropdown, Dec-mode, connect-equipment toggle, Shutdown), live RA/Dec error chart with RMS readouts, settle parameters, full control buttons (Guide / Loop / Auto-select Star / Pause / Resume / Stop / Dither). Surfaces PHD2's own guide camera + mount names
+- **Focus** — Manual stepper + full Auto-Focus V-curve panel (start/abort, live progress bar, fitted parabola chart, best-position marker) + **live frame preview canvas** that renders each AF sample exposure with a HUD chip showing current position / HFR / star count
+- **Guider** — Two-tab layout: **Control** (existing JSON-RPC UI — connect, profile switcher, exposure, Dec-mode, equipment connect, guiding controls, live RA/Dec error chart, settle parameters, **Smart Calibrate** button with optional slew-to-equator, **algorithm preset pills** Default/Reactive/Smooth/Custom + Advanced disclosure for individual algorithm knobs, profile-sync indicator chip) and **PHD2 GUI** (Linux only — xpra HTML5 client iframe embedding PHD2's native window for Wizard / Brain / Guiding Assistant / dark library access — see [docs/phd2-gui-embedding.md](docs/phd2-gui-embedding.md)). Launch / Shutdown / Auto-start on boot persist as before
 - **Sky Explorer** — d3-celestial-powered fully-offline sky map (Hipparcos to mag 6, Stellarium constellation lines, IAU names, DSO catalog, Milky Way contours). Defaults to **live local sky** from the observer's lat/lng at the current UTC time, with horizon mask + a 30 s ticker that re-centres on the zenith; switch to **Equatorial chart** mode for planning below-horizon targets. Object search, filtered catalog browser, "Tonight's altitude" chart with twilight bands, Stellarium sync, Slew & Center, "Plan mosaic" (panel grid with cos(δ) correction), Add to Sequence
 - **Tonight** — Ranked list of best DSOs / Moon / planets / comets for the current observing window. Cards with NASA / Wikipedia thumbnails (offline-cached), live ephemeris, mini altitude chart, compass widget, FOV-fit badge, and a mount-gated "Go to" that triggers Slew & Center
 - **Weather** — Astronomy-specific 3-day forecast from 7Timer with per-3 h-slot observation score (cloud + seeing + transparency + humidity), tonight's best windows callout, per-slot weather emoji (lunar glyph at night) and per-day sun/moon ephemeris from SunCalc
@@ -609,6 +611,8 @@ Responsive, dark-themed interface inspired by ASIAIR:
 - **Studio** — Post-processing tab: SQLite-indexed FITS browser, single-frame viewer with manual stretch + multi-format export, master integration, light calibration with auto-match, batch alignment + stack, debayer + background extraction + noise reduction + sharpening
 - **Settings** — INDI connection, observatory location (with **address geocoder** + **"Use my location"** GPS button, accessible any time after first-run), image output (format: FITS or XISF), profile management. Sensor dimensions are auto-read from the connected camera; focal length lives per-rig (Equipment → Manage rigs)
 - **First-run** — Location-setup modal with **address geocoder** (OpenStreetMap/Nominatim), browser geolocation, or manual lat/lon entry
+
+**Activity Bar** — App-wide footer (36 px, glass treatment) showing live operation chips (sequence progress, AF run, meridian flip, slew, exposure, filter change, PHD2 calibrating/settling, live stack, Siril/GraXpert jobs) on the left + host CPU% + RAM (green < 60% / amber 60-85% / red > 85%) on the right. Always visible across every tab; collapses chip-row to nothing when idle.
 
 **Night Mode** — Red-on-black theme that preserves dark adaptation (critical for field use).
 
@@ -620,20 +624,23 @@ One physical N.I.N.A. Polaris host frequently serves multiple physical setups �
 "backyard SCT", "travel APO", "remote site mono camera + AO". Each user
 profile carries a list of named **rigs**; switch in one click and every device
 selector + per-rig default (cooler temperature, focuser step size, focal
-length, PHD2 host/port) is reapplied automatically.
+length, PHD2 host/port, PHD2 algorithm preset) is reapplied automatically.
 
 Per-rig stored data:
 - Device names: Camera / Telescope / Focuser / FilterWheel / Rotator / FlatDevice / Dome / Weather (INDI names as returned by getProperties)
 - Cooler target temperature, default gain / offset / binning
 - Focuser step size + backlash
-- **Main scope focal length** (drives FOV calculation + FITS FOCALLEN)
-- **Guide scope focal length** (record-keeping + PHD2 pixel-scale sanity check)
+- **Main scope focal length + aperture** (drives FOV calculation + FITS FOCALLEN; auto-fillable from the catalogue picker)
+- **Guide scope focal length + aperture** (record-keeping + PHD2 pixel-scale sanity check)
+- **Telescope brand + model + accessory** (auto-resolved from `wwwroot/data/telescopes.json` + `optical-accessories.json` via the Main Telescope card's catalogue picker)
 - PHD2 endpoint (host + port)
+- **PHD2 deep-integration fields**: `PHD2ProfileId` cache after first name-match, `PHD2AlgoPreset` (Default / Reactive / Smooth / Custom), `PHD2CalibrationStepMsOverride`, `PHD2AutoSyncOnRigSwitch` (default true — triggers `PHD2ProfileSyncService` to swap PHD2 profile + apply preset on every rig activation), `PHD2CustomAlgoParams` (free-form `axis:name → value` bag)
+- Per-filter focuser offsets (consumed by `MoveToFilterOffsetInstruction`)
 
-CRUD via `/api/equipment/rigs/*`. UI: dropdown in the Equipment tab header
-plus a manage-rigs modal with inline editing (rename, focal lengths,
-cooler target) and quick actions (Activate, Duplicate, Delete, Save current
-device selections).
+CRUD via `/api/equipment/rigs/*`. UI: dropdown in the RIGS tab header
+plus a slim **Manage rigs…** modal for rename / activate / duplicate / delete
++ filter offsets (the device pickers + optics live directly on the RIGS-tab
+cards, no longer duplicated in the modal).
 
 Existing profiles auto-migrate on first load — the pre-existing
 `LastCamera` / `LastTelescope` / etc. fields become the rig named "Default".
@@ -1021,6 +1028,18 @@ Persistence:
 | POST | `/api/guider/process/shutdown` | Graceful JSON-RPC shutdown, falls back to kill only if we own it |
 | GET | `/api/guider/install-info` | Detected install (`installed`, `resolvedPath`, `downloadUrl`, `os`, `searchedPaths`) — UI uses this to surface "Download PHD2" when missing |
 | POST | `/api/guider/auto-start/{true\|false}` | Persist auto-start-on-boot preference in the user profile |
+| POST | `/api/guider/profile/sync` | Sync a rig (default: active rig) to its matching PHD2 profile + apply preset. Body: `{ rigId? }` |
+| GET | `/api/guider/profile/sync/status` | Last sync phase / error / profileMissing flag |
+| POST | `/api/guider/calibrate/smart` | Start smart calibration job. Body: `SmartCalibrateOptions` (slewToEquator, exposureMsOverride, calibrationStepMsOverride, timeoutSeconds). Returns `{ jobId }` |
+| GET | `/api/guider/calibrate/smart/{jobId}` | Poll calibration state (phase + stepMs + pixelScale + calibration + warnings) |
+| POST | `/api/guider/calibrate/smart/{jobId}/abort` | Abort running calibration |
+| GET | `/api/guider/algo-presets` | Curated algorithm presets (Default / Reactive / Smooth) with the (axis, name, value) triples each applies |
+| POST | `/api/guider/algo-preset/{name}` | Apply preset live + persist on the active rig |
+| GET | `/api/guider/algo-params` | Live values: per axis, every param `get_algo_param_names` reports |
+| PUT | `/api/guider/algo-params` | Set a single live knob `{ axis, name, value }` + flip preset to "Custom" |
+| GET | `/api/guider/gui-session/status` | xpra-hosted PHD2 GUI lifecycle (xpra installed? version? session running? bind port) |
+| POST | `/api/guider/gui-session/{start,stop,restart}` | Manage the embedded PHD2 GUI session (Linux only; 501 elsewhere) |
+| ALL | `/phd2-gui/{**}` | Reverse-proxy to xpra HTML5 client (HTTP + WebSocket). Same-origin so iframe sessionStorage works |
 
 ### Auto-Focus
 
