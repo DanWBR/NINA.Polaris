@@ -25,6 +25,8 @@
     <ProjectReference Include="..\NINA.Camera.CanonEdsdk\NINA.Camera.CanonEdsdk.csproj" />
     <ProjectReference Include="..\NINA.Camera.NikonSdk\NINA.Camera.NikonSdk.csproj" />
     <ProjectReference Include="..\NINA.Camera.SonySdk\NINA.Camera.SonySdk.csproj" />
+    <!-- Direct-WiFi mount drivers. Pure managed code, cross-platform. -->
+    <ProjectReference Include="..\NINA.Mount.SynScanWifi\NINA.Mount.SynScanWifi.csproj" />
   </ItemGroup>
 
   <ItemGroup>

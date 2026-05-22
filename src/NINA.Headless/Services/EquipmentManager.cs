@@ -198,12 +198,12 @@ public class EquipmentManager : IDisposable {
         driver = (driver ?? "indi").Trim().ToLowerInvariant();
         Telescope = driver switch {
             "indi" => new IndiTelescope(_indiClient, deviceId),
-            // SynScan / NexStar / LX200 direct WiFi drivers land in
-            // follow-up commits; the foundation is in place so they
-            // slot in by adding a case here.
+            "synscan-wifi" => new NINA.Mount.SynScanWifi.SynScanWifiTelescope(deviceId),
+            // NexStar TCP + LX200 TCP + Alpaca still pending — see
+            // docs/mounts-wifi.md for the backlog.
             _ => throw new NotSupportedException(
                 $"Mount driver '{driver}' is not implemented yet. " +
-                "Use 'indi' (or wait for the direct WiFi drivers — " +
+                "Use 'indi' or 'synscan-wifi' (the rest are still pending — " +
                 "see docs/mounts-wifi.md)."),
         };
         TelescopeDriver = driver;
@@ -224,8 +224,8 @@ public class EquipmentManager : IDisposable {
                 Description: "Any mount the running INDI server exposes — covers most WiFi mounts via indi_skywatcherAltAzMount / indi_celestron_aux / indi_ioptron_v3 / indi_lx200gps."),
             new("alpaca", "Alpaca (ASCOM)", Available: false,
                 Description: "ASCOM-over-HTTP mounts. Wiring pending."),
-            new("synscan-wifi", "Sky-Watcher SynScan (Wi-Fi UDP)", Available: false,
-                Description: "Direct UDP to SynScan Wi-Fi adapter / AZ-GTi / EQ8-R built-in Wi-Fi. Driver pending — see docs/mounts-wifi.md."),
+            new("synscan-wifi", "Sky-Watcher SynScan (Wi-Fi UDP)", Available: true,
+                Description: "Direct UDP to AZ-GTi / EQ6-R Pro / EQ8-R Pro / AllView / GoTo Dob (port 11880). Likely also drives ZWO AM5N / AM7 in SynScan-compat mode. Device id format: host[:port] — defaults to 192.168.4.1:11880 (factory AP)."),
             new("nexstar-wifi", "Celestron NexStar (Wi-Fi TCP)", Available: false,
                 Description: "Direct TCP to SkyPortal Wi-Fi accessory / StarSense Explorer Wi-Fi. Driver pending — see docs/mounts-wifi.md."),
             new("lx200-tcp", "Meade / LX200 (TCP)", Available: false,
