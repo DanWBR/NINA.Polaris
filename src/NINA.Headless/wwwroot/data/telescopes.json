@@ -67,6 +67,9 @@
     { "brand": "SVBony",          "model": "SV503 102ED",           "type": "Doublet ED APO",       "apertureMm": 102,   "focalLengthMm": 714,  "backspacingMm": 55.0 },
     { "brand": "SVBony",          "model": "SV550 80",              "type": "Triplet APO",          "apertureMm": 80,    "focalLengthMm": 480,  "backspacingMm": 55.0 },
     { "brand": "SVBony",          "model": "SV550 122",             "type": "Triplet APO",          "apertureMm": 122,   "focalLengthMm": 854,  "backspacingMm": 55.0 },
+    { "brand": "SVBony",          "model": "SV535",                 "type": "Petzval APO Lens",     "apertureMm": 12.5,  "focalLengthMm": 35,   "backspacingMm": 24.0 },
+    { "brand": "SVBony",          "model": "SV545",                 "type": "Petzval APO",          "apertureMm": 45,    "focalLengthMm": 203,  "backspacingMm": 55.0 },
+    { "brand": "SVBony",          "model": "SV555",                 "type": "Petzval APO Astrograph","apertureMm": 54,   "focalLengthMm": 243,  "backspacingMm": 55.0 },
 
     { "brand": "Takahashi",       "model": "FSQ-85EDX",             "type": "Petzval APO",          "apertureMm": 85,    "focalLengthMm": 450,  "backspacingMm": 56.0 },
     { "brand": "Takahashi",       "model": "FSQ-106EDX4",           "type": "Petzval APO",          "apertureMm": 106,   "focalLengthMm": 530,  "backspacingMm": 56.0 },
