@@ -265,6 +265,12 @@ public class ImageWriterService {
                             FormattableString.Invariant($"{exposure:0.##}s_g{gain}")),
             "FLAT"      => Path.Combine("calibration", "flat",
                             FormattableString.Invariant($"{filter}_g{gain}")),
+            // PREVIEW-tab snaps live in their own tree so they don't
+            // mix with the science lights from a sequence. Folder is
+            // {rig}/snaps/{filter}_{session-date}/{snap_NNNN}.fits.
+            "SNAP"      => Path.Combine("snaps",
+                            FormattableString.Invariant(
+                                $"{filter}_{sessionDate:yyyy-MM-dd}")),
             _           => Path.Combine("lights",
                             SanitizeFolder(string.IsNullOrEmpty(m.Target.Name) ? "Unknown" : m.Target.Name),
                             filter,

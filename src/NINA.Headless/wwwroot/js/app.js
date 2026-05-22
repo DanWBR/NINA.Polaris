@@ -159,6 +159,24 @@ function ninaApp() {
         mountDriver: 'indi',
         mountDrivers: [],
 
+        // PREVIEW tab — snap test shots. Defaults match what a
+        // typical "is this thing focused / framed?" check would use:
+        // 2s exposure, modest gain, 1x1 binning. Save-to-disk is
+        // off by default because the whole point of PREVIEW is
+        // "look without committing".
+        preview: {
+            exposure: 2.0,
+            gain: 100,
+            binning: 1,
+            filter: '',          // empty = keep current filter
+            saveToDisk: false,
+            targetName: 'snap',
+            busy: false,
+            looping: false,
+            lastSnapAt: null,
+            lastStats: null      // { mean, median, stdev, starCount, hfr, min, max }
+        },
+
         // Activity bar (bottom). Populated from the status WS message
         // each second. host comes from HostMetricsService; sirilActiveJobs
         // and graXpertActiveJobs are compact summaries of the respective
@@ -815,9 +833,45 @@ function ninaApp() {
 
                 // Repaint overlays after each render
                 this.redrawOverlay();
+                // Mirror to PREVIEW canvas so switching tabs shows the
+                // latest frame without a re-fetch.
+                this._mirrorLiveToPreviewCanvas();
             };
             img.onerror = () => URL.revokeObjectURL(url);
             img.src = url;
+        },
+
+        // Copy whatever is currently on liveCanvas to previewCanvas
+        // (and vice versa if the PREVIEW tab was the source). Cheap —
+        // single drawImage call. Called at the end of every successful
+        // render path so both tabs always show the most recent frame.
+        _mirrorLiveToPreviewCanvas() {
+            const src = document.getElementById('liveCanvas');
+            const dst = document.getElementById('previewCanvas');
+            if (!src || !dst) return;
+            if (src.width === 0 || src.height === 0) return;
+            // Size the PREVIEW canvas to fit its own container while
+            // preserving the source aspect ratio.
+            const container = dst.parentElement;
+            if (!container) return;
+            const containerW = container.clientWidth;
+            const containerH = container.clientHeight;
+            if (containerW <= 0 || containerH <= 0) {
+                // PREVIEW tab not visible yet (display:none collapses
+                // the container). Still copy at the source's native
+                // dimensions so the bitmap is ready when the user
+                // switches tabs.
+                dst.width = src.width;
+                dst.height = src.height;
+            } else {
+                const scale = Math.min(containerW / src.width, containerH / src.height, 1);
+                dst.width = Math.round(src.width * scale);
+                dst.height = Math.round(src.height * scale);
+            }
+            const ctx = dst.getContext('2d');
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(src, 0, 0, dst.width, dst.height);
         },
 
         // Compute shadow/scale either from manual sliders or auto-stretch (median+MAD)
@@ -4508,6 +4562,71 @@ function ninaApp() {
             try { await this.apiPost('/api/camera/abort'); } catch (e) { }
         },
 
+        // --- PREVIEW tab (snap-and-look) ---
+
+        // Take one test shot. Reuses the LIVE capture endpoint with the
+        // new SaveToDisk + TargetName fields plumbed through. Result
+        // image arrives via the WS image stream (same channel LIVE uses)
+        // and gets mirrored onto the PREVIEW canvas by
+        // _mirrorLiveToPreviewCanvas.
+        async previewTakeSnap() {
+            if (this.preview.busy) return;
+            if (!this.selectedCamera) {
+                this.toast('No camera connected', 'warn');
+                return;
+            }
+            this.preview.busy = true;
+            try {
+                const r = await this.apiPost('/api/camera/capture', null, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        exposure: this.preview.exposure,
+                        gain: this.preview.gain,
+                        binning: parseInt(this.preview.binning) || 1,
+                        filter: this.preview.filter || null,
+                        saveToDisk: !!this.preview.saveToDisk,
+                        targetName: this.preview.targetName || 'snap'
+                    })
+                });
+                this.preview.lastStats = r?.stats || null;
+                this.preview.lastSnapAt = Date.now();
+                if (r?.saved) {
+                    this.toast('Snap saved to {rig}/snaps/', 'ok', 2500);
+                }
+            } catch (e) {
+                this.toast('Snap failed: ' + (e.message || ''), 'error');
+                // Break the loop on error — don't hammer the camera
+                // with a guaranteed-to-fail sequence of requests.
+                this.preview.looping = false;
+            } finally {
+                this.preview.busy = false;
+            }
+            // Loop kicks the next snap only after the previous one
+            // fully resolved. $nextTick yields so the UI updates
+            // (stats refresh, button labels) before the next exposure.
+            if (this.preview.looping) {
+                this.$nextTick(() => this.previewTakeSnap());
+            }
+        },
+
+        previewToggleLoop() {
+            this.preview.looping = !this.preview.looping;
+            if (this.preview.looping && !this.preview.busy) {
+                this.previewTakeSnap();
+            }
+        },
+
+        async previewAbort() {
+            this.preview.looping = false;   // stop the chain first
+            try {
+                await this.apiPost('/api/camera/abort');
+                this.toast('Snap aborted', 'warn');
+            } catch (e) {
+                this.toast('Abort failed: ' + (e.message || ''), 'error');
+            }
+        },
+
         async setCooler(enabled, temp) {
             try {
                 await this.apiPost('/api/camera/cooler', {
@@ -6246,6 +6365,16 @@ function ninaApp() {
                 out.push({
                     id: 'ls', icon: '💎', kind: 'info',
                     label: `Live stack ${this.liveStackFrames || 0}f`
+                });
+            }
+
+            // PREVIEW tab snap in flight. Single chip whether it's a
+            // one-shot or a loop iteration; the "loop" indicator
+            // belongs to the PREVIEW tab itself, not the global bar.
+            if (this.preview && this.preview.busy) {
+                out.push({
+                    id: 'snap', icon: '📸', kind: 'info',
+                    label: `Preview ${this.preview.exposure || 0}s`
                 });
             }
 

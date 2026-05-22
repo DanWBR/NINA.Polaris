@@ -110,6 +110,10 @@
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><line x1="12" y1="2" x2="12" y2="6" stroke="currentColor" stroke-width="2"/><line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" stroke-width="2"/><line x1="2" y1="12" x2="6" y2="12" stroke="currentColor" stroke-width="2"/><line x1="18" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Focus</span>
             </button>
+            <button class="nav-btn" :class="{ active: tab === 'preview' }" @click="tab = 'preview'" title="Preview (snap test shots)">
+                <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                <span class="nav-label">Preview</span>
+            </button>
             <button class="nav-btn" :class="{ active: tab === 'sequence' }" @click="tab = 'sequence'; loadEndActions()" title="Autorun (shooting schedule)">
                 <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="3" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="10" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="17" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Autorun</span>
@@ -553,6 +557,111 @@
                             <span x-show="autoFocus.bestHfr"><strong x-text="'HFR ≈ ' + autoFocus.bestHfr?.toFixed(2)"></strong></span>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- PREVIEW — snap test shots with optional save -->
+            <div x-show="tab === 'preview'" class="tab-panel preview-tab-panel">
+                <div class="panel-header">
+                    Preview
+                    <span class="status-indicator-sm"
+                          :class="preview.busy ? 'warn' : (selectedCamera ? 'ok' : 'error')"
+                          x-text="preview.busy ? 'EXPOSING'
+                                   : (preview.looping ? 'LOOPING'
+                                   : (selectedCamera || 'No camera'))"></span>
+                </div>
+
+                <div class="preview-area">
+                    <!-- Dedicated canvas pair (separate ids from LIVE so
+                         both tabs can coexist in the DOM and the
+                         multi-canvas renderer draws to both — switching
+                         tabs shows the latest frame instantly without
+                         a re-fetch). -->
+                    <canvas id="previewCanvas" class="preview-canvas"></canvas>
+                    <canvas id="previewOverlayCanvas" class="preview-overlay-canvas"></canvas>
+                    <div class="preview-overlay" x-show="!preview.lastSnapAt">
+                        <p x-text="selectedCamera
+                                    ? 'Pick exposure + bin, then Take snap'
+                                    : 'No camera connected — connect from Rigs tab first'"></p>
+                    </div>
+                </div>
+
+                <div class="quick-controls">
+                    <div class="control-row">
+                        <label>Exp
+                            <input type="number" x-model.number="preview.exposure"
+                                   step="0.5" min="0.001" class="input-sm"
+                                   :disabled="preview.busy"> s
+                        </label>
+                        <label>Gain
+                            <input type="number" x-model.number="preview.gain"
+                                   step="10" min="0" class="input-sm"
+                                   :disabled="preview.busy">
+                        </label>
+                        <label>Bin
+                            <select x-model="preview.binning" class="input-sm"
+                                    :disabled="preview.busy">
+                                <option value="1">1x1</option>
+                                <option value="2">2x2</option>
+                                <option value="4">4x4</option>
+                            </select>
+                        </label>
+                        <label x-show="filterWheel.connected && filterWheel.filters.length > 0">
+                            Filter
+                            <select x-model="preview.filter" class="input-sm"
+                                    :disabled="preview.busy">
+                                <option value="">(current: <span x-text="filterWheel.currentFilter"></span>)</option>
+                                <template x-for="f in filterWheel.filters" :key="f">
+                                    <option :value="f" x-text="f"></option>
+                                </template>
+                            </select>
+                        </label>
+                        <label class="seq-dither-checkbox"
+                               title="When ON, snap is written to {rig}/snaps/{filter}_{date}/. When OFF the snap renders here but isn't saved.">
+                            <input type="checkbox" x-model="preview.saveToDisk"
+                                   :disabled="preview.busy">
+                            💾 Save to disk
+                        </label>
+                        <label x-show="preview.saveToDisk"
+                               title="Folder name under {rig}/snaps/. Defaults to 'snap'.">
+                            Name
+                            <input type="text" x-model="preview.targetName"
+                                   class="input-sm" style="width:140px"
+                                   :disabled="preview.busy"
+                                   placeholder="snap">
+                        </label>
+                    </div>
+                    <div class="control-row actions">
+                        <button class="btn btn-primary" @click="previewTakeSnap()"
+                                :disabled="preview.busy || preview.looping || !selectedCamera">
+                            <span x-text="preview.busy ? 'Exposing…' : '📸 Take snap'"></span>
+                        </button>
+                        <button class="btn"
+                                :class="preview.looping ? 'btn-active' : ''"
+                                @click="previewToggleLoop()"
+                                :disabled="!selectedCamera">
+                            <span x-text="preview.looping ? '⏹ Stop loop' : '↻ Loop'"></span>
+                        </button>
+                        <button class="btn btn-danger" @click="previewAbort()"
+                                :disabled="!preview.busy && !preview.looping">
+                            Abort
+                        </button>
+                        <button class="btn" @click="openImageViewer()"
+                                :disabled="!selectedCamera"
+                                title="Full-resolution zoom/pan viewer">⛶ View</button>
+                    </div>
+                </div>
+
+                <div class="stats-bar" x-show="preview.lastStats">
+                    <span>Stars: <strong x-text="preview.lastStats?.starCount ?? '--'"></strong></span>
+                    <span>HFR: <strong x-text="preview.lastStats?.hfr?.toFixed?.(2) ?? '--'"></strong></span>
+                    <span>Mean: <strong x-text="preview.lastStats?.mean?.toFixed?.(0) ?? '--'"></strong></span>
+                    <span>Median: <strong x-text="preview.lastStats?.median?.toFixed?.(0) ?? '--'"></strong></span>
+                    <span class="text-ok" x-show="preview.saveToDisk">💾 saving</span>
+                    <span x-show="preview.lastSnapAt" class="text-muted"
+                          x-text="'last: ' + (preview.lastSnapAt
+                                              ? new Date(preview.lastSnapAt).toLocaleTimeString()
+                                              : '')"></span>
                 </div>
             </div>
 

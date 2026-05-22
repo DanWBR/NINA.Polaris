@@ -7,7 +7,8 @@ public static class CameraEndpoints {
         var group = app.MapGroup("/api/camera");
 
         group.MapPost("/capture", async (EquipmentManager equip, ImageRelayService relay,
-            LiveStackingService liveStack, CaptureRequest request) => {
+            LiveStackingService liveStack, ImageWriterService imageWriter,
+            CaptureRequest request) => {
             if (equip.Camera == null)
                 return Results.BadRequest(new { error = "No camera selected" });
 
@@ -15,18 +16,51 @@ public static class CameraEndpoints {
                 if (request.Binning > 0)
                     await equip.Camera.SetBinningAsync(request.Binning, request.Binning);
 
+                // Optional pre-capture filter swap. Honour only when the
+                // request carried a non-empty string AND the wheel is
+                // actually connected — otherwise silently keep whatever
+                // filter is already in place.
+                // Optional pre-capture filter swap. FilterWheel is null
+                // when not selected/connected — same convention used
+                // throughout EquipmentManager. We only swap on a non-empty
+                // string in the request, so passing null/"" keeps the
+                // wheel where it is.
+                if (!string.IsNullOrWhiteSpace(request.Filter)
+                    && equip.FilterWheel != null) {
+                    try {
+                        await equip.FilterWheel.SetFilterByNameAsync(request.Filter);
+                    } catch {
+                        // Don't fail the whole capture on a filter swap
+                        // error — the user sees the wrong filter in
+                        // stats and can abort if it matters.
+                    }
+                }
+
                 var imageData = await equip.Camera.CaptureAsync(request.Exposure);
 
-                if (liveStack.IsRunning)
-                    await liveStack.AddFrameAsync(imageData);
-                else
-                    await relay.RelayImageAsync(imageData);
+                // PREVIEW tab: opt-in disk save under {rig}/snaps/.
+                // ImageWriterService is a no-op when ImageOutputDir is
+                // empty so we don't need to gate on profile state here.
+                if (request.SaveToDisk && imageData != null) {
+                    if (!string.IsNullOrEmpty(request.Filter))
+                        imageData.MetaData.Exposure.Filter = request.Filter;
+                    imageWriter.SaveImage(imageData,
+                        targetName: request.TargetName ?? "snap",
+                        imageType: "SNAP",
+                        gain: request.Gain);
+                }
 
-                var stats = imageData.Statistics;
+                if (liveStack.IsRunning)
+                    await liveStack.AddFrameAsync(imageData!);
+                else
+                    await relay.RelayImageAsync(imageData!);
+
+                var stats = imageData!.Statistics;
                 return Results.Ok(new {
                     status = "complete",
                     width = imageData.Properties.Width,
                     height = imageData.Properties.Height,
+                    saved = request.SaveToDisk,
                     stats = new {
                         mean = stats.Mean,
                         median = stats.Median,
@@ -137,6 +171,18 @@ public static class CameraEndpoints {
 
     static double? NanToNull(double v) => double.IsNaN(v) ? null : v;
 
-    public record CaptureRequest(double Exposure = 1.0, int Gain = 100, int Binning = 1, string? Filter = null);
+    /// <summary>
+    /// Capture-request body. <see cref="SaveToDisk"/> + <see cref="TargetName"/>
+    /// are the PREVIEW-tab additions: when SaveToDisk is true the
+    /// handler also runs ImageWriterService.SaveImage with imageType
+    /// = "SNAP" (which BuildSubDir routes into {rig}/snaps/{filter}_{date}/).
+    /// </summary>
+    public record CaptureRequest(
+        double Exposure = 1.0,
+        int Gain = 100,
+        int Binning = 1,
+        string? Filter = null,
+        bool SaveToDisk = false,
+        string? TargetName = null);
     public record CoolerRequest(bool Enabled, double? TargetTemperature = null);
 }

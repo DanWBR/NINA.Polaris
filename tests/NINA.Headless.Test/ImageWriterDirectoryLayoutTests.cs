@@ -82,6 +82,27 @@ public class ImageWriterDirectoryLayoutTests {
     }
 
     [Test]
+    public void Snap_GoesUnder_rig_snaps_filterDate() {
+        // PREVIEW-tab snaps live in their own folder so they don't
+        // pollute the science lights from a sequence. Layout:
+        //   {rig}/snaps/{filter}_{yyyy-MM-dd}/
+        var img = Frame("L", 2.0, 100, "snap", "SNAP", DateTime.Now);
+        var sub = ImageWriterService.BuildSubDir("SNAP", img, EmptyProfile(),
+            "MyRig", Session(2026, 5, 21));
+        Assert.That(sub, Is.EqualTo(Path.Combine("MyRig", "snaps", "L_2026-05-21")));
+    }
+
+    [Test]
+    public void Snap_WithNoFilter_FallsBackToL() {
+        // Same default-fallback rule as Light/Flat: empty filter
+        // becomes "L" so the path always has a stable segment.
+        var img = Frame("", 1.0, 0, "snap", "SNAP", DateTime.Now);
+        var sub = ImageWriterService.BuildSubDir("SNAP", img, EmptyProfile(),
+            "MyRig", Session(2026, 5, 21));
+        Assert.That(sub, Is.EqualTo(Path.Combine("MyRig", "snaps", "L_2026-05-21")));
+    }
+
+    [Test]
     public void UnknownTarget_FallsBackTo_Unknown() {
         var img = Frame("L", 60, 0, "", "LIGHT", new DateTime(2026, 5, 21));
         var sub = ImageWriterService.BuildSubDir("LIGHT", img, EmptyProfile(),
