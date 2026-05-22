@@ -6,9 +6,11 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <title>N.I.N.A. Polaris</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
+    <!-- Inter font is self-hosted (css/fonts/InterVariable*.woff2)
+         via @font-face in app.css. No external CDN call needed —
+         keeps the UI typeface intact on observatory hosts that
+         have no internet. -->
+    <link rel="preload" href="/css/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="/css/app.css">
     <link rel="stylesheet" href="/js/lib/celestial/celestial.css">
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -102,7 +104,7 @@
             </button>
             <button class="nav-btn" :class="{ active: tab === 'equip' }" @click="tab = 'equip'" title="Equipment">
                 <svg viewBox="0 0 24 24" width="22" height="22"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a3 3 0 0 1-4.2 4.2L7 20a2 2 0 0 1-2.8-2.8l10.3-10.3a3 3 0 0 1 4.2-4.2l-3.8 3.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                <span class="nav-label">Equip</span>
+                <span class="nav-label">Rigs</span>
             </button>
             <button class="nav-btn" :class="{ active: tab === 'sky' }" @click="tab = 'sky'; $nextTick(() => initSkyViewer())" title="Sky Explorer">
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><ellipse cx="12" cy="12" rx="10" ry="4" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="12" y1="2" x2="12" y2="22" stroke="currentColor" stroke-width="1.5"/></svg>
