@@ -2,6 +2,8 @@
 
 **Cross-platform headless astronomy controller for Raspberry Pi, ARM64 SBCs, and Windows mini PCs.**
 
+> ⚠️ **N.I.N.A. Polaris is a community-driven fork of [N.I.N.A.](https://nighttime-imaging.eu/)** It is **not** affiliated with or supported by the official N.I.N.A. development team. Please **don't** ask them for support with this fork — open issues here instead.
+
 N.I.N.A. Polaris is a lightweight, browser-controlled astrophotography system built on ASP.NET Core. It brings the power of [N.I.N.A.](https://nighttime-imaging.eu/) (Nighttime Imaging 'N' Astronomy) to single-board computers and small-form-factor PCs, with a responsive Web UI accessible from any device on the network.
 
 The Raspberry Pi (or Windows mini PC) acts as a data broker — controlling hardware, saving FITS files, and streaming images — while your laptop, tablet, or phone handles all the heavy rendering in the browser.
