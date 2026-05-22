@@ -2310,15 +2310,21 @@ select.input-sm {
     border-color: rgba(255, 255, 255, 0.22);
 }
 
+/* Donate uses the same neutral dark fill as the GitHub badge so the
+   pair reads as a matched set. Only the heart icon picks up the pink
+   accent — quietly conveys "this one's a financial ask" without
+   pulling the eye away from the rest of the page. */
 .home-badge-donate {
-    background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
-    border-color: rgba(255, 255, 255, 0.18);
-    color: #fff !important;
+    background: rgba(36, 41, 47, 0.85);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #e6edf3 !important;
 }
+.home-badge-donate svg { color: #ec4899; }
 .home-badge-donate:hover {
-    background: linear-gradient(135deg, #f472b6 0%, #ec4899 100%);
-    border-color: rgba(255, 255, 255, 0.32);
+    background: rgba(48, 54, 61, 0.95);
+    border-color: rgba(236, 72, 153, 0.45);
 }
+.home-badge-donate:hover svg { color: #f472b6; }
 
 @media (max-width: 700px) {
     .home-hero { padding: 40px 20px; min-height: 240px; }
