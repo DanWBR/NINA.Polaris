@@ -100,6 +100,12 @@ function ninaApp() {
         rigModalOpen: false,
         newRigName: '',
 
+        // Telescope + optical-accessory catalogues (lazy-loaded from
+        // wwwroot/data/ when the Manage Rigs modal opens). Drives
+        // the picker dropdowns and the "Required backspacing"
+        // readout. See loadOpticsCatalogue().
+        opticsCatalogue: { telescopes: [], accessories: [], loaded: false },
+
         // Equipment tab state
         equipCameraChoice: '',
         equipMountChoice: '',
@@ -3344,6 +3350,139 @@ function ninaApp() {
                     this.toast('Failed to save rig: ' + e.message, 'error');
                 }
             }, 400);
+        },
+
+        // ---- Telescope + accessory catalogues ----
+        // Loaded once on first open of the Manage Rigs modal.
+        // wwwroot/data/{telescopes,optical-accessories}.json are
+        // static assets served by Kestrel's UseStaticFiles middleware.
+        async loadOpticsCatalogue() {
+            if (this.opticsCatalogue.loaded) return;
+            try {
+                const [scopesResp, accResp] = await Promise.all([
+                    fetch('/data/telescopes.json'),
+                    fetch('/data/optical-accessories.json')
+                ]);
+                const scopes = await scopesResp.json();
+                const acc = await accResp.json();
+                this.opticsCatalogue = {
+                    telescopes:  scopes.telescopes  || [],
+                    accessories: acc.accessories     || [],
+                    loaded: true
+                };
+            } catch (e) {
+                this.toast?.('Failed to load optics catalogue: ' + e.message, 'warn');
+                this.opticsCatalogue = { telescopes: [], accessories: [], loaded: true };
+            }
+        },
+
+        /// Distinct telescope brands in the catalogue, sorted.
+        get opticsBrands() {
+            const set = new Set(this.opticsCatalogue.telescopes.map(t => t.brand));
+            return Array.from(set).sort();
+        },
+
+        /// Models for the brand currently picked on the given rig.
+        opticsModelsForRig(rig) {
+            return this.opticsCatalogue.telescopes
+                .filter(t => t.brand === rig.telescopeBrand)
+                .sort((a, b) => a.apertureMm - b.apertureMm);
+        },
+
+        /// Accessory entries compatible with the rig's picked OTA
+        /// model, plus any generic / empty-compatibility entries
+        /// that work on anything.
+        opticsAccessoriesForRig(rig) {
+            const model = rig.telescopeModel || '';
+            return this.opticsCatalogue.accessories.filter(a => {
+                const list = a.compatibleScopes || [];
+                if (list.length === 0) return true;   // generic
+                return list.some(s => model.includes(s));
+            }).sort((a, b) => {
+                if (a.type !== b.type) return a.type.localeCompare(b.type);
+                return (a.brand + a.model).localeCompare(b.brand + b.model);
+            });
+        },
+
+        /// Triggered when the user picks a telescope brand → reset
+        /// the model and clear computed fields so the next dropdown
+        /// hit re-populates them.
+        onTelescopeBrandChange(rig) {
+            rig.telescopeModel = '';
+            this._applyOpticsToRig(rig);
+            this.saveRig(rig);
+        },
+
+        /// Triggered when the user picks a telescope model. Auto-
+        /// fills aperture + native focal length, recomputes the
+        /// effective focal length using the current accessory, and
+        /// saves.
+        onTelescopeModelChange(rig) {
+            this._applyOpticsToRig(rig);
+            this.saveRig(rig);
+        },
+
+        /// Triggered when the user picks (or clears) an accessory.
+        /// Recomputes the effective focal length + backspacing.
+        onAccessoryChange(rig) {
+            this._applyOpticsToRig(rig);
+            this.saveRig(rig);
+        },
+
+        /// Compute the effective optics fields from the catalogue
+        /// picks. Called by every onXChange above.
+        _applyOpticsToRig(rig) {
+            const scope = this.opticsCatalogue.telescopes
+                .find(t => t.brand === rig.telescopeBrand
+                        && t.model === rig.telescopeModel);
+            if (scope) {
+                rig.apertureMm = scope.apertureMm;
+                // Base scope back-focus — overridden below if the
+                // accessory publishes its own value (most do).
+                rig.requiredBackspacingMm = scope.backspacingMm;
+            } else {
+                // Off-catalogue scope: leave aperture as the user
+                // entered it manually; same for backspacing.
+            }
+            const accessory = this.opticsCatalogue.accessories
+                .find(a => a.brand + ' ' + a.model === rig.accessoryModel)
+                || this.opticsCatalogue.accessories
+                    .find(a => a.model === rig.accessoryModel);
+            if (accessory) {
+                rig.accessoryType   = accessory.type;
+                rig.accessoryFactor = accessory.factor;
+                if (accessory.backspacingMm != null) {
+                    rig.requiredBackspacingMm = accessory.backspacingMm;
+                }
+            } else {
+                rig.accessoryType   = '';
+                rig.accessoryFactor = 1.0;
+            }
+            // Effective focal length = native × accessory factor.
+            // Only auto-recompute when a scope is picked from the
+            // catalogue; off-catalogue rigs keep the user's manual
+            // FocalLengthMm value untouched.
+            if (scope) {
+                rig.focalLengthMm = Math.round(
+                    scope.focalLengthMm * (rig.accessoryFactor || 1.0));
+            }
+        },
+
+        /// Native (no-accessory) focal length the picker is showing
+        /// for this rig. Used in the UI to display "Native fl /
+        /// Effective fl" side-by-side.
+        opticsNativeFocalLength(rig) {
+            const scope = this.opticsCatalogue.telescopes
+                .find(t => t.brand === rig.telescopeBrand
+                        && t.model === rig.telescopeModel);
+            return scope ? scope.focalLengthMm : null;
+        },
+
+        /// f-ratio = focal length / aperture. UI helper for the
+        /// readout below the picker.
+        opticsFocalRatio(rig) {
+            if (!rig.apertureMm || !rig.focalLengthMm) return null;
+            return rig.focalLengthMm / rig.apertureMm;
         },
 
         // ---- Per-rig filter offsets ----

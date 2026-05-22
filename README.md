@@ -1109,4 +1109,4 @@ Contributions are welcome! This project follows the same coding standards as the
 
 ## License
 
-This project is part of the N.I.N.A. ecosystem. See the main [N.I.N.A. repository](https://github.com/isbeorn/nina) for license details.
+This project is licensed under the Mozilla Public License 2.0.

@@ -721,7 +721,7 @@
                             <option :value="r.id" x-text="r.name"></option>
                         </template>
                     </select>
-                    <button class="btn btn-sm" @click="rigModalOpen = true">Manage rigs…</button>
+                    <button class="btn btn-sm" @click="rigModalOpen = true; loadOpticsCatalogue()">Manage rigs…</button>
                     <button class="btn btn-sm" @click="saveCurrentSelectionsToRig()"
                             :disabled="!indiConnected"
                             title="Save current device selections into this rig">💾 Save selections</button>
@@ -2824,11 +2824,85 @@
                                 <span x-show="r.focuser">🔍 <span x-text="r.focuser"></span></span>
                                 <span x-show="r.filterWheel">⚙️ <span x-text="r.filterWheel"></span></span>
                             </div>
+                            <!-- Telescope + accessory picker. Reads
+                                 from wwwroot/data/{telescopes,
+                                 optical-accessories}.json. Picking
+                                 a model auto-fills aperture / native
+                                 focal length / effective focal
+                                 length / required backspacing into
+                                 the rig fields below; user can
+                                 still edit the resolved values
+                                 manually for off-catalogue scopes. -->
+                            <div class="rig-optics-picker">
+                                <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">
+                                    Telescope (catalogue)
+                                </div>
+                                <div class="rig-picker-row">
+                                    <label>Brand
+                                        <select x-model="r.telescopeBrand"
+                                                @change="onTelescopeBrandChange(r)"
+                                                class="input-sm">
+                                            <option value="">— Manual entry —</option>
+                                            <template x-for="b in opticsBrands" :key="b">
+                                                <option :value="b" x-text="b"></option>
+                                            </template>
+                                        </select>
+                                    </label>
+                                    <label>Model
+                                        <select x-model="r.telescopeModel"
+                                                @change="onTelescopeModelChange(r)"
+                                                :disabled="!r.telescopeBrand"
+                                                class="input-sm">
+                                            <option value="">— Pick a model —</option>
+                                            <template x-for="t in opticsModelsForRig(r)" :key="t.brand + t.model">
+                                                <option :value="t.model"
+                                                    x-text="t.model + ' (' + t.apertureMm + 'mm f/' + (t.focalLengthMm/t.apertureMm).toFixed(1) + ')'"></option>
+                                            </template>
+                                        </select>
+                                    </label>
+                                </div>
+                                <div class="rig-picker-row">
+                                    <label>Accessory
+                                        <select x-model="r.accessoryModel"
+                                                @change="onAccessoryChange(r)"
+                                                class="input-sm">
+                                            <option value="">— None —</option>
+                                            <template x-for="a in opticsAccessoriesForRig(r)" :key="a.brand + a.model">
+                                                <option :value="a.brand + ' ' + a.model"
+                                                    x-text="'[' + a.type + '] ' + a.brand + ' ' + a.model + ' (' + a.factor + '×)'"></option>
+                                            </template>
+                                        </select>
+                                    </label>
+                                </div>
+                                <!-- Required-backspacing reminder. Only
+                                     shown when the picker produced a
+                                     value — most flatteners / reducers
+                                     publish theirs, the OTAs vary. -->
+                                <div class="rig-picker-readout"
+                                     x-show="opticsNativeFocalLength(r) !== null || r.requiredBackspacingMm">
+                                    <span x-show="opticsNativeFocalLength(r) !== null">
+                                        Native fl: <strong x-text="opticsNativeFocalLength(r) + ' mm'"></strong> ·
+                                    </span>
+                                    <span x-show="opticsFocalRatio(r) !== null">
+                                        f/<strong x-text="opticsFocalRatio(r)?.toFixed(2)"></strong> ·
+                                    </span>
+                                    <span x-show="r.requiredBackspacingMm" class="rig-picker-backfocus">
+                                        🔧 Back-focus: <strong x-text="r.requiredBackspacingMm + ' mm'"></strong>
+                                    </span>
+                                </div>
+                            </div>
+
                             <div class="rig-optics">
+                                <label>Aperture (mm)
+                                    <input type="number" min="20" max="1000" step="1"
+                                           x-model.number="r.apertureMm"
+                                           @change="saveRig(r)" class="input-sm">
+                                </label>
                                 <label>Main focal length (mm)
                                     <input type="number" min="50" max="10000" step="1"
                                            x-model.number="r.focalLengthMm"
-                                           @change="saveRig(r)" class="input-sm">
+                                           @change="saveRig(r)" class="input-sm"
+                                           title="Effective focal length = native × accessory factor. Auto-computed when a catalogue scope is picked; edit manually for off-catalogue OTAs.">
                                 </label>
                                 <label>Guide scope focal length (mm)
                                     <input type="number" min="50" max="2000" step="1"

@@ -172,6 +172,13 @@ public class ProfileService {
             FocuserStepSize = src.FocuserStepSize,
             FocuserBacklashSteps = src.FocuserBacklashSteps,
             FocalLengthMm = src.FocalLengthMm,
+            ApertureMm = src.ApertureMm,
+            TelescopeBrand = src.TelescopeBrand,
+            TelescopeModel = src.TelescopeModel,
+            AccessoryType = src.AccessoryType,
+            AccessoryModel = src.AccessoryModel,
+            AccessoryFactor = src.AccessoryFactor,
+            RequiredBackspacingMm = src.RequiredBackspacingMm,
             GuiderFocalLengthMm = src.GuiderFocalLengthMm,
             PHD2Host = src.PHD2Host, PHD2Port = src.PHD2Port,
             FilterOffsets = new Dictionary<string, int>(src.FilterOffsets)
@@ -343,10 +350,43 @@ public class EquipmentProfile {
     public int FocuserStepSize { get; set; } = 50;
     public int FocuserBacklashSteps { get; set; }
 
-    // Optics specific to this rig — focal length of the *main* imaging OTA
-    // (with reducer / barlow already factored in). Pure rig-level setting:
-    // change OTA → change rig.
+    // Optics specific to this rig. FocalLengthMm is the *effective*
+    // focal length used everywhere downstream (FOV calc, FITS
+    // FOCALLEN header, mosaic planner, etc.) — for OTAs with a
+    // reducer / Barlow attached this is the native focal length
+    // multiplied by AccessoryFactor. The picker in the Manage Rigs
+    // modal computes it; the user can also override manually.
     public double FocalLengthMm { get; set; } = 478;
+    /// <summary>OTA aperture in millimetres. Auto-filled from the
+    /// telescopes.json catalogue when the user picks a model; can
+    /// be set manually for off-catalogue scopes. Drives the FOV
+    /// calculator's f-ratio readout.</summary>
+    public double ApertureMm { get; set; }
+    /// <summary>Telescope brand selected in the picker (e.g.
+    /// "Celestron"). Empty string when the user filled the optics
+    /// fields manually.</summary>
+    public string TelescopeBrand { get; set; } = "";
+    /// <summary>Telescope model selected in the picker (e.g.
+    /// "EdgeHD 8"). Empty when manual.</summary>
+    public string TelescopeModel { get; set; } = "";
+    /// <summary>Optional accessory in the optical train. One of
+    /// "reducer", "barlow", "flattener", or empty when none.</summary>
+    public string AccessoryType { get; set; } = "";
+    /// <summary>Accessory brand + model string (e.g. "Celestron
+    /// 0.7x Reducer Lens (EdgeHD)"). Empty when none.</summary>
+    public string AccessoryModel { get; set; } = "";
+    /// <summary>Focal-length multiplier the accessory applies.
+    /// 1.0 when no accessory; 0.7 for a typical reducer; 2.0 for
+    /// a 2× Barlow; etc. Effective focal length =
+    /// nativeFocalLength × AccessoryFactor.</summary>
+    public double AccessoryFactor { get; set; } = 1.0;
+    /// <summary>Back-focus (camera-side spacing) required by the
+    /// current OTA + accessory combination, in millimetres.
+    /// Surfaced as a reminder in the rig editor — wrong backspacing
+    /// is the most common reason flatteners produce elongated
+    /// stars in the corners. Null when the OTA / accessory doesn't
+    /// publish a value.</summary>
+    public double? RequiredBackspacingMm { get; set; }
 
     // Focal length of the guide scope. Used for record-keeping and as a
     // sanity-check reference against PHD2's reported pixel scale. PHD2 itself

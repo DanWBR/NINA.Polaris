@@ -1,0 +1,185 @@
+{
+  "_doc": "Curated catalogue of common optical accessories — Barlows, focal reducers, field flatteners — that slot in between the OTA and the camera. Used by the Equipment rig editor to multiply the native focal length and surface the new required back-focus. Add to this list by PR — keep entries sorted by type then brand. compatibleScopes lists OTA model substrings the accessory is designed for; empty array means generic.",
+  "accessories": [
+    {
+      "brand": "Celestron",
+      "model": "0.7x Reducer Lens (EdgeHD)",
+      "type": "reducer",
+      "factor": 0.7,
+      "backspacingMm": 105.0,
+      "compatibleScopes": ["EdgeHD 8", "EdgeHD 9.25", "EdgeHD 11"],
+      "notes": "Optimised for f/7 on EdgeHD SCTs. Each EdgeHD aperture has its own dedicated reducer part number — confirm part matches your OTA."
+    },
+    {
+      "brand": "Celestron",
+      "model": "f/6.3 Reducer/Corrector (SCT)",
+      "type": "reducer",
+      "factor": 0.63,
+      "backspacingMm": 105.0,
+      "compatibleScopes": ["C6 SCT", "C8 SCT", "C9.25 SCT", "C11 SCT", "C14 SCT"],
+      "notes": "Classic Celestron SCT reducer. Drops f/10 to f/6.3."
+    },
+    {
+      "brand": "Starizona",
+      "model": "Hyperstar 8 v4",
+      "type": "reducer",
+      "factor": 0.21,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["EdgeHD 8", "C8 SCT"],
+      "notes": "Replaces the SCT secondary. Drops f/10 to f/2.0 — extreme reducer for wide-field DSO imaging."
+    },
+    {
+      "brand": "Starizona",
+      "model": "Hyperstar 11 v4",
+      "type": "reducer",
+      "factor": 0.20,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["EdgeHD 11", "C11 SCT"],
+      "notes": "Replaces the SCT secondary. Drops f/10 to f/2.0."
+    },
+    {
+      "brand": "Skywatcher",
+      "model": "0.85x Reducer (Esprit)",
+      "type": "reducer",
+      "factor": 0.85,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["Esprit 80 ED", "Esprit 100 ED", "Esprit 120 ED", "Esprit 150 ED"],
+      "notes": "Native Esprit field flattener / reducer combo."
+    },
+    {
+      "brand": "Askar",
+      "model": "0.7x Reducer",
+      "type": "reducer",
+      "factor": 0.7,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["65PHQ", "71PHQ", "103APO", "120APO"],
+      "notes": "Confirm exact part number per OTA — Askar sells dedicated reducers per scope."
+    },
+    {
+      "brand": "Takahashi",
+      "model": "0.73x Reducer (FSQ)",
+      "type": "reducer",
+      "factor": 0.73,
+      "backspacingMm": 56.0,
+      "compatibleScopes": ["FSQ-85EDX", "FSQ-106EDX4"],
+      "notes": "Dedicated 0.73× reducer that produces a 73 mm or 88 mm flat field on the FSQ series."
+    },
+    {
+      "brand": "William Optics",
+      "model": "Adjustable Flat 6A III",
+      "type": "flattener",
+      "factor": 1.0,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["ZenithStar 61 II", "ZenithStar 73 II", "ZenithStar 81 II", "GT 81 IV", "GT 102"],
+      "notes": "Field flattener (no focal-length change). Adjustable back-focus 51-59mm to suit different imaging trains."
+    },
+    {
+      "brand": "William Optics",
+      "model": "FLAT 6A III 0.8x Reducer",
+      "type": "reducer",
+      "factor": 0.8,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["ZenithStar 73 II", "ZenithStar 81 II", "GT 81 IV", "GT 102"],
+      "notes": "0.8× reducer + flattener combo."
+    },
+    {
+      "brand": "Sharpstar",
+      "model": "0.8x Reducer",
+      "type": "reducer",
+      "factor": 0.8,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["76 EDPH II", "94 EDPH", "100 EDPH II", "130 EDPH"],
+      "notes": ""
+    },
+    {
+      "brand": "TS Optics",
+      "model": "Photoline 0.79x Reducer/Flattener",
+      "type": "reducer",
+      "factor": 0.79,
+      "backspacingMm": 55.0,
+      "compatibleScopes": [],
+      "notes": "Generic 2\"/2.5\" reducer for doublet/triplet APOs up to ~125mm."
+    },
+    {
+      "brand": "Hotech",
+      "model": "0.8x Field Flattener Reducer",
+      "type": "reducer",
+      "factor": 0.8,
+      "backspacingMm": 55.0,
+      "compatibleScopes": [],
+      "notes": "Generic 2\"/2.5\" reducer."
+    },
+    {
+      "brand": "Tele Vue",
+      "model": "Powermate 2x",
+      "type": "barlow",
+      "factor": 2.0,
+      "backspacingMm": null,
+      "compatibleScopes": [],
+      "notes": "Telecentric — preserves the cone angle, popular for planetary + lunar imaging."
+    },
+    {
+      "brand": "Tele Vue",
+      "model": "Powermate 2.5x",
+      "type": "barlow",
+      "factor": 2.5,
+      "backspacingMm": null,
+      "compatibleScopes": [],
+      "notes": "Telecentric."
+    },
+    {
+      "brand": "Tele Vue",
+      "model": "Powermate 4x",
+      "type": "barlow",
+      "factor": 4.0,
+      "backspacingMm": null,
+      "compatibleScopes": [],
+      "notes": "Telecentric."
+    },
+    {
+      "brand": "Tele Vue",
+      "model": "Powermate 5x",
+      "type": "barlow",
+      "factor": 5.0,
+      "backspacingMm": null,
+      "compatibleScopes": [],
+      "notes": "Telecentric — common pick for narrow-field planetary on long SCTs."
+    },
+    {
+      "brand": "Celestron",
+      "model": "Ultima 2x Barlow",
+      "type": "barlow",
+      "factor": 2.0,
+      "backspacingMm": null,
+      "compatibleScopes": [],
+      "notes": "Common 1.25\" Barlow."
+    },
+    {
+      "brand": "Generic",
+      "model": "1.6x Barlow",
+      "type": "barlow",
+      "factor": 1.6,
+      "backspacingMm": null,
+      "compatibleScopes": [],
+      "notes": ""
+    },
+    {
+      "brand": "Generic",
+      "model": "2x Barlow",
+      "type": "barlow",
+      "factor": 2.0,
+      "backspacingMm": null,
+      "compatibleScopes": [],
+      "notes": ""
+    },
+    {
+      "brand": "Generic",
+      "model": "3x Barlow",
+      "type": "barlow",
+      "factor": 3.0,
+      "backspacingMm": null,
+      "compatibleScopes": [],
+      "notes": ""
+    }
+  ]
+}

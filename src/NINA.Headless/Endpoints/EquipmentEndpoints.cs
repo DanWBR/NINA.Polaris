@@ -92,6 +92,17 @@ public static class EquipmentEndpoints {
                 r.FocuserStepSize = update.FocuserStepSize;
                 r.FocuserBacklashSteps = update.FocuserBacklashSteps;
                 r.FocalLengthMm = update.FocalLengthMm;
+                // Telescope picker fields. Strings safe to set as-is
+                // (empty string is the "no picker selection" sentinel).
+                r.ApertureMm     = update.ApertureMm;
+                r.TelescopeBrand = update.TelescopeBrand ?? "";
+                r.TelescopeModel = update.TelescopeModel ?? "";
+                r.AccessoryType  = update.AccessoryType  ?? "";
+                r.AccessoryModel = update.AccessoryModel ?? "";
+                // Default factor to 1.0 when the client omits it —
+                // matches the no-accessory case.
+                r.AccessoryFactor = update.AccessoryFactor > 0 ? update.AccessoryFactor : 1.0;
+                r.RequiredBackspacingMm = update.RequiredBackspacingMm;
                 r.GuiderFocalLengthMm = update.GuiderFocalLengthMm;
                 r.PHD2Host = update.PHD2Host;
                 r.PHD2Port = update.PHD2Port;

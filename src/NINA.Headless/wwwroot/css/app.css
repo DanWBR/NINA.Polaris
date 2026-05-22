@@ -887,6 +887,45 @@ select.input-sm {
     width: 110px;
 }
 
+/* Telescope + accessory picker block above the resolved-value
+   inputs. Drives auto-fill of aperture / focal length / back-focus. */
+.rig-optics-picker {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-top: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.rig-picker-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.rig-picker-row label {
+    display: flex;
+    flex-direction: column;
+    font-size: 10px;
+    color: var(--text-secondary);
+    gap: 2px;
+    flex: 1;
+    min-width: 180px;
+}
+.rig-picker-row select {
+    min-width: 0;
+    width: 100%;
+}
+.rig-picker-readout {
+    font-size: 11px;
+    color: var(--text-muted);
+    padding-top: 2px;
+}
+.rig-picker-backfocus {
+    color: #ffd0a0;   /* amber — back-focus mistakes are common */
+}
+
 .rig-row-actions {
     display: flex;
     align-items: center;
