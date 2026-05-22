@@ -413,6 +413,21 @@ public class EquipmentProfile {
     // the user *thinks* the guide scope is.
     public double GuiderFocalLengthMm { get; set; } = 200;
 
+    /// <summary>
+    /// Guide-scope aperture. Used for record-keeping and as the
+    /// denominator of the guidescope f-ratio displayed in the
+    /// Guidescope card on the RIGS tab. Default 50 mm matches the
+    /// most common 50 mm × 200 mm finder-guider combo. Set to 0 to
+    /// suppress the f-ratio display.
+    /// </summary>
+    public double GuiderApertureMm { get; set; } = 50;
+
+    /// <summary>Brand of the guide telescope. Optional, free-form.</summary>
+    public string? GuideTelescopeBrand { get; set; }
+
+    /// <summary>Model of the guide telescope. Optional, free-form.</summary>
+    public string? GuideTelescopeModel { get; set; }
+
     // Per-rig PHD2 settings
     public string PHD2Host { get; set; } = "localhost";
     public int PHD2Port { get; set; } = 4400;

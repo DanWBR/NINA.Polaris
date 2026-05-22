@@ -106,6 +106,12 @@ public static class EquipmentEndpoints {
                 r.AccessoryFactor = update.AccessoryFactor > 0 ? update.AccessoryFactor : 1.0;
                 r.RequiredBackspacingMm = update.RequiredBackspacingMm;
                 r.GuiderFocalLengthMm = update.GuiderFocalLengthMm;
+                // New guide-scope metadata fields (RIGS tab card).
+                // Defensive: clamp aperture to a sane lower bound so
+                // a stray zero doesn't blow up the f-ratio calc on the UI.
+                if (update.GuiderApertureMm > 0) r.GuiderApertureMm = update.GuiderApertureMm;
+                r.GuideTelescopeBrand = update.GuideTelescopeBrand;
+                r.GuideTelescopeModel = update.GuideTelescopeModel;
                 r.PHD2Host = update.PHD2Host;
                 r.PHD2Port = update.PHD2Port;
                 r.FilterOffsets = update.FilterOffsets ?? new();

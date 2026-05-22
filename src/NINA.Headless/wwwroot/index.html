@@ -819,7 +819,26 @@
                             title="Save current device selections into this rig">💾 Save selections</button>
                 </div>
 
-                <!-- Driver-source picker (INDI vs ASCOM Alpaca) -->
+                <!-- Compact connection strip — visible when an INDI server
+                     is reachable. Replaces the bottom-of-panel "Disconnect
+                     INDI" footer so the user always sees connection state
+                     at the top of the tab without scrolling. -->
+                <div class="equip-connection-strip connected" x-show="indiConnected" x-cloak>
+                    <span class="equip-conn-status ok">✓ INDI connected</span>
+                    <span class="equip-conn-detail">
+                        <code x-text="settings.indiHost + ':' + settings.indiPort"></code>
+                        ·
+                        <strong x-text="devices.length"></strong> devices
+                    </span>
+                    <span style="flex:1"></span>
+                    <button class="btn btn-sm" @click="refreshDevices()"
+                            title="Re-enumerate INDI devices">⟳ Refresh</button>
+                    <button class="btn btn-sm btn-danger" @click="disconnectIndi()">Disconnect</button>
+                </div>
+
+                <!-- Driver-source picker (INDI vs ASCOM Alpaca) — shown
+                     when nothing is connected yet. The expanded form
+                     below acts like an "expanded" variant of the strip. -->
                 <div class="equip-connect-prompt" x-show="!indiConnected">
                     <div class="equip-source-tabs">
                         <button class="btn" :class="equipSource === 'indi' ? 'btn-active' : ''"
@@ -923,7 +942,90 @@
                     </div>
                 </div>
 
-                <div class="equip-scroll" x-show="indiConnected">
+                <!-- Role grid: cards visible regardless of INDI connection
+                     state. Hardware cards show empty dropdowns + grey
+                     status dots until the user connects to INDI/Alpaca
+                     above; metadata-only cards (Main Telescope OTA,
+                     Guidescope) work immediately because they don't
+                     depend on any backend connection. -->
+                <div class="equip-scroll equip-grid">
+
+                    <!-- Main Telescope (OTA optics — metadata only,
+                         no hardware connection). Fields map 1:1 to
+                         EquipmentProfile.{FocalLengthMm, ApertureMm,
+                         TelescopeBrand, TelescopeModel, AccessoryType,
+                         AccessoryModel, AccessoryFactor,
+                         RequiredBackspacingMm} which the rig already
+                         persists. -->
+                    <div class="equip-card equip-card-metadata">
+                        <div class="equip-card-header">
+                            <span class="equip-card-icon">&#x1F52D;</span>
+                            <span class="equip-card-title">Main Telescope</span>
+                            <span class="equip-status-dot"
+                                  :class="settings.focalLength > 0 ? 'configured' : 'disconnected'"></span>
+                        </div>
+                        <div class="equip-card-body">
+                            <div class="equip-meta-row">
+                                <label>Focal length (mm)
+                                    <input type="number" x-model.number="settings.focalLength"
+                                           @change="saveOpticsDebounced(); updateFov()"
+                                           step="10" min="0" class="input-sm" style="width:90px">
+                                </label>
+                                <label>Aperture (mm)
+                                    <input type="number" x-model.number="settings.aperture"
+                                           @change="saveOpticsDebounced()"
+                                           step="5" min="0" class="input-sm" style="width:80px">
+                                </label>
+                                <span class="equip-meta-derived"
+                                      x-show="settings.focalLength > 0 && settings.aperture > 0">
+                                    f/<strong x-text="(settings.focalLength / settings.aperture).toFixed(1)"></strong>
+                                </span>
+                            </div>
+                            <div class="equip-meta-row">
+                                <label>Brand
+                                    <input type="text" x-model="settings.telescopeBrand"
+                                           @change="saveOpticsDebounced()"
+                                           class="input-sm" placeholder="e.g. Askar">
+                                </label>
+                                <label>Model
+                                    <input type="text" x-model="settings.telescopeModel"
+                                           @change="saveOpticsDebounced()"
+                                           class="input-sm" placeholder="e.g. FRA400">
+                                </label>
+                            </div>
+                            <div class="equip-meta-row">
+                                <label>Accessory
+                                    <select x-model="settings.accessoryType"
+                                            @change="saveOpticsDebounced()" class="input-sm">
+                                        <option value="">None</option>
+                                        <option value="reducer">Reducer</option>
+                                        <option value="flattener">Flattener</option>
+                                        <option value="barlow">Barlow</option>
+                                        <option value="extender">Extender</option>
+                                    </select>
+                                </label>
+                                <label x-show="settings.accessoryType">Factor
+                                    <input type="number" x-model.number="settings.accessoryFactor"
+                                           @change="saveOpticsDebounced()"
+                                           step="0.05" min="0.1" max="5" class="input-sm" style="width:70px">
+                                </label>
+                                <label x-show="settings.accessoryType" style="flex:1">Model
+                                    <input type="text" x-model="settings.accessoryModel"
+                                           @change="saveOpticsDebounced()" class="input-sm">
+                                </label>
+                            </div>
+                            <p class="hint" style="margin:4px 0 0;font-size:11px"
+                               x-show="settings.requiredBackspacingMm">
+                                Required backspacing: <strong x-text="settings.requiredBackspacingMm + ' mm'"></strong>
+                            </p>
+                            <p class="hint" style="margin:4px 0 0;font-size:11px">
+                                Use <a href="#" @click.prevent="rigModalOpen = true; loadOpticsCatalogue()"
+                                       style="color:var(--accent)">Manage rigs…</a>
+                                to pick from the curated OTA catalog (auto-fills focal length,
+                                aperture, backspacing).
+                            </p>
+                        </div>
+                    </div>
 
                     <!-- Camera -->
                     <div class="equip-card">
@@ -1147,7 +1249,7 @@
                     <div class="equip-card">
                         <div class="equip-card-header">
                             <span class="equip-card-icon">&#x1F50D;</span>
-                            <span class="equip-card-title">Focuser</span>
+                            <span class="equip-card-title">AutoFocus Motor</span>
                             <span class="equip-status-dot" :class="focusConnected ? 'connected' : 'disconnected'"></span>
                         </div>
                         <div class="equip-card-body">
@@ -1211,6 +1313,110 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Guidescope (OTA optics for the guide setup —
+                         metadata only, no hardware connection). The
+                         guide camera itself is owned by PHD2 (next
+                         card). The pixel scale we display here is what
+                         PHD2 would derive from this focal length +
+                         camera pixel size. -->
+                    <div class="equip-card equip-card-metadata">
+                        <div class="equip-card-header">
+                            <span class="equip-card-icon">&#x1F52D;</span>
+                            <span class="equip-card-title">Guidescope</span>
+                            <span class="equip-status-dot"
+                                  :class="settings.guiderFocalLengthMm > 0 ? 'configured' : 'disconnected'"></span>
+                        </div>
+                        <div class="equip-card-body">
+                            <div class="equip-meta-row">
+                                <label>Focal length (mm)
+                                    <input type="number" x-model.number="settings.guiderFocalLengthMm"
+                                           @change="saveOpticsDebounced()"
+                                           step="10" min="0" class="input-sm" style="width:90px">
+                                </label>
+                                <label>Aperture (mm)
+                                    <input type="number" x-model.number="settings.guiderApertureMm"
+                                           @change="saveOpticsDebounced()"
+                                           step="5" min="0" class="input-sm" style="width:80px">
+                                </label>
+                                <span class="equip-meta-derived"
+                                      x-show="settings.guiderFocalLengthMm > 0 && settings.guiderApertureMm > 0">
+                                    f/<strong x-text="(settings.guiderFocalLengthMm / settings.guiderApertureMm).toFixed(1)"></strong>
+                                </span>
+                            </div>
+                            <div class="equip-meta-row">
+                                <label>Brand
+                                    <input type="text" x-model="settings.guideTelescopeBrand"
+                                           @change="saveOpticsDebounced()"
+                                           class="input-sm" placeholder="e.g. SVBony">
+                                </label>
+                                <label>Model
+                                    <input type="text" x-model="settings.guideTelescopeModel"
+                                           @change="saveOpticsDebounced()"
+                                           class="input-sm" placeholder="e.g. SV165">
+                                </label>
+                            </div>
+                            <p class="hint" style="margin:4px 0 0;font-size:11px"
+                               x-show="guider.connected && guider.pixelScale">
+                                PHD2 currently reports
+                                <strong x-text="guider.pixelScale?.toFixed(3) + '&quot;/px'"></strong>
+                                at this guide scope.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Guide Camera (read-only — PHD2 owns the actual
+                         guide cam connection. Polaris just surfaces
+                         what PHD2 reports). -->
+                    <div class="equip-card equip-card-metadata">
+                        <div class="equip-card-header">
+                            <span class="equip-card-icon">&#x1F31F;</span>
+                            <span class="equip-card-title">Guide Camera</span>
+                            <span class="equip-status-dot"
+                                  :class="guider.connected ? (guider.guiding ? 'connected' : 'warn') : 'disconnected'"></span>
+                        </div>
+                        <div class="equip-card-body">
+                            <div class="equip-detail" x-show="guider.connected">
+                                <div class="equip-detail-name"
+                                     x-text="guider.cameraName || 'Camera selected in PHD2'"></div>
+                                <div class="equip-detail-props">
+                                    <span x-show="guider.pixelScale">
+                                        Scale: <strong x-text="guider.pixelScale?.toFixed(3) + '&quot;/px'"></strong>
+                                    </span>
+                                    <span :class="guider.guiding ? 'text-ok' : 'text-muted'"
+                                          x-text="guider.appState"></span>
+                                </div>
+                            </div>
+                            <p class="hint" x-show="!guider.connected" style="margin:0">
+                                PHD2 not connected. Connect from the
+                                <a href="#" @click.prevent="tab = 'guide'"
+                                   style="color:var(--accent)">Guide tab</a>
+                                — Polaris doesn't manage guide cameras directly.
+                            </p>
+                            <p class="hint" x-show="guider.connected" style="margin:4px 0 0">
+                                Camera selection is managed by PHD2.
+                                Use <a href="#" @click.prevent="tab = 'guide'"
+                                       style="color:var(--accent)">Guide tab</a>
+                                to change.
+                            </p>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Accessories — collapsible section below the main
+                     grid. Auto-expands if any of the four optional
+                     devices has a saved selection on the active rig so
+                     the user doesn't have to click to see what's there. -->
+                <details class="equip-accessories"
+                         :open="anyAccessoryConfigured()">
+                    <summary class="equip-accessories-summary">
+                        <span class="equip-accessories-caret">▸</span>
+                        <strong>Accessories</strong>
+                        <span class="text-muted"
+                              x-text="accessoryCount() + ' configured · Rotator, Flat Panel, Dome, Weather'"></span>
+                    </summary>
+                    <div class="equip-grid equip-accessories-grid">
 
                     <!-- Rotator -->
                     <div class="equip-card">
@@ -1443,14 +1649,12 @@
                         </div>
                     </div>
 
-                </div>
+                    </div>
+                </details>
 
-                <!-- Footer -->
-                <div class="equip-footer" x-show="indiConnected">
-                    <button class="btn btn-sm" @click="refreshDevices()">Refresh Devices</button>
-                    <span class="text-muted" style="font-size: 11px;" x-text="devices.length + ' devices'"></span>
-                    <button class="btn btn-sm btn-danger" @click="disconnectIndi()" style="margin-left: auto;">Disconnect INDI</button>
-                </div>
+                <!-- Refresh/Disconnect moved to the compact connection
+                     strip at the top of the panel — no separate footer
+                     needed anymore. -->
             </div>
 
             <!-- SKY EXPLORER -->

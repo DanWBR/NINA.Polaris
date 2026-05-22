@@ -4220,3 +4220,124 @@ select.input-sm {
    right above the activity bar thanks to the same offset. */
 .tab-panel  { padding-bottom: 40px !important; }
 .home-panel { padding-bottom: 40px !important; }
+
+/* ===========================================================
+   RIGS tab — connection strip + role-based grid + accessories
+   ----------------------------------------------------------- */
+
+/* Compact connection strip shown at the top of the RIGS tab
+   when INDI is connected. Wears the same glass treatment as the
+   home cards so the page reads as a single visual family. */
+.equip-connection-strip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    margin: 0 0 12px;
+    background: rgba(15, 23, 42, 0.65);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 13px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+.equip-conn-status {
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 999px;
+}
+.equip-conn-status.ok {
+    background: rgba(34, 197, 94, 0.18);
+    color: #86efac;
+}
+.equip-conn-detail {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+.equip-conn-detail code {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+/* Role-based grid replacing the old equip-scroll. auto-fit
+   collapses to fewer columns on narrow viewports without media
+   queries; minmax floors at 280px so cards never get too narrow
+   for their content. */
+.equip-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px;
+    padding: 0;
+}
+
+/* Metadata-only card variant (Main Telescope, Guidescope, Guide
+   Camera). Visually distinguished from hardware cards with a
+   subtle accent border so the user knows there's no Connect
+   button to look for. */
+.equip-card-metadata {
+    border-left: 3px solid var(--accent);
+}
+
+/* Two-column grid of label/input pairs used inside the metadata
+   cards. Wraps on narrow viewports. */
+.equip-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: end;
+    margin-bottom: 8px;
+}
+.equip-meta-row label {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.equip-meta-derived {
+    align-self: center;
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding-bottom: 2px;
+}
+
+/* Status dot variants used by the new metadata cards. */
+.equip-status-dot.configured {
+    background: rgba(56, 189, 248, 0.6);
+}
+
+/* Accessories collapsible. Open state shows the embedded grid;
+   collapsed state is just the summary row with a count. */
+.equip-accessories {
+    margin-top: 18px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: rgba(15, 23, 42, 0.45);
+}
+.equip-accessories-summary {
+    cursor: pointer;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    user-select: none;
+    list-style: none;
+}
+.equip-accessories-summary::-webkit-details-marker { display: none; }
+.equip-accessories-summary::marker { content: ''; }
+.equip-accessories-summary strong { color: var(--text-primary); }
+.equip-accessories-caret {
+    display: inline-block;
+    transition: transform 0.15s ease;
+}
+.equip-accessories[open] .equip-accessories-caret {
+    transform: rotate(90deg);
+}
+.equip-accessories-grid {
+    padding: 0 14px 14px;
+}

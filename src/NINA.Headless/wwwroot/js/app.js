@@ -88,7 +88,22 @@ function ninaApp() {
             graxpertBgeCorrection: 'Subtraction',
             graxpertDeconStrength: 0.5,
             graxpertDeconPsfSize: 4.0,
-            graxpertDenoiseStrength: 0.5
+            graxpertDenoiseStrength: 0.5,
+            // Main Telescope OTA optics (mirrored from active rig).
+            // Bound to the Main Telescope card on the RIGS tab; edits
+            // persist via saveOpticsDebounced -> saveCurrentSelectionsToRig.
+            aperture: 0,
+            telescopeBrand: '',
+            telescopeModel: '',
+            accessoryType: '',
+            accessoryModel: '',
+            accessoryFactor: 1.0,
+            requiredBackspacingMm: null,
+            // Guidescope optics (mirrored from active rig).
+            guiderFocalLengthMm: 200,
+            guiderApertureMm: 50,
+            guideTelescopeBrand: '',
+            guideTelescopeModel: ''
         },
 
         // Connection state
@@ -4054,6 +4069,20 @@ function ninaApp() {
                 this.settings.focalLength = rig.focalLengthMm;
                 this.updateFov();
             }
+            // OTA optics — hydrate the Main Telescope card on the RIGS tab.
+            // Empty/zero values are fine (the card just shows blanks).
+            this.settings.aperture = rig.apertureMm || 0;
+            this.settings.telescopeBrand = rig.telescopeBrand || '';
+            this.settings.telescopeModel = rig.telescopeModel || '';
+            this.settings.accessoryType = rig.accessoryType || '';
+            this.settings.accessoryModel = rig.accessoryModel || '';
+            this.settings.accessoryFactor = rig.accessoryFactor || 1.0;
+            this.settings.requiredBackspacingMm = rig.requiredBackspacingMm ?? null;
+            // Guidescope card
+            this.settings.guiderFocalLengthMm = rig.guiderFocalLengthMm || 200;
+            this.settings.guiderApertureMm   = rig.guiderApertureMm   || 50;
+            this.settings.guideTelescopeBrand = rig.guideTelescopeBrand || '';
+            this.settings.guideTelescopeModel = rig.guideTelescopeModel || '';
             if (rig.phd2Host) this.guiderHost = rig.phd2Host;
             if (rig.phd2Port) this.guiderPort = rig.phd2Port;
         },
@@ -4297,6 +4326,36 @@ function ninaApp() {
             } catch (e) { this.toast('Delete failed', 'error'); }
         },
 
+        // Debounced save for inline OTA / Guidescope edits from the
+        // RIGS-tab cards. Without the debounce, every keystroke
+        // would PUT the whole rig — 600 ms is long enough that the
+        // user finishes typing a number before we round-trip.
+        saveOpticsDebounced() {
+            if (this._opticsSaveTimer) clearTimeout(this._opticsSaveTimer);
+            this._opticsSaveTimer = setTimeout(() => {
+                this.saveCurrentSelectionsToRig();
+            }, 600);
+        },
+
+        // How many of the four optional devices (Rotator, Flat Panel,
+        // Dome, Weather) have a selection saved on the active rig.
+        // Powers the accessories <details> summary count.
+        accessoryCount() {
+            let n = 0;
+            if (this.equipRotatorChoice) n++;
+            if (this.equipFlatChoice)    n++;
+            if (this.equipDomeChoice)    n++;
+            if (this.equipWeatherChoice) n++;
+            return n;
+        },
+
+        // True if at least one accessory is configured — the
+        // <details> auto-opens in this case so the user sees what
+        // they previously set without having to click.
+        anyAccessoryConfigured() {
+            return this.accessoryCount() > 0;
+        },
+
         async saveCurrentSelectionsToRig() {
             const rig = this.rigs.find(r => r.id === this.activeRigId);
             if (!rig) return;
@@ -4315,6 +4374,19 @@ function ninaApp() {
                 coolerTargetTemperature: this.equipCoolerTarget,
                 focuserStepSize: this.focusStep,
                 focalLengthMm: this.settings.focalLength,
+                // OTA optics (Main Telescope card on the RIGS tab)
+                apertureMm: this.settings.aperture,
+                telescopeBrand: this.settings.telescopeBrand,
+                telescopeModel: this.settings.telescopeModel,
+                accessoryType: this.settings.accessoryType,
+                accessoryModel: this.settings.accessoryModel,
+                accessoryFactor: this.settings.accessoryFactor,
+                requiredBackspacingMm: this.settings.requiredBackspacingMm,
+                // Guidescope card
+                guiderFocalLengthMm: this.settings.guiderFocalLengthMm,
+                guiderApertureMm:    this.settings.guiderApertureMm,
+                guideTelescopeBrand: this.settings.guideTelescopeBrand,
+                guideTelescopeModel: this.settings.guideTelescopeModel,
                 phd2Host: this.guiderHost,
                 phd2Port: this.guiderPort
             };
