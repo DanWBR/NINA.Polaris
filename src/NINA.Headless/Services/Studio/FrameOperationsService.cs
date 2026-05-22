@@ -42,6 +42,13 @@ public class FrameOperationsService {
                                                    int? polyDegree, CancellationToken ct = default)
         => await Task.Run<string?>(() => RemoveGradientSync(frameId, samplesX, samplesY, polyDegree), ct);
 
+    public async Task<string?> NoiseReductionAsync(int frameId, int? radius, CancellationToken ct = default)
+        => await Task.Run<string?>(() => NoiseReductionSync(frameId, radius), ct);
+
+    public async Task<string?> SharpenAsync(int frameId, double? amount, int? radius, int? threshold,
+                                            CancellationToken ct = default)
+        => await Task.Run<string?>(() => SharpenSync(frameId, amount, radius, threshold), ct);
+
     // --- internals ---
 
     private string? DebayerSync(int frameId) {
@@ -109,6 +116,58 @@ public class FrameOperationsService {
         FITSWriter.Write(outImg, outPath, customKeywords: kw);
         _logger.LogInformation("Background-subtracted frame {Id} → {Path}", frameId, outPath);
 
+        _processing.Invalidate(frameId);
+        _ = Task.Run(() => _library.RescanAsync());
+        return outPath;
+    }
+
+    private string? NoiseReductionSync(int frameId, int? radius) {
+        var row = _library.GetById(frameId);
+        if (row == null || !File.Exists(row.Path)) return null;
+
+        BaseImageData img;
+        using (var fs = File.OpenRead(row.Path)) img = FITSReader.Read(fs);
+
+        var r = Math.Clamp(radius ?? 2, 1, 8);
+        var blurred = GaussianBlur.Apply(img.Data,
+            img.Properties.Width, img.Properties.Height, r);
+
+        var outPath = BuildOutputPath(row, suffix: "nr");
+        var outImg = new BaseImageData(blurred, img.Properties, img.MetaData);
+        var kw = new List<KeyValuePair<string, string>> {
+            new("NRMETHOD", "Gaussian"),
+            new("NRRADIUS", r.ToString())
+        };
+        FITSWriter.Write(outImg, outPath, customKeywords: kw);
+        _logger.LogInformation("Noise-reduced frame {Id} → {Path}", frameId, outPath);
+        _processing.Invalidate(frameId);
+        _ = Task.Run(() => _library.RescanAsync());
+        return outPath;
+    }
+
+    private string? SharpenSync(int frameId, double? amount, int? radius, int? threshold) {
+        var row = _library.GetById(frameId);
+        if (row == null || !File.Exists(row.Path)) return null;
+
+        BaseImageData img;
+        using (var fs = File.OpenRead(row.Path)) img = FITSReader.Read(fs);
+
+        var a = Math.Clamp(amount ?? 1.0, 0.1, 5.0);
+        var r = Math.Clamp(radius ?? 2, 1, 8);
+        var t = Math.Max(0, threshold ?? 0);
+        var sharpened = UnsharpMask.Apply(img.Data,
+            img.Properties.Width, img.Properties.Height, a, r, t);
+
+        var outPath = BuildOutputPath(row, suffix: "sharp");
+        var outImg = new BaseImageData(sharpened, img.Properties, img.MetaData);
+        var kw = new List<KeyValuePair<string, string>> {
+            new("SHARPEN",  "UnsharpMask"),
+            new("SHARPAMT", a.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)),
+            new("SHARPRAD", r.ToString()),
+            new("SHARPTHR", t.ToString())
+        };
+        FITSWriter.Write(outImg, outPath, customKeywords: kw);
+        _logger.LogInformation("Sharpened frame {Id} → {Path}", frameId, outPath);
         _processing.Invalidate(frameId);
         _ = Task.Run(() => _library.RescanAsync());
         return outPath;

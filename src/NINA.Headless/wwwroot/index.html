@@ -2374,7 +2374,7 @@
                                          processed/ and trigger a library
                                          rescan; the user picks it up in the
                                          browser. -->
-                                    <div class="control-row">
+                                    <div class="control-row" style="flex-wrap:wrap;gap:6px">
                                         <button class="btn btn-sm"
                                                 @click="studioDebayer()"
                                                 :disabled="studio.viewer.opRunning"
@@ -2386,6 +2386,19 @@
                                                 :disabled="studio.viewer.opRunning"
                                                 title="Fit + subtract polynomial gradient (8×6 grid, deg 2)">
                                             ◐ Remove gradient
+                                        </button>
+                                        <!-- ST-7 -->
+                                        <button class="btn btn-sm"
+                                                @click="studioNoiseReduce()"
+                                                :disabled="studio.viewer.opRunning"
+                                                title="Gaussian blur (radius 2)">
+                                            ⌇ Noise reduce
+                                        </button>
+                                        <button class="btn btn-sm"
+                                                @click="studioSharpen()"
+                                                :disabled="studio.viewer.opRunning"
+                                                title="Unsharp mask (amount 1.0, radius 2)">
+                                            ✦ Sharpen
                                         </button>
                                     </div>
                                     <div class="muted" style="font-size:11px;margin-top:6px"

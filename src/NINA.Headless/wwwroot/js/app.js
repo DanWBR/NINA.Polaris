@@ -2057,6 +2057,48 @@ function ninaApp() {
             }
         },
 
+        async studioNoiseReduce() {
+            const fr = this.studio.viewer.frame;
+            if (!fr) return;
+            this.studio.viewer.opRunning = true;
+            this.studio.viewer.lastOp = '';
+            try {
+                // radius=2 default = subtle smoothing. Knobs deliberately
+                // not exposed in v1; the user can re-run with explicit
+                // ?radius= via curl if they want to tune.
+                const resp = await this.apiPost(`/api/studio/frames/${fr.id}/nr`);
+                const r = await resp.json();
+                this.studio.viewer.lastOp = r.path;
+                this.toast?.('Noise reduced → ' + r.path, 'ok');
+                this.loadStudio();
+            } catch (e) {
+                this.toast?.('Noise reduction failed: ' + e.message, 'error');
+            } finally {
+                this.studio.viewer.opRunning = false;
+            }
+        },
+
+        async studioSharpen() {
+            const fr = this.studio.viewer.frame;
+            if (!fr) return;
+            this.studio.viewer.opRunning = true;
+            this.studio.viewer.lastOp = '';
+            try {
+                // amount=1.0 default = moderate sharpen. Knobs deliberately
+                // not exposed in v1; the user can re-run with explicit
+                // ?amount=&radius=&threshold= via curl if they want to tune.
+                const resp = await this.apiPost(`/api/studio/frames/${fr.id}/sharpen`);
+                const r = await resp.json();
+                this.studio.viewer.lastOp = r.path;
+                this.toast?.('Sharpened → ' + r.path, 'ok');
+                this.loadStudio();
+            } catch (e) {
+                this.toast?.('Sharpen failed: ' + e.message, 'error');
+            } finally {
+                this.studio.viewer.opRunning = false;
+            }
+        },
+
         async studioExport(format) {
             const fr = this.studio.viewer.frame;
             if (!fr) return;

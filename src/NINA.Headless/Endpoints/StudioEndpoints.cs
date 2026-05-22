@@ -184,6 +184,27 @@ public static class StudioEndpoints {
                 ? Results.NotFound()
                 : Results.Ok(new { path });
         });
+
+        // --- ST-7: post-processing (noise reduction / sharpen) ------
+
+        // Gaussian blur as light noise-reduction. radius in pixels;
+        // default 2 (subtle smoothing), max 8.
+        g.MapPost("/frames/{id:int}/nr",
+            async (FrameOperationsService svc, int id, int? radius, CancellationToken ct) => {
+            var path = await svc.NoiseReductionAsync(id, radius, ct);
+            return path == null ? Results.NotFound() : Results.Ok(new { path });
+        });
+
+        // Unsharp-mask sharpening. amount = boost factor (typical 1.0
+        // moderate, 2-3 aggressive). radius = blur kernel pixels.
+        // threshold = min ADU difference to apply boost (keeps noise
+        // floor calm).
+        g.MapPost("/frames/{id:int}/sharpen",
+            async (FrameOperationsService svc, int id,
+                   double? amount, int? radius, int? threshold, CancellationToken ct) => {
+            var path = await svc.SharpenAsync(id, amount, radius, threshold, ct);
+            return path == null ? Results.NotFound() : Results.Ok(new { path });
+        });
     }
 
     // POST body for /masters. Kept in the endpoints file (not the
