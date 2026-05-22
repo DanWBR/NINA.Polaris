@@ -92,6 +92,33 @@
       "notes": ""
     },
     {
+      "brand": "SVBony",
+      "model": "SV193 0.8x Reducer/Flattener (SV503)",
+      "type": "reducer",
+      "factor": 0.8,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["SV503 70ED", "SV503 80ED", "SV503 102ED"],
+      "notes": "Dedicated reducer + flattener for the SV503 ED doublet series."
+    },
+    {
+      "brand": "SVBony",
+      "model": "SV209 1x Flattener (SV503)",
+      "type": "flattener",
+      "factor": 1.0,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["SV503 70ED", "SV503 80ED", "SV503 102ED"],
+      "notes": "Field flattener (no focal-length change) for the SV503 series."
+    },
+    {
+      "brand": "SVBony",
+      "model": "SV219 0.8x Reducer/Flattener (SV550)",
+      "type": "reducer",
+      "factor": 0.8,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["SV550 80", "SV550 122"],
+      "notes": "Dedicated reducer + flattener for the SV550 triplet APO series."
+    },
+    {
       "brand": "TS Optics",
       "model": "Photoline 0.79x Reducer/Flattener",
       "type": "reducer",

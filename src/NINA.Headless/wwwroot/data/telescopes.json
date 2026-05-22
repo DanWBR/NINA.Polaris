@@ -61,6 +61,13 @@
     { "brand": "Skywatcher",      "model": "Skymax 150",            "type": "Maksutov-Cassegrain",  "apertureMm": 150,   "focalLengthMm": 1800, "backspacingMm": 35.0 },
     { "brand": "Skywatcher",      "model": "Skymax 180",            "type": "Maksutov-Cassegrain",  "apertureMm": 180,   "focalLengthMm": 2700, "backspacingMm": 35.0 },
 
+    { "brand": "SVBony",          "model": "SV48P",                 "type": "Doublet Achromat",     "apertureMm": 80,    "focalLengthMm": 420,  "backspacingMm": 55.0 },
+    { "brand": "SVBony",          "model": "SV503 70ED",            "type": "Doublet ED APO",       "apertureMm": 70,    "focalLengthMm": 420,  "backspacingMm": 55.0 },
+    { "brand": "SVBony",          "model": "SV503 80ED",            "type": "Doublet ED APO",       "apertureMm": 80,    "focalLengthMm": 560,  "backspacingMm": 55.0 },
+    { "brand": "SVBony",          "model": "SV503 102ED",           "type": "Doublet ED APO",       "apertureMm": 102,   "focalLengthMm": 714,  "backspacingMm": 55.0 },
+    { "brand": "SVBony",          "model": "SV550 80",              "type": "Triplet APO",          "apertureMm": 80,    "focalLengthMm": 480,  "backspacingMm": 55.0 },
+    { "brand": "SVBony",          "model": "SV550 122",             "type": "Triplet APO",          "apertureMm": 122,   "focalLengthMm": 854,  "backspacingMm": 55.0 },
+
     { "brand": "Takahashi",       "model": "FSQ-85EDX",             "type": "Petzval APO",          "apertureMm": 85,    "focalLengthMm": 450,  "backspacingMm": 56.0 },
     { "brand": "Takahashi",       "model": "FSQ-106EDX4",           "type": "Petzval APO",          "apertureMm": 106,   "focalLengthMm": 530,  "backspacingMm": 56.0 },
     { "brand": "Takahashi",       "model": "TOA-130",               "type": "Triplet APO",          "apertureMm": 130,   "focalLengthMm": 1000, "backspacingMm": 56.0 },
