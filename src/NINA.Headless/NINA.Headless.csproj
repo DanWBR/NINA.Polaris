@@ -38,6 +38,10 @@
          system-wide stats. macOS not supported by the package — fine,
          Polaris has no mac build target. -->
     <PackageReference Include="Microsoft.Extensions.Diagnostics.ResourceMonitoring" Version="10.*" />
+    <!-- Reverse-proxy + WebSocket forwarder for /phd2-gui/* → xpra HTML5
+         client on 127.0.0.1. Same-origin so iframe sessionStorage works
+         and Polaris's existing auth covers the embedded GUI. -->
+    <PackageReference Include="Yarp.ReverseProxy" Version="2.*" />
   </ItemGroup>
 
   <!-- Bundled Siril preprocessing scripts. SirilService extracts these

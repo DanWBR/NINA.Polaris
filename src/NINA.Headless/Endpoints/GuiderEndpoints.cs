@@ -435,6 +435,48 @@ public static class GuiderEndpoints {
             return Results.Ok(new { applied = true });
         });
 
+        // ----- PH2X-6: xpra-hosted PHD2 GUI session lifecycle -----
+
+        group.MapGet("/gui-session/status", (Phd2GuiSessionService gui) => Results.Ok(new {
+            os = System.Runtime.InteropServices.RuntimeInformation.OSDescription,
+            supportedOs = gui.IsSupportedOs,
+            xpraInstalled = gui.XpraInstalled,
+            xpraVersion = gui.XpraVersion,
+            xpraPath = gui.XpraPath,
+            sessionRunning = gui.SessionRunning,
+            displayNumber = gui.DisplayNumber,
+            bindPort = gui.BindPort,
+            lastHealthCheckAt = gui.LastHealthCheckAt,
+            lastError = gui.LastError,
+            // Hint URL the UI iframes — points to the Polaris reverse-proxy
+            // so it stays same-origin (sessionStorage works there).
+            embedUrl = "/phd2-gui/"
+        }));
+
+        group.MapPost("/gui-session/start", async (Phd2GuiSessionService gui) => {
+            if (!gui.IsSupportedOs)
+                return Results.Json(new { error = "Embedded PHD2 GUI requires Linux + xpra" },
+                    statusCode: 501);
+            if (!gui.XpraInstalled)
+                return Results.Json(new { error = "xpra not installed. Run: sudo apt install xpra xserver-xorg-video-dummy" },
+                    statusCode: 501);
+            var ok = await gui.StartSessionAsync();
+            return Results.Ok(new { running = ok, error = ok ? null : gui.LastError });
+        });
+
+        group.MapPost("/gui-session/stop", async (Phd2GuiSessionService gui) => {
+            if (!gui.IsSupportedOs || !gui.XpraInstalled)
+                return Results.Json(new { error = "Not supported" }, statusCode: 501);
+            var ok = await gui.StopSessionAsync();
+            return Results.Ok(new { stopped = ok, error = ok ? null : gui.LastError });
+        });
+
+        group.MapPost("/gui-session/restart", async (Phd2GuiSessionService gui) => {
+            if (!gui.IsSupportedOs || !gui.XpraInstalled)
+                return Results.Json(new { error = "Not supported" }, statusCode: 501);
+            var ok = await gui.RestartSessionAsync();
+            return Results.Ok(new { running = ok, error = ok ? null : gui.LastError });
+        });
     }
 
     public record ConnectGuiderRequest(string? Host, int? Port);

@@ -2,6 +2,7 @@ using NINA.Headless.Endpoints;
 using NINA.Headless.Services;
 using NINA.Headless.WebSocket;
 using NINA.INDI.Client;
+using Yarp.ReverseProxy.Forwarder;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -36,6 +37,15 @@ builder.Services.AddHostedService<PHD2AutoStartService>();
 // the event subscription survives request scopes.
 builder.Services.AddSingleton<PHD2ProfileSyncService>();
 builder.Services.AddSingleton<PHD2CalibrationOrchestrator>();
+// xpra-hosted PHD2 GUI session (Linux only — service short-circuits on
+// other OSes). Register as singleton AND hosted service so it shows up
+// in DI for endpoint handlers + runs its background loop.
+builder.Services.AddSingleton<Phd2GuiSessionService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<Phd2GuiSessionService>());
+// YARP direct forwarder — used by the /phd2-gui/* reverse-proxy below
+// to bridge browser ↔ xpra HTML5 client. Includes WebSocket upgrade
+// support, which is what xpra-html5 needs for the pixel stream.
+builder.Services.AddHttpForwarder();
 builder.Services.AddSingleton<AutoFocusService>();
 builder.Services.AddSingleton<MeridianFlipService>();
 builder.Services.AddSingleton<FlatWizardService>();
@@ -86,6 +96,50 @@ app.Services.GetRequiredService<PHD2ProfileSyncService>();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseWebSockets();
+
+// ----- PH2X-7: /phd2-gui/* reverse-proxy → xpra HTML5 client -----
+// Same-origin proxy so the iframe's sessionStorage works and Polaris's
+// outer auth layer (Relay tokens / LAN) covers PHD2 GUI access. xpra
+// itself binds to 127.0.0.1 only — never exposed to the network directly.
+//
+// MapForwarder handles both static HTML5 client assets (HTML/JS/CSS
+// stripped from the iframe URL) AND the WebSocket upgrade that streams
+// PHD2's pixel updates.
+var phd2GuiForwarder = app.Services.GetRequiredService<IHttpForwarder>();
+var phd2GuiHttpClient = new HttpMessageInvoker(new SocketsHttpHandler {
+    UseProxy = false,
+    AllowAutoRedirect = false,
+    AutomaticDecompression = System.Net.DecompressionMethods.None,
+    UseCookies = false,
+    EnableMultipleHttp2Connections = true,
+    ActivityHeadersPropagator = new Yarp.ReverseProxy.Forwarder.ReverseProxyPropagator(
+        System.Diagnostics.DistributedContextPropagator.Current),
+    ConnectTimeout = TimeSpan.FromSeconds(5),
+});
+var phd2GuiTransform = HttpTransformer.Default;
+app.Map("/phd2-gui/{**rest}", async (HttpContext ctx, Phd2GuiSessionService gui) => {
+    if (!gui.IsSupportedOs || !gui.XpraInstalled) {
+        ctx.Response.StatusCode = 501;
+        await ctx.Response.WriteAsJsonAsync(new {
+            error = "Embedded PHD2 GUI requires Linux + xpra installed on the Polaris host."
+        });
+        return;
+    }
+    if (!gui.SessionRunning) {
+        ctx.Response.StatusCode = 503;
+        await ctx.Response.WriteAsJsonAsync(new {
+            error = "xpra session not running. POST /api/guider/gui-session/start to launch it."
+        });
+        return;
+    }
+    var target = $"http://127.0.0.1:{gui.BindPort}";
+    var err = await phd2GuiForwarder.SendAsync(ctx, target, phd2GuiHttpClient,
+        ForwarderRequestConfig.Empty, phd2GuiTransform);
+    if (err != ForwarderError.None) {
+        ctx.Response.StatusCode = 502;
+        await ctx.Response.WriteAsync($"xpra proxy error: {err}");
+    }
+});
 
 // Equipment endpoints
 app.MapEquipmentEndpoints();
