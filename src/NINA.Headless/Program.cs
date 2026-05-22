@@ -43,6 +43,7 @@ builder.Services.AddSingleton<WeatherForecastService>();
 builder.Services.AddSingleton<CelestialImageService>();
 builder.Services.AddSingleton<CometEphemerisService>();
 builder.Services.AddSingleton<TonightsBestService>();
+builder.Services.AddSingleton<NINA.Headless.Services.Studio.FrameLibraryService>();
 builder.Services.AddHostedService<MdnsService>();
 builder.Services.AddSingleton<RelayClient>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<RelayClient>());
@@ -83,6 +84,7 @@ app.MapPluginEndpoints();
 app.MapSkyEndpoints();
 app.MapSystemEndpoints();
 app.MapImageEndpoints();
+app.MapStudioEndpoints();
 
 // Live stacking + INDI
 app.MapLiveStackEndpoints();

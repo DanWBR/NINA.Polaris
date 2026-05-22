@@ -212,6 +212,16 @@ function ninaApp() {
         weather: { forecast: null, loading: false, error: '', lastFetched: null },
         _weatherLastKey: '',
 
+        // Studio (post-processing) — ST-1 frame browser
+        studio: {
+            frames: [],
+            stats: null,
+            rescan: null,
+            filter: { type: '', target: '', filter: '' },
+            selectedIds: []
+        },
+        _studioRescanPoll: null,
+
         // Observatory location helpers (Settings → Observatory)
         obsAddressQuery: '',
         obsAddressLoading: false,
@@ -1546,6 +1556,60 @@ function ninaApp() {
                 },
                 { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
             );
+        },
+
+        // ─── STUDIO (post-processing) — ST-1 frame browser ───────────────
+
+        async loadStudio() {
+            try {
+                const params = new URLSearchParams();
+                if (this.studio.filter.type)   params.set('type',   this.studio.filter.type);
+                if (this.studio.filter.target) params.set('target', this.studio.filter.target);
+                if (this.studio.filter.filter) params.set('filter', this.studio.filter.filter);
+                params.set('limit', '200');
+                const [frames, stats, rescan] = await Promise.all([
+                    this.apiGet(`/api/studio/frames?${params.toString()}`),
+                    this.apiGet(`/api/studio/stats`),
+                    this.apiGet(`/api/studio/rescan/status`)
+                ]);
+                this.studio.frames = frames || [];
+                this.studio.stats  = stats;
+                this.studio.rescan = rescan;
+                // Continue polling the rescan status while it's in progress
+                // so the toolbar progress label updates without a manual refresh.
+                if (rescan?.inProgress && !this._studioRescanPoll) {
+                    this._studioRescanPoll = setInterval(async () => {
+                        try {
+                            const r = await this.apiGet('/api/studio/rescan/status');
+                            this.studio.rescan = r;
+                            if (!r?.inProgress) {
+                                clearInterval(this._studioRescanPoll);
+                                this._studioRescanPoll = null;
+                                // Reload list with newly indexed frames.
+                                this.loadStudio();
+                            }
+                        } catch { /* keep polling */ }
+                    }, 2000);
+                }
+            } catch (e) {
+                this.toast?.('Studio load failed: ' + e.message, 'error');
+            }
+        },
+
+        async studioRescan() {
+            try {
+                await this.apiPost('/api/studio/rescan', {});
+                this.toast?.('Rescan started…', 'info');
+                this.loadStudio();
+            } catch (e) {
+                this.toast?.('Rescan failed: ' + e.message, 'error');
+            }
+        },
+
+        studioToggleSelect(id) {
+            const idx = this.studio.selectedIds.indexOf(id);
+            if (idx >= 0) this.studio.selectedIds.splice(idx, 1);
+            else this.studio.selectedIds.push(id);
         },
 
         // ─── Weather forecast (7Timer via /api/weather/forecast) ──────────

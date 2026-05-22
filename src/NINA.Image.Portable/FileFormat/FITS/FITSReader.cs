@@ -45,6 +45,16 @@ public static class FITSReader {
         return Read(ms);
     }
 
+    /// <summary>
+    /// Read just the FITS header block, leaving the stream positioned
+    /// at the start of the pixel data (which the caller is free to
+    /// ignore). Used by the STUDIO frame index — parsing a 64 MB pixel
+    /// block of every file just to read keywords is wasteful.
+    /// </summary>
+    public static Dictionary<string, FITSHeaderCard> ReadHeadersOnly(Stream stream) {
+        return ReadHeaders(stream);
+    }
+
     private static Dictionary<string, FITSHeaderCard> ReadHeaders(Stream stream) {
         var headers = new Dictionary<string, FITSHeaderCard>(StringComparer.OrdinalIgnoreCase);
         var block = new byte[BLOCK_SIZE];
