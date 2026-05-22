@@ -367,6 +367,12 @@ function ninaApp() {
         // OpenSeadragon image viewer
         imageViewerOpen: false,
         _osdViewer: null,
+        // URL the viewer should load. Defaults to the live-camera
+        // preview; FILES tab overrides it to point at any file. Reset
+        // to default on close so the next open from any other tab
+        // still gets the latest frame.
+        imageViewerUrl: '/api/image/latest/preview',
+        imageViewerTitle: 'Image Viewer — full resolution',
 
         // First-run location setup modal
         showLocationSetup: false,
@@ -2862,32 +2868,14 @@ function ninaApp() {
             this.files.preview = { open: false, path: '', name: '', kind: '', textContent: null };
         },
 
-        // Wrap the existing openImageViewer flow. STUDIO's version sets
-        // tileSources from a frameId-based URL; this variant takes any
-        // URL so the FILES tab can show any FITS/PNG/JPG/TIFF on disk.
+        // Open the shared image-viewer modal with a custom URL + title.
+        // Routes through openImageViewer() so the existing modal frame,
+        // close handler, navigator config, and OSD destroy/leak guard
+        // all apply — no parallel pipeline.
         _openImageViewerWithUrl(url, title) {
-            // The image viewer modal + osd-viewer container already exist
-            // in the DOM (created by STUDIO). Open it, then init OSD with
-            // our URL.
-            this.imageViewerOpen = true;
-            this.imageViewerTitle = title || '';
-            this.$nextTick(() => {
-                // Destroy any prior instance to avoid leaking the tile pyramid.
-                if (this._osdInstance) {
-                    try { this._osdInstance.destroy(); } catch {}
-                    this._osdInstance = null;
-                }
-                this._osdInstance = window.OpenSeadragon({
-                    id: 'osd-viewer',
-                    tileSources: { type: 'image', url },
-                    showNavigator: true,
-                    navigatorPosition: 'BOTTOM_RIGHT',
-                    minZoomImageRatio: 0.5,
-                    maxZoomPixelRatio: 4,
-                    visibilityRatio: 1,
-                    constrainDuringPan: true
-                });
-            });
+            this.imageViewerUrl = url;
+            this.imageViewerTitle = title || 'Image Viewer';
+            this.openImageViewer();
         },
 
         // --- Studio root setter ---------------------------------------
@@ -3479,13 +3467,21 @@ function ninaApp() {
                 try { this._osdViewer.destroy(); } catch (e) { }
                 this._osdViewer = null;
             }
+            // Reset to live-camera defaults so the next "View full image"
+            // from any other tab doesn't accidentally re-open a file.
+            this.imageViewerUrl = '/api/image/latest/preview';
+            this.imageViewerTitle = 'Image Viewer — full resolution';
         },
 
         reloadImageViewer() {
             if (this._osdViewer) {
+                // Bust the cache + reuse whatever URL the viewer is
+                // configured for. The live-camera path needs the
+                // timestamp; a static file path is harmless.
+                const sep = this.imageViewerUrl.includes('?') ? '&' : '?';
                 this._osdViewer.open({
                     type: 'image',
-                    url: '/api/image/latest/preview?t=' + Date.now()
+                    url: this.imageViewerUrl + sep + 't=' + Date.now()
                 });
             }
         },
@@ -3500,11 +3496,12 @@ function ninaApp() {
                 try { this._osdViewer.destroy(); } catch (e) { }
                 this._osdViewer = null;
             }
+            const sep = this.imageViewerUrl.includes('?') ? '&' : '?';
             this._osdViewer = OpenSeadragon({
                 id: 'osd-viewer',
                 tileSources: {
                     type: 'image',
-                    url: '/api/image/latest/preview?t=' + Date.now()
+                    url: this.imageViewerUrl + sep + 't=' + Date.now()
                 },
                 showNavigationControl: false,
                 showNavigator: true,
@@ -3518,6 +3515,11 @@ function ninaApp() {
                 gestureSettingsTouch: { clickToZoom: false },
                 animationTime: 0.4,
                 springStiffness: 8
+            });
+            // Surface backend failures as toasts so the user isn't
+            // staring at a black canvas wondering why nothing loaded.
+            this._osdViewer.addHandler('open-failed', (ev) => {
+                this.toast('Could not load image: ' + (ev?.message || 'unknown error'), 'error');
             });
         },
 
