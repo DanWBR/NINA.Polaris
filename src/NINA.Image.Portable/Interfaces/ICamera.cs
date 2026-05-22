@@ -69,6 +69,14 @@ public interface ICamera {
     Task SetIsoAsync(int iso, CancellationToken ct = default);
     Task AbortExposureAsync(CancellationToken ct = default);
 
+    /// <summary>Set the ROI / subframe Polaris will use for subsequent
+    /// captures. Default no-op so non-ROI cameras inherit gracefully.
+    /// Callers should check <see cref="CameraCapabilities.SupportsRoi"/>
+    /// before relying on this. Pass w=0 (or h=0) to clear ROI and shoot
+    /// the full sensor.</summary>
+    Task SetSubframeAsync(int x, int y, int width, int height, CancellationToken ct = default)
+        => Task.CompletedTask;
+
     // ----- Native video streaming (optional, gated by Capabilities.SupportsVideoStream) -----
     // Backends without driver-level streaming leave the defaults and
     // CameraStreamService falls back to a server-side capture loop.

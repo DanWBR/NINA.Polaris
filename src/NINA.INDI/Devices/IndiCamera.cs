@@ -183,6 +183,21 @@ public class IndiCamera : ICamera {
         _exposureTcs?.TrySetCanceled();
     }
 
+    /// <summary>Writes CCD_FRAME (X, Y, WIDTH, HEIGHT). Passing w=0 OR
+    /// h=0 resets to the full sensor (Max X/Y).</summary>
+    public async Task SetSubframeAsync(int x, int y, int width, int height, CancellationToken ct = default) {
+        if (width <= 0 || height <= 0) {
+            x = 0; y = 0;
+            width = MaxX > 0 ? MaxX : 0;
+            height = MaxY > 0 ? MaxY : 0;
+        }
+        await _client.SetNumberAsync(DeviceName, "CCD_FRAME",
+            new Dictionary<string, double> {
+                ["X"] = x, ["Y"] = y,
+                ["WIDTH"] = width, ["HEIGHT"] = height
+            }, ct);
+    }
+
     private void OnBlobReceived(IndiBlobProperty blob) {
         if (blob.Device != DeviceName) return;
 
