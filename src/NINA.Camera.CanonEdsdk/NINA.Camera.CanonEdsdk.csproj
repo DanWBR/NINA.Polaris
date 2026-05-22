@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>NINA.Camera.CanonEdsdk</RootNamespace>
+    <AssemblyName>NINA.Camera.CanonEdsdk</AssemblyName>
+    <!-- LibraryImport source generator pre-marshals the P/Invoke surface
+         at compile time — faster than DllImport reflection at startup and
+         AOT-friendly. Required for the partial static methods in Native/. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Canon EDSDK is Windows-only. Mark the assembly accordingly so
+         callers on other platforms get a clear analyzer warning if they
+         accidentally pull this in. -->
+    <SupportedOSPlatform>windows</SupportedOSPlatform>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NINA.Core.Portable\NINA.Core.Portable.csproj" />
+    <ProjectReference Include="..\NINA.Image.Portable\NINA.Image.Portable.csproj" />
+  </ItemGroup>
+
+</Project>

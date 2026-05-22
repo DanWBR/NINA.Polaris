@@ -52,10 +52,9 @@ public class EquipmentManager : IDisposable {
         driver = (driver ?? "indi").Trim().ToLowerInvariant();
         Camera = driver switch {
             "indi" => new IndiCamera(_indiClient, deviceId),
-            // Alpaca + vendor SDK drivers land in follow-up commits.
-            // For now the dispatch raises so the UI shows a clear error
-            // instead of silently doing nothing.
-            _      => throw new NotSupportedException(
+            "canon-edsdk" => CreateCanonCamera(deviceId),
+            // Alpaca + Nikon + Sony land in follow-up commits.
+            _ => throw new NotSupportedException(
                 $"Camera driver '{driver}' is not implemented yet. " +
                 "Use 'indi' (or install the matching vendor SDK)."),
         };
@@ -63,6 +62,15 @@ public class EquipmentManager : IDisposable {
         _logger.LogInformation("Camera selected: driver={Driver}, id={DeviceId}",
             driver, deviceId);
         return Camera;
+    }
+
+    private static ICamera CreateCanonCamera(string deviceId) {
+        if (!OperatingSystem.IsWindows()) {
+            throw new NotSupportedException(
+                "Canon EDSDK only runs on Windows. On Linux, use the INDI " +
+                "gphoto driver instead — see docs/dslr-linux.md.");
+        }
+        return new NINA.Camera.CanonEdsdk.CanonEdsdkCamera(deviceId);
     }
 
     /// <summary>List of camera driver kinds the host can offer. Always
@@ -76,7 +84,11 @@ public class EquipmentManager : IDisposable {
                 Description: "ASCOM-over-HTTP cameras. Wiring pending."),
         };
         if (OperatingSystem.IsWindows()) {
-            list.Add(new("canon-edsdk", "Canon EOS (EDSDK)", Available: false,
+            // Probe each vendor SDK so the UI can show a green check
+            // when EDSDK.dll (etc.) is reachable on the DLL search
+            // path, or a "download here" banner when it isn't.
+            list.Add(new("canon-edsdk", "Canon EOS (EDSDK)",
+                Available: NINA.Camera.CanonEdsdk.CanonEdsdkRegistry.IsAvailable,
                 Description: "Canon DSLR / mirrorless. Requires EDSDK DLLs."));
             list.Add(new("nikon-sdk", "Nikon (Imaging SDK)", Available: false,
                 Description: "Nikon DSLR / Z mirrorless. Requires Nikon SDK DLLs."));
@@ -85,6 +97,37 @@ public class EquipmentManager : IDisposable {
         }
         return list;
     }
+
+    /// <summary>Enumerate available cameras for a given driver kind.
+    /// Returns INDI device names for INDI; vendor-specific discovery
+    /// for the SDK drivers; empty list when the driver isn't
+    /// supported on the current platform.</summary>
+    public IReadOnlyList<DiscoveredCamera> GetDiscoveredCamerasFor(string driver) {
+        driver = (driver ?? "indi").Trim().ToLowerInvariant();
+        if (driver == "indi") {
+            return GetDeviceNames()
+                .Select(n => new DiscoveredCamera(n, n, n))
+                .ToList();
+        }
+        if (driver == "canon-edsdk" && OperatingSystem.IsWindows()) {
+            try {
+                return EnumerateCanonCameras();
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "Canon EDSDK discovery failed");
+                return Array.Empty<DiscoveredCamera>();
+            }
+        }
+        return Array.Empty<DiscoveredCamera>();
+    }
+
+    /// <summary>Windows-only inner helper so the platform analyzer
+    /// is satisfied — the OS guard in the caller is implicit here via
+    /// the attribute.</summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static IReadOnlyList<DiscoveredCamera> EnumerateCanonCameras()
+        => NINA.Camera.CanonEdsdk.CanonEdsdkDiscovery.Enumerate()
+            .Select(e => new DiscoveredCamera(e.Id, e.Model, e.PortName))
+            .ToList();
 
     public IndiTelescope SelectTelescope(string deviceName) {
         Telescope = new IndiTelescope(_indiClient, deviceName);
@@ -268,3 +311,8 @@ public class EquipmentManager : IDisposable {
 /// Used by <c>GET /api/camera/drivers</c> so the UI can populate the
 /// driver dropdown with the matching availability badges.</summary>
 public record CameraDriverInfo(string Id, string Name, bool Available, string Description);
+
+/// <summary>One row in the per-driver camera-discovery dropdown. Id
+/// is what the UI passes back to <c>POST /api/camera/select</c>; the
+/// rest is display-only.</summary>
+public record DiscoveredCamera(string Id, string Model, string Detail);

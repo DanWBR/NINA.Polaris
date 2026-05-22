@@ -110,6 +110,14 @@ public static class CameraEndpoints {
         group.MapGet("/drivers", (EquipmentManager equip)
             => Results.Ok(equip.GetAvailableCameraDrivers()));
 
+        // Per-driver camera discovery. For INDI: the device-name
+        // list from the active connection. For vendor SDKs: the
+        // SDK-specific enumeration call. Empty list when no cameras
+        // are connected (or when the driver isn't supported on this
+        // OS) — never throws.
+        group.MapGet("/discover", (EquipmentManager equip, string? driver)
+            => Results.Ok(equip.GetDiscoveredCamerasFor(driver ?? "indi")));
+
         group.MapPost("/connect", async (EquipmentManager equip) => {
             if (equip.Camera == null)
                 return Results.BadRequest(new { error = "No camera selected. Use POST /api/camera/select/{name} first" });
