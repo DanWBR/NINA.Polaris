@@ -711,6 +711,122 @@ select.input-sm {
     font-variant-numeric: tabular-nums;
 }
 
+/* Floating mount-control panel inside the Sky tab. position:fixed
+   so it overlays the celestial map and stays put while the user
+   pans/zooms underneath. Dragging is handled in app.js by writing
+   to mountPanel.x/y; this rule only paints. */
+.mount-float-panel {
+    position: fixed;
+    z-index: 90;
+    width: 280px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.35);
+    user-select: none;
+    -webkit-user-select: none;
+}
+.mount-float-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
+    border-top-left-radius: var(--radius);
+    border-top-right-radius: var(--radius);
+    cursor: move;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    touch-action: none;
+}
+.mount-float-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.mount-float-sub {
+    font-weight: 400;
+    color: var(--text-secondary);
+    font-size: 11px;
+    margin-left: 4px;
+}
+.mount-float-close {
+    background: transparent;
+    border: 0;
+    color: var(--text-secondary);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+    border-radius: 4px;
+}
+.mount-float-close:hover {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+.mount-float-body {
+    display: flex;
+    gap: 12px;
+    padding: 10px 12px;
+    align-items: flex-start;
+}
+.mount-float-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 12px 10px;
+}
+.mount-float-actions .btn {
+    flex: 1;
+    min-width: 0;
+}
+/* Compact variant of the dpad for the floating panel */
+.dpad-container-sm {
+    grid-template-columns: 36px 36px 36px;
+    grid-template-rows: 36px 36px 36px;
+    gap: 3px;
+}
+.dpad-container-sm .dpad-btn {
+    font-size: 11px;
+}
+.dpad-container-sm .dpad-stop {
+    font-size: 9px;
+}
+.mount-info-sm {
+    min-width: 0;
+    flex: 1;
+    gap: 4px;
+}
+.mount-info-sm .info-row {
+    font-size: 11px;
+}
+/* Re-open pill (bottom-right of the Sky tab) */
+.mount-float-reopen {
+    position: fixed;
+    z-index: 89;
+    right: 16px;
+    bottom: 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text-primary);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.mount-float-reopen:hover {
+    background: var(--accent);
+    color: #fff;
+}
+
 /* Focus Controls */
 .focus-controls {
     padding: 16px;

@@ -27,6 +27,12 @@ function ninaApp() {
             pierSide: 'unknown', connected: false
         },
 
+        // Floating mount control inside the Sky tab. Position lives
+        // in localStorage so the panel comes back where the user left
+        // it. _drag is transient state held during a mouse/touch drag.
+        mountPanel: { x: 24, y: 80, visible: true },
+        _mountDrag: null,
+
         // Focus
         focusPosition: 0,
         focusStep: 50,
@@ -467,6 +473,8 @@ function ninaApp() {
             this.loadRigs();
             this.loadCameraDrivers();
             this.loadMountDrivers();
+            this.restoreMountPanel();
+            window.addEventListener('resize', () => this._clampMountPanel());
             this.fetchPhd2ProcessStatus();
             this.fetchPhd2InstallInfo();
         },
@@ -3848,6 +3856,85 @@ function ninaApp() {
             } catch (e) {
                 this.toast('Slew failed: ' + e.message, 'error');
             }
+        },
+
+        // --- Floating mount panel: drag + persistence ---
+
+        // Load saved position/visibility from localStorage. Called from
+        // init() so the panel reappears in the same spot across reloads.
+        restoreMountPanel() {
+            try {
+                const raw = localStorage.getItem('mountPanel');
+                if (!raw) return;
+                const saved = JSON.parse(raw);
+                if (typeof saved.x === 'number') this.mountPanel.x = saved.x;
+                if (typeof saved.y === 'number') this.mountPanel.y = saved.y;
+                if (typeof saved.visible === 'boolean') this.mountPanel.visible = saved.visible;
+                this._clampMountPanel();
+            } catch { /* corrupt storage — ignore */ }
+        },
+
+        persistMountPanel() {
+            try {
+                localStorage.setItem('mountPanel', JSON.stringify({
+                    x: this.mountPanel.x, y: this.mountPanel.y,
+                    visible: this.mountPanel.visible
+                }));
+            } catch { /* storage full / disabled — non-fatal */ }
+        },
+
+        // Keep the panel header on-screen when the window resizes or
+        // a saved position is now off the viewport (smaller display).
+        _clampMountPanel() {
+            const w = window.innerWidth, h = window.innerHeight;
+            // Leave a 12px margin and at least 80px of the panel visible
+            // so the user can always grab the header again.
+            const minX = -180, maxX = w - 80;
+            const minY = 0, maxY = h - 32;
+            this.mountPanel.x = Math.max(minX, Math.min(maxX, this.mountPanel.x));
+            this.mountPanel.y = Math.max(minY, Math.min(maxY, this.mountPanel.y));
+        },
+
+        mountPanelDragStart(ev) {
+            // Don't start a drag from the close button — that has its
+            // own click handler with .stop already.
+            const isTouch = ev.type === 'touchstart';
+            const point = isTouch ? ev.touches[0] : ev;
+            this._mountDrag = {
+                offsetX: point.clientX - this.mountPanel.x,
+                offsetY: point.clientY - this.mountPanel.y,
+                touch: isTouch
+            };
+            const move = (e) => this._mountPanelDragMove(e);
+            const end = () => this._mountPanelDragEnd(move, end);
+            if (isTouch) {
+                window.addEventListener('touchmove', move, { passive: false });
+                window.addEventListener('touchend', end);
+                window.addEventListener('touchcancel', end);
+            } else {
+                window.addEventListener('mousemove', move);
+                window.addEventListener('mouseup', end);
+            }
+            ev.preventDefault();
+        },
+
+        _mountPanelDragMove(ev) {
+            if (!this._mountDrag) return;
+            const point = this._mountDrag.touch ? ev.touches[0] : ev;
+            this.mountPanel.x = point.clientX - this._mountDrag.offsetX;
+            this.mountPanel.y = point.clientY - this._mountDrag.offsetY;
+            this._clampMountPanel();
+            if (ev.cancelable) ev.preventDefault();
+        },
+
+        _mountPanelDragEnd(moveHandler, endHandler) {
+            this._mountDrag = null;
+            window.removeEventListener('mousemove', moveHandler);
+            window.removeEventListener('mouseup', endHandler);
+            window.removeEventListener('touchmove', moveHandler);
+            window.removeEventListener('touchend', endHandler);
+            window.removeEventListener('touchcancel', endHandler);
+            this.persistMountPanel();
         },
 
         // --- Focuser ---

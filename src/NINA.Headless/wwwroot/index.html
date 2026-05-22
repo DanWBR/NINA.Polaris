@@ -90,10 +90,6 @@
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
                 <span class="nav-label">Live</span>
             </button>
-            <button class="nav-btn" :class="{ active: tab === 'mount' }" @click="tab = 'mount'" title="Mount Control">
-                <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2L2 22h20L12 2z" fill="none" stroke="currentColor" stroke-width="2"/></svg>
-                <span class="nav-label">Mount</span>
-            </button>
             <button class="nav-btn" :class="{ active: tab === 'focus' }" @click="tab = 'focus'" title="Focus">
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><line x1="12" y1="2" x2="12" y2="6" stroke="currentColor" stroke-width="2"/><line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" stroke-width="2"/><line x1="2" y1="12" x2="6" y2="12" stroke="currentColor" stroke-width="2"/><line x1="18" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Focus</span>
@@ -430,49 +426,6 @@
                     <div class="chart-container chart-container-sm">
                         <canvas x-ref="hfrChart" id="hfrChart"></canvas>
                     </div>
-                </div>
-            </div>
-
-            <!-- MOUNT CONTROL -->
-            <div x-show="tab === 'mount'" class="tab-panel">
-                <div class="panel-header">
-                    Mount Control
-                    <span class="status-indicator-sm" :class="mount.connected ? 'ok' : 'error'"
-                          x-text="selectedTelescope || 'Not connected'"></span>
-                </div>
-                <div class="mount-layout">
-                    <div class="dpad-container">
-                        <button class="dpad-btn dpad-n" @click="mountMove('n')" :disabled="!mount.connected">N</button>
-                        <button class="dpad-btn dpad-w" @click="mountMove('w')" :disabled="!mount.connected">W</button>
-                        <button class="dpad-btn dpad-stop" @click="mountStop()">STOP</button>
-                        <button class="dpad-btn dpad-e" @click="mountMove('e')" :disabled="!mount.connected">E</button>
-                        <button class="dpad-btn dpad-s" @click="mountMove('s')" :disabled="!mount.connected">S</button>
-                    </div>
-                    <div class="mount-info">
-                        <div class="info-row"><span>RA:</span><strong x-text="formatRA(mount.ra)"></strong></div>
-                        <div class="info-row"><span>Dec:</span><strong x-text="formatDec(mount.dec)"></strong></div>
-                        <div class="info-row"><span>Alt:</span><strong x-text="formatDeg(mount.alt)"></strong></div>
-                        <div class="info-row"><span>Az:</span><strong x-text="formatDeg(mount.az)"></strong></div>
-                        <div class="info-row"><span>Tracking:</span>
-                            <strong :class="mount.tracking ? 'text-ok' : 'text-warn'"
-                                    x-text="mount.tracking ? 'ON' : 'OFF'"></strong>
-                        </div>
-                        <div class="info-row"><span>Pier:</span><strong x-text="mount.pierSide"></strong></div>
-                        <div class="info-row" x-show="mount.slewing">
-                            <span>Status:</span><strong class="text-warn">SLEWING</strong>
-                        </div>
-                        <div class="info-row" x-show="mount.parked">
-                            <span>Status:</span><strong class="text-warn">PARKED</strong>
-                        </div>
-                    </div>
-                </div>
-                <div class="control-row actions" style="margin-top: 1rem;">
-                    <button class="btn" @click="toggleTracking()" :disabled="!mount.connected">
-                        <span x-text="mount.tracking ? 'Stop Tracking' : 'Start Tracking'"></span>
-                    </button>
-                    <button class="btn" @click="parkMount()" :disabled="!mount.connected || mount.parked">Park</button>
-                    <button class="btn" @click="unparkMount()" :disabled="!mount.connected || !mount.parked">Unpark</button>
-                    <button class="btn btn-primary" @click="tab = 'sky'">GoTo (Sky)</button>
                 </div>
             </div>
 
@@ -1498,6 +1451,78 @@
                 <div class="sky-empty" x-show="!skyTarget && !skyShowResults">
                     <p class="hint">Search for a deep sky object above to get started</p>
                 </div>
+
+                <!-- Floating, draggable mount control. Shown only when
+                     a mount is connected and the user hasn't dismissed
+                     the panel. Position survives across reloads via
+                     localStorage. A small "Mount" pill in the corner
+                     re-opens it when hidden. -->
+                <div class="mount-float-panel"
+                     x-show="mount.connected && mountPanel.visible"
+                     x-cloak
+                     :style="`left: ${mountPanel.x}px; top: ${mountPanel.y}px;`">
+                    <div class="mount-float-header"
+                         @mousedown="mountPanelDragStart($event)"
+                         @touchstart="mountPanelDragStart($event)">
+                        <span class="mount-float-title">
+                            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                                <path d="M12 2L2 22h20L12 2z" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            Mount
+                            <span class="mount-float-sub" x-text="selectedTelescope || ''"></span>
+                        </span>
+                        <button class="mount-float-close"
+                                @click.stop="mountPanel.visible = false; persistMountPanel()"
+                                title="Hide">×</button>
+                    </div>
+                    <div class="mount-float-body">
+                        <div class="dpad-container dpad-container-sm">
+                            <button class="dpad-btn dpad-n" @click="mountMove('n')" :disabled="!mount.connected">N</button>
+                            <button class="dpad-btn dpad-w" @click="mountMove('w')" :disabled="!mount.connected">W</button>
+                            <button class="dpad-btn dpad-stop" @click="mountStop()">STOP</button>
+                            <button class="dpad-btn dpad-e" @click="mountMove('e')" :disabled="!mount.connected">E</button>
+                            <button class="dpad-btn dpad-s" @click="mountMove('s')" :disabled="!mount.connected">S</button>
+                        </div>
+                        <div class="mount-info mount-info-sm">
+                            <div class="info-row"><span>RA:</span><strong x-text="formatRA(mount.ra)"></strong></div>
+                            <div class="info-row"><span>Dec:</span><strong x-text="formatDec(mount.dec)"></strong></div>
+                            <div class="info-row"><span>Alt:</span><strong x-text="formatDeg(mount.alt)"></strong></div>
+                            <div class="info-row"><span>Az:</span><strong x-text="formatDeg(mount.az)"></strong></div>
+                            <div class="info-row"><span>Track:</span>
+                                <strong :class="mount.tracking ? 'text-ok' : 'text-warn'"
+                                        x-text="mount.tracking ? 'ON' : 'OFF'"></strong>
+                            </div>
+                            <div class="info-row"><span>Pier:</span><strong x-text="mount.pierSide"></strong></div>
+                            <div class="info-row" x-show="mount.slewing">
+                                <span>Status:</span><strong class="text-warn">SLEWING</strong>
+                            </div>
+                            <div class="info-row" x-show="mount.parked">
+                                <span>Status:</span><strong class="text-warn">PARKED</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mount-float-actions">
+                        <button class="btn btn-sm" @click="toggleTracking()" :disabled="!mount.connected">
+                            <span x-text="mount.tracking ? 'Stop Track' : 'Start Track'"></span>
+                        </button>
+                        <button class="btn btn-sm" @click="parkMount()" :disabled="!mount.connected || mount.parked">Park</button>
+                        <button class="btn btn-sm" @click="unparkMount()" :disabled="!mount.connected || !mount.parked">Unpark</button>
+                    </div>
+                </div>
+
+                <!-- Re-open pill when the panel was dismissed but the
+                     mount is still connected. Sits bottom-right of the
+                     Sky tab so it doesn't fight the toolbar. -->
+                <button class="mount-float-reopen"
+                        x-show="mount.connected && !mountPanel.visible"
+                        x-cloak
+                        @click="mountPanel.visible = true; persistMountPanel()"
+                        title="Show mount control">
+                    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                        <path d="M12 2L2 22h20L12 2z" fill="none" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                    Mount
+                </button>
             </div>
 
             <!-- TONIGHT'S BEST -->
