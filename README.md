@@ -244,6 +244,147 @@ Embedded WebGL sky viewer for visual target selection:
 - Click-to-pick targets, "Center on mount" button
 - Stellarium Remote Control sync — pull the currently-selected object from Stellarium with one click
 
+### Weather Forecast (Tonight + 2 days)
+
+Astronomy-specific cloud / seeing / transparency forecast so you can plan
+the next three nights without leaving the app:
+
+- **Source** — [7Timer ASTRO API](https://www.7timer.info/) (free, no key,
+  3-day window in 3-hour slots).
+- **Server-side cache** with 15 min TTL keyed on `(lat, lon)` rounded to
+  0.01°; multiple browsers on the same LAN share one upstream fetch.
+- **Per-slot observation score (0-100)** combining cloud cover, seeing,
+  transparency and humidity; hard-zero on precip. Coloured pill per slot
+  (green ≥ 70 / amber 40-69 / red &lt; 40).
+- **"Tonight's best windows"** callout — top 3 continuous runs of
+  high-score slots that fall between sunset and sunrise, ranked by total
+  duration × average score.
+- **Per-day moon phase + illumination** plus sunrise / sunset / astronomical
+  twilight (SunCalc, BSD-2, vendored offline).
+- **Weather emoji** per slot (☀ / 🌤 / ☁ / 🌧 / 🌨 / 🌫) — switches to a
+  moon glyph at night so the strip reads correctly at a glance.
+- Graceful offline degrade — when there's no internet the panel shows a
+  friendly "Forecast unavailable" message instead of crashing.
+
+### Tonight's Best
+
+ASIAIR-style ranked list of "what's worth observing right now" for the
+observer's location and the current local night window:
+
+- **Categories**: DSOs (catalog above 30° peak altitude), Moon, Planets
+  (Mercury → Neptune via CosineKitty.AstronomyEngine, opt-in by ≥ 10° peak
+  alt), Comets (curated short list of ~10 bright periodic comets with JPL
+  Keplerian elements; two-body propagator).
+- **Score** = brightness (60 − magnitude) + altitude bonus, capped per
+  category so the Moon and bright planets don't always dominate.
+- **Each card shows**: thumbnail from NASA Image Library with Wikipedia
+  fallback (offline disk cache), name + common name, RA / Dec, mag, size,
+  current alt / az, peak alt + time of peak, mini altitude chart for the
+  next 12 h (Chart.js), compass widget with arrow on current azimuth.
+- **"Fits FOV" badge** — when a camera is connected, each candidate is
+  measured against the active rig's FOV (focal length + sensor) and
+  flagged ✓ Fits / ⊘ Larger. A chip filter lets you show only what fits.
+- **"Go to" button** — only rendered when a mount is connected. Click
+  jumps to the Sky tab, centres the map, and kicks off Slew &amp; Center
+  (slew + plate-solve + re-centre) on that target.
+- **Image prefetch** — one click in Settings walks the full DSO catalog +
+  Moon + planets + comets and pulls all thumbnails to disk so the panel
+  stays usable in offline observing sites.
+
+### Post-Processing Studio (STUDIO panel)
+
+Browse, calibrate, stack, debayer, clean and export the FITS files
+captured during the session — all from the same browser UI, no
+PixInsight / Siril round-trip required for everyday work.
+
+Files are auto-organised by `ImageWriterService` under
+`{ImageOutputDir}/{rig}/...`:
+
+```
+{rig}/lights/{target}/{filter}/{session}/light_*.fits
+{rig}/calibration/dark/{exp}s_g{gain}/dark_*.fits
+{rig}/calibration/bias/g{gain}/bias_*.fits
+{rig}/calibration/flat/{filter}_g{gain}/flat_*.fits
+{rig}/calibration/darkflat/{exp}s_g{gain}/darkflat_*.fits
+{rig}/calibration/masters/master_*.fits      ← ST-3 writes here
+{rig}/calibrated/{target}/{filter}/cal_*.fits ← ST-4 writes here
+{rig}/integrated/{target}/{filter}/master_light_*.fits ← ST-5 writes here
+{rig}/processed/{target}/*.{fits,tif,png,jpg} ← ST-2/6/7 write here
+```
+
+Session date follows the astronomical noon-to-noon convention — a
+capture at 02:30 local time still belongs to the previous evening.
+
+**ST-1 Frame browser**:
+- SQLite-backed metadata index (`{AppData}/NINA.Headless/studio/frames.db`);
+  headers-only FITS scan keeps a 2000-frame session re-walkable in &lt; 1 s.
+- Filter by type / filter / target / date range; thumbnail grid with
+  auto-stretched 256 px JPEGs (generated on demand, cached on disk).
+- Multi-select with status-bar counts that drive the operations below.
+
+**ST-2 Single-frame viewer + manual stretch + multi-format export**:
+- Double-click any thumbnail → fullscreen modal viewer (OpenSeadragon).
+- Black / midtone / white sliders with auto-stretch defaults (MTF), live
+  preview (debounced 150 ms re-render).
+- Star annotation overlay, histogram (Chart.js, log Y so background
+  spike doesn't dwarf highlights), full statistics table.
+- One-click export to **TIFF 16-bit linear** (preserves dynamic range
+  for downstream PixInsight / Siril), PNG (8-bit stretched), or JPEG.
+
+**ST-3 Master calibration frames** (bias / dark / flat / dark-flat):
+- Select ≥ 2 raw cal frames → "Create master from selection" → choose
+  integration method (Mean / Median / **Sigma-clipped mean** default —
+  3σ low + 3σ high, 2 iterations).
+- Background job with progress bar; output FITS carries `NSUBS` +
+  `INTMETH` + `IMAGETYP=MASTER{TYPE}` custom keywords.
+- Cross-frame dimension validation rejects rigs mixed by mistake.
+
+**ST-4 Light-frame calibration**:
+- Select N raw lights → "Calibrate lights" → backend applies the
+  classical pipeline `(light − dark) / normalised_flat` and writes the
+  result with a `CALSTAT` header (B / D / F letters per SBIG convention)
+  plus `MDARK` / `MFLAT` / `MBIAS` filenames for traceability.
+- **Auto-match per light** — for each light, pick the master with the
+  same gain and closest exposure (darks), same gain and same filter
+  (flats), same gain (bias). Manual override per dropdown is available.
+- Bias only applied when no dark is provided (darks already contain
+  bias). Dark-flats preferred over bias as the flat calibrator.
+- Per-light failures don't abort the batch; the job reports OK / failed
+  counts.
+
+**ST-5 Batch stack (offline alignment + integration)**:
+- "Integrate (stack)" reuses the live-stacking primitives (`StarDetector`,
+  `StarMatcher`, `ImageResampler`) — same affine alignment math, but run
+  to completion in a background job.
+- Reference = frame with the most detected stars; affine transform per
+  remaining frame; frames that fail to align are skipped + reported as
+  *dropped*.
+- Per-pixel reduction via the ST-3 IntegrationMath methods.
+- Output FITS carries `NCOMBINE` / `EXPTOTAL` / `INTMETH` / `REJECT` /
+  `STACKREF` and `IMAGETYP=MASTERLIGHT`.
+
+**ST-6 Per-frame operations** (in the viewer):
+- **🎨 Debayer** — bilinear demosaic of RGGB / GRBG / GBRG / BGGR; output
+  is the Rec.601 luminance plane (single-channel FITS path) with
+  `DEBAYER` / `BAYERIN` headers.
+- **◐ Remove gradient** — sample-grid (8 × 6 default) median of patches
+  with MAD-based stellar rejection, fit a 2D polynomial (degree 2,
+  Gauss-Jordan normal-equations solver), subtract relative to the fit's
+  minimum so global brightness survives. `BGSUB` / `BGSAMPX` / `BGSAMPY`
+  / `BGDEG` headers.
+
+**ST-7 Post-processing**:
+- **⌇ Noise reduce** — separable Gaussian blur (radius 2 default), O(r)
+  per pixel via 1D-pass decomposition; `NRMETHOD` / `NRRADIUS` headers.
+- **✦ Sharpen** — unsharp mask with optional threshold guard for noise
+  floor; `SHARPEN` / `SHARPAMT` / `SHARPRAD` / `SHARPTHR` headers.
+
+Each operation writes a new FITS under `{rig}/processed/{target}/` and
+auto-refreshes the library so the result shows up immediately in the
+browser. The TIFF export path uses an in-tree minimal baseline writer
+(`NINA.Image.FileFormat.TIFF.TiffWriter`, ~110 lines) since SkiaSharp
+doesn't ship a TIFF encoder — keeps the dependency footprint small.
+
 ### Sequence Engine + Image Persistence
 
 Target list execution with automated imaging:
@@ -414,7 +555,7 @@ nina-headless/
 │   └── NINA.Relay.Server/          ← Standalone reverse-tunnel relay (ASP.NET Core)
 │
 ├── tests/
-│   └── NINA.Headless.Test/         ← 181 unit tests (NUnit)
+│   └── NINA.Headless.Test/         ← 273 unit tests (NUnit)
 │
 ├── deploy/                         ← Deployment scripts
 │   ├── nina-headless.service        ← systemd unit file
@@ -440,9 +581,14 @@ nina-headless/
 | Sky map | Aladin Lite v3 | HiPS sky surveys (DSS / 2MASS / SDSS / Pan-STARRS) |
 | Image viewer | OpenSeadragon | Full-resolution zoom/pan over last frame |
 | Image rendering | WebGL2 shaders | GPU debayer + MTF stretch (CPU fallback) |
-| Image encoding | SkiaSharp | Cross-platform JPEG encoding |
+| Image encoding | SkiaSharp | Cross-platform JPEG / PNG encoding (incl. STUDIO previews + thumbnails) |
 | FITS I/O | Custom FITSWriter | Extended headers per N.I.N.A. manual spec |
 | XISF I/O | Custom XISFWriter | PixInsight native, LZ4-compressed, FITSKeyword mirrored |
+| TIFF export | Custom TiffWriter | Baseline uncompressed 8-bit / 16-bit grayscale (SkiaSharp doesn't ship TIFF) |
+| STUDIO frame index | Microsoft.Data.Sqlite | On-disk metadata cache so 2000-frame sessions list in &lt; 50 ms |
+| Astronomy ephemeris | CosineKitty.AstronomyEngine | Planet positions for the Tonight's Best panel (MIT, ~150 KB, no native deps) |
+| Sun / moon math | SunCalc (BSD-2, vendored) | Sunset / sunrise / twilight / moon phase for the Weather panel |
+| Weather forecast | 7Timer ASTRO (HTTP, no key) | Cloud / seeing / transparency, 3-day window in 3 h slots |
 | Compression | K4os.Compression.LZ4 | Fast image compression (~2GB/s) |
 | Equipment drivers | INDI protocol (TCP/XML) + Alpaca (HTTP) | 400+ Linux drivers + ASCOM over network |
 | Plate solving | ASTAP / PlateSolve3 / Astrometry.net (online + local) | Strategy dispatcher with primary + blind fallback |
@@ -700,6 +846,49 @@ Persistence:
 | GET | `/api/stellarium/target?host=&port=` | Pull currently-selected object from Stellarium Remote Control plugin |
 | GET | `/api/stellarium/view?host=&port=` | Current view direction (alt / az / fov) |
 
+### Weather Forecast
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/weather/forecast?lat=&lon=` | 7Timer ASTRO 3-day forecast in 3 h slots with computed `observationScore` (0-100) per slot. Server-cached 15 min |
+
+### Tonight's Best
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/sky/tonights-best?lat=&lon=&limit=` | Ranked list of DSOs / Moon / planets / comets observable during tonight's window |
+| GET | `/api/sky/image?name=` | Resolve thumbnail URL for a celestial object (NASA Image Library → Wikipedia fallback, disk-cached 30 days) |
+| POST | `/api/sky/image/prefetch` | Walk the full DSO catalog + Moon + planets + comets and pull all thumbnails to disk for offline use |
+
+### STUDIO — Post-Processing
+
+Frame browser, master integration, calibration, batch stacking, debayer,
+background extraction, noise reduction, sharpening, and multi-format
+export.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/studio/rescan` | Walk `ImageOutputDir` recursively, header-only FITS scan, upsert SQLite index |
+| GET | `/api/studio/rescan/status` | Rescan progress |
+| GET | `/api/studio/frames?type=&filter=&target=&dateFrom=&dateTo=&limit=&offset=` | Paginated frame list |
+| GET | `/api/studio/frames/{id}` | Full row + FITS keyword dump |
+| GET | `/api/studio/frames/{id}/thumb` | Auto-stretched 256 px JPEG thumbnail (cached on disk) |
+| GET | `/api/studio/stats` | Aggregate: total lights, total exposure (h), distinct targets / filters |
+| GET | `/api/studio/frames/{id}/preview?black=&mid=&white=&max=&format=jpg\|png` | Stretched preview (debounced slider re-renders hit this) |
+| GET | `/api/studio/frames/{id}/autostretch` | Auto-stretch black/mid/white triple to seed UI sliders |
+| GET | `/api/studio/frames/{id}/stats?stars=` | Full ImageStatistics + StarDetector output + histogram |
+| POST | `/api/studio/frames/{id}/export?format=tif\|png\|jpg&stretched=&black=&mid=&white=` | Export to `{rig}/processed/{target}/` |
+| POST | `/api/studio/masters` | Start master-frame integration `{ frameIds, type: Bias\|Dark\|Flat\|DarkFlat, method: Mean\|Median\|SigmaClippedMean }` → `{ jobId }` |
+| GET | `/api/studio/masters/{jobId}/status` | Master-integration progress |
+| POST | `/api/studio/calibrate` | Calibrate lights `{ lightIds, masterDarkId?, masterFlatId?, masterBiasId? }` (null = auto-match per light) → `{ jobId }` |
+| GET | `/api/studio/calibrate/{jobId}/status` | Calibration progress with succeeded / failed counts |
+| POST | `/api/studio/integrate` | Batch stack `{ frameIds, method }` (align + integrate) → `{ jobId }` |
+| GET | `/api/studio/integrate/{jobId}/status` | Stack progress with combined / dropped / total exposure |
+| POST | `/api/studio/frames/{id}/debayer` | Bilinear demosaic → luminance FITS in `{rig}/processed/{target}/` |
+| POST | `/api/studio/frames/{id}/bgextract?samplesX=&samplesY=&polyDegree=` | Subtract polynomial gradient |
+| POST | `/api/studio/frames/{id}/nr?radius=` | Gaussian noise reduction |
+| POST | `/api/studio/frames/{id}/sharpen?amount=&radius=&threshold=` | Unsharp mask sharpening |
+
 ### Live Stacking
 
 | Method | Endpoint | Description |
@@ -910,7 +1099,7 @@ Relay **server** side (different process, same `Relay__*` prefix in `appsettings
 - [x] Profile management (JSON persistence)
 - [x] Network resilience (reconnect, dedup, backpressure, adaptive bandwidth)
 - [x] systemd + Docker (linux/amd64 + linux/arm64) + Windows publish scripts
-- [x] 181 unit tests
+- [x] 273 unit tests
 
 **Acquisition essentials (Phase A)**
 - [x] PHD2 guider integration (TCP/JSON-RPC, RMS, dither, settle, alerts)
@@ -970,6 +1159,10 @@ Relay **server** side (different process, same `Relay__*` prefix in `appsettings
 - [x] Sky Explorer rewritten on d3-celestial (BSD-3, MPL-compatible) — fully offline, defaults to live local sky from observer's location at current UTC, 30 s ticker, equatorial-chart toggle for planning
 - [x] Relay per-request audit log (JSON-lines `audit.log`, auto-rotated 50 MB, outcome reasons, in-memory ring buffer + `/_admin/audit` API)
 - [x] Relay mTLS for tunnel auth — per-tenant `clientCertThumbprint` pins the X.509 cert the client must present (bearer token still required)
+- [x] Weather Forecast tab — 7Timer ASTRO 3-day forecast with computed observation score, "tonight's best windows" callout, sun/moon ephemeris via vendored SunCalc
+- [x] Tonight's Best tab — ranked DSOs / Moon / planets / comets for the observer's location with NASA + Wikipedia thumbnails (offline cache), altitude chart, compass, FOV-fit badge, integrated Go-to (slew + plate-solve + centre)
+- [x] **STUDIO post-processing panel** (ST-1 → ST-7) — SQLite-backed frame browser, single-frame viewer with manual stretch + multi-format export (incl. own 16-bit linear TIFF writer since SkiaSharp doesn't ship one), master-frame integration (mean / median / sigma-clipped), light calibration with auto-matched masters, batch alignment + integration, bilinear debayer + polynomial gradient extraction, Gaussian noise reduction + unsharp-mask sharpening — full end-to-end calibrate → integrate → finish pipeline without leaving the browser
+- [x] Capture folder layout — files now auto-organised under `{rig}/lights\|calibration\|calibrated\|integrated\|processed/...`, with lights bucketed by astronomical session (noon-to-noon rollover) and calibration kept rig-level so masters are reusable across nights
 
 ### Planned
 
