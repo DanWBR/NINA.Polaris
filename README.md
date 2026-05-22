@@ -19,6 +19,46 @@ Browser (laptop / tablet / phone)        Raspberry Pi / Mini PC
                                          └──────────────────────────┘
 ```
 
+## Contents
+
+- [Features](#features)
+  - [Equipment Control via INDI](#equipment-control-via-indi)
+  - [DSLR / Mirrorless cameras](#dslr--mirrorless-cameras)
+  - [Real-Time Image Streaming](#real-time-image-streaming)
+  - [Live Stacking (EAA)](#live-stacking-eaa)
+  - [Plate Solving & Centering](#plate-solving--centering)
+  - [Guiding (PHD2) — full management](#guiding-phd2--full-management)
+  - [Auto-Focus (V-Curve)](#auto-focus-v-curve)
+  - [Meridian Flip Automation](#meridian-flip-automation)
+  - [Advanced Sequencer (tree-based)](#advanced-sequencer-tree-based)
+  - [Mosaic Planner](#mosaic-planner)
+  - [Plugin System](#plugin-system)
+  - [Dithering](#dithering)
+  - [Sky Catalog & Sky Atlas](#sky-catalog--sky-atlas)
+  - [Sky Map](#sky-map)
+  - [Weather Forecast](#weather-forecast)
+  - [Tonight's Best](#tonights-best)
+  - [Studio (post-processing)](#studio-post-processing)
+  - [Sequence Engine + Image Persistence](#sequence-engine--image-persistence)
+  - [Flat Wizard](#flat-wizard)
+  - [Web UI](#web-ui)
+  - [Equipment Rigs (multi-rig support)](#equipment-rigs-multi-rig-support)
+  - [Telescope + Accessory Catalogue](#telescope--accessory-catalogue)
+  - [Profile Management](#profile-management)
+  - [Remote Access (Relay Server)](#remote-access-relay-server)
+  - [Network Resilience](#network-resilience)
+  - [Discovery & Cross-Platform Drivers](#discovery--cross-platform-drivers)
+- [Architecture](#architecture)
+  - [Technology Stack](#technology-stack)
+- [Getting Started](#getting-started)
+- [Deployment](#deployment)
+- [API Reference](#api-reference)
+- [Configuration](#configuration)
+- [Performance Targets](#performance-targets)
+- [Support the project](#support-the-project)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## Features
 
 ### Equipment Control via INDI
@@ -34,6 +74,46 @@ Full INDI protocol client with support for 400+ Linux drivers:
 - **Rotator** — Angle positioning, reverse toggle
 - **Weather** — Temperature, humidity, dew point, wind, pressure, cloud cover, SQM, rain, safety status
 - **Flat Panel** — Light on/off, brightness control, dust cap open/close
+
+### DSLR / Mirrorless cameras
+
+Beyond the dedicated astronomy cameras INDI exposes, Polaris speaks
+to consumer DSLR / mirrorless bodies through a shared `ICamera`
+abstraction with driver-specific backends:
+
+- **Linux** — use the existing INDI `indi_gphoto_ccd` driver (wraps
+  libgphoto2, supports hundreds of Canon / Nikon / Sony / Fuji
+  bodies). Zero extra Polaris code; pick `driver=indi` in the
+  Equipment card and the gphoto-exposed camera shows up alongside
+  the astro CCDs. Setup walkthrough in
+  [`docs/dslr-linux.md`](docs/dslr-linux.md).
+- **Canon (Windows)** — native Canon EDSDK integration with full
+  capture path: RAW + JPEG dual delivery, ISO + shutter + bulb
+  control, automatic SaveTo=Host. CR2 files land verbatim under
+  `{rig}/lights/.../`; the embedded JPEG drives the live preview.
+  Install instructions + EULA caveats in
+  [`docs/dslr-windows-canon.md`](docs/dslr-windows-canon.md).
+- **Nikon (Windows)** — skeleton driver wired into the Equipment UI
+  and ICamera dispatch. Implementation path documented (vendor the
+  MIT-licensed [MekNikon](https://github.com/meklarian/MekNikon)
+  MAID bindings, or build against the Nikon Imaging SDK for Z
+  series) in [`docs/dslr-windows-nikon.md`](docs/dslr-windows-nikon.md).
+- **Sony (Windows + Linux)** — skeleton driver covering two
+  complementary paths: the legacy Wi-Fi Camera Remote API v1.90
+  (HTTP/JSON, cross-platform, easiest to implement — reference:
+  [nantcom/SonyCameraSDK](https://github.com/nantcom/SonyCameraSDK))
+  for older α / NEX bodies, and the modern USB Camera Remote SDK
+  v2.x for α7 III onward. Full landscape in
+  [`docs/dslr-windows-sony.md`](docs/dslr-windows-sony.md).
+
+The UI auto-detects which vendor SDKs are reachable on the running
+host, shows install banners (with direct doc links) for any that
+aren't installed, surfaces an **ISO** dropdown instead of the Gain
+field for DSLR-class cameras, and hides cooler / binning controls
+that don't apply. Captured RAW files (CR2 / NEF / ARW) are saved
+verbatim alongside the camera-native pipeline — the embedded JPEG
+becomes the on-screen preview while the RAW waits for the Studio
+panel (or PixInsight / Siril if you'd rather process there).
 
 ### Real-Time Image Streaming
 
@@ -413,7 +493,7 @@ Responsive, dark-themed interface inspired by ASIAIR:
 
 - **Home** — Cold-start landing with a Horsehead/Flame nebula hero. 4 colour-coded status cards (Equipment / Guider / Sequence / Server) react in real time to the rest of the app, plus 6 quick-action tiles that jump straight into the relevant tab (Connect / Plan / Launch PHD2 / Build sequence / Auto-focus / Live view). Live UTC clock in the hero
 - **Live View** — Real-time camera preview with WebGL2 GPU rendering (debayer + MTF stretch on GPU), star annotations overlay, crosshair + 3x3 grid, hover pixel readout (raw ADU or RGB), manual stretch sliders, image-history thumbnail strip, HFR + star-count history chart, detailed statistics panel + histogram, full-resolution zoom viewer (OpenSeadragon)
-- **Equipment** — Rig selector bar at the top, then cards for Camera (with auto-detected sensor dimensions + temperature + cooler power chart), Mount, Focuser, Filter Wheel, Rotator, Flat Panel, Dome, Weather, Guider (PHD2). Per-device select / connect / disconnect plus quick controls. "💾 Save selections" button captures the current dropdown picks into the active rig. "Manage rigs…" opens a modal with inline editing of focal lengths, cooler target, and per-rig device assignments
+- **Equipment** — Rig selector bar at the top, then cards for Camera (with auto-detected sensor dimensions + temperature + cooler power chart, plus a **camera-driver dropdown** for INDI / Canon EDSDK / Nikon / Sony with install-banner links when a vendor SDK isn't reachable), Mount, Focuser, Filter Wheel, Rotator, Flat Panel, Dome, Weather, Guider (PHD2). Per-device select / connect / disconnect plus quick controls. "💾 Save selections" button captures the current dropdown picks into the active rig. "Manage rigs…" opens a modal with inline editing of focal lengths, cooler target, per-rig device assignments, and a **telescope + accessory picker** that auto-fills aperture / focal length / f-ratio / required back-focus from a curated catalogue
 - **Mount Control** — NSEW directional pad, tracking toggle, park/unpark, GoTo via Sky Explorer
 - **Focus** — Manual stepper + full Auto-Focus V-curve panel (start/abort, live progress bar, fitted parabola chart, best-position marker)
 - **Guider** — PHD2 connection panel + **Launch PHD2** button (spawns the auto-detected install) + **Auto-start on boot** checkbox (persists in profile, launches PHD2 on every Headless start), inline "Download PHD2" banner when not installed, PHD2-management bar (profile dropdown, exposure dropdown, Dec-mode, connect-equipment toggle, Shutdown), live RA/Dec error chart with RMS readouts, settle parameters, full control buttons (Guide / Loop / Auto-select Star / Pause / Resume / Stop / Dither). Surfaces PHD2's own guide camera + mount names
@@ -453,6 +533,39 @@ device selections).
 
 Existing profiles auto-migrate on first load — the pre-existing
 `LastCamera` / `LastTelescope` / etc. fields become the rig named "Default".
+
+### Telescope + Accessory Catalogue
+
+Curated catalogue of popular astro OTAs + reducers / Barlows /
+flatteners that drives auto-fill of the rig's optical fields.
+Pick brand → model → optional accessory and Polaris computes the
+aperture, native + effective focal length, f-ratio, and the
+required camera-side back-focus.
+
+- **~80 telescopes** spanning Askar (FRA + PHQ + APO lines),
+  Astro-Physics, Celestron (C-series + EdgeHD + RASA), Explore
+  Scientific, GSO RC + Newtonian, Meade LX200, Sharpstar EDPH,
+  Skywatcher (Esprit + Evostar + Quattro + Skymax), SVBony (SV48P
+  + SV503 + SV550 + SV535 + SV545 + SV555), Takahashi (FSQ + TOA
+  + Epsilon), Tele Vue, Vixen, William Optics (RedCat + ZenithStar
+  + GT + FLT).
+- **~25 optical accessories** — Celestron 0.7× EdgeHD + f/6.3 SCT
+  reducers, Starizona Hyperstar 8/11, Skywatcher 0.85× Esprit,
+  Askar / Sharpstar / SVBony / Takahashi dedicated reducers, WO
+  Flat 6A III flatteners, Tele Vue Powermate 2/2.5/4/5×, generic
+  1.6/2/3× Barlows. `compatibleScopes` filters the dropdown to
+  entries that fit the picked OTA; empty list means generic.
+- **Effective focal length** = native × accessory factor (rounded).
+  Back-focus reminder surfaces in amber — wrong backspacing is the
+  most common cause of elongated stars in the corners of a flatener
+  shot.
+- The picker auto-fills, then writes the resolved values into the
+  rig — the catalogue can change later without breaking saved rigs.
+  Off-catalogue scopes still work via the manual focal length /
+  aperture inputs.
+- Catalogues live in `wwwroot/data/telescopes.json` +
+  `wwwroot/data/optical-accessories.json`. PRs welcome to extend
+  the lists.
 
 ### Profile Management
 
@@ -558,7 +671,7 @@ nina-headless/
 │   └── NINA.Relay.Server/          ← Standalone reverse-tunnel relay (ASP.NET Core)
 │
 ├── tests/
-│   └── NINA.Headless.Test/         ← 273 unit tests (NUnit)
+│   └── NINA.Headless.Test/         ← 294 unit tests (NUnit)
 │
 ├── deploy/                         ← Deployment scripts
 │   ├── nina-headless.service        ← systemd unit file
@@ -580,6 +693,7 @@ nina-headless/
 | Real-time (images) | WebSocket (binary) | JPEG or LZ4-compressed raw frames, adaptive |
 | Real-time (status) | WebSocket (JSON) | Equipment + sequence + guider + AF + meridian flip at 1Hz |
 | Frontend framework | Alpine.js v3 | Reactive UI (~15KB, no build step) |
+| UI typeface | Inter (SIL OFL 1.1, self-hosted) | Variable woff2 for every weight + italic, ~740 KB total. No external CDN call — the UI looks the same online and offline |
 | Charts | Chart.js v4 | Guiding, focus, HFR, temperature, histogram, altitude |
 | Sky map | d3-celestial (BSD-3) | Fully-offline sky viewer with Hipparcos stars, constellations, DSO overlay, Milky Way contours |
 | Image viewer | OpenSeadragon | Full-resolution zoom/pan over last frame |
