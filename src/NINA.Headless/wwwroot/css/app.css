@@ -2545,6 +2545,46 @@ select.input-sm {
     gap: 6px;
 }
 
+/* Camera driver picker — shows above the device dropdown when more
+   than one camera backend is available on this host (e.g. INDI plus
+   Canon EDSDK on Windows). */
+.equip-driver-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+.equip-driver-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    min-width: 50px;
+}
+.equip-driver-select {
+    flex: 1;
+}
+
+/* Install-required banner: vendor SDK selected but the native DLLs
+   aren't reachable. Tints amber and links to the matching install doc. */
+.equip-install-banner {
+    background: rgba(255, 160, 80, 0.12);
+    border: 1px solid rgba(255, 160, 80, 0.4);
+    border-radius: var(--radius);
+    padding: 6px 10px;
+    font-size: 11px;
+    color: #ffb066;
+    margin-bottom: 8px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.equip-install-banner a {
+    color: #ffd0a0;
+    text-decoration: underline;
+}
+
 .equip-select {
     flex: 1;
     min-width: 0;

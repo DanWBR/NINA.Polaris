@@ -115,6 +115,18 @@ function ninaApp() {
         equipDomeTarget: 0,
         equipCameraInfo: { coolerOn: false, binX: 0, binY: 0, bitDepth: 0 },
 
+        // Camera driver state (DSLR support). cameraDriver picks
+        // which backend the next Select call uses ('indi' default,
+        // 'canon-edsdk'/'nikon-sdk'/'sony-sdk' for vendor SDKs).
+        // cameraDrivers is populated once from /api/camera/drivers;
+        // cameraVendorDevices is the per-driver discovery payload
+        // refreshed by the "Detect" button.
+        cameraDriver: 'indi',
+        cameraDrivers: [],
+        cameraVendorDevices: [],
+        cameraDiscovering: false,
+        cameraIso: 800,
+
         // Rotator
         rotator: { connected: false, name: '', position: null, moving: false, reversed: false },
 
@@ -438,6 +450,7 @@ function ninaApp() {
             this.loadMfSettings();
             this.loadAtlasTypes();
             this.loadRigs();
+            this.loadCameraDrivers();
             this.fetchPhd2ProcessStatus();
             this.fetchPhd2InstallInfo();
         },
@@ -3247,6 +3260,10 @@ function ninaApp() {
 
         _applyRigToChoices(rig) {
             this.equipCameraChoice = rig.camera || '';
+            // Hydrate the camera-driver dropdown from the rig. Old
+            // rigs without the field default to "indi" via the
+            // backend's ?? coalesce; the UI mirrors that here.
+            this.cameraDriver = rig.cameraDriver || 'indi';
             this.equipMountChoice = rig.telescope || '';
             this.equipFocuserChoice = rig.focuser || '';
             this.equipFilterChoice = rig.filterWheel || '';
@@ -3376,6 +3393,7 @@ function ninaApp() {
             const updated = {
                 ...rig,
                 camera: this.equipCameraChoice || rig.camera,
+                cameraDriver: this.cameraDriver || rig.cameraDriver || 'indi',
                 telescope: this.equipMountChoice || rig.telescope,
                 focuser: this.equipFocuserChoice || rig.focuser,
                 filterWheel: this.equipFilterChoice || rig.filterWheel,
@@ -3834,7 +3852,13 @@ function ninaApp() {
         async equipConnectCamera() {
             if (!this.equipCameraChoice) return;
             try {
-                await this.apiPost(`/api/camera/select/${encodeURIComponent(this.equipCameraChoice)}`);
+                // Pass driver as query param so the backend dispatches
+                // to the correct backend factory. Default 'indi' keeps
+                // legacy behaviour unchanged.
+                const qs = this.cameraDriver && this.cameraDriver !== 'indi'
+                    ? `?driver=${encodeURIComponent(this.cameraDriver)}` : '';
+                await this.apiPost(
+                    `/api/camera/select/${encodeURIComponent(this.equipCameraChoice)}${qs}`);
                 await this.apiPost('/api/camera/connect');
                 this.selectedCamera = this.equipCameraChoice;
                 this.toast('Camera connected: ' + this.equipCameraChoice, 'ok');
@@ -3842,6 +3866,63 @@ function ninaApp() {
             } catch (e) {
                 this.toast('Camera connection failed: ' + e.message, 'error');
             }
+        },
+
+        // Load the list of camera-driver kinds offered by this host
+        // and their availability flags. Cached for the session — call
+        // again only after the user installs a vendor SDK.
+        async loadCameraDrivers() {
+            try {
+                this.cameraDrivers = await this.apiGet('/api/camera/drivers');
+            } catch (e) {
+                // Treat any failure as "INDI only" so the dropdown
+                // doesn't disappear entirely.
+                this.cameraDrivers = [{
+                    id: 'indi', name: 'INDI', available: true,
+                    description: 'Standard astronomy cameras via INDI server.'
+                }];
+            }
+        },
+
+        // "Detect cameras" button handler. Calls the backend's
+        // per-driver discovery endpoint and populates the camera
+        // dropdown for vendor SDKs (INDI uses the existing devices
+        // list from the connected indiserver).
+        async detectVendorCameras() {
+            this.cameraDiscovering = true;
+            try {
+                const list = await this.apiGet(
+                    `/api/camera/discover?driver=${encodeURIComponent(this.cameraDriver)}`);
+                this.cameraVendorDevices = list || [];
+                if (this.cameraVendorDevices.length === 0) {
+                    this.toast('No cameras detected for ' + this.cameraDriver, 'warn');
+                }
+            } catch (e) {
+                this.toast('Discovery failed: ' + e.message, 'error');
+                this.cameraVendorDevices = [];
+            } finally {
+                this.cameraDiscovering = false;
+            }
+        },
+
+        // Compute the currently-selected driver descriptor for UI
+        // gating. Used by the template to drive the install banner,
+        // capability hides, etc.
+        get cameraDriverInfo() {
+            return this.cameraDrivers.find(d => d.id === this.cameraDriver) || null;
+        },
+
+        get isDslrCamera() {
+            return ['canon-edsdk', 'nikon-sdk', 'sony-sdk'].includes(this.cameraDriver);
+        },
+
+        async setCameraIso(iso) {
+            // The capture endpoint takes per-shot ISO via the request
+            // body; this setter is for the manual control on the
+            // Equipment tab. Not yet implemented on the backend as a
+            // standalone POST — exposed here as a stub so the dropdown
+            // is interactive even before that endpoint exists.
+            this.cameraIso = +iso;
         },
 
         async equipDisconnectCamera() {

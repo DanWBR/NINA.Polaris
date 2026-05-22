@@ -27,7 +27,7 @@
                 </svg>
                 <span class="brand-name">N.I.N.A.</span>
                 <span class="brand-tag">POLARIS</span>
-                <span class="brand-version">v0.1</span>
+                <span class="brand-version">v0.0.1</span>
             </a>
         </div>
         <div class="status-bar-right">
@@ -141,10 +141,10 @@
             <div x-show="tab === 'home'" class="tab-panel home-panel">
                 <div class="home-hero">
                     <div class="home-hero-text">
-                        <span class="home-eyebrow">N.I.N.A. Polaris · v0.1</span>
+                        <span class="home-eyebrow">N.I.N.A. Polaris · v0.0.1</span>
                         <h1 class="home-title">Ready when you are.</h1>
                         <p class="home-lede" x-show="!indiConnected">
-                            Nothing connected yet. Pick a starting point below — the rest of the
+                            Nothing connected yet. Pick a starting point below and the rest of the
                             tabs come alive once your equipment is online.
                         </p>
                         <p class="home-lede" x-show="indiConnected">
@@ -841,13 +841,71 @@
                             <span class="equip-status-dot" :class="selectedCamera ? 'connected' : 'disconnected'"></span>
                         </div>
                         <div class="equip-card-body">
+                            <!-- Driver picker. INDI is the default; vendor SDKs
+                                 (Canon EDSDK, Nikon, Sony) only appear in the
+                                 list on Windows and only with a green check
+                                 when the matching DLLs are reachable. -->
+                            <div class="equip-driver-row" x-show="cameraDrivers.length > 1">
+                                <label class="equip-driver-label">Driver</label>
+                                <select class="equip-select equip-driver-select"
+                                        x-model="cameraDriver"
+                                        @change="cameraVendorDevices = []; equipCameraChoice = ''">
+                                    <template x-for="d in cameraDrivers" :key="d.id">
+                                        <option :value="d.id" :disabled="!d.available"
+                                                x-text="d.name + (d.available ? '' : ' (not installed)')"></option>
+                                    </template>
+                                </select>
+                            </div>
+
+                            <!-- Install banner: vendor SDK selected but the
+                                 native DLLs aren't reachable. Links to the
+                                 matching docs page. -->
+                            <div class="equip-install-banner"
+                                 x-show="cameraDriverInfo && !cameraDriverInfo.available"
+                                 x-cloak>
+                                <span x-text="cameraDriverInfo?.name + ' DLLs not found on this host.'"></span>
+                                <a x-show="cameraDriver === 'canon-edsdk'"
+                                   href="https://github.com/DanWBR/nina-headless/blob/master/docs/dslr-windows-canon.md"
+                                   target="_blank">Install instructions →</a>
+                            </div>
+
                             <div class="equip-select-row">
-                                <select class="equip-select" x-model="equipCameraChoice">
+                                <!-- INDI path: the device dropdown comes from
+                                     the active indiserver's device list. -->
+                                <select class="equip-select" x-model="equipCameraChoice"
+                                        x-show="cameraDriver === 'indi'">
                                     <option value="">-- Select device --</option>
                                     <template x-for="dev in devices" :key="'cam-'+dev.name">
                                         <option :value="dev.name" x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
                                     </template>
                                 </select>
+
+                                <!-- Vendor SDK path: dropdown is populated by
+                                     the "Detect" button below. Stays empty
+                                     until the user clicks it. -->
+                                <select class="equip-select" x-model="equipCameraChoice"
+                                        x-show="cameraDriver !== 'indi'">
+                                    <option value="">
+                                        <template x-if="cameraVendorDevices.length === 0">
+                                            <span>-- Click Detect to scan --</span>
+                                        </template>
+                                        <template x-if="cameraVendorDevices.length > 0">
+                                            <span>-- Select camera --</span>
+                                        </template>
+                                    </option>
+                                    <template x-for="c in cameraVendorDevices" :key="c.id">
+                                        <option :value="c.id" x-text="c.model + ' (' + c.detail + ')'"></option>
+                                    </template>
+                                </select>
+
+                                <button class="btn btn-sm" @click="detectVendorCameras()"
+                                        x-show="cameraDriver !== 'indi'"
+                                        :disabled="cameraDiscovering || !cameraDriverInfo?.available"
+                                        title="Re-scan for connected cameras">
+                                    <span x-show="!cameraDiscovering">🔍 Detect</span>
+                                    <span x-show="cameraDiscovering">…</span>
+                                </button>
+
                                 <button class="btn btn-sm btn-primary" @click="equipConnectCamera()"
                                         :disabled="!equipCameraChoice">Connect</button>
                                 <button class="btn btn-sm btn-danger" @click="equipDisconnectCamera()"
@@ -856,13 +914,19 @@
                             <div class="equip-detail" x-show="selectedCamera">
                                 <div class="equip-detail-name" x-text="selectedCamera"></div>
                                 <div class="equip-detail-props">
-                                    <span x-show="cameraTemp !== null">Temp: <strong x-text="(cameraTemp?.toFixed(1) || '--') + '°C'"></strong></span>
-                                    <span>Cooler: <strong :class="equipCameraInfo.coolerOn ? 'text-ok' : 'text-muted'"
+                                    <!-- DSLRs don't report sensor temperature
+                                         or cooler state — hide both rows
+                                         when the active driver is a vendor SDK. -->
+                                    <span x-show="!isDslrCamera && cameraTemp !== null">Temp: <strong x-text="(cameraTemp?.toFixed(1) || '--') + '°C'"></strong></span>
+                                    <span x-show="!isDslrCamera">Cooler: <strong :class="equipCameraInfo.coolerOn ? 'text-ok' : 'text-muted'"
                                                           x-text="equipCameraInfo.coolerOn ? 'ON' : 'OFF'"></strong></span>
-                                    <span x-show="equipCameraInfo.binX">Bin: <strong x-text="equipCameraInfo.binX + 'x' + equipCameraInfo.binY"></strong></span>
+                                    <span x-show="!isDslrCamera && equipCameraInfo.binX">Bin: <strong x-text="equipCameraInfo.binX + 'x' + equipCameraInfo.binY"></strong></span>
                                     <span x-show="equipCameraInfo.bitDepth">Depth: <strong x-text="equipCameraInfo.bitDepth + '-bit'"></strong></span>
+                                    <span x-show="isDslrCamera">ISO: <strong x-text="cameraIso"></strong></span>
                                 </div>
-                                <div class="equip-inline-controls">
+
+                                <!-- Cooler controls — astronomy cameras only. -->
+                                <div class="equip-inline-controls" x-show="!isDslrCamera">
                                     <button class="btn btn-sm" @click="setCooler(!equipCameraInfo.coolerOn, equipCoolerTarget)"
                                             :class="equipCameraInfo.coolerOn ? 'btn-active' : ''"
                                             x-text="equipCameraInfo.coolerOn ? 'Cooler ON' : 'Cooler OFF'"></button>
@@ -873,7 +937,23 @@
                                     </label>
                                     <button class="btn btn-sm" @click="setCooler(true, equipCoolerTarget)">Set</button>
                                 </div>
-                                <div class="chart-container chart-container-xs" x-show="tempHistory.length >= 2">
+
+                                <!-- ISO dropdown — DSLR only. Standard ISO
+                                     steps from 50 to 102400; vendor drivers
+                                     pick the closest supported value. -->
+                                <div class="equip-inline-controls" x-show="isDslrCamera">
+                                    <label class="equip-temp-label">
+                                        ISO
+                                        <select class="input-sm" :value="cameraIso" @change="setCameraIso($event.target.value)">
+                                            <template x-for="v in [50,100,200,400,800,1600,3200,6400,12800,25600,51200,102400]" :key="v">
+                                                <option :value="v" x-text="v"></option>
+                                            </template>
+                                        </select>
+                                    </label>
+                                </div>
+
+                                <div class="chart-container chart-container-xs"
+                                     x-show="!isDslrCamera && tempHistory.length >= 2">
                                     <canvas x-ref="tempChart" id="tempChart"></canvas>
                                 </div>
                             </div>
