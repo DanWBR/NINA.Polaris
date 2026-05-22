@@ -7,9 +7,9 @@ using NINA.Image.Interfaces;
 namespace NINA.Headless.Services;
 
 /// <summary>
-/// Saves captured images to disk as FITS with extended headers built from the
-/// currently-connected equipment state (telescope, filter wheel, focuser,
-/// rotator, weather) and the active profile (observer, site, target).
+/// Saves captured images to disk as FITS / XISF with extended headers built
+/// from the currently-connected equipment state (telescope, filter wheel,
+/// focuser, rotator, weather) and the active profile (observer, site, target).
 ///
 /// File naming honours <c>ProfileService.Active.ImageNamePattern</c>; the
 /// following placeholders are recognised (NINA convention):
@@ -18,6 +18,25 @@ namespace NINA.Headless.Services;
 ///   {camera}    {temp}     {imagetype}
 /// Missing tokens are silently substituted with "Unknown" so the file always
 /// has a well-formed name even if equipment isn't reporting metadata.
+///
+/// Files are organised under <c>ImageOutputDir</c> in a fixed layout so the
+/// STUDIO panel can match calibration frames to lights without scanning
+/// every header. The shape is:
+///
+///   ImageOutputDir/
+///     lights/{target}/{filter}/{yyyy-MM-dd}/light_*.fits
+///     calibration/
+///       dark/{exposure}s_g{gain}/dark_*.fits
+///       bias/g{gain}/bias_*.fits
+///       flat/{filter}_g{gain}/flat_*.fits
+///       masters/master_*.fits            (written by STUDIO ST-3)
+///     calibrated/{target}/{filter}/...   (written by STUDIO ST-4)
+///     integrated/{target}/{filter}/...   (written by STUDIO ST-5)
+///     processed/{target}/...             (written by STUDIO ST-7 — TIFF/PNG/JPEG)
+///
+/// The sub-path is derived from IMAGETYP. The filename pattern still
+/// controls just the leaf name. Pre-existing flat layouts keep being
+/// indexed by the FrameLibraryService scan since it walks recursively.
 /// </summary>
 public class ImageWriterService {
     private readonly EquipmentManager _equip;
@@ -71,13 +90,20 @@ public class ImageWriterService {
             // Sanitise illegal filename characters
             foreach (var c in Path.GetInvalidFileNameChars()) fileName = fileName.Replace(c, '_');
 
-            var fullPath = Path.Combine(dir, fileName);
+            // Standard subdirectory layout — keeps lights / calibration /
+            // STUDIO outputs separated so the post-processing pipeline can
+            // find matching darks by exposure+gain (and flats by filter+gain)
+            // without scanning every header.
+            var subDir = BuildSubDir(imageType, imageData, profile);
+            var targetDir = string.IsNullOrEmpty(subDir) ? dir : Path.Combine(dir, subDir);
+            Directory.CreateDirectory(targetDir);
+            var fullPath = Path.Combine(targetDir, fileName);
 
-            // Avoid clobber: append (N) if exists
+            // Avoid clobber: append _N if exists
             int copy = 1;
             while (File.Exists(fullPath)) {
                 var name = Path.GetFileNameWithoutExtension(fileName);
-                fullPath = Path.Combine(dir, $"{name}_{copy++}{extension}");
+                fullPath = Path.Combine(targetDir, $"{name}_{copy++}{extension}");
             }
 
             RotatorMetaData? rotMeta = null;
@@ -176,6 +202,44 @@ public class ImageWriterService {
     }
 
     private static double Safe(double v) => double.IsNaN(v) || double.IsInfinity(v) ? 0 : v;
+
+    /// <summary>
+    /// Pick the structured subdirectory under ImageOutputDir for a frame
+    /// based on its IMAGETYP. Lights live under
+    /// lights/{target}/{filter}/{date}; calibration frames are grouped by
+    /// the keys that matter for matching them to lights later (exposure +
+    /// gain for darks, gain for bias, filter + gain for flats).
+    /// </summary>
+    public static string BuildSubDir(string imageType, IImageData img, UserProfile profile) {
+        var m = img.MetaData;
+        var typeUpper = (imageType ?? "LIGHT").Trim().ToUpperInvariant();
+        var filter   = SanitizeFolder(string.IsNullOrEmpty(m.Exposure.Filter) ? "L" : m.Exposure.Filter);
+        var gain     = m.Camera.Gain;
+        var exposure = m.Exposure.ExposureTime;
+
+        return typeUpper switch {
+            "DARK"      => Path.Combine("calibration", "dark",
+                            FormattableString.Invariant($"{exposure:0.##}s_g{gain}")),
+            "BIAS"      => Path.Combine("calibration", "bias",
+                            FormattableString.Invariant($"g{gain}")),
+            "DARKFLAT"  => Path.Combine("calibration", "darkflat",
+                            FormattableString.Invariant($"{exposure:0.##}s_g{gain}")),
+            "FLAT"      => Path.Combine("calibration", "flat",
+                            FormattableString.Invariant($"{filter}_g{gain}")),
+            _           => Path.Combine("lights",
+                            SanitizeFolder(string.IsNullOrEmpty(m.Target.Name) ? "Unknown" : m.Target.Name),
+                            filter,
+                            m.CreationTime.ToLocalTime().ToString("yyyy-MM-dd",
+                                System.Globalization.CultureInfo.InvariantCulture))
+        };
+    }
+
+    private static string SanitizeFolder(string s) {
+        if (string.IsNullOrWhiteSpace(s)) return "Unknown";
+        foreach (var c in Path.GetInvalidFileNameChars()) s = s.Replace(c, '_');
+        // Also normalise spaces to underscore so paths stay shell-safe.
+        return s.Replace(' ', '_');
+    }
 
     private static string SubstitutePattern(string pattern, IImageData img, int seq) {
         var m = img.MetaData;
