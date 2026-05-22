@@ -173,6 +173,12 @@ PHD2 is a first-class managed device, not just a black box we send commands to.
 - **Auto-start on boot** — a single checkbox in the Guider tab makes the headless app launch PHD2 and connect the JSON-RPC client ~2s after every startup. Persisted per profile; survives restarts. Backed by a hosted service that retries the connect 5× in case PHD2's event server is slow to come up
 - Commands: start guiding / stop / loop / pause / resume / dither (with settle pixels + time + timeout) / auto-select star / clear calibration / clear history
 
+**Deep integration (PH2X):**
+- **Rig ↔ PHD2 profile sync (1:1)** — each Polaris rig maps to a PHD2 profile of the same name. Switching rigs automatically switches the PHD2 profile via RPC + applies the rig's algorithm preset + any per-rig algorithm overrides. When a profile is missing, the GUI surfaces a banner pointing to the embedded PHD2 GUI tab where the user can run the Wizard.
+- **Smart Calibrate** — one button: Polaris reads pixel scale, computes a sane calibration step from `(distance_px × pixel_scale) / guide_rate`, optionally slews the main mount to the celestial equator, clears calibration, finds a star, triggers `guide(recalibrate=true)`, monitors the calibration to completion via the AppState event stream, validates orthogonality + non-zero rate, and surfaces results. State machine + progress streamed live via `/ws/status` → `guider.calibrateJob`.
+- **Algorithm tuning presets** — `Default` / `Reactive` / `Smooth` curated bundles for Hysteresis (RA) + Resist-Switch (DEC) algorithms; applied via `set_algo_param` with silent skip for params the current algorithm doesn't expose. Advanced disclosure shows every live knob (`get_algo_param_names` + per-name `get_algo_param`); editing any knob flips the preset to `Custom` and persists the bag on the rig.
+- **Embedded PHD2 GUI** (Linux only) — the GUIDE tab has a tabstrip: **Control** (JSON-RPC UI) | **PHD2 GUI** (xpra HTML5 client embedded via reverse-proxy). Lets you run PHD2's native Profile Wizard, Brain dialog, Guiding Assistant, dark library, etc. remotely without VNC/SSH. See [docs/phd2-gui-embedding.md](docs/phd2-gui-embedding.md) for install instructions. On Windows/macOS the Control tab still works fully; the GUI tab shows a clear OS-not-supported banner.
+
 ### Auto-Focus (V-Curve)
 
 Automated focus point determination via symmetric sweep:
