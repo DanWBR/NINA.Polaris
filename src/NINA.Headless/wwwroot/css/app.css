@@ -2035,6 +2035,14 @@ select.input-sm {
     padding: 0 !important;
     overflow-y: auto;
     position: relative;
+    /* Flex column lets the footer use `margin-top: auto` to claim
+       the remaining vertical space and sit at the bottom even when
+       the content above doesn't fill the viewport. Without this,
+       position: sticky has no scroll to anchor against on a short
+       page and the footer just sits wherever the flow leaves it. */
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
     background:
         /* Bottom darkening keeps the footer + lower cards legible. */
         linear-gradient(180deg,
@@ -2228,13 +2236,15 @@ select.input-sm {
 }
 
 .home-footer {
-    /* Stick the footer to the bottom of the scrolling home-panel so
-       the credit + GitHub link stay visible regardless of how far
-       the user has scrolled. position: sticky inside an overflow-y
-       container parks the element at the requested edge of the
-       viewport without floating over content above it.
-       Translucent dark glass (same recipe as the cards) keeps the
-       nebula visible behind it while ensuring text contrast. */
+    /* Two-step pinning:
+       1. margin-top: auto eats remaining vertical space inside the
+          flex column home-panel so the footer drops to the bottom
+          on short pages (no scroll required).
+       2. position: sticky bottom: 0 keeps it parked at the viewport
+          edge once the page is long enough to scroll past it.
+       Both rules are needed; alone, the first only works on short
+       pages and the second only works on tall ones. */
+    margin-top: auto;
     position: sticky;
     bottom: 0;
     z-index: 5;
