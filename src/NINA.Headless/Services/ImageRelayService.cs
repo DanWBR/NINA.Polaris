@@ -5,6 +5,30 @@ using NINA.Image.Interfaces;
 
 namespace NINA.Headless.Services;
 
+/// <summary>
+/// Broadcasts captured frames to every connected
+/// <c>/ws/image-stream</c> client. Each client is fanned out
+/// independently, so a slow browser doesn't stall the rest. Two
+/// transport modes per client:
+/// <list type="bullet">
+/// <item><b>JPEG</b> (default) — server-side stretch + encode, ~50-200 KB
+/// per frame, works on any browser.</item>
+/// <item><b>Raw</b> — uint16 pixels + LZ4-compressed bayer pattern,
+/// client-side WebGL2 stretch + debayer, ~5-15 MB per frame, requires
+/// a modern browser.</item>
+/// </list>
+///
+/// Adaptive bandwidth: when send latency for a raw-mode client exceeds
+/// <see cref="AdaptiveDowngradeLatency"/> for
+/// <see cref="AdaptiveDowngradeStreak"/> consecutive frames, that
+/// specific client is downgraded to JPEG. When latency recovers, the
+/// upgrade path runs in reverse. Disable via
+/// <see cref="AdaptiveEnabled"/>.
+///
+/// Holds the most recent <see cref="ImageBuffer"/> + its JPEG encoding
+/// so a freshly-connected client can immediately render the last frame
+/// without waiting for the next capture.
+/// </summary>
 public class ImageRelayService : IDisposable {
     private readonly ConcurrentDictionary<string, ClientEntry> _clients = new();
     private readonly ILogger<ImageRelayService> _logger;

@@ -3,6 +3,21 @@ using System.Text.Json.Serialization;
 
 namespace NINA.Headless.Services;
 
+/// <summary>
+/// Central runtime configuration service. Owns the active
+/// <see cref="UserProfile"/> and the per-rig <c>EquipmentProfile</c>
+/// list, persists to JSON under <c>{LocalAppData}/NINA.Headless/profiles/</c>,
+/// and raises <see cref="EquipmentProfileActivated"/> so dependent
+/// services (PHD2ProfileSyncService, LiveStackTriggersService, the
+/// meridian-flip orchestrator) can reconfigure themselves when the
+/// user switches rigs.
+///
+/// All mutations go through a save-lock <see cref="SemaphoreSlim"/>
+/// so concurrent endpoint writes don't tear the JSON file. Reads
+/// return the current snapshot directly — callers should not mutate
+/// the returned record; the profile is replaced wholesale on save,
+/// not edited in place.
+/// </summary>
 public class ProfileService {
     private static readonly JsonSerializerOptions JsonOpts = new() {
         WriteIndented = true,

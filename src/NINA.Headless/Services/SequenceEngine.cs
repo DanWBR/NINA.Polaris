@@ -3,6 +3,24 @@ using System.Text.Json.Serialization;
 
 namespace NINA.Headless.Services;
 
+/// <summary>
+/// The "simple" sequencer engine — flat list of <see cref="SequenceItem"/>s
+/// (target, filter, exposure, count) executed in order. This is what
+/// the AUTORUN tab drives. The tree-based <c>AdvancedSequencer</c>
+/// lives under <c>Services/Sequencer/</c> and serves the ADV tab.
+///
+/// The engine coordinates the full capture loop: filter swap → camera
+/// expose → save to disk → live-stack push → PHD2 dither (when
+/// triggered) → meridian-flip check (delegating to
+/// <see cref="MeridianFlipService"/>). State is exposed through
+/// public properties + polled by <c>StatusStreamHandler</c> at 1 Hz
+/// so the UI can render progress without subscribing per-frame.
+///
+/// Pause/Resume uses a <see cref="SemaphoreSlim"/> gate; Abort cancels
+/// the run-task's <see cref="CancellationTokenSource"/>. State
+/// transitions are protected only by the single-task nature of the
+/// run — at most one capture is in flight at any time.
+/// </summary>
 public class SequenceEngine {
     private readonly EquipmentManager _equip;
     private readonly ImageRelayService _relay;

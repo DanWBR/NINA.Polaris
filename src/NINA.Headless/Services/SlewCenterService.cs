@@ -4,6 +4,22 @@ using NINA.Image.Interfaces;
 
 namespace NINA.Headless.Services;
 
+/// <summary>
+/// "Slew &amp; Center" orchestrator. Given a target (RA, Dec), commands
+/// the mount to slew, then iteratively plate-solves test exposures
+/// and nudges the mount until the actual centre is within the
+/// requested tolerance (default 30 arcsec).
+///
+/// Long-running by nature — slews take seconds, each plate solve
+/// takes 3-30s depending on solver. Exposed through a job pattern:
+/// <see cref="StartJob"/> returns immediately with a job id; the
+/// job's state lives in <c>_jobs</c> and is broadcast to the UI by
+/// <c>StatusStreamHandler</c>. <c>AbortJob(id)</c> cancels via the
+/// job's CTS.
+///
+/// Consumed by the SKY tab "Go to" button, the meridian-flip post-flip
+/// recentre step, and the LiveStack auto-recenter trigger.
+/// </summary>
 public class SlewCenterService {
     private readonly EquipmentManager _equip;
     private readonly PlateSolveService _solver;
