@@ -2368,6 +2368,32 @@
                                 </div>
 
                                 <div class="studio-viewer-section">
+                                    <h4>Operations</h4>
+                                    <!-- ST-6: Debayer + background extraction.
+                                         Both write a new FITS under
+                                         processed/ and trigger a library
+                                         rescan; the user picks it up in the
+                                         browser. -->
+                                    <div class="control-row">
+                                        <button class="btn btn-sm"
+                                                @click="studioDebayer()"
+                                                :disabled="studio.viewer.opRunning"
+                                                title="Bilinear demosaic to luminance plane">
+                                            🎨 Debayer
+                                        </button>
+                                        <button class="btn btn-sm"
+                                                @click="studioRemoveGradient()"
+                                                :disabled="studio.viewer.opRunning"
+                                                title="Fit + subtract polynomial gradient (8×6 grid, deg 2)">
+                                            ◐ Remove gradient
+                                        </button>
+                                    </div>
+                                    <div class="muted" style="font-size:11px;margin-top:6px"
+                                         x-show="studio.viewer.lastOp"
+                                         x-text="'→ ' + studio.viewer.lastOp"></div>
+                                </div>
+
+                                <div class="studio-viewer-section">
                                     <h4>Export to processed/</h4>
                                     <div class="control-row">
                                         <button class="btn btn-sm" @click="studioExport('tif')"

@@ -231,7 +231,11 @@ function ninaApp() {
                 stats: null,
                 loadingStats: false,
                 exporting: false,
-                lastExport: ''
+                lastExport: '',
+                // ST-6: per-frame operations (debayer / bgextract)
+                // share a single in-flight flag + result line.
+                opRunning: false,
+                lastOp: ''
             },
             // ST-3: master-frame creation dialog. type/method drive the
             // POST body; lastJob carries the rolling progress payload
@@ -2009,6 +2013,47 @@ function ninaApp() {
                     done: 0, total: 0, combined: 0, dropped: 0, totalExposureSec: 0
                 };
                 this.toast?.('Integration start failed: ' + e.message, 'error');
+            }
+        },
+
+        // ─── ST-6: Per-frame operations (debayer / bgextract) ───────
+
+        async studioDebayer() {
+            const fr = this.studio.viewer.frame;
+            if (!fr) return;
+            this.studio.viewer.opRunning = true;
+            this.studio.viewer.lastOp = '';
+            try {
+                const resp = await this.apiPost(`/api/studio/frames/${fr.id}/debayer`);
+                const r = await resp.json();
+                this.studio.viewer.lastOp = r.path;
+                this.toast?.('Debayered → ' + r.path, 'ok');
+                this.loadStudio();
+            } catch (e) {
+                this.toast?.('Debayer failed: ' + e.message, 'error');
+            } finally {
+                this.studio.viewer.opRunning = false;
+            }
+        },
+
+        async studioRemoveGradient() {
+            const fr = this.studio.viewer.frame;
+            if (!fr) return;
+            this.studio.viewer.opRunning = true;
+            this.studio.viewer.lastOp = '';
+            try {
+                // Defaults match BackgroundExtractor.Options.Default;
+                // expose them in the UI later if anyone wants finer
+                // control without re-deploying.
+                const resp = await this.apiPost(`/api/studio/frames/${fr.id}/bgextract`);
+                const r = await resp.json();
+                this.studio.viewer.lastOp = r.path;
+                this.toast?.('Background removed → ' + r.path, 'ok');
+                this.loadStudio();
+            } catch (e) {
+                this.toast?.('Background extraction failed: ' + e.message, 'error');
+            } finally {
+                this.studio.viewer.opRunning = false;
             }
         },
 

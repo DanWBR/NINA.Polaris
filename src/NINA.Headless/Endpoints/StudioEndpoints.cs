@@ -160,6 +160,30 @@ public static class StudioEndpoints {
             var p = svc.GetStatus(jobId);
             return p == null ? Results.NotFound() : Results.Ok(p);
         });
+
+        // --- ST-6: debayer + background extraction -------------------
+
+        // Debayer an OSC frame to a single-channel luminance plane.
+        // Writes a new FITS under {rig}/processed/{target}/. Fails if
+        // the source isn't a Bayered raw.
+        g.MapPost("/frames/{id:int}/debayer",
+            async (FrameOperationsService svc, int id, CancellationToken ct) => {
+            var path = await svc.DebayerAsync(id, ct);
+            return path == null
+                ? Results.BadRequest(new { error = "Frame is not Bayered, or source missing." })
+                : Results.Ok(new { path });
+        });
+
+        // Subtract a 2D-polynomial background gradient from the frame.
+        // samplesX/samplesY/polyDegree are optional knobs.
+        g.MapPost("/frames/{id:int}/bgextract",
+            async (FrameOperationsService svc, int id,
+                   int? samplesX, int? samplesY, int? polyDegree, CancellationToken ct) => {
+            var path = await svc.RemoveGradientAsync(id, samplesX, samplesY, polyDegree, ct);
+            return path == null
+                ? Results.NotFound()
+                : Results.Ok(new { path });
+        });
     }
 
     // POST body for /masters. Kept in the endpoints file (not the
