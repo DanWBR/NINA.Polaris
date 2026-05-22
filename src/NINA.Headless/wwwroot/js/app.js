@@ -3614,9 +3614,14 @@ function ninaApp() {
 
         // True when the currently-open viewer should show the
         // (toggleable) FITS header panel. Used to gate the button +
-        // panel + image padding in the template.
+        // panel + image padding in the template. Testing the title
+        // (which is just the file name) instead of the URL avoids
+        // the trap where the URL has the .fits extension but is
+        // followed by &maxDim=... query params, so the previous
+        // regex `\.(fits|fit|fts)(\?|$)` never matched and the
+        // button never appeared.
         get fitsHeadersAvailable() {
-            return /\.(fits|fit|fts)(\?|$)/i.test(this.imageViewerUrl || '');
+            return /\.(fits|fit|fts)$/i.test(this.imageViewerTitle || '');
         },
 
         // Escape behaviour for the image-viewer modal: first press
