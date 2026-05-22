@@ -529,7 +529,8 @@ function ninaApp() {
             stopTracking: false,
             warmCamera: false,
             disconnectGuider: false,
-            runOnStop: false
+            runOnStop: false,
+            autoGraXpert: false
         },
         seqEndExpanded: false,
         _endActionsSaveTimer: null,
@@ -4287,7 +4288,8 @@ function ninaApp() {
                         stopTracking: !!data.stopTracking,
                         warmCamera: !!data.warmCamera,
                         disconnectGuider: !!data.disconnectGuider,
-                        runOnStop: !!data.runOnStop
+                        runOnStop: !!data.runOnStop,
+                        autoGraXpert: !!data.autoGraXpert
                     };
                 }
             } catch (e) { /* not fatal — defaults stand */ }

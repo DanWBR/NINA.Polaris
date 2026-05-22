@@ -2037,10 +2037,25 @@
                                        @change="saveEndActions()" :disabled="seqState === 'running'">
                                 Also run when sequence is stopped
                             </label>
+                            <!-- Per-frame hook (lives in End Events panel to keep the
+                                 Autorun UI compact). Disabled when GraXpert isn't installed
+                                 with a tooltip explaining why. -->
+                            <label class="seq-dither-checkbox"
+                                   :title="graxpert.status?.available
+                                           ? 'After each saved light, run GraXpert background extraction in the background'
+                                           : 'Install GraXpert on the server to enable this'">
+                                <input type="checkbox" x-model="endActions.autoGraXpert"
+                                       @change="saveEndActions()"
+                                       :disabled="seqState === 'running' || !graxpert.status?.available">
+                                Auto-extract gradient with GraXpert (per frame)
+                            </label>
                         </div>
                         <p class="seq-dither-hint text-muted">
                             Park supersedes stop-tracking. End events always run on natural completion;
                             tick the box above to also run them when you press Stop.
+                            <br>
+                            Auto-GraXpert is fire-and-forget — the next exposure does not wait for it.
+                            Output lands next to each light with the <code>_bge</code> suffix.
                         </p>
                     </div>
                 </div>

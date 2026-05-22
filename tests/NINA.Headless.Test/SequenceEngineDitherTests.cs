@@ -22,8 +22,10 @@ public class SequenceEngineDitherTests {
         var meridianFlip = new MeridianFlipService(equip, phd2, slewCenter, autoFocus, profile,
             NullLogger<MeridianFlipService>.Instance);
         var imageWriter = new ImageWriterService(equip, profile, NullLogger<ImageWriterService>.Instance);
+        var graXpert = new NINA.Headless.Services.External.GraXpertService(emptyConfig, profile,
+            NullLogger<NINA.Headless.Services.External.GraXpertService>.Instance);
         return new SequenceEngine(equip, relay, liveStack, phd2, meridianFlip, imageWriter,
-            NullLogger<SequenceEngine>.Instance);
+            graXpert, NullLogger<SequenceEngine>.Instance);
     }
 
     [Test]
@@ -102,6 +104,23 @@ public class SequenceEngineDitherTests {
         Assert.That(engine.EndActions.WarmCamera, Is.False);
         Assert.That(engine.EndActions.DisconnectGuider, Is.False);
         Assert.That(engine.EndActions.RunOnStop, Is.False);
+        Assert.That(engine.EndActions.AutoGraXpert, Is.False,
+            "Per-frame auto-GraXpert hook must default off");
+    }
+
+    [Test]
+    public void EndActions_AutoGraXpertSurvivesRoundTrip() {
+        // Critical for the Autorun UI: the checkbox round-trips
+        // through GetStatus + the /end-actions endpoint and must
+        // persist its state across requests.
+        var engine = MakeEngine();
+        engine.EndActions = new SequenceEndActions {
+            AutoGraXpert = true
+        };
+        Assert.That(engine.EndActions.AutoGraXpert, Is.True);
+        var status = engine.GetStatus();
+        Assert.That(status.EndActions, Is.Not.Null);
+        Assert.That(status.EndActions!.AutoGraXpert, Is.True);
     }
 
     [Test]

@@ -36,15 +36,20 @@ public class SequenceEngine {
     /// <summary>End-of-run housekeeping (park, warm, etc). Default: nothing.</summary>
     public SequenceEndActions EndActions { get; set; } = new();
 
+    private readonly NINA.Headless.Services.External.GraXpertService _graXpert;
+
     public SequenceEngine(EquipmentManager equip, ImageRelayService relay,
         LiveStackingService liveStack, PHD2Client phd2, MeridianFlipService meridianFlip,
-        ImageWriterService imageWriter, ILogger<SequenceEngine> logger) {
+        ImageWriterService imageWriter,
+        NINA.Headless.Services.External.GraXpertService graXpert,
+        ILogger<SequenceEngine> logger) {
         _equip = equip;
         _relay = relay;
         _liveStack = liveStack;
         _phd2 = phd2;
         _meridianFlip = meridianFlip;
         _imageWriter = imageWriter;
+        _graXpert = graXpert;
         _logger = logger;
     }
 
@@ -243,8 +248,36 @@ public class SequenceEngine {
 
                         // Persist to disk with extended FITS headers (no-op if no output dir).
                         // imageType controls the calibration/light subfolder split in BuildSubDir.
-                        _imageWriter.SaveImage(imageData, targetName: item.Name,
+                        var savedPath = _imageWriter.SaveImage(imageData, targetName: item.Name,
                             imageType: imageType, gain: item.Gain);
+
+                        // Auto-GraXpert BGE hook. Fire-and-forget so the
+                        // next exposure doesn't wait on the ~10s BGE pass.
+                        // Only LIGHT frames + only when the user opted in
+                        // + only when GraXpert is actually installed. Decon
+                        // and Denoise never auto-run — they hurt SNR on
+                        // individual lights and are best on integrated
+                        // masters; offered manually in STUDIO instead.
+                        if (EndActions.AutoGraXpert
+                            && !string.IsNullOrEmpty(savedPath)
+                            && !isCalibration
+                            && _graXpert.IsAvailable) {
+                            var fileToProcess = savedPath!;
+                            _ = Task.Run(async () => {
+                                try {
+                                    var opts = new NINA.Headless.Services.External.GraXpertOptions(
+                                        Operation: NINA.Headless.Services.External.GraXpertOperation.BackgroundExtraction);
+                                    var res = await _graXpert.ProcessFrameAsync(
+                                        fileToProcess, opts, CancellationToken.None);
+                                    if (!string.IsNullOrEmpty(res.Error)) {
+                                        _logger.LogWarning("Auto-GraXpert failed for {Path}: {Err}",
+                                            fileToProcess, res.Error);
+                                    }
+                                } catch (Exception ex) {
+                                    _logger.LogWarning(ex, "Auto-GraXpert hook threw for {Path}", fileToProcess);
+                                }
+                            });
+                        }
 
                         if (_liveStack.IsRunning) {
                             await _liveStack.AddFrameAsync(imageData, ct);
@@ -481,6 +514,16 @@ public class SequenceEndActions {
     public bool DisconnectGuider { get; set; }
     /// <summary>If true, end-actions also fire when the user hits Stop. Default false.</summary>
     public bool RunOnStop { get; set; }
+
+    /// <summary>
+    /// Per-frame hook (not strictly an end-action — lives here so it
+    /// shares the Autorun panel UI). When true and GraXpert is
+    /// installed, every saved LIGHT frame is shipped to GraXpert for
+    /// background-extraction in a fire-and-forget Task. Calibration
+    /// frames are skipped. The next exposure does not wait on the
+    /// ~10 s BGE pass — explicit performance > purity trade-off.
+    /// </summary>
+    public bool AutoGraXpert { get; set; }
 }
 
 public class SequenceStatus {
