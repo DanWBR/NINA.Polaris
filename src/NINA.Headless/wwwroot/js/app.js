@@ -20,6 +20,28 @@ function ninaApp() {
         liveStackEnabled: false,
         liveStackFrames: 0,
 
+        // LSTR-5: live-stack auto-refocus + auto-recenter triggers.
+        // Mirror of EquipmentProfile.LiveStackTriggers — hydrated from
+        // /api/livestack/triggers/status on first load and on rig
+        // switch, written back via debounced PUT on any field change.
+        liveStackTriggers: {
+            refocusEnabled: false,
+            refocusEveryNFrames: 30,
+            refocusEveryMinutes: 0,
+            refocusTempDeltaC: 0,
+            refocusHfrIncreasePercent: 0,
+            refocusRequest: {
+                steps: 9, stepSize: 50, exposureSeconds: 3,
+                minStars: 5, backlashSteps: 0
+            },
+            recenterEnabled: false,
+            recenterEveryNFrames: 50,
+            recenterEveryMinutes: 0,
+            recenterDriftArcsec: 0,
+            recenterToleranceArcsec: 30
+        },
+        liveStackStatus: null,    // { isRunning, frameCount, ..., triggers: {...} }
+
         // Mount
         mount: {
             ra: null, dec: null, alt: null, az: null,
@@ -687,6 +709,11 @@ function ninaApp() {
             // dropdowns on the RIGS tab and the Manage Rigs modal. Load
             // upfront so the dropdowns are populated on first open.
             this.loadOpticsCatalogue();
+            // LSTR-5: live-stack triggers settings (per-rig). Loaded
+            // upfront so the LIVE tab's <details> panel renders with
+            // the persisted values on first open instead of showing
+            // defaults that then flicker to the real values.
+            this.loadLiveStackTriggers();
             this.loadCameraDrivers();
             this.loadMountDrivers();
             this.restoreMountPanel();
@@ -5024,6 +5051,62 @@ function ninaApp() {
             }
         },
 
+        // --- LSTR-5: live-stack triggers ---
+
+        async loadLiveStackTriggers() {
+            try {
+                const r = await this.apiGet('/api/livestack/triggers/status');
+                if (r?.settings) this.liveStackTriggers = Object.assign({},
+                    this.liveStackTriggers, r.settings);
+            } catch (e) { /* first load before any save — ignore */ }
+        },
+        _liveStackTriggersSaveTimer: null,
+        saveLiveStackTriggers() {
+            if (this._liveStackTriggersSaveTimer) clearTimeout(this._liveStackTriggersSaveTimer);
+            this._liveStackTriggersSaveTimer = setTimeout(async () => {
+                try {
+                    await this.apiPost('/api/livestack/triggers/settings', null, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.liveStackTriggers)
+                    });
+                } catch (e) {
+                    this.toast('Save triggers failed: ' + e.message, 'error');
+                }
+            }, 500);
+        },
+        async refocusNow() {
+            try {
+                await this.apiPost('/api/livestack/triggers/refocus-now');
+                this.toast('Refocus fired', 'info');
+            } catch (e) { this.toast('Refocus failed: ' + e.message, 'error'); }
+        },
+        async recenterNow() {
+            try {
+                await this.apiPost('/api/livestack/triggers/recenter-now');
+                this.toast('Recenter fired', 'info');
+            } catch (e) { this.toast('Recenter failed: ' + e.message, 'error'); }
+        },
+        // Format helpers used by the trigger status lines.
+        formatRelativeTime(iso) {
+            if (!iso) return '—';
+            const t = new Date(iso).getTime();
+            const dt = (Date.now() - t) / 1000;
+            if (dt < 60) return Math.floor(dt) + 's ago';
+            if (dt < 3600) return Math.floor(dt / 60) + 'm ago';
+            return Math.floor(dt / 3600) + 'h ago';
+        },
+        formatRaDecShort(raHours, decDeg) {
+            if (raHours == null || decDeg == null) return '—';
+            const h = Math.floor(raHours);
+            const m = Math.floor((raHours - h) * 60);
+            const decSign = decDeg >= 0 ? '+' : '-';
+            const dAbs = Math.abs(decDeg);
+            const dd = Math.floor(dAbs);
+            const dm = Math.floor((dAbs - dd) * 60);
+            return `${h}h ${m}m, ${decSign}${dd}° ${dm}'`;
+        },
+
         // --- Telescope/Mount ---
 
         async selectTelescope(name) {
@@ -7080,6 +7163,10 @@ function ninaApp() {
             if (msg.liveStack) {
                 this.liveStackEnabled = msg.liveStack.isRunning;
                 this.liveStackFrames = msg.liveStack.frameCount;
+                // Whole payload kept around so the triggers panel can
+                // read .triggers + per-frame HFR / star count without
+                // a second source of truth.
+                this.liveStackStatus = msg.liveStack;
             }
             if (msg.sequence) {
                 this.seqStatus = msg.sequence;

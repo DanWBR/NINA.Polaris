@@ -351,6 +351,147 @@
                         <button class="btn" @click="resetLiveStack()" x-show="liveStackEnabled">Reset</button>
                         <button class="btn" @click="openImageViewer()" :disabled="!selectedCamera" title="Full-resolution zoom/pan viewer">⛶ View</button>
                     </div>
+
+                    <!-- LSTR-5: Auto refocus + recenter triggers. Visible
+                         whenever live stack toggle is shown (independent of
+                         on/off state — user might want to configure before
+                         starting). Banner-style status when an action runs. -->
+                    <details class="livestack-triggers"
+                             :open="liveStackTriggers.refocusEnabled || liveStackTriggers.recenterEnabled">
+                        <summary>⚡ Auto re-focus / re-center</summary>
+
+                        <div class="livestack-triggers-row text-warn"
+                             x-show="liveStackStatus?.triggers?.isExecuting">
+                            ⚙ Executing
+                            <strong x-text="liveStackStatus.triggers.executingKind"></strong>…
+                            captures paused until done.
+                        </div>
+                        <div class="livestack-triggers-row text-err"
+                             x-show="liveStackStatus?.triggers?.lastError"
+                             x-text="'⚠ ' + liveStackStatus.triggers.lastError"></div>
+
+                        <fieldset class="livestack-triggers-block">
+                            <legend>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" x-model="liveStackTriggers.refocusEnabled"
+                                           @change="saveLiveStackTriggers()">
+                                    Auto re-focus
+                                </label>
+                            </legend>
+                            <div class="livestack-triggers-row">
+                                <label>Every
+                                    <input type="number" min="0" step="5"
+                                           x-model.number="liveStackTriggers.refocusEveryNFrames"
+                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:70px">
+                                    frames
+                                </label>
+                                <label>Every
+                                    <input type="number" min="0" step="5"
+                                           x-model.number="liveStackTriggers.refocusEveryMinutes"
+                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:70px">
+                                    minutes
+                                </label>
+                                <label>ΔT ≥
+                                    <input type="number" min="0" step="0.1"
+                                           x-model.number="liveStackTriggers.refocusTempDeltaC"
+                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:70px">
+                                    °C
+                                </label>
+                                <label>HFR ≥
+                                    <input type="number" min="0" step="5"
+                                           x-model.number="liveStackTriggers.refocusHfrIncreasePercent"
+                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:70px">
+                                    % above last
+                                </label>
+                            </div>
+                            <div class="livestack-triggers-row">
+                                <label>AF steps
+                                    <input type="number" min="3" max="25" step="2"
+                                           x-model.number="liveStackTriggers.refocusRequest.steps"
+                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:60px">
+                                </label>
+                                <label>Step size
+                                    <input type="number" min="1" step="1"
+                                           x-model.number="liveStackTriggers.refocusRequest.stepSize"
+                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:60px">
+                                </label>
+                                <label>Exposure (s)
+                                    <input type="number" min="0.1" step="0.5"
+                                           x-model.number="liveStackTriggers.refocusRequest.exposureSeconds"
+                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:70px">
+                                </label>
+                                <button class="btn btn-sm" @click="refocusNow()"
+                                        :disabled="liveStackStatus?.triggers?.isExecuting">▶ Now</button>
+                            </div>
+                            <div class="livestack-triggers-row text-muted"
+                                 x-show="liveStackStatus?.triggers?.lastRefocusAt">
+                                Last refocus:
+                                <strong x-text="formatRelativeTime(liveStackStatus.triggers.lastRefocusAt)"></strong>
+                                at frame <strong x-text="liveStackStatus.triggers.lastRefocusFrame"></strong>
+                                (HFR <strong x-text="liveStackStatus.triggers.lastRefocusHfr?.toFixed?.(2) || '—'"></strong>)
+                            </div>
+                        </fieldset>
+
+                        <fieldset class="livestack-triggers-block">
+                            <legend>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" x-model="liveStackTriggers.recenterEnabled"
+                                           @change="saveLiveStackTriggers()">
+                                    Auto re-center
+                                </label>
+                            </legend>
+                            <div class="livestack-triggers-row">
+                                <label>Every
+                                    <input type="number" min="0" step="5"
+                                           x-model.number="liveStackTriggers.recenterEveryNFrames"
+                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:70px">
+                                    frames
+                                </label>
+                                <label>Every
+                                    <input type="number" min="0" step="5"
+                                           x-model.number="liveStackTriggers.recenterEveryMinutes"
+                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:70px">
+                                    minutes
+                                </label>
+                                <label title="Plate-solves every frame — heavy on RPi 4. Leave at 0 unless you need reactive drift correction.">
+                                    Drift ≥
+                                    <input type="number" min="0" step="5"
+                                           x-model.number="liveStackTriggers.recenterDriftArcsec"
+                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:70px">
+                                    arcsec
+                                </label>
+                                <label>Tolerance
+                                    <input type="number" min="5" step="5"
+                                           x-model.number="liveStackTriggers.recenterToleranceArcsec"
+                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:70px">
+                                    arcsec
+                                </label>
+                                <button class="btn btn-sm" @click="recenterNow()"
+                                        :disabled="liveStackStatus?.triggers?.isExecuting || !liveStackStatus?.triggers?.referenceSolved">
+                                    ▶ Now
+                                </button>
+                            </div>
+                            <div class="livestack-triggers-row text-muted"
+                                 x-show="liveStackStatus?.triggers?.referenceSolved">
+                                Reference solved:
+                                <strong x-text="formatRaDecShort(liveStackStatus.triggers.referenceRaHours,
+                                                                  liveStackStatus.triggers.referenceDecDeg)"></strong>
+                            </div>
+                            <div class="livestack-triggers-row text-warn"
+                                 x-show="liveStackEnabled
+                                          && liveStackTriggers.recenterEnabled
+                                          && !liveStackStatus?.triggers?.referenceSolved">
+                                Waiting for first-frame plate solve to establish reference…
+                            </div>
+                            <div class="livestack-triggers-row text-muted"
+                                 x-show="liveStackStatus?.triggers?.lastRecenterAt">
+                                Last recenter:
+                                <strong x-text="formatRelativeTime(liveStackStatus.triggers.lastRecenterAt)"></strong>
+                                at frame <strong x-text="liveStackStatus.triggers.lastRecenterFrame"></strong>
+                                (drift <strong x-text="liveStackStatus.triggers.lastRecenterDriftArcsec?.toFixed?.(1) || '—'"></strong>")
+                            </div>
+                        </fieldset>
+                    </details>
                 </div>
                 <div class="stats-bar">
                     <span>Stars: <strong x-text="stats.starCount">--</strong></span>

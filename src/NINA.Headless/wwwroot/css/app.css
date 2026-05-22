@@ -4668,3 +4668,58 @@ label select.input-sm {
     z-index: 1;
     pointer-events: none;
 }
+
+/* LSTR-5: Live-stack triggers expandable panel inside the LIVE tab.
+   Sits below the capture-buttons row. <details> open is bound to
+   either enabled flag so the panel auto-expands when triggers exist. */
+.livestack-triggers {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 12px;
+}
+.livestack-triggers > summary {
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-weight: 500;
+    user-select: none;
+}
+.livestack-triggers > summary:hover { color: var(--text-primary); }
+
+.livestack-triggers-block {
+    margin: 8px 0;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: rgba(0,0,0,0.15);
+}
+.livestack-triggers-block > legend {
+    padding: 0 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.livestack-triggers-block > legend .checkbox-label {
+    text-transform: none;
+    color: var(--text-primary);
+    font-size: 12px;
+    letter-spacing: 0;
+}
+.livestack-triggers-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 16px;
+    margin-bottom: 6px;
+}
+.livestack-triggers-row label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.livestack-triggers-row label > input[type="number"] {
+    margin: 0 2px;
+}
