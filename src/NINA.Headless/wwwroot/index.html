@@ -3106,7 +3106,8 @@
          methods directly so we get the same behaviour with theme-correct
          styling. -->
     <div class="image-viewer-modal" x-show="imageViewerOpen" x-cloak
-         @click.self="closeImageViewer()" @keydown.escape.window="closeImageViewer()">
+         @click.self="closeImageViewer()"
+         @keydown.escape.window="onImageViewerEscape()">
         <div class="image-viewer-frame">
             <div class="image-viewer-header">
                 <span x-text="imageViewerTitle"></span>

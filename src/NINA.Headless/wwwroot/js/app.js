@@ -3548,7 +3548,29 @@ function ninaApp() {
             try {
                 const cur = this._osdViewer.isFullPage();
                 this._osdViewer.setFullPage(!cur);
+                // Hint the user how to come back. OSD's full-page mode
+                // hides the modal header (where our exit button lives),
+                // so without this they have no visual cue.
+                if (!cur) this.toast('Full page — press Esc to exit', 'info');
             } catch (e) {}
+        },
+
+        // Escape behaviour for the image-viewer modal: first press
+        // exits OSD full-page mode (where the modal header is hidden,
+        // so the user has no other escape hatch); second press closes
+        // the modal entirely. Without this, full-page traps the user
+        // because closeImageViewer() destroys the OSD instance while
+        // the document still thinks it's full-page.
+        onImageViewerEscape() {
+            if (this._osdViewer) {
+                try {
+                    if (this._osdViewer.isFullPage()) {
+                        this._osdViewer.setFullPage(false);
+                        return;
+                    }
+                } catch (e) { /* fall through to close */ }
+            }
+            this.closeImageViewer();
         },
 
         // When a sky target is selected via search, also re-center the celestial

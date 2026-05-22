@@ -112,18 +112,88 @@ public static class FITSReader {
                     pixels[i] = (ushort)Math.Clamp(scaled, 0, 65535);
                 }
                 break;
-            case -32: // IEEE float
-                for (int i = 0; i < pixelCount; i++) {
-                    // Big-endian float
-                    byte[] floatBytes = [rawData[i * 4 + 3], rawData[i * 4 + 2], rawData[i * 4 + 1], rawData[i * 4]];
-                    float val = BitConverter.ToSingle(floatBytes);
-                    double scaled = val * bscale + bzero;
-                    pixels[i] = (ushort)Math.Clamp(scaled, 0, 65535);
-                }
+            case -32: // IEEE single-precision float
+                ReadFloatPixels(rawData, pixels, pixelCount, bzero, bscale, bytesPerSample: 4);
+                break;
+            case -64: // IEEE double-precision float
+                ReadFloatPixels(rawData, pixels, pixelCount, bzero, bscale, bytesPerSample: 8);
                 break;
         }
 
         return pixels;
+    }
+
+    /// <summary>
+    /// Read float pixel data and auto-scale to the ushort range. Float
+    /// FITS files arrive in two distinct conventions and we don't get
+    /// to know which up front:
+    ///   - Normalised stacks (PixInsight, Siril) store values in
+    ///     [0.0, 1.0]. A naive `(ushort)val` clamps every pixel to 0
+    ///     and renders the whole image black — the regression that
+    ///     surfaced first when opening a stacked master from the
+    ///     FILES tab.
+    ///   - Unscaled integer-to-float conversions store values in
+    ///     roughly [0, 65535] and the naive cast happens to work.
+    /// The fix is to scan the observed min/max in a first pass and
+    /// linearly remap to [0, 65535] in a second pass. AutoStretch later
+    /// applies the usual MTF on top, so non-linear curves in the source
+    /// (HDR composites with a long tail) still display correctly.
+    /// NaN / infinity pixels (very common in stacks where the rejection
+    /// killed every contributing frame) are treated as zero, both for
+    /// the range scan and the final write.
+    /// </summary>
+    private static void ReadFloatPixels(byte[] rawData, ushort[] pixels, long pixelCount,
+                                        int bzero, double bscale, int bytesPerSample) {
+        // First pass: gather a tight min/max over finite samples only.
+        double min = double.PositiveInfinity, max = double.NegativeInfinity;
+        for (long i = 0; i < pixelCount; i++) {
+            double val = ReadFloatAt(rawData, i * bytesPerSample, bytesPerSample);
+            val = val * bscale + bzero;
+            if (!double.IsFinite(val)) continue;
+            if (val < min) min = val;
+            if (val > max) max = val;
+        }
+        if (!double.IsFinite(min) || !double.IsFinite(max) || max <= min) {
+            // Degenerate input: constant or all-NaN buffer. Output stays
+            // zero — there's nothing meaningful to show anyway.
+            Array.Clear(pixels, 0, pixels.Length);
+            return;
+        }
+
+        double range = max - min;
+        double scale65k = 65535.0 / range;
+
+        // Second pass: rescale + write. We could fold these into one
+        // loop but the two-pass form is clearer and the extra walk is
+        // negligible against the I/O cost.
+        for (long i = 0; i < pixelCount; i++) {
+            double val = ReadFloatAt(rawData, i * bytesPerSample, bytesPerSample);
+            val = val * bscale + bzero;
+            if (!double.IsFinite(val)) { pixels[i] = 0; continue; }
+            double mapped = (val - min) * scale65k;
+            // Clamp guards against floating-point noise that nudges the
+            // top end one ULP past max.
+            pixels[i] = (ushort)Math.Clamp(mapped, 0.0, 65535.0);
+        }
+    }
+
+    /// <summary>
+    /// FITS stores floats and doubles in big-endian byte order. .NET's
+    /// BitConverter is host-endian, so reverse the bytes before decoding.
+    /// </summary>
+    private static double ReadFloatAt(byte[] data, long offset, int bytesPerSample) {
+        if (bytesPerSample == 4) {
+            Span<byte> bytes = stackalloc byte[4] {
+                data[offset + 3], data[offset + 2], data[offset + 1], data[offset]
+            };
+            return BitConverter.ToSingle(bytes);
+        } else {
+            Span<byte> bytes = stackalloc byte[8] {
+                data[offset + 7], data[offset + 6], data[offset + 5], data[offset + 4],
+                data[offset + 3], data[offset + 2], data[offset + 1], data[offset]
+            };
+            return BitConverter.ToDouble(bytes);
+        }
     }
 
     private static ImageMetaData ExtractMetaData(Dictionary<string, FITSHeaderCard> headers) {
