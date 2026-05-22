@@ -1,0 +1,35 @@
+############################################
+# Polaris preprocessing — Mono camera (LRGB / narrowband)
+# Bias + flat + lights, NO darks
+#
+# Use when you haven't built fresh darks for this rig + temp.
+# Bias still cancels the read-noise pedestal; flat fixes vignette
+# + dust. Hot pixels remain — cosmetic correction (cosmetic
+# command after register) can clean them up if needed.
+############################################
+
+requires 1.0.0
+
+cd biases
+convert bias -out=../process -fitseq
+cd ../process
+stack bias_ rej 3 3 -nonorm
+cd ..
+
+cd flats
+convert flat -out=../process -fitseq
+cd ../process
+calibrate flat_ -bias=bias_stacked
+stack pp_flat_ rej 3 3 -norm=mul
+cd ..
+
+cd lights
+convert light -out=../process -fitseq
+cd ../process
+calibrate light_ -bias=bias_stacked -flat=pp_flat_stacked
+
+register pp_light_
+stack r_pp_light_ rej 3 3 -norm=addscale -output_norm -out=result
+load result
+save result
+close

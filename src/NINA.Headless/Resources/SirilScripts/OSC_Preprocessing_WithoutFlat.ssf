@@ -1,0 +1,40 @@
+############################################
+# Polaris preprocessing — OSC (one-shot color)
+# Bias + dark + lights, NO flats
+#
+# Use when you came home without flats (forgot the panel, dawn
+# came first, OTA spacing changed). Bias + dark still cancel
+# read noise + thermal signal; you'll need PixInsight/StarTools/
+# GraXpert to clean up the vignette + dust after the stack.
+#
+# Expected work-dir layout:
+#   biases/  darks/  flats/(empty)  lights/
+############################################
+
+requires 1.0.0
+
+# Master bias
+cd biases
+convert bias -out=../process -fitseq
+cd ../process
+stack bias_ rej 3 3 -nonorm
+cd ..
+
+# Master dark
+cd darks
+convert dark -out=../process -fitseq
+cd ../process
+stack dark_ rej 3 3 -nonorm
+cd ..
+
+# Calibrate lights with bias + dark only, then debayer.
+cd lights
+convert light -out=../process -fitseq
+cd ../process
+calibrate light_ -bias=bias_stacked -dark=dark_stacked -cfa -equalize_cfa -debayer
+
+register pp_light_
+stack r_pp_light_ rej 3 3 -norm=addscale -output_norm -out=result
+load result
+save result
+close

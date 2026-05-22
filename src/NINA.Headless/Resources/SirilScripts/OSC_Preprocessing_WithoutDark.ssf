@@ -1,0 +1,41 @@
+############################################
+# Polaris preprocessing — OSC (one-shot color)
+# Bias + flat + lights, NO darks
+#
+# Use when you haven't shot darks for this session (cool nights,
+# short exposures, or starting out). Bias still suppresses the
+# read-noise pedestal, flat fixes vignette + dust, lights register
+# and stack as usual.
+#
+# Expected work-dir layout:
+#   biases/  darks/(empty)  flats/  lights/
+############################################
+
+requires 1.0.0
+
+# 1. Master bias
+cd biases
+convert bias -out=../process -fitseq
+cd ../process
+stack bias_ rej 3 3 -nonorm
+cd ..
+
+# 2. Master flat (bias-calibrated)
+cd flats
+convert flat -out=../process -fitseq
+cd ../process
+calibrate flat_ -bias=bias_stacked
+stack pp_flat_ rej 3 3 -norm=mul
+cd ..
+
+# 3. Calibrate lights with bias + flat only, then debayer.
+cd lights
+convert light -out=../process -fitseq
+cd ../process
+calibrate light_ -bias=bias_stacked -flat=pp_flat_stacked -cfa -equalize_cfa -debayer
+
+register pp_light_
+stack r_pp_light_ rej 3 3 -norm=addscale -output_norm -out=result
+load result
+save result
+close

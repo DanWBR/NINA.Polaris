@@ -1,0 +1,34 @@
+############################################
+# Polaris preprocessing — Mono camera (LRGB / narrowband)
+# Bias + dark + lights, NO flats
+#
+# Use when you don't have flats for this filter + OTA spacing.
+# Bias + dark clean up read noise + thermal signal; vignette and
+# dust survive into the stack — plan to remove them with
+# GraXpert / DBE / ABE downstream.
+############################################
+
+requires 1.0.0
+
+cd biases
+convert bias -out=../process -fitseq
+cd ../process
+stack bias_ rej 3 3 -nonorm
+cd ..
+
+cd darks
+convert dark -out=../process -fitseq
+cd ../process
+stack dark_ rej 3 3 -nonorm
+cd ..
+
+cd lights
+convert light -out=../process -fitseq
+cd ../process
+calibrate light_ -bias=bias_stacked -dark=dark_stacked
+
+register pp_light_
+stack r_pp_light_ rej 3 3 -norm=addscale -output_norm -out=result
+load result
+save result
+close

@@ -1,0 +1,33 @@
+############################################
+# Polaris preprocessing — OSC (one-shot color)
+# Lights only — NO bias, NO darks, NO flats (DBF = D+B+F)
+#
+# The minimum-viable pipeline: debayer + register + stack the
+# lights you have. Useful when you only have raw subs (testing a
+# new target, someone else's data, a first-light session). Expect
+# visible read noise, thermal hot pixels, and vignette in the
+# output that calibration would have removed.
+#
+# Expected work-dir layout:
+#   biases/(empty)  darks/(empty)  flats/(empty)  lights/
+############################################
+
+requires 1.0.0
+
+cd lights
+convert light -out=../process -fitseq
+cd ../process
+
+# Debayer first (no calibration to do), producing pp_light_*.
+seqcosme light_ -prefix=pp_
+seqdebayer pp_light_
+
+# Register the debayered sequence.
+register pp_light_
+
+# Stack with sigma rejection + additive scaling normalization.
+stack r_pp_light_ rej 3 3 -norm=addscale -output_norm -out=result
+
+load result
+save result
+close

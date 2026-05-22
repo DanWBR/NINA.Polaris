@@ -1,0 +1,20 @@
+############################################
+# Polaris preprocessing — Mono camera (LRGB / narrowband)
+# Lights only — NO bias, NO darks, NO flats
+#
+# The minimum-viable pipeline: register + stack the lights you
+# have. Expect read noise, hot pixels, and vignette in the
+# output that calibration would have removed.
+############################################
+
+requires 1.0.0
+
+cd lights
+convert light -out=../process -fitseq
+cd ../process
+
+register light_
+stack r_light_ rej 3 3 -norm=addscale -output_norm -out=result
+load result
+save result
+close

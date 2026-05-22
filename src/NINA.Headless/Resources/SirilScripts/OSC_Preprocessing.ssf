@@ -1,0 +1,55 @@
+############################################
+# Polaris preprocessing — OSC (one-shot color)
+# Full calibration: bias + dark + flat + lights
+#
+# Expected work-dir layout (Polaris stages this for you):
+#   biases/   — bias frames
+#   darks/    — dark frames
+#   flats/    — flat frames
+#   lights/   — light frames (the target)
+#
+# Output: result.fit (registered, stacked, debayered)
+############################################
+
+requires 1.0.0
+
+# 1. Master bias
+cd biases
+convert bias -out=../process -fitseq
+cd ../process
+stack bias_ rej 3 3 -nonorm
+cd ..
+
+# 2. Master flat (calibrate with master bias)
+cd flats
+convert flat -out=../process -fitseq
+cd ../process
+calibrate flat_ -bias=bias_stacked
+stack pp_flat_ rej 3 3 -norm=mul
+cd ..
+
+# 3. Master dark
+cd darks
+convert dark -out=../process -fitseq
+cd ../process
+stack dark_ rej 3 3 -nonorm
+cd ..
+
+# 4. Calibrate lights with master dark + master flat,
+#    then debayer (RGGB pattern is auto-detected from the FITS header).
+cd lights
+convert light -out=../process -fitseq
+cd ../process
+calibrate light_ -dark=dark_stacked -flat=pp_flat_stacked -cfa -equalize_cfa -debayer
+
+# 5. Register (align) the calibrated lights.
+register pp_light_
+
+# 6. Stack with sigma rejection + additive scaling normalization.
+stack r_pp_light_ rej 3 3 -norm=addscale -output_norm -out=result
+
+# 7. Final save with a stable name Polaris can find afterwards.
+load result
+save result
+
+close

@@ -1,0 +1,27 @@
+############################################
+# Polaris — OSC dual-narrowband extraction
+# Splits an OSC stack shot through an L-eXtreme / L-Ultimate /
+# Antlia-style dual-band filter into separate Ha and OIII
+# channels. Run after stacking (use OSC_Preprocessing.ssf first
+# or hand it an already-stacked result.fit in the work dir root).
+#
+# Workflow:
+#   1. Run an OSC_Preprocessing variant to produce result.fit
+#   2. Drop into this script — it expects result.fit in cwd
+#   3. Outputs: result_Ha.fit + result_OIII.fit
+#
+# After this you can combine them in PixInsight / GIMP / Photoshop
+# as an HOO composite (R=Ha, G=OIII, B=OIII) or Foraxx-style HOO.
+############################################
+
+requires 1.0.0
+
+# Make sure we have a stacked result to work on.
+load result
+
+# Extract narrowband channels via Siril's built-in dual-band
+# extractor. Output naming follows result_Ha / result_OIII.
+extract_HaOIII -resample=ha
+
+save result_extracted
+close

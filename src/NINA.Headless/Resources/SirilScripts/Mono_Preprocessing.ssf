@@ -1,0 +1,48 @@
+############################################
+# Polaris preprocessing — Mono camera (LRGB / narrowband)
+# Full calibration: bias + dark + flat + lights
+#
+# Run this script once per channel (L, R, G, B, Ha, OIII, SII...).
+# Drop only that channel's lights/flats into the work dir; the
+# darks + biases are shared across channels.
+#
+# Expected work-dir layout:
+#   biases/  darks/  flats/  lights/
+############################################
+
+requires 1.0.0
+
+# Master bias
+cd biases
+convert bias -out=../process -fitseq
+cd ../process
+stack bias_ rej 3 3 -nonorm
+cd ..
+
+# Master flat (bias-calibrated)
+cd flats
+convert flat -out=../process -fitseq
+cd ../process
+calibrate flat_ -bias=bias_stacked
+stack pp_flat_ rej 3 3 -norm=mul
+cd ..
+
+# Master dark
+cd darks
+convert dark -out=../process -fitseq
+cd ../process
+stack dark_ rej 3 3 -nonorm
+cd ..
+
+# Calibrate lights with dark + flat. No -cfa / -debayer flags
+# because mono sensors have no Bayer matrix.
+cd lights
+convert light -out=../process -fitseq
+cd ../process
+calibrate light_ -dark=dark_stacked -flat=pp_flat_stacked
+
+register pp_light_
+stack r_pp_light_ rej 3 3 -norm=addscale -output_norm -out=result
+load result
+save result
+close

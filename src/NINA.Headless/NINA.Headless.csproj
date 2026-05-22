@@ -35,4 +35,13 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.8" />
   </ItemGroup>
 
+  <!-- Bundled Siril preprocessing scripts. SirilService extracts these
+       from the assembly to %LOCALAPPDATA%/NINA.Headless/siril/
+       scripts-bundled/ on first use; from there siril-cli consumes them
+       like any other .ssf on disk. Embedded so the deploy is a single
+       executable + no separate "make sure to copy the scripts dir" step. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\SirilScripts\*.ssf" />
+  </ItemGroup>
+
 </Project>

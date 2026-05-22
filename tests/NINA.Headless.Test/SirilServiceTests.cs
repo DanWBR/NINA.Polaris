@@ -88,14 +88,52 @@ public class SirilServiceTests {
     public void EnumerateScripts_PicksUpBundledFromAssembly() {
         // When the bundled .ssf resources land in the assembly, the
         // enumeration must surface them with Source="bundled". The
-        // test makes no assumption about WHICH scripts exist (the
-        // bundle is delivered in a separate phase) — only that the
-        // mechanism runs and produces zero or more bundled entries
-        // without exception.
+        // tests don't assume the user has Siril installed but they
+        // DO assume Polaris ships its own scripts — this test would
+        // catch a regression where the csproj <EmbeddedResource> entry
+        // gets removed and the bundled set silently empties.
         var scripts = _siril.EnumerateScripts();
         Assert.That(scripts, Is.Not.Null);
+        var bundled = scripts.Where(s => s.Source == "bundled").ToList();
+        Assert.That(bundled.Count, Is.GreaterThanOrEqualTo(9),
+            "Expected the 9 bundled preprocessing scripts to be embedded");
+
+        // Spot-check the matrix the user explicitly asked for:
+        // each variant (with/without dark/flat/DBF) for both OSC and
+        // mono must be present.
+        var names = bundled.Select(b => b.Name).ToList();
+        foreach (var expected in new[] {
+            "OSC_Preprocessing.ssf",
+            "OSC_Preprocessing_WithoutDark.ssf",
+            "OSC_Preprocessing_WithoutFlat.ssf",
+            "OSC_Preprocessing_WithoutDBF.ssf",
+            "Mono_Preprocessing.ssf",
+            "Mono_Preprocessing_WithoutDark.ssf",
+            "Mono_Preprocessing_WithoutFlat.ssf",
+            "Mono_Preprocessing_WithoutDBF.ssf",
+            "OSC_Extract_HaOIII.ssf"
+        }) {
+            Assert.That(names, Has.Member(expected),
+                $"Bundled script {expected} is missing from the assembly");
+        }
+    }
+
+    [Test]
+    public void BundledScripts_ExtractedToDiskCorrectly() {
+        // The extraction path should produce real .ssf files on disk,
+        // not empty placeholders. Each script must have at least the
+        // `requires` line and end with `close` — otherwise Siril
+        // refuses them.
+        var scripts = _siril.EnumerateScripts()
+            .Where(s => s.Source == "bundled").ToList();
         foreach (var s in scripts) {
-            Assert.That(s.Source, Is.AnyOf("bundled", "user"));
+            Assert.That(File.Exists(s.Path), Is.True,
+                $"Bundled script {s.Name} not extracted to {s.Path}");
+            var content = File.ReadAllText(s.Path);
+            Assert.That(content, Does.Contain("requires"),
+                $"{s.Name} missing `requires` directive");
+            Assert.That(content.TrimEnd().EndsWith("close", StringComparison.Ordinal),
+                $"{s.Name} should end with `close` to release Siril resources");
         }
     }
 
