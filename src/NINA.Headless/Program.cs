@@ -16,6 +16,10 @@ builder.Services.AddSingleton<ImageRelayService>();
 builder.Services.AddSingleton<CameraStreamService>();
 builder.Services.AddSingleton<NINA.Headless.Services.Planetary.VideoRecordingService>();
 builder.Services.AddSingleton<NINA.Headless.Services.Planetary.PlanetaryStackerService>();
+// LSTR-3: subscribes to LiveStackingService.FrameIntegrated at construction.
+// Eagerly resolved alongside PHD2ProfileSyncService below so the
+// subscription wires at startup, not on first /api/livestack/triggers/* hit.
+builder.Services.AddSingleton<LiveStackTriggersService>();
 // Auto-shows live camera feed while mount is slewing (no-op when any
 // capture surface is active). Singleton + hosted service so the
 // background poll loop runs.
@@ -100,6 +104,12 @@ var app = builder.Build();
 // this, the singleton would only be constructed on first /api/guider/*
 // request and rig activations before that would skip auto-sync.
 app.Services.GetRequiredService<PHD2ProfileSyncService>();
+// Same eager-resolve rationale: LiveStackTriggersService subscribes to
+// LiveStackingService frame events in its constructor. Without this
+// the singleton would only be constructed when /api/livestack/triggers
+// is hit, and any frames stacked before then would skip auto-refocus
+// / auto-recenter evaluation.
+app.Services.GetRequiredService<LiveStackTriggersService>();
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
