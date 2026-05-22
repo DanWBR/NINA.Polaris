@@ -39,6 +39,7 @@ Browser (laptop / tablet / phone)        Raspberry Pi / Mini PC
   - [Weather Forecast](#weather-forecast)
   - [Tonight's Best](#tonights-best)
   - [Studio (post-processing)](#studio-post-processing)
+  - [External tools (Siril + GraXpert)](#external-tools-siril--graxpert)
   - [File explorer](#file-explorer)
   - [Sequence Engine + Image Persistence](#sequence-engine--image-persistence)
   - [Flat Wizard](#flat-wizard)
@@ -464,6 +465,59 @@ capture at 02:30 local time still belongs to the previous evening.
 
 Each operation writes a new FITS under `{rig}/processed/{target}/` and
 auto-refreshes the library.
+
+### External tools (Siril + GraXpert)
+
+Polaris drives two external CLIs when they're installed on the
+host machine: **Siril** for preprocessing + stacking, and
+**GraXpert** for AI-based background extraction, deconvolution,
+and denoising.
+
+Detection happens automatically on startup — the Settings tab's
+**External tools** section shows the detected version and binary
+path (or "Not detected" with install hints).
+
+**Siril** ([siril.org](https://siril.org)) becomes the preferred
+stacking engine the moment it's detected. The STUDIO tab gains a
+**⚡ Stack with Siril** button that runs your chosen `.ssf`
+script against the selected frames. Polaris ships 9 curated
+preprocessing scripts (OSC + Mono × the with/without dark/flat/DBF
+matrix, plus OSC narrowband extraction), and also picks up your
+personal scripts from the standard Siril scripts dir so anything
+you wrote works the same way. See
+[docs/siril-setup.md](docs/siril-setup.md).
+
+**GraXpert** ([graxpert.com](https://www.graxpert.com)) offers
+three operations:
+- **🌅 BGE (background extraction)** — removes gradients.
+- **✨ Deconvolution** (v3.0+) — sharpens a stacked master.
+- **🔇 Denoise** (v3.0+) — AI noise reduction on the master.
+
+You can run GraXpert in three ways:
+1. **Manual batch** — multi-select frames in **FILES**, click the
+   op button, tune the sliders, hit Start.
+2. **Auto during capture** — tick "Auto-extract gradient with
+   GraXpert (per frame)" in the **AUTORUN** End Events panel.
+   Every saved light fires a fire-and-forget BGE in the
+   background. Designed for heavy-light-pollution sites where
+   each frame has its own gradient.
+3. **Combined with Siril** — in the STUDIO Siril modal, tick
+   "Inject GraXpert BGE per-frame before stacking" to chain the
+   two: GraXpert cleans each light first, then Siril stacks the
+   `_bge` outputs. Slower but produces a much cleaner master.
+
+Decon + Denoise are manual-only on integrated masters — running
+them per-frame degrades SNR. See
+[docs/graxpert-setup.md](docs/graxpert-setup.md).
+
+Outputs land in dedicated per-tool folders so you can tell what
+came from where: `{rig}/siril/{target}/`, `{rig}/bge/{target}/`,
+and `{rig}/decon|denoise/{target}/`.
+
+When Siril / GraXpert isn't installed, the built-in C# pipeline
+(MasterFrameService + CalibrationService + BatchStackingService)
+remains available as a fallback so users without the externals
+still get a working stacking workflow.
 
 ### File explorer
 
