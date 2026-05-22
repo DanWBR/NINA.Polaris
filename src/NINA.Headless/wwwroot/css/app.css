@@ -4578,6 +4578,12 @@ label select.input-sm {
 .video-tab-panel {
     display: flex;
     flex-direction: column;
+    /* min-height:0 unlocks the flex children to shrink below their
+       content size; without it the .video-pane > .preview-area
+       (flex:1 + min-height:200) overflows past .tab-panel's bottom
+       padding when the viewport is short. */
+    min-height: 0;
+    overflow: hidden;
 }
 .video-tabstrip {
     display: flex;
@@ -4606,6 +4612,21 @@ label select.input-sm {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    /* Claim all remaining space inside .video-tab-panel so the
+       preview-area's flex:1 actually has something to grow into.
+       overflow-y:auto lets the controls scroll within the pane on
+       narrow viewports rather than pushing the whole layout. */
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+/* Cap the live-preview area inside VIDEO Capture so a tall sensor
+   readout doesn't try to push the surrounding controls off-screen.
+   The .preview-area class itself is shared with LIVE / PREVIEW, so
+   we only narrow it here. */
+.video-pane .preview-area {
+    flex: 0 0 auto;
+    height: clamp(240px, 50vh, 520px);
 }
 
 /* SKY tab inset showing the live camera feed while the mount slews.

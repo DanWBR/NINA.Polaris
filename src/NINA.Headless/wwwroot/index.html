@@ -727,7 +727,7 @@
 
                 <!-- ===== Tab 1: Capture ===== -->
                 <div x-show="videoTab === 'capture'" class="video-pane">
-                    <div class="preview-area" style="min-height:300px">
+                    <div class="preview-area">
                         <canvas id="videoCaptureCanvas" class="preview-canvas"></canvas>
                         <div class="preview-overlay" x-show="!cameraStream.running">
                             <p x-text="selectedCamera
