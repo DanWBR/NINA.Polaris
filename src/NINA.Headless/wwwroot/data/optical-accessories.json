@@ -116,25 +116,43 @@
       "factor": 0.8,
       "backspacingMm": 55.0,
       "compatibleScopes": ["SV503 70ED", "SV503 80ED", "SV503 102ED"],
-      "notes": "Dedicated reducer + flattener for the SV503 ED doublet series."
+      "notes": "Dedicated 2\" reducer + flattener for the SV503 ED doublet series. M54×1 thread on the camera side. SV503 80ED 560 mm f/7 → 448 mm f/5.6; SV503 102ED 714 mm f/7 → 571 mm f/5.6."
     },
     {
       "brand": "SVBony",
-      "model": "SV209 1x Flattener (SV503)",
+      "model": "SV209 1x Flattener (SV550 80)",
       "type": "flattener",
       "factor": 1.0,
       "backspacingMm": 55.0,
-      "compatibleScopes": ["SV503 70ED", "SV503 80ED", "SV503 102ED"],
-      "notes": "Field flattener (no focal-length change) for the SV503 series."
+      "compatibleScopes": ["SV550 80"],
+      "notes": "Field flattener bundled with the SV550 80 APO. No focal-length change."
     },
     {
       "brand": "SVBony",
-      "model": "SV219 0.8x Reducer/Flattener (SV550)",
+      "model": "SV209 0.8x Reducer/Flattener (SV550 122)",
       "type": "reducer",
       "factor": 0.8,
       "backspacingMm": 55.0,
-      "compatibleScopes": ["SV550 80", "SV550 122"],
-      "notes": "Dedicated reducer + flattener for the SV550 triplet APO series."
+      "compatibleScopes": ["SV550 122"],
+      "notes": "Reducer + flattener bundled with the SV550 122 APO. 854 mm f/7 → 683 mm f/5.6."
+    },
+    {
+      "brand": "SVBony",
+      "model": "SV137 2x Barlow",
+      "type": "barlow",
+      "factor": 2.0,
+      "backspacingMm": null,
+      "compatibleScopes": [],
+      "notes": "1.25\" two-element multi-coated Barlow. Doubles the effective focal length."
+    },
+    {
+      "brand": "SVBony",
+      "model": "SV137 3x Barlow",
+      "type": "barlow",
+      "factor": 3.0,
+      "backspacingMm": null,
+      "compatibleScopes": [],
+      "notes": "1.25\" two-element multi-coated Barlow. Triples the effective focal length — common pick for planetary at modest aperture."
     },
     {
       "brand": "TS Optics",
