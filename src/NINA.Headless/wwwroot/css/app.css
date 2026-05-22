@@ -1675,10 +1675,16 @@ select.input-sm {
 }
 .home-clock {
     margin-top: 18px;
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    /* Inter via the global body stack — tabular-nums + slashed-zero
+       keep the seconds digits in fixed columns (no jitter when the
+       clock ticks) and disambiguate the zero from O, without
+       dropping into a monospace face. */
+    font-family: inherit;
+    font-variant-numeric: tabular-nums slashed-zero;
+    font-feature-settings: "tnum", "zero";
     font-size: 13px;
     color: var(--text-muted, #94a3b8);
-    letter-spacing: 1px;
+    letter-spacing: 0.4px;
     display: inline-flex;
     align-items: center;
     flex-wrap: wrap;
