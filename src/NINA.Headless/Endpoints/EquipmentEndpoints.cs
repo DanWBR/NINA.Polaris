@@ -126,6 +126,10 @@ public static class EquipmentEndpoints {
                 if (update.PHD2CustomAlgoParams != null)
                     r.PHD2CustomAlgoParams = update.PHD2CustomAlgoParams;
                 r.FilterOffsets = update.FilterOffsets ?? new();
+                // Live-stack triggers (LSTR-2). Defensive null check
+                // keeps old clients from clobbering the field.
+                if (update.LiveStackTriggers != null)
+                    r.LiveStackTriggers = update.LiveStackTriggers;
             });
             return ok ? Results.Ok(new { message = "Rig updated" })
                       : Results.NotFound(new { error = "Rig not found" });

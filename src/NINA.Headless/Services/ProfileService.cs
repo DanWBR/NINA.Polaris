@@ -190,7 +190,23 @@ public class ProfileService {
             PHD2CalibrationStepMsOverride = src.PHD2CalibrationStepMsOverride,
             PHD2AutoSyncOnRigSwitch = src.PHD2AutoSyncOnRigSwitch,
             PHD2CustomAlgoParams = new Dictionary<string, double>(src.PHD2CustomAlgoParams),
-            FilterOffsets = new Dictionary<string, int>(src.FilterOffsets)
+            FilterOffsets = new Dictionary<string, int>(src.FilterOffsets),
+            // Live-stack triggers — clone the whole shape so the new rig
+            // gets the same refocus/recenter policy as the source. Reset
+            // counters live on the orchestrator, not the settings.
+            LiveStackTriggers = new LiveStackTriggers {
+                RefocusEnabled = src.LiveStackTriggers.RefocusEnabled,
+                RefocusEveryNFrames = src.LiveStackTriggers.RefocusEveryNFrames,
+                RefocusEveryMinutes = src.LiveStackTriggers.RefocusEveryMinutes,
+                RefocusTempDeltaC = src.LiveStackTriggers.RefocusTempDeltaC,
+                RefocusHfrIncreasePercent = src.LiveStackTriggers.RefocusHfrIncreasePercent,
+                RefocusRequest = src.LiveStackTriggers.RefocusRequest,
+                RecenterEnabled = src.LiveStackTriggers.RecenterEnabled,
+                RecenterEveryNFrames = src.LiveStackTriggers.RecenterEveryNFrames,
+                RecenterEveryMinutes = src.LiveStackTriggers.RecenterEveryMinutes,
+                RecenterDriftArcsec = src.LiveStackTriggers.RecenterDriftArcsec,
+                RecenterToleranceArcsec = src.LiveStackTriggers.RecenterToleranceArcsec
+            }
         };
         _activeProfile.EquipmentProfiles.Add(copy);
         Save();
@@ -498,6 +514,13 @@ public class EquipmentProfile {
     /// in the table are treated as 0.
     /// </summary>
     public Dictionary<string, int> FilterOffsets { get; set; } = new();
+
+    /// <summary>
+    /// Auto re-focus + re-center policy applied during live stacking
+    /// (LSTR-3). Persisted per-rig because thermal characteristics +
+    /// guiding precision vary by setup. Default = all triggers disabled.
+    /// </summary>
+    public LiveStackTriggers LiveStackTriggers { get; set; } = new();
 }
 
 public class ProfileSummary {
