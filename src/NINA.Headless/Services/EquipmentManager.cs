@@ -110,10 +110,12 @@ public class EquipmentManager : IDisposable {
         // Sony Camera Remote SDK ships native binaries for both
         // Windows and Linux, so it shows up on every OS — including
         // Raspberry Pi via the SDK's linux-arm64 build.
-        list.Add(new("sony-sdk", "Sony (Camera Remote SDK)",
+        list.Add(new("sony-sdk", "Sony α series",
             Available: NINA.Camera.SonySdk.SonySdkRegistry.IsAvailable,
-            Description: "Sony α series (Windows + Linux). Skeleton driver — " +
-                "see docs/dslr-windows-sony.md to wire up the actual SDK."));
+            Description: "Sony α series. Skeleton driver — see " +
+                "docs/dslr-windows-sony.md (two complementary paths: " +
+                "Wi-Fi Camera Remote API for older bodies, USB SCRSDK " +
+                "v2.x for current bodies)."));
         return list;
     }
 

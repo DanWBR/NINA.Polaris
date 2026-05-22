@@ -33,31 +33,45 @@ go through the INDI gphoto path instead.
 
 ## What's needed to make it real
 
-1. Register on
-   <https://developer.sony.com/imaging-products/camera-remote-sdk/>
-   (free, requires accepting the SDK licence).
-2. Download SCRSDK v2.x for the platforms you care about
-   (Windows x64, Linux x64, Linux ARM64 if you want Raspberry Pi
-   support).
-3. Implement the native bindings under
-   `src/NINA.Camera.SonySdk/Native/`. The SDK provides a
-   C-style API surface (`SCRSDK::Init`, `EnumCameraObjects`,
-   `Connect`, `SetDeviceProperty`, `SendCommand(S1Shooting)`,
-   etc.) that's easier to P/Invoke than the C++ class layouts in
-   Canon EDSDK and Nikon Imaging SDK.
-4. Wire up `SonySdkDiscovery.Enumerate()` against
-   `EnumCameraObjects` so the UI's **Detect** button populates
-   the camera dropdown.
-5. Wire up `SonySdkCamera.ConnectAsync` /
-   `CaptureAsync` against the SDK's connect + shutter +
-   transfer flow.
-6. Flip `SonySdkRegistry.IsAvailable` to return true on
-   successful `SCRSDK::Init`.
+Sony's tethering stack splits in two — which one fits depends
+on the cameras you want to support:
 
-## Supported bodies
+### Option A — Camera Remote API v1.90 (Wi-Fi REST, older bodies)
 
-SCRSDK v2.x covers (model availability depends on the SDK
-version you download):
+Cameras released ~2013-2017 expose a **JSON-RPC over HTTP**
+interface over Wi-Fi (Sony "Smart Remote Control" mode). No
+native binaries, no Zadig USB-driver dance, no platform
+restrictions — works the same on Windows, Linux, Raspberry Pi
+and even tablets. Easiest path to a working Sony driver.
+
+Bodies covered (this list is not exhaustive — any body with
+the "Smart Remote Control" PlayMemories app works):
+
+- α6000 / α6300 / α6500
+- α7 / α7R / α7S (original)
+- α7 II / α7R II / α7S II
+- NEX-5R / NEX-5T / NEX-6
+- DSC-QX10 / QX100 lens cameras
+- HX series with Wi-Fi
+
+**Recommended reference:** the MS-PL-licensed
+[nantcom/SonyCameraSDK](https://github.com/nantcom/SonyCameraSDK)
+project is a portable C# client for this exact API. Adapt its
+HTTP-call patterns into `SonySdkCamera` — discovery via SSDP on
+port 1900, then JSON-RPC POSTs against
+`http://{cam-ip}:8080/sony/camera`. Methods we care about:
+`startRecMode` / `actTakePicture` / `getEvent` / `setIsoSpeedRate`
+/ `setShutterSpeed` / `setExposureMode`.
+
+This path doesn't need any redistribution-restricted DLLs — the
+camera has the API built in. The Polaris-side wrapper can live
+entirely under our MPL 2.0 licence.
+
+### Option B — Camera Remote SDK v2.x (USB tether, modern bodies)
+
+Cameras released 2018-onward dropped the Wi-Fi REST API in
+favour of Sony's **Camera Remote SDK** (SCRSDK), a C-style
+native library over USB tether. Coverage:
 
 - α7 III / α7 IV
 - α7R III / α7R IV / α7R V
@@ -68,9 +82,34 @@ version you download):
 - FX3 / FX30
 - α6700
 
-Older bodies (α7 II, α6500, etc.) are not supported by SCRSDK
-and need to be driven through the Sony Imaging Edge Remote
-Control app via a screen-scrape adapter — not in scope here.
+Path:
+
+1. Register on
+   <https://developer.sony.com/imaging-products/camera-remote-sdk/>
+   (free, accept the SDK licence).
+2. Download SCRSDK v2.x for the platforms you care about
+   (Windows x64, Linux x64, Linux ARM64 for Raspberry Pi).
+3. Implement the native bindings under
+   `src/NINA.Camera.SonySdk/Native/`. The SDK exposes a C-style
+   API (`SCRSDK::Init`, `EnumCameraObjects`, `Connect`,
+   `SetDeviceProperty`, `SendCommand(S1Shooting)`, etc.)
+   that's easier to P/Invoke than Canon EDSDK and Nikon Imaging SDK.
+4. Wire `SonySdkDiscovery.Enumerate()` against `EnumCameraObjects`.
+5. Wire `SonySdkCamera.ConnectAsync` / `CaptureAsync` against
+   the SDK's connect + shutter + transfer flow.
+
+SCRSDK DLLs are not redistributable — same arrangement as Canon
+and Nikon (users register, accept the EULA, drop the libraries
+into `plugins/sony-sdk/`).
+
+### Picking which one to implement first
+
+Option A (Camera Remote API) is the easier win: pure HTTP, no
+native deps, no platform restrictions, no EULA dance, covers
+the cameras a hobbyist astrophotographer is most likely to have
+on hand. Option B is needed for current bodies. Both can live
+in the same `NINA.Camera.SonySdk` project with internal branching
+by camera generation.
 
 ## Capture-path expectations
 
