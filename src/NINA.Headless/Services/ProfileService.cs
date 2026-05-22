@@ -163,7 +163,8 @@ public class ProfileService {
         var copy = new EquipmentProfile {
             Name = newName,
             Camera = src.Camera, CameraDriver = src.CameraDriver,
-            Telescope = src.Telescope, Focuser = src.Focuser,
+            Telescope = src.Telescope, TelescopeDriver = src.TelescopeDriver,
+            Focuser = src.Focuser,
             FilterWheel = src.FilterWheel, Rotator = src.Rotator,
             FlatDevice = src.FlatDevice, Dome = src.Dome, Weather = src.Weather,
             CoolerTargetTemperature = src.CoolerTargetTemperature,
@@ -335,6 +336,12 @@ public class EquipmentProfile {
     /// before this field existed.</summary>
     public string CameraDriver { get; set; } = "indi";
     public string? Telescope { get; set; }
+    /// <summary>Mount backend kind. One of: <c>indi</c> (default, covers
+    /// every mount the running indiserver exposes), <c>alpaca</c>,
+    /// <c>synscan-wifi</c> (Sky-Watcher UDP, planned), <c>nexstar-wifi</c>
+    /// (Celestron TCP, planned), <c>lx200-tcp</c> (Meade-compatible TCP,
+    /// planned). Defaults to <c>indi</c> for backward compatibility.</summary>
+    public string TelescopeDriver { get; set; } = "indi";
     public string? Focuser { get; set; }
     public string? FilterWheel { get; set; }
     public string? Rotator { get; set; }

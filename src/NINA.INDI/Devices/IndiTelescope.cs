@@ -1,13 +1,22 @@
 using NINA.Core.Enum;
+using NINA.Image.Interfaces;
 using NINA.INDI.Client;
 
 namespace NINA.INDI.Devices;
 
-public class IndiTelescope {
+public class IndiTelescope : ITelescope {
     private readonly IndiClient _client;
 
     public string DeviceName { get; }
     public bool IsConnected => _client.IsConnected;
+
+    /// <summary>INDI mounts come in all shapes. Default to the
+    /// GEM capability profile — for the common WiFi alt-az bodies
+    /// (AZ-GTi, NexStar SE) the pier-side indicator simply stays
+    /// "unknown" and the UI tolerates it. A future refinement can
+    /// inspect the INDI driver name and switch to <see cref="MountCapabilities.AltAz"/>
+    /// when it's clearly an alt-az.</summary>
+    public MountCapabilities Capabilities => MountCapabilities.GermanEquatorial;
 
     public double RightAscension => _client.GetNumber(DeviceName, "EQUATORIAL_EOD_COORD", "RA");
     public double Declination => _client.GetNumber(DeviceName, "EQUATORIAL_EOD_COORD", "DEC");

@@ -79,6 +79,8 @@ public static class EquipmentEndpoints {
                 if (!string.IsNullOrWhiteSpace(update.CameraDriver))
                     r.CameraDriver = update.CameraDriver;
                 r.Telescope = update.Telescope;
+                if (!string.IsNullOrWhiteSpace(update.TelescopeDriver))
+                    r.TelescopeDriver = update.TelescopeDriver;
                 r.Focuser = update.Focuser;
                 r.FilterWheel = update.FilterWheel;
                 r.Rotator = update.Rotator;

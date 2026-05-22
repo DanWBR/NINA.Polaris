@@ -98,10 +98,26 @@ public static class TelescopeEndpoints {
             return Results.Ok(new { status = "moving", direction });
         });
 
-        group.MapPost("/select/{deviceName}", (EquipmentManager equip, string deviceName) => {
-            equip.SelectTelescope(deviceName);
-            return Results.Ok(new { selected = deviceName });
+        group.MapPost("/select/{deviceName}", (EquipmentManager equip, string deviceName, string? driver) => {
+            // ?driver=indi (default) | synscan-wifi | nexstar-wifi |
+            // lx200-tcp | alpaca. Legacy clients omit it and get INDI.
+            try {
+                equip.SelectTelescope(driver ?? "indi", deviceName);
+                return Results.Ok(new {
+                    selected = deviceName,
+                    driver = driver ?? "indi"
+                });
+            } catch (NotSupportedException ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
         });
+
+        // Mount driver catalogue. Same shape as /api/camera/drivers.
+        // INDI is always available; direct WiFi drivers (SynScan UDP,
+        // NexStar TCP, LX200 TCP) advertise as "not installed" until
+        // their backend lands — see docs/mounts-wifi.md.
+        group.MapGet("/drivers", (EquipmentManager equip)
+            => Results.Ok(equip.GetAvailableMountDrivers()));
 
         group.MapPost("/connect", async (EquipmentManager equip) => {
             if (equip.Telescope == null)

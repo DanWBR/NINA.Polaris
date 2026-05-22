@@ -21,7 +21,16 @@ public class EquipmentManager : IDisposable {
     /// camera is selected.</summary>
     public string? CameraDriver { get; private set; }
 
-    public IndiTelescope? Telescope { get; private set; }
+    /// <summary>Currently-selected mount, regardless of backend.
+    /// Today only <see cref="IndiTelescope"/> implements it; direct
+    /// WiFi / Bluetooth drivers (SynScan UDP, NexStar TCP, LX200 TCP)
+    /// plug in here without touching the capture / sequencing code.
+    /// See <c>docs/mounts-wifi.md</c> for the open driver work.</summary>
+    public ITelescope? Telescope { get; private set; }
+    /// <summary>Mount driver kind currently bound to <see cref="Telescope"/>.
+    /// Mirrors <c>EquipmentProfile.TelescopeDriver</c>. Null when no
+    /// mount is selected.</summary>
+    public string? TelescopeDriver { get; private set; }
     public IndiFocuser? Focuser { get; private set; }
     public IndiFilterWheel? FilterWheel { get; private set; }
     public IndiRotator? Rotator { get; private set; }
@@ -174,10 +183,54 @@ public class EquipmentManager : IDisposable {
             .Select(e => new DiscoveredCamera(e.Id, e.Model, e.PortName))
             .ToList();
 
-    public IndiTelescope SelectTelescope(string deviceName) {
-        Telescope = new IndiTelescope(_indiClient, deviceName);
-        _logger.LogInformation("Telescope selected: {Name}", deviceName);
+    /// <summary>Legacy entry-point — assumes the INDI driver. Kept
+    /// for backwards compatibility with the existing
+    /// <c>POST /api/telescope/select/{deviceName}</c> route.</summary>
+    public ITelescope SelectTelescope(string deviceName)
+        => SelectTelescope("indi", deviceName);
+
+    /// <summary>Select a mount by driver kind + driver-specific
+    /// device id. INDI mounts are addressed by INDI device name;
+    /// direct WiFi drivers (SynScan UDP, NexStar TCP, LX200 TCP)
+    /// take a <c>host:port</c> string. Vendor SDK drivers are
+    /// addressed by serial / id.</summary>
+    public ITelescope SelectTelescope(string driver, string deviceId) {
+        driver = (driver ?? "indi").Trim().ToLowerInvariant();
+        Telescope = driver switch {
+            "indi" => new IndiTelescope(_indiClient, deviceId),
+            // SynScan / NexStar / LX200 direct WiFi drivers land in
+            // follow-up commits; the foundation is in place so they
+            // slot in by adding a case here.
+            _ => throw new NotSupportedException(
+                $"Mount driver '{driver}' is not implemented yet. " +
+                "Use 'indi' (or wait for the direct WiFi drivers — " +
+                "see docs/mounts-wifi.md)."),
+        };
+        TelescopeDriver = driver;
+        _logger.LogInformation("Telescope selected: driver={Driver}, id={DeviceId}",
+            driver, deviceId);
         return Telescope;
+    }
+
+    /// <summary>Available mount drivers on this host. Always includes
+    /// <c>indi</c>; the WiFi / Alpaca entries are advertised as
+    /// "not installed" until their backend lands.</summary>
+    public IReadOnlyList<CameraDriverInfo> GetAvailableMountDrivers() {
+        // Reusing CameraDriverInfo here — the shape is identical
+        // (id / name / available / description) and a separate
+        // record would just be ceremony.
+        return new List<CameraDriverInfo> {
+            new("indi", "INDI", Available: true,
+                Description: "Any mount the running INDI server exposes — covers most WiFi mounts via indi_skywatcherAltAzMount / indi_celestron_aux / indi_ioptron_v3 / indi_lx200gps."),
+            new("alpaca", "Alpaca (ASCOM)", Available: false,
+                Description: "ASCOM-over-HTTP mounts. Wiring pending."),
+            new("synscan-wifi", "Sky-Watcher SynScan (Wi-Fi UDP)", Available: false,
+                Description: "Direct UDP to SynScan Wi-Fi adapter / AZ-GTi / EQ8-R built-in Wi-Fi. Driver pending — see docs/mounts-wifi.md."),
+            new("nexstar-wifi", "Celestron NexStar (Wi-Fi TCP)", Available: false,
+                Description: "Direct TCP to SkyPortal Wi-Fi accessory / StarSense Explorer Wi-Fi. Driver pending — see docs/mounts-wifi.md."),
+            new("lx200-tcp", "Meade / LX200 (TCP)", Available: false,
+                Description: "Direct TCP wrapping the LX200 serial protocol. Driver pending — see docs/mounts-wifi.md."),
+        };
     }
 
     public IndiFocuser SelectFocuser(string deviceName) {
