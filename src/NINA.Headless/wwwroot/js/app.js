@@ -255,6 +255,16 @@ function ninaApp() {
         phd2Install: null,      // /install-info response: { installed, resolvedPath, downloadUrl, os, ... }
         phd2AutoStart: false,   // bound to checkbox, posted to /api/guider/auto-start/{bool}
 
+        // PH2X tab + state. guideTab toggles between the existing
+        // JSON-RPC control panel and the xpra-hosted GUI iframe.
+        guideTab: 'control',
+        phd2AlgoPresetNames: [],
+        phd2ActivePreset: 'Default',
+        phd2AlgoParams: null,            // { axes: { ra: {Hyst:0.1, ...}, dec: {...} } }
+        smartCalibrate: { slewToEquator: false },
+        phd2GuiSession: null,            // { supportedOs, xpraInstalled, running, port, ... }
+        phd2GuiBusy: false,
+
         // Advanced Sequencer state
         advSeq: {
             doc: { name: 'Untitled', root: null },
@@ -619,6 +629,10 @@ function ninaApp() {
             this.loadGraxpertStatus();
             this.loadAtlasTypes();
             this.loadRigs();
+            // Telescope/accessory catalog feeds the Main Telescope card
+            // dropdowns on the RIGS tab and the Manage Rigs modal. Load
+            // upfront so the dropdowns are populated on first open.
+            this.loadOpticsCatalogue();
             this.loadCameraDrivers();
             this.loadMountDrivers();
             this.restoreMountPanel();
@@ -856,37 +870,40 @@ function ninaApp() {
             img.src = url;
         },
 
-        // Copy whatever is currently on liveCanvas to previewCanvas
-        // (and vice versa if the PREVIEW tab was the source). Cheap —
-        // single drawImage call. Called at the end of every successful
-        // render path so both tabs always show the most recent frame.
+        // Copy whatever is currently on liveCanvas to every secondary
+        // canvas that wants a copy of the latest frame (PREVIEW tab,
+        // FOCUS tab auto-focus preview). Cheap — single drawImage per
+        // destination. Called at the end of every successful render
+        // path so all tabs always show the most recent frame.
         _mirrorLiveToPreviewCanvas() {
             const src = document.getElementById('liveCanvas');
-            const dst = document.getElementById('previewCanvas');
-            if (!src || !dst) return;
+            if (!src) return;
             if (src.width === 0 || src.height === 0) return;
-            // Size the PREVIEW canvas to fit its own container while
-            // preserving the source aspect ratio.
-            const container = dst.parentElement;
-            if (!container) return;
-            const containerW = container.clientWidth;
-            const containerH = container.clientHeight;
-            if (containerW <= 0 || containerH <= 0) {
-                // PREVIEW tab not visible yet (display:none collapses
-                // the container). Still copy at the source's native
-                // dimensions so the bitmap is ready when the user
-                // switches tabs.
-                dst.width = src.width;
-                dst.height = src.height;
-            } else {
-                const scale = Math.min(containerW / src.width, containerH / src.height, 1);
-                dst.width = Math.round(src.width * scale);
-                dst.height = Math.round(src.height * scale);
+            for (const id of ['previewCanvas', 'focusCanvas']) {
+                const dst = document.getElementById(id);
+                if (!dst) continue;
+                // Size the destination canvas to fit its container
+                // while preserving the source aspect ratio. When the
+                // tab isn't visible yet (display:none collapses the
+                // container), copy at native dimensions so the bitmap
+                // is ready when the user switches tabs.
+                const container = dst.parentElement;
+                if (!container) continue;
+                const containerW = container.clientWidth;
+                const containerH = container.clientHeight;
+                if (containerW <= 0 || containerH <= 0) {
+                    dst.width = src.width;
+                    dst.height = src.height;
+                } else {
+                    const scale = Math.min(containerW / src.width, containerH / src.height, 1);
+                    dst.width = Math.round(src.width * scale);
+                    dst.height = Math.round(src.height * scale);
+                }
+                const ctx = dst.getContext('2d');
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                ctx.drawImage(src, 0, 0, dst.width, dst.height);
             }
-            const ctx = dst.getContext('2d');
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-            ctx.drawImage(src, 0, 0, dst.width, dst.height);
         },
 
         // Compute shadow/scale either from manual sliders or auto-stretch (median+MAD)
@@ -4085,6 +4102,8 @@ function ninaApp() {
             this.settings.guideTelescopeModel = rig.guideTelescopeModel || '';
             if (rig.phd2Host) this.guiderHost = rig.phd2Host;
             if (rig.phd2Port) this.guiderPort = rig.phd2Port;
+            // PH2X: surface the rig's PHD2 algo preset choice on the pill.
+            this.phd2ActivePreset = rig.phd2AlgoPreset || 'Default';
         },
 
         async switchRig(id) {
@@ -4324,6 +4343,62 @@ function ninaApp() {
                 if (this.activeRigId === id) this.activeRigId = this.rigs[0]?.id;
                 this.toast('Rig deleted', 'warn');
             } catch (e) { this.toast('Delete failed', 'error'); }
+        },
+
+        // Settings-mirror version of _applyOpticsToRig — same lookup,
+        // writes to this.settings.* instead of a rig object. Used by
+        // the catalog picker dropdowns in the Main Telescope card on
+        // the RIGS tab (settings.* later flushes into the active rig
+        // via saveCurrentSelectionsToRig). Off-catalogue picks (brand
+        // cleared back to blank) leave the typed fields alone.
+        _applyOpticsToSettings() {
+            const s = this.settings;
+            const scope = this.opticsCatalogue.telescopes
+                .find(t => t.brand === s.telescopeBrand
+                        && t.model === s.telescopeModel);
+            if (scope) {
+                s.aperture = scope.apertureMm;
+                s.requiredBackspacingMm = scope.backspacingMm;
+            }
+            const accessory = this.opticsCatalogue.accessories
+                .find(a => a.brand + ' ' + a.model === s.accessoryModel)
+                || this.opticsCatalogue.accessories
+                    .find(a => a.model === s.accessoryModel);
+            if (accessory) {
+                s.accessoryType   = accessory.type;
+                s.accessoryFactor = accessory.factor;
+                if (accessory.backspacingMm != null) {
+                    s.requiredBackspacingMm = accessory.backspacingMm;
+                }
+            } else if (!s.accessoryModel) {
+                s.accessoryType   = '';
+                s.accessoryFactor = 1.0;
+            }
+            // Effective focal length = native × accessory factor.
+            // Only recompute when picked from the catalog so manual
+            // off-catalog values stay untouched.
+            if (scope) {
+                s.focalLength = Math.round(
+                    scope.focalLengthMm * (s.accessoryFactor || 1.0));
+                this.updateFov();
+            }
+        },
+
+        // Catalog picker change handlers for the Main Telescope card.
+        // Brand reset clears the model; model + accessory changes
+        // re-derive aperture/focal/backspacing from the catalog.
+        onTelescopeBrandPick() {
+            this.settings.telescopeModel = '';
+            this._applyOpticsToSettings();
+            this.saveOpticsDebounced();
+        },
+        onTelescopeModelPick() {
+            this._applyOpticsToSettings();
+            this.saveOpticsDebounced();
+        },
+        onAccessoryPick() {
+            this._applyOpticsToSettings();
+            this.saveOpticsDebounced();
         },
 
         // Debounced save for inline OTA / Guidescope edits from the
@@ -5780,7 +5855,11 @@ function ninaApp() {
                 this.fetchPhd2Profiles(),
                 this.fetchPhd2Exposure(),
                 this.fetchPhd2DecMode(),
-                this.fetchPhd2EquipmentConnected()
+                this.fetchPhd2EquipmentConnected(),
+                // PH2X: presets list + live params (UI binds to these);
+                // load once on connect so the pill + Advanced surface aren't blank.
+                this.loadPhd2AlgoPresets(),
+                this.loadPhd2AlgoParams()
             ]);
         },
 
@@ -5914,6 +5993,96 @@ function ninaApp() {
                 this.guider.recentSteps = [];
                 this.toast('PHD2 disconnected', 'warn');
             } catch (e) { this.toast('PHD2 disconnect failed', 'error'); }
+        },
+
+        // ----- PH2X-4: Smart Calibrate -----
+        async phd2SmartCalibrate() {
+            try {
+                const r = await this.apiPost('/api/guider/calibrate/smart', {
+                    slewToEquator: !!this.smartCalibrate.slewToEquator,
+                    timeoutSeconds: 240
+                });
+                this.toast(`Smart calibrate kicked off (job ${r.jobId?.slice(0, 8)}…)`, 'info');
+            } catch (e) { this.toast('Smart calibrate failed: ' + e.message, 'error'); }
+        },
+
+        // ----- PH2X-5: Algorithm presets + advanced knobs -----
+        async loadPhd2AlgoPresets() {
+            try {
+                const r = await this.apiGet('/api/guider/algo-presets');
+                this.phd2AlgoPresetNames = (r.names || []).concat(['Custom']);
+            } catch (e) { /* PHD2 may not be reachable yet */ }
+        },
+        async phd2ApplyAlgoPreset(name) {
+            try {
+                await this.apiPost(`/api/guider/algo-preset/${encodeURIComponent(name)}`);
+                this.phd2ActivePreset = name;
+                this.toast(`Applied preset: ${name}`, 'ok');
+                this.loadPhd2AlgoParams();  // refresh live values
+            } catch (e) { this.toast('Apply preset failed: ' + e.message, 'error'); }
+        },
+        async loadPhd2AlgoParams() {
+            try {
+                const r = await this.apiGet('/api/guider/algo-params');
+                this.phd2AlgoParams = r;
+            } catch (e) { /* PHD2 disconnected */ }
+        },
+        async phd2SetAlgoParam(axis, name, value) {
+            if (!isFinite(value)) return;
+            try {
+                await this.apiPost('/api/guider/algo-params', null, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ axis, name, value })
+                });
+                this.phd2ActivePreset = 'Custom';
+                this.toast(`${axis}/${name} = ${value}`, 'ok');
+            } catch (e) { this.toast('Set algo param failed: ' + e.message, 'error'); }
+        },
+
+        // ----- PH2X-6/8: xpra GUI session lifecycle -----
+        async loadPhd2GuiStatus() {
+            try {
+                this.phd2GuiSession = await this.apiGet('/api/guider/gui-session/status');
+            } catch (e) { this.phd2GuiSession = { supportedOs: false, lastError: e.message }; }
+        },
+        async phd2GuiStart() {
+            this.phd2GuiBusy = true;
+            try {
+                const r = await this.apiPost('/api/guider/gui-session/start');
+                if (r.running) {
+                    this.toast('PHD2 GUI session started', 'ok');
+                } else {
+                    this.toast('Start failed: ' + (r.error || 'unknown'), 'error');
+                }
+            } catch (e) { this.toast('Start failed: ' + e.message, 'error'); }
+            finally {
+                this.phd2GuiBusy = false;
+                await this.loadPhd2GuiStatus();
+            }
+        },
+        async phd2GuiStop() {
+            this.phd2GuiBusy = true;
+            try {
+                await this.apiPost('/api/guider/gui-session/stop');
+                this.toast('PHD2 GUI session stopped', 'warn');
+            } catch (e) { this.toast('Stop failed: ' + e.message, 'error'); }
+            finally {
+                this.phd2GuiBusy = false;
+                await this.loadPhd2GuiStatus();
+            }
+        },
+        async phd2GuiRestart() {
+            this.phd2GuiBusy = true;
+            try {
+                const r = await this.apiPost('/api/guider/gui-session/restart');
+                this.toast(r.running ? 'PHD2 GUI restarted' : ('Restart failed: ' + (r.error || '')),
+                    r.running ? 'ok' : 'error');
+            } catch (e) { this.toast('Restart failed: ' + e.message, 'error'); }
+            finally {
+                this.phd2GuiBusy = false;
+                await this.loadPhd2GuiStatus();
+            }
         },
         async guiderStart() {
             try {
@@ -6678,12 +6847,21 @@ function ninaApp() {
                         stepCount: g.stepCount || 0,
                         lastAlert: g.lastAlert || null,
                         lastSettleStatus: g.lastSettleStatus || null,
-                        recentSteps: g.recentSteps || []
+                        recentSteps: g.recentSteps || [],
+                        // PH2X-9 sub-objects — UI binds chips + state to these.
+                        profileSync: g.profileSync || null,
+                        calibrateJob: g.calibrateJob || null,
+                        guiSession: g.guiSession || null
                     };
                     // Auto-expand chart scale based on peak (with floor of 2")
                     const need = Math.max(this.guider.peakRA, this.guider.peakDec, 1.0) * 1.2;
                     if (need > this.guideChartScale) this.guideChartScale = Math.ceil(need);
                 }
+                // Even on disconnect, surface the sync/calibrate/gui-session
+                // sub-objects so the chips + GUI tab still update.
+                if (g.profileSync)  this.guider.profileSync = g.profileSync;
+                if (g.calibrateJob) this.guider.calibrateJob = g.calibrateJob;
+                if (g.guiSession)   this.phd2GuiSession = g.guiSession;
             }
             if (msg.liveStack) {
                 this.liveStackEnabled = msg.liveStack.isRunning;

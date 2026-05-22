@@ -14,7 +14,7 @@ public class SequenceEngineDitherTests {
         var relay = new ImageRelayService(NullLogger<ImageRelayService>.Instance);
         var liveStack = new LiveStackingService(relay, NullLogger<LiveStackingService>.Instance);
         var phd2 = new PHD2Client(NullLogger<PHD2Client>.Instance);
-        var autoFocus = new AutoFocusService(equip, NullLogger<AutoFocusService>.Instance);
+        var autoFocus = new AutoFocusService(equip, relay, NullLogger<AutoFocusService>.Instance);
         var emptyConfig = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
         var plateSolve = new PlateSolveService(emptyConfig, NullLogger<PlateSolveService>.Instance);
         var profile = new ProfileService(emptyConfig, NullLogger<ProfileService>.Instance);

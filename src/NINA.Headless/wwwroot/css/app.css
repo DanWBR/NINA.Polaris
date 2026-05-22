@@ -1595,6 +1595,54 @@ select.input-sm {
     flex-wrap: wrap;
 }
 
+/* Live frame preview inside the Focus tab. The AutoFocusService relays
+   each sweep exposure through ImageRelayService, the multi-canvas
+   renderer mirrors that into #focusCanvas. Fixed-height to keep the
+   layout stable as the V-curve chart appears below. */
+.af-preview-area {
+    position: relative;
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    height: 320px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.af-preview-canvas {
+    max-width: 100%;
+    max-height: 100%;
+    display: block;
+}
+.af-preview-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 13px;
+    text-align: center;
+    pointer-events: none;
+}
+/* Compact HUD chip in the corner — shows current AF sweep position +
+   HFR + star count so the user reads progress without leaving the
+   preview frame. */
+.af-preview-badge {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    background: rgba(0, 0, 0, 0.7);
+    color: var(--text-secondary);
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    pointer-events: none;
+    font-variant-numeric: tabular-nums;
+}
+.af-preview-badge strong { color: var(--text-primary); }
+
 .af-chart {
     background: #0d0d18;
     border: 1px solid var(--border);
@@ -4291,7 +4339,10 @@ select.input-sm {
    for their content. */
 .equip-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    /* minmax floor bumped 280 → 420 px (per user request: "aumente o
+       comprimento dos cards em 50%"). auto-fit still collapses to
+       fewer columns on narrow viewports without media queries. */
+    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
     gap: 12px;
     padding: 0;
 }
@@ -4321,6 +4372,22 @@ select.input-sm {
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
+}
+/* Selects inside metadata-card rows need to fill the label width
+   (otherwise inherit input-sm's 60-90px fixed width and clip
+   "— Manual entry —" / "— Pick a model —" labels). Numeric inputs
+   inside the same row keep their explicit inline width attr. */
+.equip-meta-row label select.input-sm {
+    width: 100%;
+    min-width: 160px;
+}
+/* Only stretch labels that *wrap a select* — labels around numeric
+   inputs keep their intrinsic narrow width (set via inline style on
+   the input). Uses :has() (Chromium 105+, Safari 15.4+, Firefox 121+
+   — fine for this app's target browsers). */
+.equip-meta-row > label:has(select.input-sm) {
+    flex: 1 1 180px;
+    min-width: 0;
 }
 .equip-meta-derived {
     align-self: center;
@@ -4364,4 +4431,125 @@ select.input-sm {
 }
 .equip-accessories-grid {
     padding: 0 14px 14px;
+}
+
+/* ==========================================================================
+   PH2X: PHD2 deep-integration UI (Guide tab tabstrip + xpra GUI + presets)
+   ========================================================================== */
+
+/* Tabstrip between "Control" (existing JSON-RPC UI) and "PHD2 GUI" (xpra
+   iframe). Visually echoes the .equip-source-tabs pattern but with a
+   filled active state since this is the primary nav inside Guide. */
+.guide-tabstrip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 6px 0 10px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
+}
+.guide-tab {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid transparent;
+    padding: 6px 14px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+}
+.guide-tab:hover { background: rgba(255,255,255,0.04); color: var(--text-primary); }
+.guide-tab.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+
+/* Profile-sync chip in the tabstrip. Color reflects last sync phase. */
+.profile-sync-indicator {
+    margin-left: auto;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.05);
+    color: var(--text-secondary);
+}
+.profile-sync-indicator.sync-ok   { background: rgba(34,197,94,0.18); color: #86efac; }
+.profile-sync-indicator.sync-warn { background: rgba(245,158,11,0.18); color: #fcd34d; }
+.profile-sync-indicator.sync-err  { background: rgba(239,68,68,0.18); color: #fca5a5; }
+.profile-sync-indicator.sync-busy { background: rgba(99,102,241,0.18); color: #a5b4fc; }
+
+/* Smart Calibrate + algo preset block — sits below the existing guiding
+   controls in the Control tab. Spans full width for the row layout. */
+.phd2-smart-block {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+}
+.phd2-smart-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.phd2-algo-advanced summary::marker { color: var(--text-muted); }
+
+/* PHD2 GUI tab — iframe wrapper + the 4 conditional states. */
+.phd2-gui-tab {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 400px;
+}
+.phd2-gui-banner {
+    padding: 14px 18px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    line-height: 1.5;
+}
+.phd2-gui-banner code {
+    background: rgba(0,0,0,0.3);
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+.phd2-gui-banner-info { background: rgba(99,102,241,0.10); border: 1px solid rgba(99,102,241,0.30); }
+.phd2-gui-banner-warn { background: rgba(245,158,11,0.10); border: 1px solid rgba(245,158,11,0.30); }
+
+.phd2-gui-empty {
+    padding: 40px 20px;
+    text-align: center;
+    background: rgba(255,255,255,0.02);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+}
+.phd2-gui-empty h3 { margin: 0 0 8px; color: var(--text-primary); }
+.phd2-gui-empty p  { margin: 4px 0; color: var(--text-muted); font-size: 13px; }
+
+.phd2-gui-frame-wrap {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 600px;
+}
+.phd2-gui-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: var(--radius) var(--radius) 0 0;
+    font-size: 12px;
+}
+.phd2-gui-iframe {
+    flex: 1;
+    width: 100%;
+    min-height: 600px;
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 var(--radius) var(--radius);
+    background: #000;
 }

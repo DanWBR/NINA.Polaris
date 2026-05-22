@@ -14,6 +14,7 @@ namespace NINA.Headless.Services;
 /// </summary>
 public class AutoFocusService {
     private readonly EquipmentManager _equip;
+    private readonly ImageRelayService _relay;
     private readonly ILogger<AutoFocusService> _logger;
 
     private CancellationTokenSource? _cts;
@@ -25,8 +26,11 @@ public class AutoFocusService {
     public AutoFocusResult? LastResult { get; private set; }
     public string? LastError { get; private set; }
 
-    public AutoFocusService(EquipmentManager equip, ILogger<AutoFocusService> logger) {
+    public AutoFocusService(EquipmentManager equip,
+                            ImageRelayService relay,
+                            ILogger<AutoFocusService> logger) {
         _equip = equip;
+        _relay = relay;
         _logger = logger;
     }
 
@@ -107,6 +111,11 @@ public class AutoFocusService {
 
                 int actualPos = focuser.Position;
                 var image = await camera.CaptureAsync(request.ExposureSeconds, ct);
+                // Push each AF frame through the image relay so the
+                // Focus tab preview canvas (and the Live canvas) can
+                // render the sweep frames as the user watches the run.
+                try { await _relay.RelayImageAsync(image, ct); }
+                catch (Exception ex) { _logger.LogDebug(ex, "AF frame relay failed (non-fatal)"); }
                 var hfr = MeasureHFR(image, request.MinStars);
 
                 var point = new AutoFocusPoint {
@@ -159,6 +168,8 @@ public class AutoFocusService {
             int? finalStars = null;
             if (request.TakeConfirmationFrame) {
                 var image = await camera.CaptureAsync(request.ExposureSeconds, ct);
+                try { await _relay.RelayImageAsync(image, ct); }
+                catch (Exception ex) { _logger.LogDebug(ex, "AF confirmation frame relay failed (non-fatal)"); }
                 var hfr = MeasureHFR(image, request.MinStars);
                 finalHfr = hfr.medianHfr;
                 finalStars = hfr.starCount;

@@ -94,7 +94,7 @@
                 <svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 12l9-9 9 9v9a2 2 0 01-2 2h-4v-7H10v7H6a2 2 0 01-2-2v-9z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
                 <span class="nav-label">Home</span>
             </button>
-            <button class="nav-btn" :class="{ active: tab === 'equip' }" @click="tab = 'equip'" title="Equipment">
+            <button class="nav-btn" :class="{ active: tab === 'equip' }" @click="tab = 'equip'; loadOpticsCatalogue()" title="Equipment">
                 <svg viewBox="0 0 24 24" width="22" height="22"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a3 3 0 0 1-4.2 4.2L7 20a2 2 0 0 1-2.8-2.8l10.3-10.3a3 3 0 0 1 4.2-4.2l-3.8 3.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <span class="nav-label">Rigs</span>
             </button>
@@ -546,6 +546,27 @@
                         </div>
                     </div>
 
+                    <!-- Focus preview canvas. Receives a mirror of the
+                         most recent frame from the multi-canvas render
+                         path; AutoFocusService now relays each sample
+                         frame to /ws/image-stream, so during a sweep the
+                         user sees each exposure land here in real time.
+                         Outside a sweep it shows whatever the last frame
+                         was (live stream, snap, etc.). -->
+                    <div class="af-preview-area">
+                        <canvas id="focusCanvas" class="af-preview-canvas"></canvas>
+                        <div class="af-preview-overlay"
+                             x-show="autoFocus.state !== 'running' && !(autoFocus.points || []).length">
+                            <p>Frames will appear here as the AF sweep runs.</p>
+                        </div>
+                        <div class="af-preview-badge"
+                             x-show="autoFocus.state === 'running' && autoFocus.currentPosition">
+                            pos <strong x-text="autoFocus.currentPosition"></strong>
+                            <span x-show="autoFocus.lastHfr"> · HFR <strong x-text="autoFocus.lastHfr?.toFixed(2)"></strong></span>
+                            <span x-show="autoFocus.lastStarCount"> · ★ <strong x-text="autoFocus.lastStarCount"></strong></span>
+                        </div>
+                    </div>
+
                     <!-- V-curve chart (Chart.js) -->
                     <div class="af-chart" x-show="(autoFocus.points || []).length > 0">
                         <div class="chart-container">
@@ -673,6 +694,34 @@
                           x-text="guider.connected ? guider.appState : 'Disconnected'"></span>
                 </div>
 
+                <!-- Tabstrip: Control (existing JSON-RPC UI + smart calibrate + presets)
+                     | PHD2 GUI (iframe via reverse-proxy to xpra HTML5 client).
+                     guideTab state is on app.js (default 'control'). -->
+                <div class="guide-tabstrip">
+                    <button class="guide-tab" :class="{ active: guideTab === 'control' }"
+                            @click="guideTab = 'control'">Control</button>
+                    <button class="guide-tab" :class="{ active: guideTab === 'gui' }"
+                            @click="guideTab = 'gui'; loadPhd2GuiStatus()">PHD2 GUI</button>
+                    <!-- Profile-sync indicator chip — lives in the strip so
+                         it's visible from either tab. -->
+                    <span class="profile-sync-indicator" x-show="guider.profileSync"
+                          :class="{
+                              'sync-ok': guider.profileSync?.phase === 'ok',
+                              'sync-warn': guider.profileSync?.profileMissing,
+                              'sync-err': guider.profileSync?.error,
+                              'sync-busy': ['switching','applying-preset','looking-up'].includes(guider.profileSync?.phase)
+                          }"
+                          :title="guider.profileSync?.error || guider.profileSync?.phase || ''">
+                        <span x-show="guider.profileSync?.phase === 'ok'">✓ Profile synced</span>
+                        <span x-show="guider.profileSync?.profileMissing">⚠ Profile missing</span>
+                        <span x-show="guider.profileSync?.error && !guider.profileSync?.profileMissing">⚠ Sync error</span>
+                        <span x-show="['switching','applying-preset','looking-up'].includes(guider.profileSync?.phase)">↻ Syncing…</span>
+                    </span>
+                </div>
+
+                <!-- ===== TAB 1: Control (everything that was here before) ===== -->
+                <div x-show="guideTab === 'control'">
+
                 <!-- "PHD2 not installed" banner -->
                 <div x-show="!guider.connected && phd2Install && !phd2Install.installed"
                      class="warn-banner" style="margin-bottom:0.5rem">
@@ -795,6 +844,124 @@
                     <button class="btn btn-sm" @click="guiderClearHistory()" style="margin-left: auto;">Clear History</button>
                     <button class="btn btn-sm btn-danger" @click="guiderDisconnect()">Disconnect</button>
                 </div>
+
+                <!-- Smart Calibrate + Algo Preset block (PH2X-4 + PH2X-5).
+                     Visible whenever PHD2 is connected — these wrap the
+                     RPC-only orchestrations that PHD2 doesn't expose in
+                     its own UI as a single button. -->
+                <div class="phd2-smart-block" x-show="guider.connected" style="margin-top:10px">
+                    <div class="phd2-smart-row">
+                        <button class="btn btn-primary"
+                                @click="phd2SmartCalibrate()"
+                                :disabled="!!(guider.calibrateJob && !guider.calibrateJob.done)">
+                            🎯 Smart Calibrate
+                        </button>
+                        <label class="seq-dither-checkbox" title="Slew main mount to celestial equator before calibrating">
+                            <input type="checkbox" x-model="smartCalibrate.slewToEquator">
+                            Slew to equator
+                        </label>
+                        <span class="text-muted" x-show="guider.calibrateJob && !guider.calibrateJob.done"
+                              x-text="'Phase: ' + (guider.calibrateJob?.phase || '')"></span>
+                        <span class="text-ok" x-show="guider.calibrateJob?.phase === 'Ok'"
+                              x-text="'✓ Step ' + guider.calibrateJob.stepMs + 'ms'"></span>
+                        <span class="text-err" x-show="guider.calibrateJob?.phase === 'Fail'"
+                              x-text="'✗ ' + (guider.calibrateJob?.error || 'Failed')"></span>
+                    </div>
+                    <div class="phd2-smart-row" style="margin-top:6px">
+                        <label class="text-muted" style="font-size:11px;text-transform:uppercase">Algo preset</label>
+                        <template x-for="name in (phd2AlgoPresetNames || [])" :key="name">
+                            <button class="btn btn-sm"
+                                    :class="{ 'btn-active': phd2ActivePreset === name }"
+                                    @click="phd2ApplyAlgoPreset(name)"
+                                    x-text="name"></button>
+                        </template>
+                        <span class="text-muted" style="font-size:11px"
+                              x-show="phd2ActivePreset === 'Custom'">(Custom)</span>
+                    </div>
+                    <details class="phd2-algo-advanced" style="margin-top:6px">
+                        <summary style="font-size:11px;color:var(--text-muted);cursor:pointer">
+                            Advanced — individual algorithm knobs
+                        </summary>
+                        <div style="margin-top:8px;font-size:11px"
+                             x-show="phd2AlgoParams && phd2AlgoParams.axes">
+                            <template x-for="axis in Object.keys(phd2AlgoParams?.axes || {})" :key="axis">
+                                <div style="margin-bottom:8px">
+                                    <strong x-text="axis.toUpperCase() + ' axis'"></strong>
+                                    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">
+                                        <template x-for="param in Object.keys(phd2AlgoParams.axes[axis] || {})" :key="axis + ':' + param">
+                                            <label style="display:flex;flex-direction:column;gap:2px">
+                                                <span x-text="param" style="color:var(--text-muted)"></span>
+                                                <input type="number" step="0.01"
+                                                       :value="phd2AlgoParams.axes[axis][param]"
+                                                       @change="phd2SetAlgoParam(axis, param, parseFloat($event.target.value))"
+                                                       class="input-sm" style="width:80px">
+                                            </label>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                            <button class="btn btn-sm" @click="loadPhd2AlgoParams()">↻ Refresh</button>
+                        </div>
+                        <div x-show="!phd2AlgoParams || !phd2AlgoParams.axes" style="font-size:11px;color:var(--text-muted)">
+                            <button class="btn btn-sm" @click="loadPhd2AlgoParams()">Load live values</button>
+                        </div>
+                    </details>
+                </div>
+
+                </div><!-- /guideTab === 'control' -->
+
+                <!-- ===== TAB 2: PHD2 GUI (xpra HTML5 iframe) ===== -->
+                <div x-show="guideTab === 'gui'" class="phd2-gui-tab">
+                    <!-- State 1: Non-Linux host -->
+                    <div x-show="phd2GuiSession && !phd2GuiSession.supportedOs"
+                         class="phd2-gui-banner phd2-gui-banner-info">
+                        Embedded PHD2 GUI requires Linux + xpra on the Polaris host.
+                        On Windows/macOS, open PHD2 directly on the machine
+                        running it. The <strong>Control</strong> tab on the
+                        left already covers all JSON-RPC operations
+                        (profile switch, exposure, dec mode, guiding,
+                        dithering, smart calibrate, algorithm tuning).
+                    </div>
+                    <!-- State 2: Linux but xpra not installed -->
+                    <div x-show="phd2GuiSession && phd2GuiSession.supportedOs && !phd2GuiSession.xpraInstalled"
+                         class="phd2-gui-banner phd2-gui-banner-warn">
+                        <strong>xpra not installed.</strong>
+                        Run on the Polaris host:
+                        <code>sudo apt install xpra xserver-xorg-video-dummy</code>
+                        then restart Polaris. After that, this tab will
+                        embed PHD2's native GUI (Wizard, Brain, Guiding
+                        Assistant) so you can do everything remotely.
+                    </div>
+                    <!-- State 3: xpra installed but session not running -->
+                    <div x-show="phd2GuiSession && phd2GuiSession.supportedOs && phd2GuiSession.xpraInstalled && !phd2GuiSession.running"
+                         class="phd2-gui-empty">
+                        <h3>PHD2 GUI session not running</h3>
+                        <p>Starting takes ~5–10 seconds (spins up an Xorg-dummy
+                           display + launches PHD2 inside).</p>
+                        <button class="btn btn-primary" @click="phd2GuiStart()"
+                                :disabled="phd2GuiBusy">
+                            <span x-show="!phd2GuiBusy">▶ Start PHD2 GUI session</span>
+                            <span x-show="phd2GuiBusy">Starting…</span>
+                        </button>
+                        <p x-show="phd2GuiSession?.lastError" class="text-err"
+                           style="margin-top:8px" x-text="phd2GuiSession.lastError"></p>
+                    </div>
+                    <!-- State 4: Session running — iframe + toolbar -->
+                    <div x-show="phd2GuiSession && phd2GuiSession.running" class="phd2-gui-frame-wrap">
+                        <div class="phd2-gui-toolbar">
+                            <span class="text-ok">✓ xpra v<span x-text="phd2GuiSession?.xpraVersion"></span></span>
+                            <span class="text-muted" style="font-size:11px">
+                                port <span x-text="phd2GuiSession?.port"></span>
+                            </span>
+                            <span style="flex:1"></span>
+                            <button class="btn btn-sm" @click="phd2GuiRestart()" :disabled="phd2GuiBusy"
+                                    title="Stop + restart the xpra session (recovers from hung sessions)">↻ Restart</button>
+                            <button class="btn btn-sm btn-danger" @click="phd2GuiStop()" :disabled="phd2GuiBusy">Stop</button>
+                        </div>
+                        <iframe class="phd2-gui-iframe" src="/phd2-gui/"
+                                allow="fullscreen"></iframe>
+                    </div>
+                </div><!-- /guideTab === 'gui' -->
             </div>
 
             <!-- EQUIPMENT MANAGEMENT -->
@@ -965,6 +1132,59 @@
                                   :class="settings.focalLength > 0 ? 'configured' : 'disconnected'"></span>
                         </div>
                         <div class="equip-card-body">
+                            <!-- Catalog picker. Same data source as the
+                                 Manage Rigs modal — Brand + Model selects
+                                 driven by wwwroot/data/telescopes.json,
+                                 Accessory select by optical-accessories.json.
+                                 Picking a model auto-fills aperture +
+                                 native focal length + backspacing; picking
+                                 an accessory recomputes effective focal
+                                 length via the factor. Off-catalog scopes:
+                                 leave Brand on "Manual entry" and use the
+                                 fields below. -->
+                            <div class="equip-meta-row">
+                                <label>Brand (catalog)
+                                    <select x-model="settings.telescopeBrand"
+                                            @change="onTelescopeBrandPick()" class="input-sm">
+                                        <option value="">— Manual entry —</option>
+                                        <template x-for="b in opticsBrands" :key="b">
+                                            <option :value="b" x-text="b"></option>
+                                        </template>
+                                    </select>
+                                </label>
+                                <label>Model
+                                    <select x-model="settings.telescopeModel"
+                                            @change="onTelescopeModelPick()"
+                                            :disabled="!settings.telescopeBrand"
+                                            class="input-sm">
+                                        <option value="">— Pick a model —</option>
+                                        <template x-for="t in opticsModelsForRig({telescopeBrand: settings.telescopeBrand})"
+                                                  :key="t.brand + t.model">
+                                            <option :value="t.model"
+                                                x-text="t.model + ' (' + t.apertureMm + 'mm f/' + (t.focalLengthMm/t.apertureMm).toFixed(1) + ')'"></option>
+                                        </template>
+                                    </select>
+                                </label>
+                            </div>
+                            <div class="equip-meta-row">
+                                <label>Accessory (catalog)
+                                    <select x-model="settings.accessoryModel"
+                                            @change="onAccessoryPick()"
+                                            class="input-sm">
+                                        <option value="">— None —</option>
+                                        <template x-for="a in opticsAccessoriesForRig({telescopeModel: settings.telescopeModel})"
+                                                  :key="a.brand + a.model">
+                                            <option :value="a.brand + ' ' + a.model"
+                                                x-text="'[' + a.type + '] ' + a.brand + ' ' + a.model + ' (' + a.factor + '×)'"></option>
+                                        </template>
+                                    </select>
+                                </label>
+                            </div>
+
+                            <!-- Resolved / manual override values. The
+                                 catalog picker above writes into these;
+                                 the user can still tweak them by hand
+                                 for off-catalog rigs. -->
                             <div class="equip-meta-row">
                                 <label>Focal length (mm)
                                     <input type="number" x-model.number="settings.focalLength"
@@ -980,49 +1200,15 @@
                                       x-show="settings.focalLength > 0 && settings.aperture > 0">
                                     f/<strong x-text="(settings.focalLength / settings.aperture).toFixed(1)"></strong>
                                 </span>
-                            </div>
-                            <div class="equip-meta-row">
-                                <label>Brand
-                                    <input type="text" x-model="settings.telescopeBrand"
-                                           @change="saveOpticsDebounced()"
-                                           class="input-sm" placeholder="e.g. Askar">
-                                </label>
-                                <label>Model
-                                    <input type="text" x-model="settings.telescopeModel"
-                                           @change="saveOpticsDebounced()"
-                                           class="input-sm" placeholder="e.g. FRA400">
-                                </label>
-                            </div>
-                            <div class="equip-meta-row">
-                                <label>Accessory
-                                    <select x-model="settings.accessoryType"
-                                            @change="saveOpticsDebounced()" class="input-sm">
-                                        <option value="">None</option>
-                                        <option value="reducer">Reducer</option>
-                                        <option value="flattener">Flattener</option>
-                                        <option value="barlow">Barlow</option>
-                                        <option value="extender">Extender</option>
-                                    </select>
-                                </label>
                                 <label x-show="settings.accessoryType">Factor
                                     <input type="number" x-model.number="settings.accessoryFactor"
                                            @change="saveOpticsDebounced()"
                                            step="0.05" min="0.1" max="5" class="input-sm" style="width:70px">
                                 </label>
-                                <label x-show="settings.accessoryType" style="flex:1">Model
-                                    <input type="text" x-model="settings.accessoryModel"
-                                           @change="saveOpticsDebounced()" class="input-sm">
-                                </label>
                             </div>
                             <p class="hint" style="margin:4px 0 0;font-size:11px"
                                x-show="settings.requiredBackspacingMm">
                                 Required backspacing: <strong x-text="settings.requiredBackspacingMm + ' mm'"></strong>
-                            </p>
-                            <p class="hint" style="margin:4px 0 0;font-size:11px">
-                                Use <a href="#" @click.prevent="rigModalOpen = true; loadOpticsCatalogue()"
-                                       style="color:var(--accent)">Manage rigs…</a>
-                                to pick from the curated OTA catalog (auto-fills focal length,
-                                aperture, backspacing).
                             </p>
                         </div>
                     </div>
@@ -3921,11 +4107,14 @@
          @click.self="rigModalOpen = false"
          @keydown.escape.window="rigModalOpen = false">
         <div class="location-setup-frame" style="max-width: 700px;">
-            <h2>🔭 Equipment rigs</h2>
+            <h2>🔭 Manage rigs</h2>
             <p class="text-muted" style="font-size: 12px;">
-                A rig is a saved set of equipment selections + per-rig defaults
-                (cooler temp, gain, focuser step, focal length, PHD2 endpoint).
-                Switch rigs in one click instead of re-selecting every device.
+                A rig is a saved set of equipment selections. Edit device
+                pickers, optics, cooler target and PHD2 endpoint directly
+                on the <strong>cards in the RIGS tab</strong> — they all
+                save to the active rig automatically. This modal is for
+                rig management: rename, create, duplicate, delete, switch
+                active, and set per-rig filter offsets.
             </p>
 
             <div class="rig-list">
@@ -3939,133 +4128,70 @@
                                 <span class="text-ok" style="font-size: 11px;"
                                       x-show="r.id === activeRigId">● ACTIVE</span>
                             </div>
+                            <!-- At-a-glance summary of what's saved in this rig.
+                                 Everything below comes straight from the rig
+                                 record so the user knows what the rig holds
+                                 without having to switch to it first. -->
                             <div class="rig-devices text-muted">
                                 <span x-show="r.camera">📷 <span x-text="r.camera"></span></span>
                                 <span x-show="r.telescope">🔭 <span x-text="r.telescope"></span></span>
                                 <span x-show="r.focuser">🔍 <span x-text="r.focuser"></span></span>
                                 <span x-show="r.filterWheel">⚙️ <span x-text="r.filterWheel"></span></span>
                             </div>
-                            <!-- Telescope + accessory picker. Reads
-                                 from wwwroot/data/{telescopes,
-                                 optical-accessories}.json. Picking
-                                 a model auto-fills aperture / native
-                                 focal length / effective focal
-                                 length / required backspacing into
-                                 the rig fields below; user can
-                                 still edit the resolved values
-                                 manually for off-catalogue scopes. -->
-                            <div class="rig-optics-picker">
-                                <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">
-                                    Telescope (catalogue)
-                                </div>
-                                <div class="rig-picker-row">
-                                    <label>Brand
-                                        <select x-model="r.telescopeBrand"
-                                                @change="onTelescopeBrandChange(r)"
-                                                class="input-sm">
-                                            <option value="">— Manual entry —</option>
-                                            <template x-for="b in opticsBrands" :key="b">
-                                                <option :value="b" x-text="b"></option>
-                                            </template>
-                                        </select>
-                                    </label>
-                                    <label>Model
-                                        <select x-model="r.telescopeModel"
-                                                @change="onTelescopeModelChange(r)"
-                                                :disabled="!r.telescopeBrand"
-                                                class="input-sm">
-                                            <option value="">— Pick a model —</option>
-                                            <template x-for="t in opticsModelsForRig(r)" :key="t.brand + t.model">
-                                                <option :value="t.model"
-                                                    x-text="t.model + ' (' + t.apertureMm + 'mm f/' + (t.focalLengthMm/t.apertureMm).toFixed(1) + ')'"></option>
-                                            </template>
-                                        </select>
-                                    </label>
-                                </div>
-                                <div class="rig-picker-row">
-                                    <label>Accessory
-                                        <select x-model="r.accessoryModel"
-                                                @change="onAccessoryChange(r)"
-                                                class="input-sm">
-                                            <option value="">— None —</option>
-                                            <template x-for="a in opticsAccessoriesForRig(r)" :key="a.brand + a.model">
-                                                <option :value="a.brand + ' ' + a.model"
-                                                    x-text="'[' + a.type + '] ' + a.brand + ' ' + a.model + ' (' + a.factor + '×)'"></option>
-                                            </template>
-                                        </select>
-                                    </label>
-                                </div>
-                                <!-- Required-backspacing reminder. Only
-                                     shown when the picker produced a
-                                     value — most flatteners / reducers
-                                     publish theirs, the OTAs vary. -->
-                                <div class="rig-picker-readout"
-                                     x-show="opticsNativeFocalLength(r) !== null || r.requiredBackspacingMm">
-                                    <span x-show="opticsNativeFocalLength(r) !== null">
-                                        Native fl: <strong x-text="opticsNativeFocalLength(r) + ' mm'"></strong> ·
+                            <div class="rig-devices text-muted" style="margin-top:2px">
+                                <span x-show="r.telescopeBrand || r.telescopeModel || r.focalLengthMm">
+                                    OTA:
+                                    <strong x-text="(r.telescopeBrand || '') + ' ' + (r.telescopeModel || '') || 'manual'"></strong>
+                                    <span x-show="r.focalLengthMm">·
+                                        <span x-text="r.focalLengthMm + 'mm'"></span>
+                                        <span x-show="r.apertureMm">f/<span
+                                              x-text="(r.focalLengthMm / r.apertureMm).toFixed(1)"></span></span>
                                     </span>
-                                    <span x-show="opticsFocalRatio(r) !== null">
-                                        f/<strong x-text="opticsFocalRatio(r)?.toFixed(2)"></strong> ·
-                                    </span>
-                                    <span x-show="r.requiredBackspacingMm" class="rig-picker-backfocus">
-                                        🔧 Back-focus: <strong x-text="r.requiredBackspacingMm + ' mm'"></strong>
-                                    </span>
-                                </div>
+                                </span>
+                                <span x-show="r.guiderFocalLengthMm">
+                                    · Guide: <strong x-text="r.guiderFocalLengthMm + 'mm'"></strong>
+                                </span>
+                                <span x-show="r.coolerTargetTemperature != null">
+                                    · Cooler: <strong x-text="r.coolerTargetTemperature + '°C'"></strong>
+                                </span>
                             </div>
 
-                            <div class="rig-optics">
-                                <label>Aperture (mm)
-                                    <input type="number" min="20" max="1000" step="1"
-                                           x-model.number="r.apertureMm"
-                                           @change="saveRig(r)" class="input-sm">
-                                </label>
-                                <label>Main focal length (mm)
-                                    <input type="number" min="50" max="10000" step="1"
-                                           x-model.number="r.focalLengthMm"
-                                           @change="saveRig(r)" class="input-sm"
-                                           title="Effective focal length = native × accessory factor. Auto-computed when a catalogue scope is picked; edit manually for off-catalogue OTAs.">
-                                </label>
-                                <label>Guide scope focal length (mm)
-                                    <input type="number" min="50" max="2000" step="1"
-                                           x-model.number="r.guiderFocalLengthMm"
-                                           @change="saveRig(r)" class="input-sm">
-                                </label>
-                                <label>Cooler target (°C)
-                                    <input type="number" min="-40" max="20" step="1"
-                                           x-model.number="r.coolerTargetTemperature"
-                                           @change="saveRig(r)" class="input-sm">
-                                </label>
-                            </div>
-
-                            <!-- Per-rig filter offset table -->
-                            <div class="rig-filter-offsets" style="margin-top:8px">
-                                <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">
-                                    Filter offsets (steps, relative to reference filter)
+                            <!-- Per-rig filter offset table. Stays in the
+                                 modal because no equipment card surfaces
+                                 it — these are pure rig metadata used by
+                                 the sequencer when a filter swap happens. -->
+                            <details class="rig-filter-offsets" style="margin-top:8px">
+                                <summary style="font-size:11px;color:var(--text-muted);text-transform:uppercase;cursor:pointer">
+                                    Filter offsets
+                                    <span x-show="Object.keys(r.filterOffsets || {}).length"
+                                          x-text="'(' + Object.keys(r.filterOffsets || {}).length + ')'"></span>
+                                </summary>
+                                <div style="margin-top:6px">
+                                    <table style="width:100%;font-size:12px;border-collapse:collapse">
+                                        <template x-for="(steps, filterName) in (r.filterOffsets || {})" :key="filterName">
+                                            <tr>
+                                                <td style="padding:2px 4px"><code x-text="filterName"></code></td>
+                                                <td style="padding:2px 4px">
+                                                    <input type="number" step="1" :value="steps"
+                                                           @input="setFilterOffset(r, filterName, $event.target.value)"
+                                                           class="input-sm" style="width:80px">
+                                                </td>
+                                                <td style="padding:2px 4px">
+                                                    <button class="btn btn-sm btn-danger"
+                                                            @click="removeFilterOffset(r, filterName)" title="Remove">✕</button>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </table>
+                                    <div style="display:flex;gap:4px;margin-top:4px">
+                                        <input type="text" :id="'newFilter-' + r.id" placeholder="Filter name (e.g. R)"
+                                               class="input-sm" style="flex:1">
+                                        <input type="number" :id="'newOffset-' + r.id" placeholder="Δ steps"
+                                               class="input-sm" style="width:80px">
+                                        <button class="btn btn-sm" @click="addFilterOffset(r)">+ Add</button>
+                                    </div>
                                 </div>
-                                <table style="width:100%;font-size:12px;border-collapse:collapse">
-                                    <template x-for="(steps, filterName) in (r.filterOffsets || {})" :key="filterName">
-                                        <tr>
-                                            <td style="padding:2px 4px"><code x-text="filterName"></code></td>
-                                            <td style="padding:2px 4px">
-                                                <input type="number" step="1" :value="steps"
-                                                       @input="setFilterOffset(r, filterName, $event.target.value)"
-                                                       class="input-sm" style="width:80px">
-                                            </td>
-                                            <td style="padding:2px 4px">
-                                                <button class="btn btn-sm btn-danger"
-                                                        @click="removeFilterOffset(r, filterName)" title="Remove">✕</button>
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </table>
-                                <div style="display:flex;gap:4px;margin-top:4px">
-                                    <input type="text" :id="'newFilter-' + r.id" placeholder="Filter name (e.g. R)"
-                                           class="input-sm" style="flex:1">
-                                    <input type="number" :id="'newOffset-' + r.id" placeholder="Δ steps"
-                                           class="input-sm" style="width:80px">
-                                    <button class="btn btn-sm" @click="addFilterOffset(r)">+ Add</button>
-                                </div>
-                            </div>
+                            </details>
                         </div>
                         <div class="rig-row-actions">
                             <button class="btn btn-sm btn-primary"
