@@ -291,6 +291,18 @@ public class UserProfile {
     public string? AstapPath { get; set; }
     public double SolveToleranceArcsec { get; set; } = 30;
 
+    // External post-processing tools (Siril + GraXpert). Empty/null
+    // means "auto-detect" via BinaryLocator; set explicitly to
+    // override the default path search.
+    public string? SirilPath { get; set; }
+    public string? SirilScriptsDir { get; set; }
+    public string? GraXpertPath { get; set; }
+    public double GraXpertBgeSmoothing { get; set; } = 1.0;
+    public string GraXpertBgeCorrection { get; set; } = "Subtraction";
+    public double GraXpertDeconStrength { get; set; } = 0.5;
+    public double GraXpertDeconPsfSize { get; set; } = 4.0;
+    public double GraXpertDenoiseStrength { get; set; } = 0.5;
+
     // Image output
     public string ImageOutputDir { get; set; } = "";
     public string ImageNamePattern { get; set; } = "{target}_{filter}_{exposure}s_{date}_{seq}";
