@@ -124,6 +124,24 @@ public static class StudioEndpoints {
             var p = svc.GetStatus(jobId);
             return p == null ? Results.NotFound() : Results.Ok(p);
         });
+
+        // --- ST-4: light frame calibration ---------------------------
+
+        // Calibrate a batch of lights using auto-matched (or
+        // explicitly-overridden) masters. The service applies
+        // (light − dark) / normalised_flat and writes a CALSTAT
+        // header listing which corrections were applied.
+        g.MapPost("/calibrate", (CalibrationService svc, CalibrationService.CalibrationRequest req) => {
+            if (req?.LightIds == null || req.LightIds.Count == 0)
+                return Results.BadRequest(new { error = "Provide at least one light frame id." });
+            var jobId = svc.StartJob(req);
+            return Results.Accepted(value: new { jobId });
+        });
+
+        g.MapGet("/calibrate/{jobId}/status", (CalibrationService svc, string jobId) => {
+            var p = svc.GetStatus(jobId);
+            return p == null ? Results.NotFound() : Results.Ok(p);
+        });
     }
 
     // POST body for /masters. Kept in the endpoints file (not the

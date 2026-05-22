@@ -242,12 +242,26 @@ function ninaApp() {
                 type: 'Dark',
                 method: 'SigmaClippedMean',
                 lastJob: null
+            },
+            // ST-4: light calibration dialog. master ids = null means
+            // auto-match per light; setting an id pins that master for
+            // the whole batch. masters.{darks,flats,biases} populated
+            // on dialog open from the library.
+            calibrate: {
+                open: false,
+                running: false,
+                darkId: null,
+                flatId: null,
+                biasId: null,
+                masters: { darks: [], flats: [], biases: [] },
+                lastJob: null
             }
         },
         _studioRescanPoll: null,
         _studioViewerDebounce: null,
         _studioHistogramChart: null,
         _studioMasterPoll: null,
+        _studioCalibratePoll: null,
 
         // Observatory location helpers (Settings → Observatory)
         obsAddressQuery: '',
@@ -1823,6 +1837,100 @@ function ninaApp() {
                 this.studio.master.running = false;
                 this.studio.master.lastJob = { stage: 'error', error: e.message, done: 0, total: 0 };
                 this.toast?.('Master start failed: ' + e.message, 'error');
+            }
+        },
+
+        // ─── ST-4: Light frame calibration ───────────────────────────────
+
+        studioHasLightSelected() {
+            return this.studio.frames.some(f =>
+                this.studio.selectedIds.includes(f.id) &&
+                (f.imageType || '').toUpperCase() === 'LIGHT');
+        },
+
+        studioLightCount() {
+            return this.studio.frames.filter(f =>
+                this.studio.selectedIds.includes(f.id) &&
+                (f.imageType || '').toUpperCase() === 'LIGHT').length;
+        },
+
+        async studioOpenCalibrateDialog() {
+            // Pull the available masters from the library so the
+            // override dropdowns aren't empty. One full /frames call
+            // is fine — the user typically has a handful of masters.
+            this.studio.calibrate.darkId = null;
+            this.studio.calibrate.flatId = null;
+            this.studio.calibrate.biasId = null;
+            this.studio.calibrate.lastJob = null;
+            try {
+                const all = await this.apiGet('/api/studio/frames?limit=500');
+                const byType = t => all.filter(f =>
+                    (f.imageType || '').toUpperCase() === 'MASTER' + t);
+                this.studio.calibrate.masters = {
+                    darks:  byType('DARK'),
+                    flats:  byType('FLAT'),
+                    biases: byType('BIAS')
+                };
+            } catch (e) {
+                this.toast?.('Could not load master list: ' + e.message, 'error');
+                this.studio.calibrate.masters = { darks: [], flats: [], biases: [] };
+            }
+            this.studio.calibrate.open = true;
+        },
+
+        studioCloseCalibrateDialog() {
+            this.studio.calibrate.open = false;
+            if (this._studioCalibratePoll) {
+                clearInterval(this._studioCalibratePoll);
+                this._studioCalibratePoll = null;
+            }
+        },
+
+        async studioStartCalibrate() {
+            // Filter selectedIds down to LIGHTs only — calibrating a
+            // dark by accident produces noise frames in calibrated/.
+            const lightIds = this.studio.frames
+                .filter(f => this.studio.selectedIds.includes(f.id) &&
+                             (f.imageType || '').toUpperCase() === 'LIGHT')
+                .map(f => f.id);
+            if (lightIds.length === 0) return;
+
+            this.studio.calibrate.running = true;
+            this.studio.calibrate.lastJob = {
+                stage: 'queued', done: 0, total: lightIds.length,
+                succeeded: 0, failed: 0
+            };
+            try {
+                const resp = await this.apiPost('/api/studio/calibrate', {
+                    lightIds:     lightIds,
+                    masterDarkId: this.studio.calibrate.darkId,
+                    masterFlatId: this.studio.calibrate.flatId,
+                    masterBiasId: this.studio.calibrate.biasId
+                });
+                const r = await resp.json();
+                this._studioCalibratePoll = setInterval(async () => {
+                    try {
+                        const s = await this.apiGet(`/api/studio/calibrate/${r.jobId}/status`);
+                        this.studio.calibrate.lastJob = s;
+                        if (!s.inProgress) {
+                            clearInterval(this._studioCalibratePoll);
+                            this._studioCalibratePoll = null;
+                            this.studio.calibrate.running = false;
+                            const ok = s.succeeded || 0;
+                            const fail = s.failed || 0;
+                            const msg = `Calibration done — ${ok} OK` + (fail > 0 ? `, ${fail} failed` : '');
+                            this.toast?.(msg, fail > 0 ? 'warning' : 'ok');
+                            this.loadStudio();
+                        }
+                    } catch { /* swallow transient failure */ }
+                }, 1000);
+            } catch (e) {
+                this.studio.calibrate.running = false;
+                this.studio.calibrate.lastJob = {
+                    stage: 'error', error: e.message,
+                    done: 0, total: 0, succeeded: 0, failed: 0
+                };
+                this.toast?.('Calibration start failed: ' + e.message, 'error');
             }
         },
 

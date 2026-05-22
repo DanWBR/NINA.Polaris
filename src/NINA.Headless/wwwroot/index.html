@@ -2002,6 +2002,13 @@
                             @click="studioOpenMasterDialog()">
                         ⨯ Create master from selection
                     </button>
+                    <!-- ST-4: Calibrate selected lights. Only enabled
+                         when at least one selected frame is a LIGHT. -->
+                    <button class="btn btn-sm btn-primary"
+                            :disabled="!studioHasLightSelected()"
+                            @click="studioOpenCalibrateDialog()">
+                        ✦ Calibrate lights
+                    </button>
                 </div>
 
                 <!-- ST-3: Master integration modal -->
@@ -2080,6 +2087,98 @@
                                         :disabled="studio.master.running || studio.selectedIds.length < 2">
                                     <span x-show="!studio.master.running">▶ Integrate</span>
                                     <span x-show="studio.master.running">Working…</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ST-4: Calibrate lights modal -->
+                <div class="studio-viewer-modal" x-show="studio.calibrate.open"
+                     x-cloak @click.self="studioCloseCalibrateDialog()"
+                     @keydown.escape.window="studio.calibrate.open && studioCloseCalibrateDialog()">
+                    <div class="studio-master-modal">
+                        <div class="studio-viewer-header">
+                            <div class="studio-viewer-title">
+                                <strong>Calibrate light frames</strong>
+                                <span class="muted" x-text="studioLightCount() + ' lights selected'"></span>
+                            </div>
+                            <button class="btn btn-sm" @click="studioCloseCalibrateDialog()" :disabled="studio.calibrate.running">✕</button>
+                        </div>
+                        <div class="studio-master-body">
+                            <div class="muted" style="font-size:12px">
+                                For each selected light, the service applies
+                                <code>(light − dark) / normalised_flat</code> and writes a
+                                <code>CALSTAT</code> header recording which corrections ran.
+                                Auto-match picks the master with the same gain (and closest
+                                exposure for darks, same filter for flats).
+                            </div>
+
+                            <label class="control-row">
+                                <span style="min-width:90px">Master dark</span>
+                                <select x-model="studio.calibrate.darkId" :disabled="studio.calibrate.running" class="input-md">
+                                    <option :value="null">Auto-match per light</option>
+                                    <template x-for="m in studio.calibrate.masters.darks" :key="m.id">
+                                        <option :value="m.id"
+                                            x-text="m.fileName + ' (' + m.exposureSec + 's · g' + m.gain + ')'"></option>
+                                    </template>
+                                </select>
+                            </label>
+
+                            <label class="control-row">
+                                <span style="min-width:90px">Master flat</span>
+                                <select x-model="studio.calibrate.flatId" :disabled="studio.calibrate.running" class="input-md">
+                                    <option :value="null">Auto-match per light</option>
+                                    <template x-for="m in studio.calibrate.masters.flats" :key="m.id">
+                                        <option :value="m.id"
+                                            x-text="m.fileName + ' (' + (m.filter || 'L') + ' · g' + m.gain + ')'"></option>
+                                    </template>
+                                </select>
+                            </label>
+
+                            <label class="control-row">
+                                <span style="min-width:90px">Master bias</span>
+                                <select x-model="studio.calibrate.biasId" :disabled="studio.calibrate.running" class="input-md">
+                                    <option :value="null">Auto-match (only used if no dark)</option>
+                                    <template x-for="m in studio.calibrate.masters.biases" :key="m.id">
+                                        <option :value="m.id"
+                                            x-text="m.fileName + ' (g' + m.gain + ')'"></option>
+                                    </template>
+                                </select>
+                            </label>
+
+                            <!-- Progress -->
+                            <div class="studio-master-progress"
+                                 x-show="studio.calibrate.running || studio.calibrate.lastJob">
+                                <div class="muted" style="font-size:12px;text-transform:uppercase;letter-spacing:0.05em">
+                                    Status: <span x-text="studio.calibrate.lastJob?.stage || 'idle'"></span>
+                                </div>
+                                <div class="studio-master-bar" x-show="studio.calibrate.lastJob?.total > 0">
+                                    <div class="studio-master-bar-fill"
+                                         :style="'width:' + Math.round(100 * (studio.calibrate.lastJob?.done || 0) / (studio.calibrate.lastJob?.total || 1)) + '%'"></div>
+                                </div>
+                                <div style="font-size:11px;color:var(--text-muted)" x-show="studio.calibrate.lastJob">
+                                    <span x-text="(studio.calibrate.lastJob?.done || 0) + ' / ' + (studio.calibrate.lastJob?.total || 0)"></span>
+                                    <span x-show="studio.calibrate.lastJob?.succeeded > 0 || studio.calibrate.lastJob?.failed > 0">
+                                        · <span style="color:#88e088"
+                                                x-text="(studio.calibrate.lastJob?.succeeded || 0) + ' OK'"></span>
+                                        <span style="color:#ff9c66" x-show="studio.calibrate.lastJob?.failed > 0">
+                                          · <span x-text="(studio.calibrate.lastJob?.failed || 0) + ' failed'"></span>
+                                        </span>
+                                    </span>
+                                </div>
+                                <div style="color:#ff9c66;font-size:12px"
+                                     x-show="studio.calibrate.lastJob?.error"
+                                     x-text="'⚠ ' + studio.calibrate.lastJob?.error"></div>
+                            </div>
+
+                            <div class="control-row actions" style="margin-top:14px">
+                                <button class="btn" @click="studioCloseCalibrateDialog()"
+                                        :disabled="studio.calibrate.running">Close</button>
+                                <button class="btn btn-primary" @click="studioStartCalibrate()"
+                                        :disabled="studio.calibrate.running || !studioHasLightSelected()">
+                                    <span x-show="!studio.calibrate.running">▶ Calibrate</span>
+                                    <span x-show="studio.calibrate.running">Working…</span>
                                 </button>
                             </div>
                         </div>
