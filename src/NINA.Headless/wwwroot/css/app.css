@@ -473,6 +473,23 @@ select.input-sm {
     width: 90px;
 }
 
+/* Any select.input-sm wrapped in a <label> stretches to fill the
+   label's width — the input-sm 90px default is for bare standalone
+   selects, but inside form-row labels the parent's flex/grow rules
+   already do the right thing, so the select should follow. Without
+   this rule, dropdown placeholders like "Pick a recorded SER" or
+   "Select device" get truncated to "Pick a recor…" / "Select dev…"
+   even when the surrounding label has plenty of horizontal room.
+   180px floor avoids visually-empty chevron-only stubs.
+
+   Numeric <input> children of <label> keep their explicit width
+   (the inline style="width:90px" overrides go untouched). */
+label > select.input-sm,
+label select.input-sm {
+    width: 100%;
+    min-width: 180px;
+}
+
 .search-input {
     flex: 1;
     padding: 6px 10px;
