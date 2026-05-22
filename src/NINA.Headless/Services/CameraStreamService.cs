@@ -34,6 +34,11 @@ public class CameraStreamService : IDisposable {
     private long _frameCount;
     private DateTime _startedAt;
     private DateTime _lastFrameAt;
+    // External listeners (VideoRecordingService, SlewPreviewService, etc.)
+    // Fan-out is keyed by an integer handle so callers can Dispose safely
+    // even after concurrent Stop / Restart.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, Action<IImageData>> _externalSubs = new();
+    private int _nextSubId;
 
     public bool IsRunning { get; private set; }
     public string Mode { get; private set; } = "idle";      // "native" | "loop" | "idle"
@@ -176,6 +181,31 @@ public class CameraStreamService : IDisposable {
         } catch (Exception ex) {
             _logger.LogDebug(ex, "Relay of stream frame failed");
         }
+        // External fan-out to recording / slew-preview / etc. One bad
+        // subscriber shouldn't kill the others or stall the stream.
+        foreach (var sub in _externalSubs.Values) {
+            try { sub(frame); }
+            catch (Exception ex) { _logger.LogDebug(ex, "External stream subscriber threw"); }
+        }
+    }
+
+    /// <summary>
+    /// Subscribe to every stream frame. Dispose the returned handle to
+    /// unsubscribe. Multiple subscribers coexist; the underlying camera
+    /// stream lifecycle (start/stop) is NOT affected by subscription
+    /// presence — callers must still trigger Start / StopAsync.
+    /// </summary>
+    public IDisposable SubscribeFrames(Action<IImageData> handler) {
+        var id = Interlocked.Increment(ref _nextSubId);
+        _externalSubs[id] = handler;
+        return new FrameSub(this, id);
+    }
+
+    private sealed class FrameSub : IDisposable {
+        private readonly CameraStreamService _svc;
+        private readonly int _id;
+        public FrameSub(CameraStreamService svc, int id) { _svc = svc; _id = id; }
+        public void Dispose() => _svc._externalSubs.TryRemove(_id, out _);
     }
 
     public void Dispose() {
