@@ -82,21 +82,17 @@
     <div class="app-layout">
         <!-- Sidebar (desktop) / Bottom tabs (mobile) -->
         <nav class="sidebar">
+            <!-- Sidebar order follows the rough mental model of a
+                 typical session: arrive (Home) → pick gear (Rigs) →
+                 pick a target (Sky) → start guiding (Guide) → focus
+                 (Focus) → fire the schedule (Autorun) → watch frames
+                 land (Live) → drop into the tree sequencer if needed
+                 (Adv) → post-process (Studio) → plan ahead
+                 (Tonight, Weather) → manage files (Files) → config
+                 (Settings). -->
             <button class="nav-btn" :class="{ active: tab === 'home' }" @click="tab = 'home'" title="Home">
                 <svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 12l9-9 9 9v9a2 2 0 01-2 2h-4v-7H10v7H6a2 2 0 01-2-2v-9z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
                 <span class="nav-label">Home</span>
-            </button>
-            <button class="nav-btn" :class="{ active: tab === 'live' }" @click="tab = 'live'" title="Live View">
-                <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
-                <span class="nav-label">Live</span>
-            </button>
-            <button class="nav-btn" :class="{ active: tab === 'focus' }" @click="tab = 'focus'" title="Focus">
-                <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><line x1="12" y1="2" x2="12" y2="6" stroke="currentColor" stroke-width="2"/><line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" stroke-width="2"/><line x1="2" y1="12" x2="6" y2="12" stroke="currentColor" stroke-width="2"/><line x1="18" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="2"/></svg>
-                <span class="nav-label">Focus</span>
-            </button>
-            <button class="nav-btn" :class="{ active: tab === 'guide' }" @click="tab = 'guide'" title="Guider">
-                <svg viewBox="0 0 24 24" width="22" height="22"><polygon points="12,2 15,10 23,10 17,15 19,23 12,18 5,23 7,15 1,10 9,10" fill="none" stroke="currentColor" stroke-width="2"/></svg>
-                <span class="nav-label">Guide</span>
             </button>
             <button class="nav-btn" :class="{ active: tab === 'equip' }" @click="tab = 'equip'" title="Equipment">
                 <svg viewBox="0 0 24 24" width="22" height="22"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a3 3 0 0 1-4.2 4.2L7 20a2 2 0 0 1-2.8-2.8l10.3-10.3a3 3 0 0 1 4.2-4.2l-3.8 3.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -106,17 +102,21 @@
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><ellipse cx="12" cy="12" rx="10" ry="4" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="12" y1="2" x2="12" y2="22" stroke="currentColor" stroke-width="1.5"/></svg>
                 <span class="nav-label">Sky</span>
             </button>
-            <button class="nav-btn" :class="{ active: tab === 'tonight' }" @click="tab = 'tonight'; loadTonightsBest()" title="Tonight's Best">
-                <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2 L13.5 10.5 L22 12 L13.5 13.5 L12 22 L10.5 13.5 L2 12 L10.5 10.5 Z" fill="currentColor"/></svg>
-                <span class="nav-label">Tonight</span>
+            <button class="nav-btn" :class="{ active: tab === 'guide' }" @click="tab = 'guide'" title="Guider">
+                <svg viewBox="0 0 24 24" width="22" height="22"><polygon points="12,2 15,10 23,10 17,15 19,23 12,18 5,23 7,15 1,10 9,10" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                <span class="nav-label">Guide</span>
             </button>
-            <button class="nav-btn" :class="{ active: tab === 'weather' }" @click="tab = 'weather'; loadWeatherForecast()" title="Weather forecast">
-                <svg viewBox="0 0 24 24" width="22" height="22"><path d="M7 18h11a4 4 0 1 0-.7-7.95A6 6 0 0 0 6.2 12.04 4.5 4.5 0 0 0 7 18z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="6" cy="6" r="1.5" fill="currentColor"/><circle cx="19" cy="5" r="1" fill="currentColor"/></svg>
-                <span class="nav-label">Weather</span>
+            <button class="nav-btn" :class="{ active: tab === 'focus' }" @click="tab = 'focus'" title="Focus">
+                <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><line x1="12" y1="2" x2="12" y2="6" stroke="currentColor" stroke-width="2"/><line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" stroke-width="2"/><line x1="2" y1="12" x2="6" y2="12" stroke="currentColor" stroke-width="2"/><line x1="18" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="2"/></svg>
+                <span class="nav-label">Focus</span>
             </button>
             <button class="nav-btn" :class="{ active: tab === 'sequence' }" @click="tab = 'sequence'; loadEndActions()" title="Autorun (shooting schedule)">
                 <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="3" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="10" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="17" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Autorun</span>
+            </button>
+            <button class="nav-btn" :class="{ active: tab === 'live' }" @click="tab = 'live'" title="Live View">
+                <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
+                <span class="nav-label">Live</span>
             </button>
             <button class="nav-btn" :class="{ active: tab === 'seqadv' }" @click="tab = 'seqadv'; loadAdvSeq()" title="Advanced Sequencer">
                 <svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 4h6v6H3V4zm0 10h6v6H3v-6zm10-10h8m-8 4h6m-6 10h8m-8 4h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -125,6 +125,14 @@
             <button class="nav-btn" :class="{ active: tab === 'studio' }" @click="tab = 'studio'; loadStudio()" title="Studio (post-processing)">
                 <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="4" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="11" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 17l6-5 4 3 5-4 3 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <span class="nav-label">Studio</span>
+            </button>
+            <button class="nav-btn" :class="{ active: tab === 'tonight' }" @click="tab = 'tonight'; loadTonightsBest()" title="Tonight's Best">
+                <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2 L13.5 10.5 L22 12 L13.5 13.5 L12 22 L10.5 13.5 L2 12 L10.5 10.5 Z" fill="currentColor"/></svg>
+                <span class="nav-label">Tonight</span>
+            </button>
+            <button class="nav-btn" :class="{ active: tab === 'weather' }" @click="tab = 'weather'; loadWeatherForecast()" title="Weather forecast">
+                <svg viewBox="0 0 24 24" width="22" height="22"><path d="M7 18h11a4 4 0 1 0-.7-7.95A6 6 0 0 0 6.2 12.04 4.5 4.5 0 0 0 7 18z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="6" cy="6" r="1.5" fill="currentColor"/><circle cx="19" cy="5" r="1" fill="currentColor"/></svg>
+                <span class="nav-label">Weather</span>
             </button>
             <button class="nav-btn" :class="{ active: tab === 'files' }" @click="tab = 'files'; filesInit()" title="Files (server file explorer)">
                 <svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
