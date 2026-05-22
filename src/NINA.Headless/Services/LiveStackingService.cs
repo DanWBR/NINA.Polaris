@@ -4,6 +4,20 @@ using NINA.Image.Interfaces;
 
 namespace NINA.Headless.Services;
 
+/// <summary>Async handler invoked once per integrated frame. Handlers
+/// run sequentially inside the caller's await chain — a long-running
+/// handler (e.g. an auto-focus run) naturally pauses the next capture
+/// because the caller is awaiting AddFrameAsync. This is the
+/// LiveStackTriggersService integration point (LSTR-1).</summary>
+public delegate Task LiveStackFrameHandler(LiveStackFrameInfo info);
+
+public record LiveStackFrameInfo(
+    int FrameCount,        // count AFTER this integration
+    IImageData Frame,      // the raw frame integrated (not the running stack)
+    double MedianHfr,      // median HFR of stars detected in this frame
+    int StarCount,
+    DateTime At);
+
 public class LiveStackingService {
     private readonly ImageRelayService _relay;
     private readonly ILogger<LiveStackingService> _logger;
@@ -18,14 +32,41 @@ public class LiveStackingService {
     private List<DetectedStar>? _referenceStars;
     private bool _isRunning;
 
+    // Frame-integrated subscribers (LSTR-1). Append-only list guarded
+    // by _handlersLock for snapshotting; handlers awaited sequentially
+    // inside AddFrameAsync so a slow handler (AF run, recenter) blocks
+    // the caller and naturally pauses the next capture.
+    private readonly List<LiveStackFrameHandler> _frameHandlers = new();
+    private readonly object _handlersLock = new();
+
     public bool IsRunning => _isRunning;
     public int FrameCount => _frameCount;
     public int Width => _width;
     public int Height => _height;
+    public double LastFrameMedianHfr { get; private set; }
+    public int LastFrameStarCount { get; private set; }
 
     public LiveStackingService(ImageRelayService relay, ILogger<LiveStackingService> logger) {
         _relay = relay;
         _logger = logger;
+    }
+
+    /// <summary>Subscribe to per-frame integration events. Handlers
+    /// are awaited sequentially inside <see cref="AddFrameAsync"/>;
+    /// a slow handler pauses the upstream capture loop. Returns an
+    /// IDisposable that removes the subscription.</summary>
+    public IDisposable SubscribeFrameIntegrated(LiveStackFrameHandler handler) {
+        lock (_handlersLock) _frameHandlers.Add(handler);
+        return new HandlerSub(this, handler);
+    }
+
+    private sealed class HandlerSub : IDisposable {
+        private readonly LiveStackingService _svc;
+        private readonly LiveStackFrameHandler _h;
+        public HandlerSub(LiveStackingService svc, LiveStackFrameHandler h) { _svc = svc; _h = h; }
+        public void Dispose() {
+            lock (_svc._handlersLock) _svc._frameHandlers.Remove(_h);
+        }
     }
 
     public void Reset() {
@@ -37,6 +78,8 @@ public class LiveStackingService {
             _width = 0;
             _height = 0;
             _isRunning = false;
+            LastFrameMedianHfr = 0;
+            LastFrameStarCount = 0;
             _logger.LogInformation("Live stacking reset");
         }
     }
@@ -119,8 +162,35 @@ public class LiveStackingService {
         var stackedImage = new BaseImageData(stackedPixels, stackedProps, imageData.MetaData);
         await _relay.RelayImageAsync(stackedImage, ct);
 
-        _logger.LogInformation("Live stack: frame {N} added, {Stars} stars, relayed to clients",
-            _frameCount, stars.Count);
+        // Compute median HFR from the already-detected stars (no extra
+        // pixel pass). Falls back to 0 when no stars — handlers that
+        // care about HFR should treat 0 as "no data this frame".
+        double medianHfr = 0;
+        if (stars.Count > 0) {
+            var sorted = stars.Select(s => s.HFR).Where(h => h > 0).OrderBy(h => h).ToList();
+            if (sorted.Count > 0) medianHfr = sorted[sorted.Count / 2];
+        }
+        LastFrameMedianHfr = medianHfr;
+        LastFrameStarCount = stars.Count;
+
+        _logger.LogInformation("Live stack: frame {N} added, {Stars} stars (HFR={Hfr:F2}), relayed",
+            _frameCount, stars.Count, medianHfr);
+
+        // Snapshot handlers + await sequentially. Any handler that
+        // throws is logged + swallowed — one bad subscriber can't
+        // poison the chain. Slow handlers (AF, recenter) pause the
+        // upstream capture loop by extending this await.
+        LiveStackFrameHandler[] handlers;
+        lock (_handlersLock) handlers = _frameHandlers.ToArray();
+        if (handlers.Length > 0) {
+            var info = new LiveStackFrameInfo(_frameCount, imageData, medianHfr, stars.Count, DateTime.UtcNow);
+            foreach (var h in handlers) {
+                try { await h(info); }
+                catch (Exception ex) {
+                    _logger.LogWarning(ex, "LiveStack frame handler threw (continuing)");
+                }
+            }
+        }
     }
 
     public ushort[] GetStackedResult() {
