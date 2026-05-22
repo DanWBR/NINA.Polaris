@@ -2260,6 +2260,66 @@ select.input-sm {
 .home-footer a { color: var(--accent, #38bdf8); }
 .home-credit { font-size: 11px; opacity: 0.7; }
 
+/* Footer info row: project name, tagline, badges all on one line
+   with consistent vertical alignment. flex-wrap keeps it sane on
+   narrow viewports. */
+.home-footer-info {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.home-footer-tag {
+    color: var(--text-muted, #94a3b8);
+    font-size: 12px;
+    margin-right: 4px;
+}
+
+/* Pill-shaped badges with an icon + label. Two flavours: the
+   GitHub badge sticks to the panel's neutral dark fill (matches
+   shields.io conventions); the donate badge is a warm pink so the
+   call-to-action stands out without being garish. Both lift on
+   hover for a small affordance. */
+.home-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none !important;
+    line-height: 1.4;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+.home-badge svg { flex-shrink: 0; }
+.home-badge:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
+}
+
+.home-badge-github {
+    background: rgba(36, 41, 47, 0.85);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #e6edf3 !important;
+}
+.home-badge-github:hover {
+    background: rgba(48, 54, 61, 0.95);
+    border-color: rgba(255, 255, 255, 0.22);
+}
+
+.home-badge-donate {
+    background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+    border-color: rgba(255, 255, 255, 0.18);
+    color: #fff !important;
+}
+.home-badge-donate:hover {
+    background: linear-gradient(135deg, #f472b6 0%, #ec4899 100%);
+    border-color: rgba(255, 255, 255, 0.32);
+}
+
 @media (max-width: 700px) {
     .home-hero { padding: 40px 20px; min-height: 240px; }
     .home-status, .home-quick, .home-footer { padding-left: 16px; padding-right: 16px; }
