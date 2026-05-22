@@ -2,8 +2,6 @@
 
 **Cross-platform headless astronomy controller for Raspberry Pi, ARM64 SBCs, and Windows mini PCs.**
 
-> Repo and .NET projects are still named `nina-headless` / `NINA.Headless.*` — the product / UI is **N.I.N.A. Polaris** (the headless edition of NINA, named after the guiding star). All URLs, build paths, and namespaces continue to use the original names; only the user-facing branding changed.
-
 N.I.N.A. Polaris is a lightweight, browser-controlled astrophotography system built on ASP.NET Core. It brings the power of [N.I.N.A.](https://nighttime-imaging.eu/) (Nighttime Imaging 'N' Astronomy) to single-board computers and small-form-factor PCs, with a responsive Web UI accessible from any device on the network.
 
 The Raspberry Pi (or Windows mini PC) acts as a data broker — controlling hardware, saving FITS files, and streaming images — while your laptop, tablet, or phone handles all the heavy rendering in the browser.
@@ -182,7 +180,7 @@ Build a multi-panel mosaic centred on any selected sky target. The
 **🧩 Plan mosaic** button in the Sky tab opens a modal where you set
 cols × rows + overlap %, with the per-panel FOV auto-filled from the
 active rig (sensor + focal length). A live yellow grid overlay appears
-on the Aladin map showing where each panel will land — adjust until it
+on the sky map showing where each panel will land — adjust until it
 covers your target.
 
 - cos(δ) correction on RA, so the grid sits true at any declination
@@ -235,14 +233,23 @@ Embedded deep sky catalog with 200+ objects:
 - **Altitude chart** — target altitude across tonight's window (sunset → sunrise) with civil / nautical / astronomical twilight transitions
 - Object metadata: coordinates (J2000), magnitude, type, common names
 
-### Sky Map (Aladin Lite)
+### Sky Map
 
-Embedded WebGL sky viewer for visual target selection:
+Embedded fully-offline sky viewer for visual target selection, powered
+by [d3-celestial](https://github.com/ofrohn/d3-celestial):
 
-- HiPS tile surveys: DSS2 color/red, 2MASS, SDSS9, Pan-STARRS DR1, Mellinger
-- Camera-FOV overlay calculated from sensor + focal length (auto-applies cos(Dec) compensation)
+- Hipparcos catalog to magnitude 6, Stellarium constellation lines and
+  IAU names, DSO catalog overlay, Milky Way contours
+- Defaults to a **live local sky** view from the observer's lat/lng at
+  the current UTC time, with horizon mask and a 30 s ticker that
+  re-centres on the zenith
+- **Equatorial chart** mode for planning targets below the current
+  horizon
+- Camera-FOV overlay calculated from sensor + focal length (auto-applies
+  cos(Dec) compensation)
 - Click-to-pick targets, "Center on mount" button
-- Stellarium Remote Control sync — pull the currently-selected object from Stellarium with one click
+- Stellarium Remote Control sync — pull the currently-selected object
+  from Stellarium with one click
 
 ### Weather Forecast
 
@@ -572,7 +579,7 @@ nina-headless/
 | Real-time (status) | WebSocket (JSON) | Equipment + sequence + guider + AF + meridian flip at 1Hz |
 | Frontend framework | Alpine.js v3 | Reactive UI (~15KB, no build step) |
 | Charts | Chart.js v4 | Guiding, focus, HFR, temperature, histogram, altitude |
-| Sky map | Aladin Lite v3 | HiPS sky surveys (DSS / 2MASS / SDSS / Pan-STARRS) |
+| Sky map | d3-celestial (BSD-3) | Fully-offline sky viewer with Hipparcos stars, constellations, DSO overlay, Milky Way contours |
 | Image viewer | OpenSeadragon | Full-resolution zoom/pan over last frame |
 | Image rendering | WebGL2 shaders | GPU debayer + MTF stretch (CPU fallback) |
 | Image encoding | SkiaSharp | Cross-platform JPEG / PNG encoding (incl. STUDIO previews + thumbnails) |
