@@ -58,15 +58,26 @@ public static class FitsThumbnailer {
         int newW = Math.Max(1, (int)Math.Round(grayCopy.Width * scale));
         int newH = Math.Max(1, (int)Math.Round(grayCopy.Height * scale));
 
-        using var resized = (newW == grayCopy.Width && newH == grayCopy.Height)
-            ? grayCopy
-            : grayCopy.Resize(
+        // Pick the source bitmap for the final RGBA pass. When we
+        // *do* need to resize, we own a fresh SKBitmap; otherwise we
+        // draw straight from grayCopy. The `needsResize` flag drives
+        // the dispose path below — aliasing two `using` variables to
+        // the same SkiaSharp handle double-frees the native object,
+        // which presented as silent all-black JPEG output.
+        bool needsResize = newW != grayCopy.Width || newH != grayCopy.Height;
+        SKBitmap? resized = needsResize
+            ? grayCopy.Resize(
                 new SKImageInfo(newW, newH, SKColorType.Gray8, SKAlphaType.Opaque),
-                SKSamplingOptions.Default);
-
-        using var rgb = new SKBitmap(newW, newH, SKColorType.Rgba8888, SKAlphaType.Opaque);
-        using (var canvas = new SKCanvas(rgb)) canvas.DrawBitmap(resized, 0, 0);
-        using var data = rgb.Encode(SKEncodedImageFormat.Jpeg, quality);
-        return data.ToArray();
+                SKSamplingOptions.Default)
+            : null;
+        try {
+            var drawSrc = resized ?? grayCopy;
+            using var rgb = new SKBitmap(newW, newH, SKColorType.Rgba8888, SKAlphaType.Opaque);
+            using (var canvas = new SKCanvas(rgb)) canvas.DrawBitmap(drawSrc, 0, 0);
+            using var data = rgb.Encode(SKEncodedImageFormat.Jpeg, quality);
+            return data.ToArray();
+        } finally {
+            resized?.Dispose();
+        }
     }
 }

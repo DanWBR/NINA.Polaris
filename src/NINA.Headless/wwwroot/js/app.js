@@ -3523,6 +3523,34 @@ function ninaApp() {
             });
         },
 
+        // --- OpenSeadragon toolbar (custom buttons in modal header) ---
+
+        // The modal header drives these instead of OSD's built-in
+        // navigation control. The native control needs an `images/`
+        // sprite folder we don't vendor; calling viewport methods
+        // directly is the documented bypass.
+        osdZoom(factor) {
+            if (!this._osdViewer) return;
+            try {
+                const vp = this._osdViewer.viewport;
+                vp.zoomBy(factor);
+                vp.applyConstraints();
+            } catch (e) { /* viewer disposed mid-click; ignore */ }
+        },
+
+        osdHome() {
+            if (!this._osdViewer) return;
+            try { this._osdViewer.viewport.goHome(); } catch (e) {}
+        },
+
+        osdToggleFullPage() {
+            if (!this._osdViewer) return;
+            try {
+                const cur = this._osdViewer.isFullPage();
+                this._osdViewer.setFullPage(!cur);
+            } catch (e) {}
+        },
+
         // When a sky target is selected via search, also re-center the celestial
         // map on it. The FOV overlay redraws automatically since it reads from
         // this.skyTarget on each updateSkyCameraFov() call.

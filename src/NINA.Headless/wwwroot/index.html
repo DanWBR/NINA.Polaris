@@ -3098,12 +3098,23 @@
          (latest-frame preview) and the FILES tab (any FITS/PNG/JPG
          on disk). The displayed title + loaded URL come from state
          (imageViewerTitle, imageViewerUrl) so both flows reuse the
-         same modal frame, close handler, and OSD instance management. -->
+         same modal frame, close handler, and OSD instance management.
+         The toolbar is built from HTML buttons rather than OSD's
+         built-in navigation control — OSD ships PNG sprites for those
+         and we don't vendor them, so its native toolbar renders as
+         broken-image alt text. The btn-sm buttons here call viewport
+         methods directly so we get the same behaviour with theme-correct
+         styling. -->
     <div class="image-viewer-modal" x-show="imageViewerOpen" x-cloak
          @click.self="closeImageViewer()" @keydown.escape.window="closeImageViewer()">
         <div class="image-viewer-frame">
             <div class="image-viewer-header">
                 <span x-text="imageViewerTitle"></span>
+                <span style="flex:1"></span>
+                <button class="btn btn-sm" @click="osdZoom(1.5)" title="Zoom in">＋</button>
+                <button class="btn btn-sm" @click="osdZoom(1/1.5)" title="Zoom out">－</button>
+                <button class="btn btn-sm" @click="osdHome()" title="Fit to view">⌂</button>
+                <button class="btn btn-sm" @click="osdToggleFullPage()" title="Full page">⛶</button>
                 <button class="btn btn-sm" @click="reloadImageViewer()" title="Reload">↻</button>
                 <button class="btn btn-sm btn-danger" @click="closeImageViewer()">✕</button>
             </div>
