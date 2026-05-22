@@ -373,6 +373,18 @@ function ninaApp() {
         // still gets the latest frame.
         imageViewerUrl: '/api/image/latest/preview',
         imageViewerTitle: 'Image Viewer — full resolution',
+        // FITS header overlay panel inside the image viewer. Open
+        // automatically when previewing a .fits/.fit/.fts file from
+        // the FILES tab — toggleable by the user via the toolbar
+        // button. Visibility is sticky in localStorage so power users
+        // who always want headers visible don't have to keep clicking.
+        fitsHeaders: {
+            visible: localStorage.getItem('fitsHeadersVisible') !== '0',
+            loading: false,
+            data: null,         // { fileName, totalCards, groups: [{name, cards: [{keyword,value,comment}]}] }
+            error: '',
+            path: ''
+        },
 
         // First-run location setup modal
         showLocationSetup: false,
@@ -2843,6 +2855,10 @@ function ninaApp() {
                 const url = '/api/files/preview?path=' + encodeURIComponent(entry.fullPath)
                           + '&maxDim=2400&t=' + Date.now();
                 this._openImageViewerWithUrl(url, entry.name);
+                // Kick off the FITS header fetch in parallel with the
+                // image load. The overlay panel renders as soon as the
+                // JSON lands; visibility is a separate sticky toggle.
+                this.loadFitsHeaders(entry.fullPath);
                 return;
             }
             if (textExts.includes(ext)) {
@@ -3471,6 +3487,11 @@ function ninaApp() {
             // from any other tab doesn't accidentally re-open a file.
             this.imageViewerUrl = '/api/image/latest/preview';
             this.imageViewerTitle = 'Image Viewer — full resolution';
+            // Drop the header cache so reopening a different FITS doesn't
+            // briefly flash the previous file's headers.
+            this.fitsHeaders.data = null;
+            this.fitsHeaders.path = '';
+            this.fitsHeaders.error = '';
         },
 
         reloadImageViewer() {
@@ -3553,6 +3574,49 @@ function ninaApp() {
                 // so without this they have no visual cue.
                 if (!cur) this.toast('Full page — press Esc to exit', 'info');
             } catch (e) {}
+        },
+
+        // --- FITS header overlay panel --------------------------------
+
+        // Fetch + cache header cards for a given path. Skipped silently
+        // for non-FITS paths so the caller can just always invoke it.
+        async loadFitsHeaders(path) {
+            const ext = (path || '').toLowerCase().split('.').pop();
+            if (!['fits','fit','fts'].includes(ext)) {
+                this.fitsHeaders.data = null;
+                this.fitsHeaders.path = '';
+                return;
+            }
+            // Skip the fetch if we already have headers for this path
+            // (the user toggled visibility off then on without leaving
+            // the viewer).
+            if (this.fitsHeaders.path === path && this.fitsHeaders.data) return;
+            this.fitsHeaders.loading = true;
+            this.fitsHeaders.error = '';
+            this.fitsHeaders.path = path;
+            try {
+                const r = await this.apiGet('/api/files/fits-headers?path='
+                    + encodeURIComponent(path));
+                this.fitsHeaders.data = r;
+            } catch (e) {
+                this.fitsHeaders.data = null;
+                this.fitsHeaders.error = e.message || 'Could not read headers';
+            } finally {
+                this.fitsHeaders.loading = false;
+            }
+        },
+
+        toggleFitsHeaders() {
+            this.fitsHeaders.visible = !this.fitsHeaders.visible;
+            localStorage.setItem('fitsHeadersVisible',
+                this.fitsHeaders.visible ? '1' : '0');
+        },
+
+        // True when the currently-open viewer should show the
+        // (toggleable) FITS header panel. Used to gate the button +
+        // panel + image padding in the template.
+        get fitsHeadersAvailable() {
+            return /\.(fits|fit|fts)(\?|$)/i.test(this.imageViewerUrl || '');
         },
 
         // Escape behaviour for the image-viewer modal: first press

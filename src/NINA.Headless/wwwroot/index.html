@@ -3116,10 +3116,52 @@
                 <button class="btn btn-sm" @click="osdZoom(1/1.5)" title="Zoom out">－</button>
                 <button class="btn btn-sm" @click="osdHome()" title="Fit to view">⌂</button>
                 <button class="btn btn-sm" @click="osdToggleFullPage()" title="Full page">⛶</button>
+                <!-- FITS header overlay toggle. Only meaningful when
+                     the viewer is showing a .fits/.fit/.fts file. -->
+                <button class="btn btn-sm"
+                        x-show="fitsHeadersAvailable"
+                        :class="fitsHeaders.visible ? 'btn-active' : ''"
+                        @click="toggleFitsHeaders()"
+                        title="Toggle FITS headers panel">ℹ</button>
                 <button class="btn btn-sm" @click="reloadImageViewer()" title="Reload">↻</button>
                 <button class="btn btn-sm btn-danger" @click="closeImageViewer()">✕</button>
             </div>
-            <div id="osd-viewer" class="image-viewer-canvas"></div>
+            <!-- Canvas + side overlay live in a wrapper so flex layout
+                 can shrink the canvas when the headers panel is open. -->
+            <div class="image-viewer-body"
+                 :class="{ 'with-headers': fitsHeadersAvailable && fitsHeaders.visible }">
+                <div id="osd-viewer" class="image-viewer-canvas"></div>
+                <aside class="image-viewer-headers"
+                       x-show="fitsHeadersAvailable && fitsHeaders.visible"
+                       x-cloak>
+                    <div class="ivh-head">
+                        <strong>FITS headers</strong>
+                        <span class="text-muted"
+                              x-show="fitsHeaders.data"
+                              x-text="fitsHeaders.data?.totalCards + ' cards'"></span>
+                        <button class="btn btn-sm" @click="toggleFitsHeaders()" title="Hide">›</button>
+                    </div>
+                    <div class="ivh-body">
+                        <div x-show="fitsHeaders.loading" class="ivh-empty">Loading…</div>
+                        <div x-show="!fitsHeaders.loading && fitsHeaders.error"
+                             class="ivh-empty text-warn"
+                             x-text="fitsHeaders.error"></div>
+                        <template x-for="group in (fitsHeaders.data?.groups || [])" :key="group.name">
+                            <section class="ivh-group" x-show="group.cards.length > 0">
+                                <h4 x-text="group.name + ' (' + group.cards.length + ')'"></h4>
+                                <table>
+                                    <template x-for="c in group.cards" :key="c.keyword">
+                                        <tr :title="c.comment || ''">
+                                            <td class="ivh-key" x-text="c.keyword"></td>
+                                            <td class="ivh-val" x-text="c.value"></td>
+                                        </tr>
+                                    </template>
+                                </table>
+                            </section>
+                        </template>
+                    </div>
+                </aside>
+            </div>
         </div>
     </div>
 
