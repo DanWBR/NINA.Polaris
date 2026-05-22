@@ -21,6 +21,9 @@ public static class StatusStreamHandler {
 
         var equip = context.RequestServices.GetRequiredService<EquipmentManager>();
         var cameraStream = context.RequestServices.GetRequiredService<CameraStreamService>();
+        var videoRecording = context.RequestServices.GetRequiredService<NINA.Headless.Services.Planetary.VideoRecordingService>();
+        var videoStacker = context.RequestServices.GetRequiredService<NINA.Headless.Services.Planetary.PlanetaryStackerService>();
+        var slewPreview = context.RequestServices.GetRequiredService<SlewPreviewService>();
         var liveStack = context.RequestServices.GetRequiredService<LiveStackingService>();
         var sequence = context.RequestServices.GetRequiredService<SequenceEngine>();
         var phd2 = context.RequestServices.GetRequiredService<PHD2Client>();
@@ -213,6 +216,40 @@ public static class StatusStreamHandler {
                             fps = cameraStream.Fps,
                             lastError = cameraStream.LastError,
                             supportsNative = equip.Camera?.Capabilities.SupportsVideoStream ?? false
+                        },
+                        // Planetary recording lifecycle (VIDEO tab Capture).
+                        videoRecording = new {
+                            recording = videoRecording.IsRecording,
+                            path = videoRecording.OutputPath,
+                            frames = videoRecording.FrameCount,
+                            bytes = videoRecording.BytesWritten,
+                            durationSec = videoRecording.Duration.TotalSeconds,
+                            droppedFrames = videoRecording.DroppedFrames,
+                            lastError = videoRecording.LastError
+                        },
+                        // Planetary stack job (VIDEO tab Process). Null when idle.
+                        videoStack = videoStacker.CurrentJob == null ? null : new {
+                            id = videoStacker.CurrentJob.Id,
+                            phase = videoStacker.CurrentJob.Phase.ToString(),
+                            totalFrames = videoStacker.CurrentJob.TotalFrames,
+                            framesAnalyzed = videoStacker.CurrentJob.FramesAnalyzed,
+                            framesPicked = videoStacker.CurrentJob.FramesPicked,
+                            framesAligned = videoStacker.CurrentJob.FramesAligned,
+                            framesStacked = videoStacker.CurrentJob.FramesStacked,
+                            outputPath = videoStacker.CurrentJob.OutputPath,
+                            error = videoStacker.CurrentJob.Error,
+                            done = videoStacker.CurrentJob.Phase
+                                is NINA.Headless.Services.Planetary.StackPhase.Ok
+                                or NINA.Headless.Services.Planetary.StackPhase.Fail
+                        },
+                        // Auto-slew-preview state (SKY tab inset card).
+                        slewPreview = new {
+                            enabled = slewPreview.Enabled,
+                            active = slewPreview.IsPreviewActive,
+                            slewing = slewPreview.LastDecision_Slewing,
+                            captureIdle = slewPreview.LastDecision_CaptureIdle,
+                            lastCheckedAt = slewPreview.LastCheckedAt,
+                            lastError = slewPreview.LastError
                         },
                         // New blocks powering the bottom activity bar.
                         host = hostMetrics.Latest,
