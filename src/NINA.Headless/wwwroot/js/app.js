@@ -192,6 +192,21 @@ function ninaApp() {
             lastStats: null      // { mean, median, stdev, starCount, hfr, min, max }
         },
 
+        // Server-side continuous video stream. Started by the Stream
+        // button in PREVIEW; backend's CameraStreamService auto-picks
+        // native CCD_VIDEO_STREAM vs server-loop based on camera
+        // capabilities. Updated each second from /ws/status.
+        cameraStream: {
+            running: false,
+            mode: 'idle',         // 'idle' | 'native' | 'loop'
+            fps: 0,
+            frames: 0,
+            exposure: 0.1,
+            gain: 0,
+            supportsNative: false,
+            lastError: null
+        },
+
         // Activity bar (bottom). Populated from the status WS message
         // each second. host comes from HostMetricsService; sirilActiveJobs
         // and graXpertActiveJobs are compact summaries of the respective
@@ -4766,11 +4781,42 @@ function ninaApp() {
 
         async previewAbort() {
             this.preview.looping = false;   // stop the chain first
+            // If a server-side stream is running, take it down too so the
+            // Abort button is a true "everything stop" panic switch.
+            if (this.cameraStream.running) {
+                try { await this.apiPost('/api/camera/stream/stop'); }
+                catch (e) { /* server may have already stopped it */ }
+            }
             try {
                 await this.apiPost('/api/camera/abort');
                 this.toast('Snap aborted', 'warn');
             } catch (e) {
                 this.toast('Abort failed: ' + (e.message || ''), 'error');
+            }
+        },
+
+        // Toggle the server-side continuous stream. Backend auto-picks
+        // native (CCD_VIDEO_STREAM, ~10-30 fps) when the camera supports
+        // it, else falls back to a tight capture loop on the server.
+        // Frames pipe through the existing /ws/image-stream channel —
+        // the LIVE / PREVIEW / Focus canvases all render them.
+        async toggleCameraStream() {
+            if (this.cameraStream.running) {
+                try {
+                    await this.apiPost('/api/camera/stream/stop');
+                    this.toast('Stream stopped', 'info');
+                } catch (e) { this.toast('Stop failed: ' + e.message, 'error'); }
+                return;
+            }
+            try {
+                const r = await this.apiPost('/api/camera/stream/start', {
+                    exposure: this.preview.exposure,
+                    gain: this.preview.gain,
+                    binning: parseInt(this.preview.binning)
+                });
+                this.toast(`Stream started (${r.mode}${r.supportsNative ? ' / native CCD_VIDEO_STREAM' : ' / server loop'})`, 'ok');
+            } catch (e) {
+                this.toast('Stream failed: ' + (e.message || 'unknown'), 'error');
             }
         },
 
@@ -6886,6 +6932,11 @@ function ninaApp() {
             // the equipment + sequence state that handlers above
             // already populated).
             if (msg.host) this.host = msg.host;
+            if (msg.cameraStream) {
+                // Preserve last-known values so the button label stays
+                // readable while the stream service initialises.
+                this.cameraStream = Object.assign({}, this.cameraStream, msg.cameraStream);
+            }
             if (msg.sirilJobs) this.sirilActiveJobs = msg.sirilJobs;
             if (msg.graXpertJobs) this.graXpertActiveJobs = msg.graXpertJobs;
 

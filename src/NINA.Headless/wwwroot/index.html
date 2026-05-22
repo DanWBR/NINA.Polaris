@@ -660,11 +660,28 @@
                         <button class="btn"
                                 :class="preview.looping ? 'btn-active' : ''"
                                 @click="previewToggleLoop()"
-                                :disabled="!selectedCamera">
+                                :disabled="!selectedCamera || cameraStream.running">
                             <span x-text="preview.looping ? '⏹ Stop loop' : '↻ Loop'"></span>
                         </button>
+                        <!-- Server-side continuous stream. Auto-picks native
+                             (CCD_VIDEO_STREAM, ~10-30 fps) when the camera
+                             supports it, else falls back to a tight loop on
+                             the server (frame rate bounded by exposure). -->
+                        <button class="btn"
+                                :class="cameraStream.running ? 'btn-active' : ''"
+                                @click="toggleCameraStream()"
+                                :disabled="!selectedCamera || preview.busy || preview.looping"
+                                :title="cameraStream.supportsNative
+                                    ? 'Native CCD_VIDEO_STREAM available — high fps'
+                                    : 'Server loop fallback (no native stream on this camera)'">
+                            <span x-show="!cameraStream.running">🎥 Stream</span>
+                            <span x-show="cameraStream.running" x-text="
+                                '⏹ Stop ('
+                                + (cameraStream.mode === 'native' ? 'native' : 'loop')
+                                + ' · ' + (cameraStream.fps?.toFixed?.(1) || '0.0') + ' fps)'"></span>
+                        </button>
                         <button class="btn btn-danger" @click="previewAbort()"
-                                :disabled="!preview.busy && !preview.looping">
+                                :disabled="!preview.busy && !preview.looping && !cameraStream.running">
                             Abort
                         </button>
                         <button class="btn" @click="openImageViewer()"
