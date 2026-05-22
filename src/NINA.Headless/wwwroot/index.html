@@ -114,6 +114,10 @@
                 <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" fill="none" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Preview</span>
             </button>
+            <button class="nav-btn" :class="{ active: tab === 'video' }" @click="tab = 'video'" title="Video (planetary capture + lucky imaging)">
+                <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="6" width="13" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 10l5-3v10l-5-3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+                <span class="nav-label">Video</span>
+            </button>
             <button class="nav-btn" :class="{ active: tab === 'sequence' }" @click="tab = 'sequence'; loadEndActions()" title="Autorun (shooting schedule)">
                 <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="3" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="10" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="17" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Autorun</span>
@@ -700,6 +704,164 @@
                           x-text="'last: ' + (preview.lastSnapAt
                                               ? new Date(preview.lastSnapAt).toLocaleTimeString()
                                               : '')"></span>
+                </div>
+            </div>
+
+            <!-- VIDEO (planetary capture + lucky-imaging stack) -->
+            <div x-show="tab === 'video'" class="tab-panel video-tab-panel">
+                <div class="panel-header">
+                    Video (planetary)
+                    <span class="status-indicator-sm"
+                          :class="videoRecording.recording ? 'warn'
+                                  : (videoStack && !videoStack.done ? 'warn' : 'ok')"
+                          x-text="videoRecording.recording ? ('REC ' + (videoRecording.frames || 0) + ' frames')
+                                  : (videoStack && !videoStack.done ? ('STACK · ' + videoStack.phase) : 'IDLE')"></span>
+                </div>
+
+                <div class="video-tabstrip">
+                    <button class="video-tab" :class="{ active: videoTab === 'capture' }"
+                            @click="videoTab = 'capture'">Capture</button>
+                    <button class="video-tab" :class="{ active: videoTab === 'process' }"
+                            @click="videoTab = 'process'; loadVideoSerList()">Process</button>
+                </div>
+
+                <!-- ===== Tab 1: Capture ===== -->
+                <div x-show="videoTab === 'capture'" class="video-pane">
+                    <div class="preview-area" style="min-height:300px">
+                        <canvas id="videoCaptureCanvas" class="preview-canvas"></canvas>
+                        <div class="preview-overlay" x-show="!cameraStream.running">
+                            <p x-text="selectedCamera
+                                ? (cameraStream.supportsNative
+                                    ? 'Click Start Stream to begin (camera supports native CCD_VIDEO_STREAM)'
+                                    : 'Click Start Stream (server loop mode — fps limited by exposure)')
+                                : 'No camera connected — connect from RIGS tab first'"></p>
+                        </div>
+                    </div>
+
+                    <div class="quick-controls">
+                        <div class="control-row">
+                            <label>Exposure (s)
+                                <input type="number" x-model.number="video.exposure"
+                                       step="0.005" min="0.001" class="input-sm"
+                                       :disabled="cameraStream.running || videoRecording.recording">
+                            </label>
+                            <label>Gain
+                                <input type="number" x-model.number="video.gain"
+                                       step="10" min="0" class="input-sm"
+                                       :disabled="cameraStream.running || videoRecording.recording">
+                            </label>
+                            <label>Bin
+                                <select x-model="video.binning" class="input-sm"
+                                        :disabled="cameraStream.running || videoRecording.recording">
+                                    <option value="1">1×1</option>
+                                    <option value="2">2×2</option>
+                                </select>
+                            </label>
+                            <label>Target name
+                                <input type="text" x-model="video.targetName"
+                                       class="input-sm" style="width:120px"
+                                       :disabled="videoRecording.recording">
+                            </label>
+                            <label>Max duration (s)
+                                <input type="number" x-model.number="video.maxDurationSec"
+                                       step="10" min="0" class="input-sm" style="width:80px"
+                                       :disabled="videoRecording.recording">
+                            </label>
+                        </div>
+
+                        <div class="control-row actions">
+                            <button class="btn"
+                                    :class="cameraStream.running ? 'btn-active' : ''"
+                                    @click="videoToggleStream()"
+                                    :disabled="!selectedCamera || videoRecording.recording">
+                                <span x-show="!cameraStream.running">🎥 Start Stream</span>
+                                <span x-show="cameraStream.running"
+                                      x-text="'⏹ Stop Stream (' + (cameraStream.fps?.toFixed?.(1) || '0.0') + ' fps)'"></span>
+                            </button>
+                            <button class="btn btn-primary"
+                                    @click="videoToggleRecord()"
+                                    :disabled="!cameraStream.running"
+                                    :class="videoRecording.recording ? 'btn-danger' : ''">
+                                <span x-show="!videoRecording.recording">⏺ Record</span>
+                                <span x-show="videoRecording.recording"
+                                      x-text="'⏹ Stop (' + (videoRecording.frames || 0) + ' frames · '
+                                              + ((videoRecording.bytes / 1048576) | 0) + ' MB)'"></span>
+                            </button>
+                            <span x-show="videoRecording.recording" class="text-muted" style="font-size:11px">
+                                → <code x-text="videoRecording.path"></code>
+                            </span>
+                        </div>
+
+                        <div class="stats-bar" x-show="videoRecording.droppedFrames > 0">
+                            <span class="text-warn">⚠ Dropped frames: <strong x-text="videoRecording.droppedFrames"></strong>
+                                (writer can't keep up with stream cadence)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ===== Tab 2: Process (lucky imaging stack) ===== -->
+                <div x-show="videoTab === 'process'" class="video-pane">
+                    <div class="control-row" style="margin-bottom:10px">
+                        <label style="flex:1">SER file
+                            <select x-model="video.processSerPath" class="input-sm">
+                                <option value="">— Pick a recorded SER —</option>
+                                <template x-for="f in video.serList" :key="f.path">
+                                    <option :value="f.path" x-text="f.label"></option>
+                                </template>
+                            </select>
+                        </label>
+                        <button class="btn btn-sm" @click="loadVideoSerList()">↻ Refresh</button>
+                    </div>
+
+                    <div class="control-row">
+                        <label>Keep top
+                            <input type="number" x-model.number="video.keepPercent"
+                                   min="1" max="100" step="5" class="input-sm" style="width:70px"
+                                   :disabled="videoStack && !videoStack.done"> %
+                        </label>
+                        <label>Output name
+                            <input type="text" x-model="video.outputName" class="input-sm" style="width:120px"
+                                   :disabled="videoStack && !videoStack.done">
+                        </label>
+                        <button class="btn btn-primary" @click="videoStartStack()"
+                                :disabled="!video.processSerPath || (videoStack && !videoStack.done)">
+                            <span x-show="!videoStack || videoStack.done">▶ Stack</span>
+                            <span x-show="videoStack && !videoStack.done"
+                                  x-text="videoStack?.phase + '…'"></span>
+                        </button>
+                        <button class="btn btn-danger" @click="videoAbortStack()"
+                                :disabled="!videoStack || videoStack.done">Abort</button>
+                    </div>
+
+                    <!-- Live progress -->
+                    <div class="af-progress" x-show="videoStack && !videoStack.done" style="margin-top:10px">
+                        <div class="af-progress-bar">
+                            <div class="af-progress-fill" :style="'width: ' + videoStackPercent() + '%'"></div>
+                        </div>
+                        <div class="af-progress-info">
+                            <span>Phase: <strong x-text="videoStack?.phase"></strong></span>
+                            <span x-show="videoStack?.framesAnalyzed">
+                                Analyzed: <strong x-text="videoStack.framesAnalyzed + '/' + videoStack.totalFrames"></strong>
+                            </span>
+                            <span x-show="videoStack?.framesPicked">
+                                Kept: <strong x-text="videoStack.framesPicked"></strong>
+                            </span>
+                            <span x-show="videoStack?.framesAligned">
+                                Aligned: <strong x-text="videoStack.framesAligned"></strong>
+                            </span>
+                            <span x-show="videoStack?.framesStacked">
+                                Stacked: <strong x-text="videoStack.framesStacked"></strong>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="stats-bar" x-show="videoStack?.phase === 'Ok'" style="margin-top:10px">
+                        <span class="text-ok">✓ Stack complete</span>
+                        <span>→ <code x-text="videoStack.outputPath"></code></span>
+                    </div>
+                    <div class="stats-bar" x-show="videoStack?.phase === 'Fail'" style="margin-top:10px">
+                        <span class="text-err">✗ <span x-text="videoStack.error"></span></span>
+                    </div>
                 </div>
             </div>
 
@@ -1862,6 +2024,16 @@
 
             <!-- SKY EXPLORER -->
             <div x-show="tab === 'sky'" class="tab-panel tab-panel-sky">
+                <!-- Slew preview inset — auto-shows the live camera feed
+                     while the mount is slewing and nothing else is using
+                     the camera. SlewPreviewService drives the camera
+                     stream; the multi-canvas renderer mirrors frames to
+                     #slewPreviewCanvas the same way it does for LIVE /
+                     PREVIEW / Focus canvases. -->
+                <div class="slew-preview-inset" x-show="slewPreview?.active" x-cloak>
+                    <div class="slew-preview-label">📷 Slewing — live view</div>
+                    <canvas id="slewPreviewCanvas" class="slew-preview-canvas"></canvas>
+                </div>
                 <div class="sky-toolbar">
                     <input type="text" class="search-input" placeholder="Search object (M31, NGC 7000, Orion...)"
                            x-model="skySearch" @keyup.enter="searchSky()" @input="skyShowResults = false">

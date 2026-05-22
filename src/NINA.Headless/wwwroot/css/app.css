@@ -4553,3 +4553,75 @@ select.input-sm {
     border-radius: 0 0 var(--radius) var(--radius);
     background: #000;
 }
+
+/* ==========================================================================
+   VIDEO tab — planetary capture (SER) + lucky-imaging stack
+   ========================================================================== */
+
+.video-tab-panel {
+    display: flex;
+    flex-direction: column;
+}
+.video-tabstrip {
+    display: flex;
+    gap: 6px;
+    margin: 6px 0 10px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
+}
+.video-tab {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid transparent;
+    padding: 6px 14px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+}
+.video-tab:hover { background: rgba(255,255,255,0.04); color: var(--text-primary); }
+.video-tab.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+.video-pane {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* SKY tab inset showing the live camera feed while the mount slews.
+   Positioned in the lower-right corner, fades in/out via x-show. */
+.slew-preview-inset {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    z-index: 20;
+    width: 260px;
+    height: 200px;
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+    /* Soft fade so the inset doesn't pop on/off jarringly. */
+    transition: opacity 300ms ease;
+}
+.slew-preview-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+.slew-preview-label {
+    position: absolute;
+    top: 4px;
+    left: 6px;
+    font-size: 10px;
+    color: #fcd34d;
+    background: rgba(0,0,0,0.7);
+    padding: 2px 6px;
+    border-radius: 2px;
+    z-index: 1;
+    pointer-events: none;
+}

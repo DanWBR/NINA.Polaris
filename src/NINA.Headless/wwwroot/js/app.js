@@ -207,6 +207,36 @@ function ninaApp() {
             lastError: null
         },
 
+        // VIDEO tab state — planetary capture (SER) + lucky-imaging stack.
+        // Driven by VideoRecordingService + PlanetaryStackerService on the
+        // server; the WS status feed populates videoRecording / videoStack.
+        videoTab: 'capture',       // 'capture' | 'process'
+        video: {
+            exposure: 0.05,
+            gain: 200,
+            binning: 1,
+            targetName: 'planet',
+            maxDurationSec: 60,
+            // Process side
+            processSerPath: '',
+            serList: [],          // [{ path, label }]
+            keepPercent: 50,
+            outputName: 'stack'
+        },
+        videoRecording: {
+            recording: false, path: null, frames: 0, bytes: 0,
+            durationSec: 0, droppedFrames: 0, lastError: null
+        },
+        videoStack: null,         // { id, phase, framesAnalyzed, ..., done }
+
+        // Auto slew-preview state. SlewPreviewService streams its
+        // decision flags here so the SKY tab inset can fade itself in
+        // and out without per-tab polling.
+        slewPreview: {
+            enabled: true, active: false, slewing: false, captureIdle: true,
+            lastCheckedAt: null, lastError: null
+        },
+
         // Activity bar (bottom). Populated from the status WS message
         // each second. host comes from HostMetricsService; sirilActiveJobs
         // and graXpertActiveJobs are compact summaries of the respective
@@ -894,7 +924,7 @@ function ninaApp() {
             const src = document.getElementById('liveCanvas');
             if (!src) return;
             if (src.width === 0 || src.height === 0) return;
-            for (const id of ['previewCanvas', 'focusCanvas']) {
+            for (const id of ['previewCanvas', 'focusCanvas', 'videoCaptureCanvas', 'slewPreviewCanvas']) {
                 const dst = document.getElementById(id);
                 if (!dst) continue;
                 // Size the destination canvas to fit its container
@@ -4820,6 +4850,106 @@ function ninaApp() {
             }
         },
 
+        // ----- VIDEO tab (planetary capture + lucky-imaging stack) -----
+
+        // Capture side — wraps the existing /api/camera/stream endpoints
+        // with the VIDEO tab's own exposure/gain/binning. Recording
+        // subscribes to the stream on the server side (no client-side
+        // frame routing).
+        async videoToggleStream() {
+            if (this.cameraStream.running) {
+                try { await this.apiPost('/api/camera/stream/stop'); }
+                catch (e) { this.toast('Stop failed: ' + e.message, 'error'); }
+                return;
+            }
+            try {
+                await this.apiPost('/api/camera/stream/start', {
+                    exposure: this.video.exposure,
+                    gain: this.video.gain,
+                    binning: parseInt(this.video.binning)
+                });
+            } catch (e) {
+                this.toast('Stream failed: ' + (e.message || 'unknown'), 'error');
+            }
+        },
+        async videoToggleRecord() {
+            if (this.videoRecording.recording) {
+                try {
+                    await this.apiPost('/api/video/record/stop');
+                    this.toast('Recording stopped', 'info');
+                } catch (e) { this.toast('Stop failed: ' + e.message, 'error'); }
+                return;
+            }
+            try {
+                const r = await this.apiPost('/api/video/record/start', {
+                    targetName: this.video.targetName || 'planet',
+                    maxDurationSeconds: this.video.maxDurationSec > 0 ? this.video.maxDurationSec : null
+                });
+                this.toast(`Recording → ${r.path}`, 'ok');
+            } catch (e) { this.toast('Record failed: ' + (e.message || 'unknown'), 'error'); }
+        },
+
+        // Process side — enumerates SER files under {ImageOutputDir}/planetary
+        // via the FileBrowserService API and offers them in the dropdown.
+        async loadVideoSerList() {
+            try {
+                // Walk the planetary subtree. Files endpoint gives us
+                // recursive directory listings.
+                const root = (this.settings.imageOutputDir || '') + '/planetary';
+                const list = await this.apiGet(`/api/files/list?path=${encodeURIComponent(root)}&recursive=true`);
+                this.video.serList = (list.entries || [])
+                    .filter(e => !e.isDir && e.name.toLowerCase().endsWith('.ser'))
+                    .map(e => ({
+                        path: e.path,
+                        label: e.name + ' (' + ((e.sizeBytes / 1048576) | 0) + ' MB)'
+                    }));
+            } catch (e) {
+                // FilesEndpoint may return 4xx if dir doesn't exist yet
+                // (no recordings made). Leave list empty; no toast spam.
+                this.video.serList = [];
+            }
+        },
+        async videoStartStack() {
+            if (!this.video.processSerPath) return;
+            try {
+                const r = await this.apiPost('/api/video/stack/start', {
+                    serPath: this.video.processSerPath,
+                    keepPercent: this.video.keepPercent,
+                    outputName: this.video.outputName
+                });
+                this.toast(`Stack started (job ${r.jobId?.slice?.(0, 8) || ''}…)`, 'info');
+            } catch (e) { this.toast('Stack failed: ' + e.message, 'error'); }
+        },
+        async videoAbortStack() {
+            if (!this.videoStack?.id) return;
+            try { await this.apiPost(`/api/video/stack/${this.videoStack.id}/abort`); }
+            catch (e) { this.toast('Abort failed: ' + e.message, 'warn'); }
+        },
+        videoStackPercent() {
+            const j = this.videoStack;
+            if (!j) return 0;
+            // Rough progress: weight phases evenly. Within Analyzing /
+            // Aligning / Stacking, use the per-frame ratio.
+            const phaseWeights = {
+                Reading: 5, Analyzing: 30, Ranking: 5,
+                Aligning: 20, Stacking: 35, Writing: 5
+            };
+            const order = ['Reading', 'Analyzing', 'Ranking', 'Aligning', 'Stacking', 'Writing'];
+            let pct = 0;
+            for (const p of order) {
+                if (p === j.phase) {
+                    let inner = 0;
+                    if (p === 'Analyzing' && j.totalFrames) inner = j.framesAnalyzed / j.totalFrames;
+                    else if (p === 'Aligning' && j.framesPicked) inner = j.framesAligned / j.framesPicked;
+                    else if (p === 'Stacking' && j.framesPicked) inner = j.framesStacked / j.framesPicked;
+                    pct += phaseWeights[p] * inner;
+                    break;
+                }
+                pct += phaseWeights[p] || 0;
+            }
+            return Math.min(100, Math.max(0, pct));
+        },
+
         async setCooler(enabled, temp) {
             try {
                 await this.apiPost('/api/camera/cooler', {
@@ -6937,6 +7067,9 @@ function ninaApp() {
                 // readable while the stream service initialises.
                 this.cameraStream = Object.assign({}, this.cameraStream, msg.cameraStream);
             }
+            if (msg.videoRecording) this.videoRecording = msg.videoRecording;
+            if (msg.videoStack !== undefined) this.videoStack = msg.videoStack;  // null when idle
+            if (msg.slewPreview) this.slewPreview = msg.slewPreview;
             if (msg.sirilJobs) this.sirilActiveJobs = msg.sirilJobs;
             if (msg.graXpertJobs) this.graXpertActiveJobs = msg.graXpertJobs;
 
