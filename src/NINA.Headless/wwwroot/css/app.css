@@ -3989,3 +3989,118 @@ select.input-sm {
     background: linear-gradient(90deg, #4fc3f7, #9cb3ff);
     transition: width 0.3s ease;
 }
+
+/* ===========================================================
+   External tools (Siril + GraXpert) — Settings section + Siril
+   run modal. Each "row" is a card per tool with status pill +
+   detail body.
+   ----------------------------------------------------------- */
+.external-tool-row {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    background: rgba(0, 0, 0, 0.18);
+}
+.external-tool-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+.external-tool-head strong {
+    font-size: 14px;
+    color: var(--text-primary);
+}
+.external-tool-status {
+    font-size: 12px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+}
+.external-tool-status.ok   { background: rgba(34, 197, 94, 0.18); color: #86efac; }
+.external-tool-status.warn { background: rgba(245, 158, 11, 0.18); color: #fcd34d; }
+.external-tool-status.idle { background: rgba(148, 163, 184, 0.18); color: #cbd5e1; }
+.external-tool-status.error{ background: rgba(239, 68, 68, 0.20); color: #fca5a5; }
+.external-tool-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* Siril run modal: dropdown of scripts, frame counts, progress
+   bar, log tail. Reuses the location-setup-modal backdrop pattern. */
+.siril-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+.siril-modal-frame {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px;
+    max-width: 640px;
+    width: 100%;
+    color: var(--text-primary);
+}
+.siril-modal-frame h2 {
+    margin: 0 0 14px;
+    font-size: 18px;
+}
+.siril-modal-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+.siril-modal-row label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 180px;
+}
+.siril-modal-counts {
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+}
+.siril-modal-counts strong { color: var(--text-primary); }
+.siril-modal-progress {
+    margin: 14px 0;
+}
+.siril-modal-progress-bar {
+    width: 100%;
+    height: 10px;
+    background: var(--bg-primary);
+    border-radius: 5px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+.siril-modal-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4fc3f7, #9cb3ff);
+    transition: width 0.4s ease;
+}
+.siril-modal-progress-meta {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+.siril-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 14px;
+}

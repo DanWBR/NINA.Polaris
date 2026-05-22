@@ -77,7 +77,12 @@ function ninaApp() {
             imageNamePattern: '',
             stellariumHost: 'localhost',
             stellariumPort: 8090,
-            preferAdvancedSequencer: false
+            preferAdvancedSequencer: false,
+            // External tools — see ExternalTools section in Settings.
+            // Empty = auto-detect (BinaryLocator on the server picks
+            // the right path for the host OS).
+            sirilPath: '',
+            sirilScriptsDir: ''
         },
 
         // Connection state
@@ -348,6 +353,25 @@ function ninaApp() {
         },
         _filesLastShiftIndex: -1,    // anchor for shift-click range selection
 
+        // External tools (Siril + GraXpert). status is the snapshot
+        // from /api/{tool}/status; scripts is the script catalogue.
+        // jobs (later) will hold active Siril/GraXpert job summaries.
+        siril: {
+            status: null,        // { available, binaryPath, version, scriptsCount }
+            scripts: [],         // [{ name, path, source }]
+            jobs: [],            // active jobs polled from /api/siril/jobs
+            modalOpen: false,
+            modalScriptName: '',
+            modalTargetName: '',
+            modalLights: [],     // string[] of full paths
+            modalDarks: [],
+            modalFlats: [],
+            modalBiases: [],
+            currentJobId: null,
+            currentJob: null,
+            _pollTimer: null
+        },
+
         // d3-celestial Sky Viewer (offline, BSD-3-Clause).
         // Always renders the live sky from the observer's location at the
         // current UTC time, in horizontal projection — same convention as
@@ -519,6 +543,7 @@ function ninaApp() {
             this.loadDitherSettings();
             this.loadMfSettings();
             this.loadEndActions();
+            this.loadSirilStatus();
             this.loadAtlasTypes();
             this.loadRigs();
             this.loadCameraDrivers();
@@ -1125,6 +1150,8 @@ function ninaApp() {
                     this.settings.imageOutputDir = data.imageOutputDir || '';
                     this.settings.imageNamePattern = data.imageNamePattern || '';
                     this.settings.preferAdvancedSequencer = !!data.preferAdvancedSequencer;
+                    this.settings.sirilPath = data.sirilPath || '';
+                    this.settings.sirilScriptsDir = data.sirilScriptsDir || '';
                     // First time the app boots, honour the user's preferred sequencer flavour.
                     if (!this._sequencerTabBootHandled) {
                         this._sequencerTabBootHandled = true;
@@ -1757,6 +1784,15 @@ function ninaApp() {
             const idx = this.studio.selectedIds.indexOf(id);
             if (idx >= 0) this.studio.selectedIds.splice(idx, 1);
             else this.studio.selectedIds.push(id);
+        },
+
+        // Return absolute file paths for the currently-selected frames.
+        // Used by sirilOpenRunModal to prefill the lights list.
+        studioSelectedLightPaths() {
+            const set = new Set(this.studio.selectedIds);
+            return this.studio.frames
+                .filter(f => set.has(f.id))
+                .map(f => f.path);
         },
 
         // ─── ST-2: Single-frame viewer ────────────────────────────────────
@@ -4291,7 +4327,9 @@ function ninaApp() {
                         imageFormat: this.settings.imageFormat,
                         imageOutputDir: this.settings.imageOutputDir,
                         imageNamePattern: this.settings.imageNamePattern,
-                        preferAdvancedSequencer: this.settings.preferAdvancedSequencer
+                        preferAdvancedSequencer: this.settings.preferAdvancedSequencer,
+                        sirilPath: this.settings.sirilPath,
+                        sirilScriptsDir: this.settings.sirilScriptsDir
                     })
                 });
             } catch (e) { }
@@ -4873,6 +4911,151 @@ function ninaApp() {
         // install banner + the INDI-dropdown-vs-host-input toggle.
         get mountDriverInfo() {
             return this.mountDrivers.find(d => d.id === this.mountDriver) || null;
+        },
+
+        // --- External tools: Siril ------------------------------------
+
+        // Fetch detection status + script catalogue. Called on init
+        // and after Settings changes (Re-detect button, path edits).
+        async loadSirilStatus() {
+            try {
+                this.siril.status = await this.apiGet('/api/siril/status');
+                if (this.siril.status.available) {
+                    await this.sirilReloadScripts();
+                }
+            } catch (e) {
+                // Server might not have SirilEndpoints yet (older build);
+                // don't break the rest of the app.
+                this.siril.status = { available: false };
+            }
+        },
+
+        async sirilReloadScripts() {
+            try {
+                this.siril.scripts = await this.apiGet('/api/siril/scripts');
+            } catch (e) {
+                this.siril.scripts = [];
+            }
+        },
+
+        // Re-probe the Siril binary on the server (cache invalidation).
+        // Use after the user installs Siril or changes the path override.
+        async sirilRedetect() {
+            try {
+                const r = await this.apiPost('/api/siril/redetect');
+                this.siril.status = {
+                    available: r.available,
+                    binaryPath: r.binaryPath,
+                    version: r.version,
+                    scriptsCount: this.siril.scripts.length
+                };
+                if (r.available) await this.sirilReloadScripts();
+                this.toast(r.available
+                    ? 'Siril detected: v' + (r.version || '?')
+                    : 'Siril not found — check the path override', r.available ? 'ok' : 'warn');
+            } catch (e) {
+                this.toast('Siril detection failed: ' + (e.message || ''), 'error');
+            }
+        },
+
+        // --- Siril run modal (STUDIO "Stack with Siril" entry point) ---
+
+        sirilOpenRunModal(prefilledLights) {
+            if (!this.siril.status?.available) {
+                this.toast('Siril is not installed on this host', 'warn');
+                return;
+            }
+            if (this.siril.scripts.length === 0) {
+                this.toast('No Siril scripts found', 'warn');
+                return;
+            }
+            // Default to the first OSC preprocessing script if it
+            // exists; otherwise just take whatever the catalogue
+            // returns first (bundled comes before user, sorted).
+            const defaultScript = this.siril.scripts.find(s =>
+                /OSC_Preprocessing\.ssf/i.test(s.name)) || this.siril.scripts[0];
+            this.siril.modalScriptName = defaultScript?.name || '';
+            this.siril.modalTargetName = 'Untitled';
+            this.siril.modalLights = (prefilledLights || []).slice();
+            this.siril.modalDarks = [];
+            this.siril.modalFlats = [];
+            this.siril.modalBiases = [];
+            this.siril.currentJobId = null;
+            this.siril.currentJob = null;
+            this.siril.modalOpen = true;
+        },
+
+        sirilCloseModal() {
+            this.siril.modalOpen = false;
+            if (this.siril._pollTimer) {
+                clearInterval(this.siril._pollTimer);
+                this.siril._pollTimer = null;
+            }
+        },
+
+        async sirilStartRun() {
+            if (!this.siril.modalScriptName) {
+                this.toast('Pick a script first', 'warn');
+                return;
+            }
+            if (this.siril.modalLights.length === 0) {
+                this.toast('No light frames selected', 'warn');
+                return;
+            }
+            try {
+                const r = await this.apiPost('/api/siril/run', null, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        scriptName: this.siril.modalScriptName,
+                        targetName: this.siril.modalTargetName,
+                        lightPaths: this.siril.modalLights,
+                        darkPaths: this.siril.modalDarks.length ? this.siril.modalDarks : null,
+                        flatPaths: this.siril.modalFlats.length ? this.siril.modalFlats : null,
+                        biasPaths: this.siril.modalBiases.length ? this.siril.modalBiases : null
+                    })
+                });
+                this.siril.currentJobId = r.jobId;
+                this.toast('Siril job started: ' + r.jobId, 'ok');
+                this._sirilStartPolling();
+            } catch (e) {
+                this.toast('Siril start failed: ' + (e.message || ''), 'error');
+            }
+        },
+
+        _sirilStartPolling() {
+            if (this.siril._pollTimer) clearInterval(this.siril._pollTimer);
+            this.siril._pollTimer = setInterval(async () => {
+                if (!this.siril.currentJobId) return;
+                try {
+                    const job = await this.apiGet('/api/siril/jobs/'
+                        + encodeURIComponent(this.siril.currentJobId));
+                    this.siril.currentJob = job;
+                    if (job && (job.stage === 'done' || job.stage === 'failed'
+                                || job.stage === 'cancelled')) {
+                        clearInterval(this.siril._pollTimer);
+                        this.siril._pollTimer = null;
+                        if (job.stage === 'done') {
+                            this.toast('Siril finished: ' + (job.resultPath || ''), 'ok');
+                        } else if (job.stage === 'failed') {
+                            this.toast('Siril failed: ' + (job.lastError || ''), 'error');
+                        }
+                    }
+                } catch (e) {
+                    // Transient — keep polling.
+                }
+            }, 1500);
+        },
+
+        async sirilCancelCurrent() {
+            if (!this.siril.currentJobId) return;
+            try {
+                await this.apiPost('/api/siril/jobs/'
+                    + encodeURIComponent(this.siril.currentJobId) + '/cancel');
+                this.toast('Cancellation requested', 'info');
+            } catch (e) {
+                this.toast('Cancel failed: ' + (e.message || ''), 'error');
+            }
         },
 
         async equipDisconnectMount() {

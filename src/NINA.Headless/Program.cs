@@ -93,6 +93,7 @@ app.MapSystemEndpoints();
 app.MapImageEndpoints();
 app.MapStudioEndpoints();
 app.MapFilesEndpoints();
+app.MapSirilEndpoints();
 
 // Live stacking + INDI
 app.MapLiveStackEndpoints();

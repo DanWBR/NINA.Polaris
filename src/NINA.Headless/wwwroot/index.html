@@ -2196,6 +2196,15 @@
                         <span x-show="!studio.rescan?.inProgress">⟳ Rescan</span>
                         <span x-show="studio.rescan?.inProgress">Scanning…</span>
                     </button>
+                    <!-- Siril entry point. Visible only when Siril
+                         is detected and the user has selected ≥1 frame. -->
+                    <button class="btn btn-sm btn-primary"
+                            x-show="siril.status?.available"
+                            :disabled="studio.selectedIds.length === 0"
+                            @click="sirilOpenRunModal(studioSelectedLightPaths())"
+                            title="Run a Siril script on the selected frames">
+                        ⚡ Stack with Siril
+                    </button>
                 </div>
 
                 <!-- Filters -->
@@ -2954,6 +2963,74 @@
                         <strong>Advanced:</strong> tree with containers, loop conditions, and event triggers (auto-focus on temp/HFR/time, meridian flip, dither, safety abort).
                     </p>
                 </div>
+
+                <!-- External post-processing tools (Siril + GraXpert).
+                     Both run as external binaries; auto-detected on
+                     startup, configurable via override paths. -->
+                <div class="settings-section">
+                    <h3>External tools</h3>
+                    <p class="hint" style="margin-top:0;margin-bottom:10px">
+                        Polaris can drive Siril (preprocessing + stacking) and GraXpert (background
+                        extraction, deconvolution, denoising) as external binaries when installed
+                        on this machine.
+                    </p>
+
+                    <!-- Siril row -->
+                    <div class="external-tool-row">
+                        <div class="external-tool-head">
+                            <strong>Siril</strong>
+                            <span class="external-tool-status"
+                                  :class="siril.status?.available ? 'ok' : 'idle'"
+                                  x-text="siril.status?.available
+                                          ? ('✓ Detected v' + (siril.status.version || '?'))
+                                          : '✗ Not detected'"></span>
+                            <button class="btn btn-sm" @click="sirilRedetect()" title="Re-probe Siril path + version">Re-detect</button>
+                        </div>
+                        <div class="external-tool-body">
+                            <label>
+                                Path override
+                                <input type="text" class="input-md" style="width:100%;max-width:520px"
+                                       x-model="settings.sirilPath"
+                                       @change="saveSettingsToServer(); sirilRedetect()"
+                                       placeholder="(auto) e.g. C:\Program Files\Siril\bin\siril-cli.exe">
+                            </label>
+                            <label style="margin-top:6px">
+                                Extra scripts folder
+                                <input type="text" class="input-md" style="width:100%;max-width:520px"
+                                       x-model="settings.sirilScriptsDir"
+                                       @change="saveSettingsToServer(); sirilReloadScripts()"
+                                       placeholder="(default OS location) e.g. %APPDATA%\siril\scripts">
+                            </label>
+                            <p class="hint" style="margin-top:6px"
+                               x-show="siril.status?.available">
+                                <span x-text="(siril.scripts?.filter(s => s.source === 'bundled').length || 0) + ' bundled'"></span>
+                                +
+                                <span x-text="(siril.scripts?.filter(s => s.source === 'user').length || 0) + ' user'"></span>
+                                scripts ·
+                                <span x-text="siril.status?.binaryPath || ''"></span>
+                            </p>
+                            <p class="hint text-warn" style="margin-top:6px"
+                               x-show="!siril.status?.available">
+                                Install Siril from <a href="https://siril.org/download/" target="_blank" rel="noopener">siril.org</a>
+                                and reload this page (or click Re-detect).
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- GraXpert row (status only for now; full controls land in F4/F5) -->
+                    <div class="external-tool-row">
+                        <div class="external-tool-head">
+                            <strong>GraXpert</strong>
+                            <span class="external-tool-status idle">Coming next</span>
+                        </div>
+                        <p class="hint" style="margin-top:6px;margin-bottom:0">
+                            Background extraction, deconvolution, and denoising integration
+                            arrives in the next iteration. Install GraXpert v3.0+ from
+                            <a href="https://www.graxpert.com" target="_blank" rel="noopener">graxpert.com</a>
+                            in the meantime.
+                        </p>
+                    </div>
+                </div>
             </div>
 
         </main>
@@ -3121,6 +3198,77 @@
          broken-image alt text. The btn-sm buttons here call viewport
          methods directly so we get the same behaviour with theme-correct
          styling. -->
+    <!-- Siril run modal (STUDIO entry point) -->
+    <div class="siril-modal" x-show="siril.modalOpen" x-cloak
+         @click.self="sirilCloseModal()"
+         @keydown.escape.window="sirilCloseModal()">
+        <div class="siril-modal-frame">
+            <h2>⚡ Stack with Siril</h2>
+
+            <div class="siril-modal-row">
+                <label>
+                    Script
+                    <select class="input-md" x-model="siril.modalScriptName">
+                        <template x-for="s in siril.scripts" :key="s.path">
+                            <option :value="s.name"
+                                    x-text="s.name + (s.source === 'user' ? '  (your script)' : '')"></option>
+                        </template>
+                    </select>
+                </label>
+                <label style="max-width:180px">
+                    Target name
+                    <input type="text" class="input-md"
+                           x-model="siril.modalTargetName" placeholder="e.g. M81">
+                </label>
+            </div>
+
+            <div class="siril-modal-counts">
+                <span>Lights: <strong x-text="siril.modalLights.length"></strong></span>
+                <span>Darks: <strong x-text="siril.modalDarks.length"></strong></span>
+                <span>Flats: <strong x-text="siril.modalFlats.length"></strong></span>
+                <span>Biases: <strong x-text="siril.modalBiases.length"></strong></span>
+            </div>
+
+            <p class="hint" x-show="!siril.currentJob">
+                Calibration frames pre-fill happens in the next iteration —
+                for now run the WithoutDark / WithoutFlat / WithoutDBF
+                variants when you don't have masters yet.
+            </p>
+
+            <!-- Progress block once a job starts -->
+            <div class="siril-modal-progress" x-show="siril.currentJob">
+                <div class="siril-modal-progress-bar">
+                    <div class="siril-modal-progress-fill"
+                         :style="'width: ' + (siril.currentJob?.percentDone || 0) + '%'"></div>
+                </div>
+                <div class="siril-modal-progress-meta">
+                    <span x-text="siril.currentJob?.stage || ''"></span>
+                    <span x-text="(siril.currentJob?.percentDone || 0) + '%'"></span>
+                </div>
+                <p class="hint text-warn" x-show="siril.currentJob?.lastError"
+                   x-text="siril.currentJob?.lastError"></p>
+                <p class="hint text-ok" x-show="siril.currentJob?.stage === 'done'"
+                   x-text="'Result: ' + siril.currentJob?.resultPath"></p>
+            </div>
+
+            <div class="siril-modal-actions">
+                <button class="btn"
+                        x-show="!siril.currentJob || siril.currentJob.stage === 'done'
+                                || siril.currentJob.stage === 'failed'
+                                || siril.currentJob.stage === 'cancelled'"
+                        @click="sirilCloseModal()">Close</button>
+                <button class="btn btn-danger"
+                        x-show="siril.currentJob && siril.currentJob.stage !== 'done'
+                                && siril.currentJob.stage !== 'failed'
+                                && siril.currentJob.stage !== 'cancelled'"
+                        @click="sirilCancelCurrent()">Cancel job</button>
+                <button class="btn btn-primary"
+                        x-show="!siril.currentJob"
+                        @click="sirilStartRun()">Start</button>
+            </div>
+        </div>
+    </div>
+
     <div class="image-viewer-modal" x-show="imageViewerOpen" x-cloak
          @click.self="closeImageViewer()"
          @keydown.escape.window="onImageViewerEscape()">

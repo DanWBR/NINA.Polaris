@@ -78,6 +78,16 @@ public static class SystemEndpoints {
                 p.ImageNamePattern = update.ImageNamePattern;
                 p.ImageFormat = update.ImageFormat;
                 p.PreferAdvancedSequencer = update.PreferAdvancedSequencer;
+                // External-tool path overrides. Empty/null = auto-detect.
+                p.SirilPath = update.SirilPath;
+                p.SirilScriptsDir = update.SirilScriptsDir;
+                p.GraXpertPath = update.GraXpertPath;
+                p.GraXpertBgeSmoothing = update.GraXpertBgeSmoothing;
+                p.GraXpertBgeCorrection = update.GraXpertBgeCorrection
+                                              ?? p.GraXpertBgeCorrection;
+                p.GraXpertDeconStrength = update.GraXpertDeconStrength;
+                p.GraXpertDeconPsfSize = update.GraXpertDeconPsfSize;
+                p.GraXpertDenoiseStrength = update.GraXpertDenoiseStrength;
             });
             return Results.Ok(new { message = "Profile saved" });
         });
