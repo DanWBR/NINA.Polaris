@@ -1841,6 +1841,13 @@ label select.input-sm {
 .tab-panel-sky > .sky-results,
 .tab-panel-sky > .sky-slew-progress {
     flex: 0 0 auto;
+    /* When a target is picked the sky-info-panel grows with name +
+       common-name + aliases + coords + actions + altitude chart.
+       Without a cap the action row gets pushed below the viewport
+       and clipped by the tab-panel's overflow:hidden. Cap height and
+       scroll internally so the buttons always stay reachable. */
+    max-height: 38vh;
+    overflow-y: auto;
 }
 /* d3-celestial ships its own #celestial-map { overflow:visible; height:auto;
    display:inline-block; min-width:720px } which (ID selector) wins over a
