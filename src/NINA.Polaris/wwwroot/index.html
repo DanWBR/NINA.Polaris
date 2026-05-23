@@ -4012,9 +4012,9 @@
                  (HostInfo.cs). Tooltip carries the full model/OS;
                  short label fits in the bar. -->
             <span class="activity-host-stat activity-host-device" x-show="host.device"
-                  :title="host.device ? `${host.device.model}\n${host.device.os}\n${host.device.architecture} · ${host.device.cores} cores` : ''">
+                  :title="hostDeviceTooltip()">
                 <span class="activity-host-icon" x-text="hostDeviceIcon()"></span>
-                <span class="activity-host-value" x-text="host.device ? host.device.shortLabel : ''"></span>
+                <span class="activity-host-value" x-text="hostDeviceLabel()"></span>
             </span>
             <span class="activity-host-stat" title="System CPU usage">
                 <span class="activity-host-label">CPU</span>

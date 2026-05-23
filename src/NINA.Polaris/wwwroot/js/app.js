@@ -6960,7 +6960,7 @@ function ninaApp() {
         // ClassifyWindowsModel. Generic fallback for anything we
         // don't have a specific glyph for.
         hostDeviceIcon() {
-            const k = this.host?.device?.kind || '';
+            const k = (this.host && this.host.device && this.host.device.kind) || '';
             switch (k) {
                 case 'raspberry-pi': return '🍓';
                 case 'jetson':       return '🧠';
@@ -6973,6 +6973,14 @@ function ninaApp() {
                 case 'linux':        return '🐧';
                 default:             return '🖥️';
             }
+        },
+        hostDeviceLabel() {
+            return (this.host && this.host.device && this.host.device.shortLabel) || '';
+        },
+        hostDeviceTooltip() {
+            const d = this.host && this.host.device;
+            if (!d) return '';
+            return d.model + '\n' + d.os + '\n' + d.architecture + ' · ' + d.cores + ' cores';
         },
         formatHostRam(usedMB, totalMB) {
             if (!totalMB || totalMB <= 0) return '— / —';
