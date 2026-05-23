@@ -4982,8 +4982,43 @@ function ninaApp() {
             try {
                 const data = await this.apiGet('/api/equipment/devices');
                 this.devices = data.devices || [];
+                // After the device list is in place, re-apply the
+                // connected-device names to the per-card dropdowns.
+                // We have to do this AFTER `devices` populates because
+                // a <select> can't pick a value whose matching <option>
+                // doesn't exist yet — the browser silently resets it
+                // to the first option ("Select device"). The WS handler
+                // does an early write to equip*Choice, but that lands
+                // before this fetch returns. Re-apply here so the
+                // dropdowns end up correct regardless of timing.
+                this._syncEquipChoicesFromConnected();
             } catch (e) {
                 this.toast('Failed to refresh devices', 'error');
+            }
+        },
+
+        // Mirror connected device names into the RIGS-tab dropdowns.
+        // Only fills empty choices — never clobbers a user mid-pick.
+        // Called from refreshDevices() AND from the WS handler when a
+        // new equipment payload arrives.
+        _syncEquipChoicesFromConnected() {
+            const has = n => Array.isArray(this.devices)
+                && this.devices.some(d => d && d.name === n);
+            if (!this.equipCameraChoice && this.selectedCamera
+                && has(this.selectedCamera)) {
+                this.equipCameraChoice = this.selectedCamera;
+            }
+            if (!this.equipMountChoice && this.selectedTelescope
+                && has(this.selectedTelescope)) {
+                this.equipMountChoice = this.selectedTelescope;
+            }
+            if (!this.equipFocuserChoice && this.selectedFocuser
+                && has(this.selectedFocuser)) {
+                this.equipFocuserChoice = this.selectedFocuser;
+            }
+            if (!this.equipFilterChoice && this.selectedFilterWheel
+                && has(this.selectedFilterWheel)) {
+                this.equipFilterChoice = this.selectedFilterWheel;
             }
         },
 
@@ -7478,6 +7513,14 @@ function ninaApp() {
                     this.equipFilterChoice = eq.filterWheel.name;
                 }
             }
+            // Belt-and-suspenders: also sync on every WS tick so if a
+            // race between this handler and refreshDevices() left a
+            // dropdown empty (selected* set but devices list still
+            // pending), the next tick after refreshDevices resolves
+            // hydrates it. _syncEquipChoicesFromConnected is a no-op
+            // when either devices is empty or the choice is already
+            // set, so calling it 1Hz is cheap + idempotent.
+            if (this.indiConnected) this._syncEquipChoicesFromConnected();
             if (eq.rotator) {
                 this.rotator = {
                     connected: eq.rotator.connected,
