@@ -1729,11 +1729,21 @@
                                     <span x-show="equipCameraInfo.pixelSizeUm > 0">Pixel: <strong x-text="equipCameraInfo.pixelSizeUm.toFixed(2) + ' µm'"></strong></span>
                                 </div>
 
-                                <!-- Cooler controls — astronomy cameras only. -->
+                                <!-- Cooler controls — astronomy cameras only.
+                                     Toggle reflects current state at a
+                                     glance (green = ON, red = OFF) —
+                                     replaces the old "Cooler OFF"
+                                     button-with-label that read ambiguously. -->
                                 <div class="equip-inline-controls" x-show="!isDslrCamera">
-                                    <button class="btn btn-sm" @click="setCooler(!equipCameraInfo.coolerOn, equipCoolerTarget)"
-                                            :class="equipCameraInfo.coolerOn ? 'btn-active' : ''"
-                                            x-text="equipCameraInfo.coolerOn ? 'Cooler ON' : 'Cooler OFF'"></button>
+                                    <label class="equip-toggle"
+                                           :title="equipCameraInfo.coolerOn ? 'Turn cooler OFF' : 'Turn cooler ON'">
+                                        <input type="checkbox"
+                                               :checked="!!equipCameraInfo.coolerOn"
+                                               @change="setCooler($event.target.checked, equipCoolerTarget)">
+                                        <span class="equip-toggle-track"></span>
+                                        <span class="equip-toggle-thumb"></span>
+                                    </label>
+                                    <span class="text-muted" style="font-size:11px">Cooler</span>
                                     <label class="equip-temp-label">
                                         Target
                                         <input type="number" x-model.number="equipCoolerTarget" step="1" min="-40" max="30" class="input-sm">
@@ -1854,9 +1864,15 @@
                                     <span x-show="mount.parked" class="text-warn">PARKED</span>
                                 </div>
                                 <div class="equip-inline-controls">
-                                    <button class="btn btn-sm" @click="toggleTracking()"
-                                            :class="mount.tracking ? 'btn-active' : ''"
-                                            x-text="mount.tracking ? 'Tracking ON' : 'Tracking OFF'"></button>
+                                    <label class="equip-toggle"
+                                           :title="mount.tracking ? 'Stop tracking' : 'Start tracking'">
+                                        <input type="checkbox"
+                                               :checked="!!mount.tracking"
+                                               @change="toggleTracking()">
+                                        <span class="equip-toggle-track"></span>
+                                        <span class="equip-toggle-thumb"></span>
+                                    </label>
+                                    <span class="text-muted" style="font-size:11px">Tracking</span>
                                     <button class="btn btn-sm" @click="parkMount()" :disabled="mount.parked">Park</button>
                                     <button class="btn btn-sm" @click="unparkMount()" :disabled="!mount.parked">Unpark</button>
                                 </div>
