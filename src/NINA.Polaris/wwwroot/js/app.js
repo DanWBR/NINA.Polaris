@@ -7384,7 +7384,18 @@ function ninaApp() {
             const eq = msg.equipment || {};
 
             if (eq.indi) {
+                // Detect the false→true transition (typical on page
+                // refresh while INDI was already connected server-side)
+                // and auto-hydrate the device list. Without this the
+                // RIGS tab showed "INDI (0 devices)" + every device
+                // dropdown was empty until the user manually clicked
+                // Refresh — even though Camera/Mount/etc were already
+                // connected and reporting data via the WS.
+                const wasIndiDisconnected = !this.indiConnected;
                 this.indiConnected = eq.indi.connected;
+                if (wasIndiDisconnected && this.indiConnected) {
+                    this.refreshDevices();
+                }
             }
             if (eq.camera) {
                 this.cameraTemp = eq.camera.temperature;
