@@ -295,6 +295,24 @@ function ninaApp() {
         sirilActiveJobs: [],
         graXpertActiveJobs: [],
 
+        // SIM-6: built-in equipment simulator. WS payload populates
+        // `simulator` once a second; `simulatorSettings` mirrors the
+        // persisted UserProfile fields and is loaded on first Settings
+        // tab visit. Defaults match the server's sensible-defaults so
+        // the UI renders coherently before the first GET completes.
+        simulator: {
+            kind: 'none', isSupported: false, installed: false,
+            version: null, devicesAvailable: [],
+            isRunning: false, runningDevices: [],
+            launchedAt: null, lastError: null, downloadUrl: ''
+        },
+        simulatorSettings: {
+            autoStart: false,
+            devices: ['ccd', 'telescope', 'focus', 'wheel'],
+            port: 7624
+        },
+        _simulatorSettingsLoaded: false,
+
         // Rotator
         rotator: { connected: false, name: '', position: null, moving: false, reversed: false },
 
@@ -7181,6 +7199,71 @@ function ninaApp() {
         hostDeviceLabel() {
             return (this.host && this.host.device && this.host.device.shortLabel) || '';
         },
+
+        // --- SIM-6: built-in equipment simulator ---
+
+        // Hydrate the persisted settings (autoStart, devices, port)
+        // from the active UserProfile. Called on first visit to the
+        // Settings tab + after Re-detect (in case the server's
+        // default-resolution logic kicked in).
+        async loadSimulatorSettings() {
+            if (this._simulatorSettingsLoaded) return;
+            try {
+                const data = await this.apiGet('/api/simulator/settings');
+                this.simulatorSettings = {
+                    autoStart: !!data.autoStart,
+                    devices: data.devices || ['ccd', 'telescope', 'focus', 'wheel'],
+                    port: data.port || 7624
+                };
+                this._simulatorSettingsLoaded = true;
+            } catch (e) { /* server may not be reachable yet */ }
+        },
+
+        async saveSimulatorSettings() {
+            try {
+                await this.apiPost('/api/simulator/settings', null, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.simulatorSettings)
+                });
+            } catch (e) {
+                this.toast('Simulator settings save failed: ' + (e.message || e), 'error');
+            }
+        },
+
+        async simulatorReDetect() {
+            try {
+                await this.apiPost('/api/simulator/detect');
+                this.toast('Simulator re-detected', 'ok');
+            } catch (e) {
+                this.toast('Re-detect failed: ' + (e.message || e), 'error');
+            }
+        },
+
+        async simulatorLaunch() {
+            // Refresh persisted settings first so the launch matches
+            // what the user sees on screen — defensive against the
+            // checkbox @change debounce racing the button click.
+            await this.saveSimulatorSettings();
+            try {
+                const resp = await this.apiPost('/api/simulator/launch', {
+                    devices: this.simulatorSettings.devices,
+                    port: this.simulatorSettings.port
+                });
+                this.toast('Simulator launched: ' + (resp.devices || []).join(', '), 'ok');
+            } catch (e) {
+                this.toast('Launch failed: ' + (e.message || e), 'error');
+            }
+        },
+
+        async simulatorShutdown() {
+            try {
+                await this.apiPost('/api/simulator/shutdown');
+                this.toast('Simulator stopped', 'ok');
+            } catch (e) {
+                this.toast('Shutdown failed: ' + (e.message || e), 'error');
+            }
+        },
         // Pre-formatted CPU brand + freq + cores from HostInfo.cs
         // (e.g. "Intel Core i7-12700K @ 3.60 GHz · 20 cores"). Null
         // on hosts where CPU detection failed.
@@ -7429,6 +7512,9 @@ function ninaApp() {
             // the equipment + sequence state that handlers above
             // already populated).
             if (msg.host) this.host = msg.host;
+            // SIM-6: simulator backend status (kind/installed/version/
+            // running/runningDevices). The Settings panel binds to this.
+            if (msg.simulator) this.simulator = msg.simulator;
             if (msg.cameraStream) {
                 // Preserve last-known values so the button label stays
                 // readable while the stream service initialises.

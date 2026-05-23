@@ -1354,6 +1354,17 @@ Relay **server** side (different process, same `Relay__*` prefix in `appsettings
 | WASM live-stack bundle | ~12 MB on disk, ~3 MB gzipped | One-time download per browser |
 | Status broadcast | 1 Hz | Equipment + sequence state |
 
+### Testing without hardware
+
+Polaris ships with a one-click button to spawn a fake telescope +
+camera + focuser + filter wheel. Open Settings → Equipment simulator
+→ Launch. The simulated camera renders **real stars** from the GSC
+catalog at whatever RA/Dec the simulated mount is pointing at —
+plate solve, auto-focus, live stacking all work end-to-end against
+it. Linux/macOS uses INDI simulators (`apt install indi-bin`);
+Windows uses Alpaca Omni Simulator. See
+[docs/user-guide/simulator-mode.md](docs/user-guide/simulator-mode.md).
+
 ### Client-side compute offload (CLST)
 
 Live stacking can run **in your browser** via a WebAssembly module

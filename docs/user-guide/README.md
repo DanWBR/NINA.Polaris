@@ -61,6 +61,11 @@ Each tab in the sidebar has its own page. Read the ones you need:
   SSH remote debug setup (full breakpoints + step-debug from VS on
   Windows over the network), plus simpler publish + run + hot-reload
   workflows.
+- **[Equipment simulator mode](simulator-mode.md)** — built-in fake
+  telescope + camera + focuser + filter wheel for testing the whole
+  pipeline without real hardware. Renders real stars at the simulated
+  mount position so plate solve, auto-focus, and live stacking all
+  actually work.
 
 ## A note on screenshots
 

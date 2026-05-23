@@ -3765,7 +3765,8 @@
             </div>
 
             <!-- SETTINGS -->
-            <div x-show="tab === 'settings'" class="tab-panel">
+            <div x-show="tab === 'settings'" class="tab-panel"
+                 x-init="$watch('tab', t => { if (t === 'settings') loadSimulatorSettings(); })">
                 <div class="panel-header">Settings</div>
 
                 <div class="settings-section">
@@ -3784,6 +3785,109 @@
                         <span class="status-indicator ok" style="font-size: 11px;">Connected</span>
                         <span class="text-muted" style="font-size: 12px;" x-text="devices.length + ' devices found'"></span>
                         <button class="btn btn-sm" @click="tab = 'equip'" style="margin-left: auto;">Manage Equipment</button>
+                    </div>
+                </div>
+
+                <!-- SIM: built-in equipment simulator. Lets the user
+                     test the whole pipeline without real hardware —
+                     INDI simulator stack on Linux/macOS (renders real
+                     stars from the GSC catalog at the simulated mount
+                     position), Alpaca Omni Simulator on Windows. -->
+                <div class="settings-section">
+                    <h3>Equipment simulator</h3>
+                    <p class="text-muted" style="font-size: 12px; margin-top: -4px;">
+                        Spawn fake cameras + mounts so you can test Polaris without a real rig.
+                        Best for new-installation smoke tests, dev work, or showing the UI to
+                        someone before sunset.
+                    </p>
+
+                    <!-- Backend + install status row. Surfaces what
+                         host OS Polaris picked + whether the binaries
+                         are on disk. -->
+                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                        <span class="text-muted" style="font-size: 11px;">Backend:</span>
+                        <strong x-text="simulator.kind === 'indi' ? 'INDI simulators (Linux/macOS)'
+                                       : simulator.kind === 'ascom' ? 'ASCOM / Alpaca (Windows)'
+                                       : 'None (no backend for this OS)'"></strong>
+
+                        <span x-show="simulator.installed" class="status-indicator ok"
+                              style="font-size: 11px;"
+                              x-text="'✓ Installed' + (simulator.version ? ' v' + simulator.version : '')"></span>
+                        <span x-show="simulator.kind !== 'none' && !simulator.installed"
+                              class="status-indicator warn" style="font-size: 11px;">Not installed</span>
+
+                        <span x-show="simulator.isRunning" class="status-indicator ok"
+                              style="font-size: 11px;">🟢 Running</span>
+                        <span x-show="!simulator.isRunning && simulator.installed"
+                              class="status-indicator" style="font-size: 11px;">Stopped</span>
+
+                        <button class="btn btn-sm" @click="simulatorReDetect()"
+                                style="margin-left: auto;">⟳ Re-detect</button>
+                    </div>
+
+                    <!-- Install instructions banner when the host
+                         doesn't have the binaries yet. -->
+                    <div x-show="simulator.kind !== 'none' && !simulator.installed && simulator.lastError"
+                         style="margin-top: 12px; padding: 10px; background: rgba(245,158,11,0.1); border-left: 3px solid var(--warn); font-size: 12px;">
+                        <div x-text="simulator.lastError"></div>
+                        <a :href="simulator.downloadUrl" target="_blank" style="display: inline-block; margin-top: 6px;">
+                            Open install guide →
+                        </a>
+                    </div>
+
+                    <!-- Device checkbox grid — only the drivers we
+                         actually detected get a checkbox. Saved as
+                         the user toggles + included in Launch. -->
+                    <div x-show="simulator.installed" style="margin-top: 12px;">
+                        <div class="text-muted" style="font-size: 11px; margin-bottom: 4px;">Devices to start:</div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 6px;">
+                            <template x-for="dev in ['ccd','telescope','focus','wheel','guide','dome','weather']" :key="dev">
+                                <label :title="(simulator.devicesAvailable || []).includes(dev) ? '' : 'Driver not detected on this host'"
+                                       :style="(simulator.devicesAvailable || []).includes(dev) ? '' : 'opacity:0.4; cursor:not-allowed'"
+                                       style="display: flex; align-items: center; gap: 6px; font-size: 12px;">
+                                    <input type="checkbox"
+                                           :value="dev"
+                                           x-model="simulatorSettings.devices"
+                                           @change="saveSimulatorSettings()"
+                                           :disabled="!(simulator.devicesAvailable || []).includes(dev)">
+                                    <span x-text="dev === 'ccd' ? 'Camera (CCD)'
+                                                : dev.charAt(0).toUpperCase() + dev.slice(1)"></span>
+                                </label>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Port + auto-start + launch buttons -->
+                    <div x-show="simulator.installed" style="margin-top: 12px;">
+                        <div class="control-row actions" style="flex-wrap: wrap; gap: 12px;">
+                            <label style="font-size: 12px;">
+                                Port:
+                                <input type="number" x-model.number="simulatorSettings.port"
+                                       @change="saveSimulatorSettings()"
+                                       class="input-sm" style="width: 80px;" min="1" max="65535">
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px;">
+                                <input type="checkbox" x-model="simulatorSettings.autoStart"
+                                       @change="saveSimulatorSettings()">
+                                Auto-start when Polaris boots
+                            </label>
+                            <span style="flex:1"></span>
+                            <button class="btn btn-primary" @click="simulatorLaunch()"
+                                    x-show="!simulator.isRunning"
+                                    :disabled="!simulator.installed || (simulatorSettings.devices || []).length === 0">
+                                ▶ Launch simulators
+                            </button>
+                            <button class="btn btn-danger" @click="simulatorShutdown()"
+                                    x-show="simulator.isRunning">
+                                ⏹ Stop
+                            </button>
+                        </div>
+                    </div>
+
+                    <div x-show="simulator.isRunning" class="text-muted"
+                         style="font-size: 11px; margin-top: 8px;">
+                        💡 Now go to <a href="#" @click.prevent="tab = 'equip'">RIGS tab</a> and pick "Simulator..." in each device dropdown.
+                        Running: <span x-text="(simulator.runningDevices || []).join(', ')"></span>
                     </div>
                 </div>
 
