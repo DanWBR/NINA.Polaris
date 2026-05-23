@@ -669,6 +669,27 @@ function ninaApp() {
             bestHfr: null,
             success: null
         },
+        // PA-4: TPPA polar alignment state. Mirrors the WS payload's
+        // polarAlignment sub-object. completedOk + isActive are
+        // derived from phase + presence of CurrentJob server-side.
+        // Form fields (slewDeg/exposureSec/settleSec/gain) hydrate
+        // from the active rig's PolarAlign* settings on load.
+        polar: {
+            phase: 'Idle',
+            isActive: false,
+            completedOk: false,
+            points: [],
+            azErrorArcsec: 0,
+            altErrorArcsec: 0,
+            totalErrorArcsec: 0,
+            lastError: null,
+            // Form-bound (per-rig). Initial values overridden by
+            // _hydratePolarSettingsFromRig() after rigs load.
+            slewDeg: 30,
+            exposureSec: 3.0,
+            settleSec: 2,
+            gain: 100
+        },
         afParams: {
             steps: 9,
             stepSize: 50,
@@ -4960,6 +4981,8 @@ function ninaApp() {
             this.equipWeatherChoice = rig.weather || '';
             if (rig.coolerTargetTemperature != null) this.equipCoolerTarget = rig.coolerTargetTemperature;
             if (rig.focuserStepSize) this.focusStep = rig.focuserStepSize;
+            // PA-4: hydrate polar alignment TPPA tunables from the rig.
+            this._hydratePolarSettingsFromRig(rig);
             if (rig.focalLengthMm) {
                 this.settings.focalLength = rig.focalLengthMm;
                 this.updateFov();
@@ -6172,6 +6195,138 @@ function ninaApp() {
                 await this.apiPost('/api/autofocus/abort');
                 this.toast('Auto-focus abort requested', 'warn');
             } catch (e) { this.toast('AF abort failed', 'error'); }
+        },
+
+        // ---- PA-4: Polar alignment (TPPA) actions ----
+
+        /// Start a TPPA job using the form values (which mirror the
+        /// active rig's saved PolarAlign* settings).
+        async polarStart() {
+            try {
+                await this.apiPost('/api/polar/start', {
+                    slewStepDegrees: this.polar.slewDeg,
+                    exposureSeconds: this.polar.exposureSec,
+                    settleSeconds: this.polar.settleSec,
+                    gain: this.polar.gain
+                });
+                this.toast('Polar alignment started', 'info');
+            } catch (e) {
+                this.toast('Polar start failed: ' + (e.message || ''), 'error');
+            }
+        },
+
+        async polarAbort() {
+            try {
+                await this.apiPost('/api/polar/abort');
+                this.toast('Polar alignment abort requested', 'warn');
+            } catch (e) { this.toast('Polar abort failed', 'error'); }
+        },
+
+        async polarRefineStart() {
+            try {
+                await this.apiPost('/api/polar/refine/start');
+                this.toast('Polar refine loop started', 'info');
+            } catch (e) {
+                this.toast('Refine start failed: ' + (e.message || ''), 'error');
+            }
+        },
+
+        async polarRefineStop() {
+            try {
+                await this.apiPost('/api/polar/refine/stop');
+                this.toast('Polar refine stopped', 'warn');
+            } catch (e) { this.toast('Refine stop failed', 'error'); }
+        },
+
+        /// Persist the 4 form fields back to the active rig profile
+        /// so the next session uses the same TPPA settings.
+        async savePolarRigSettings() {
+            const rig = this.rigs?.find(r => r.id === this.activeRigId);
+            if (!rig) return;
+            try {
+                await this.apiPost('/api/equipment/rigs/' + encodeURIComponent(rig.id), null, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ...rig,
+                        polarAlignSlewDegrees: parseInt(this.polar.slewDeg) || 30,
+                        polarAlignExposureSec: parseFloat(this.polar.exposureSec) || 3.0,
+                        polarAlignSettleSeconds: parseInt(this.polar.settleSec) || 2,
+                        polarAlignGain: parseInt(this.polar.gain) || 100
+                    })
+                });
+            } catch (e) {
+                this.toast('Polar settings save failed: ' + (e.message || ''), 'error');
+            }
+        },
+
+        /// Pull the per-rig polar settings into the form on rig load /
+        /// rig switch. Called from _applyRigToChoices.
+        _hydratePolarSettingsFromRig(rig) {
+            if (!rig) return;
+            if (rig.polarAlignSlewDegrees > 0) this.polar.slewDeg = rig.polarAlignSlewDegrees;
+            if (rig.polarAlignExposureSec > 0) this.polar.exposureSec = rig.polarAlignExposureSec;
+            if (rig.polarAlignSettleSeconds >= 0) this.polar.settleSec = rig.polarAlignSettleSeconds;
+            if (rig.polarAlignGain > 0) this.polar.gain = rig.polarAlignGain;
+        },
+
+        // ---- PA-4: Polar UI helpers (status pills, progress, formatting) ----
+
+        polarStatusLabel() {
+            const p = this.polar.phase || 'Idle';
+            if (p === 'Idle') return 'IDLE';
+            if (p === 'Ok') return 'ALIGNED';
+            if (p === 'Failed') return 'FAILED';
+            if (p === 'Cancelled') return 'CANCELLED';
+            if (p === 'Refining') return 'REFINING';
+            return p.toUpperCase();
+        },
+
+        polarStatusClass() {
+            const p = this.polar.phase;
+            if (p === 'Ok') return 'ok';
+            if (p === 'Failed') return 'err';
+            if (p === 'Cancelled') return 'warn';
+            if (this.polar.isActive) return 'warn';
+            return '';
+        },
+
+        polarPhaseLabel() {
+            // Insert spaces for readability: MovingToPoint1 → Moving to point 1
+            const p = this.polar.phase || '';
+            return p.replace(/([A-Z])/g, ' $1').replace(/(\d)/g, ' $1').trim();
+        },
+
+        polarProgressPercent() {
+            // 11 distinct working phases between Preflight and Ok.
+            // Rough linear mapping is good enough for a UX bar.
+            const order = ['Preflight',
+                'MovingToPoint1', 'SolvingPoint1',
+                'MovingToPoint2', 'SolvingPoint2',
+                'MovingToPoint3', 'SolvingPoint3',
+                'Computing', 'SlewingHome', 'Ok'];
+            const idx = order.indexOf(this.polar.phase);
+            if (idx < 0) return 0;
+            return Math.round(100 * (idx + 1) / order.length);
+        },
+
+        // Colour classes for the result block, by error magnitude in arcmin.
+        polarAzClass() { return this._polarColorBy(this.polar.azErrorArcsec); },
+        polarAltClass() { return this._polarColorBy(this.polar.altErrorArcsec); },
+        polarTotalClass() { return this._polarColorBy(this.polar.totalErrorArcsec); },
+        _polarColorBy(arcsec) {
+            const abs = Math.abs(arcsec || 0) / 60.0; // arcmin
+            if (abs < 1.0) return 'text-ok';
+            if (abs < 5.0) return 'text-warn';
+            return 'text-err';
+        },
+
+        /// Format arcsec error with sign + arcmin units (NINA convention).
+        formatArcmin(arcsec) {
+            if (arcsec == null || isNaN(arcsec)) return '—';
+            const arcmin = arcsec / 60.0;
+            const sign = arcmin >= 0 ? '+' : '';
+            return sign + arcmin.toFixed(2) + "'";
         },
 
         // ---- AF chart helpers ----
@@ -8346,6 +8501,23 @@ function ninaApp() {
             // Server-pushed toasts. Server keeps a ring buffer; we
             // monotonically track the highest id we've already shown
             // so reconnects + status ticks don't re-fire stale toasts.
+            // PA-4: polar alignment job snapshot. Server sends null
+            // when no job has run yet, so the form fields keep their
+            // hydrated values. completedOk + isActive derived locally
+            // from phase to keep template bindings simple.
+            if (msg.polarAlignment !== undefined) {
+                const pa = msg.polarAlignment;
+                if (pa) {
+                    this.polar.phase = pa.phase || 'Idle';
+                    this.polar.isActive = !!pa.isActive;
+                    this.polar.completedOk = pa.phase === 'Ok';
+                    this.polar.points = pa.points || [];
+                    this.polar.azErrorArcsec = pa.azErrorArcsec || 0;
+                    this.polar.altErrorArcsec = pa.altErrorArcsec || 0;
+                    this.polar.totalErrorArcsec = pa.totalErrorArcsec || 0;
+                    this.polar.lastError = pa.lastError || null;
+                }
+            }
             // Skip the very first payload after a WS connect — those
             // are notifications that happened BEFORE the user opened
             // the browser, and replaying 20 stale toasts on page load

@@ -113,6 +113,10 @@
                 <svg viewBox="0 0 24 24" width="22" height="22"><polygon points="12,2 15,10 23,10 17,15 19,23 12,18 5,23 7,15 1,10 9,10" fill="none" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Guide</span>
             </button>
+            <button class="nav-btn" :class="{ active: tab === 'polar' }" @click="tab = 'polar'" title="Polar alignment (TPPA)">
+                <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><line x1="12" y1="2" x2="12" y2="5" stroke="currentColor" stroke-width="2"/><line x1="12" y1="19" x2="12" y2="22" stroke="currentColor" stroke-width="2"/><line x1="2" y1="12" x2="5" y2="12" stroke="currentColor" stroke-width="2"/><line x1="19" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="2"/></svg>
+                <span class="nav-label">Polar</span>
+            </button>
             <button class="nav-btn" :class="{ active: tab === 'focus' }" @click="tab = 'focus'" title="Focus">
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><line x1="12" y1="2" x2="12" y2="6" stroke="currentColor" stroke-width="2"/><line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" stroke-width="2"/><line x1="2" y1="12" x2="6" y2="12" stroke="currentColor" stroke-width="2"/><line x1="18" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Focus</span>
@@ -646,6 +650,131 @@
                     <div class="chart-container chart-container-sm">
                         <canvas x-ref="hfrChart" id="hfrChart"></canvas>
                     </div>
+                </div>
+            </div>
+
+            <!-- POLAR ALIGNMENT (TPPA) -->
+            <div x-show="tab === 'polar'" class="tab-panel">
+                <div class="panel-header">
+                    Polar alignment (TPPA)
+                    <span class="status-indicator-sm"
+                          :class="polarStatusClass()"
+                          x-text="polarStatusLabel()"></span>
+                </div>
+
+                <!-- Parameters form. Bound to per-rig profile fields;
+                     changes POST to /api/equipment/rigs/{id} on blur. -->
+                <div class="quick-controls" style="margin-bottom: 12px">
+                    <div class="control-row">
+                        <label>RA slew step (deg)
+                            <input type="number" class="input-sm" min="5" max="60" step="5"
+                                   x-model.number="polar.slewDeg"
+                                   @change="savePolarRigSettings()"
+                                   :disabled="polar.isActive">
+                        </label>
+                        <label>Exposure (s)
+                            <input type="number" class="input-sm" min="0.1" max="60" step="0.5"
+                                   x-model.number="polar.exposureSec"
+                                   @change="savePolarRigSettings()"
+                                   :disabled="polar.isActive">
+                        </label>
+                        <label>Settle (s)
+                            <input type="number" class="input-sm" min="0" max="30" step="1"
+                                   x-model.number="polar.settleSec"
+                                   @change="savePolarRigSettings()"
+                                   :disabled="polar.isActive">
+                        </label>
+                        <label>Gain
+                            <input type="number" class="input-sm" min="0" max="600" step="10"
+                                   x-model.number="polar.gain"
+                                   @change="savePolarRigSettings()"
+                                   :disabled="polar.isActive">
+                        </label>
+                    </div>
+                    <div class="control-row actions">
+                        <button class="btn btn-primary" @click="polarStart()"
+                                :disabled="polar.isActive || !selectedCamera || !mount?.connected">
+                            ▶ Start TPPA
+                        </button>
+                        <button class="btn" @click="polarRefineStart()"
+                                :disabled="polar.isActive || !polar.completedOk"
+                                title="Continuous capture+solve loop — see error vector shrink as you adjust knobs">
+                            🔄 Refine
+                        </button>
+                        <button class="btn" @click="polarRefineStop()"
+                                :disabled="polar.phase !== 'Refining'">
+                            ⏹ Stop refine
+                        </button>
+                        <button class="btn btn-danger" @click="polarAbort()"
+                                :disabled="!polar.isActive">
+                            ⛔ Abort
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Live progress bar — visible while a job is in flight -->
+                <div class="af-progress" x-show="polar.isActive" style="margin-bottom: 12px">
+                    <div class="af-progress-bar">
+                        <div class="af-progress-fill" :style="'width: ' + polarProgressPercent() + '%'"></div>
+                    </div>
+                    <div class="af-progress-info">
+                        <span>Phase: <strong x-text="polarPhaseLabel()"></strong></span>
+                        <span x-show="polar.points.length > 0">
+                            Solved: <strong x-text="polar.points.length + ' / 3'"></strong>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Result block — visible once we have an error vector -->
+                <div class="stats-bar" x-show="polar.completedOk" style="margin-bottom: 12px">
+                    <span class="text-ok">✓ Alignment complete</span>
+                    <span>Azimuth error: <strong :class="polarAzClass()"
+                            x-text="formatArcmin(polar.azErrorArcsec)"></strong></span>
+                    <span>Altitude error: <strong :class="polarAltClass()"
+                            x-text="formatArcmin(polar.altErrorArcsec)"></strong></span>
+                    <span>Total: <strong :class="polarTotalClass()"
+                            x-text="formatArcmin(polar.totalErrorArcsec)"></strong></span>
+                </div>
+
+                <!-- Failure / cancellation message -->
+                <div class="stats-bar" x-show="polar.phase === 'Failed' && polar.lastError">
+                    <span class="text-warn">⚠ <span x-text="polar.lastError"></span></span>
+                </div>
+
+                <!-- Solved-points table -->
+                <div x-show="polar.points.length > 0" style="margin-bottom: 12px">
+                    <table class="data-table" style="width:100%">
+                        <thead>
+                            <tr><th>#</th><th>RA (h)</th><th>Dec (°)</th><th>Rotation (°)</th><th>At (UTC)</th></tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="p in polar.points" :key="p.index">
+                                <tr>
+                                    <td x-text="p.index + 1"></td>
+                                    <td x-text="p.raHours?.toFixed(4)"></td>
+                                    <td x-text="p.decDeg?.toFixed(4)"></td>
+                                    <td x-text="p.rotationDeg?.toFixed(2)"></td>
+                                    <td x-text="new Date(p.atUtc).toLocaleTimeString()"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Idle hint -->
+                <div x-show="!polar.isActive && polar.points.length === 0" class="hint" style="margin-top: 12px">
+                    <p>
+                        <strong>How TPPA works:</strong> point the telescope at any patch of sky with a few stars
+                        (Dec ~60°+ recommended), enable tracking, then click Start.
+                        Polaris will slew the mount in RA by <strong x-text="polar.slewDeg + '°'"></strong>
+                        two times and plate-solve at each position. The three solved points constrain
+                        the mount's mechanical polar axis, and the difference vs. the true celestial pole
+                        gives your alignment error.
+                    </p>
+                    <p>
+                        After TPPA, click <strong>Refine</strong> to enter a live capture/solve loop —
+                        adjust your tripod knobs and watch the error vector shrink in real time.
+                    </p>
                 </div>
             </div>
 

@@ -42,6 +42,7 @@ public static class StatusStreamHandler {
         var simulator = context.RequestServices
             .GetRequiredService<NINA.Polaris.Services.Simulator.SimulatorService>();
         var notifications = context.RequestServices.GetRequiredService<NotificationService>();
+        var polarAlign = context.RequestServices.GetRequiredService<PolarAlignmentService>();
         var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
 
         using var ws = await context.WebSockets.AcceptWebSocketAsync(new WebSocketAcceptContext {
@@ -290,7 +291,24 @@ public static class StatusStreamHandler {
                         // is the stack running, which devices). UI
                         // shows a green/amber chip + the Settings
                         // panel binds to these fields.
-                        simulator = simulator.GetStatus()
+                        simulator = simulator.GetStatus(),
+                        // PA-4: TPPA orchestrator state. CurrentJob is
+                        // null until the user clicks Start; serialise a
+                        // null-shaped object so the front-end can bind
+                        // without null checks.
+                        polarAlignment = polarAlign.CurrentJob == null ? null : new {
+                            jobId = polarAlign.CurrentJob.Id,
+                            phase = polarAlign.CurrentJob.Phase.ToString(),
+                            mode = polarAlign.CurrentJob.Mode,
+                            isActive = polarAlign.CurrentJob.IsActive,
+                            points = polarAlign.CurrentJob.Points,
+                            azErrorArcsec = polarAlign.CurrentJob.AzErrorArcsec,
+                            altErrorArcsec = polarAlign.CurrentJob.AltErrorArcsec,
+                            totalErrorArcsec = polarAlign.CurrentJob.TotalErrorArcsec,
+                            lastError = polarAlign.CurrentJob.LastError,
+                            startedAt = polarAlign.CurrentJob.StartedAt,
+                            completedAt = polarAlign.CurrentJob.CompletedAt
+                        }
                     };
 
                     await SendJsonAsync(ws, status, cts.Token);
