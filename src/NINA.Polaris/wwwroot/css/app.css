@@ -70,7 +70,10 @@ html, body {
     align-items: center;
     justify-content: space-between;
     height: var(--statusbar-height);
-    padding: 0 12px;
+    /* Tighter left padding so the brand badge sits closer to the
+       left edge of the viewport — user asked to "mover um pouco
+       à esquerda". Right side keeps the original gutter. */
+    padding: 0 12px 0 6px;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border);
     z-index: 100;
@@ -139,11 +142,12 @@ html, body {
     color: transparent;
 }
 .brand-tag {
-    /* Match the N.I.N.A. wordmark — same gradient, smaller, no
-       background or border. Reads as a sub-name rather than a pill. */
+    /* Match the N.I.N.A. wordmark — same gradient AND the same
+       optical weight so the two halves read as equal partners in
+       one continuous mark, not name+subtitle. */
     font-weight: 800;
-    font-size: 13px;
-    letter-spacing: 2px;
+    font-size: 17px;
+    letter-spacing: 2.5px;
     line-height: 1;
     background: linear-gradient(90deg, #4fc3f7 0%, #2196f3 60%, #7e57c2 100%);
     -webkit-background-clip: text;
@@ -2188,8 +2192,10 @@ label select.input-sm {
     letter-spacing: 3px;
 }
 .home-eyebrow .brand-tag {
-    font-size: 16px;
-    letter-spacing: 2.5px;
+    /* Hero scale — match N.I.N.A. so POLARIS reads as the same word
+       not a sub-name. */
+    font-size: 22px;
+    letter-spacing: 3px;
 }
 .home-eyebrow .brand-version {
     font-size: 11px;
