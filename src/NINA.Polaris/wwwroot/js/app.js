@@ -3676,74 +3676,109 @@ function ninaApp() {
             try { Celestial.rotate({ center: [ra * 15, decClamped, 0] }); } catch {}
         },
 
-        updateSkyCameraFov() {
-            if (!this._celestialReady) return;
-            // Camera-FOV rectangle is drawn as a custom GeoJSON layer
-            // (d3-celestial supports user-supplied overlays via add()).
-            // Anchor preference: a selected sky target (the user is
-            // planning where to go), else the mount's actual pointing
-            // (the user wants to see what's currently in frame). Bail
-            // out when neither is available — and also when the toggle
-            // is off.
-            if (!this.aladinShowFov) {
-                if (this._fovLayerId) try { Celestial.remove(this._fovLayerId); } catch {}
-                this._fovLayerId = null;
-                Celestial.redraw();
-                return;
-            }
-            let ra = this.skyTarget?.ra ?? this.skyTarget?.raHours;
-            let dec = this.skyTarget?.dec ?? this.skyTarget?.decDeg;
-            if ((ra == null || dec == null) && this.mount?.connected
-                && this.mount.ra != null && this.mount.dec != null) {
-                // Fall back to the mount's current pointing so the FOV
-                // overlay is visible the moment the user opens the SKY
-                // tab with a connected mount, without requiring a
-                // target to be picked first.
-                ra = this.mount.ra;
-                dec = this.mount.dec;
-            }
-            if (ra == null || dec == null) {
-                if (this._fovLayerId) try { Celestial.remove(this._fovLayerId); } catch {}
-                this._fovLayerId = null;
-                Celestial.redraw();
-                return;
-            }
-
-            // FOV rectangle in equatorial coords. The corners are offset
-            // from the target by ±w in RA (corrected by cos(dec) for the
-            // RA-axis squish near the poles) and ±h in Dec.
+        // ASIAIR-style two-FOV overlay on the sky map:
+        //   • BLUE rectangle — where the mount is currently pointing
+        //     (always shown when a mount is connected). Lets the user
+        //     see what's actually in frame right now without picking
+        //     anything.
+        //   • RED rectangle — where the user is planning to go
+        //     (anchored on the picked sky target if any). Acts as the
+        //     "preview my next slew" indicator.
+        // Both share the same FOV dimensions (sensor + focal length
+        // from the active rig). Drawn as custom d3-celestial layers
+        // — we register the layers ONCE and then mutate the cached
+        // GeoJSON on subsequent calls, then nudge Celestial.redraw().
+        // (The old code re-registered the layer every call, leaking
+        // a new SVG layer per WS tick and never cleaning the old.)
+        _buildFovRing(raHours, decDeg) {
             const w = this.fov.width / 2;
             const h = this.fov.height / 2;
-            const cosDec = Math.cos(dec * Math.PI / 180) || 1e-6;
-            const raDeg = ra * 15;
+            const cosDec = Math.cos(decDeg * Math.PI / 180) || 1e-6;
+            const raDeg = raHours * 15;
             const ring = [
-                [raDeg - w / cosDec, dec - h],
-                [raDeg + w / cosDec, dec - h],
-                [raDeg + w / cosDec, dec + h],
-                [raDeg - w / cosDec, dec + h],
-                [raDeg - w / cosDec, dec - h]
+                [raDeg - w / cosDec, decDeg - h],
+                [raDeg + w / cosDec, decDeg - h],
+                [raDeg + w / cosDec, decDeg + h],
+                [raDeg - w / cosDec, decDeg + h],
+                [raDeg - w / cosDec, decDeg - h]
             ];
-            const geo = {
+            return {
                 type: 'FeatureCollection',
                 features: [{ type: 'Feature', properties: { name: 'FOV' },
                              geometry: { type: 'LineString', coordinates: ring } }]
             };
+        },
+
+        _ensureFovLayers() {
+            if (this._fovLayersRegistered) return;
+            if (!this._celestialReady || typeof Celestial === 'undefined') return;
+            const self = this;
             try {
+                // MOUNT-FOV layer — blue. Reads self._fovMountGeo on
+                // each redraw; if null, draws nothing.
                 Celestial.add({
                     type: 'line',
-                    callback: () => Celestial.container.selectAll('.fov').remove(),
+                    callback: () => Celestial.container.selectAll('.fov-mount').remove(),
                     redraw: () => {
-                        Celestial.container.selectAll('.fov').remove();
-                        Celestial.container.selectAll('.fov')
-                            .data(geo.features).enter().append('path')
-                            .attr('class', 'fov')
-                            .attr('d', Celestial.map(geo))
-                            .style('stroke', '#22c55e').style('stroke-width', 2)
+                        Celestial.container.selectAll('.fov-mount').remove();
+                        const g = self._fovMountGeo;
+                        if (!g) return;
+                        Celestial.container.selectAll('.fov-mount')
+                            .data(g.features).enter().append('path')
+                            .attr('class', 'fov-mount')
+                            .attr('d', Celestial.map(g))
+                            .style('stroke', '#3b82f6').style('stroke-width', 2)
                             .style('fill', 'none');
                     }
                 });
-                Celestial.redraw();
-            } catch (e) { console.warn('FOV overlay failed', e); }
+                // TARGET-FOV layer — red. Same pattern.
+                Celestial.add({
+                    type: 'line',
+                    callback: () => Celestial.container.selectAll('.fov-target').remove(),
+                    redraw: () => {
+                        Celestial.container.selectAll('.fov-target').remove();
+                        const g = self._fovTargetGeo;
+                        if (!g) return;
+                        Celestial.container.selectAll('.fov-target')
+                            .data(g.features).enter().append('path')
+                            .attr('class', 'fov-target')
+                            .attr('d', Celestial.map(g))
+                            .style('stroke', '#ef4444').style('stroke-width', 2)
+                            .style('stroke-dasharray', '4 3')
+                            .style('fill', 'none');
+                    }
+                });
+                this._fovLayersRegistered = true;
+            } catch (e) { console.warn('FOV layer register failed', e); }
+        },
+
+        updateSkyCameraFov() {
+            if (!this._celestialReady) return;
+            this._ensureFovLayers();
+            if (!this.aladinShowFov) {
+                this._fovMountGeo = null;
+                this._fovTargetGeo = null;
+                try { Celestial.redraw(); } catch {}
+                return;
+            }
+            // Mount FOV (blue, solid) — live position.
+            if (this.mount?.connected
+                && this.mount.ra != null && this.mount.dec != null) {
+                this._fovMountGeo = this._buildFovRing(this.mount.ra, this.mount.dec);
+            } else {
+                this._fovMountGeo = null;
+            }
+            // Target FOV (red, dashed) — picked planning target.
+            const tRa = this.skyTarget?.ra ?? this.skyTarget?.raHours;
+            const tDec = this.skyTarget?.dec ?? this.skyTarget?.decDeg;
+            if (tRa != null && tDec != null) {
+                this._fovTargetGeo = this._buildFovRing(tRa, tDec);
+            } else {
+                this._fovTargetGeo = null;
+            }
+            try { Celestial.redraw(); } catch (e) {
+                console.warn('FOV redraw failed', e);
+            }
         },
 
         // Pixel readout: convert mouse event coords to source-image coords +

@@ -2394,9 +2394,16 @@
                             <span>°</span>
                         </span>
                     </label>
-                    <label class="seq-dither-checkbox">
+                    <label class="seq-dither-checkbox"
+                           title="Blue rectangle: mount's current pointing. Red dashed: planning target (the DSO you searched).">
                         <input type="checkbox" x-model="aladinShowFov" @change="updateSkyCameraFov()">
                         Show camera FOV
+                        <span x-show="aladinShowFov" class="text-muted" style="margin-left:6px;font-size:10px">
+                            <span style="display:inline-block;width:10px;height:0;border-top:2px solid #3b82f6;vertical-align:middle"></span>
+                            mount ·
+                            <span style="display:inline-block;width:10px;height:0;border-top:2px dashed #ef4444;vertical-align:middle"></span>
+                            target
+                        </span>
                     </label>
                     <button class="btn btn-sm" @click="skyGoToMount()" :disabled="!mount.connected">Center on mount</button>
                     <span class="muted" style="font-size:11px;margin-left:auto">
