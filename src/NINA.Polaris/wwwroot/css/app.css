@@ -3225,8 +3225,12 @@ label select.input-sm {
     transition: border-color var(--transition);
     /* Keeps every card the same visible height even when its body has
        only a placeholder dropdown — avoids the squished look when no
-       device is selected yet. */
+       device is selected yet. Capped at max-height so a device with
+       lots of metadata (Camera with cooler chart + properties, Mount
+       with full ephemeris) gets its own scrollbar instead of pushing
+       the page layout around. */
     min-height: 220px;
+    max-height: 420px;
     display: flex;
     flex-direction: column;
 }
@@ -3292,6 +3296,23 @@ label select.input-sm {
        to the role-card layout (user feedback: "diminuir a fonte dentro
        dos cards"). */
     font-size: 11px;
+    /* Scroll inside the body when metadata overflows the card's
+       max-height. The dropdown + Connect/Disconnect stay readable;
+       the detail block scrolls beneath them. */
+    overflow-y: auto;
+    /* Slim, subtle scrollbar — matches the dark theme. */
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+.equip-card-body::-webkit-scrollbar {
+    width: 6px;
+}
+.equip-card-body::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+}
+.equip-card-body::-webkit-scrollbar-track {
+    background: transparent;
 }
 
 /* Pull a couple of inner text styles down a notch too so the visual

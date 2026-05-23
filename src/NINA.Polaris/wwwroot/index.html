@@ -1708,6 +1708,12 @@
                                     <span x-show="!isDslrCamera && equipCameraInfo.binX">Bin: <strong x-text="equipCameraInfo.binX + 'x' + equipCameraInfo.binY"></strong></span>
                                     <span x-show="equipCameraInfo.bitDepth">Depth: <strong x-text="equipCameraInfo.bitDepth + '-bit'"></strong></span>
                                     <span x-show="isDslrCamera">ISO: <strong x-text="cameraIso"></strong></span>
+                                    <!-- Sensor metadata — only on real CCDs that
+                                         report it; DSLRs and Alpaca sims often
+                                         leave these zero. -->
+                                    <span x-show="equipCameraInfo.maxX > 0">Resolution: <strong x-text="equipCameraInfo.maxX + ' × ' + equipCameraInfo.maxY + ' px'"></strong></span>
+                                    <span x-show="equipCameraInfo.sensorWidthMm > 0">Sensor: <strong x-text="equipCameraInfo.sensorWidthMm.toFixed(1) + ' × ' + equipCameraInfo.sensorHeightMm.toFixed(1) + ' mm'"></strong></span>
+                                    <span x-show="equipCameraInfo.pixelSizeUm > 0">Pixel: <strong x-text="equipCameraInfo.pixelSizeUm.toFixed(2) + ' µm'"></strong></span>
                                 </div>
 
                                 <!-- Cooler controls — astronomy cameras only. -->
@@ -1820,8 +1826,12 @@
                                 <div class="equip-detail-props">
                                     <span>RA: <strong x-text="formatRA(mount.ra)"></strong></span>
                                     <span>Dec: <strong x-text="formatDec(mount.dec)"></strong></span>
+                                    <span x-show="mount.alt != null">Alt: <strong x-text="(mount.alt?.toFixed(2) || '--') + '°'"></strong></span>
+                                    <span x-show="mount.az != null">Az: <strong x-text="(mount.az?.toFixed(2) || '--') + '°'"></strong></span>
                                     <span>Tracking: <strong :class="mount.tracking ? 'text-ok' : 'text-warn'"
                                                              x-text="mount.tracking ? 'ON' : 'OFF'"></strong></span>
+                                    <span x-show="mount.pierSide">Pier: <strong x-text="mount.pierSide"></strong></span>
+                                    <span x-show="mount.slewing" class="text-warn">SLEWING</span>
                                     <span x-show="mount.parked" class="text-warn">PARKED</span>
                                 </div>
                                 <div class="equip-inline-controls">
