@@ -53,6 +53,13 @@ Each tab in the sidebar has its own page. Read the ones you need:
 - **[Troubleshooting](troubleshooting.md)** — common problems + fixes.
 - **[FAQ](faq.md)** — questions that come up a lot.
 
+## For developers
+
+- **[Debug on Raspberry Pi from Visual Studio](rpi-debug-from-vs.md)** —
+  SSH remote debug setup (full breakpoints + step-debug from VS on
+  Windows over the network), plus simpler publish + run + hot-reload
+  workflows.
+
 ## A note on screenshots
 
 Screenshots in this guide use placeholder paths like
