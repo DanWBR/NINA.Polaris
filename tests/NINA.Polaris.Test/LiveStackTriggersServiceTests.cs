@@ -33,9 +33,16 @@ public class LiveStackTriggersServiceTests {
         // 1 hour of RA = 15° on the equator → 15 * 3600 arcsec at Dec 0
         var atEquator = LiveStackTriggersService.AngularDistanceArcsec(12.0, 0.0, 13.0, 0.0);
         Assert.That(atEquator, Is.EqualTo(54000).Within(1));
-        // At Dec 60° the same 1h of RA only spans 7.5° (cos 60 = 0.5)
+        // At Dec 60° the naive small-angle approximation Δα·cos(δ) says
+        // 15°·0.5 = 7.5° = 27000". But the production code uses the
+        // haversine formula (proper great-circle distance), so the actual
+        // separation is slightly shorter — the path cuts across the
+        // sphere rather than walking along the small circle. Haversine
+        // gives ≈26943" here, off by about 57" from the cos-δ estimate.
+        // Pin the haversine value so a future "optimization" back to the
+        // wrong approximation gets caught.
         var at60 = LiveStackTriggersService.AngularDistanceArcsec(12.0, 60.0, 13.0, 60.0);
-        Assert.That(at60, Is.EqualTo(27000).Within(50));
+        Assert.That(at60, Is.EqualTo(26942.1).Within(0.5));
     }
 
     [Test]
