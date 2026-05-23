@@ -4324,6 +4324,22 @@ label select.input-sm {
     font-size: 12px;
     line-height: 1;
 }
+/* CPU info chip — same visual weight as the device chip + same
+   right-border separator. Caps width so a verbose CPU name doesn't
+   push the live metrics off-screen on narrow viewports. */
+.activity-host-cpu-info {
+    padding-right: 10px;
+    margin-right: 2px;
+    border-right: 1px solid var(--border);
+    max-width: 280px;
+    overflow: hidden;
+}
+.activity-host-cpu-info .activity-host-value {
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
 /* Push all tab content up so the fixed bar never tapes over the
    last row of any panel. The home panel keeps its sticky footer

@@ -141,6 +141,47 @@ public class HostInfoTests {
         Assert.That(HostInfo.NormaliseCpuName("   "), Is.Null);
     }
 
+    // --- CPU label formatting (brand + freq + cores).
+    [Test]
+    public void BuildCpuLabel_AllParts_RendersFull() {
+        Assert.That(HostInfo.BuildCpuLabel("Intel Core i7-12700K", 3600, 20),
+            Is.EqualTo("Intel Core i7-12700K @ 3.60 GHz · 20 cores"));
+    }
+
+    [Test]
+    public void BuildCpuLabel_NoFrequency_DropsClockPart() {
+        Assert.That(HostInfo.BuildCpuLabel("AMD Ryzen 9 7950X", null, 32),
+            Is.EqualTo("AMD Ryzen 9 7950X · 32 cores"));
+        Assert.That(HostInfo.BuildCpuLabel("AMD Ryzen 9 7950X", 0, 32),
+            Is.EqualTo("AMD Ryzen 9 7950X · 32 cores"));
+    }
+
+    [Test]
+    public void BuildCpuLabel_SingleCore_DropsCoreCount() {
+        // "1 core" is silly to call out; only render when >1.
+        Assert.That(HostInfo.BuildCpuLabel("ARM Cortex-A53", 1400, 1),
+            Is.EqualTo("ARM Cortex-A53 @ 1.40 GHz"));
+    }
+
+    [Test]
+    public void BuildCpuLabel_OnlyBrand_RendersJustBrand() {
+        Assert.That(HostInfo.BuildCpuLabel("Apple M2 Pro", null, 1),
+            Is.EqualTo("Apple M2 Pro"));
+    }
+
+    [Test]
+    public void BuildCpuLabel_NothingUseful_ReturnsNull() {
+        Assert.That(HostInfo.BuildCpuLabel(null, null, 1), Is.Null);
+        Assert.That(HostInfo.BuildCpuLabel("", 0, 1), Is.Null);
+    }
+
+    [Test]
+    public void BuildCpuLabel_FrequencyFormattingHas2Decimals() {
+        // 5800 MHz → "5.80 GHz" (not "5.8 GHz" or "5,80 GHz")
+        Assert.That(HostInfo.BuildCpuLabel("X", 5800, 1), Does.Contain("5.80 GHz"));
+        Assert.That(HostInfo.BuildCpuLabel("X", 1000, 1), Does.Contain("1.00 GHz"));
+    }
+
     [Test]
     public void Current_ReturnsCachedInstance_AcrossCalls() {
         // HostInfo.Current is a Lazy<T>; subsequent calls must not

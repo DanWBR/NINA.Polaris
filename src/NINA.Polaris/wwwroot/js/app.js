@@ -6986,6 +6986,12 @@ function ninaApp() {
         hostDeviceLabel() {
             return (this.host && this.host.device && this.host.device.shortLabel) || '';
         },
+        // Pre-formatted CPU brand + freq + cores from HostInfo.cs
+        // (e.g. "Intel Core i7-12700K @ 3.60 GHz · 20 cores"). Null
+        // on hosts where CPU detection failed.
+        hostCpuLabel() {
+            return (this.host && this.host.device && this.host.device.cpuLabel) || '';
+        },
         hostDeviceTooltip() {
             const d = this.host && this.host.device;
             if (!d) return '';

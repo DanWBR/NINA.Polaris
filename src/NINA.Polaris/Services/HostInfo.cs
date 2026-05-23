@@ -31,14 +31,17 @@ public static class HostInfo {
         var kind = "generic";
         var model = "Unknown";
         string? cpu = null;
+        int? cpuMhz = null;
 
         try {
             if (OperatingSystem.IsLinux()) {
                 (kind, model) = DetectLinux();
                 cpu = DetectLinuxCpu();
+                cpuMhz = DetectLinuxCpuFrequencyMhz();
             } else if (OperatingSystem.IsWindows()) {
                 (kind, model) = DetectWindows();
                 cpu = NormaliseCpuName(QueryWmi("Win32_Processor", "Name"));
+                cpuMhz = ParseInt(QueryWmi("Win32_Processor", "MaxClockSpeed"));
             } else if (OperatingSystem.IsMacOS()) {
                 (kind, model) = ("mac", "Apple Mac");
             }
@@ -54,7 +57,9 @@ public static class HostInfo {
             Architecture: arch,
             Cores: Math.Max(1, Environment.ProcessorCount),
             ShortLabel: BuildShortLabel(kind, model, cpu, arch),
-            Cpu: cpu);
+            Cpu: cpu,
+            CpuFrequencyMhz: cpuMhz,
+            CpuLabel: BuildCpuLabel(cpu, cpuMhz, Math.Max(1, Environment.ProcessorCount)));
     }
 
     /// <summary>Linux detection priority:
@@ -268,6 +273,58 @@ public static class HostInfo {
         return string.IsNullOrWhiteSpace(s) ? null : s;
     }
 
+    /// <summary>Format the CPU label shown in its own activity-bar
+    /// chip: "<c>Intel Core i7-12700K @ 3.60 GHz · 16 cores</c>" when
+    /// everything is available, gracefully dropping pieces when not.
+    /// Returns null if there's no CPU info worth showing.</summary>
+    internal static string? BuildCpuLabel(string? cpu, int? freqMhz, int cores) {
+        if (string.IsNullOrWhiteSpace(cpu) && freqMhz is null or 0 && cores <= 1) return null;
+        var parts = new List<string>(3);
+        if (!string.IsNullOrWhiteSpace(cpu)) parts.Add(cpu);
+        if (freqMhz is int mhz && mhz > 0) parts.Add($"@ {mhz / 1000.0:F2} GHz");
+        if (cores > 1) parts.Add($"· {cores} cores");
+        return parts.Count == 0 ? null : string.Join(" ", parts);
+    }
+
+    /// <summary>Detect CPU max clock speed in MHz. Preferred source is
+    /// the cpufreq sysfs (always accurate, accounts for turbo bins);
+    /// falls back to /proc/cpuinfo's "cpu MHz" line which reports the
+    /// CURRENT scaled clock — close enough for display purposes when
+    /// cpufreq isn't exposed (containers, custom kernels). Returns
+    /// null on systems where neither source works.</summary>
+    internal static int? DetectLinuxCpuFrequencyMhz() {
+        try {
+            // cpufreq reports kHz; divide by 1000 → MHz
+            const string maxFreqPath = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq";
+            if (File.Exists(maxFreqPath)) {
+                var kHz = ParseInt(File.ReadAllText(maxFreqPath).Trim());
+                if (kHz is > 0) return kHz.Value / 1000;
+            }
+        } catch { /* sysfs not readable */ }
+
+        try {
+            foreach (var line in File.ReadLines("/proc/cpuinfo")) {
+                if (line.StartsWith("cpu MHz", StringComparison.OrdinalIgnoreCase)) {
+                    var idx = line.IndexOf(':');
+                    if (idx > 0) {
+                        var v = line[(idx + 1)..].Trim();
+                        if (double.TryParse(v, System.Globalization.NumberStyles.Float,
+                                            System.Globalization.CultureInfo.InvariantCulture,
+                                            out var mhz)) {
+                            return (int)Math.Round(mhz);
+                        }
+                    }
+                }
+            }
+        } catch { /* /proc not readable */ }
+        return null;
+    }
+
+    private static int? ParseInt(string? s) {
+        if (string.IsNullOrWhiteSpace(s)) return null;
+        return int.TryParse(s.Trim(), out var v) ? v : null;
+    }
+
     /// <summary>Read the first "model name" line out of /proc/cpuinfo.
     /// Returns the normalised brand string (or null on x86 systems
     /// where /proc isn't readable, or ARM systems where cpuinfo uses
@@ -339,6 +396,12 @@ public static class HostInfo {
 /// "AMD Ryzen 9 7950X", "ARM Cortex-A76") with the vendor noise
 /// stripped. Null if not detectable. Useful in the tooltip even when
 /// the device chip shows a fancy mini-PC name.</param>
+/// <param name="CpuFrequencyMhz">Maximum CPU clock speed in MHz
+/// (turbo-aware on Linux via cpufreq sysfs; nominal MaxClockSpeed on
+/// Windows via WMI). Null when the source isn't readable.</param>
+/// <param name="CpuLabel">Pre-formatted human label combining brand
+/// + frequency + cores: "Intel Core i7-12700K @ 3.60 GHz · 20 cores".
+/// Null when there's nothing worth showing.</param>
 public sealed record HostDeviceInfo(
     string Kind,
     string Model,
@@ -346,4 +409,6 @@ public sealed record HostDeviceInfo(
     string Architecture,
     int Cores,
     string ShortLabel,
-    string? Cpu);
+    string? Cpu,
+    int? CpuFrequencyMhz,
+    string? CpuLabel);
