@@ -1195,7 +1195,9 @@ function ninaApp() {
                 uniform float u_shadow;
                 uniform float u_scale;
                 uniform float u_mtf;   // typically 0.25
-                uniform int u_bayer;   // 0=mono 1=RGGB 2=BGGR 3=GRBG 4=GBRG
+                uniform int u_bayer;   // 0=mono 1=RGGB 2=BGGR 3=GBRG 4=GRBG
+                uniform float u_wbR;   // red channel gain  (default 1.7 for daylight OSC)
+                uniform float u_wbB;   // blue channel gain (default 1.5 for daylight OSC)
                 in vec2 v_uv;
                 out vec4 fragColor;
 
@@ -1233,7 +1235,16 @@ function ninaApp() {
                     else if (u_bayer == 2) { b = p00; g = 0.5 * (p10 + p01); r = p11; }   // BGGR
                     else if (u_bayer == 3) { g = 0.5 * (p00 + p11); b = p10; r = p01; }   // GBRG
                     else /* 4 GRBG */      { g = 0.5 * (p00 + p11); r = p10; b = p01; }
-                    fragColor = vec4(stretch(r), stretch(g), stretch(b), 1.0);
+                    // Apply per-channel white balance to compensate for
+                    // OSC Bayer 2:1:1 G:R:B sensitivity. Without this
+                    // the image comes out heavily green-tinted (every
+                    // 2x2 cell averages two green sites against one
+                    // red and one blue). Defaults 1.7/1.5 approximate
+                    // daylight WB for typical CMOS OSC sensors (ZWO
+                    // ASI224/ASI462/ASI715, QHY5III678C, etc.). Apply
+                    // before stretch so the WB-amplified bright pixels
+                    // can still saturate cleanly.
+                    fragColor = vec4(stretch(r * u_wbR), stretch(g), stretch(b * u_wbB), 1.0);
                 }`;
 
             const compile = (type, src) => {
@@ -1275,7 +1286,9 @@ function ninaApp() {
                 shadow: gl.getUniformLocation(prog, 'u_shadow'),
                 scale: gl.getUniformLocation(prog, 'u_scale'),
                 mtf: gl.getUniformLocation(prog, 'u_mtf'),
-                bayer: gl.getUniformLocation(prog, 'u_bayer')
+                bayer: gl.getUniformLocation(prog, 'u_bayer'),
+                wbR: gl.getUniformLocation(prog, 'u_wbR'),
+                wbB: gl.getUniformLocation(prog, 'u_wbB')
             };
             this._glTexture = gl.createTexture();
             console.info('WebGL2 renderer initialised');
@@ -1331,6 +1344,14 @@ function ninaApp() {
             gl.uniform1f(this._glLocs.scale, scaleFactor);
             gl.uniform1f(this._glLocs.mtf, this.stretchMid || 0.25);
             gl.uniform1i(this._glLocs.bayer, bayerPattern | 0);
+            // Per-channel WB gain. Defaults give a roughly neutral
+            // daylight look on raw OSC data; users can tune via the
+            // existing WB Red / WB Blue sliders in VIDEO (and soon
+            // in PREVIEW). Server-side WB writes via /api/camera/
+            // white-balance still happen too — these multipliers
+            // stack on top for client-side preview correction.
+            gl.uniform1f(this._glLocs.wbR, this.previewWbR ?? 1.7);
+            gl.uniform1f(this._glLocs.wbB, this.previewWbB ?? 1.5);
 
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
@@ -1533,6 +1554,17 @@ function ninaApp() {
             const bitDepth = dv.getInt32(12, true);
             const bayerPattern = dv.getInt32(16, true);
             const uncompressedSize = dv.getInt32(20, true);
+
+            // Bail on placeholder / heartbeat frames before they spam
+            // the WebGL pipeline. We were seeing periodic 0x0 frames
+            // arrive over /ws/image-stream — likely a service-side
+            // empty broadcast (slew-preview kicking off, live-stack
+            // accumulator reset, etc.). Renderer would faithfully
+            // upload an empty texture, fan out a 0-sized bitmap,
+            // and end up clearing every visible canvas. Skip silently.
+            if (width <= 0 || height <= 0 || uncompressedSize <= 0) {
+                return;
+            }
 
             // LZ4 decompression requires lz4.min.js — fallback to REST JPEG if unavailable
             if (typeof LZ4 === 'undefined') {
