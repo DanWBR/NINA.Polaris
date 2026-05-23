@@ -172,8 +172,18 @@ public class ImageRelayService : IDisposable {
     }
 
     public byte[]? GetLatestJpeg(int quality = 85) {
-        if (_latestImage == null) return null;
-        return _latestJpeg ??= _latestImage.ToJpeg(quality);
+        var img = _latestImage;
+        // Skip the encode when no real frame is buffered yet — the
+        // initial state has a 0x0 ImageBuffer (placeholder), and
+        // JpegHelper rightly refuses it. Surfacing null lets the
+        // endpoint return 404 instead of crashing the request.
+        if (img == null || img.Width <= 0 || img.Height <= 0) return null;
+        try {
+            return _latestJpeg ??= img.ToJpeg(quality);
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "JPEG encode of {W}x{H} frame failed", img.Width, img.Height);
+            return null;
+        }
     }
 
     public ImageBuffer? GetLatestImage() => _latestImage;
