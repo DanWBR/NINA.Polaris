@@ -35,7 +35,9 @@ Each tab in the sidebar has its own page. Read the ones you need:
 - **[AUTORUN](autorun.md)** — simple sequence editor with end-actions.
 - **[ADV](adv-sequencer.md)** — advanced tree-based sequencer (NINA-style).
 - **[LIVE](live-stacking.md)** — real-time EAA stacking with auto
-  re-focus / re-center triggers.
+  re-focus / re-center triggers. See also
+  [client-side compute](client-side-compute.md) for the WASM offload
+  that lets a slow server (Pi 2/3) do the math in your browser instead.
 - **[VIDEO](video-planetary.md)** — planetary capture + lucky-imaging
   stack pipeline (SER format).
 - **[SKY](sky-explorer.md)** — offline sky map, target search, mosaic

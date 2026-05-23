@@ -1351,7 +1351,18 @@ Relay **server** side (different process, same `Relay__*` prefix in `appsettings
 | Image relay | ~3-10 MB/frame | LZ4 compressed, fits WiFi 5GHz |
 | JPEG preview | ~200-400 KB | For mobile/weak clients |
 | Frontend bundle | ~580 KB total | Alpine.js + libs, cacheable |
+| WASM live-stack bundle | ~12 MB on disk, ~3 MB gzipped | One-time download per browser |
 | Status broadcast | 1 Hz | Equipment + sequence state |
+
+### Client-side compute offload (CLST)
+
+Live stacking can run **in your browser** via a WebAssembly module
+that reuses the same `NINA.Image.Portable` algorithms the server
+runs. On Pi 2 / Pi 3 hosts this is the only way to keep up — the
+Pi just orchestrates equipment + relays raw frames, the browser
+does StarDetector + alignment + accumulator. Auto-detected on WS
+handshake; per-rig override in the LIVE tab toolbar. See
+[docs/user-guide/client-side-compute.md](docs/user-guide/client-side-compute.md).
 
 ## Support the project
 

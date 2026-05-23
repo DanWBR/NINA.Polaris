@@ -4,6 +4,11 @@ Real-time integration of incoming frames into a single growing image.
 For Electronically Assisted Astronomy (EAA), comet hunting, or just
 watching your DSO target build up while you have a beer.
 
+> **Where the math runs**: by default the server (Pi / mini-PC) does
+> the stacking. On underpowered hosts (Pi 2/3) you can flip the
+> Compute dropdown to client-side WASM offload so the browser owns
+> the accumulator — see [client-side compute](client-side-compute.md).
+
 ## How it works
 
 Polaris doesn't drive the capture from the LIVE tab — it **subscribes**
