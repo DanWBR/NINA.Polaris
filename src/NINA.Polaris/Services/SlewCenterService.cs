@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using NINA.Image.FileFormat.FITS;
 using NINA.Image.Interfaces;
+using NINA.Polaris.Services.PlateSolving;
 
 namespace NINA.Polaris.Services;
 
@@ -83,7 +84,20 @@ public class SlewCenterService {
             }
 
             if (!_solver.IsAvailable) {
-                job.Error = "Plate solver (ASTAP) not available";
+                // List every configured solver + why each one isn't ready,
+                // so the user sees the full picture instead of just
+                // "ASTAP not available" (which is misleading when they've
+                // never configured ASTAP and were hoping the
+                // astrometry.net online fallback would do the work).
+                var lines = _solver.AllSolvers.Select(s =>
+                    "  • " + s.DisplayName + " — "
+                    + (s.IsAvailable ? "ready"
+                       : s is AstrometryNetOnlineSolver
+                           ? "needs PlateSolve:AstrometryApiKey in appsettings"
+                           : "binary not found"));
+                job.Error = "No plate solver available. Install one OR set an API key:\n"
+                    + string.Join("\n", lines)
+                    + "\nTip: use Slew Only if you just want to point the mount without centering.";
                 job.State = SlewCenterState.Failed;
                 return;
             }
