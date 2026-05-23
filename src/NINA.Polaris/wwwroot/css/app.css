@@ -1857,7 +1857,14 @@ label select.input-sm {
 .sky-viewer,
 #celestial-map.sky-viewer {
     flex: 0 0 auto;
-    height: calc(100vh - 240px) !important;
+    /* Reserve enough viewport for: top bar (40px) + sky-toolbar
+       (~50px) + sky-survey-row (~50px) + sky-info-panel with a
+       selected target (~150px: name + common + aliases + coords +
+       action row) + action-row bottom margin (50px) + activity bar
+       (36px) ≈ 380px. Was 240px which only worked when no DSO was
+       picked — once the user searched M31 the sky-info-panel grew
+       and the action row got clipped past the viewport. */
+    height: calc(100vh - 380px) !important;
     min-height: 280px !important;
     width: 100% !important;
     min-width: 0 !important;
