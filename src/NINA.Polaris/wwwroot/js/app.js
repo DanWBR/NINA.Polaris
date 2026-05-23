@@ -4188,18 +4188,20 @@ function ninaApp() {
         // Guider chart: RA (red) + Dec (blue) vs sample index.
         // The canvas lives inside x-show="guider.connected" which starts
         // as display:none, so Chart.js used to measure 0x0 at first
-        // create and never re-fit. We now (a) defer instance creation
-        // until the canvas actually has a non-zero size, and
-        // (b) destroy + recreate if a tab switch leaves the canvas
-        // measuring different — both safer than relying on resize()
-        // alone, which doesn't always recompute scales correctly.
+        // create and never re-fit. We defer instance creation until the
+        // canvas actually has a non-zero size — then a single Chart.js
+        // instance is reused and just gets its data swapped on each
+        // ~1Hz WS tick.
         updateGuideChart() {
             const canvas = this.$refs.guideChart;
             if (!canvas || typeof Chart === 'undefined') return;
-            // Wait until the canvas has actual pixels before creating
-            // the chart — its parent may still be display:none on the
-            // first WS tick.
-            if (canvas.clientWidth < 10 || canvas.clientHeight < 10) return;
+
+            // Wait until the canvas has pixels — its parent may still be
+            // display:none on the first few WS ticks after page load.
+            // We don't bail in subsequent ticks even if clientWidth dips
+            // because that would freeze the chart on transient layouts.
+            const ready = canvas.clientWidth >= 10 && canvas.clientHeight >= 10;
+            if (!this._charts.guide && !ready) return;
 
             const t = this._chartTheme();
             const steps = (this.guider.recentSteps || []).filter(
@@ -4208,14 +4210,6 @@ function ninaApp() {
             const raVals  = steps.map(s => Number(s.ra));
             const decVals = steps.map(s => Number(s.dec));
             const labels  = steps.map((_, i) => i);
-
-            // Detect a stale chart whose canvas was sized 0 at creation
-            // — Chart.js exposes width/height once it has measured.
-            const existing = this._charts.guide;
-            if (existing && (existing.width < 10 || existing.canvas !== canvas)) {
-                try { existing.destroy(); } catch {}
-                this._charts.guide = null;
-            }
 
             let c = this._charts.guide;
             if (!c) {
@@ -4252,12 +4246,25 @@ function ninaApp() {
                     }
                 });
                 this._charts.guide = c;
-                return;   // already painted with current data
+                // Fall through into the update path so the freshly-
+                // created chart paints its first frame instead of
+                // staying at the initial empty data Chart.js cached
+                // before the first draw cycle.
+            } else {
+                // Reuse: swap data in place. Chart.js v4 picks up the
+                // new array identities on next update().
+                c.data.labels = labels;
+                c.data.datasets[0].data = raVals;
+                c.data.datasets[1].data = decVals;
             }
-            c.data.labels = labels;
-            c.data.datasets[0].data = raVals;
-            c.data.datasets[1].data = decVals;
-            c.update('none');
+            // Default update mode re-runs the layout pass and the
+            // axis-scale calculation. 'none' (which we tried before)
+            // skips animation but in some Chart.js v4 builds also
+            // skips the data-rebind step, freezing the visible plot
+            // even though c.data.datasets[0].data points at fresh
+            // numbers. Default is safe + fast since we set
+            // animation: false above.
+            c.update();
         },
 
         // Auto-Focus V-curve: HFR vs Position, scatter + fit overlay
