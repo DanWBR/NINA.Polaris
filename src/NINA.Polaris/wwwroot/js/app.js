@@ -1144,7 +1144,16 @@ function ninaApp() {
             if (this._gl) return true;
             const canvas = document.getElementById('liveCanvas');
             if (!canvas) return false;
-            const gl = canvas.getContext('webgl2', { antialias: false, premultipliedAlpha: false });
+            // preserveDrawingBuffer:true is required so we can drawImage(liveCanvas, ...)
+            // onto secondary canvases AFTER WebGL rendered. Without it the
+            // browser is allowed to clear the buffer between the gl.drawArrays
+            // call and the fan-out drawImage, leaving the colour-debayered
+            // bitmap as fully transparent on PREVIEW / VIDEO targets.
+            const gl = canvas.getContext('webgl2', {
+                antialias: false,
+                premultipliedAlpha: false,
+                preserveDrawingBuffer: true
+            });
             if (!gl) {
                 console.info('WebGL2 not available, falling back to CPU stretch');
                 return false;
@@ -1263,19 +1272,24 @@ function ninaApp() {
             const canvas = document.getElementById('liveCanvas');
             if (!canvas) return false;
 
-            // Size canvas to container while preserving aspect ratio
-            const container = canvas.parentElement;
-            // Bail out to the 2D fallback when the LIVE tab is hidden —
-            // its container collapses to 0 width and we'd render the
-            // bitmap into a 0×0 canvas that the fan-out can't recover
-            // from (WebGL output isn't drawable via drawImage once
-            // sized to 0).
-            if (!container || container.clientWidth <= 0 || container.clientHeight <= 0) {
-                return false;
-            }
-            const scale = Math.min(container.clientWidth / width, container.clientHeight / height, 1);
-            canvas.width = Math.round(width * scale);
-            canvas.height = Math.round(height * scale);
+            // Always render at SOURCE resolution into liveCanvas regardless
+            // of whether the LIVE tab is currently visible. liveCanvas is
+            // our "GPU output" — we then drawImage() it onto whichever
+            // visible canvas the user is looking at (PREVIEW / VIDEO /
+            // FOCUS) via the fan-out helper. Scaling for display happens
+            // there. Previous version bailed when LIVE was hidden, which
+            // forced everything onto the 2D fallback path — and the 2D
+            // fallback has no debayer, so OSC colour cameras rendered as
+            // grayscale (or a Bayer dot pattern) and the video tab stayed
+            // black entirely whenever the WASM stacker rejected frames.
+            //
+            // Cap the GPU render size to avoid uploading absurd buffers
+            // when a 6000×4000 sensor lands — fan-out scaling handles
+            // visual fidelity beyond ~2048 anyway.
+            const MAX_GPU_DIM = 2048;
+            const renderScale = Math.min(MAX_GPU_DIM / width, MAX_GPU_DIM / height, 1);
+            canvas.width = Math.max(1, Math.round(width * renderScale));
+            canvas.height = Math.max(1, Math.round(height * renderScale));
 
             gl.viewport(0, 0, canvas.width, canvas.height);
             gl.useProgram(this._glProgram);
@@ -1303,6 +1317,12 @@ function ninaApp() {
             gl.uniform1i(this._glLocs.bayer, bayerPattern | 0);
 
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+            // GPU bitmap is ready in liveCanvas. Fan it out (with proper
+            // scale-to-container) onto every visible canvas so the user
+            // sees the colour-debayered + stretched result on whatever
+            // tab they're on, not just LIVE.
+            this._fanOutFrameToCanvases(canvas, canvas.width, canvas.height);
             this.redrawOverlay();
             return true;
         },
