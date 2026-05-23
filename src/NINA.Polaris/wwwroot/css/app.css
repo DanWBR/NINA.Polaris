@@ -3330,6 +3330,60 @@ label select.input-sm {
     gap: 6px;
 }
 
+/* iOS-style connection toggle. Replaces the previous Connect/
+   Disconnect button pair on each equip-card. Red track when
+   disconnected, green when connected, with a sliding thumb.
+   The native checkbox is hidden behind the painted UI but stays
+   focusable + keyboard-toggleable for accessibility. */
+.equip-toggle {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    width: 44px;
+    height: 24px;
+    flex: 0 0 auto;
+    user-select: none;
+}
+.equip-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+.equip-toggle-track {
+    position: absolute;
+    inset: 0;
+    border-radius: 12px;
+    background: #c53030;            /* red = disconnected */
+    transition: background 0.18s ease;
+}
+.equip-toggle input:checked + .equip-toggle-track {
+    background: #2f855a;            /* green = connected */
+}
+.equip-toggle-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    transition: transform 0.18s ease;
+}
+.equip-toggle input:checked + .equip-toggle-track + .equip-toggle-thumb,
+.equip-toggle input:checked ~ .equip-toggle-thumb {
+    transform: translateX(20px);
+}
+.equip-toggle-busy .equip-toggle-track {
+    background: #b7791f;            /* amber = action in flight */
+}
+.equip-toggle[aria-disabled="true"] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 /* Camera driver picker — shows above the device dropdown when more
    than one camera backend is available on this host (e.g. INDI plus
    Canon EDSDK on Windows). */

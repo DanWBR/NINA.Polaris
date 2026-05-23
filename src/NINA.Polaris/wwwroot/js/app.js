@@ -1,3 +1,17 @@
+// Chart instances live OUTSIDE the Alpine component so Alpine's reactive
+// Proxy doesn't wrap them. Chart.js mutates its own internal state during
+// every update() / configure() / layout pass — when those objects were
+// proxied, each property read went through Alpine's get-trap, registered
+// the running effect as a dependency, and re-ran the effect on the next
+// internal mutation. Result: infinite recursion ("Maximum call stack size
+// exceeded") plus half-applied layout state surfacing as
+// "Cannot set properties of undefined (setting 'fullSize')".
+// Keeping the registry at module scope guarantees Chart.js sees raw
+// instances and stays out of Alpine's reactivity graph.
+const _polarisCharts = {
+    guide: null, af: null, hfr: null, temp: null, hist: null, alt: null
+};
+
 function ninaApp() {
     return {
         tab: 'home',
@@ -633,7 +647,9 @@ function ninaApp() {
         _tempLastSample: 0,
 
         // Chart.js instances (created lazily when canvas is visible)
-        _charts: { guide: null, af: null, hfr: null, temp: null, hist: null, alt: null },
+        // (Chart.js instances live at module scope in _polarisCharts —
+        //  see comment at the top of this file for why they can't
+        //  live on the reactive component.)
 
         // Auto-Focus
         autoFocus: {
@@ -4178,12 +4194,12 @@ function ninaApp() {
         },
 
         _ensureChart(refName, key, type, makeConfig) {
-            if (this._charts[key]) return this._charts[key];
+            if (_polarisCharts[key]) return _polarisCharts[key];
             if (typeof Chart === 'undefined') return null;
             const canvas = this.$refs[refName];
             if (!canvas) return null;
-            this._charts[key] = new Chart(canvas, makeConfig());
-            return this._charts[key];
+            _polarisCharts[key] = new Chart(canvas, makeConfig());
+            return _polarisCharts[key];
         },
 
         // Guider chart: RA (red) + Dec (blue) vs sample index.
@@ -4202,7 +4218,7 @@ function ninaApp() {
             // We don't bail in subsequent ticks even if clientWidth dips
             // because that would freeze the chart on transient layouts.
             const ready = canvas.clientWidth >= 10 && canvas.clientHeight >= 10;
-            if (!this._charts.guide && !ready) return;
+            if (!_polarisCharts.guide && !ready) return;
 
             const t = this._chartTheme();
             // Build plain numeric arrays without going through .map()
@@ -4233,7 +4249,7 @@ function ninaApp() {
                 }
             }
 
-            let c = this._charts.guide;
+            let c = _polarisCharts.guide;
             if (!c) {
                 c = new Chart(canvas, {
                     type: 'line',
@@ -4267,7 +4283,7 @@ function ninaApp() {
                         }
                     }
                 });
-                this._charts.guide = c;
+                _polarisCharts.guide = c;
                 // Fall through into the update path so the freshly-
                 // created chart paints its first frame instead of
                 // staying at the initial empty data Chart.js cached
@@ -4389,7 +4405,7 @@ function ninaApp() {
             // x-show transition). Wait until the canvas has real pixels.
             const canvas = this.$refs.tempChart;
             if (!canvas || typeof Chart === 'undefined') return;
-            if (!this._charts.temp
+            if (!_polarisCharts.temp
                 && (canvas.clientWidth < 10 || canvas.clientHeight < 10)) return;
 
             const t = this._chartTheme();

@@ -1691,10 +1691,23 @@
                                     <span x-show="cameraDiscovering">…</span>
                                 </button>
 
-                                <button class="btn btn-sm btn-primary" @click="equipConnectCamera()"
-                                        :disabled="!equipCameraChoice">Connect</button>
-                                <button class="btn btn-sm btn-danger" @click="equipDisconnectCamera()"
-                                        :disabled="!selectedCamera">Disconnect</button>
+                                <!-- iOS-style toggle replaces the old
+                                     Connect/Disconnect button pair. Red
+                                     track when disconnected, green when
+                                     connected. Disabled only when there's
+                                     nothing to connect to (no pending
+                                     pick) AND nothing currently
+                                     connected. -->
+                                <label class="equip-toggle"
+                                       :aria-disabled="(!selectedCamera && !equipCameraChoice).toString()"
+                                       :title="selectedCamera ? 'Disconnect camera' : 'Connect camera'">
+                                    <input type="checkbox"
+                                           :checked="!!selectedCamera"
+                                           :disabled="!selectedCamera && !equipCameraChoice"
+                                           @change="$event.target.checked ? equipConnectCamera() : equipDisconnectCamera()">
+                                    <span class="equip-toggle-track"></span>
+                                    <span class="equip-toggle-thumb"></span>
+                                </label>
                             </div>
                             <div class="equip-detail" x-show="selectedCamera">
                                 <div class="equip-detail-name" x-text="selectedCamera"></div>
@@ -1816,10 +1829,16 @@
                                                      : 'host:port'"
                                        title="Mount IP and port. Empty falls back to the driver's default endpoint (e.g. 192.168.4.1:11880 for SynScan factory AP).">
 
-                                <button class="btn btn-sm btn-primary" @click="equipConnectMount()"
-                                        :disabled="(mountDriver === 'indi' && !equipMountChoice) || (mountDriver !== 'indi' && !mountDriverInfo?.available)">Connect</button>
-                                <button class="btn btn-sm btn-danger" @click="equipDisconnectMount()"
-                                        :disabled="!mount.connected">Disconnect</button>
+                                <label class="equip-toggle"
+                                       :aria-disabled="(!mount.connected && ((mountDriver === 'indi' && !equipMountChoice) || (mountDriver !== 'indi' && !mountDriverInfo?.available))).toString()"
+                                       :title="mount.connected ? 'Disconnect mount' : 'Connect mount'">
+                                    <input type="checkbox"
+                                           :checked="!!mount.connected"
+                                           :disabled="!mount.connected && ((mountDriver === 'indi' && !equipMountChoice) || (mountDriver !== 'indi' && !mountDriverInfo?.available))"
+                                           @change="$event.target.checked ? equipConnectMount() : equipDisconnectMount()">
+                                    <span class="equip-toggle-track"></span>
+                                    <span class="equip-toggle-thumb"></span>
+                                </label>
                             </div>
                             <div class="equip-detail" x-show="mount.connected">
                                 <div class="equip-detail-name" x-text="selectedTelescope"></div>
@@ -1863,10 +1882,16 @@
                                                 x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
                                     </template>
                                 </select>
-                                <button class="btn btn-sm btn-primary" @click="equipConnectFocuser()"
-                                        :disabled="!equipFocuserChoice">Connect</button>
-                                <button class="btn btn-sm btn-danger" @click="equipDisconnectFocuser()"
-                                        :disabled="!focusConnected">Disconnect</button>
+                                <label class="equip-toggle"
+                                       :aria-disabled="(!focusConnected && !equipFocuserChoice).toString()"
+                                       :title="focusConnected ? 'Disconnect focuser' : 'Connect focuser'">
+                                    <input type="checkbox"
+                                           :checked="!!focusConnected"
+                                           :disabled="!focusConnected && !equipFocuserChoice"
+                                           @change="$event.target.checked ? equipConnectFocuser() : equipDisconnectFocuser()">
+                                    <span class="equip-toggle-track"></span>
+                                    <span class="equip-toggle-thumb"></span>
+                                </label>
                             </div>
                             <div class="equip-detail" x-show="focusConnected">
                                 <div class="equip-detail-name" x-text="selectedFocuser"></div>
@@ -1897,10 +1922,16 @@
                                                 x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
                                     </template>
                                 </select>
-                                <button class="btn btn-sm btn-primary" @click="equipConnectFilter()"
-                                        :disabled="!equipFilterChoice">Connect</button>
-                                <button class="btn btn-sm btn-danger" @click="equipDisconnectFilter()"
-                                        :disabled="!filterWheel.connected">Disconnect</button>
+                                <label class="equip-toggle"
+                                       :aria-disabled="(!filterWheel.connected && !equipFilterChoice).toString()"
+                                       :title="filterWheel.connected ? 'Disconnect filter wheel' : 'Connect filter wheel'">
+                                    <input type="checkbox"
+                                           :checked="!!filterWheel.connected"
+                                           :disabled="!filterWheel.connected && !equipFilterChoice"
+                                           @change="$event.target.checked ? equipConnectFilter() : equipDisconnectFilter()">
+                                    <span class="equip-toggle-track"></span>
+                                    <span class="equip-toggle-thumb"></span>
+                                </label>
                             </div>
                             <div class="equip-detail" x-show="filterWheel.connected">
                                 <div class="equip-detail-name" x-text="selectedFilterWheel"></div>
