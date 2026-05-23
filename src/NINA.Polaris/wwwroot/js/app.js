@@ -6955,6 +6955,25 @@ function ninaApp() {
             if (p == null) return '';
             return p > 85 ? 'host-red' : p > 60 ? 'host-amber' : 'host-green';
         },
+        // Picks an emoji icon matching the device kind classification
+        // done server-side by HostInfo.ClassifyLinuxModel /
+        // ClassifyWindowsModel. Generic fallback for anything we
+        // don't have a specific glyph for.
+        hostDeviceIcon() {
+            const k = this.host?.device?.kind || '';
+            switch (k) {
+                case 'raspberry-pi': return '🍓';
+                case 'jetson':       return '🧠';
+                case 'rockpi':
+                case 'odroid':
+                case 'mini-pc':      return '🖥️';
+                case 'vm':           return '🧪';
+                case 'mac':          return '';
+                case 'windows':      return '🪟';
+                case 'linux':        return '🐧';
+                default:             return '🖥️';
+            }
+        },
         formatHostRam(usedMB, totalMB) {
             if (!totalMB || totalMB <= 0) return '— / —';
             // Render in GB once we cross 1 GB total; below that

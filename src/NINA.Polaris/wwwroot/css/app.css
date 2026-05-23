@@ -4304,6 +4304,27 @@ label select.input-sm {
 .host-amber { color: #fcd34d; }
 .host-red   { color: #fca5a5; font-weight: 600; }
 
+/* Hardware identification chip — sits leftmost in the host group
+   so the eye lands on "this is Polaris on a Pi 5" before the live
+   numbers. Slightly muted compared to CPU/RAM since it's static. */
+.activity-host-device {
+    padding-right: 10px;
+    margin-right: 2px;
+    border-right: 1px solid var(--border);
+    max-width: 240px;
+    overflow: hidden;
+}
+.activity-host-device .activity-host-value {
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.activity-host-icon {
+    font-size: 12px;
+    line-height: 1;
+}
+
 /* Push all tab content up so the fixed bar never tapes over the
    last row of any panel. The home panel keeps its sticky footer
    right above the activity bar thanks to the same offset. */

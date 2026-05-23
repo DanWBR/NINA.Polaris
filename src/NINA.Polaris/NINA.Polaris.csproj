@@ -44,6 +44,13 @@
     <PackageReference Include="Yarp.ReverseProxy" Version="2.*" />
   </ItemGroup>
 
+  <!-- Expose `internal` helpers to the test project so pure-string
+       parsers (HostInfo.ClassifyLinuxModel, BuildShortLabel, ...) can
+       be pinned without being part of the public API surface. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="NINA.Polaris.Test" />
+  </ItemGroup>
+
   <!-- Bundled Siril preprocessing scripts. SirilService extracts these
        from the assembly to %LOCALAPPDATA%/NINA.Polaris/siril/
        scripts-bundled/ on first use; from there siril-cli consumes them

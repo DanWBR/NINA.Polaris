@@ -42,6 +42,11 @@ public class HostMetricsService : BackgroundService {
     /// <summary>Most recent successful sample. Initialised to zeros.</summary>
     public HostMetricsSnapshot Latest { get; private set; } = new();
 
+    /// <summary>Host hardware identification — detected once at
+    /// startup, broadcast verbatim in every snapshot so the UI can
+    /// label the activity bar.</summary>
+    public HostDeviceInfo Device { get; } = HostInfo.Current;
+
     private static readonly TimeSpan SampleInterval = TimeSpan.FromSeconds(2);
 
     public HostMetricsService(IResourceMonitor monitor, ILogger<HostMetricsService> logger) {
@@ -60,9 +65,14 @@ public class HostMetricsService : BackgroundService {
         // valid emit.
         await Task.Delay(SampleInterval, stoppingToken);
 
+        // Seed Latest immediately with the device info so the first
+        // status broadcast (which may happen before the first sample
+        // completes) already carries the host label.
+        Latest = Latest with { Device = Device };
+
         while (!stoppingToken.IsCancellationRequested) {
             try {
-                Latest = Sample(process, ref lastCpuTime, ref lastSampleTime, coreCount);
+                Latest = Sample(process, ref lastCpuTime, ref lastSampleTime, coreCount) with { Device = Device };
             } catch (Exception ex) {
                 // Defensive: cgroups not mounted, ResourceMonitor
                 // edge cases, or a transient PerformanceCounter
@@ -137,4 +147,10 @@ public sealed record HostMetricsSnapshot {
     public double ProcessCpuPercent { get; init; }
     public long ProcessMemoryMB { get; init; }
     public DateTime SampledAt { get; init; }
+
+    /// <summary>Host hardware identification — same instance is shared
+    /// across every snapshot (detection is one-shot at startup). Null
+    /// before the first <see cref="HostMetricsService.ExecuteAsync"/>
+    /// tick runs.</summary>
+    public HostDeviceInfo? Device { get; init; }
 }
