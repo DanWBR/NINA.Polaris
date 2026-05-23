@@ -96,17 +96,142 @@ public class PolarAlignmentService {
         }
     }
 
-    /// <summary>PA-5: kick off a continuous capture+solve refinement
-    /// loop. Requires a completed TPPA job (so we have a baseline of
-    /// 3 solved points). Implemented in PA-5 — stubbed here so the
-    /// endpoint shape is stable from PA-1 forward.</summary>
+    /// <summary>Kick off a continuous capture+solve refinement loop.
+    /// Requires a completed TPPA job in CurrentJob (so we have a
+    /// baseline of 3 solved points). Each iteration captures, plate-
+    /// solves, evicts the oldest of the 3 baseline points, appends the
+    /// fresh one, and recomputes (azErr, altErr). The error decreases
+    /// as the user adjusts the mount knobs. Loop continues until
+    /// StopRefinement() or external cancellation.</summary>
     public PolarAlignmentJob StartRefinement() {
-        throw new NotImplementedException("Refinement loop ships in PA-5.");
+        var baseline = CurrentJob;
+        if (baseline == null || baseline.Phase != PolarAlignmentPhase.Ok || baseline.Points.Count < 3) {
+            throw new InvalidOperationException(
+                "Run TPPA first to establish a 3-point baseline before refining.");
+        }
+        if (_refineCts != null && !_refineCts.IsCancellationRequested) {
+            throw new InvalidOperationException("Refinement already running.");
+        }
+
+        // Reuse the same Job object — Mode flips to "refine", Phase
+        // becomes Refining, but the 3 baseline Points carry over so
+        // we can substitute them as new samples arrive. UI gets the
+        // continuity for free (same WS payload shape).
+        baseline.Mode = "refine";
+        baseline.Phase = PolarAlignmentPhase.Refining;
+        baseline.CompletedAt = null;
+        try { JobUpdated?.Invoke(baseline); } catch { }
+
+        _refineCts = new CancellationTokenSource();
+        _ = Task.Run(() => RunRefinementAsync(baseline, _refineCts.Token));
+        return baseline;
     }
 
     public void StopRefinement() {
-        // PA-5 will replace this with CTS cancellation for the
-        // refinement task. No-op until then.
+        _refineCts?.Cancel();
+        _refineCts = null;
+        // Land the job back at Ok so the UI's "completed" indicator
+        // stays lit. The last-computed error vector is preserved.
+        if (CurrentJob != null && CurrentJob.Phase == PolarAlignmentPhase.Refining) {
+            CurrentJob.Mode = "tppa";
+            CurrentJob.Phase = PolarAlignmentPhase.Ok;
+            CurrentJob.CompletedAt = DateTime.UtcNow;
+            try { JobUpdated?.Invoke(CurrentJob); } catch { }
+        }
+    }
+
+    private CancellationTokenSource? _refineCts;
+
+    private async Task RunRefinementAsync(PolarAlignmentJob job, CancellationToken ct) {
+        var camera = _equip.Camera;
+        var telescope = _equip.Telescope;
+        if (camera == null || telescope == null) {
+            _notify.Push("error", "Refine: camera or telescope disconnected.");
+            return;
+        }
+
+        var userProfile = _profiles.Active;
+        try {
+            while (!ct.IsCancellationRequested) {
+                // 1. Capture at the CURRENT mount position (no slew).
+                IImageData image;
+                try {
+                    image = await camera.CaptureAsync(
+                        job.Options.ExposureSeconds,
+                        new CaptureOptions(Gain: job.Options.Gain, ImageType: "POLAR"),
+                        ct);
+                } catch (OperationCanceledException) { break; }
+                catch (Exception ex) {
+                    _logger.LogWarning(ex, "Refine: capture failed; retrying after settle");
+                    try { await Task.Delay(job.Options.SettleSeconds * 1000, ct); } catch { break; }
+                    continue;
+                }
+                if (image == null || image.Properties.Width <= 0) {
+                    try { await Task.Delay(job.Options.SettleSeconds * 1000, ct); } catch { break; }
+                    continue;
+                }
+
+                // 2. Plate solve.
+                PlateSolveResult solve;
+                try {
+                    solve = await SolveOnceAsync(image, telescope, ct);
+                } catch (OperationCanceledException) { break; }
+                catch (Exception ex) {
+                    _logger.LogDebug(ex, "Refine: solve threw — skipping iteration");
+                    try { await Task.Delay(job.Options.SettleSeconds * 1000, ct); } catch { break; }
+                    continue;
+                }
+                if (!solve.Success) {
+                    _logger.LogDebug("Refine: solve failed ({Err}) — skipping", solve.Error);
+                    try { await Task.Delay(job.Options.SettleSeconds * 1000, ct); } catch { break; }
+                    continue;
+                }
+
+                // 3. Sliding-window: evict oldest baseline point, append
+                //    the fresh one. Re-index so they read 0/1/2 in
+                //    order for the UI table.
+                var newPoint = new PolarPoint(
+                    Index: 2,
+                    RaHours: solve.RaHours,
+                    DecDeg: solve.DecDeg,
+                    RotationDeg: solve.RotationDeg,
+                    AtUtc: DateTime.UtcNow);
+                if (job.Points.Count >= 3) {
+                    job.Points.RemoveAt(0);
+                }
+                job.Points.Add(newPoint);
+                for (int i = 0; i < job.Points.Count; i++) {
+                    job.Points[i] = job.Points[i] with { Index = i };
+                }
+
+                // 4. Recompute error.
+                if (job.Points.Count == 3) {
+                    var (azErr, altErr) = PolarAlignmentMath.ComputeError(
+                        job.Points[0], job.Points[1], job.Points[2],
+                        userProfile.Latitude, userProfile.Longitude);
+                    job.AzErrorArcsec = azErr;
+                    job.AltErrorArcsec = altErr;
+                    job.TotalErrorArcsec = PolarAlignmentMath.TotalErrorArcsec(azErr, altErr);
+                }
+
+                // 5. Push update + settle before next iteration.
+                try { JobUpdated?.Invoke(job); } catch { }
+                try { await Task.Delay(Math.Max(500, job.Options.SettleSeconds * 1000), ct); }
+                catch { break; }
+            }
+        } catch (Exception ex) {
+            _logger.LogError(ex, "Refine loop crashed");
+            _notify.Push("error", "Refine loop crashed: " + ex.Message);
+        }
+        // Loop exit: land back at Ok so the Refine button is offered
+        // again. (StopRefinement also handles this — this is the
+        // fallback for organic loop exits.)
+        if (job.Phase == PolarAlignmentPhase.Refining) {
+            job.Phase = PolarAlignmentPhase.Ok;
+            job.Mode = "tppa";
+            job.CompletedAt = DateTime.UtcNow;
+            try { JobUpdated?.Invoke(job); } catch { }
+        }
     }
 
     private async Task RunAsync(PolarAlignmentJob job, CancellationToken ct) {

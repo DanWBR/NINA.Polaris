@@ -4305,6 +4305,106 @@ function ninaApp() {
             if (this.showStarOverlay && this.lastStars) this._drawStarsOnOverlay(ctx, ovr.width, ovr.height);
             if (this.showCrosshair) this._drawCrosshairOnOverlay(ctx, ovr.width, ovr.height);
             if (this.showGrid) this._drawGridOnOverlay(ctx, ovr.width, ovr.height);
+            // PA-5: polar-alignment error vector. Visible whenever we
+            // have a computed error vector (post-TPPA), so the arrow
+            // stays on-screen during Refine and the user can watch it
+            // shrink while adjusting knobs.
+            if (this.polar && this.polar.totalErrorArcsec > 0) {
+                this._drawPolarErrorVector(ctx, ovr.width, ovr.height);
+            }
+        },
+
+        // PA-5: polar error vector overlay.
+        //
+        // Draws an arrow from the canvas centre pointing in the
+        // direction the user needs to nudge the tripod knobs to
+        // reduce the error to zero. Arrow length is logarithmic in
+        // total arcmin (30' fills, 1' is small but visible) so it
+        // shrinks smoothly during a Refine run. Colour: red > 5',
+        // amber 1-5', green < 1'.
+        //
+        // Direction math: (azErr, altErr) are in arcsec in topocentric
+        // alt/az. The CAMERA frame is rotated by the last solve's
+        // rotationDeg relative to north-up. Rotating the error vector
+        // by -rotationDeg orients the arrow with the camera's view —
+        // up-on-screen corresponds to "up in altitude" only after this
+        // de-rotation.
+        _drawPolarErrorVector(ctx, w, h) {
+            const azErr = this.polar.azErrorArcsec || 0;
+            const altErr = this.polar.altErrorArcsec || 0;
+            const totalArcmin = (this.polar.totalErrorArcsec || 0) / 60.0;
+            if (totalArcmin <= 0) return;
+
+            // Last solve's rotation (camera Y-axis vs sky north).
+            const pts = this.polar.points || [];
+            const rotDeg = pts.length > 0 ? (pts[pts.length - 1].rotationDeg || 0) : 0;
+            const rotRad = -rotDeg * Math.PI / 180.0;
+
+            // Map (azErr, altErr) → screen vector. +alt = up-on-camera
+            // (after de-rotation), +az = east-of-camera. Use Y inverted
+            // because canvas Y grows downward.
+            const cos = Math.cos(rotRad), sin = Math.sin(rotRad);
+            const ex = azErr, ey = altErr;
+            const xUnit =  ex * cos - ey * sin;
+            const yUnit = -(ex * sin + ey * cos);  // invert for screen Y
+
+            // Length scaled logarithmically: 30' → fills, 1' → ~25%
+            const maxLen = Math.min(w, h) * 0.42;
+            const scale = Math.log(1 + totalArcmin) / Math.log(1 + 30);
+            const magn = Math.sqrt(xUnit * xUnit + yUnit * yUnit);
+            const len = maxLen * Math.min(1, scale);
+            const dx = (xUnit / Math.max(1e-9, magn)) * len;
+            const dy = (yUnit / Math.max(1e-9, magn)) * len;
+
+            const cx = w / 2, cy = h / 2;
+            const tipX = cx + dx, tipY = cy + dy;
+
+            // Colour by magnitude.
+            let color;
+            if (totalArcmin > 5) color = 'rgba(239, 68, 68, 0.95)';
+            else if (totalArcmin > 1) color = 'rgba(245, 158, 11, 0.95)';
+            else color = 'rgba(74, 222, 128, 0.95)';
+
+            // Shaft.
+            ctx.save();
+            ctx.strokeStyle = color;
+            ctx.fillStyle = color;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(tipX, tipY);
+            ctx.stroke();
+
+            // Arrowhead — small triangle at the tip.
+            const ang = Math.atan2(dy, dx);
+            const headLen = 14;
+            const headHalf = 7;
+            ctx.beginPath();
+            ctx.moveTo(tipX, tipY);
+            ctx.lineTo(tipX - headLen * Math.cos(ang) + headHalf * Math.sin(ang),
+                       tipY - headLen * Math.sin(ang) - headHalf * Math.cos(ang));
+            ctx.lineTo(tipX - headLen * Math.cos(ang) - headHalf * Math.sin(ang),
+                       tipY - headLen * Math.sin(ang) + headHalf * Math.cos(ang));
+            ctx.closePath();
+            ctx.fill();
+
+            // Centre marker.
+            ctx.beginPath();
+            ctx.arc(cx, cy, 4, 0, 2 * Math.PI);
+            ctx.fill();
+
+            // Label box, top-left.
+            const az = (azErr / 60).toFixed(2);
+            const alt = (altErr / 60).toFixed(2);
+            const tot = totalArcmin.toFixed(2);
+            const label = `Az ${az}'  Alt ${alt}'  Total ${tot}'`;
+            ctx.font = '12px sans-serif';
+            const textW = ctx.measureText(label).width;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+            ctx.fillRect(8, 8, textW + 12, 22);
+            ctx.fillStyle = color;
+            ctx.fillText(label, 14, 24);
+            ctx.restore();
         },
 
         _drawStarsOnOverlay(ctx, w, h) {
@@ -8508,6 +8608,7 @@ function ninaApp() {
             if (msg.polarAlignment !== undefined) {
                 const pa = msg.polarAlignment;
                 if (pa) {
+                    const prevTotal = this.polar.totalErrorArcsec;
                     this.polar.phase = pa.phase || 'Idle';
                     this.polar.isActive = !!pa.isActive;
                     this.polar.completedOk = pa.phase === 'Ok';
@@ -8516,6 +8617,13 @@ function ninaApp() {
                     this.polar.altErrorArcsec = pa.altErrorArcsec || 0;
                     this.polar.totalErrorArcsec = pa.totalErrorArcsec || 0;
                     this.polar.lastError = pa.lastError || null;
+                    // PA-5: any time the error vector moves, repaint
+                    // the overlay so the arrow tracks fresh values
+                    // during Refine. Cheap (single clear + redraw
+                    // already done at 1Hz for star annotations).
+                    if (this.polar.totalErrorArcsec !== prevTotal) {
+                        this.$nextTick(() => this.redrawOverlay());
+                    }
                 }
             }
             // Skip the very first payload after a WS connect — those
