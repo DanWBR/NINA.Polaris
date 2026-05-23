@@ -54,6 +54,21 @@ public interface ISimulatorBackend {
     /// health check to surface crashes ("was running, now isn't")
     /// without us polling subprocess exit codes.</summary>
     Task<bool> IsRunningAsync(CancellationToken ct = default);
+
+    /// <summary>Add one driver to a running simulator stack without
+    /// restarting it (SIM-8). For INDI this writes a <c>start</c>
+    /// command to the indiserver FIFO; for Alpaca it asks the Omni
+    /// Simulator to enable a device. Returns false when the backend
+    /// isn't running yet (call <see cref="LaunchAsync"/> first), when
+    /// the device tag isn't supported on this host, or when the
+    /// backend rejected the request.</summary>
+    Task<bool> AddDeviceAsync(string device, CancellationToken ct = default);
+
+    /// <summary>Remove one driver from a running simulator stack
+    /// without restarting it. INDI <c>stop</c> via FIFO. Returns
+    /// false when nothing is running or when the device wasn't
+    /// already started.</summary>
+    Task<bool> RemoveDeviceAsync(string device, CancellationToken ct = default);
 }
 
 /// <summary>Snapshot of what the host's simulator install looks like.

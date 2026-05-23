@@ -38,6 +38,23 @@ public static class SimulatorEndpoints {
             return Results.Ok(new { shutdown = true });
         });
 
+        // SIM-8: add/remove one device on a running stack without
+        // restarting indiserver. The UI uses these for live device
+        // checkbox toggles (toggle = immediate add/remove); they're
+        // safe to call repeatedly because backends treat them as
+        // idempotent.
+        g.MapPost("/device/{tag}/start", async (string tag, SimulatorService sim) => {
+            var ok = await sim.AddDeviceAsync(tag);
+            return ok ? Results.Ok(new { started = tag })
+                      : Results.Conflict(new { error = sim.LastError ?? "Add device failed" });
+        });
+
+        g.MapPost("/device/{tag}/stop", async (string tag, SimulatorService sim) => {
+            var ok = await sim.RemoveDeviceAsync(tag);
+            return ok ? Results.Ok(new { stopped = tag })
+                      : Results.Conflict(new { error = sim.LastError ?? "Remove device failed" });
+        });
+
         g.MapGet("/settings", (ProfileService profiles) => Results.Ok(new SimulatorSettings(
             AutoStart: profiles.Active.SimulatorAutoStart,
             Devices: profiles.Active.SimulatorDevices ?? new List<string>(SimulatorDeviceTags.Defaults),

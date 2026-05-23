@@ -7264,6 +7264,39 @@ function ninaApp() {
                 this.toast('Shutdown failed: ' + (e.message || e), 'error');
             }
         },
+
+        // SIM-8: device checkbox toggle handler. Two cases:
+        //   - Server stopped: just persist the new device list (used
+        //     by the next Launch).
+        //   - Server running: send the add/remove command to the
+        //     FIFO RIGHT NOW so the user gets immediate feedback
+        //     (real-world usage: pick up a guide camera mid-session
+        //     without tearing the whole rig down).
+        async simulatorOnDeviceToggle(dev) {
+            // x-model has already mutated simulatorSettings.devices
+            // by the time @change fires — persist that.
+            await this.saveSimulatorSettings();
+            if (!this.simulator.isRunning) return;
+
+            const enabled = (this.simulatorSettings.devices || []).includes(dev);
+            const wasRunning = (this.simulator.runningDevices || []).includes(dev);
+            try {
+                if (enabled && !wasRunning) {
+                    await this.apiPost(`/api/simulator/device/${encodeURIComponent(dev)}/start`);
+                    this.toast(`Started ${dev}`, 'ok');
+                } else if (!enabled && wasRunning) {
+                    await this.apiPost(`/api/simulator/device/${encodeURIComponent(dev)}/stop`);
+                    this.toast(`Stopped ${dev}`, 'ok');
+                }
+            } catch (e) {
+                this.toast(`${dev} toggle failed: ${e.message || e}`, 'error');
+                // Refresh settings from server to undo the optimistic
+                // x-model change so the checkbox visually reflects
+                // reality.
+                this._simulatorSettingsLoaded = false;
+                await this.loadSimulatorSettings();
+            }
+        },
         // Pre-formatted CPU brand + freq + cores from HostInfo.cs
         // (e.g. "Intel Core i7-12700K @ 3.60 GHz · 20 cores"). Null
         // on hosts where CPU detection failed.

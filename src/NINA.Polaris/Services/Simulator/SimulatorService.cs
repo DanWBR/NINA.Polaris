@@ -109,6 +109,51 @@ public class SimulatorService : IDisposable {
         }
     }
 
+    /// <summary>SIM-8: add one device to the running stack via FIFO
+    /// (or backend-specific equivalent) without restarting indiserver.
+    /// Returns false when nothing is running yet or the backend
+    /// rejected the command. Updates <see cref="RunningDevices"/>
+    /// optimistically so the WS payload reflects the new state on
+    /// the next tick.</summary>
+    public async Task<bool> AddDeviceAsync(string device, CancellationToken ct = default) {
+        await _lock.WaitAsync(ct);
+        try {
+            if (!IsRunning) {
+                LastError = "Simulator isn't running — Launch first.";
+                return false;
+            }
+            var ok = await ActiveBackend.AddDeviceAsync(device, ct);
+            if (ok) {
+                RunningDevices = RunningDevices.Concat([device])
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            } else if (LastError == null) {
+                LastError = $"Backend rejected add: {device}";
+            }
+            return ok;
+        } finally {
+            _lock.Release();
+        }
+    }
+
+    /// <summary>SIM-8: stop one device on the running stack without
+    /// tearing the whole thing down.</summary>
+    public async Task<bool> RemoveDeviceAsync(string device, CancellationToken ct = default) {
+        await _lock.WaitAsync(ct);
+        try {
+            if (!IsRunning) return false;
+            var ok = await ActiveBackend.RemoveDeviceAsync(device, ct);
+            if (ok) {
+                RunningDevices = RunningDevices
+                    .Where(d => !d.Equals(device, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
+            return ok;
+        } finally {
+            _lock.Release();
+        }
+    }
+
     /// <summary>Cheap TCP probe — periodic health check called from
     /// the auto-start service. Updates <see cref="IsRunning"/> if the
     /// subprocess died between launch and now.</summary>
@@ -173,4 +218,6 @@ internal sealed class NoopSimulatorBackend : ISimulatorBackend {
         => Task.FromResult(false);
     public Task ShutdownAsync(CancellationToken ct = default) => Task.CompletedTask;
     public Task<bool> IsRunningAsync(CancellationToken ct = default) => Task.FromResult(false);
+    public Task<bool> AddDeviceAsync(string device, CancellationToken ct = default) => Task.FromResult(false);
+    public Task<bool> RemoveDeviceAsync(string device, CancellationToken ct = default) => Task.FromResult(false);
 }

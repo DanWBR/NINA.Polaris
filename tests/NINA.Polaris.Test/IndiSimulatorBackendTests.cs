@@ -26,54 +26,46 @@ public class IndiSimulatorBackendTests {
         Assert.That(IndiSimulatorBackend.ParseVersion(raw!), Is.EqualTo(expected));
     }
 
-    // --- BuildArgs ---
+    // --- BuildArgs (SIM-8: FIFO mode — drivers no longer in argv) ---
     [Test]
-    public void BuildArgs_DefaultDevices_BuildsExpectedArgv() {
+    public void BuildArgs_UsesFifoPath_NotDriverList() {
+        // SIM-8 switched indiserver to runtime driver control via
+        // FIFO. The argv carries the FIFO path; drivers are started
+        // afterwards via FIFO `start` commands. This test pins the
+        // wire format so a regression to argv-based driver passing
+        // is caught immediately.
         var req = new SimulatorLaunchRequest(SimulatorDeviceTags.Defaults, 7624);
-        var args = IndiSimulatorBackend.BuildArgs(req);
-        // Verbose flag, explicit port, then one binary per device,
-        // in the exact order from the request. indiserver is order-
-        // sensitive only for the @hostname prefix syntax which we
-        // don't use.
-        Assert.That(args, Is.EqualTo(
-            "-v -p 7624 indi_simulator_ccd indi_simulator_telescope "
-            + "indi_simulator_focus indi_simulator_wheel"));
+        var args = IndiSimulatorBackend.BuildArgs(req, "/tmp/polaris-indi-test.fifo");
+        Assert.That(args, Is.EqualTo("-v -p 7624 -f /tmp/polaris-indi-test.fifo"));
     }
 
     [Test]
     public void BuildArgs_CustomPort_ReflectsInArgs() {
         var req = new SimulatorLaunchRequest([SimulatorDeviceTags.Ccd], 7625);
-        Assert.That(IndiSimulatorBackend.BuildArgs(req), Does.Contain("-p 7625"));
+        Assert.That(IndiSimulatorBackend.BuildArgs(req, "/tmp/x"), Does.Contain("-p 7625"));
+    }
+
+    // --- BuildFifoCommand (SIM-8) ---
+    [TestCase("ccd",       true,  "start indi_simulator_ccd")]
+    [TestCase("telescope", true,  "start indi_simulator_telescope")]
+    [TestCase("focus",     false, "stop indi_simulator_focus")]
+    [TestCase("wheel",     false, "stop indi_simulator_wheel")]
+    [TestCase("guide",     true,  "start indi_simulator_guide")]
+    [TestCase("dome",      true,  "start indi_simulator_dome")]
+    [TestCase("weather",   true,  "start indi_simulator_weather")]
+    public void BuildFifoCommand_KnownDevices_RendersCorrectVerb(
+            string device, bool start, string expected) {
+        Assert.That(IndiSimulatorBackend.BuildFifoCommand(device, start),
+            Is.EqualTo(expected));
     }
 
     [Test]
-    public void BuildArgs_UnknownTag_IsSilentlyDropped() {
-        // A stale UI checkbox could send "rotator" before the device
-        // is actually wired up here. Drop unknowns instead of failing
-        // launch — failing one driver shouldn't sink the whole stack.
-        var req = new SimulatorLaunchRequest(
-            ["ccd", "made-up-device", "telescope"], 7624);
-        var args = IndiSimulatorBackend.BuildArgs(req);
-        Assert.That(args, Does.Contain("indi_simulator_ccd"));
-        Assert.That(args, Does.Contain("indi_simulator_telescope"));
-        Assert.That(args, Does.Not.Contain("made-up"));
-    }
-
-    [Test]
-    public void BuildArgs_AllSevenDevices_AllAppear() {
-        var req = new SimulatorLaunchRequest(SimulatorDeviceTags.All, 7624);
-        var args = IndiSimulatorBackend.BuildArgs(req);
-        foreach (var binary in new[] {
-            "indi_simulator_ccd",
-            "indi_simulator_telescope",
-            "indi_simulator_focus",
-            "indi_simulator_wheel",
-            "indi_simulator_guide",
-            "indi_simulator_dome",
-            "indi_simulator_weather"
-        }) {
-            Assert.That(args, Does.Contain(binary));
-        }
+    public void BuildFifoCommand_UnknownDevice_ReturnsNull() {
+        // Caller (AddDeviceAsync / RemoveDeviceAsync) checks for
+        // null and bails — better than sending indiserver a bogus
+        // command and surfacing a confusing error.
+        Assert.That(IndiSimulatorBackend.BuildFifoCommand("made-up", true),
+            Is.Null);
     }
 
     // --- IsSupported gate ---

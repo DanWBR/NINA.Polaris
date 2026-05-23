@@ -3837,9 +3837,16 @@
 
                     <!-- Device checkbox grid — only the drivers we
                          actually detected get a checkbox. Saved as
-                         the user toggles + included in Launch. -->
+                         the user toggles. SIM-8: when the stack is
+                         running, each toggle hits the FIFO
+                         immediately (add/remove a driver without
+                         restarting indiserver). When stopped,
+                         changes just update the persisted device
+                         list for the next Launch. -->
                     <div x-show="simulator.installed" style="margin-top: 12px;">
-                        <div class="text-muted" style="font-size: 11px; margin-bottom: 4px;">Devices to start:</div>
+                        <div class="text-muted" style="font-size: 11px; margin-bottom: 4px;">
+                            Devices<span x-show="simulator.isRunning"> (toggle to add/remove live)</span>:
+                        </div>
                         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 6px;">
                             <template x-for="dev in ['ccd','telescope','focus','wheel','guide','dome','weather']" :key="dev">
                                 <label :title="(simulator.devicesAvailable || []).includes(dev) ? '' : 'Driver not detected on this host'"
@@ -3848,10 +3855,13 @@
                                     <input type="checkbox"
                                            :value="dev"
                                            x-model="simulatorSettings.devices"
-                                           @change="saveSimulatorSettings()"
+                                           @change="simulatorOnDeviceToggle(dev)"
                                            :disabled="!(simulator.devicesAvailable || []).includes(dev)">
                                     <span x-text="dev === 'ccd' ? 'Camera (CCD)'
                                                 : dev.charAt(0).toUpperCase() + dev.slice(1)"></span>
+                                    <span x-show="(simulator.runningDevices || []).includes(dev)"
+                                          class="status-indicator ok"
+                                          style="font-size: 9px; padding: 1px 4px;">●</span>
                                 </label>
                             </template>
                         </div>
