@@ -41,6 +41,36 @@ public class Phd2GuiSessionService : BackgroundService {
     public string OperatingSystem => Environment.OSVersion.Platform.ToString();
     public bool IsSupportedOs => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
 
+    /// <summary>True when the current CPU architecture has a working
+    /// xpra + Xorg-dummy stack. ARMv7 32-bit (Raspberry Pi 2 / 3
+    /// with 32-bit Raspbian) is excluded — xpra installs from apt but
+    /// crashes at session start: the dummy Xorg driver is unreliable
+    /// on 32-bit ARM and several Python/GTK deps don't behave. Pi 4+
+    /// with the 64-bit Raspberry Pi OS is fine.
+    ///
+    /// Reported separately from <see cref="IsSupportedOs"/> so the UI
+    /// can show the right "why this isn't available" message instead
+    /// of a generic "not Linux".</summary>
+    public bool IsSupportedArch =>
+        RuntimeInformation.OSArchitecture != Architecture.Arm;
+
+    /// <summary>One-line human-readable reason the embedded GUI is
+    /// unavailable on this host, or null when it should work.
+    /// UI surfaces this in the GUIDE / Settings banner so the user
+    /// doesn't see a generic "click Start to begin" button on a
+    /// platform that physically can't run xpra.</summary>
+    public string? UnsupportedReason {
+        get {
+            if (!IsSupportedOs)
+                return $"Embedded PHD2 GUI requires Linux + xpra. {RuntimeInformation.OSDescription} is not supported.";
+            if (!IsSupportedArch)
+                return "Embedded PHD2 GUI requires 64-bit Linux. xpra has known issues on 32-bit ARM " +
+                       "(Raspberry Pi 2 / 3 with 32-bit Raspberry Pi OS). Upgrade to 64-bit Pi OS on a Pi 4 / 5, " +
+                       "or use PHD2's native window via X11 forwarding / VNC.";
+            return null;
+        }
+    }
+
     public DateTime? LastHealthCheckAt { get; private set; }
     public string? LastError { get; private set; }
 
@@ -56,6 +86,17 @@ public class Phd2GuiSessionService : BackgroundService {
         if (!IsSupportedOs) {
             _logger.LogInformation("Phd2GuiSessionService: OS {Os} not supported (Linux only) — service idle",
                 RuntimeInformation.OSDescription);
+            LastError = UnsupportedReason;
+            return;
+        }
+        if (!IsSupportedArch) {
+            // Don't even try to detect xpra on 32-bit ARM — install
+            // succeeds via apt but session-start crashes; better to
+            // surface the limitation cleanly upfront than to let the
+            // user click Start and get a confusing process-died log.
+            _logger.LogInformation("Phd2GuiSessionService: architecture {Arch} not supported (xpra unstable on 32-bit ARM) — service idle",
+                RuntimeInformation.OSArchitecture);
+            LastError = UnsupportedReason;
             return;
         }
 

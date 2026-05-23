@@ -84,6 +84,8 @@ public static class StatusStreamHandler {
                     };
                     var guiSessionPayload = new {
                         supportedOs = phd2Gui.IsSupportedOs,
+                        supportedArch = phd2Gui.IsSupportedArch,
+                        unsupportedReason = phd2Gui.UnsupportedReason,
                         xpraInstalled = phd2Gui.XpraInstalled,
                         xpraVersion = phd2Gui.XpraVersion,
                         running = phd2Gui.SessionRunning,

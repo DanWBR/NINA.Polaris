@@ -144,8 +144,15 @@ Polaris UI. Lets you do everything PHD2's GUI offers without VNC/SSH:
 
 States:
 
-1. **Non-Linux host** — banner explains the limitation; use PHD2's
-   native window on Windows/macOS directly
+1. **Platform unsupported** — banner explains the limitation. Two
+   variants:
+   - **Non-Linux host** (Windows / macOS) — open PHD2's native window
+     on that machine directly.
+   - **32-bit ARM** (Raspberry Pi 2 / 3 with 32-bit Raspberry Pi OS) —
+     xpra installs from apt but its session-start crashes; the dummy
+     Xorg driver is unreliable on ARMv7. Upgrade to 64-bit Pi OS on
+     a Pi 4 / 5, or run PHD2 on a separate machine and point Polaris
+     at it.
 2. **Linux without xpra** — install instructions with `sudo apt
    install xpra xserver-xorg-video-dummy`
 3. **Linux + xpra installed but session not running** — "▶ Start PHD2

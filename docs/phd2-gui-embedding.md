@@ -6,13 +6,32 @@ expose: profile creation via the Wizard, the Brain dialog, Guiding
 Assistant, dark library management, equipment picker, custom algorithm
 selection.
 
-This is **Linux-only** on the server side. Polaris achieves the embed
-by running PHD2 inside an [xpra](https://xpra.org) session with an
-Xorg-dummy virtual display, then reverse-proxying xpra's HTML5 client
-through `/phd2-gui/*`. On Windows/macOS, the GUIDE tab still gives you
-the full JSON-RPC controls (profile switching, exposure, smart calibrate,
-algorithm presets) — for the rare cases needing PHD2's GUI, open PHD2
-directly on that machine.
+This is **Linux-only** on the server side, and **64-bit Linux only**.
+Polaris achieves the embed by running PHD2 inside an [xpra](https://xpra.org)
+session with an Xorg-dummy virtual display, then reverse-proxying xpra's
+HTML5 client through `/phd2-gui/*`. On Windows/macOS, the GUIDE tab still
+gives you the full JSON-RPC controls (profile switching, exposure, smart
+calibrate, algorithm presets) — for the rare cases needing PHD2's GUI,
+open PHD2 directly on that machine.
+
+### Not supported on 32-bit ARM (Raspberry Pi 2 / 3 with 32-bit Pi OS)
+
+xpra installs from apt on Raspberry Pi OS 32-bit (ARMv7), but session-start
+crashes — the dummy Xorg driver is unreliable on 32-bit ARM and several
+Python/GTK dependencies misbehave. Polaris detects this at startup and
+disables the "PHD2 GUI" panel with a clear message instead of letting you
+hit a confusing process-died log.
+
+If you're on a Pi 2 or Pi 3, your options are:
+
+- Upgrade to **64-bit Raspberry Pi OS** on a Pi 4 / Pi 5 (recommended —
+  xpra works fine there).
+- Run PHD2 on a separate Windows/Linux machine on the LAN and point
+  Polaris at it via the **PHD2 host/port** setting in the GUIDE tab.
+- Use X11 forwarding / VNC to reach PHD2's native window directly.
+
+The full JSON-RPC control surface in the GUIDE tab still works on 32-bit
+ARM — only the embedded GUI window is unavailable.
 
 ## Install (Raspberry Pi, Debian, Ubuntu)
 
