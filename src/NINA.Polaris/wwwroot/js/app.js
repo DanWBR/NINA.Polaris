@@ -753,6 +753,34 @@ function ninaApp() {
                 document.documentElement.setAttribute('data-theme', 'night');
             }
 
+            // Re-render the cached frame whenever the user switches
+            // tabs. Fixes the classic "last snap painted on PREVIEW,
+            // user switches to VIDEO, sees black canvas" — the
+            // previously-hidden videoCaptureCanvas was reported as
+            // hidden(0x0) during the original fan-out, so it never
+            // received the bitmap. $nextTick waits for x-show to
+            // flip display:block + the layout to settle so the
+            // target container actually has dimensions when we
+            // re-fanout.
+            this.$watch('tab', () => {
+                this.$nextTick(() => {
+                    if (this._lastRawFrame) {
+                        this.applyManualStretch();
+                    }
+                });
+            });
+            // Same trick for sub-tabs that host their own preview
+            // canvas (VIDEO has Capture/Process; Capture owns
+            // videoCaptureCanvas). Without this, the bitmap follows
+            // only outer tab switches.
+            this.$watch('videoTab', () => {
+                this.$nextTick(() => {
+                    if (this._lastRawFrame) {
+                        this.applyManualStretch();
+                    }
+                });
+            });
+
             this.$watch('settings', () => {
                 this.updateFov();
                 this.saveSettings();
