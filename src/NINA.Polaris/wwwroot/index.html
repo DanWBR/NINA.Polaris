@@ -2447,18 +2447,25 @@
                         <span>FOV: <strong x-text="fov.width.toFixed(2) + '&deg; x ' + fov.height.toFixed(2) + '&deg;'"></strong></span>
                     </div>
                     <div class="control-row actions">
+                        <!-- Slew & Center / Slew Only act on whatever's
+                             framed in the red target FOV — i.e. the live
+                             map centre. The user pans the sky map to
+                             choose where to go; no need to pick a DSO
+                             first. Add to Sequence / Tonight's altitude
+                             / Plan mosaic still need a named DSO so
+                             they stay gated on skyTarget. -->
                         <button class="btn btn-primary" @click="slewAndCenter()"
-                                :disabled="!skyTarget || !mount.connected || slewCenterJobId"
-                                :title="!skyTarget ? 'Search and pick a target first' : (!mount.connected ? 'Connect a mount first' : (slewCenterJobId ? 'Slew & Center already running' : 'Slew, plate-solve, re-center on the picked target'))">Slew &amp; Center</button>
-                        <button class="btn" @click="slewTo(skyTarget?.ra, skyTarget?.dec)"
-                                :disabled="!skyTarget || !mount.connected"
-                                :title="!skyTarget ? 'Search and pick a target first' : (!mount.connected ? 'Connect a mount first' : 'Slew without plate-solve')">Slew Only</button>
+                                :disabled="!mount.connected || slewCenterJobId"
+                                :title="!mount.connected ? 'Connect a mount first' : (slewCenterJobId ? 'Slew & Center already running' : 'Slew, plate-solve, re-center on whatever is framed in the red target FOV')">Slew &amp; Center</button>
+                        <button class="btn" @click="slewToCurrent()"
+                                :disabled="!mount.connected"
+                                :title="!mount.connected ? 'Connect a mount first' : 'Slew without plate-solve to the centre of the red target FOV'">Slew Only</button>
                         <button class="btn" @click="addToSequence()" :disabled="!skyTarget"
-                                :title="!skyTarget ? 'Search and pick a target first' : 'Append this target to the active sequence'">Add to Sequence</button>
+                                :title="!skyTarget ? 'Search and pick a named target first' : 'Append this target to the active sequence'">Add to Sequence</button>
                         <button class="btn" @click="loadAltitudeChart()" :disabled="!skyTarget"
-                                :title="!skyTarget ? 'Search and pick a target first' : 'Plot altitude vs time for tonight at your location'">Tonight's altitude</button>
+                                :title="!skyTarget ? 'Search and pick a named target first' : 'Plot altitude vs time for tonight at your location'">Tonight's altitude</button>
                         <button class="btn" @click="openMosaicPlanner()" :disabled="!skyTarget"
-                                :title="!skyTarget ? 'Search and pick a target first' : 'Build a mosaic grid around this target and export to the Advanced Sequencer'">🧩 Plan mosaic</button>
+                                :title="!skyTarget ? 'Search and pick a named target first' : 'Build a mosaic grid around this target and export to the Advanced Sequencer'">🧩 Plan mosaic</button>
                     </div>
 
                     <div class="chart-container chart-container-sm" x-show="altitudeData">

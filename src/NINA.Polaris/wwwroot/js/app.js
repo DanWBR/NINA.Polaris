@@ -3784,6 +3784,14 @@ function ninaApp() {
                     }
                 });
                 // TARGET-FOV layer — red dashed rectangle + marker.
+                // ASIAIR-style: always anchored at the CURRENT MAP CENTER
+                // (not a picked DSO), so dragging the sky map slides the
+                // background under the fixed-on-screen target rectangle.
+                // The slewAndCenter()/slewTo() handlers read the same map
+                // center, so what the user frames is what gets slewed to.
+                // Re-derive on every redraw — d3-celestial fires redraw on
+                // every pan/zoom, so the target stays glued to the
+                // viewport centre with no polling needed.
                 Celestial.add({
                     type: 'line',
                     callback: () => {
@@ -3793,8 +3801,10 @@ function ninaApp() {
                     redraw: () => {
                         Celestial.container.selectAll('.fov-target').remove();
                         Celestial.container.selectAll('.fov-target-mark').remove();
-                        const g = self._fovTargetGeo;
-                        if (!g) return;
+                        if (!self.aladinShowFov) return;
+                        const c = self._skyMapCenter();
+                        if (!c) return;
+                        const g = self._buildFovRing(c.raHours, c.decDeg);
                         Celestial.container.selectAll('.fov-target')
                             .data(g.features).enter().append('path')
                             .attr('class', 'fov-target')
@@ -3802,21 +3812,38 @@ function ninaApp() {
                             .style('stroke', '#ef4444').style('stroke-width', 2.5)
                             .style('stroke-dasharray', '5 3')
                             .style('fill', 'rgba(239,68,68,0.10)');
-                        const a = self._fovTargetAnchor;
-                        if (a) self._drawFovCenterMarker(
-                            'fov-target-mark', a.ra, a.dec, '#ef4444');
+                        self._drawFovCenterMarker(
+                            'fov-target-mark', c.raHours, c.decDeg, '#ef4444');
                     }
                 });
                 this._fovLayersRegistered = true;
             } catch (e) { console.warn('FOV layer register failed', e); }
         },
 
+        // Read the current map-center RA/Dec from d3-celestial's projection.
+        // d3 projections store the centre as a negated rotation:
+        // projection.rotate() returns [lambda, phi, gamma] and the map
+        // centre is at [-lambda, -phi]. Returns null when celestial isn't
+        // ready yet.
+        _skyMapCenter() {
+            try {
+                if (!Celestial?.mapProjection?.rotate) return null;
+                const r = Celestial.mapProjection.rotate();
+                if (!r || r.length < 2) return null;
+                let raDeg = -r[0];
+                // Wrap RA into [0, 360) so downstream math + display stay sane.
+                raDeg = ((raDeg % 360) + 360) % 360;
+                const decDeg = Math.max(-90, Math.min(90, -r[1]));
+                return { raHours: raDeg / 15, decDeg };
+            } catch { return null; }
+        },
+
         updateSkyCameraFov() {
             if (!this._celestialReady) return;
             this._ensureFovLayers();
             if (!this.aladinShowFov) {
-                this._fovMountGeo = this._fovTargetGeo = null;
-                this._fovMountAnchor = this._fovTargetAnchor = null;
+                this._fovMountGeo = null;
+                this._fovMountAnchor = null;
                 try { Celestial.redraw(); } catch {}
                 return;
             }
@@ -3830,17 +3857,8 @@ function ninaApp() {
                 this._fovMountGeo = null;
                 this._fovMountAnchor = null;
             }
-            // Target FOV (red dashed rectangle + marker) anchored at
-            // the picked planning target.
-            const tRa = this.skyTarget?.ra ?? this.skyTarget?.raHours;
-            const tDec = this.skyTarget?.dec ?? this.skyTarget?.decDeg;
-            if (tRa != null && tDec != null) {
-                this._fovTargetGeo = this._buildFovRing(tRa, tDec);
-                this._fovTargetAnchor = { ra: tRa, dec: tDec };
-            } else {
-                this._fovTargetGeo = null;
-                this._fovTargetAnchor = null;
-            }
+            // Target FOV is computed inside the layer's redraw() callback
+            // from the live map centre — no need to set state here.
             try { Celestial.redraw(); } catch (e) {
                 console.warn('FOV redraw failed', e);
             }
@@ -7094,12 +7112,23 @@ function ninaApp() {
             this._goToSelectedTarget();
         },
 
+        // ASIAIR-style "Slew & Center to whatever's framed in the
+        // red target FOV right now". Reads the map centre via the
+        // d3-celestial projection rotation — the same source the
+        // on-map target rectangle uses, so what the user sees framed
+        // is what the mount tries to put under the camera.
+        // Falls back to a picked skyTarget if the map centre can't
+        // be read for any reason.
         async slewAndCenter() {
-            if (!this.skyTarget) return;
+            const target = this._currentSlewTarget();
+            if (!target) {
+                this.toast('Sky map not ready', 'error');
+                return;
+            }
             try {
                 const resp = await this.apiPost('/api/sky/slew-and-center', {
-                    ra: this.skyTarget.ra,
-                    dec: this.skyTarget.dec,
+                    ra: target.ra,
+                    dec: target.dec,
                     toleranceArcsec: 30
                 });
                 const data = await resp.json();
@@ -7110,6 +7139,28 @@ function ninaApp() {
             } catch (e) {
                 this.toast('Slew & center failed: ' + e.message, 'error');
             }
+        },
+
+        // Slew Only handler — same target source as slewAndCenter
+        // (live map centre) but skips the plate-solve loop.
+        async slewToCurrent() {
+            const target = this._currentSlewTarget();
+            if (!target) { this.toast('Sky map not ready', 'error'); return; }
+            return this.slewTo(target.ra, target.dec);
+        },
+
+        _currentSlewTarget() {
+            // Prefer the live map centre (what's framed in the red
+            // target FOV right now). Falls back to a picked skyTarget
+            // if d3-celestial isn't initialised yet.
+            const c = this._skyMapCenter && this._skyMapCenter();
+            if (c && Number.isFinite(c.raHours) && Number.isFinite(c.decDeg)) {
+                return { ra: c.raHours, dec: c.decDeg };
+            }
+            if (this.skyTarget?.ra != null && this.skyTarget?.dec != null) {
+                return { ra: this.skyTarget.ra, dec: this.skyTarget.dec };
+            }
+            return null;
         },
 
         startSlewCenterPolling() {
