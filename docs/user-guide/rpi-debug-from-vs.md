@@ -1,13 +1,16 @@
 # Debug Polaris on a Raspberry Pi from Visual Studio
 
-Developer-oriented guide. Three workflows, ranked by ergonomics:
+Developer-oriented guide. Four workflows, ranked by ergonomics:
 
 - **[A. SSH remote debug (recommended)](#a-ssh-remote-debug-recommended)** —
   full step-debug from Visual Studio on Windows, breakpoints, watch,
   call-stack, just like local
-- **[B. Publish + SSH manual](#b-publish--ssh-manual)** — no debugger,
+- **[B. One-button deploy + restart via PowerShell script](#b-one-button-deploy--restart-via-powershell-script)** —
+  `deploy\deploy-to-pi.ps1` does publish + scp + service restart in
+  one go. No step-debug, but the fastest iteration loop without VS.
+- **[C. Publish + SSH manual](#c-publish--ssh-manual)** — no debugger,
   just logs in stdout. Smoke-test only.
-- **[C. Hot-reload via `dotnet watch`](#c-hot-reload-via-dotnet-watch)** —
+- **[D. Hot-reload via `dotnet watch`](#d-hot-reload-via-dotnet-watch)** —
   edit on Windows, auto-restart on Pi. No step-debug.
 
 ## A. SSH remote debug (recommended)
@@ -126,7 +129,106 @@ Open the browser to `http://<pi-ip>:5000` to drive the UI.
   the debugger path explicitly under `Debug → Debug launch profiles
   → SSH → "Pre-launch command"` to point at `~/vsdbg/vsdbg`.
 
-## B. Publish + SSH manual
+## B. One-button deploy + restart via PowerShell script
+
+For the "edit something, see it on the Pi, fix it, repeat" loop
+without spinning up the VS SSH machinery. Ships in `deploy/deploy-to-pi.ps1`.
+
+### One-time setup on the Pi
+
+1. **SSH key auth** (no passwords). From Windows:
+   ```powershell
+   ssh-keygen           # if you don't already have one
+   ssh-copy-id pi@polaris.local     # WSL/Git-Bash, OR copy ~/.ssh/id_rsa.pub
+                                    # into pi:~/.ssh/authorized_keys by hand
+   ssh pi@polaris.local exit        # confirm it works without prompting
+   ```
+
+2. **.NET 10 ASP.NET runtime + libfontconfig1** on the Pi — same as
+   section A step 1 above.
+
+3. **(Optional but recommended)** A systemd unit so the deploy
+   script can `systemctl restart` it cleanly. Easiest is a
+   user-mode unit at `~/.config/systemd/user/polaris.service`:
+
+   ```ini
+   [Unit]
+   Description=N.I.N.A. Polaris
+
+   [Service]
+   WorkingDirectory=%h/polaris
+   ExecStart=/usr/local/bin/dotnet NINA.Polaris.dll
+   Environment=ASPNETCORE_URLS=http://0.0.0.0:5000
+   Restart=on-failure
+   RestartSec=5
+
+   [Install]
+   WantedBy=default.target
+   ```
+
+   Then:
+   ```bash
+   systemctl --user daemon-reload
+   systemctl --user enable polaris
+   loginctl enable-linger pi    # so the user service starts at boot
+                                # without you having to log in
+   ```
+
+   The deploy script auto-detects this unit and uses `systemctl
+   --user restart polaris`. If the unit isn't present it falls back
+   to `pkill + nohup`, which is fine for ad-hoc testing.
+
+### Use
+
+```powershell
+# Pi 2/3 (32-bit Raspbian, ARMv7)
+.\deploy\deploy-to-pi.ps1
+
+# Pi 4/5 (64-bit Pi OS / Ubuntu)
+.\deploy\deploy-to-pi.ps1 -Rid linux-arm64
+
+# Explicit IP
+.\deploy\deploy-to-pi.ps1 -PiHost 192.168.1.50
+
+# Different user / path
+.\deploy\deploy-to-pi.ps1 -PiUser dan -RemotePath /srv/polaris
+
+# Just copy, don't bounce the service
+.\deploy\deploy-to-pi.ps1 -NoRestart
+
+# Just bounce, don't re-copy
+.\deploy\deploy-to-pi.ps1 -NoCopy
+
+# Debug config (bigger binaries, faster build)
+.\deploy\deploy-to-pi.ps1 -Debug
+```
+
+End to end: `dotnet publish -r {rid}` → `scp -Cpr` → `ssh
+'systemctl restart polaris OR pkill+nohup'`. First publish takes
+~30s; subsequent deploys are mostly the scp (~5-15s depending on
+LAN speed + Pi 2 slow flash) + a 1-second restart.
+
+### Pi 2 Model B caveats
+
+The Pi 2 (ARMv7, 900 MHz quad-core Cortex-A7, 1 GB RAM,
+VideoCore IV GPU) is the slowest target Polaris supports. It works
+for connection + basic capture tests, but:
+
+- **RID**: must be `linux-arm` (32-bit), not `linux-arm64`. Confirm
+  with `uname -m` → `armv7l`.
+- **RAM**: 1 GB is tight. Polaris idle ≈ 120-180 MB; with live
+  stacking + PHD2 + ASTAP simultaneously it can swap. Disable
+  features you're not testing.
+- **WebGL2**: Chromium on Raspbian 32-bit doesn't support WebGL2
+  → live preview falls back to server-side JPEG (extra CPU on
+  the Pi). Toggle "Force JPEG mode" in Settings to make it
+  explicit.
+- **CPU%**: anything image-heavy (stretch, debayer, star detect)
+  pegs all 4 cores. Browser-side will be sluggish over the LAN.
+- **For real work**: upgrade to a Pi 4 (4GB+) or Pi 5. Pi 2 is
+  useful as a low-power smoke-test target.
+
+## C. Publish + SSH manual
 
 Skip the VS SSH plumbing. Use the publish scripts in `deploy/`:
 
@@ -147,9 +249,10 @@ ASPNETCORE_URLS=http://0.0.0.0:5000 ./NINA.Polaris
 
 No step-debug — just logs in stdout. Useful for "did my fix actually
 launch on the Pi" without spinning up the VS deploy machinery. Bad
-choice if you're hunting an actual bug — use **A**.
+choice if you're hunting an actual bug — use **A**. Bad choice if
+you want a repeatable loop — use **B**.
 
-## C. Hot-reload via `dotnet watch`
+## D. Hot-reload via `dotnet watch`
 
 For tight iteration (edit on Windows, file syncs, Pi auto-restarts):
 
