@@ -1628,13 +1628,29 @@ function ninaApp() {
         // failed. Renders into every visible canvas via the same
         // fan-out helper the binary paths use so PREVIEW / FOCUS /
         // VIDEO all see the frame, not just LIVE.
+        //
+        // Throttled with a 5s back-off after any 404 so a missing
+        // preview endpoint can't generate a 5fps console-spam loop
+        // when the video stream is running. (Symptom we hit: 100+
+        // failed GETs per second on a fresh page load before LZ4
+        // was vendored.)
         _fetchPreviewFallback() {
             if (this._previewFetching) return;
+            const now = Date.now();
+            if (this._previewBackoffUntil && now < this._previewBackoffUntil) return;
             this._previewFetching = true;
 
             fetch('/api/image/latest/preview')
                 .then(resp => {
-                    if (!resp.ok) throw new Error('No preview');
+                    if (!resp.ok) {
+                        // Back off for 5s on any non-OK (typically 404
+                        // "No image available" while the server hasn't
+                        // produced a frame yet, or before live-stack /
+                        // capture has started). Prevents the per-frame
+                        // 404 flood we saw in production.
+                        this._previewBackoffUntil = Date.now() + 5000;
+                        throw new Error('No preview');
+                    }
                     return resp.blob();
                 })
                 .then(blob => {
