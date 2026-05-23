@@ -196,13 +196,29 @@ public class IndiCamera : ICamera {
     }
 
     public async Task SetTemperatureAsync(double temperature, CancellationToken ct = default) {
-        await _client.SetNumberAsync(DeviceName, "CCD_TEMPERATURE",
-            new Dictionary<string, double> { ["CCD_TEMPERATURE_VALUE"] = temperature }, ct);
+        // CCD_TEMPERATURE is read-only on uncooled cameras (ZWO ASI715MC,
+        // most planetary CMOS). On those drivers writing it raises a
+        // "Cannot set read-only property" dispatch error. Probe the
+        // property — if it exists at all on a cooled camera, it's
+        // writable; if missing we don't have a cooler to talk to.
+        var prop = _client.GetProperty(DeviceName, "CCD_TEMPERATURE") as IndiNumberProperty;
+        if (prop == null) return;
+        try {
+            await _client.SetNumberAsync(DeviceName, "CCD_TEMPERATURE",
+                new Dictionary<string, double> { ["CCD_TEMPERATURE_VALUE"] = temperature }, ct);
+        } catch { /* read-only or out-of-range on this driver — silent */ }
     }
 
     public async Task SetCoolerAsync(bool on, CancellationToken ct = default) {
-        await _client.SetSwitchAsync(DeviceName, "CCD_COOLER",
-            new Dictionary<string, bool> { ["COOLER_ON"] = on, ["COOLER_OFF"] = !on }, ct);
+        // CCD_COOLER doesn't exist on uncooled cameras. Without this
+        // guard the indiserver log fills with "Property CCD_COOLER is
+        // not defined in ZWO CCD ASI715MC" on every UI toggle.
+        var prop = _client.GetProperty(DeviceName, "CCD_COOLER") as IndiSwitchProperty;
+        if (prop == null) return;
+        try {
+            await _client.SetSwitchAsync(DeviceName, "CCD_COOLER",
+                new Dictionary<string, bool> { ["COOLER_ON"] = on, ["COOLER_OFF"] = !on }, ct);
+        } catch { /* driver rejected the switch — silent */ }
     }
 
     /// <summary>INDI astronomy cameras don't expose ISO. No-op.</summary>
