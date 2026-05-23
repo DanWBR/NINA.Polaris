@@ -7400,6 +7400,13 @@ function ninaApp() {
             if (eq.camera) {
                 this.cameraTemp = eq.camera.temperature;
                 this.selectedCamera = eq.camera.name;
+                // Mirror the connected device into the RIGS-tab dropdown
+                // so it shows the actual selection instead of "Select
+                // device" on page-refresh-while-connected. Only set
+                // when empty so we don't clobber a user mid-pick.
+                if (!this.equipCameraChoice && eq.camera.name) {
+                    this.equipCameraChoice = eq.camera.name;
+                }
                 this.equipCameraInfo = {
                     coolerOn: eq.camera.coolerOn || false,
                     binX: eq.camera.binX || 0,
@@ -7444,6 +7451,9 @@ function ninaApp() {
                     connected: eq.telescope.connected
                 });
                 this.selectedTelescope = eq.telescope.name;
+                if (!this.equipMountChoice && eq.telescope.name) {
+                    this.equipMountChoice = eq.telescope.name;
+                }
             }
             if (eq.focuser) {
                 this.focusPosition = eq.focuser.position;
@@ -7451,6 +7461,9 @@ function ninaApp() {
                 this.focusMoving = eq.focuser.moving;
                 this.focusConnected = true;
                 this.selectedFocuser = eq.focuser.name;
+                if (!this.equipFocuserChoice && eq.focuser.name) {
+                    this.equipFocuserChoice = eq.focuser.name;
+                }
             }
             if (eq.filterWheel) {
                 this.filterWheel = {
@@ -7461,6 +7474,9 @@ function ninaApp() {
                     moving: eq.filterWheel.moving
                 };
                 this.selectedFilterWheel = eq.filterWheel.name;
+                if (!this.equipFilterChoice && eq.filterWheel.name) {
+                    this.equipFilterChoice = eq.filterWheel.name;
+                }
             }
             if (eq.rotator) {
                 this.rotator = {
