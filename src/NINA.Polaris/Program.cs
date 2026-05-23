@@ -111,25 +111,39 @@ app.Services.GetRequiredService<PHD2ProfileSyncService>();
 // / auto-recenter evaluation.
 app.Services.GetRequiredService<LiveStackTriggersService>();
 
-// CLST-5: flip LiveStackingService into MetricsOnly when at least
-// one image-stream client reports wasm:true (i.e. the WASM live-stack
-// module loaded and is ready to take the math), and back to Full
-// when the last WASM client disconnects. Done as a one-shot
-// subscription at app start; ImageRelayService raises the event
-// every time the aggregate count crosses 0/1.
+// CLST-5 + CLST-7: pick the live-stack compute target based on
+//   (a) the active rig's LiveStackComputeMode override ("auto" /
+//       "server" / "client") and
+//   (b) how many connected image-stream clients have the WASM module
+//       loaded.
+// Re-evaluated on three triggers: relay's WasmCapableCountChanged
+// (client connect/disconnect/capability change), profile activation
+// (user switches rigs), and the PUT /api/equipment/rigs/{id} that
+// edits the override (handled implicitly — the next event reads the
+// fresh value off ProfileService.ActiveEquipmentProfile).
 {
     var liveStack = app.Services.GetRequiredService<LiveStackingService>();
     var relay = app.Services.GetRequiredService<ImageRelayService>();
+    var profiles = app.Services.GetRequiredService<ProfileService>();
     var liveStackLogger = app.Services.GetRequiredService<ILogger<LiveStackingService>>();
-    relay.WasmCapableCountChanged += (count) => {
-        var newMode = count > 0 ? StackMode.MetricsOnly : StackMode.Full;
+
+    void EvaluateMode(string trigger) {
+        var rigOverride = (profiles.ActiveEquipmentProfile?.LiveStackComputeMode ?? "auto")
+                          .Trim().ToLowerInvariant();
+        var newMode = rigOverride switch {
+            "server" => StackMode.Full,
+            "client" => StackMode.MetricsOnly,
+            _        => relay.WasmCapableClientCount > 0 ? StackMode.MetricsOnly : StackMode.Full
+        };
         if (liveStack.Mode != newMode) {
             liveStack.Mode = newMode;
             liveStackLogger.LogInformation(
-                "Live stacker mode -> {Mode} (wasm-capable clients: {Count})",
-                newMode, count);
+                "Live stacker mode -> {Mode} (trigger={Trigger}, rigOverride={Override}, wasmClients={Count})",
+                newMode, trigger, rigOverride, relay.WasmCapableClientCount);
         }
-    };
+    }
+    relay.WasmCapableCountChanged += _ => EvaluateMode("client-handshake");
+    profiles.EquipmentProfileActivated += _ => EvaluateMode("rig-switch");
 }
 
 app.UseDefaultFiles();

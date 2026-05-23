@@ -536,6 +536,22 @@ public class EquipmentProfile {
     /// guiding precision vary by setup. Default = all triggers disabled.
     /// </summary>
     public LiveStackTriggers LiveStackTriggers { get; set; } = new();
+
+    /// <summary>CLST-7: where live-stacking math runs.
+    /// <list type="bullet">
+    /// <item><b>auto</b> (default) — server flips to MetricsOnly
+    /// when a WASM-capable client connects, back to Full otherwise.</item>
+    /// <item><b>server</b> — force server-side accumulator regardless
+    /// of clients. Use when you want a Pi to be the canonical source
+    /// for multiple browsers, or when WASM is slow on the client.</item>
+    /// <item><b>client</b> — force MetricsOnly. Useful for testing the
+    /// WASM path, or to free Pi CPU even if no client is currently
+    /// hooked up (the next one that connects will pick up the stack
+    /// from frame 1 on its side).</item>
+    /// </list>
+    /// Stored per-rig because the trade-off depends on the host:
+    /// Pi 2/3 → client; Pi 5 / mini-PC → either works.</summary>
+    public string LiveStackComputeMode { get; set; } = "auto";
 }
 
 public class ProfileSummary {

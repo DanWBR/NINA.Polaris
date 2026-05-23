@@ -19,6 +19,11 @@ function ninaApp() {
         // Live stacking
         liveStackEnabled: false,
         liveStackFrames: 0,
+        // CLST-7: per-rig override for where the math runs.
+        // "auto" = let the server pick based on WASM handshake (default).
+        // "server" / "client" = force. Hydrated from active rig +
+        // persisted via PUT /api/equipment/rigs/{id}.
+        liveStackComputeMode: 'auto',
 
         // LSTR-5: live-stack auto-refocus + auto-recenter triggers.
         // Mirror of EquipmentProfile.LiveStackTriggers — hydrated from
@@ -1225,6 +1230,32 @@ function ninaApp() {
         },
 
         // Raw LZ4 mode: parse header, decompress, auto-stretch, render (WebGL when possible)
+        // CLST-7: persist the live-stack compute mode override (auto /
+        // server / client) into the active rig. The server's mode
+        // evaluator re-runs on rig-switch and immediately on the next
+        // WS handshake event, so the new setting takes effect within
+        // ~1 second without an explicit refresh.
+        async saveLiveStackComputeMode() {
+            try {
+                const rig = this.rigs.find(r => r.id === this.activeRigId);
+                if (!rig) return;
+                // Server's PUT merges only the fields present in the
+                // body, so we can patch just this one without round-
+                // tripping the whole rig object. (See EquipmentEndpoints
+                // — the null-check on update.LiveStackComputeMode
+                // keeps other fields untouched.)
+                await this.apiPost('/api/equipment/rigs/' + encodeURIComponent(rig.id), null, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ liveStackComputeMode: this.liveStackComputeMode })
+                });
+                rig.liveStackComputeMode = this.liveStackComputeMode;
+                this.toast(`Live-stack compute: ${this.liveStackComputeMode}`, 'ok');
+            } catch (e) {
+                this.toast('Save failed: ' + (e.message || e), 'error');
+            }
+        },
+
         // CLST-6: upload the WASM-accumulated stack to the server as a
         // FITS. Reads the latest cached raw frame for dimensions +
         // metadata; the actual pixels come from the WASM module's
@@ -4308,6 +4339,9 @@ function ninaApp() {
         },
 
         _applyRigToChoices(rig) {
+            // CLST-7: per-rig compute target override. Defaults to
+            // "auto" for old rigs without the field.
+            this.liveStackComputeMode = rig.liveStackComputeMode || 'auto';
             this.equipCameraChoice = rig.camera || '';
             // Hydrate the camera-driver dropdown from the rig. Old
             // rigs without the field default to "indi" via the
@@ -7065,7 +7099,13 @@ function ninaApp() {
             // Live stacking
             if (this.liveStackEnabled) {
                 out.push({
-                    id: 'ls', icon: '💎', kind: 'info',
+                    id: 'ls',
+                    // CLST-7: show where the stacking math is running.
+                    // 🌐 = browser (WASM), 🖥 = server. The chip
+                    // doubles as an at-a-glance debug aid when
+                    // diagnosing "is my Pi pegged?".
+                    icon: (this.liveStackStatus?.mode === 'metricsonly') ? '🌐' : '🖥',
+                    kind: 'info',
                     label: `Live stack ${this.liveStackFrames || 0}f`
                 });
             }

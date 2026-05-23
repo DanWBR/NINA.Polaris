@@ -130,6 +130,11 @@ public static class EquipmentEndpoints {
                 // keeps old clients from clobbering the field.
                 if (update.LiveStackTriggers != null)
                     r.LiveStackTriggers = update.LiveStackTriggers;
+                // CLST-7: live-stack compute target override. "auto"
+                // (default), "server", or "client". Empty/null from
+                // old clients leaves the existing setting alone.
+                if (!string.IsNullOrWhiteSpace(update.LiveStackComputeMode))
+                    r.LiveStackComputeMode = update.LiveStackComputeMode.Trim().ToLowerInvariant();
             });
             return ok ? Results.Ok(new { message = "Rig updated" })
                       : Results.NotFound(new { error = "Rig not found" });

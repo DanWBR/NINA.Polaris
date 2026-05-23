@@ -363,6 +363,22 @@
                             💾 Save current stack
                         </button>
                         <button class="btn" @click="openImageViewer()" :disabled="!selectedCamera" title="Full-resolution zoom/pan viewer">⛶ View</button>
+                        <!-- CLST-7: per-rig override for the compute
+                             target. Auto follows the WASM handshake;
+                             server forces the Pi to keep stacking;
+                             client forces MetricsOnly even without a
+                             WASM client connected (next browser that
+                             arrives stacks from frame 1 on its side). -->
+                        <label class="livestack-compute-label" title="Where live-stacking math runs. Saved per rig.">
+                            Compute:
+                            <select class="input-sm"
+                                    x-model="liveStackComputeMode"
+                                    @change="saveLiveStackComputeMode()">
+                                <option value="auto">Auto</option>
+                                <option value="server">🖥 Server</option>
+                                <option value="client">🌐 Client (WASM)</option>
+                            </select>
+                        </label>
                     </div>
 
                     <!-- LSTR-5: Auto refocus + recenter triggers. Visible
