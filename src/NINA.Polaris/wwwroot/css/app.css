@@ -73,7 +73,7 @@ html, body {
     /* Tighter left padding so the brand badge sits closer to the
        left edge of the viewport — user asked to "mover um pouco
        à esquerda". Right side keeps the original gutter. */
-    padding: 0 12px 0 6px;
+    padding: 0 12px 0 2px;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border);
     z-index: 100;
@@ -3125,9 +3125,10 @@ label select.input-sm {
        viewport bottom. The global .tab-panel padding-bottom is meant
        to reserve space for it, but the sky tab packs its rows tight
        to the bottom edge (sky-info-panel + control-row) and the last
-       action button row was sliding behind the activity bar. Add an
-       explicit extra cushion specifically here. */
-    padding-bottom: 48px !important;
+       action button row was sliding behind the activity bar. Need
+       enough headroom for: activity bar (36px) + button height (~32px)
+       + a few px of breathing room — bumped from 48 to 72. */
+    padding-bottom: 72px !important;
 }
 
 /* Image History */
