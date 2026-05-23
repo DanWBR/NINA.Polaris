@@ -875,9 +875,35 @@ function ninaApp() {
 
             ws.onopen = () => {
                 this._imageWsAttempt = 0;
-                // Request JPEG mode (universally supported); send {"mode":"raw"} for LZ4+uint16
-                ws.send(JSON.stringify({ mode: 'jpeg' }));
+                // CLST-4: if WASM is ready, ask for raw mode (uint16 +
+                // LZ4) so the client-side stacker can do its work.
+                // Otherwise stick with JPEG (universally supported,
+                // server-side stacked preview already encoded).
+                const mode = this.wasmReady ? 'raw' : 'jpeg';
+                ws.send(JSON.stringify({ mode }));
+                // Tell the server we can stack client-side. CLST-5 will
+                // act on this (flip LiveStackingService → MetricsOnly).
+                // Until CLST-5 ships the server logs + ignores it;
+                // sending now is benign.
+                ws.send(JSON.stringify({
+                    type: 'client-capability',
+                    wasm: !!this.wasmReady,
+                    wasmVersion: this.wasmVersion || null
+                }));
             };
+            // Re-send capability + switch mode when WASM finishes
+            // loading after the WS opens (race common on first page
+            // load because WASM init is async).
+            window.addEventListener('nina-wasm-ready', () => {
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ mode: 'raw' }));
+                    ws.send(JSON.stringify({
+                        type: 'client-capability',
+                        wasm: true,
+                        wasmVersion: this.wasmVersion
+                    }));
+                }
+            }, { once: true });
 
             ws.onmessage = (evt) => {
                 if (typeof evt.data === 'string') {
@@ -1199,6 +1225,46 @@ function ninaApp() {
         },
 
         // Raw LZ4 mode: parse header, decompress, auto-stretch, render (WebGL when possible)
+        // CLST-4: feed a raw uint16 frame to the WASM stacker and
+        // return the running-mean accumulator for display. Side
+        // effect: posts a 'client-stack-progress' message back to the
+        // server so the LSTR trigger orchestrator gets HFR + star
+        // count even though the server itself isn't accumulating
+        // anymore (MetricsOnly mode).
+        _stackViaWasm(pixels, width, height) {
+            const interop = globalThis.NINA.Polaris.Wasm.Interop;
+            // JSExport marshaller doesn't grok Uint16Array directly;
+            // pass through Int32Array (free aliasing, no per-element
+            // copy — JS just reinterprets the buffer view).
+            const asInt32 = new Int32Array(pixels.length);
+            for (let i = 0; i < pixels.length; i++) asInt32[i] = pixels[i];
+
+            const metrics = interop.AddFrame(asInt32, width, height);
+            const [frameCount, hfrX100, starCount, alignmentOk, _reserved] = metrics;
+
+            // Send the metrics back to the server so the trigger
+            // orchestrator (LiveStackTriggersService) sees the same
+            // numbers it'd get from server-side StarDetector.
+            if (this.imageWs && this.imageWs.readyState === WebSocket.OPEN) {
+                this.imageWs.send(JSON.stringify({
+                    type: 'client-stack-progress',
+                    frameCount,
+                    hfr: hfrX100 / 100,
+                    starCount,
+                    alignmentOk: !!alignmentOk
+                }));
+            }
+
+            // Pull the accumulated stack out for display. The
+            // GetStackedResult export returns int[] (JSExport doesn't
+            // marshal ushort[]); widen back to Uint16Array via the
+            // low 16 bits.
+            const stackedInt32 = interop.GetStackedResult();
+            const out = new Uint16Array(stackedInt32.length);
+            for (let i = 0; i < stackedInt32.length; i++) out[i] = stackedInt32[i] & 0xFFFF;
+            return out;
+        },
+
         _renderRawFrame(arrayBuffer) {
             const dv = new DataView(arrayBuffer);
             if (arrayBuffer.byteLength < 24) return; // too small
@@ -1229,11 +1295,30 @@ function ninaApp() {
             }
 
             // Convert to uint16 array
-            const pixels = new Uint16Array(decompressed.buffer);
+            let pixels = new Uint16Array(decompressed.buffer);
             const maxVal = (1 << bitDepth) - 1;
 
-            // Cache the raw frame so manual-stretch slider changes can re-render
-            // without waiting for the next capture
+            // CLST-4: when the server tells us it's in MetricsOnly
+            // mode and our WASM module is loaded, route this frame
+            // through the WASM stacker instead of treating it as the
+            // displayable result. WASM accumulates → we display its
+            // running mean. While the server stays in Full mode the
+            // raw frames it relays are ALREADY the accumulated stack,
+            // so feeding them to WASM again would compound — only run
+            // the WASM path when the server is opted into metrics-only.
+            const serverMode = this.liveStackStatus?.mode || 'full';
+            if (this.wasmReady && serverMode === 'metricsonly'
+                && globalThis.NINA?.Polaris?.Wasm?.Interop) {
+                try {
+                    pixels = this._stackViaWasm(pixels, width, height);
+                } catch (e) {
+                    console.warn('[Polaris] WASM stack failed, rendering raw frame as-is:', e);
+                }
+            }
+
+            // Cache the (possibly WASM-accumulated) frame so manual-
+            // stretch slider changes re-render against the latest
+            // accumulator without waiting for the next capture.
             this._lastRawFrame = { pixels, width, height, bitDepth, bayerPattern, maxVal };
 
             const { shadow, scaleFactor } = this._computeStretchParams(pixels, maxVal);

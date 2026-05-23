@@ -199,6 +199,13 @@ public static class StatusStreamHandler {
                             referenceStarCount = liveStack.GetStatus().ReferenceStarCount,
                             lastFrameHfr = liveStack.LastFrameMedianHfr,
                             lastFrameStarCount = liveStack.LastFrameStarCount,
+                            // CLST-1/CLST-4: "full" (server-side accumulator) or
+                            // "metricsonly" (client owns the accumulator via WASM).
+                            // The client only routes raw frames through its WASM
+                            // stacker when this is "metricsonly" — otherwise the
+                            // raw frames the server relays ARE the accumulated
+                            // stack and re-stacking would compound.
+                            mode = liveStack.GetStatus().Mode,
                             triggers = liveStackTriggers.CurrentStatus
                         },
                         guider = guiderPayload,
