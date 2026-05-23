@@ -1641,12 +1641,27 @@
 
                             <div class="equip-select-row">
                                 <!-- INDI path: the device dropdown comes from
-                                     the active indiserver's device list. -->
-                                <select class="equip-select" x-model="equipCameraChoice"
-                                        x-show="cameraDriver === 'indi'">
+                                     the active indiserver's device list.
+                                     Bound via @change + :selected (not x-model)
+                                     because x-model fights with dynamic
+                                     <template x-for> options — if the JS sets
+                                     equipCameraChoice to a name before the
+                                     matching option exists, x-model writes
+                                     the empty string back. :selected on the
+                                     option itself self-declares the picked
+                                     row regardless of render order. When no
+                                     pending pick exists, fall back to the
+                                     connected device name (selectedCamera)
+                                     so a fresh page-refresh-while-connected
+                                     auto-shows the live equipment. -->
+                                <select class="equip-select"
+                                        x-show="cameraDriver === 'indi'"
+                                        @change="equipCameraChoice = $event.target.value">
                                     <option value="">Select device</option>
                                     <template x-for="dev in devices" :key="'cam-'+dev.name">
-                                        <option :value="dev.name" x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
+                                        <option :value="dev.name"
+                                                :selected="(equipCameraChoice ? equipCameraChoice : selectedCamera) === dev.name"
+                                                x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
                                     </template>
                                 </select>
 
@@ -1769,12 +1784,17 @@
 
                             <div class="equip-select-row">
                                 <!-- INDI path: device dropdown is populated
-                                     from the active indiserver. -->
-                                <select class="equip-select" x-model="equipMountChoice"
-                                        x-show="mountDriver === 'indi'">
+                                     from the active indiserver. See the
+                                     Camera card comment for why we avoid
+                                     x-model here. -->
+                                <select class="equip-select"
+                                        x-show="mountDriver === 'indi'"
+                                        @change="equipMountChoice = $event.target.value">
                                     <option value="">Select device</option>
                                     <template x-for="dev in devices" :key="'mnt-'+dev.name">
-                                        <option :value="dev.name" x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
+                                        <option :value="dev.name"
+                                                :selected="(equipMountChoice ? equipMountChoice : selectedTelescope) === dev.name"
+                                                x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
                                     </template>
                                 </select>
 
@@ -1824,10 +1844,13 @@
                         </div>
                         <div class="equip-card-body">
                             <div class="equip-select-row">
-                                <select class="equip-select" x-model="equipFocuserChoice">
+                                <select class="equip-select"
+                                        @change="equipFocuserChoice = $event.target.value">
                                     <option value="">Select device</option>
                                     <template x-for="dev in devices" :key="'foc-'+dev.name">
-                                        <option :value="dev.name" x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
+                                        <option :value="dev.name"
+                                                :selected="(equipFocuserChoice ? equipFocuserChoice : selectedFocuser) === dev.name"
+                                                x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
                                     </template>
                                 </select>
                                 <button class="btn btn-sm btn-primary" @click="equipConnectFocuser()"
@@ -1855,10 +1878,13 @@
                         </div>
                         <div class="equip-card-body">
                             <div class="equip-select-row">
-                                <select class="equip-select" x-model="equipFilterChoice">
+                                <select class="equip-select"
+                                        @change="equipFilterChoice = $event.target.value">
                                     <option value="">Select device</option>
                                     <template x-for="dev in devices" :key="'fw-'+dev.name">
-                                        <option :value="dev.name" x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
+                                        <option :value="dev.name"
+                                                :selected="(equipFilterChoice ? equipFilterChoice : selectedFilterWheel) === dev.name"
+                                                x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
                                     </template>
                                 </select>
                                 <button class="btn btn-sm btn-primary" @click="equipConnectFilter()"
