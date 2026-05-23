@@ -5374,22 +5374,33 @@ function ninaApp() {
             }
             this.preview.busy = true;
             try {
-                const r = await this.apiPost('/api/camera/capture', null, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        exposure: this.preview.exposure,
-                        gain: this.preview.gain,
-                        binning: parseInt(this.preview.binning) || 1,
-                        filter: this.preview.filter || null,
-                        saveToDisk: !!this.preview.saveToDisk,
-                        targetName: this.preview.targetName || 'snap'
-                    })
+                // apiPost returns a Response object — we need .json()
+                // to get the actual { stats, saved, ... } payload.
+                // Use a per-request timeout proportional to exposure
+                // (default apiFetch timeout is 15s, which is too short
+                // for a 30s sub).
+                const resp = await this.apiPost('/api/camera/capture', {
+                    exposure: this.preview.exposure,
+                    gain: this.preview.gain,
+                    binning: parseInt(this.preview.binning) || 1,
+                    filter: this.preview.filter || null,
+                    saveToDisk: !!this.preview.saveToDisk,
+                    targetName: this.preview.targetName || 'snap'
+                }, {
+                    timeout: Math.max(15000, (this.preview.exposure + 30) * 1000)
                 });
+                const r = await resp.json();
                 this.preview.lastStats = r?.stats || null;
                 this.preview.lastSnapAt = Date.now();
+                // Snap fired successfully — surface a quick confirmation
+                // (the actual image lands on previewCanvas via the WS
+                // image-stream broadcast that the backend kicked off).
                 if (r?.saved) {
-                    this.toast('Snap saved to {rig}/snaps/', 'ok', 2500);
+                    this.toast('Snap saved · HFR ' + (r.stats?.hfr?.toFixed?.(2) || '--')
+                        + ' · ' + (r.stats?.starCount ?? '--') + ' stars', 'ok', 2500);
+                } else {
+                    this.toast('Snap done · HFR ' + (r.stats?.hfr?.toFixed?.(2) || '--')
+                        + ' · ' + (r.stats?.starCount ?? '--') + ' stars', 'ok', 2000);
                 }
             } catch (e) {
                 this.toast('Snap failed: ' + (e.message || ''), 'error');
