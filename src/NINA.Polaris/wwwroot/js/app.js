@@ -688,6 +688,17 @@ function ninaApp() {
             setInterval(() => this.updateClock(), 1000);
             this.updateFov();
 
+            // CLST-2: listen for the WASM module's "ready" signal so
+            // we can flip the offload-capable flag + log it. CLST-4
+            // turns this into the actual frame-pipeline dispatch.
+            this.wasmReady = false;
+            this.wasmVersion = null;
+            window.addEventListener('nina-wasm-ready', (e) => {
+                this.wasmReady = true;
+                this.wasmVersion = (e.detail && e.detail.version) || 'unknown';
+                console.log('[Polaris] WASM live-stack ready, ' + this.wasmVersion);
+            });
+
             const saved = localStorage.getItem('nina-settings');
             if (saved) {
                 try { Object.assign(this.settings, JSON.parse(saved)); } catch (e) { }

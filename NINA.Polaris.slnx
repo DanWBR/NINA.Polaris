@@ -5,6 +5,7 @@
   <Folder Name="/src/">
     <Project Path="src/NINA.Core.Portable/NINA.Core.Portable.csproj" />
     <Project Path="src/NINA.Polaris/NINA.Polaris.csproj" />
+    <Project Path="src/NINA.Polaris.Wasm/NINA.Polaris.Wasm.csproj" />
     <Project Path="src/NINA.Image.Portable/NINA.Image.Portable.csproj" />
     <Project Path="src/NINA.INDI/NINA.INDI.csproj" />
     <Project Path="src/NINA.Relay.Protocol/NINA.Relay.Protocol.csproj" />

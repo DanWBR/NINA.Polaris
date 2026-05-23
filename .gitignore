@@ -369,3 +369,7 @@ docs/*.pdf
 docs/*.zip
 docs/*.tar.gz
 publish/
+# CLST-2: WASM build output mirrored from src/NINA.Polaris.Wasm/bin/.../AppBundle/
+# Rebuild with deploy/build-wasm.ps1.
+src/NINA.Polaris/wwwroot/js/wasm/
+build-output/

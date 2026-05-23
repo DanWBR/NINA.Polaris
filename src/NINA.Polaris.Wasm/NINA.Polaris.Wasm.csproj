@@ -1,0 +1,67 @@
+<!--
+  NINA.Polaris.Wasm — browser-side image processing module.
+
+  Compiled AOT to WebAssembly via .NET 10 wasm-tools workload. The
+  browser loads the resulting bundle, the page JS calls into the
+  [JSExport] surface defined in Interop.cs, and the heavy live-stack
+  math (StarDetector / StarMatcher / AffineTransform / ImageResampler
+  from NINA.Image.Portable) runs client-side instead of pegging the
+  Pi's CPUs.
+
+  See the CLST-* phases in the project root plan file.
+
+  Build:
+    dotnet publish src\NINA.Polaris.Wasm -p:PublishAot=true ^
+        -r browser-wasm -c Release ^
+        -o src\NINA.Polaris\wwwroot\js\wasm
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <!-- browser-wasm needs an entry point even if Main is empty;
+         WasmMainJSPath wires the bundled JS bootstrap. -->
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>NINA.Polaris.Wasm</RootNamespace>
+    <AssemblyName>NINA.Polaris.Wasm</AssemblyName>
+    <!-- Required by the [JSExport] source generator (SYSLIB1075). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!-- Browser-wasm runtime identifier; activates the
+         wasm-tools workload's AOT + JS interop machinery. -->
+    <RuntimeIdentifier>browser-wasm</RuntimeIdentifier>
+    <UseMonoRuntime>true</UseMonoRuntime>
+
+    <!-- AOT compile to native WASM via Mono AOT (the only AOT path
+         supported for browser-wasm; NativeAOT / PublishAot=true gives
+         NETSDK1203 here). ~2-3x faster than the IL interpreter for
+         pixel math; bundle ~5-8MB gzipped after trimming. -->
+    <RunAOTCompilation>true</RunAOTCompilation>
+
+    <!-- WASM SIMD intrinsics (Chromium 91+, Firefox 90+, Safari
+         16.4+). 2-3x speedup on inner loops over scalar fallback. -->
+    <WasmEnableSIMD>true</WasmEnableSIMD>
+
+    <!-- Generate the JS bootstrap file that the page loads. The
+         loader takes care of streaming the .wasm, instantiating the
+         runtime, and exposing [JSExport] methods on `globalThis.NINA`. -->
+    <WasmMainJSPath>main.js</WasmMainJSPath>
+
+    <!-- Trimming aggressive — keeps only the IL the JSExport surface
+         actually reaches. Critical for shaving the bundle from
+         ~25MB to ~5-8MB. The browser cached after first load. -->
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>full</TrimMode>
+  </PropertyGroup>
+
+  <!-- ProjectReference to NINA.Image.Portable is intentionally
+       deferred to CLST-3. NINA.Image.Portable depends on SkiaSharp
+       (for JPEG encoding + display preview) which doesn't AOT-compile
+       to browser-wasm out of the box; CLST-3 will deal with carving
+       out a SkiaSharp-free subset or pulling in SkiaSharp.WASM. For
+       CLST-2 we just want the toolchain proven with the Ping smoke
+       test below — keep the dependency surface minimal until then. -->
+
+</Project>
