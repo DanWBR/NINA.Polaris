@@ -56,12 +56,15 @@
     <TrimMode>full</TrimMode>
   </PropertyGroup>
 
-  <!-- ProjectReference to NINA.Image.Portable is intentionally
-       deferred to CLST-3. NINA.Image.Portable depends on SkiaSharp
-       (for JPEG encoding + display preview) which doesn't AOT-compile
-       to browser-wasm out of the box; CLST-3 will deal with carving
-       out a SkiaSharp-free subset or pulling in SkiaSharp.WASM. For
-       CLST-2 we just want the toolchain proven with the Ping smoke
-       test below — keep the dependency surface minimal until then. -->
+  <ItemGroup>
+    <!-- Reuse the SAME algorithms the server runs (StarDetector,
+         StarMatcher, AffineTransform, ImageResampler). Zero divergence
+         between server-side (StackMode.Full) and client-side stacking.
+         SkiaSharp ships native browser-wasm builds since 3.x; the
+         TIFF/JPEG encoders in NINA.Image.Portable that depend on it
+         aren't reached by the [JSExport] surface so the trimmer will
+         strip them. -->
+    <ProjectReference Include="..\NINA.Image.Portable\NINA.Image.Portable.csproj" />
+  </ItemGroup>
 
 </Project>

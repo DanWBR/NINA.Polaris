@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "NINA.Polaris.Wasm": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:54144;http://localhost:54145"
+    }
+  }
+}
