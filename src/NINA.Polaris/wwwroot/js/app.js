@@ -1526,7 +1526,42 @@ function ninaApp() {
 
             // Convert to uint16 array
             let pixels = new Uint16Array(decompressed.buffer);
-            const maxVal = (1 << bitDepth) - 1;
+
+            // Some native video streams (ZWO ASI under indi_asi_ccd at
+            // 8-bit FITS, for example) advertise BITPIX=16 in the
+            // stream header but only ever fill the low byte — every
+            // pixel reads <= 255 against a maxVal of 65535, the MTF
+            // stretch collapses everything to ~0, and the canvas is
+            // black. Probe a stride sample on the first few frames
+            // after a mismatched-bitdepth handoff and clamp maxVal
+            // down to the actual dynamic range when it's wildly off.
+            // Costs ~5µs per frame.
+            let maxVal = (1 << bitDepth) - 1;
+            const probeStride = Math.max(1, (pixels.length / 4096) | 0);
+            let observedMax = 0;
+            for (let i = 0; i < pixels.length; i += probeStride) {
+                if (pixels[i] > observedMax) observedMax = pixels[i];
+            }
+            if (observedMax > 0 && observedMax < (maxVal >>> 1)) {
+                // Round up to the nearest power-of-two boundary so the
+                // stretch math has a sensible normaliser. Stops at 16
+                // because anything dimmer than that is probably a true
+                // black frame, not a bit-depth mismatch.
+                let fitted = 255;
+                while (fitted < observedMax * 2 && fitted < 65535) fitted = (fitted << 1) | 1;
+                maxVal = fitted;
+            }
+
+            // Periodic diagnostic — one line per ~30 frames so we can
+            // confirm in DevTools what the WS pipeline is actually
+            // delivering when something looks off. Cheap.
+            this._rawFrameCounter = (this._rawFrameCounter || 0) + 1;
+            if ((this._rawFrameCounter % 30) === 1) {
+                console.log('[Polaris] raw frame #' + this._rawFrameCounter
+                    + ' · ' + width + 'x' + height + ' · bitDepth=' + bitDepth
+                    + ' · observedMax=' + observedMax + ' · effectiveMaxVal=' + maxVal
+                    + ' · bayer=' + bayerPattern);
+            }
 
             // CLST-4: when the server tells us it's in MetricsOnly
             // mode and our WASM module is loaded, route this frame
