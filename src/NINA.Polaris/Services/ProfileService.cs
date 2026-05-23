@@ -442,6 +442,15 @@ public class EquipmentProfile {
     public int FocuserStepSize { get; set; } = 50;
     public int FocuserBacklashSteps { get; set; }
 
+    // Polar alignment (TPPA) tunables. Per-rig because exposure /
+    // gain that work for a fast OSC don't necessarily work for a
+    // long-FL mono guide cam. Defaults match the N.I.N.A. desktop
+    // TPPA out-of-the-box values.
+    public int PolarAlignSlewDegrees { get; set; } = 30;
+    public double PolarAlignExposureSec { get; set; } = 3.0;
+    public int PolarAlignSettleSeconds { get; set; } = 2;
+    public int PolarAlignGain { get; set; } = 100;
+
     // Optics specific to this rig. FocalLengthMm is the *effective*
     // focal length used everywhere downstream (FOV calc, FITS
     // FOCALLEN header, mosaic planner, etc.) — for OTAs with a

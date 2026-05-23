@@ -78,6 +78,9 @@ builder.Services.AddHttpForwarder();
 builder.Services.AddSingleton<AutoFocusService>();
 builder.Services.AddSingleton<MeridianFlipService>();
 builder.Services.AddSingleton<FlatWizardService>();
+// PA-1: TPPA orchestrator. Singleton because it holds CurrentJob
+// (consumed by StatusStreamHandler) + the in-flight CancellationTokenSource.
+builder.Services.AddSingleton<PolarAlignmentService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Alpaca.AlpacaDiscovery>();
 builder.Services.AddSingleton<StellariumClient>();
 builder.Services.AddSingleton<AltitudeService>();
@@ -252,6 +255,7 @@ app.MapGuiderEndpoints();
 app.MapSimulatorEndpoints();
 app.MapAutoFocusEndpoints();
 app.MapMeridianFlipEndpoints();
+app.MapPolarAlignmentEndpoints();
 app.MapFlatWizardEndpoints();
 app.MapAlpacaEndpoints();
 app.MapStellariumEndpoints();

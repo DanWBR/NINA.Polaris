@@ -93,6 +93,16 @@ public static class EquipmentEndpoints {
                 r.DefaultBinning = update.DefaultBinning;
                 r.FocuserStepSize = update.FocuserStepSize;
                 r.FocuserBacklashSteps = update.FocuserBacklashSteps;
+                // Polar alignment (TPPA) tunables. Defensive: zero from
+                // an old client should not nuke the defaults — clamp.
+                if (update.PolarAlignSlewDegrees > 0)
+                    r.PolarAlignSlewDegrees = update.PolarAlignSlewDegrees;
+                if (update.PolarAlignExposureSec > 0)
+                    r.PolarAlignExposureSec = update.PolarAlignExposureSec;
+                if (update.PolarAlignSettleSeconds >= 0)
+                    r.PolarAlignSettleSeconds = update.PolarAlignSettleSeconds;
+                if (update.PolarAlignGain > 0)
+                    r.PolarAlignGain = update.PolarAlignGain;
                 r.FocalLengthMm = update.FocalLengthMm;
                 // Telescope picker fields. Strings safe to set as-is
                 // (empty string is the "no picker selection" sentinel).
