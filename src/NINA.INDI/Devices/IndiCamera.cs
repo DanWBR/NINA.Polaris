@@ -89,6 +89,26 @@ public class IndiCamera : ICamera {
         }
     }
 
+    /// <summary>Write gain into CCD_CONTROLS only if the driver actually
+    /// advertises that property + a matching element. Some drivers
+    /// (notably indi_simulator_ccd) never publish CCD_CONTROLS at all,
+    /// and sending it triggers a "Property CCD_CONTROLS is not defined"
+    /// dispatch error in indiserver's log. Also handles driver-specific
+    /// casing — Gain (most), gain (a few), GAIN (rare).</summary>
+    private async Task TrySetGainAsync(int gain, CancellationToken ct) {
+        var ctrl = _client.GetProperty(DeviceName, "CCD_CONTROLS") as IndiNumberProperty;
+        if (ctrl == null) return;   // driver doesn't expose CCD_CONTROLS (e.g. CCD Simulator)
+        string? key = null;
+        foreach (var candidate in new[] { "Gain", "gain", "GAIN" }) {
+            if (ctrl.Values.ContainsKey(candidate)) { key = candidate; break; }
+        }
+        if (key == null) return;   // CCD_CONTROLS exists but no gain element
+        try {
+            await _client.SetNumberAsync(DeviceName, "CCD_CONTROLS",
+                new Dictionary<string, double> { [key] = gain }, ct);
+        } catch { /* driver rejected the value (out of range?) — non-fatal */ }
+    }
+
     /// <summary>Writes WB_R and WB_B into CCD_CONTROLS. Silent skip if
     /// the driver doesn't have one of the keys.</summary>
     public async Task SetWhiteBalanceAsync(double red, double blue, CancellationToken ct = default) {
@@ -134,10 +154,7 @@ public class IndiCamera : ICamera {
             } catch { /* property may not exist on this driver */ }
         }
         if (opts?.Gain is int g) {
-            try {
-                await _client.SetNumberAsync(DeviceName, "CCD_CONTROLS",
-                    new Dictionary<string, double> { ["Gain"] = g }, ct);
-            } catch { }
+            await TrySetGainAsync(g, ct);
         }
 
         _isStreaming = true;
@@ -202,8 +219,7 @@ public class IndiCamera : ICamera {
             await SetBinningAsync(bx, by, ct);
         }
         if (opts?.Gain is int g) {
-            await _client.SetNumberAsync(DeviceName, "CCD_CONTROLS",
-                new Dictionary<string, double> { ["Gain"] = g }, ct);
+            await TrySetGainAsync(g, ct);
         }
 
         await _client.SetNumberAsync(DeviceName, "CCD_EXPOSURE",
