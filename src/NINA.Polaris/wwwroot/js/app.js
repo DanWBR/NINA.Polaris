@@ -4998,26 +4998,52 @@ function ninaApp() {
         },
 
         // Mirror connected device names into the RIGS-tab dropdowns.
-        // Only fills empty choices — never clobbers a user mid-pick.
-        // Called from refreshDevices() AND from the WS handler when a
-        // new equipment payload arrives.
+        // Two-step per device:
+        //   1. If the choice points at a name not present in the current
+        //      devices list, clear it. This catches the very common case
+        //      where the saved rig profile carries a stale device name
+        //      ("ZWO ASI120MM" but tonight's indiserver only exposes
+        //      "CCD Simulator") — without clearing, the truthy stale
+        //      value silently blocks step 2 from running.
+        //   2. If the choice is now empty AND the live equipment payload
+        //      reports a connected device whose name DOES match a current
+        //      dropdown option, set the choice to that name. The
+        //      dropdown then shows the connected device pre-selected.
+        // Called from refreshDevices() (after the list arrives) and from
+        // the WS handler each tick (cheap; only mutates when needed).
         _syncEquipChoicesFromConnected() {
-            const has = n => Array.isArray(this.devices)
-                && this.devices.some(d => d && d.name === n);
+            if (!Array.isArray(this.devices) || this.devices.length === 0) return;
+            const names = new Set(this.devices.filter(d => d && d.name).map(d => d.name));
+            // Camera
+            if (this.equipCameraChoice && !names.has(this.equipCameraChoice)) {
+                this.equipCameraChoice = '';
+            }
             if (!this.equipCameraChoice && this.selectedCamera
-                && has(this.selectedCamera)) {
+                && names.has(this.selectedCamera)) {
                 this.equipCameraChoice = this.selectedCamera;
             }
+            // Mount
+            if (this.equipMountChoice && !names.has(this.equipMountChoice)) {
+                this.equipMountChoice = '';
+            }
             if (!this.equipMountChoice && this.selectedTelescope
-                && has(this.selectedTelescope)) {
+                && names.has(this.selectedTelescope)) {
                 this.equipMountChoice = this.selectedTelescope;
             }
+            // Focuser
+            if (this.equipFocuserChoice && !names.has(this.equipFocuserChoice)) {
+                this.equipFocuserChoice = '';
+            }
             if (!this.equipFocuserChoice && this.selectedFocuser
-                && has(this.selectedFocuser)) {
+                && names.has(this.selectedFocuser)) {
                 this.equipFocuserChoice = this.selectedFocuser;
             }
+            // Filter wheel
+            if (this.equipFilterChoice && !names.has(this.equipFilterChoice)) {
+                this.equipFilterChoice = '';
+            }
             if (!this.equipFilterChoice && this.selectedFilterWheel
-                && has(this.selectedFilterWheel)) {
+                && names.has(this.selectedFilterWheel)) {
                 this.equipFilterChoice = this.selectedFilterWheel;
             }
         },
