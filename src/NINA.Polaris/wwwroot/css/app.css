@@ -2162,15 +2162,25 @@ label select.input-sm {
 }
 .home-hero-text { max-width: 720px; }
 .home-eyebrow {
-    display: inline-block;
-    font-size: 12px; font-weight: 600;
-    letter-spacing: 2px; text-transform: uppercase;
-    color: var(--accent, #38bdf8);
-    padding: 5px 12px;
-    border: 1px solid rgba(56, 189, 248, 0.35);
-    border-radius: 999px;
-    background: rgba(56, 189, 248, 0.07);
+    /* Same brand wordmark as the header — no pill chrome. Children
+       (.brand-name, .brand-tag, .brand-version) inherit their look
+       from the header rules. The hero version is sized up a touch
+       relative to the header. */
+    display: inline-flex;
+    align-items: baseline;
+    gap: 10px;
     margin-bottom: 16px;
+}
+.home-eyebrow .brand-name {
+    font-size: 22px;
+    letter-spacing: 3px;
+}
+.home-eyebrow .brand-tag {
+    font-size: 16px;
+    letter-spacing: 2.5px;
+}
+.home-eyebrow .brand-version {
+    font-size: 11px;
 }
 .home-title {
     font-size: clamp(32px, 5vw, 56px);
