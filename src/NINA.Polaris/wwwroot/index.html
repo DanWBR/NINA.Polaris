@@ -1739,8 +1739,8 @@
                                          report it; DSLRs and Alpaca sims often
                                          leave these zero. -->
                                     <span x-show="equipCameraInfo.maxX > 0">Resolution: <strong x-text="equipCameraInfo.maxX + ' × ' + equipCameraInfo.maxY + ' px'"></strong></span>
-                                    <span x-show="equipCameraInfo.sensorWidthMm > 0">Sensor: <strong x-text="equipCameraInfo.sensorWidthMm.toFixed(1) + ' × ' + equipCameraInfo.sensorHeightMm.toFixed(1) + ' mm'"></strong></span>
-                                    <span x-show="equipCameraInfo.pixelSizeUm > 0">Pixel: <strong x-text="equipCameraInfo.pixelSizeUm.toFixed(2) + ' µm'"></strong></span>
+                                    <span x-show="equipCameraInfo.sensorWidthMm > 0">Sensor: <strong x-text="(equipCameraInfo.sensorWidthMm || 0).toFixed(1) + ' × ' + (equipCameraInfo.sensorHeightMm || 0).toFixed(1) + ' mm'"></strong></span>
+                                    <span x-show="equipCameraInfo.pixelSizeUm > 0">Pixel: <strong x-text="(equipCameraInfo.pixelSizeUm || 0).toFixed(2) + ' µm'"></strong></span>
                                 </div>
 
                                 <!-- Cooler controls — astronomy cameras only.
@@ -2460,7 +2460,14 @@
                         <span x-show="skyTarget?.magnitude">Mag: <strong x-text="skyTarget?.magnitude"></strong></span>
                         <span>FOV: <strong x-text="fov.width.toFixed(2) + '&deg; x ' + fov.height.toFixed(2) + '&deg;'"></strong></span>
                     </div>
-                    <div class="control-row actions">
+                    <!-- margin-bottom forces ~50px clear above the
+                         fixed activity bar at viewport bottom — the
+                         tab-panel padding wasn't winning against the
+                         sky panel's height:100% + overflow:hidden
+                         flex layout. Applied directly to the action
+                         row so the cushion can't be overridden by
+                         flex sizing on ancestors. -->
+                    <div class="control-row actions" style="margin-bottom: 50px">
                         <!-- Slew & Center / Slew Only act on whatever's
                              framed in the red target FOV — i.e. the live
                              map centre. The user pans the sky map to
