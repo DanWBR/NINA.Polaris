@@ -373,3 +373,13 @@ publish/
 # Rebuild with deploy/build-wasm.ps1.
 src/NINA.Polaris/wwwroot/js/wasm/
 build-output/
+
+# Runtime capture output — recorded by the user's local session,
+# never belongs in the repo.
+src/NINA.Polaris/planetary/
+src/NINA.Polaris/snaps/
+src/NINA.Polaris/lights/
+src/NINA.Polaris/calibration/
+src/NINA.Polaris/calibrated/
+src/NINA.Polaris/integrated/
+src/NINA.Polaris/processed/
