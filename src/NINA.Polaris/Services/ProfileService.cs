@@ -364,6 +364,17 @@ public class UserProfile {
     // as soon as the Headless app starts.
     public bool PHD2AutoStart { get; set; } = false;
 
+    // SIM-2: built-in equipment simulator (indi_simulator_* on Linux,
+    // Alpaca Omni Simulator on Windows). When SimulatorAutoStart is
+    // true, SimulatorAutoStartService launches the configured stack
+    // ~3s after Polaris boots so the user doesn't need to babysit a
+    // separate terminal. Toggleable from the Settings tab. Defaults
+    // are conservative: off, sensible 4-device list, INDI default port.
+    public bool SimulatorAutoStart { get; set; } = false;
+    public List<string> SimulatorDevices { get; set; }
+        = new() { "ccd", "telescope", "focus", "wheel" };
+    public int SimulatorPort { get; set; } = 7624;
+
     /// <summary>
     /// Which sequencer to surface as the default in the UI. The Simple
     /// Sequencer (legacy, A4-era) is a flat list of items; the Advanced

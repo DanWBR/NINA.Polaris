@@ -45,6 +45,16 @@ builder.Services.AddSingleton<ImageWriterService>();
 builder.Services.AddSingleton<PHD2Client>();
 builder.Services.AddSingleton<PHD2ProcessManager>();
 builder.Services.AddHostedService<PHD2AutoStartService>();
+
+// SIM-2: built-in equipment simulator (indi_simulator_* on Linux/Mac,
+// Alpaca Omni Simulator on Windows). Both backends register; the
+// orchestrator picks the supported one at startup via IsSupported.
+// AutoStart service handles the launch-on-boot toggle + periodic
+// health probe.
+builder.Services.AddSingleton<NINA.Polaris.Services.Simulator.ISimulatorBackend,
+    NINA.Polaris.Services.Simulator.IndiSimulatorBackend>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Simulator.SimulatorService>();
+builder.Services.AddHostedService<NINA.Polaris.Services.Simulator.SimulatorAutoStartService>();
 // Listens to ProfileService.EquipmentProfileActivated; keep singleton so
 // the event subscription survives request scopes.
 builder.Services.AddSingleton<PHD2ProfileSyncService>();
@@ -226,6 +236,7 @@ app.MapFlatDeviceEndpoints();
 app.MapDomeEndpoints();
 app.MapWeatherEndpoints();
 app.MapGuiderEndpoints();
+app.MapSimulatorEndpoints();
 app.MapAutoFocusEndpoints();
 app.MapMeridianFlipEndpoints();
 app.MapFlatWizardEndpoints();

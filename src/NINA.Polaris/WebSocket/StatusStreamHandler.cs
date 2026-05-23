@@ -39,6 +39,8 @@ public static class StatusStreamHandler {
             .GetRequiredService<NINA.Polaris.Services.External.SirilService>();
         var graxpert = context.RequestServices
             .GetRequiredService<NINA.Polaris.Services.External.GraXpertService>();
+        var simulator = context.RequestServices
+            .GetRequiredService<NINA.Polaris.Services.Simulator.SimulatorService>();
         var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
 
         using var ws = await context.WebSockets.AcceptWebSocketAsync(new WebSocketAcceptContext {
@@ -275,7 +277,13 @@ public static class StatusStreamHandler {
                         // New blocks powering the bottom activity bar.
                         host = hostMetrics.Latest,
                         sirilJobs = sirilJobsPayload,
-                        graXpertJobs = graXpertJobsPayload
+                        graXpertJobs = graXpertJobsPayload,
+                        // SIM-4: built-in equipment simulator status
+                        // (which backend is active, is it installed,
+                        // is the stack running, which devices). UI
+                        // shows a green/amber chip + the Settings
+                        // panel binds to these fields.
+                        simulator = simulator.GetStatus()
                     };
 
                     await SendJsonAsync(ws, status, cts.Token);
