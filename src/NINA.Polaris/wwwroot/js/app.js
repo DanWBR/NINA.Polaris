@@ -1005,36 +1005,54 @@ function ninaApp() {
             }
         },
 
-        // JPEG mode: create blob URL, draw to canvas via Image element
+        // JPEG mode: create blob URL, draw to every receiving canvas.
+        // Used to draw only to #liveCanvas + then mirror, but when the
+        // user is on a tab where LIVE is display:none, liveCanvas's
+        // parent has 0 width and the canvas ended up sized 0x0 — the
+        // mirror bailed because src.width === 0 and the visible
+        // previewCanvas / videoCaptureCanvas got nothing. Render
+        // straight into each known canvas instead, sizing from its
+        // OWN visible parent.
         _renderJpegFrame(arrayBuffer) {
             const blob = new Blob([arrayBuffer], { type: 'image/jpeg' });
             const url = URL.createObjectURL(blob);
 
             const img = new Image();
             img.onload = () => {
-                const canvas = document.getElementById('liveCanvas');
-                if (!canvas) { URL.revokeObjectURL(url); return; }
-
-                // Resize canvas to match image aspect ratio within container
-                const container = canvas.parentElement;
-                const containerW = container.clientWidth;
-                const containerH = container.clientHeight;
-                const scale = Math.min(containerW / img.width, containerH / img.height, 1);
-                canvas.width = Math.round(img.width * scale);
-                canvas.height = Math.round(img.height * scale);
-
-                const ctx = canvas.getContext('2d');
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = 'high';
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
+                const targets = ['liveCanvas', 'previewCanvas',
+                                 'focusCanvas', 'videoCaptureCanvas',
+                                 'slewPreviewCanvas'];
+                let drewAny = false;
+                for (const id of targets) {
+                    const canvas = document.getElementById(id);
+                    if (!canvas) continue;
+                    const container = canvas.parentElement;
+                    if (!container) continue;
+                    const cw = container.clientWidth;
+                    const ch = container.clientHeight;
+                    // Skip canvases whose container is collapsed (parent
+                    // tab not visible). They'll get a fresh paint when
+                    // the user switches to that tab via the existing
+                    // mirror call.
+                    if (cw <= 0 || ch <= 0) continue;
+                    const scale = Math.min(cw / img.width, ch / img.height, 1);
+                    canvas.width  = Math.round(img.width  * scale);
+                    canvas.height = Math.round(img.height * scale);
+                    const ctx = canvas.getContext('2d');
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = 'high';
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    drewAny = true;
+                }
                 URL.revokeObjectURL(url);
 
-                // Repaint overlays after each render
-                this.redrawOverlay();
-                // Mirror to PREVIEW canvas so switching tabs shows the
-                // latest frame without a re-fetch.
-                this._mirrorLiveToPreviewCanvas();
+                if (drewAny) {
+                    this.redrawOverlay();
+                    // Also fan out to any still-hidden canvases via the
+                    // mirror path so the latest frame is ready when the
+                    // user switches tabs.
+                    this._mirrorLiveToPreviewCanvas();
+                }
             };
             img.onerror = () => URL.revokeObjectURL(url);
             img.src = url;
