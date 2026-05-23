@@ -41,6 +41,7 @@ public static class StatusStreamHandler {
             .GetRequiredService<NINA.Polaris.Services.External.GraXpertService>();
         var simulator = context.RequestServices
             .GetRequiredService<NINA.Polaris.Services.Simulator.SimulatorService>();
+        var notifications = context.RequestServices.GetRequiredService<NotificationService>();
         var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
 
         using var ws = await context.WebSockets.AcceptWebSocketAsync(new WebSocketAcceptContext {
@@ -280,6 +281,10 @@ public static class StatusStreamHandler {
                         host = hostMetrics.Latest,
                         sirilJobs = sirilJobsPayload,
                         graXpertJobs = graXpertJobsPayload,
+                        // Server-pushed toasts (auto-connect outcomes,
+                        // simulator events, etc.). Client de-dups by id
+                        // — see toast pump in app.js.
+                        notifications = notifications.Snapshot(),
                         // SIM-4: built-in equipment simulator status
                         // (which backend is active, is it installed,
                         // is the stack running, which devices). UI

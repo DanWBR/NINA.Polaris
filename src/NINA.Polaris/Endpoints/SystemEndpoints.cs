@@ -72,6 +72,7 @@ public static class SystemEndpoints {
                 p.DefaultBinning = update.DefaultBinning;
                 p.IndiHost = update.IndiHost;
                 p.IndiPort = update.IndiPort;
+                p.AutoConnectOnStartup = update.AutoConnectOnStartup;
                 p.AstapPath = update.AstapPath;
                 p.SolveToleranceArcsec = update.SolveToleranceArcsec;
                 p.ImageOutputDir = update.ImageOutputDir;

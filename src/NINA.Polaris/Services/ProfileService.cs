@@ -325,6 +325,13 @@ public class UserProfile {
     public string IndiHost { get; set; } = "localhost";
     public int IndiPort { get; set; } = 7624;
 
+    /// <summary>Master toggle for HardwareAutoConnectService — when on,
+    /// app startup tries INDI, runs Alpaca discovery, and then
+    /// re-connects every device saved on the active rig. Default off
+    /// so a fresh install never silently dials hardware that isn't
+    /// powered up yet.</summary>
+    public bool AutoConnectOnStartup { get; set; } = false;
+
     // Legacy single-rig equipment selection (still serialised for
     // backward-compat; new code uses EquipmentProfiles below).
     public string? LastCamera { get; set; }

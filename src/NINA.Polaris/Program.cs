@@ -104,6 +104,12 @@ builder.Services.AddResourceMonitoring();
 builder.Services.AddSingleton<HostMetricsService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<HostMetricsService>());
 builder.Services.AddHostedService<MdnsService>();
+// Server-pushed toast channel + boot-time auto-connect for INDI /
+// Alpaca / active-rig equipment. The auto-connect service is gated
+// on profile.AutoConnectOnStartup; if the toggle is off, RunAsync
+// is never scheduled and there's zero runtime cost.
+builder.Services.AddSingleton<NotificationService>();
+builder.Services.AddHostedService<HardwareAutoConnectService>();
 builder.Services.AddSingleton<RelayClient>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<RelayClient>());
 builder.Services.AddSingleton(sp =>

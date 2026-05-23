@@ -4143,6 +4143,17 @@
                 </div>
 
                 <div class="settings-section">
+                    <h3>Hardware</h3>
+                    <label class="checkbox-label" title="When Polaris starts up, automatically connect to INDI, run an Alpaca discovery on the local network, and connect every device saved on the active rig. Toasts surface each step.">
+                        <input type="checkbox" x-model="settings.autoConnectOnStartup" @change="saveSettingsToServer()">
+                        Auto-connect hardware on server startup
+                    </label>
+                    <p class="hint" style="margin-top:6px">
+                        Tries INDI at <code x-text="(settings.indiHost || 'localhost') + ':' + (settings.indiPort || 7624)"></code>, then runs Alpaca local-network discovery, then connects every device saved on the active rig. Each result fires a toast on every connected browser. Default off so a fresh install never dials hardware that isn't powered up yet.
+                    </p>
+                </div>
+
+                <div class="settings-section">
                     <h3>Sequencer</h3>
                     <label class="checkbox-label" title="Land on the Advanced (tree-based) sequencer tab by default. Both sequencers stay available regardless.">
                         <input type="checkbox" x-model="settings.preferAdvancedSequencer" @change="saveSettingsToServer()">

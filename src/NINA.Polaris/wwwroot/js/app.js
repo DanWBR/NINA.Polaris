@@ -119,6 +119,9 @@ function ninaApp() {
             stellariumHost: 'localhost',
             stellariumPort: 8090,
             preferAdvancedSequencer: false,
+            // Boot-time auto-connect — INDI + Alpaca discovery +
+            // active-rig device bind. Pushed by HardwareAutoConnectService.
+            autoConnectOnStartup: false,
             // External tools — see ExternalTools section in Settings.
             // Empty = auto-detect (BinaryLocator on the server picks
             // the right path for the host OS).
@@ -1885,6 +1888,7 @@ function ninaApp() {
                     this.settings.imageOutputDir = data.imageOutputDir || '';
                     this.settings.imageNamePattern = data.imageNamePattern || '';
                     this.settings.preferAdvancedSequencer = !!data.preferAdvancedSequencer;
+                    this.settings.autoConnectOnStartup = !!data.autoConnectOnStartup;
                     this.settings.sirilPath = data.sirilPath || '';
                     this.settings.sirilScriptsDir = data.sirilScriptsDir || '';
                     this.settings.graxpertPath = data.graxpertPath || '';
@@ -5450,6 +5454,7 @@ function ninaApp() {
                         imageOutputDir: this.settings.imageOutputDir,
                         imageNamePattern: this.settings.imageNamePattern,
                         preferAdvancedSequencer: this.settings.preferAdvancedSequencer,
+                        autoConnectOnStartup: this.settings.autoConnectOnStartup,
                         sirilPath: this.settings.sirilPath,
                         sirilScriptsDir: this.settings.sirilScriptsDir,
                         graxpertPath: this.settings.graxpertPath,
@@ -8338,6 +8343,26 @@ function ninaApp() {
             if (msg.slewPreview) this.slewPreview = msg.slewPreview;
             if (msg.sirilJobs) this.sirilActiveJobs = msg.sirilJobs;
             if (msg.graXpertJobs) this.graXpertActiveJobs = msg.graXpertJobs;
+            // Server-pushed toasts. Server keeps a ring buffer; we
+            // monotonically track the highest id we've already shown
+            // so reconnects + status ticks don't re-fire stale toasts.
+            // Skip the very first payload after a WS connect — those
+            // are notifications that happened BEFORE the user opened
+            // the browser, and replaying 20 stale toasts on page load
+            // is more annoying than useful. The id is still recorded
+            // so subsequent fresh notifications fire normally.
+            if (Array.isArray(msg.notifications) && msg.notifications.length) {
+                if (this._notificationsLastId === undefined) {
+                    this._notificationsLastId = msg.notifications[msg.notifications.length - 1].id;
+                } else {
+                    for (const n of msg.notifications) {
+                        if (n.id > this._notificationsLastId) {
+                            this.toast(n.text, n.kind || 'info', n.ttlMs || 4000);
+                            this._notificationsLastId = n.id;
+                        }
+                    }
+                }
+            }
 
             // Refresh charts once per status frame (1Hz) — only if their canvas
             // is currently in the DOM, otherwise Chart.js skips silently.
