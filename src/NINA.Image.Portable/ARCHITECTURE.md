@@ -128,7 +128,7 @@ the stretched midtone lands at a configurable target (default 0.25).
 
 The output is a `byte[]` for display in browser-side `<canvas>`.
 
-## How NINA.Headless consumes this
+## How NINA.Polaris consumes this
 
 - **Capture path**: `IndiCamera.CaptureAsync` returns `IImageData`
   built by `FITSReader` from the BLOB. `ImageRelayService` then

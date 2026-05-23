@@ -1,4 +1,4 @@
-# Multi-stage build for NINA Headless.
+# Multi-stage build for N.I.N.A. Polaris.
 #
 # Builds inside a .NET 10 SDK image, runs on the slim ASP.NET Core runtime.
 # Targets both linux/amd64 (mini-PCs, x86 SBCs) and linux/arm64 (Raspberry
@@ -18,13 +18,13 @@ WORKDIR /src
 
 # Cache restore: copy only csproj / sln first so subsequent code changes
 # don't bust the NuGet cache.
-COPY NINA.Headless.sln ./
+COPY NINA.Polaris.sln ./
 COPY src/NINA.Core.Portable/NINA.Core.Portable.csproj src/NINA.Core.Portable/
 COPY src/NINA.Image.Portable/NINA.Image.Portable.csproj src/NINA.Image.Portable/
 COPY src/NINA.INDI/NINA.INDI.csproj src/NINA.INDI/
-COPY src/NINA.Headless/NINA.Headless.csproj src/NINA.Headless/
-COPY tests/NINA.Headless.Test/NINA.Headless.Test.csproj tests/NINA.Headless.Test/
-RUN dotnet restore src/NINA.Headless/NINA.Headless.csproj
+COPY src/NINA.Polaris/NINA.Polaris.csproj src/NINA.Polaris/
+COPY tests/NINA.Polaris.Test/NINA.Polaris.Test.csproj tests/NINA.Polaris.Test/
+RUN dotnet restore src/NINA.Polaris/NINA.Polaris.csproj
 
 # Bring in the rest of the source and publish a self-contained binary.
 COPY src/ src/
@@ -37,7 +37,7 @@ RUN case "$TARGETARCH" in \
         *)     RID=linux-x64  ;; \
     esac && \
     echo "Publishing for $RID" && \
-    dotnet publish src/NINA.Headless/NINA.Headless.csproj \
+    dotnet publish src/NINA.Polaris/NINA.Polaris.csproj \
         -c Release \
         -r $RID \
         --self-contained false \
@@ -70,4 +70,4 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s \
     CMD wget -q --spider http://localhost:5000/api/system/status || exit 1
 
-ENTRYPOINT ["./NINA.Headless"]
+ENTRYPOINT ["./NINA.Polaris"]

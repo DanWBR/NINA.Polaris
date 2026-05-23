@@ -7,11 +7,11 @@ the source. End-user docs live in [docs/user-guide/](docs/user-guide/).
 ## TL;DR
 
 ```bash
-git clone https://github.com/DanWBR/nina-headless.git
-cd nina-headless
-dotnet build src/NINA.Headless/NINA.Headless.csproj
-dotnet test tests/NINA.Headless.Test/NINA.Headless.Test.csproj
-dotnet run --project src/NINA.Headless/NINA.Headless.csproj
+git clone https://github.com/DanWBR/nina-polaris.git
+cd nina-polaris
+dotnet build src/NINA.Polaris/NINA.Polaris.csproj
+dotnet test tests/NINA.Polaris.Test/NINA.Polaris.Test.csproj
+dotnet run --project src/NINA.Polaris/NINA.Polaris.csproj
 ```
 
 Server listens on `http://localhost:5000`. Edit + rebuild + refresh
@@ -23,7 +23,7 @@ rebuild).
 - **.NET 10** (latest STS)
 - **ASP.NET Core minimal APIs** + WebSocket handlers
 - **Alpine.js 3** for the frontend reactivity (no build pipeline)
-- **NUnit** + plain xUnit-style tests in `tests/NINA.Headless.Test`
+- **NUnit** + plain xUnit-style tests in `tests/NINA.Polaris.Test`
 - **SQLite** via `Microsoft.Data.Sqlite` for the STUDIO frame index
 - **YARP** for the `/phd2-gui/` reverse proxy
 - **SkiaSharp** for image encoding (JPEG/PNG/TIFF)
@@ -46,10 +46,10 @@ src/
   NINA.Mount.SynScanWifi/    # direct-WiFi SynScan driver
   NINA.Relay.Protocol/       # shared types for relay (tenant, audit)
   NINA.Relay.Server/         # standalone VPS-deployed relay server
-  NINA.Headless/             # the ASP.NET Core host — Services/,
+  NINA.Polaris/             # the ASP.NET Core host — Services/,
                              # Endpoints/, WebSocket/, wwwroot/
 tests/
-  NINA.Headless.Test/        # all the unit tests
+  NINA.Polaris.Test/        # all the unit tests
 docs/                        # user + dev docs
   user-guide/                # end-user (rendered to GitHub Pages later)
   *.md                       # per-feature install/setup docs
@@ -95,7 +95,7 @@ Concrete walkthrough — add a hypothetical "weather safety monitor":
    buttons + status dot)
 6. **Add JS state + methods** in `wwwroot/js/app.js` mirroring the
    existing equipment cards
-7. **Add tests** in `tests/NINA.Headless.Test/IndiSafetyTests.cs`
+7. **Add tests** in `tests/NINA.Polaris.Test/IndiSafetyTests.cs`
 
 Reference: the `IndiWeather` device + `WeatherEndpoints` show the
 full pattern.
@@ -119,7 +119,7 @@ complete add.
 ## How to add a sequencer instruction / trigger / condition
 
 The Advanced Sequencer uses MEF-discovered exports in
-`src/NINA.Headless/Services/Sequencer/`.
+`src/NINA.Polaris/Services/Sequencer/`.
 
 1. Create a class implementing the appropriate base (`SequenceInstruction`,
    `SequenceTrigger`, `SequenceCondition`)
@@ -144,7 +144,7 @@ Polaris uses the `IPlateSolver` strategy pattern.
    PlateSolveOptions options, CancellationToken ct)` is the only
    required method
 3. Register in `Program.cs`:
-   `builder.Services.AddSingleton<NINA.Headless.Services.PlateSolving.YourSolver>();`
+   `builder.Services.AddSingleton<NINA.Polaris.Services.PlateSolving.YourSolver>();`
 4. `PlateSolveService` (the dispatcher) auto-discovers + adds to the
    solver list
 5. Settings → Plate solver → Primary / Blind dropdowns surface it
@@ -211,7 +211,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
   get golden-value tests
 - WebSocket / endpoint integration tests are not yet in place — only
   manual smoke testing on the dev box. Contributions welcome.
-- `dotnet test tests/NINA.Headless.Test/NINA.Headless.Test.csproj` runs
+- `dotnet test tests/NINA.Polaris.Test/NINA.Polaris.Test.csproj` runs
   the full suite (~450 tests, ~5 seconds on RPi 5).
 
 ## License + 3rd-party

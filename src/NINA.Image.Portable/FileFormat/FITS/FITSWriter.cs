@@ -65,7 +65,7 @@ public static class FITSWriter {
         Add(cards, "BZERO", "32768", "Offset for unsigned 16-bit");
         Add(cards, "BSCALE", "1");
         Add(cards, "EXTEND", "T");
-        AddStr(cards, "SWCREATE", "NINA.Headless");
+        AddStr(cards, "SWCREATE", "NINA.Polaris");
         AddStr(cards, "ROWORDER", "TOP-DOWN");
 
         // ---- Image / exposure ----

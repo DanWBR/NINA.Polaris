@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NINA Headless — browser-controlled astrophotography for any device</title>
+<title>N.I.N.A. Polaris — browser-controlled astrophotography for any device</title>
 <meta name="description" content="A lightweight, browser-controlled astrophotography control system on ASP.NET Core. Runs on Raspberry Pi, mini PCs, and Windows. INDI + ASCOM/Alpaca, PHD2 guiding, plate solving, live stacking, advanced sequencer, and a relay server for remote access.">
-<meta property="og:title" content="NINA Headless">
+<meta property="og:title" content="N.I.N.A. Polaris">
 <meta property="og:description" content="Browser-controlled astrophotography rig — RPi or Windows. Free & open-source.">
 <meta property="og:image" content="assets/horsehead.jpg">
 <link rel="stylesheet" href="styles.css">
@@ -23,7 +23,7 @@
             <a href="#features">Features</a>
             <a href="#getting-started">Get started</a>
             <a href="#stack">Stack</a>
-            <a href="https://github.com/DanWBR/NINA.Headless" target="_blank" rel="noopener">GitHub ↗</a>
+            <a href="https://github.com/DanWBR/NINA.Polaris" target="_blank" rel="noopener">GitHub ↗</a>
         </div>
     </nav>
 
@@ -40,7 +40,7 @@
             controlled from the browser of your phone, laptop, or warm-room tablet.
         </p>
         <div class="hero-cta">
-            <a class="btn btn-primary" href="https://github.com/DanWBR/NINA.Headless" target="_blank" rel="noopener">
+            <a class="btn btn-primary" href="https://github.com/DanWBR/NINA.Polaris" target="_blank" rel="noopener">
                 <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor">
                     <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
                 </svg>
@@ -133,19 +133,19 @@
         <div class="start-grid">
             <article class="start-card">
                 <header><span class="start-tag">RPi</span><h3>Raspberry Pi 4 / 5</h3></header>
-                <pre><code>git clone https://github.com/DanWBR/NINA.Headless.git
-cd NINA.Headless
+                <pre><code>git clone https://github.com/DanWBR/NINA.Polaris.git
+cd NINA.Polaris
 ./deploy/publish-linux-arm64.sh
-./publish/linux-arm64/NINA.Headless</code></pre>
+./publish/linux-arm64/NINA.Polaris</code></pre>
                 <p>Then point any browser at <code>http://nina-&lt;hostname&gt;.local:5000</code>. mDNS announcer ships built-in.</p>
             </article>
 
             <article class="start-card">
                 <header><span class="start-tag">Windows</span><h3>Windows mini PC</h3></header>
-                <pre><code>git clone https://github.com/DanWBR/NINA.Headless.git
-cd NINA.Headless
+                <pre><code>git clone https://github.com/DanWBR/NINA.Polaris.git
+cd NINA.Polaris
 .\deploy\publish-win-x64.ps1
-.\publish\win-x64\NINA.Headless.exe</code></pre>
+.\publish\win-x64\NINA.Polaris.exe</code></pre>
                 <p>Or <code>-InstallService</code> for a Windows Service that survives reboots. Discovers ASCOM Remote (Alpaca) drivers on the LAN automatically.</p>
             </article>
 
@@ -154,7 +154,7 @@ cd NINA.Headless
                 <pre><code>docker run -d --network host \
   -v $(pwd)/config:/config \
   -v $(pwd)/images:/images \
-  ghcr.io/danwbr/nina-headless:latest</code></pre>
+  ghcr.io/danwbr/nina-polaris:latest</code></pre>
                 <p>Multi-arch image (arm64 + amd64). Compose file in the repo includes indiserver in the same stack.</p>
             </article>
         </div>
@@ -184,7 +184,7 @@ cd NINA.Headless
         <h2 class="section-title">Free, open-source, and waiting to image something.</h2>
         <p class="section-sub">MIT-style license inherited from upstream N.I.N.A. — bring your own scope.</p>
         <div class="hero-cta" style="justify-content:center;margin-top:24px">
-            <a class="btn btn-primary" href="https://github.com/DanWBR/NINA.Headless" target="_blank" rel="noopener">Source &amp; releases</a>
+            <a class="btn btn-primary" href="https://github.com/DanWBR/NINA.Polaris" target="_blank" rel="noopener">Source &amp; releases</a>
             <a class="btn btn-ghost" href="https://buy.stripe.com/9B68wPeoLcMSgOz2iJbMQ02" target="_blank" rel="noopener">❤ Donate</a>
         </div>
     </div>
@@ -193,15 +193,15 @@ cd NINA.Headless
 <footer class="site-footer">
     <div class="container footer-grid">
         <div>
-            <strong>NINA Headless</strong>
+            <strong>N.I.N.A. Polaris</strong>
             <p>Browser-controlled astrophotography on any device.</p>
         </div>
         <div>
             <strong>Project</strong>
             <ul>
-                <li><a href="https://github.com/DanWBR/NINA.Headless" target="_blank" rel="noopener">GitHub repo</a></li>
-                <li><a href="https://github.com/DanWBR/NINA.Headless/blob/master/README.md" target="_blank" rel="noopener">README</a></li>
-                <li><a href="https://github.com/DanWBR/NINA.Headless/issues" target="_blank" rel="noopener">Issues / requests</a></li>
+                <li><a href="https://github.com/DanWBR/NINA.Polaris" target="_blank" rel="noopener">GitHub repo</a></li>
+                <li><a href="https://github.com/DanWBR/NINA.Polaris/blob/master/README.md" target="_blank" rel="noopener">README</a></li>
+                <li><a href="https://github.com/DanWBR/NINA.Polaris/issues" target="_blank" rel="noopener">Issues / requests</a></li>
             </ul>
         </div>
         <div>

@@ -318,7 +318,7 @@ covers your target.
 
 Drop a third-party `.dll` into `./plugins/` (or
 `Plugins:Directory`) and on next startup the host loads it into its
-own `AssemblyLoadContext`, scans for `INinaHeadlessPlugin`
+own `AssemblyLoadContext`, scans for `INinaPolarisPlugin`
 implementations, and registers their contributed sequencer entities
 into the polymorphic JSON converter + palette. From the user's point
 of view the plugin's entities appear in the Advanced Sequencer
@@ -328,7 +328,7 @@ palette under whatever category the plugin chose.
 - Plugin assemblies reference the host's existing types (`ISequenceEntity`,
   `SequenceContext`, `ILogger`) directly — no SDK package to publish
 - Contract surface in `Services/Plugins/`:
-  - `INinaHeadlessPlugin` — `Name`/`Version`/`Description`/`Author` +
+  - `INinaPolarisPlugin` — `Name`/`Version`/`Description`/`Author` +
     `Register(IPluginRegistry)`
   - `IPluginRegistry` — `RegisterSequencerEntity<T>(category)`
 - `GET /api/plugins` lists what loaded + the entity discriminators each
@@ -793,9 +793,9 @@ Built for unreliable field WiFi:
 ## Architecture
 
 ```
-nina-headless/
+nina-polaris/
 ├── src/
-│   ├── NINA.Headless/              ← ASP.NET Core app (Kestrel, Minimal API)
+│   ├── NINA.Polaris/              ← ASP.NET Core app (Kestrel, Minimal API)
 │   │   ├── Program.cs              ← Host builder, service registration
 │   │   ├── Endpoints/              ← REST API (13 endpoint groups)
 │   │   ├── WebSocket/              ← Image stream + status broadcast
@@ -813,10 +813,10 @@ nina-headless/
 │   └── NINA.Relay.Server/          ← Standalone reverse-tunnel relay (ASP.NET Core)
 │
 ├── tests/
-│   └── NINA.Headless.Test/         ← 294 unit tests (NUnit)
+│   └── NINA.Polaris.Test/         ← 294 unit tests (NUnit)
 │
 ├── deploy/                         ← Deployment scripts
-│   ├── nina-headless.service        ← systemd unit file
+│   ├── nina-polaris.service        ← systemd unit file
 │   ├── install.sh                   ← Linux installer
 │   ├── publish-linux-arm64.sh       ← RPi build script
 │   ├── publish-win-x64.ps1         ← Windows build script
@@ -870,10 +870,10 @@ nina-headless/
 ### Build & Run (Development)
 
 ```bash
-git clone https://github.com/DanWBR/nina-headless.git
-cd nina-headless
+git clone https://github.com/DanWBR/nina-polaris.git
+cd nina-polaris
 dotnet build
-dotnet run --project src/NINA.Headless
+dotnet run --project src/NINA.Polaris
 ```
 
 Open `http://localhost:5000` in your browser.
@@ -898,26 +898,26 @@ chmod +x deploy/publish-linux-arm64.sh
 2. **Copy to the Pi:**
 
 ```bash
-scp -r publish/linux-arm64/* pi@raspberrypi:/tmp/nina-headless/
+scp -r publish/linux-arm64/* pi@raspberrypi:/tmp/nina-polaris/
 ```
 
 3. **Install on the Pi:**
 
 ```bash
 ssh pi@raspberrypi
-sudo bash /tmp/nina-headless/deploy/install.sh /tmp/nina-headless
+sudo bash /tmp/nina-polaris/deploy/install.sh /tmp/nina-polaris
 ```
 
-This creates a `nina` system user, installs to `/opt/nina-headless`, enables and starts the systemd service.
+This creates a `nina` system user, installs to `/opt/nina-polaris`, enables and starts the systemd service.
 
 4. **Access:** Open `http://raspberrypi:5000` from any device on the network.
 
 **Manage the service:**
 
 ```bash
-sudo systemctl status nina-headless    # Check status
-sudo journalctl -u nina-headless -f    # Follow logs
-sudo systemctl restart nina-headless   # Restart
+sudo systemctl status nina-polaris    # Check status
+sudo journalctl -u nina-polaris -f    # Follow logs
+sudo systemctl restart nina-polaris   # Restart
 ```
 
 ### Windows Mini PC
@@ -929,7 +929,7 @@ sudo systemctl restart nina-headless   # Restart
 **Run as console app:**
 
 ```powershell
-.\publish\win-x64\NINA.Headless.exe
+.\publish\win-x64\NINA.Polaris.exe
 ```
 
 **Install as Windows Service:**
@@ -1369,11 +1369,11 @@ Contributions are welcome! This project follows the same coding standards as the
 
 ### Project Structure for Contributors
 
-- **Endpoints** are in `src/NINA.Headless/Endpoints/` — each is an extension method on `WebApplication`
-- **Services** are in `src/NINA.Headless/Services/` — registered as singletons in `Program.cs`
+- **Endpoints** are in `src/NINA.Polaris/Endpoints/` — each is an extension method on `WebApplication`
+- **Services** are in `src/NINA.Polaris/Services/` — registered as singletons in `Program.cs`
 - **INDI devices** follow a consistent pattern in `src/NINA.INDI/Devices/`
-- **Frontend** is plain HTML/JS/CSS in `src/NINA.Headless/wwwroot/` — no build step required
-- **Tests** go in `tests/NINA.Headless.Test/` using NUnit
+- **Frontend** is plain HTML/JS/CSS in `src/NINA.Polaris/wwwroot/` — no build step required
+- **Tests** go in `tests/NINA.Polaris.Test/` using NUnit
 
 ## License
 

@@ -19,7 +19,7 @@ public static class CoreUtil {
         }
     }
 
-    public static string Title => "N.I.N.A. Headless";
+    public static string Title => "N.I.N.A. Polaris";
 
     public static string GetUniqueFilePath(string fullPath) {
         int count = 1;

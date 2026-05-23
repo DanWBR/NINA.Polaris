@@ -1,6 +1,6 @@
 # Landing page
 
-Stand-alone marketing page for NINA Headless. No build step, no
+Stand-alone marketing page for N.I.N.A. Polaris. No build step, no
 dependencies — just an HTML file + a CSS file + one background image.
 
 ## Files
@@ -34,7 +34,7 @@ Three options:
 
 1. **GitHub Pages** — point Pages at the `landing/` folder in this repo
 2. **Static host** — upload the three files to Netlify / Vercel / S3 / Cloudflare Pages
-3. **Bundled with the app** — copy `landing/*` into `src/NINA.Headless/wwwroot/`
+3. **Bundled with the app** — copy `landing/*` into `src/NINA.Polaris/wwwroot/`
    and it's served at `http://your-rig:5000/index.html` automatically
 
 ## Editing

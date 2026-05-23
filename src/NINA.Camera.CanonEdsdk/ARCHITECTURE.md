@@ -30,7 +30,7 @@ runtime.
 
 Keeping the wrapper in its own project means:
 
-- The native dependency is **soft** — `NINA.Headless` references this
+- The native dependency is **soft** — `NINA.Polaris` references this
   project, but the constructor of `CanonEdsdkCamera` is the first
   thing that actually touches a `DllImport`. If the DLLs aren't
   present, the user just doesn't see Canon in the driver dropdown.
@@ -80,7 +80,7 @@ Implements `NINA.Image.Portable.Interfaces.ICamera`:
   `SupportsCooler = false`, `SupportsBinning = false`,
   `SupportsIso = true`, `SupportsBulb = true`
 
-## How NINA.Headless integrates
+## How NINA.Polaris integrates
 
 1. At startup, `EquipmentManager` checks if the platform is Windows +
    if `EDSDK.dll` is reachable. If yes, registers

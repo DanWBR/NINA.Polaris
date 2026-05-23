@@ -1,4 +1,4 @@
-# Sample NINA Headless plugin
+# Sample N.I.N.A. Polaris plugin
 
 A minimal example showing how a third-party assembly can contribute a
 new sequencer instruction to the Advanced Sequencer.
@@ -17,7 +17,7 @@ dotnet build -c Release
 cp bin/Release/net10.0/SamplePlugin.dll ../../publish/win-x64/plugins/
 ```
 
-(Replace the publish path with wherever you run NINA Headless from.
+(Replace the publish path with wherever you run N.I.N.A. Polaris from.
 You can also set `Plugins__Directory=/absolute/path/to/plugins` to
 load from any location.)
 
@@ -25,12 +25,12 @@ load from any location.)
 
 Two files:
 
-- `SamplePlugin.csproj` — references `NINA.Headless.dll` (the host you
+- `SamplePlugin.csproj` — references `NINA.Polaris.dll` (the host you
   built from the main solution) and targets `net10.0`.
 - `BeepPlugin.cs`:
   - `BeepInstruction` is a `SequenceInstruction` with a stable `Type`
     discriminator (`"SamplePlugin.Beep"`) and a `Message` field.
-  - `BeepPlugin` implements `INinaHeadlessPlugin`. In its `Register`
+  - `BeepPlugin` implements `INinaPolarisPlugin`. In its `Register`
     method it calls
     `registry.RegisterSequencerEntity<BeepInstruction>("Plugins / Sample")`.
 
@@ -39,7 +39,7 @@ Two files:
 The `PluginLoaderService` (hosted service) scans
 `Plugins:Directory` (default `./plugins`), loads every `.dll` into an
 isolated `AssemblyLoadContext`, finds types implementing
-`INinaHeadlessPlugin`, instantiates them, and invokes `Register`.
+`INinaPolarisPlugin`, instantiates them, and invokes `Register`.
 
 Once that returns, the new entity is:
 

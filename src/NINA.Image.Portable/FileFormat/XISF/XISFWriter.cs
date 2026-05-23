@@ -289,7 +289,7 @@ public static class XISFWriter {
                 }
             }
 
-            WriteFitsKeyword(xw, "SWCREATE", "NINA.Headless", null);
+            WriteFitsKeyword(xw, "SWCREATE", "NINA.Polaris", null);
 
             xw.WriteEndElement(); // </Image>
 
@@ -297,7 +297,7 @@ public static class XISFWriter {
             xw.WriteStartElement("Metadata");
             WriteProperty(xw, "XISF:CreationTime", "TimePoint",
                 DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture));
-            WriteProperty(xw, "XISF:CreatorApplication", "String", "NINA.Headless");
+            WriteProperty(xw, "XISF:CreatorApplication", "String", "NINA.Polaris");
             xw.WriteEndElement(); // </Metadata>
 
             xw.WriteEndElement(); // </xisf>

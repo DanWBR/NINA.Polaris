@@ -49,7 +49,7 @@ Implements `NINA.Image.Portable.Interfaces.ITelescope`. Methods map
 - `Park` / `Unpark`
 - `IsSlewing` polled status
 
-## How NINA.Headless uses it
+## How NINA.Polaris uses it
 
 `EquipmentManager.SelectTelescope("synscan-wifi", ipAddress)`
 instantiates this driver instead of `IndiTelescope`. Same `ITelescope`

@@ -4,7 +4,7 @@ using System.Text;
 namespace NINA.Relay.Protocol;
 
 /// <summary>
-/// Wire protocol used between a NINA Headless instance (the "tunnel client")
+/// Wire protocol used between a N.I.N.A. Polaris instance (the "tunnel client")
 /// and the relay server (the "tunnel server"). All frames flow over a single
 /// outbound WebSocket the client opens to the server, and use a small fixed
 /// binary header so multiple browser HTTP requests can be multiplexed over

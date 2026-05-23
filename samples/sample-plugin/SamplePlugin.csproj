@@ -12,9 +12,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Point this at wherever you built or installed NINA.Headless.dll. -->
-    <Reference Include="NINA.Headless">
-      <HintPath>..\..\src\NINA.Headless\bin\Debug\net10.0\NINA.Headless.dll</HintPath>
+    <!-- Point this at wherever you built or installed NINA.Polaris.dll. -->
+    <Reference Include="NINA.Polaris">
+      <HintPath>..\..\src\NINA.Polaris\bin\Debug\net10.0\NINA.Polaris.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Microsoft.Extensions.Logging.Abstractions">

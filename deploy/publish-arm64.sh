@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# NINA Headless - Publish for Linux ARM64 (Raspberry Pi 4/5, SBCs)
+# N.I.N.A. Polaris - Publish for Linux ARM64 (Raspberry Pi 4/5, SBCs)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$SCRIPT_DIR/../src/NINA.Headless/NINA.Headless.csproj"
+PROJECT_DIR="$SCRIPT_DIR/../src/NINA.Polaris/NINA.Polaris.csproj"
 OUTPUT_DIR="$SCRIPT_DIR/../publish/linux-arm64"
 RUNTIME="linux-arm64"
 CONFIG="Release"
 
 echo ""
 echo "=========================================="
-echo "  NINA Headless - Publish linux-arm64"
+echo "  N.I.N.A. Polaris - Publish linux-arm64"
 echo "=========================================="
 echo ""
 
@@ -33,7 +33,7 @@ dotnet publish "$PROJECT_DIR" \
     -p:DebugSymbols=false \
     -o "$OUTPUT_DIR"
 
-chmod +x "$OUTPUT_DIR/NINA.Headless"
+chmod +x "$OUTPUT_DIR/NINA.Polaris"
 
 SIZE=$(du -sh "$OUTPUT_DIR" | cut -f1)
 echo ""
@@ -46,5 +46,5 @@ echo "[INFO] Size: $SIZE"
 echo "[INFO] Runtime: $RUNTIME (self-contained)"
 echo ""
 echo "[INFO] Deploy to RPi:"
-echo "  scp -r $OUTPUT_DIR/* pi@nina.local:/opt/nina-headless/"
+echo "  scp -r $OUTPUT_DIR/* pi@nina.local:/opt/nina-polaris/"
 echo ""

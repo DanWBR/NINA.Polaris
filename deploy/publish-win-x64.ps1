@@ -1,5 +1,5 @@
 # =============================================================================
-# NINA Headless - Publish Script for Windows x64 (Mini PCs)
+# N.I.N.A. Polaris - Publish Script for Windows x64 (Mini PCs)
 # =============================================================================
 # Builds a self-contained deployment for win-x64.
 # Run from any directory; paths are resolved relative to this script.
@@ -14,12 +14,12 @@ $ErrorActionPreference = 'Stop'
 
 $ScriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $RepoRoot   = Split-Path -Parent $ScriptDir
-$Project    = Join-Path $RepoRoot 'src\NINA.Headless\NINA.Headless.csproj'
+$Project    = Join-Path $RepoRoot 'src\NINA.Polaris\NINA.Polaris.csproj'
 $OutputDir  = Join-Path $RepoRoot 'publish\win-x64'
 $RID        = 'win-x64'
 
 Write-Host '=============================================================================' -ForegroundColor Cyan
-Write-Host "  NINA Headless - Publishing for $RID" -ForegroundColor Cyan
+Write-Host "  N.I.N.A. Polaris - Publishing for $RID" -ForegroundColor Cyan
 Write-Host '=============================================================================' -ForegroundColor Cyan
 Write-Host ''
 
@@ -88,7 +88,7 @@ if ($InstallService) {
     Write-Host ''
 
     $ServiceName = 'NINAHeadless'
-    $ExePath     = Join-Path $OutputDir 'NINA.Headless.exe'
+    $ExePath     = Join-Path $OutputDir 'NINA.Polaris.exe'
 
     # Check for administrator privileges
     $isAdmin = ([Security.Principal.WindowsPrincipal] `
@@ -116,9 +116,9 @@ if ($InstallService) {
     sc.exe create $ServiceName `
         binPath= "`"$ExePath`"" `
         start= delayed-auto `
-        DisplayName= "NINA Headless Astronomy Controller" | Out-Null
+        DisplayName= "N.I.N.A. Polaris Astronomy Controller" | Out-Null
 
-    sc.exe description $ServiceName "NINA Headless astronomy equipment controller and web API" | Out-Null
+    sc.exe description $ServiceName "N.I.N.A. Polaris astronomy equipment controller and web API" | Out-Null
     sc.exe failure $ServiceName reset= 86400 actions= restart/10000/restart/30000/restart/60000 | Out-Null
 
     Write-Host "Starting $ServiceName ..."
@@ -135,19 +135,19 @@ if ($InstallService) {
     Write-Host "    .\publish-win-x64.ps1 -InstallService" -ForegroundColor White
     Write-Host ''
     Write-Host '  Option 2: Use sc.exe manually (requires admin):'
-    Write-Host "    sc.exe create NINAHeadless binPath= `"$OutputDir\NINA.Headless.exe`" start= delayed-auto" -ForegroundColor White
+    Write-Host "    sc.exe create NINAHeadless binPath= `"$OutputDir\NINA.Polaris.exe`" start= delayed-auto" -ForegroundColor White
     Write-Host "    sc.exe start NINAHeadless" -ForegroundColor White
     Write-Host ''
     Write-Host '  Option 3: Use NSSM (Non-Sucking Service Manager) for more control:'
     Write-Host '    choco install nssm   # or download from https://nssm.cc/' -ForegroundColor White
-    Write-Host "    nssm install NINAHeadless `"$OutputDir\NINA.Headless.exe`"" -ForegroundColor White
+    Write-Host "    nssm install NINAHeadless `"$OutputDir\NINA.Polaris.exe`"" -ForegroundColor White
     Write-Host '    nssm set NINAHeadless AppDirectory' "`"$OutputDir`"" -ForegroundColor White
     Write-Host '    nssm set NINAHeadless AppEnvironmentExtra ASPNETCORE_URLS=http://0.0.0.0:5000' -ForegroundColor White
     Write-Host '    nssm start NINAHeadless' -ForegroundColor White
     Write-Host ''
     Write-Host '  Or just run it directly:'
     Write-Host "    cd $OutputDir" -ForegroundColor White
-    Write-Host '    .\NINA.Headless.exe' -ForegroundColor White
+    Write-Host '    .\NINA.Polaris.exe' -ForegroundColor White
     Write-Host ''
 }
 

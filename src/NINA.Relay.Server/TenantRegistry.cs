@@ -5,7 +5,7 @@ using NINA.Relay.Protocol;
 namespace NINA.Relay.Server;
 
 /// <summary>
-/// Per-tenant tunnel state. A tenant is one NINA Headless instance —
+/// Per-tenant tunnel state. A tenant is one N.I.N.A. Polaris instance —
 /// identified by the bearer token it used to authenticate. The relay server
 /// holds the active tunnel WebSocket here and tracks all the in-flight
 /// proxied requests waiting for responses to come back from the client.

@@ -40,7 +40,7 @@ endpoints.
 
 ## Service architecture
 
-Services live in `src/NINA.Headless/Services/`. Every service is a
+Services live in `src/NINA.Polaris/Services/`. Every service is a
 **DI singleton** unless stated otherwise. They communicate via:
 
 - **Direct DI references** — most common, e.g. `SequenceEngine` holds
@@ -330,7 +330,7 @@ job id + spins a `Task.Run`. Job state is read via `GetJob(id)`
 
 Each project folder has its own `ARCHITECTURE.md` for deeper details:
 
-- [src/NINA.Headless/ARCHITECTURE.md](src/NINA.Headless/ARCHITECTURE.md)
+- [src/NINA.Polaris/ARCHITECTURE.md](src/NINA.Polaris/ARCHITECTURE.md)
 - [src/NINA.INDI/ARCHITECTURE.md](src/NINA.INDI/ARCHITECTURE.md)
 - [src/NINA.Image.Portable/ARCHITECTURE.md](src/NINA.Image.Portable/ARCHITECTURE.md)
 - [src/NINA.Camera.CanonEdsdk/ARCHITECTURE.md](src/NINA.Camera.CanonEdsdk/ARCHITECTURE.md) etc.

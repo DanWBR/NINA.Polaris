@@ -1,9 +1,9 @@
-# docker-compose for NINA Headless + optional INDI server sidecar.
+# docker-compose for N.I.N.A. Polaris + optional INDI server sidecar.
 #
 # Run:
 #     docker compose up -d
 #
-# The default profile starts just NINA Headless. Add `--profile indi` to
+# The default profile starts just N.I.N.A. Polaris. Add `--profile indi` to
 # also start an indiserver sidecar (good for self-contained simulator
 # setups). Add `--profile astap` to mount the plate solver into the
 # container (requires the host to have it installed at /opt/astap).
@@ -17,8 +17,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ghcr.io/danwbr/nina-headless:latest
-    container_name: nina-headless
+    image: ghcr.io/danwbr/nina-polaris:latest
+    container_name: nina-polaris
     restart: unless-stopped
     network_mode: host
     environment:

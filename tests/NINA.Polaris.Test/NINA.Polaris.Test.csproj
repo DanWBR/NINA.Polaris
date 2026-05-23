@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.*" />
+    <PackageReference Include="NUnit" Version="4.*" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.*" />
+    <PackageReference Include="Moq" Version="4.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\NINA.Polaris\NINA.Polaris.csproj" />
+    <ProjectReference Include="..\..\src\NINA.INDI\NINA.INDI.csproj" />
+    <ProjectReference Include="..\..\src\NINA.Image.Portable\NINA.Image.Portable.csproj" />
+    <ProjectReference Include="..\..\src\NINA.Core.Portable\NINA.Core.Portable.csproj" />
+    <ProjectReference Include="..\..\src\NINA.Relay.Server\NINA.Relay.Server.csproj" />
+    <ProjectReference Include="..\..\src\NINA.Camera.CanonEdsdk\NINA.Camera.CanonEdsdk.csproj" />
+    <ProjectReference Include="..\..\src\NINA.Camera.NikonSdk\NINA.Camera.NikonSdk.csproj" />
+    <ProjectReference Include="..\..\src\NINA.Camera.SonySdk\NINA.Camera.SonySdk.csproj" />
+    <ProjectReference Include="..\..\src\NINA.Mount.SynScanWifi\NINA.Mount.SynScanWifi.csproj" />
+  </ItemGroup>
+</Project>

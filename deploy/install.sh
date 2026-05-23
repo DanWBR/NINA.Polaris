@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# NINA Headless - Installation Script for RPi / Linux ARM64
+# N.I.N.A. Polaris - Installation Script for RPi / Linux ARM64
 # =============================================================================
 # Usage:
 #   sudo ./install.sh [path-to-published-files]
@@ -11,8 +11,8 @@
 
 set -euo pipefail
 
-INSTALL_DIR="/opt/nina-headless"
-SERVICE_NAME="nina-headless"
+INSTALL_DIR="/opt/nina-polaris"
+SERVICE_NAME="nina-polaris"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PUBLISH_DIR="${1:-${SCRIPT_DIR}/../publish/linux-arm64}"
@@ -36,8 +36,8 @@ if [[ ! -d "$PUBLISH_DIR" ]]; then
     error "Published files not found at: $PUBLISH_DIR\n       Run publish-linux-arm64.sh first, or pass the publish directory as an argument."
 fi
 
-if [[ ! -f "$PUBLISH_DIR/NINA.Headless" ]]; then
-    error "NINA.Headless binary not found in $PUBLISH_DIR. Is this the correct publish output?"
+if [[ ! -f "$PUBLISH_DIR/NINA.Polaris" ]]; then
+    error "NINA.Polaris binary not found in $PUBLISH_DIR. Is this the correct publish output?"
 fi
 
 # ---------------------------------------------------------------------------
@@ -88,13 +88,13 @@ cp -a "$PUBLISH_DIR/." "$INSTALL_DIR/"
 # ---------------------------------------------------------------------------
 info "Setting ownership and permissions ..."
 chown -R "$NINA_USER":"$NINA_USER" "$INSTALL_DIR"
-chmod 755 "$INSTALL_DIR/NINA.Headless"
+chmod 755 "$INSTALL_DIR/NINA.Polaris"
 
 # ---------------------------------------------------------------------------
 # Install systemd service
 # ---------------------------------------------------------------------------
 info "Installing systemd service unit ..."
-cp "${SCRIPT_DIR}/nina-headless.service" "$SERVICE_FILE"
+cp "${SCRIPT_DIR}/nina-polaris.service" "$SERVICE_FILE"
 chmod 644 "$SERVICE_FILE"
 
 systemctl daemon-reload

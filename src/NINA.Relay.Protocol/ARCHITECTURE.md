@@ -34,7 +34,7 @@ All records are immutable, serialized over the WS tunnel as MessagePack
 ## Why a separate project
 
 Sharing the records avoids the "we changed the protocol on one side
-and forgot the other" class of bug. Both `NINA.Headless`
+and forgot the other" class of bug. Both `NINA.Polaris`
 (`Services/RelayClient.cs`) and `NINA.Relay.Server` reference this
 project.
 

@@ -213,7 +213,7 @@ app.MapGet("/_admin/audit", (AuditLog audit, string? tenant, int? limit) => Resu
 }));
 
 
-// Tunnel registration WebSocket (from NINA Headless instances)
+// Tunnel registration WebSocket (from N.I.N.A. Polaris instances)
 app.Map("/_tunnel", async (HttpContext ctx, TunnelHandler handler) => {
     await handler.HandleAsync(ctx);
 });

@@ -5,9 +5,9 @@ Polaris instances (running on private LANs at telescope locations) be
 accessed from anywhere on the internet through a TLS-tunneled
 reverse-proxy — without exposing the Pi directly.
 
-This is a **completely separate process** from `NINA.Headless`. They
+This is a **completely separate process** from `NINA.Polaris`. They
 share types via `NINA.Relay.Protocol`, and the Pi-side client lives
-in `src/NINA.Headless/Services/RelayClient.cs`.
+in `src/NINA.Polaris/Services/RelayClient.cs`.
 
 For the end-user perspective + deployment guide, read
 [docs/user-guide/relay.md](../../docs/user-guide/relay.md).
@@ -49,7 +49,7 @@ src/NINA.Relay.Server/
                           └──────────┬────────────┘
                                      │
    ┌────────────────────────────────▼─────────────────────────────┐
-   │ Pi running NINA.Headless + RelayClient (initiates tunnel)    │
+   │ Pi running NINA.Polaris + RelayClient (initiates tunnel)    │
    └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -136,6 +136,6 @@ the end-to-end procedure.
 
 - [NINA.Relay.Protocol/ARCHITECTURE.md](../NINA.Relay.Protocol/ARCHITECTURE.md)
   — wire types
-- `src/NINA.Headless/Services/RelayClient.cs` — the Pi-side client
+- `src/NINA.Polaris/Services/RelayClient.cs` — the Pi-side client
 - [docs/user-guide/relay.md](../../docs/user-guide/relay.md)
 - [Root ARCHITECTURE.md](../../ARCHITECTURE.md)

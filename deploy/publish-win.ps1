@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    NINA Headless - Publish for Windows x64
+    N.I.N.A. Polaris - Publish for Windows x64
 .DESCRIPTION
     Builds a self-contained deployment for Windows mini PCs and desktops.
 #>
@@ -14,12 +14,12 @@ param(
 $ErrorActionPreference = "Stop"
 
 $scriptDir = Split-Path -Parent $PSCommandPath
-$projectPath = Join-Path $scriptDir "..\src\NINA.Headless\NINA.Headless.csproj"
+$projectPath = Join-Path $scriptDir "..\src\NINA.Polaris\NINA.Polaris.csproj"
 $outputDir = Join-Path $scriptDir "..\publish\$Runtime"
 
 Write-Host ""
 Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "  NINA Headless - Publish $Runtime" -ForegroundColor Cyan
+Write-Host "  N.I.N.A. Polaris - Publish $Runtime" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -56,5 +56,5 @@ Write-Host "[INFO] Size: $size" -ForegroundColor Green
 Write-Host "[INFO] Runtime: $Runtime (self-contained)" -ForegroundColor Green
 Write-Host ""
 Write-Host "[INFO] Run:" -ForegroundColor Green
-Write-Host "  & '$outputDir\NINA.Headless.exe' --urls=http://0.0.0.0:5000" -ForegroundColor Green
+Write-Host "  & '$outputDir\NINA.Polaris.exe' --urls=http://0.0.0.0:5000" -ForegroundColor Green
 Write-Host ""

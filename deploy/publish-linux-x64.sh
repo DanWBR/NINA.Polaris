@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# NINA Headless - Publish for Linux x64 (Intel/AMD mini PCs, NUCs)
+# N.I.N.A. Polaris - Publish for Linux x64 (Intel/AMD mini PCs, NUCs)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$SCRIPT_DIR/../src/NINA.Headless/NINA.Headless.csproj"
+PROJECT_DIR="$SCRIPT_DIR/../src/NINA.Polaris/NINA.Polaris.csproj"
 OUTPUT_DIR="$SCRIPT_DIR/../publish/linux-x64"
 RUNTIME="linux-x64"
 CONFIG="Release"
 
 echo ""
 echo "=========================================="
-echo "  NINA Headless - Publish linux-x64"
+echo "  N.I.N.A. Polaris - Publish linux-x64"
 echo "=========================================="
 echo ""
 
@@ -33,7 +33,7 @@ dotnet publish "$PROJECT_DIR" \
     -p:DebugSymbols=false \
     -o "$OUTPUT_DIR"
 
-chmod +x "$OUTPUT_DIR/NINA.Headless"
+chmod +x "$OUTPUT_DIR/NINA.Polaris"
 
 SIZE=$(du -sh "$OUTPUT_DIR" | cut -f1)
 echo ""

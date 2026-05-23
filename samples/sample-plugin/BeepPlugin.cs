@@ -1,5 +1,5 @@
-using NINA.Headless.Services.Plugins;
-using NINA.Headless.Services.Sequencer;
+using NINA.Polaris.Services.Plugins;
+using NINA.Polaris.Services.Sequencer;
 
 namespace SamplePlugin;
 
@@ -20,11 +20,11 @@ public class BeepInstruction : SequenceInstruction {
     }
 }
 
-public class BeepPlugin : INinaHeadlessPlugin {
+public class BeepPlugin : INinaPolarisPlugin {
     public string Name        => "Sample Plugin";
     public string Version     => "1.0.0";
     public string Description => "Demo plugin — contributes a 'Beep' instruction that just logs a message";
-    public string Author      => "NINA Headless team";
+    public string Author      => "N.I.N.A. Polaris team";
 
     public void Register(IPluginRegistry registry) {
         registry.RegisterSequencerEntity<BeepInstruction>("Plugins / Sample");

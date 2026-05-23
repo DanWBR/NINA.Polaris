@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/NINA.Core.Portable/NINA.Core.Portable.csproj" />
+    <Project Path="src/NINA.Polaris/NINA.Polaris.csproj" />
+    <Project Path="src/NINA.Image.Portable/NINA.Image.Portable.csproj" />
+    <Project Path="src/NINA.INDI/NINA.INDI.csproj" />
+    <Project Path="src/NINA.Relay.Protocol/NINA.Relay.Protocol.csproj" />
+    <Project Path="src/NINA.Relay.Server/NINA.Relay.Server.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/NINA.Polaris.Test/NINA.Polaris.Test.csproj" />
+  </Folder>
+</Solution>

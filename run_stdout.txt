@@ -1,11 +1,11 @@
-Usando as configurações de inicialização de C:\Users\danie\source\repos\DanWBR\nina-headless\src\NINA.Headless\Properties\launchSettings.json...
+Usando as configurações de inicialização de C:\Users\danie\source\repos\DanWBR\nina-polaris\src\NINA.Polaris\Properties\launchSettings.json...
 Compilando...
-C:\Users\danie\source\repos\DanWBR\nina-headless\src\NINA.INDI\NINA.INDI.csproj : warning NU1902: O pacote 'SixLabors.ImageSharp' 3.1.8 tem uma moderado vulnerabilidade de gravidade conhecida, https://github.com/advisories/GHSA-rxmq-m78w-7wmc [C:\Users\danie\source\repos\DanWBR\nina-headless\src\NINA.Headless\NINA.Headless.csproj]
-C:\Users\danie\source\repos\DanWBR\nina-headless\src\NINA.Headless\NINA.Headless.csproj : warning NU1902: O pacote 'SixLabors.ImageSharp' 3.1.8 tem uma moderado vulnerabilidade de gravidade conhecida, https://github.com/advisories/GHSA-rxmq-m78w-7wmc
-C:\Users\danie\source\repos\DanWBR\nina-headless\src\NINA.Image.Portable\NINA.Image.Portable.csproj : warning NU1902: O pacote 'SixLabors.ImageSharp' 3.1.8 tem uma moderado vulnerabilidade de gravidade conhecida, https://github.com/advisories/GHSA-rxmq-m78w-7wmc [C:\Users\danie\source\repos\DanWBR\nina-headless\src\NINA.Headless\NINA.Headless.csproj]
-C:\Users\danie\source\repos\DanWBR\nina-headless\src\NINA.Headless\NINA.Headless.csproj : warning NU1902: O pacote 'SixLabors.ImageSharp' 3.1.8 tem uma moderado vulnerabilidade de gravidade conhecida, https://github.com/advisories/GHSA-rxmq-m78w-7wmc
-C:\Users\danie\source\repos\DanWBR\nina-headless\src\NINA.Image.Portable\NINA.Image.Portable.csproj : warning NU1902: O pacote 'SixLabors.ImageSharp' 3.1.8 tem uma moderado vulnerabilidade de gravidade conhecida, https://github.com/advisories/GHSA-rxmq-m78w-7wmc
-C:\Users\danie\source\repos\DanWBR\nina-headless\src\NINA.INDI\NINA.INDI.csproj : warning NU1902: O pacote 'SixLabors.ImageSharp' 3.1.8 tem uma moderado vulnerabilidade de gravidade conhecida, https://github.com/advisories/GHSA-rxmq-m78w-7wmc
+C:\Users\danie\source\repos\DanWBR\nina-polaris\src\NINA.INDI\NINA.INDI.csproj : warning NU1902: O pacote 'SixLabors.ImageSharp' 3.1.8 tem uma moderado vulnerabilidade de gravidade conhecida, https://github.com/advisories/GHSA-rxmq-m78w-7wmc [C:\Users\danie\source\repos\DanWBR\nina-polaris\src\NINA.Polaris\NINA.Polaris.csproj]
+C:\Users\danie\source\repos\DanWBR\nina-polaris\src\NINA.Polaris\NINA.Polaris.csproj : warning NU1902: O pacote 'SixLabors.ImageSharp' 3.1.8 tem uma moderado vulnerabilidade de gravidade conhecida, https://github.com/advisories/GHSA-rxmq-m78w-7wmc
+C:\Users\danie\source\repos\DanWBR\nina-polaris\src\NINA.Image.Portable\NINA.Image.Portable.csproj : warning NU1902: O pacote 'SixLabors.ImageSharp' 3.1.8 tem uma moderado vulnerabilidade de gravidade conhecida, https://github.com/advisories/GHSA-rxmq-m78w-7wmc [C:\Users\danie\source\repos\DanWBR\nina-polaris\src\NINA.Polaris\NINA.Polaris.csproj]
+C:\Users\danie\source\repos\DanWBR\nina-polaris\src\NINA.Polaris\NINA.Polaris.csproj : warning NU1902: O pacote 'SixLabors.ImageSharp' 3.1.8 tem uma moderado vulnerabilidade de gravidade conhecida, https://github.com/advisories/GHSA-rxmq-m78w-7wmc
+C:\Users\danie\source\repos\DanWBR\nina-polaris\src\NINA.Image.Portable\NINA.Image.Portable.csproj : warning NU1902: O pacote 'SixLabors.ImageSharp' 3.1.8 tem uma moderado vulnerabilidade de gravidade conhecida, https://github.com/advisories/GHSA-rxmq-m78w-7wmc
+C:\Users\danie\source\repos\DanWBR\nina-polaris\src\NINA.INDI\NINA.INDI.csproj : warning NU1902: O pacote 'SixLabors.ImageSharp' 3.1.8 tem uma moderado vulnerabilidade de gravidade conhecida, https://github.com/advisories/GHSA-rxmq-m78w-7wmc
 warn: Microsoft.AspNetCore.Server.Kestrel[0]
       Overriding address(es) 'http://localhost:5268'. Binding to endpoints defined via IConfiguration and/or UseKestrel() instead.
 info: Microsoft.Hosting.Lifetime[14]
@@ -15,4 +15,4 @@ info: Microsoft.Hosting.Lifetime[0]
 info: Microsoft.Hosting.Lifetime[0]
       Hosting environment: Development
 info: Microsoft.Hosting.Lifetime[0]
-      Content root path: C:\Users\danie\source\repos\DanWBR\nina-headless\src\NINA.Headless
+      Content root path: C:\Users\danie\source\repos\DanWBR\nina-polaris\src\NINA.Polaris

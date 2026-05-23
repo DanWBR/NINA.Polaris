@@ -13,12 +13,6 @@ nighttime-imaging.eu is a full Windows desktop app and remains the
 gold standard for that platform. Polaris is for remote-site / SBC
 use cases NINA doesn't target.
 
-**Q: Why is it called Polaris?**
-
-A: Named after the user (Daniel Wagner Bertelli Rodrigues = DanWBR;
-Polaris fit). Not the star. We considered naming it "NINA Lite" but
-that overstates the relationship with the upstream project.
-
 **Q: Does Polaris share code with NINA?**
 
 A: Some, but heavily forked. We've stripped the Windows-only WPF UI

@@ -33,7 +33,7 @@ themselves. It's a one-time, free process.
    `plugins/canon-edsdk/` and drop the DLLs there.
 
    Alternative: copy them next to the Polaris executable directly
-   (`NINA.Headless.exe`). Either location works because the standard
+   (`NINA.Polaris.exe`). Either location works because the standard
    Windows DLL search path covers both.
 
 6. Restart Polaris so the registry probe re-detects the SDK.
@@ -92,7 +92,7 @@ themselves. It's a one-time, free process.
 
 - **"EdsInitializeSDK failed"**: the DLLs aren't reachable. Verify
   `EDSDK.dll` is in `plugins/canon-edsdk/` or next to
-  `NINA.Headless.exe`, and that Polaris is running as a 64-bit
+  `NINA.Polaris.exe`, and that Polaris is running as a 64-bit
   process (it always is on .NET 10) so the 64-bit DLL is loaded.
 - **"Detect" returns no cameras**: another app has the EDSDK
   session, or the camera's USB mode is set to **PC** mode but the

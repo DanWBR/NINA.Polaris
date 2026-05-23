@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the NINA Headless container image for both linux/amd64 and
+# Build the N.I.N.A. Polaris container image for both linux/amd64 and
 # linux/arm64 using Docker Buildx, and push to the configured registry.
 #
 # Usage:
@@ -12,7 +12,7 @@ set -euo pipefail
 
 TAG="${1:-latest}"
 REGISTRY="${REGISTRY:-ghcr.io/danwbr}"
-IMAGE="${REGISTRY}/nina-headless:${TAG}"
+IMAGE="${REGISTRY}/nina-polaris:${TAG}"
 
 # Ensure buildx is available and a builder exists
 if ! docker buildx inspect nina-builder > /dev/null 2>&1; then

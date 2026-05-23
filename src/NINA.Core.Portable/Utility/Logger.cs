@@ -10,7 +10,7 @@ public static class Logger {
         .WriteTo.File(
             Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "NINA", "Logs", "nina-headless-.log"),
+                "NINA", "Logs", "nina-polaris-.log"),
             rollingInterval: RollingInterval.Day,
             retainedFileCountLimit: 10)
         .CreateLogger();

@@ -69,8 +69,8 @@ preprocessing matrix:
 | OSC dual-narrowband | — | `OSC_Extract_HaOIII.ssf` |
 
 These get extracted from the Polaris assembly to
-`%LOCALAPPDATA%/NINA.Headless/siril/scripts-bundled/` (Windows) or
-`~/.local/share/NINA.Headless/siril/scripts-bundled/` (Linux/macOS)
+`%LOCALAPPDATA%/NINA.Polaris/siril/scripts-bundled/` (Windows) or
+`~/.local/share/NINA.Polaris/siril/scripts-bundled/` (Linux/macOS)
 on first use. They're idempotent — Polaris re-extracts on upgrade.
 
 Your personal scripts in the standard Siril location

@@ -1,14 +1,14 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    NINA Headless - Windows Setup Script
+    N.I.N.A. Polaris - Windows Setup Script
 .DESCRIPTION
     Installs .NET runtime, checks for ASCOM Platform, configures firewall,
-    and optionally creates a Windows Service for NINA Headless.
+    and optionally creates a Windows Service for N.I.N.A. Polaris.
 #>
 
 param(
-    [string]$InstallDir = "C:\Program Files\NINA Headless",
+    [string]$InstallDir = "C:\Program Files\N.I.N.A. Polaris",
     [string]$DotNetVersion = "10.0",
     [int]$Port = 5000,
     [switch]$CreateService
@@ -22,7 +22,7 @@ function Write-Err   { param([string]$Msg) Write-Host "[ERROR] $Msg" -Foreground
 
 Write-Host ""
 Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "  NINA Headless - Windows Setup" -ForegroundColor Cyan
+Write-Host "  N.I.N.A. Polaris - Windows Setup" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -49,7 +49,7 @@ function Install-AscomCheck {
         } else {
             Write-Warn "ASCOM Platform not found."
             Write-Warn "For ASCOM device support, install from: https://ascom-standards.org/Downloads/Index.htm"
-            Write-Warn "NINA Headless can still use Alpaca devices without ASCOM Platform."
+            Write-Warn "N.I.N.A. Polaris can still use Alpaca devices without ASCOM Platform."
         }
     }
 
@@ -146,7 +146,7 @@ function Install-AstapCheck {
 
 # Step 4: Install application files
 function Install-Application {
-    Write-Info "Installing NINA Headless to $InstallDir..."
+    Write-Info "Installing N.I.N.A. Polaris to $InstallDir..."
 
     if (-not (Test-Path $InstallDir)) {
         New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
@@ -155,7 +155,7 @@ function Install-Application {
     $scriptDir = Split-Path -Parent $PSCommandPath
     $publishDir = Join-Path (Split-Path -Parent $scriptDir) "publish"
 
-    if ((Test-Path $publishDir) -and (Test-Path (Join-Path $publishDir "NINA.Headless.exe"))) {
+    if ((Test-Path $publishDir) -and (Test-Path (Join-Path $publishDir "NINA.Polaris.exe"))) {
         Write-Info "Copying published binaries..."
         Copy-Item -Path "$publishDir\*" -Destination $InstallDir -Recurse -Force
         Write-Info "Application files installed"
@@ -169,7 +169,7 @@ function Install-Application {
 function Set-FirewallRule {
     Write-Info "Configuring firewall for port $Port..."
 
-    $ruleName = "NINA Headless (TCP $Port)"
+    $ruleName = "N.I.N.A. Polaris (TCP $Port)"
 
     $existing = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
     if ($existing) {
@@ -185,7 +185,7 @@ function Set-FirewallRule {
             -LocalPort $Port `
             -Action Allow `
             -Profile Private `
-            -Description "Allow NINA Headless web UI access on LAN" | Out-Null
+            -Description "Allow N.I.N.A. Polaris web UI access on LAN" | Out-Null
 
         Write-Info "Firewall rule created (Private network only)"
     } catch {
@@ -204,7 +204,7 @@ function Install-NinaService {
     Write-Info "Creating Windows Service..."
 
     $serviceName = "NINAHeadless"
-    $exePath = Join-Path $InstallDir "NINA.Headless.exe"
+    $exePath = Join-Path $InstallDir "NINA.Polaris.exe"
 
     if (-not (Test-Path $exePath)) {
         Write-Warn "Cannot create service: $exePath not found"
@@ -228,9 +228,9 @@ function Install-NinaService {
     sc.exe create $serviceName `
         binPath= $binPath `
         start= delayed-auto `
-        DisplayName= "NINA Headless Astronomy Controller" | Out-Null
+        DisplayName= "N.I.N.A. Polaris Astronomy Controller" | Out-Null
 
-    sc.exe description $serviceName "NINA Headless - Web-based astronomy camera and telescope controller" | Out-Null
+    sc.exe description $serviceName "N.I.N.A. Polaris - Web-based astronomy camera and telescope controller" | Out-Null
 
     sc.exe failure $serviceName reset= 86400 actions= restart/10000/restart/30000/restart/60000 | Out-Null
 
@@ -247,14 +247,14 @@ function Install-StartupShortcut {
 
     Write-Info "Creating startup shortcut..."
 
-    $exePath = Join-Path $InstallDir "NINA.Headless.exe"
+    $exePath = Join-Path $InstallDir "NINA.Polaris.exe"
     if (-not (Test-Path $exePath)) {
         Write-Warn "Skipping shortcut: application not installed yet"
         return
     }
 
     $startupFolder = [System.Environment]::GetFolderPath("CommonStartup")
-    $shortcutPath = Join-Path $startupFolder "NINA Headless.lnk"
+    $shortcutPath = Join-Path $startupFolder "N.I.N.A. Polaris.lnk"
 
     try {
         $shell = New-Object -ComObject WScript.Shell
@@ -262,7 +262,7 @@ function Install-StartupShortcut {
         $shortcut.TargetPath = $exePath
         $shortcut.Arguments = "--urls=http://0.0.0.0:$Port"
         $shortcut.WorkingDirectory = $InstallDir
-        $shortcut.Description = "NINA Headless Astronomy Controller"
+        $shortcut.Description = "N.I.N.A. Polaris Astronomy Controller"
         $shortcut.WindowStyle = 7  # minimized
         $shortcut.Save()
         Write-Info "Startup shortcut created (runs minimized on login)"
@@ -288,7 +288,7 @@ Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "  Setup Complete!" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Info "Access NINA Headless at:"
+Write-Info "Access N.I.N.A. Polaris at:"
 if ($ip) {
     Write-Info "  http://${ip}:$Port"
 }
@@ -299,6 +299,6 @@ if ($CreateService) {
     Write-Info "  Start-Service NINAHeadless"
 } else {
     Write-Info "Run manually:"
-    Write-Info "  & '$InstallDir\NINA.Headless.exe' --urls=http://0.0.0.0:$Port"
+    Write-Info "  & '$InstallDir\NINA.Polaris.exe' --urls=http://0.0.0.0:$Port"
 }
 Write-Host ""

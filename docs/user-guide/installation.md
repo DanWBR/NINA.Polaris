@@ -31,9 +31,9 @@ Three options:
 
 **A. Pre-built release** (when available):
 ```bash
-curl -L https://github.com/DanWBR/nina-headless/releases/latest/download/polaris-linux-arm64.tar.gz | tar xz
+curl -L https://github.com/DanWBR/nina-polaris/releases/latest/download/polaris-linux-arm64.tar.gz | tar xz
 cd polaris-linux-arm64
-./NINA.Headless
+./NINA.Polaris
 ```
 
 **B. Docker** (if `docker` is installed):
@@ -42,7 +42,7 @@ docker run -d --name polaris \
   --network host \
   -v /home/pi/astro:/data \
   -v $HOME/.config/polaris:/root/.config \
-  ghcr.io/danwbr/nina-headless:latest
+  ghcr.io/danwbr/nina-polaris:latest
 ```
 
 The `--network host` is critical — INDI's BLOB-streaming over loopback
@@ -50,11 +50,11 @@ is much faster than a bridge.
 
 **C. Build from source**:
 ```bash
-git clone https://github.com/DanWBR/nina-headless.git
-cd nina-headless
-dotnet publish src/NINA.Headless/NINA.Headless.csproj \
+git clone https://github.com/DanWBR/nina-polaris.git
+cd nina-polaris
+dotnet publish src/NINA.Polaris/NINA.Polaris.csproj \
   -c Release -r linux-arm64 --self-contained
-./src/NINA.Headless/bin/Release/net10.0/linux-arm64/publish/NINA.Headless
+./src/NINA.Polaris/bin/Release/net10.0/linux-arm64/publish/NINA.Polaris
 ```
 
 ### 3. Start INDI server with the drivers you need
@@ -112,7 +112,7 @@ show up.
 ```powershell
 # Download + extract polaris-win-x64.zip from releases
 cd polaris-win-x64
-.\NINA.Headless.exe
+.\NINA.Polaris.exe
 ```
 
 By default the app appears at `http://localhost:5000` and other LAN

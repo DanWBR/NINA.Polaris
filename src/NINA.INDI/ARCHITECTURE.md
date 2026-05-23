@@ -37,7 +37,7 @@ src/NINA.INDI/
     IndiDome.cs              # azimuth, shutter, slave
     IndiWeather.cs           # WEATHER_PARAMETERS (read-only)
     IndiGuider.cs            # PHD2-side guider devices (legacy; PHD2
-                             # connection is via JSON-RPC in NINA.Headless)
+                             # connection is via JSON-RPC in NINA.Polaris)
 ```
 
 ## Protocol layer
@@ -109,11 +109,11 @@ incoming FITS BLOB into a `BaseImageData` via `FITSReader` from
 - It doesn't launch `indiserver` — that's an external prerequisite
   the user runs separately (or via `indiwebmanager`).
 - It doesn't speak Alpaca / ASCOM — those live in
-  `src/NINA.Headless/Services/Alpaca/`.
+  `src/NINA.Polaris/Services/Alpaca/`.
 
-## How NINA.Headless uses it
+## How NINA.Polaris uses it
 
-`EquipmentManager` in NINA.Headless owns a single `IndiClient`
+`EquipmentManager` in NINA.Polaris owns a single `IndiClient`
 instance. When a rig selects an INDI device (e.g. "ZWO ASI2600MC
 Pro" as Camera), `EquipmentManager` instantiates the matching
 `IndiCamera` wrapper bound to that device name and exposes it through
@@ -128,7 +128,7 @@ equipment. If you need a new one (e.g. "safety monitor"):
    property vector names
 2. Create `Devices/IndiSafety.cs` with the wrapper pattern (constructor
    + property getters + action methods)
-3. Wire it into `EquipmentManager` in NINA.Headless
+3. Wire it into `EquipmentManager` in NINA.Polaris
 4. Add the endpoint group + UI card following the patterns in
    [CONTRIBUTING.md](../../CONTRIBUTING.md)
 

@@ -1,16 +1,16 @@
 # NINA Relay Server
 
-Reverse-tunnel relay so NINA Headless instances behind a NAT (typical
+Reverse-tunnel relay so N.I.N.A. Polaris instances behind a NAT (typical
 home or remote-observatory setup) can be reached from the public internet
 without inbound port-forwarding or DDNS.
 
 ```
  Browser  ──HTTPS──►  relay.example.com  ──reverse WebSocket──►  Raspberry Pi
-                       (this project)                              (NINA Headless,
+                       (this project)                              (N.I.N.A. Polaris,
                                                                     no public IP)
 ```
 
-The NINA Headless instance opens an **outbound** WebSocket to this relay
+The N.I.N.A. Polaris instance opens an **outbound** WebSocket to this relay
 server, authenticates with a bearer token, and stays connected. The relay
 exposes a public HTTP endpoint and forwards browser requests through that
 tunnel.
@@ -187,7 +187,7 @@ the cert is *requested* but not *required* by Kestrel.
 }
 ```
 
-On the **NINA Headless** side, point the client at a `.pfx`:
+On the **N.I.N.A. Polaris** side, point the client at a `.pfx`:
 
 ```jsonc
 {
@@ -241,7 +241,7 @@ Generate tokens with any source of entropy:
 openssl rand -hex 32
 ```
 
-On the NINA Headless side, add to `appsettings.json` or env vars:
+On the N.I.N.A. Polaris side, add to `appsettings.json` or env vars:
 
 ```jsonc
 {
@@ -289,7 +289,7 @@ Two reasonable deployment modes:
 
 2. **Each user self-hosts**: any small VPS with a public IP works; the user
    issues their own tokens. The compose file in the repo root can run both
-   the relay server and an indiserver alongside NINA Headless.
+   the relay server and an indiserver alongside N.I.N.A. Polaris.
 
 The protocol and wire format are identical either way.
 

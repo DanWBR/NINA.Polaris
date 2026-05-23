@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# NINA Headless - Publish Script for Linux ARM64 (Raspberry Pi)
+# N.I.N.A. Polaris - Publish Script for Linux ARM64 (Raspberry Pi)
 # =============================================================================
 # Builds a self-contained deployment for linux-arm64.
 # Run from any directory; paths are resolved relative to this script.
@@ -10,12 +10,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-PROJECT="$REPO_ROOT/src/NINA.Headless/NINA.Headless.csproj"
+PROJECT="$REPO_ROOT/src/NINA.Polaris/NINA.Polaris.csproj"
 OUTPUT_DIR="$REPO_ROOT/publish/linux-arm64"
 RID="linux-arm64"
 
 echo "============================================================================="
-echo "  NINA Headless - Publishing for $RID"
+echo "  N.I.N.A. Polaris - Publishing for $RID"
 echo "============================================================================="
 echo ""
 
@@ -66,12 +66,12 @@ echo ""
 echo "To deploy to your Raspberry Pi:"
 echo ""
 echo "  1. Copy the published files to your Pi:"
-echo "     scp -r $OUTPUT_DIR pi@<pi-address>:/tmp/nina-headless"
+echo "     scp -r $OUTPUT_DIR pi@<pi-address>:/tmp/nina-polaris"
 echo ""
 echo "  2. SSH into the Pi and run the installer:"
 echo "     ssh pi@<pi-address>"
-echo "     sudo ./deploy/install.sh /tmp/nina-headless"
+echo "     sudo ./deploy/install.sh /tmp/nina-polaris"
 echo ""
 echo "  Or use rsync for faster incremental updates:"
-echo "     rsync -avz --progress $OUTPUT_DIR/ pi@<pi-address>:/tmp/nina-headless/"
+echo "     rsync -avz --progress $OUTPUT_DIR/ pi@<pi-address>:/tmp/nina-polaris/"
 echo ""
