@@ -3680,15 +3680,34 @@ function ninaApp() {
             if (!this._celestialReady) return;
             // Camera-FOV rectangle is drawn as a custom GeoJSON layer
             // (d3-celestial supports user-supplied overlays via add()).
-            if (!this.aladinShowFov || !this.skyTarget) {
+            // Anchor preference: a selected sky target (the user is
+            // planning where to go), else the mount's actual pointing
+            // (the user wants to see what's currently in frame). Bail
+            // out when neither is available — and also when the toggle
+            // is off.
+            if (!this.aladinShowFov) {
                 if (this._fovLayerId) try { Celestial.remove(this._fovLayerId); } catch {}
                 this._fovLayerId = null;
                 Celestial.redraw();
                 return;
             }
-            const ra  = this.skyTarget.ra ?? this.skyTarget.raHours;
-            const dec = this.skyTarget.dec ?? this.skyTarget.decDeg;
-            if (ra == null || dec == null) return;
+            let ra = this.skyTarget?.ra ?? this.skyTarget?.raHours;
+            let dec = this.skyTarget?.dec ?? this.skyTarget?.decDeg;
+            if ((ra == null || dec == null) && this.mount?.connected
+                && this.mount.ra != null && this.mount.dec != null) {
+                // Fall back to the mount's current pointing so the FOV
+                // overlay is visible the moment the user opens the SKY
+                // tab with a connected mount, without requiring a
+                // target to be picked first.
+                ra = this.mount.ra;
+                dec = this.mount.dec;
+            }
+            if (ra == null || dec == null) {
+                if (this._fovLayerId) try { Celestial.remove(this._fovLayerId); } catch {}
+                this._fovLayerId = null;
+                Celestial.redraw();
+                return;
+            }
 
             // FOV rectangle in equatorial coords. The corners are offset
             // from the target by ±w in RA (corrected by cos(dec) for the
@@ -7550,6 +7569,7 @@ function ninaApp() {
                 }
             }
             if (eq.telescope) {
+                const prevRa = this.mount.ra, prevDec = this.mount.dec;
                 Object.assign(this.mount, {
                     ra: eq.telescope.ra, dec: eq.telescope.dec,
                     alt: eq.telescope.alt, az: eq.telescope.az,
@@ -7560,6 +7580,18 @@ function ninaApp() {
                 this.selectedTelescope = eq.telescope.name;
                 if (!this.equipMountChoice && eq.telescope.name) {
                     this.equipMountChoice = eq.telescope.name;
+                }
+                // Mount-anchored FOV overlay needs to track the new
+                // RA/Dec. Skip when a skyTarget is selected (that path
+                // anchors the FOV on the target, not the mount) or
+                // when the position didn't change (don't churn d3-
+                // celestial on every 1Hz tick if the mount is parked
+                // or perfectly still).
+                if (this.tab === 'sky' && !this.skyTarget
+                    && this.aladinShowFov
+                    && (prevRa !== this.mount.ra || prevDec !== this.mount.dec)
+                    && typeof this.updateSkyCameraFov === 'function') {
+                    this.updateSkyCameraFov();
                 }
             }
             if (eq.focuser) {
