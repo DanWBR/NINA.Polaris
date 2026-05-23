@@ -1930,6 +1930,20 @@ function ninaApp() {
                 this._celestialReady = true;
                 this._updateSkyClock();
                 console.log('d3-celestial ready (live horizontal projection)');
+                // Register the FOV overlay layers eagerly — the lazy
+                // path via updateSkyCameraFov() can miss the very first
+                // redraw cycle if the user opens the SKY tab before any
+                // updateFov() / WS-handler call fires. Calling
+                // updateSkyCameraFov() here also force-paints both
+                // rectangles right away so the user sees them without
+                // needing to interact with anything.
+                try {
+                    this._ensureFovLayers();
+                    this.updateSkyCameraFov();
+                    console.log('[Polaris] FOV layers registered (mount + target)');
+                } catch (e) {
+                    console.warn('[Polaris] FOV layer init failed', e);
+                }
             } catch (e) {
                 console.error('d3-celestial init failed', e);
             }
@@ -3802,6 +3816,12 @@ function ninaApp() {
                         og.selectAll('.fov-mount').remove();
                         og.selectAll('.fov-mount-mark').remove();
                         const g = self._fovMountGeo;
+                        if (!self._fovDiagLogged) {
+                            self._fovDiagLogged = true;
+                            console.log('[Polaris] FOV redraw fired — mountGeo:',
+                                !!g, 'aladinShowFov:', self.aladinShowFov,
+                                'fov:', self.fov);
+                        }
                         if (!g) return;
                         og.selectAll('.fov-mount')
                             .data(g.features).enter().append('path')
