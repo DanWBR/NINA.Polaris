@@ -110,21 +110,204 @@ public class PolarAlignmentService {
     }
 
     private async Task RunAsync(PolarAlignmentJob job, CancellationToken ct) {
-        // PA-2 implements the capture/slew/solve sequence. PA-3 wires
-        // in the math at the Computing phase. For PA-1 this is a stub
-        // so the endpoint surface compiles and the WS broadcaster has
-        // something to serialize.
+        // Track original mount position so we can slew back at the
+        // end (cosmetic — TPPA already extracted the error vector by
+        // then, but leaving the user 60° off where they expected is
+        // surprising).
+        double ra0 = 0, dec0 = 0;
+
         try {
+            // 1. Preflight ----------------------------------------------------
             SetPhase(job, PolarAlignmentPhase.Preflight);
-            await Task.Delay(100, ct); // give the WS one tick to see Preflight
-            Fail(job, "Polar alignment loop not yet implemented (PA-2).");
+            _notify.Push("info", "Polar alignment starting…", 2500);
+
+            var telescope = _equip.Telescope;
+            var camera = _equip.Camera;
+            if (telescope == null || !telescope.IsConnected) {
+                Fail(job, "Telescope not connected.");
+                return;
+            }
+            if (camera == null || !camera.IsConnected) {
+                Fail(job, "Camera not connected.");
+                return;
+            }
+            if (!telescope.IsTracking) {
+                Fail(job, "Telescope must be tracking (sidereal) for TPPA. Enable tracking and retry.");
+                return;
+            }
+            if (telescope.IsParked) {
+                Fail(job, "Telescope is parked. Unpark before running polar alignment.");
+                return;
+            }
+
+            ra0 = telescope.RightAscension;
+            dec0 = telescope.Declination;
+
+            // 2. Three solved points -----------------------------------------
+            // Slew step measured in degrees; mount RA is in hours, so
+            // convert via /15. Positive direction; meridian-aware
+            // picker is TODO (see plan edge cases).
+            double slewStepHours = job.Options.SlewStepDegrees / 15.0;
+
+            for (int i = 0; i < 3; i++) {
+                ct.ThrowIfCancellationRequested();
+
+                double targetRa = NormalizeRaHours(ra0 + i * slewStepHours);
+
+                // Slew. For i=0 this is usually a no-op (~0.01h drift
+                // during the brief preflight) but we still call it to
+                // make sure we know our exact pointing.
+                SetPhase(job, MovingPhaseFor(i));
+                _notify.Push("info", $"Polar align: slewing to point {i + 1}/3 (RA {targetRa:F3}h)", 2000);
+                await telescope.SlewAsync(targetRa, dec0, ct);
+
+                // Settle — mount stops shaking, INDI driver finishes
+                // emitting EQUATORIAL_EOD_COORD updates.
+                if (job.Options.SettleSeconds > 0) {
+                    await Task.Delay(job.Options.SettleSeconds * 1000, ct);
+                }
+
+                // Capture + plate-solve.
+                SetPhase(job, SolvingPhaseFor(i));
+                var image = await camera.CaptureAsync(
+                    job.Options.ExposureSeconds,
+                    new CaptureOptions(Gain: job.Options.Gain, ImageType: "POLAR"),
+                    ct);
+                if (image == null || image.Properties.Width <= 0 || image.Properties.Height <= 0) {
+                    Fail(job, $"Point {i + 1}: camera returned an empty frame.");
+                    return;
+                }
+
+                var result = await SolveOnceAsync(image, telescope, ct);
+                if (!result.Success) {
+                    // One retry with doubled exposure — common rescue
+                    // for marginal star count on the first attempt.
+                    _logger.LogInformation(
+                        "Polar align point {Index} first solve failed ({Err}); retrying with 2x exposure",
+                        i + 1, result.Error);
+                    var retryImage = await camera.CaptureAsync(
+                        job.Options.ExposureSeconds * 2.0,
+                        new CaptureOptions(Gain: job.Options.Gain, ImageType: "POLAR"),
+                        ct);
+                    if (retryImage != null && retryImage.Properties.Width > 0) {
+                        result = await SolveOnceAsync(retryImage, telescope, ct);
+                    }
+                }
+                if (!result.Success) {
+                    Fail(job, $"Plate solve failed at point {i + 1}: {result.Error}. " +
+                              $"Try increasing exposure or gain in rig settings.");
+                    return;
+                }
+
+                job.Points.Add(new PolarPoint(
+                    Index: i,
+                    RaHours: result.RaHours,
+                    DecDeg: result.DecDeg,
+                    RotationDeg: result.RotationDeg,
+                    AtUtc: DateTime.UtcNow));
+
+                // Force a WS push so the UI's "Point N of 3 solved"
+                // ticker updates immediately instead of waiting for the
+                // next 1Hz tick.
+                try { JobUpdated?.Invoke(job); } catch { }
+            }
+
+            // 3. Compute polar error ----------------------------------------
+            SetPhase(job, PolarAlignmentPhase.Computing);
+            // PA-3 plugs in PolarAlignmentMath.ComputeError here. Until
+            // then the job lands with zeroed errors — the UI still
+            // shows the 3 solved points and the phase transitions,
+            // just no arrow.
+            job.AzErrorArcsec = 0;
+            job.AltErrorArcsec = 0;
+            job.TotalErrorArcsec = 0;
+
+            // 4. Cosmetic slew home -----------------------------------------
+            SetPhase(job, PolarAlignmentPhase.SlewingHome);
+            try {
+                await telescope.SlewAsync(ra0, dec0, ct);
+            } catch (Exception ex) {
+                // Don't fail the whole alignment if the home slew
+                // hiccups — the user already has their error vector.
+                _logger.LogWarning(ex, "Polar align: slew back to start failed");
+            }
+
+            // 5. Done -------------------------------------------------------
+            job.CompletedAt = DateTime.UtcNow;
+            SetPhase(job, PolarAlignmentPhase.Ok);
+            _notify.Push("ok",
+                "Polar alignment complete — see POLAR tab for error vector.", 5000);
         } catch (OperationCanceledException) {
             SetPhase(job, PolarAlignmentPhase.Cancelled);
             job.CompletedAt = DateTime.UtcNow;
+            _notify.Push("warn", "Polar alignment cancelled.");
+            // Best-effort slew home so the mount isn't stranded.
+            try {
+                if (_equip.Telescope != null && ra0 > 0)
+                    await _equip.Telescope.SlewAsync(ra0, dec0, CancellationToken.None);
+            } catch { /* shutdown — eat it */ }
         } catch (Exception ex) {
             _logger.LogError(ex, "Polar alignment RunAsync crashed");
             Fail(job, ex.Message);
         }
+    }
+
+    /// <summary>Write a temp FITS, call the plate solver, delete the
+    /// FITS regardless of outcome. Caller decides what to do with
+    /// failures (retry / fail the job).</summary>
+    private async Task<PlateSolveResult> SolveOnceAsync(
+        IImageData image, ITelescope telescope, CancellationToken ct) {
+        var path = WriteTempFits(image);
+        try {
+            var opts = new PlateSolveOptions {
+                // RA hint in hours, Dec hint in degrees. Helps every
+                // solver narrow the search — especially ASTAP.
+                HintRa = telescope.RightAscension,
+                HintDec = telescope.Declination,
+                SearchRadiusDeg = 30,
+                ScaleArcsecPerPixel = ComputePixelScaleHint(),
+                FovDeg = 0  // let the solver derive from pixel scale + image size
+            };
+            return await _plateSolve.SolveAsync(path, opts, ct);
+        } finally {
+            try { File.Delete(path); } catch { /* housekeeping */ }
+        }
+    }
+
+    private static PolarAlignmentPhase MovingPhaseFor(int index) => index switch {
+        0 => PolarAlignmentPhase.MovingToPoint1,
+        1 => PolarAlignmentPhase.MovingToPoint2,
+        _ => PolarAlignmentPhase.MovingToPoint3,
+    };
+
+    private static PolarAlignmentPhase SolvingPhaseFor(int index) => index switch {
+        0 => PolarAlignmentPhase.SolvingPoint1,
+        1 => PolarAlignmentPhase.SolvingPoint2,
+        _ => PolarAlignmentPhase.SolvingPoint3,
+    };
+
+    /// <summary>Wrap an RA value back into [0, 24) hours. Adding
+    /// slewStepHours can push past 24h near RA=23h.</summary>
+    private static double NormalizeRaHours(double ra) {
+        var r = ra % 24.0;
+        return r < 0 ? r + 24.0 : r;
+    }
+
+    /// <summary>Best-effort pixel-scale hint for the plate solver,
+    /// computed from camera pixel size + rig main focal length. The
+    /// solver derives the real scale from the FITS header too, but
+    /// the hint narrows search radius (especially on ASTAP) and is
+    /// REQUIRED by PlateSolve3. Returns 0 when either input is
+    /// missing — the solver chain handles the unknown-scale case.</summary>
+    private double ComputePixelScaleHint() {
+        var cam = _equip.Camera;
+        if (cam == null) return 0;
+        var rig = _profiles.ActiveEquipmentProfile;
+        if (rig.FocalLengthMm <= 0) return 0;
+        // PixelSizeX is in microns. arcsec/pixel = pixelSize_um * 206.265 / focalLength_mm.
+        var px = cam.PixelSizeX;
+        if (double.IsNaN(px) || px <= 0) return 0;
+        return px * 206.265 / rig.FocalLengthMm;
     }
 
     private void SetPhase(PolarAlignmentJob job, PolarAlignmentPhase phase) {
