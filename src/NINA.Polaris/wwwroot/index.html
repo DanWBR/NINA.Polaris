@@ -62,31 +62,16 @@
                       style="margin-left:4px;opacity:0.85"></span>
             </span>
             <!-- PHD2 badge: tracks the JSON-RPC connection + live
-                 AppState (not just the OS process running flag, which
-                 can be true while the RPC client is still disconnected).
-                 Shows the same state the GUIDE-tab Control panel sees:
-                   • disconnected → "PHD2 OFF" (grey)
-                   • guiding      → "PHD2 GUIDING (0.65\"")" (green)
-                   • calibrating  → "PHD2 CAL"   (amber)
-                   • looping      → "PHD2 LOOP"  (amber)
-                   • selected/lost→ "PHD2 LOST"/etc (amber/error)
-                   • connected but idle → "PHD2 ON" (amber) -->
+                 AppState (same source the GUIDE-tab Control panel
+                 uses). Single x-text expression — three x-show'd
+                 spans were causing the badge to render empty when
+                 Alpine couldn't evaluate one of the cascading
+                 conditions cleanly. -->
             <span class="status-indicator"
-                  :class="!guider.connected ? 'off'
-                          : (guider.guiding ? 'ok'
-                          : (guider.appState === 'LostLock' ? 'error' : 'warn'))"
+                  :class="phd2BadgeClass()"
                   @click="tab='guide'"
-                  :title="!guider.connected
-                          ? 'PHD2 not connected — click for Guider'
-                          : (guider.guiding
-                             ? ('Guiding — RMS ' + (guider.rmsTotal?.toFixed(2) || '--') + '\"')
-                             : ('PHD2 ' + (guider.appState || 'connected') + ' — click for Guider'))">
-                <span x-show="!guider.connected">PHD2 OFF</span>
-                <span x-show="guider.connected && guider.guiding"
-                      x-text="'PHD2 GUIDING (' + (guider.rmsTotal?.toFixed(2) || '--') + '\")'"></span>
-                <span x-show="guider.connected && !guider.guiding"
-                      x-text="'PHD2 ' + (guider.appState === 'Stopped' ? 'ON' : (guider.appState || 'ON').toUpperCase())"></span>
-            </span>
+                  :title="phd2BadgeTitle()"
+                  x-text="phd2BadgeText()"></span>
             <span class="status-chip" x-show="cameraTemp !== null">
                 <span class="chip-icon">T</span>
                 <span x-text="cameraTemp !== null ? cameraTemp.toFixed(1) + '&deg;C' : '--'"></span>

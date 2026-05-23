@@ -7666,6 +7666,38 @@ function ninaApp() {
         hostCpuLabel() {
             return (this.host && this.host.device && this.host.device.cpuLabel) || '';
         },
+
+        // PHD2 header badge: text + class + tooltip computed from the
+        // live guider state (same source the GUIDE-tab Control panel
+        // reads). Done as plain methods because the previous inline
+        // x-show cascade rendered empty in some Alpine eval orders.
+        phd2BadgeText() {
+            const g = this.guider || {};
+            if (!g.connected) return 'PHD2 OFF';
+            if (g.guiding) {
+                const rms = (g.rmsTotal != null) ? g.rmsTotal.toFixed(2) : '--';
+                return `PHD2 GUIDING (${rms}")`;
+            }
+            const st = g.appState || '';
+            if (!st || st === 'Stopped') return 'PHD2 ON';
+            return 'PHD2 ' + st.toUpperCase();
+        },
+        phd2BadgeClass() {
+            const g = this.guider || {};
+            if (!g.connected) return 'off';
+            if (g.guiding) return 'ok';
+            if (g.appState === 'LostLock') return 'error';
+            return 'warn';
+        },
+        phd2BadgeTitle() {
+            const g = this.guider || {};
+            if (!g.connected) return 'PHD2 not connected — click for Guider';
+            if (g.guiding) {
+                const rms = (g.rmsTotal != null) ? g.rmsTotal.toFixed(2) : '--';
+                return `Guiding — RMS ${rms}" — click for Guider`;
+            }
+            return `PHD2 ${g.appState || 'connected'} — click for Guider`;
+        },
         hostDeviceTooltip() {
             const d = this.host && this.host.device;
             if (!d) return '';
