@@ -1159,18 +1159,34 @@ function ninaApp() {
                 return false;
             }
 
-            // Vertex shader: clip-space quad
+            // Vertex shader: clip-space quad.
+            //
+            // Important: the y-flip is done on gl_Position (negate
+            // a_pos.y), NOT on v_uv. The fragment shader's Bayer
+            // debayer snaps each output pixel to a 2x2 source cell
+            // via floor(v_uv * texSize/2) * 2; if we flipped v_uv
+            // instead, an even-height texture (e.g. 2192 rows) would
+            // shift every 2x2 cell by one source row, turning an
+            // RGGB sensor into a GBRG read at the shader level.
+            // That gave a heavy green/cyan colour cast on OSC
+            // cameras (e.g. ZWO ASI715MC). Flipping the position
+            // instead leaves texel (0,0) of the upload mapping to
+            // screen-top-left, so the Bayer pattern enum the server
+            // sent us applies directly.
             const vs = `#version 300 es
                 in vec2 a_pos;
                 out vec2 v_uv;
                 void main() {
-                    v_uv = vec2((a_pos.x + 1.0) * 0.5, 1.0 - (a_pos.y + 1.0) * 0.5);
-                    gl_Position = vec4(a_pos, 0.0, 1.0);
+                    v_uv = (a_pos.xy + vec2(1.0)) * 0.5;
+                    gl_Position = vec4(a_pos.x, -a_pos.y, 0.0, 1.0);
                 }`;
 
             // Fragment shader: sample uint16 R channel + optional 2x2 debayer + MTF stretch.
-            // Bayer pattern encoding (matches server-side BayerPatternEnum):
-            //   0 = None (mono), 1 = RGGB, 2 = BGGR, 3 = GRBG, 4 = GBRG
+            // Bayer pattern encoding MUST match NINA.Core.Enum.BayerPatternEnum:
+            //   0 = None (mono), 1 = RGGB, 2 = BGGR, 3 = GBRG, 4 = GRBG
+            // (3 and 4 were previously swapped in this shader relative
+            // to the C# enum — the GBRG/GRBG case fell through to the
+            // wrong colour assignment.)
             const fs = `#version 300 es
                 precision highp float;
                 precision highp usampler2D;
@@ -1215,8 +1231,8 @@ function ninaApp() {
                     float r, g, b;
                     if (u_bayer == 1) { r = p00; g = 0.5 * (p10 + p01); b = p11; }       // RGGB
                     else if (u_bayer == 2) { b = p00; g = 0.5 * (p10 + p01); r = p11; }   // BGGR
-                    else if (u_bayer == 3) { g = 0.5 * (p00 + p11); r = p10; b = p01; }   // GRBG
-                    else /* 4 GBRG */      { g = 0.5 * (p00 + p11); b = p10; r = p01; }
+                    else if (u_bayer == 3) { g = 0.5 * (p00 + p11); b = p10; r = p01; }   // GBRG
+                    else /* 4 GRBG */      { g = 0.5 * (p00 + p11); r = p10; b = p01; }
                     fragColor = vec4(stretch(r), stretch(g), stretch(b), 1.0);
                 }`;
 
