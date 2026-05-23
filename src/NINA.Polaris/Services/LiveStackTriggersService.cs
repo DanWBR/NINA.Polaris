@@ -53,18 +53,23 @@ public class LiveStackTriggersService : IDisposable {
     public LiveStackTriggersStatus CurrentStatus {
         get {
             lock (_stateLock) {
+                // NaN/Infinity are NOT valid JSON and would 500 the
+                // /api/livestack/triggers/status endpoint. The "not
+                // yet observed" sentinels (NaN for temp, 0 for hfr /
+                // drift / frame) become null so the UI's null-coalesce
+                // can render an em-dash.
                 return new LiveStackTriggersStatus {
                     IsExecuting = _isExecuting,
                     ExecutingKind = _executingKind,
                     LastRefocusAt = _lastRefocusAt == DateTime.MinValue ? null : _lastRefocusAt,
-                    LastRefocusFrame = _lastRefocusFrame,
-                    LastRefocusHfr = _lastRefocusHfr,
-                    LastRefocusTempC = _lastRefocusTempC,
+                    LastRefocusFrame = _lastRefocusFrame == 0 ? null : _lastRefocusFrame,
+                    LastRefocusHfr = SafeDouble(_lastRefocusHfr, zeroMeansUnset: true),
+                    LastRefocusTempC = SafeDouble(_lastRefocusTempC, zeroMeansUnset: false),
                     LastRecenterAt = _lastRecenterAt == DateTime.MinValue ? null : _lastRecenterAt,
-                    LastRecenterFrame = _lastRecenterFrame,
-                    LastRecenterDriftArcsec = _lastRecenterDriftArcsec,
-                    ReferenceRaHours = _referenceRaHours,
-                    ReferenceDecDeg = _referenceDecDeg,
+                    LastRecenterFrame = _lastRecenterFrame == 0 ? null : _lastRecenterFrame,
+                    LastRecenterDriftArcsec = SafeDouble(_lastRecenterDriftArcsec, zeroMeansUnset: true),
+                    ReferenceRaHours = SafeDouble(_referenceRaHours),
+                    ReferenceDecDeg = SafeDouble(_referenceDecDeg),
                     ReferenceSolved = _referenceSolved,
                     LastError = _lastError
                 };
@@ -362,18 +367,39 @@ public class LiveStackTriggersService : IDisposable {
     }
 
     public void Dispose() { _frameSub.Dispose(); }
+
+    /// <summary>Map sentinel doubles (NaN, ±Infinity, optionally 0)
+    /// to null so the JSON serializer doesn't throw. System.Text.Json
+    /// rejects NaN/Infinity by default and there's no JsonNumberHandling
+    /// flag for "treat zero as not-set" — easier to normalise here
+    /// than to teach every consumer to ignore garbage values.</summary>
+    private static double? SafeDouble(double v, bool zeroMeansUnset = false) {
+        if (double.IsNaN(v) || double.IsInfinity(v)) return null;
+        if (zeroMeansUnset && v == 0) return null;
+        return v;
+    }
+    private static double? SafeDouble(double? v) {
+        if (v is null) return null;
+        return SafeDouble(v.Value);
+    }
 }
 
 public class LiveStackTriggersStatus {
     public bool IsExecuting { get; init; }
     public string? ExecutingKind { get; init; }
     public DateTime? LastRefocusAt { get; init; }
-    public int LastRefocusFrame { get; init; }
-    public double LastRefocusHfr { get; init; }
-    public double LastRefocusTempC { get; init; }
+    /// <summary>Null = no refocus has run yet this session.</summary>
+    public int? LastRefocusFrame { get; init; }
+    /// <summary>Null = unknown / not measured (was 0 or NaN internally).</summary>
+    public double? LastRefocusHfr { get; init; }
+    /// <summary>Null = unknown (camera doesn't report temperature, or
+    /// no refocus has run yet).</summary>
+    public double? LastRefocusTempC { get; init; }
     public DateTime? LastRecenterAt { get; init; }
-    public int LastRecenterFrame { get; init; }
-    public double LastRecenterDriftArcsec { get; init; }
+    /// <summary>Null = no recenter has run yet this session.</summary>
+    public int? LastRecenterFrame { get; init; }
+    /// <summary>Null = unknown.</summary>
+    public double? LastRecenterDriftArcsec { get; init; }
     public double? ReferenceRaHours { get; init; }
     public double? ReferenceDecDeg { get; init; }
     public bool ReferenceSolved { get; init; }

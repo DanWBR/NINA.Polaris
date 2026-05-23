@@ -153,6 +153,15 @@ function ninaApp() {
         activeRigId: null,
         rigModalOpen: false,
         newRigName: '',
+        // Derived: the active rig's display name. The home panel uses
+        // this in places like `x-show="activeRig"` + "Rig: {name}".
+        // Defined as a getter so Alpine reacts when rigs or activeRigId
+        // change. Falls back to '' so x-show treats it as falsy when
+        // no rig is loaded yet.
+        get activeRig() {
+            const r = this.rigs && this.rigs.find(x => x.id === this.activeRigId);
+            return r ? r.name : '';
+        },
 
         // Telescope + optical-accessory catalogues (lazy-loaded from
         // wwwroot/data/ when the Manage Rigs modal opens). Drives

@@ -363,12 +363,12 @@
                         <div class="livestack-triggers-row text-warn"
                              x-show="liveStackStatus?.triggers?.isExecuting">
                             ⚙ Executing
-                            <strong x-text="liveStackStatus.triggers.executingKind"></strong>…
+                            <strong x-text="liveStackStatus?.triggers?.executingKind || ''"></strong>…
                             captures paused until done.
                         </div>
                         <div class="livestack-triggers-row text-err"
                              x-show="liveStackStatus?.triggers?.lastError"
-                             x-text="'⚠ ' + liveStackStatus.triggers.lastError"></div>
+                             x-text="'⚠ ' + (liveStackStatus?.triggers?.lastError || '')"></div>
 
                         <fieldset class="livestack-triggers-block">
                             <legend>
@@ -426,9 +426,9 @@
                             <div class="livestack-triggers-row text-muted"
                                  x-show="liveStackStatus?.triggers?.lastRefocusAt">
                                 Last refocus:
-                                <strong x-text="formatRelativeTime(liveStackStatus.triggers.lastRefocusAt)"></strong>
-                                at frame <strong x-text="liveStackStatus.triggers.lastRefocusFrame"></strong>
-                                (HFR <strong x-text="liveStackStatus.triggers.lastRefocusHfr?.toFixed?.(2) || '—'"></strong>)
+                                <strong x-text="formatRelativeTime(liveStackStatus?.triggers?.lastRefocusAt)"></strong>
+                                at frame <strong x-text="liveStackStatus?.triggers?.lastRefocusFrame ?? '—'"></strong>
+                                (HFR <strong x-text="liveStackStatus?.triggers?.lastRefocusHfr?.toFixed?.(2) || '—'"></strong>)
                             </div>
                         </fieldset>
 
@@ -474,8 +474,8 @@
                             <div class="livestack-triggers-row text-muted"
                                  x-show="liveStackStatus?.triggers?.referenceSolved">
                                 Reference solved:
-                                <strong x-text="formatRaDecShort(liveStackStatus.triggers.referenceRaHours,
-                                                                  liveStackStatus.triggers.referenceDecDeg)"></strong>
+                                <strong x-text="formatRaDecShort(liveStackStatus?.triggers?.referenceRaHours,
+                                                                  liveStackStatus?.triggers?.referenceDecDeg)"></strong>
                             </div>
                             <div class="livestack-triggers-row text-warn"
                                  x-show="liveStackEnabled
@@ -486,9 +486,9 @@
                             <div class="livestack-triggers-row text-muted"
                                  x-show="liveStackStatus?.triggers?.lastRecenterAt">
                                 Last recenter:
-                                <strong x-text="formatRelativeTime(liveStackStatus.triggers.lastRecenterAt)"></strong>
-                                at frame <strong x-text="liveStackStatus.triggers.lastRecenterFrame"></strong>
-                                (drift <strong x-text="liveStackStatus.triggers.lastRecenterDriftArcsec?.toFixed?.(1) || '—'"></strong>")
+                                <strong x-text="formatRelativeTime(liveStackStatus?.triggers?.lastRecenterAt)"></strong>
+                                at frame <strong x-text="liveStackStatus?.triggers?.lastRecenterFrame ?? '—'"></strong>
+                                (drift <strong x-text="liveStackStatus?.triggers?.lastRecenterDriftArcsec?.toFixed?.(1) || '—'"></strong>")
                             </div>
                         </fieldset>
                     </details>

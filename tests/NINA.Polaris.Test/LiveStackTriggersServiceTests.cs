@@ -65,8 +65,11 @@ public class LiveStackTriggersServiceTests {
         var st = svc.CurrentStatus;
         Assert.That(st.LastRefocusAt, Is.Null);
         Assert.That(st.LastRecenterAt, Is.Null);
-        Assert.That(st.LastRefocusFrame, Is.EqualTo(0));
-        Assert.That(st.LastRecenterFrame, Is.EqualTo(0));
+        // Null instead of 0 — the "no refocus yet" sentinel was
+        // changed to nullable when the NaN/Infinity JSON-serialization
+        // bug was fixed (0 / NaN now both map to null).
+        Assert.That(st.LastRefocusFrame, Is.Null);
+        Assert.That(st.LastRecenterFrame, Is.Null);
         Assert.That(st.ReferenceSolved, Is.False);
         Assert.That(st.ReferenceRaHours, Is.Null);
         Assert.That(st.ReferenceDecDeg, Is.Null);
