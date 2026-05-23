@@ -998,7 +998,21 @@ function ninaApp() {
 
             // Detect format: JPEG files always start with 0xFF 0xD8 (SOI marker)
             const view = new Uint8Array(arrayBuffer);
-            if (view.length >= 2 && view[0] === 0xFF && view[1] === 0xD8) {
+            const isJpeg = view.length >= 2 && view[0] === 0xFF && view[1] === 0xD8;
+
+            // One-shot diagnostic — leaves a single line per session so
+            // we can confirm in DevTools whether snap captures actually
+            // deliver a binary frame over /ws/image-stream. Quiet for
+            // subsequent frames so the video feed doesn't spam.
+            if (!this._loggedFirstFrame) {
+                this._loggedFirstFrame = true;
+                console.log('[Polaris] first image frame: ' + (isJpeg ? 'JPEG' : 'RAW')
+                    + ' · ' + arrayBuffer.byteLength + ' bytes'
+                    + ' · wasmReady=' + !!this.wasmReady
+                    + ' · serverMode=' + (this.liveStackStatus?.mode || 'full'));
+            }
+
+            if (isJpeg) {
                 this._renderJpegFrame(arrayBuffer);
             } else {
                 this._renderRawFrame(arrayBuffer);
@@ -1393,6 +1407,25 @@ function ninaApp() {
             const asInt32 = new Int32Array(pixels.length);
             for (let i = 0; i < pixels.length; i++) asInt32[i] = pixels[i];
 
+            // (Re-)initialise the accumulator whenever the incoming
+            // frame's dimensions don't match what's already cached.
+            // Without this guard, a snap captured at a different
+            // resolution than the previous video stream would land in
+            // an AddFrame that silently rejects and a GetStackedResult
+            // that returns a zero-length or wrong-sized array — the
+            // outer renderer then loops zero times and paints black.
+            const expectedLen = width * height;
+            if (this._wasmInitDims?.w !== width
+                || this._wasmInitDims?.h !== height) {
+                try {
+                    interop.Initialize(width, height, 0);
+                    this._wasmInitDims = { w: width, h: height };
+                } catch (e) {
+                    console.warn('[Polaris] WASM Initialize failed:', e);
+                    return pixels;   // bail to raw frame
+                }
+            }
+
             const metrics = interop.AddFrame(asInt32, width, height);
             const [frameCount, hfrX100, starCount, alignmentOk, _reserved] = metrics;
 
@@ -1412,8 +1445,15 @@ function ninaApp() {
             // Pull the accumulated stack out for display. The
             // GetStackedResult export returns int[] (JSExport doesn't
             // marshal ushort[]); widen back to Uint16Array via the
-            // low 16 bits.
+            // low 16 bits. If the returned buffer doesn't match the
+            // expected pixel count (init race, marshalling glitch,
+            // single-frame snap that the stacker hasn't seen), fall
+            // back to the raw incoming pixels so the canvas isn't
+            // left empty.
             const stackedInt32 = interop.GetStackedResult();
+            if (!stackedInt32 || stackedInt32.length !== expectedLen) {
+                return pixels;
+            }
             const out = new Uint16Array(stackedInt32.length);
             for (let i = 0; i < stackedInt32.length; i++) out[i] = stackedInt32[i] & 0xFFFF;
             return out;
@@ -1538,7 +1578,11 @@ function ninaApp() {
             }
         },
 
-        // Fallback: fetch JPEG preview via REST endpoint
+        // Fallback: fetch JPEG preview via REST endpoint. Used when
+        // raw mode is in effect but LZ4 isn't loaded or decompression
+        // failed. Renders into every visible canvas via the same
+        // fan-out helper the binary paths use so PREVIEW / FOCUS /
+        // VIDEO all see the frame, not just LIVE.
         _fetchPreviewFallback() {
             if (this._previewFetching) return;
             this._previewFetching = true;
@@ -1552,16 +1596,8 @@ function ninaApp() {
                     const url = URL.createObjectURL(blob);
                     const img = new Image();
                     img.onload = () => {
-                        const canvas = document.getElementById('liveCanvas');
-                        if (canvas) {
-                            const container = canvas.parentElement;
-                            const scale = Math.min(container.clientWidth / img.width, container.clientHeight / img.height, 1);
-                            canvas.width = Math.round(img.width * scale);
-                            canvas.height = Math.round(img.height * scale);
-                            const ctx = canvas.getContext('2d');
-                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                            this._drawCrosshair(ctx, canvas.width, canvas.height);
-                        }
+                        this._fanOutFrameToCanvases(img, img.width, img.height);
+                        this.redrawOverlay();
                         URL.revokeObjectURL(url);
                         this._previewFetching = false;
                     };
