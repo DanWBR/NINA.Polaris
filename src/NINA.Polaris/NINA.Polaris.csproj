@@ -60,15 +60,13 @@
     <EmbeddedResource Include="Resources\SirilScripts\*.ssf" />
   </ItemGroup>
 
-  <!-- SWE-3: Stellarium Web HiPS skydata is gitignored (~500MB-1GB,
-       fetched via scripts/fetch-stellarium-skydata.sh) but the Web
-       SDK's default wwwroot/** Content include already picks the
-       files up off the filesystem on `dotnet publish` (gitignore
-       doesn't affect MSBuild's file walk). No explicit Content
-       Include needed — adding one duplicates every file the SDK
-       already enumerated and fails the build with:
-         Duplicate 'Content' items were included. The .NET SDK
-         includes 'Content' items from your project directory by
-         default. -->
+  <!-- SWE-3: Stellarium Web HiPS skydata ships in-repo at
+       wwwroot/sky/data/skydata/ (~4.6MB — the upstream test-skydata
+       bundle from the submodule, sufficient for offline rendering
+       of stars + DSOs + Milky Way + Sun/Moon + IAU constellations).
+       The Web SDK's default wwwroot/** Content include picks it up
+       on `dotnet publish` automatically — no explicit <Content
+       Include> needed (adding one duplicates every file and fails
+       the build with "Duplicate 'Content' items were included"). -->
 
 </Project>

@@ -24,6 +24,16 @@
 external/stellarium-web-engine/** -text
 
 ###############################################################################
+# Stellarium Web HiPS skydata bundle (copied from the submodule's
+# apps/test-skydata/ at SWE-3-bugfix). Keep byte-identical to upstream
+# so the engine's HEALPix tile readers see exactly the bytes they
+# expect — Windows CRLF translation on .properties / .json files is
+# enough to corrupt the magic-byte sniff that the engine does on first
+# fetch and silently disable the data source.
+###############################################################################
+src/NINA.Polaris/wwwroot/sky/data/skydata/** -text
+
+###############################################################################
 # Set default behavior for command prompt diff.
 #
 # This is need for earlier builds of msysgit that does not have it on by

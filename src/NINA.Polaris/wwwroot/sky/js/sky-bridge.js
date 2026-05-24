@@ -34,28 +34,33 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.3.1-swe3';
+    var BRIDGE_VERSION = '0.3.2-swe3';
 
     // SWE-3: where the engine looks for HiPS data. Default is the
-    // live Stellarium Web CloudFront — the same URL the official
-    // stellarium-web.org app uses. Tiles are fetched lazily as the
-    // user pans/zooms and the browser's HTTP cache keeps them
-    // around between sessions, so after a few minutes of use the
-    // sky is effectively local.
+    // bundled local copy under wwwroot/sky/data/skydata/ — the same
+    // test-skydata tree that ships inside the stellarium-web-engine
+    // submodule (apps/test-skydata/). ~4.6MB total, includes:
     //
-    // A true offline mirror requires a custom HiPS crawler that
-    // walks each component's Norder pyramid by HEALPix index (the
-    // recursive wget/curl in scripts/fetch-stellarium-skydata.sh
-    // can only grab the property files because CloudFront doesn't
-    // serve directory listings). That ships as a future
-    // enhancement when there's demand for fully air-gapped
-    // observatory installs.
+    //   stars/        Hipparcos + Tycho HiPS pyramid (Norder 0-N .eph)
+    //   dso/          NGC / IC / Messier DSO HiPS
+    //   surveys/      milkyway + sso/moon + sso/sun image surveys
+    //   landscapes/   guereins horizon panorama
+    //   skycultures/  IAU western constellations + names
+    //   mpcorb.dat    Minor Planet Center asteroid elements
+    //   CometEls.txt  bright-comet orbital elements
+    //   tle_satellite.jsonl.gz  satellite TLEs (optional)
+    //
+    // Earlier defaults pointed at https://d3ufh70wg9uzo4.cloudfront.net/skydata/
+    // (the CloudFront bucket we found referenced in stellarium-web.org's
+    // webpack chunk). That URL turned out to host the stellarium-web.org
+    // SPA itself, not a HiPS data mirror — every probe came back with the
+    // same 2894-byte SPA index.html, so the engine got HTML instead of
+    // .eph tile bytes and silently rendered an empty sky.
     //
     // Override by setting window.__skyDataBase BEFORE this script
-    // loads — e.g. to point at a populated local mirror:
-    //   window.__skyDataBase = 'data/skydata/';
-    var SKYDATA_BASE = window.__skyDataBase
-        || 'https://d3ufh70wg9uzo4.cloudfront.net/skydata/';
+    // loads — e.g. to point at an external HiPS mirror:
+    //   window.__skyDataBase = 'https://example.com/skydata/';
+    var SKYDATA_BASE = window.__skyDataBase || 'data/skydata/';
 
     // -----------------------------------------------------------------
     // WebGL detection.

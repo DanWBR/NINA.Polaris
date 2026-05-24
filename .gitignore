@@ -384,7 +384,15 @@ src/NINA.Polaris/calibrated/
 src/NINA.Polaris/integrated/
 src/NINA.Polaris/processed/
 
-# SWE-3: Stellarium Web HiPS skydata. ~500MB-1GB; fetched via
-# scripts/fetch-stellarium-skydata.sh. Excluded from git but
-# included in publish output via csproj Content Include.
-src/NINA.Polaris/wwwroot/sky/data/skydata/
+# SWE-3: Stellarium Web HiPS skydata. The compact test-skydata
+# (~4.6MB total — HiPS Norder0/1 tile pyramids for stars + DSOs
+# + Milky Way survey + Moon + Sun + IAU constellations + DE441
+# planet ephemeris) ships in-repo at
+# src/NINA.Polaris/wwwroot/sky/data/skydata/ so the sky map works
+# offline out of the box. The earlier idea of a "fetch from
+# CloudFront" script was abandoned — the CloudFront URL we
+# discovered turned out to be the stellarium-web.org SPA hosting
+# bucket, not a HiPS data mirror, and CloudFront does not serve
+# directory indices crawlers can walk anyway. The committed copy
+# comes from external/stellarium-web-engine/apps/test-skydata/
+# under AGPL — copy is verbatim from the submodule.
