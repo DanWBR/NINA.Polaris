@@ -575,7 +575,9 @@ html, body {
 
 /* Inputs */
 .input-sm {
-    width: 60px;
+    /* Bumped 60→80 px so 3-digit values (gain 600, settle 30 s) and
+       the native spinner arrows don't clip the typed text. */
+    width: 80px;
     padding: 4px 6px;
     background: var(--bg-input);
     border: 1px solid var(--border);
@@ -584,6 +586,17 @@ html, body {
     font-size: 13px;
     outline: none;
     transition: border-color var(--transition);
+}
+
+/* Exposure-preset inputs hold up to 4 chars + a decimal + spinner
+   arrows (e.g. "1000" or "0.0001"). Bump them a bit beyond the
+   default .input-sm so the value never gets cropped. Selector
+   matches both pre-disarm (list=...) and post-disarm
+   (data-exposure-presets=1) forms — see the popover script in
+   index.html. */
+input[list="exposure-presets"],
+input[data-exposure-presets] {
+    width: 100px;
 }
 
 .input-md {
