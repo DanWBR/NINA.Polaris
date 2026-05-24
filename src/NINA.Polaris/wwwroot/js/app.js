@@ -247,6 +247,15 @@ function ninaApp() {
         selectedTelescope: null,
         selectedFocuser: null,
 
+        // ZWO ASI gain presets (L/M/H). Mirrors ASIAIR's three-button
+        // shortcut: L = lowest gain (planets/lunar, max dynamic range),
+        // M = balanced general-purpose, H = HCG threshold for the
+        // sensor (best SNR for narrowband / deep sky, lower DR).
+        // Loaded once from /data/zwo-gain-presets.json on init.
+        // null until the fetch resolves; presetsForActiveCamera() returns
+        // null if the active camera isn't recognised as a ZWO model.
+        _zwoPresets: null,
+
         // WebSocket state
         statusWs: null,
         imageWs: null,
@@ -906,6 +915,14 @@ function ninaApp() {
                 localStorage.setItem('nina-sky-dss', v ? '1' : '0');
             });
 
+            // ZWO gain presets — static lookup table. Tiny file (~1 KB)
+            // so fire-and-forget. If the fetch fails the L/M/H buttons
+            // simply never appear (zwoPresetsForActiveCamera returns null).
+            fetch('/data/zwo-gain-presets.json')
+                .then(r => r.ok ? r.json() : null)
+                .then(j => { if (j && j.presets) this._zwoPresets = j.presets; })
+                .catch(() => { /* silently degrade */ });
+
             // UI zoom: load explicit user value if previously set,
             // else derive from current viewport so phones / tablets
             // start at the same scale as the CSS @media rules.
@@ -1063,6 +1080,39 @@ function ninaApp() {
             const min = (this.equipCameraInfo && this.equipCameraInfo.minExposure)
                 || 0.0001;
             return EXPOSURE_PRESETS_ALL.filter(v => v >= min);
+        },
+
+        // ZWO L/M/H gain presets — mirrors ASIAIR's three-button shortcut.
+        // Returns { L, M, H, hcg } for the active camera if its INDI/Alpaca
+        // device name matches a known ZWO model key (substring match,
+        // case-insensitive), null otherwise. The UI conditionally renders
+        // the L/M/H button strip on this — non-ZWO cameras get nothing.
+        zwoPresetsForActiveCamera() {
+            if (!this._zwoPresets) return null;
+            const name = (this.selectedCamera
+                || this.equipCameraChoice
+                || '').toUpperCase();
+            if (!name) return null;
+            for (const key in this._zwoPresets) {
+                if (name.includes(key)) return this._zwoPresets[key];
+            }
+            return null;
+        },
+
+        // Apply a preset to a x-model binding. Object-path setter so a
+        // single helper can write to `preview.gain`, `video.gain`,
+        // `polar.gain`, `gain` (root level), or any sequence row item's
+        // gain field. `path` is dot-separated; `value` is the numeric
+        // preset (0, 100, 250, etc.). Triggers @change handlers via
+        // Alpine reactivity.
+        applyGainPreset(path, value) {
+            const parts = path.split('.');
+            let obj = this;
+            for (let i = 0; i < parts.length - 1; i++) {
+                obj = obj[parts[i]];
+                if (obj == null) return;
+            }
+            obj[parts[parts.length - 1]] = value;
         },
 
         // ----- Remote terminal (xterm.js + SSH via /ws/terminal) -----
@@ -4383,7 +4433,13 @@ function ninaApp() {
         },
 
         // Click the name → set as the current Sky target, jump to Sky tab,
-        // recentre the map. Doesn't move the mount — that's the Go to btn.
+        // recentre the map ON THE PICKED OBJECT. Doesn't move the mount —
+        // that's the Go to btn.
+        //
+        // Bug fix: previously this called skyGoToMount() which prefers
+        // mount.ra/dec over skyTarget — so the map snapped to the mount
+        // position instead of the picked card. Now we drive the engine
+        // straight via _skyLookAt with the card's coordinates.
         tonightPickTarget(item) {
             this.skyTarget = {
                 name:    item.name,
@@ -4394,20 +4450,46 @@ function ninaApp() {
             };
             this.tab = 'sky';
             this.$nextTick(() => {
-                if (typeof this.skyGoToMount === 'function') this.skyGoToMount();
+                // Centre on the picked target directly. Pick a sensible FOV
+                // so the card's object actually fills a reasonable fraction
+                // of the viewport without losing context (same heuristic
+                // skyGoToMount uses: ~4× the camera width, ≥ 1°).
+                let fovDeg;
+                if (this.fov && this.fov.width > 0) {
+                    fovDeg = Math.max(this.fov.width * 4, 1);
+                }
+                this._skyLookAt(item.raHours, item.decDeg, fovDeg, item.name);
+                this._pushSkyFovOverlays();
                 if (typeof this.updateSkyCameraFov === 'function') this.updateSkyCameraFov();
             });
         },
 
-        // Mount-connected click → slew + plate solve + centre, same workflow
-        // the existing Sky tab Slew & Center button uses.
+        // Mount-connected click → slew + plate solve + centre, on the
+        // picked card's exact coordinates.
+        //
+        // Bug fix: previously this called slewAndCenter() with no args,
+        // which reads the *current map centre* from the engine via
+        // _skyGetCenter(). Right after tab-switching that centre may
+        // still be the mount position (tween hasn't run), so the mount
+        // slewed to where it already was. POST the card's coords
+        // directly to the slew-and-center endpoint instead — no
+        // dependence on the map state.
         async tonightGoTo(item) {
             this.tonightPickTarget(item);
-            this.$nextTick(() => {
-                if (typeof this.slewAndCenter === 'function') {
-                    this.slewAndCenter();
-                }
-            });
+            try {
+                const resp = await this.apiPost('/api/sky/slew-and-center', {
+                    ra: item.raHours,
+                    dec: item.decDeg,
+                    toleranceArcsec: 30
+                });
+                const data = await resp.json();
+                this.slewCenterJobId = data.jobId;
+                this.slewCenterStatus = { state: 'pending', iteration: 0 };
+                this.toast('Slew & center to ' + item.name, 'ok');
+                this.startSlewCenterPolling();
+            } catch (e) {
+                this.toast('Slew & center failed: ' + (e.message || ''), 'error');
+            }
         },
 
         // Helper: mark a card's thumb as failed-to-load. If we were

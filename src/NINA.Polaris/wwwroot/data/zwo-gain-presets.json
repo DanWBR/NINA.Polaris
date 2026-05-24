@@ -1,0 +1,27 @@
+{
+  "_comment": "ZWO ASI camera gain presets. ASIAIR exposes these as L/M/H. Values are sourced from ZWO's published 'recommended settings' PDFs per camera + community-consensus on the HCG (High Conversion Gain) threshold where the sensor switches readout mode. Match key is a case-insensitive substring tested against the INDI/Alpaca device name (e.g. 'ZWO CCD ASI2600MM Pro' matches key 'ASI2600').",
+  "_source": "ZWO product pages + cloudynights/zwo community wiki, May 2026 snapshot.",
+  "presets": {
+    "ASI071":    { "L": 0, "M": 90,  "H": 240, "hcg": 240 },
+    "ASI094":    { "L": 0, "M": 90,  "H": 240, "hcg": 240 },
+    "ASI120":    { "L": 0, "M": 50,  "H": 100, "hcg": null },
+    "ASI174":    { "L": 0, "M": 100, "H": 250, "hcg": null },
+    "ASI178":    { "L": 0, "M": 100, "H": 200, "hcg": null },
+    "ASI183":    { "L": 0, "M": 111, "H": 270, "hcg": 270 },
+    "ASI224":    { "L": 0, "M": 80,  "H": 250, "hcg": null },
+    "ASI290":    { "L": 0, "M": 90,  "H": 250, "hcg": null },
+    "ASI294":    { "L": 0, "M": 120, "H": 200, "hcg": 200 },
+    "ASI385":    { "L": 0, "M": 80,  "H": 250, "hcg": null },
+    "ASI462":    { "L": 0, "M": 100, "H": 250, "hcg": null },
+    "ASI482":    { "L": 0, "M": 100, "H": 250, "hcg": null },
+    "ASI533":    { "L": 0, "M": 80,  "H": 100, "hcg": 100 },
+    "ASI585":    { "L": 0, "M": 100, "H": 250, "hcg": 250 },
+    "ASI676":    { "L": 0, "M": 100, "H": 250, "hcg": null },
+    "ASI678":    { "L": 0, "M": 100, "H": 250, "hcg": null },
+    "ASI715":    { "L": 0, "M": 100, "H": 250, "hcg": null },
+    "ASI1600":   { "L": 0, "M": 76,  "H": 300, "hcg": 300 },
+    "ASI2400":   { "L": 0, "M": 26,  "H": 200, "hcg": 200 },
+    "ASI2600":   { "L": 0, "M": 100, "H": 100, "hcg": 100 },
+    "ASI6200":   { "L": 0, "M": 100, "H": 100, "hcg": 100 }
+  }
+}
