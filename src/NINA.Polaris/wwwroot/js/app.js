@@ -2257,7 +2257,9 @@ function ninaApp() {
                         // there. Skip if no center payload or the drag
                         // was actually a programmatic look-at echo (a
                         // look-at we just sent ourselves).
-                        if (msg.fromDrag && msg.center) {
+                        if (msg.fromDrag && msg.center
+                            && Number.isFinite(msg.center.raDeg)
+                            && Number.isFinite(msg.center.decDeg)) {
                             const c = msg.center;
                             this.skyTarget = {
                                 name: 'Drag ' + c.raDeg.toFixed(2) + ',' + c.decDeg.toFixed(2),
@@ -2275,18 +2277,23 @@ function ninaApp() {
                         // object name, route to selectSkyTarget so the
                         // existing Slew & Center / planning UI picks
                         // it up. Otherwise stash the raw coords as the
-                        // current target.
-                        if (msg.objectName) {
-                            this.selectSkyTarget({
-                                name: msg.objectName,
-                                ra: msg.raDeg / 15, dec: msg.decDeg,
-                                type: 'click', magnitude: null
-                            });
-                        } else if (typeof msg.raDeg === 'number') {
-                            this.skyTarget = {
-                                name: 'Click ' + msg.raDeg.toFixed(2) + ',' + msg.decDeg.toFixed(2),
-                                ra: msg.raDeg / 15, dec: msg.decDeg
-                            };
+                        // current target. Guard against NaN/null coords
+                        // — those silently serialise as JSON null and
+                        // crash the server-side SlewAndCenterRequest
+                        // parser (non-nullable double).
+                        if (Number.isFinite(msg.raDeg) && Number.isFinite(msg.decDeg)) {
+                            if (msg.objectName) {
+                                this.selectSkyTarget({
+                                    name: msg.objectName,
+                                    ra: msg.raDeg / 15, dec: msg.decDeg,
+                                    type: 'click', magnitude: null
+                                });
+                            } else {
+                                this.skyTarget = {
+                                    name: 'Click ' + msg.raDeg.toFixed(2) + ',' + msg.decDeg.toFixed(2),
+                                    ra: msg.raDeg / 15, dec: msg.decDeg
+                                };
+                            }
                         }
                         break;
                     default:
@@ -8050,14 +8057,19 @@ function ninaApp() {
 
         _currentSlewTarget() {
             // Prefer the live map centre (what's framed in the red
-            // target FOV right now). Falls back to a picked skyTarget
-            // if d3-celestial isn't initialised yet.
+            // target FOV right now). Falls back to a picked skyTarget.
+            // _skyMapCenter() always returns null now (d3-celestial
+            // removed), so in practice we always fall through to
+            // skyTarget. Validate it's finite before returning — NaN
+            // coords serialise as JSON null and crash the server-side
+            // SlewAndCenterRequest parser (non-nullable double).
             const c = this._skyMapCenter && this._skyMapCenter();
             if (c && Number.isFinite(c.raHours) && Number.isFinite(c.decDeg)) {
                 return { ra: c.raHours, dec: c.decDeg };
             }
-            if (this.skyTarget?.ra != null && this.skyTarget?.dec != null) {
-                return { ra: this.skyTarget.ra, dec: this.skyTarget.dec };
+            const t = this.skyTarget;
+            if (t && Number.isFinite(t.ra) && Number.isFinite(t.dec)) {
+                return { ra: t.ra, dec: t.dec };
             }
             return null;
         },

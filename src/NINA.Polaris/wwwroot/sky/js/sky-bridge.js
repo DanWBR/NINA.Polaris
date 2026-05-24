@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.5.0-swe5';
+    var BRIDGE_VERSION = '0.5.1-swe5';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -241,11 +241,18 @@
             var observed = stel.s2c([obs.yaw, obs.pitch]);
             var icrf = stel.convertFrame(obs, 'OBSERVED', 'ICRF', observed);
             var radec = stel.c2s(icrf);
-            return {
-                raDeg: stel.anp(radec[0]) / stel.D2R,
-                decDeg: stel.anpm(radec[1]) / stel.D2R,
-                fovDeg: stel.core.fov / stel.D2R
-            };
+            var raDeg = stel.anp(radec[0]) / stel.D2R;
+            var decDeg = stel.anpm(radec[1]) / stel.D2R;
+            var fovDeg = stel.core.fov / stel.D2R;
+            // Don't emit garbage: if any component is non-finite (engine
+            // can produce NaN during transient init states) return null
+            // so the parent's Number.isFinite guards short-circuit
+            // cleanly instead of skyTarget.ra ending up as NaN → null
+            // in JSON → backend rejecting the SlewAndCenterRequest.
+            if (!isFinite(raDeg) || !isFinite(decDeg) || !isFinite(fovDeg)) {
+                return null;
+            }
+            return { raDeg: raDeg, decDeg: decDeg, fovDeg: fovDeg };
         } catch (e) {
             console.warn('[Sky] skyGetCenter failed:', e);
             return null;
