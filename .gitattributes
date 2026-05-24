@@ -4,6 +4,18 @@
 * text=auto
 
 ###############################################################################
+# stellarium-web-engine submodule: keep upstream line endings verbatim.
+# It's a Unix project — checking it out with CRLF on Windows breaks the
+# Emscripten build (shebangs like '#!/usr/bin/python3' end up as
+# '/usr/bin/python3\r' which exec() can't find, and SCons reports a
+# misleading "FileNotFoundError: ./tools/make-assets.py").
+#
+# `-text` tells git "do not apply any line-ending normalisation here";
+# files arrive on the filesystem exactly as upstream stored them.
+###############################################################################
+external/stellarium-web-engine/** -text
+
+###############################################################################
 # Set default behavior for command prompt diff.
 #
 # This is need for earlier builds of msysgit that does not have it on by

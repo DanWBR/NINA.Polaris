@@ -79,15 +79,28 @@ docker run --rm \
         # pip --user installs into ~/.local/bin which isn't on
         # PATH by default for the non-root user inside the image.
         export PATH=\"\$HOME/.local/bin:\$PATH\"
-        # Upstream tools/*.py scripts use '#!/usr/bin/python3' which
-        # only resolves on Debian-style images. emscripten/emsdk has
+        # Belt-and-suspenders for Windows checkouts: strip CRLF
+        # line endings from tools/*.py (and a few key text files
+        # SCons reads) so shebangs and Python files exec correctly.
+        # The proper fix is the '-text' rule for
+        # external/stellarium-web-engine/** in the repo root
+        # .gitattributes — that prevents Git on Windows from doing
+        # the lossy LF→CRLF translation on the next fresh
+        # submodule checkout. This in-build sed handles already-
+        # checked-out trees so the user doesn't have to nuke +
+        # re-init the submodule.
+        echo '→ Stripping CRLF from tools/*.py + SConscripts'
+        for f in tools/*.py SConstruct SConscript; do
+            if [ -f \"\$f\" ]; then
+                tr -d '\r' < \"\$f\" > \"\$f.tmp\" && mv \"\$f.tmp\" \"\$f\"
+                chmod +x \"\$f\" 2>/dev/null || true
+            fi
+        done
+        # Same problem can hit upstream tools/*.py shebangs even after
+        # CRLF strip — they hard-code '#!/usr/bin/python3' which only
+        # resolves on Debian-style images. emscripten/emsdk has
         # python3 elsewhere on PATH (typically /emsdk/python/...).
-        # Patch the shebangs to '#!/usr/bin/env python3' so the
-        # kernel finds the interpreter no matter where it lives.
-        # Without this the build dies with a misleading
-        # 'FileNotFoundError: ./tools/make-assets.py' from SCons —
-        # Linux returns ENOENT for the script when the interpreter
-        # is missing, not the script itself.
+        # Rewrite to env-based lookup.
         echo '→ Patching shebangs in tools/*.py'
         for f in tools/*.py; do
             if [ -f \"\$f\" ] && head -1 \"\$f\" | grep -q '^#!/usr/bin/python3\$'; then
