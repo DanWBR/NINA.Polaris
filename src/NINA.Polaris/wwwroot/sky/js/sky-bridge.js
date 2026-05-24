@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.3.4-swe3';
+    var BRIDGE_VERSION = '0.3.5-swe3';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -226,8 +226,19 @@
             // would obscure that visual confirmation. onReady (below)
             // is a separate signal that the JS bridge can be called.
             setStatus(null);
+            // wasmFile MUST be absolute. The engine .js is loaded from
+            // /sky/js/wasm/stellarium-web-engine.js, and emscripten
+            // resolves any relative wasmFile against that script's URL
+            // — so 'js/wasm/stellarium-web-engine.wasm' becomes
+            // /sky/js/wasm/js/wasm/stellarium-web-engine.wasm (path
+            // duplicated) → silent 404 → onRuntimeInitialized never
+            // fires → onReady never fires → __stel stays undefined.
+            // Same emscripten-can't-do-relative-URLs trap that bit us
+            // with addDataSource. skyBaseUrl() returns the absolute URL
+            // of /sky/ so prepending it lands the wasm at the right
+            // /sky/js/wasm/... path.
             window.StelWebEngine({
-                wasmFile: 'js/wasm/stellarium-web-engine.wasm',
+                wasmFile: skyBaseUrl() + 'js/wasm/stellarium-web-engine.wasm',
                 canvas: document.getElementById('stel-canvas'),
                 onReady: function (stel) {
                     window.__stel = stel;       // exposed for SWE-4 RPC handlers
