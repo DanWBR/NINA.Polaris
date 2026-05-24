@@ -34,7 +34,30 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.3.2-swe3';
+    var BRIDGE_VERSION = '0.3.3-swe3';
+
+    // -----------------------------------------------------------------
+    // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
+    // relative URLs in addDataSource — see comment in
+    // external/stellarium-web-engine/apps/simple-html/stellarium-web-engine.html
+    // around its getBaseUrl(): "at the moment emscripten doesn't
+    // support relative url properly". A relative 'data/skydata/' will
+    // silently 404 against some internal base and the engine renders
+    // an empty sky with no console error.
+    //
+    // Build the absolute URL of the directory holding /sky/index.html
+    // and prepend it ourselves. window.location.href returns e.g.
+    // "http://host:5000/sky/" (or "http://host:5000/sky/index.html");
+    // strip the final segment and re-append a slash so the join with
+    // 'data/skydata/' yields a clean absolute URL.
+    // -----------------------------------------------------------------
+    function skyBaseUrl() {
+        var url = window.location.href.split('/');
+        // Last segment is "" (when href ends with "/") or "index.html" —
+        // either way we want everything *before* that final slash.
+        url.pop();
+        return url.join('/') + '/';
+    }
 
     // SWE-3: where the engine looks for HiPS data. Default is the
     // bundled local copy under wwwroot/sky/data/skydata/ — the same
@@ -60,7 +83,14 @@
     // Override by setting window.__skyDataBase BEFORE this script
     // loads — e.g. to point at an external HiPS mirror:
     //   window.__skyDataBase = 'https://example.com/skydata/';
-    var SKYDATA_BASE = window.__skyDataBase || 'data/skydata/';
+    //
+    // NOTE: always resolved through skyBaseUrl() above so the engine
+    // sees an absolute URL even when the caller passes a relative one.
+    // Engine fetches break otherwise (emscripten relative-URL bug).
+    var _skydataRaw = window.__skyDataBase || 'data/skydata/';
+    var SKYDATA_BASE = /^https?:\/\//.test(_skydataRaw)
+        ? _skydataRaw
+        : skyBaseUrl() + _skydataRaw;
 
     // -----------------------------------------------------------------
     // WebGL detection.
