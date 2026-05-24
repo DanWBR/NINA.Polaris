@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.4.2-swe4';
+    var BRIDGE_VERSION = '0.5.0-swe5';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -253,6 +253,163 @@
     }
 
     // -----------------------------------------------------------------
+    // SWE-5: FOV overlays. One shared layer holds two GeoJSON objects
+    // (mount + target rectangles) plus an optional mosaic grid.
+    // Re-created on each set-fov-overlays message because the engine's
+    // geojson object doesn't seem to expose a stable mutate-data API —
+    // remove old, add fresh. Cheap (≤ few polygons).
+    // -----------------------------------------------------------------
+    var __skyFovLayer = null;
+    var __skyFovObjs = { mount: null, target: null, mosaic: null };
+
+    function skyEnsureFovLayer() {
+        if (__skyFovLayer || !window.__stel) return __skyFovLayer;
+        try {
+            __skyFovLayer = window.__stel.createLayer({
+                id: 'polaris-fov', z: 10, visible: true
+            });
+        } catch (e) {
+            console.warn('[Sky] createLayer failed:', e);
+        }
+        return __skyFovLayer;
+    }
+
+    // Build a 4-corner rectangle on the celestial sphere from
+    // (centreRA, centreDec, widthDeg, heightDeg, rotationDeg).
+    // Tangent-plane approximation is sufficient for camera-scale FOVs
+    // (< 10°). Returns 5 [ra, dec] pairs (closed polygon — first ==
+    // last per the GeoJSON spec).
+    function skyFovRect(raDeg, decDeg, wDeg, hDeg, rotDeg) {
+        var rot = (rotDeg || 0) * Math.PI / 180;
+        var cosR = Math.cos(rot), sinR = Math.sin(rot);
+        var hw = wDeg / 2, hh = hDeg / 2;
+        // Tangent-plane corners (E is +ra-axis, N is +dec-axis).
+        var local = [
+            [-hw, -hh], [+hw, -hh], [+hw, +hh], [-hw, +hh]
+        ];
+        var cosDec = Math.cos(decDeg * Math.PI / 180);
+        // Avoid /0 right at the pole — cap.
+        if (Math.abs(cosDec) < 1e-3) cosDec = 1e-3;
+        var ring = local.map(function (p) {
+            var x = p[0] * cosR - p[1] * sinR;
+            var y = p[0] * sinR + p[1] * cosR;
+            return [raDeg + x / cosDec, decDeg + y];
+        });
+        ring.push(ring[0].slice()); // close
+        return ring;
+    }
+
+    function skyFovGeoJson(centre, color, dashed) {
+        var ring = skyFovRect(centre.raDeg, centre.decDeg,
+            centre.widthDeg, centre.heightDeg, centre.rotationDeg || 0);
+        var props = {
+            stroke: color,
+            'stroke-width': dashed ? 2 : 2,
+            'stroke-opacity': 1,
+            fill: color,
+            'fill-opacity': 0.05
+        };
+        if (dashed) props['stroke-dasharray'] = '6,4';
+        return {
+            type: 'FeatureCollection',
+            features: [{
+                type: 'Feature',
+                properties: props,
+                geometry: { type: 'Polygon', coordinates: [ring] }
+            }]
+        };
+    }
+
+    function skyRemoveObj(slot) {
+        var obj = __skyFovObjs[slot];
+        if (!obj || !__skyFovLayer) return;
+        try {
+            if (typeof __skyFovLayer.remove === 'function') {
+                __skyFovLayer.remove(obj);
+            }
+        } catch (e) { /* engine may not support remove — swallow */ }
+        __skyFovObjs[slot] = null;
+    }
+
+    function skySetFovOverlays(mount, target, mosaic) {
+        var stel = window.__stel;
+        if (!stel) return;
+        skyEnsureFovLayer();
+        if (!__skyFovLayer) return;
+        // Always recreate — engine geojson is immutable per-instance.
+        skyRemoveObj('mount');
+        skyRemoveObj('target');
+        skyRemoveObj('mosaic');
+        try {
+            if (mount && mount.widthDeg > 0) {
+                __skyFovObjs.mount = stel.createObj('geojson', {
+                    data: skyFovGeoJson(mount, '#3b82f6', false)
+                });
+                __skyFovLayer.add(__skyFovObjs.mount);
+            }
+            if (target && target.widthDeg > 0) {
+                __skyFovObjs.target = stel.createObj('geojson', {
+                    data: skyFovGeoJson(target, '#ef4444', true)
+                });
+                __skyFovLayer.add(__skyFovObjs.target);
+            }
+            if (mosaic && mosaic.tiles && mosaic.tiles.length) {
+                // Mosaic grid: one polygon per tile, yellow.
+                var features = mosaic.tiles.map(function (t) {
+                    var ring = skyFovRect(t.raDeg, t.decDeg,
+                        t.widthDeg, t.heightDeg, t.rotationDeg || 0);
+                    return {
+                        type: 'Feature',
+                        properties: {
+                            stroke: '#facc15', 'stroke-width': 1,
+                            'stroke-opacity': 0.7,
+                            fill: '#facc15', 'fill-opacity': 0.03
+                        },
+                        geometry: { type: 'Polygon', coordinates: [ring] }
+                    };
+                });
+                __skyFovObjs.mosaic = stel.createObj('geojson', {
+                    data: { type: 'FeatureCollection', features: features }
+                });
+                __skyFovLayer.add(__skyFovObjs.mosaic);
+            }
+        } catch (e) {
+            console.warn('[Sky] set-fov-overlays failed:', e);
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // SWE-5: emit 'center' to the parent whenever the user drags the
+    // sky (changes observer.yaw/pitch). The engine fires stel.change()
+    // for any property update; we filter to observer pose changes and
+    // throttle to ~10 Hz so the parent can keep its target FOV rect
+    // anchored to the new map centre without flooding postMessage.
+    // -----------------------------------------------------------------
+    function skyInstallChangeHook() {
+        var stel = window.__stel;
+        if (!stel || typeof stel.change !== 'function') return;
+        var lastEmit = 0;
+        try {
+            stel.change(function (obj, attr) {
+                if (!attr) return;
+                if (attr !== 'observer.yaw' && attr !== 'observer.pitch'
+                    && attr !== 'core.fov') return;
+                var now = Date.now();
+                if (now - lastEmit < 100) return;
+                lastEmit = now;
+                postToParent({
+                    type: 'center',
+                    center: skyGetCenter(),
+                    fromDrag: true,
+                    __from: 'sky-bridge'
+                });
+            });
+        } catch (e) {
+            console.warn('[Sky] change-hook install failed:', e);
+        }
+    }
+
+    // -----------------------------------------------------------------
     // Incoming message router (parent → iframe).
     // -----------------------------------------------------------------
     window.addEventListener('message', function (ev) {
@@ -305,6 +462,12 @@
                 break;
             case 'select-clear':
                 try { stel.core.selection = 0; } catch (e) { /* swallow */ }
+                break;
+            case 'set-fov-overlays':
+                // SWE-5: mount FOV (blue), target FOV (red dashed),
+                // optional mosaic grid (yellow). Each side is null to
+                // clear that overlay.
+                skySetFovOverlays(msg.mount || null, msg.target || null, msg.mosaic || null);
                 break;
             default:
                 console.log('[Sky] unknown message type:', msg.type);
@@ -514,6 +677,10 @@
                     __from: 'sky-bridge'
                 });
                 console.log('[Sky] engine onReady fired — bridge v' + BRIDGE_VERSION);
+                // SWE-5: install the change-hook that emits 'center'
+                // when the user drags the sky. Must run AFTER stel is
+                // populated; before that stel.change is undefined.
+                skyInstallChangeHook();
                 // SWE-4: flush any RPC messages the parent queued while
                 // we were initialising (Polaris's first set-observer /
                 // set-time tick typically fires within the first second

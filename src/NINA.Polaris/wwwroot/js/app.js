@@ -2243,9 +2243,31 @@ function ninaApp() {
                         break;
                     case 'center':
                         if (this._skyCenterPending) {
+                            // Reply to an explicit get-center request.
                             const cb = this._skyCenterPending;
                             this._skyCenterPending = null;
                             try { cb(msg.center); } catch (e) { console.warn(e); }
+                        }
+                        // SWE-5: ASIAIR-style drag-to-frame. When the
+                        // user pans the sky in the iframe, the bridge
+                        // emits {fromDrag:true} center updates ~10 Hz.
+                        // Treat that as "set this point as the planning
+                        // target" so the red target FOV rectangle
+                        // follows the drag and Slew & Center will go
+                        // there. Skip if no center payload or the drag
+                        // was actually a programmatic look-at echo (a
+                        // look-at we just sent ourselves).
+                        if (msg.fromDrag && msg.center) {
+                            const c = msg.center;
+                            this.skyTarget = {
+                                name: 'Drag ' + c.raDeg.toFixed(2) + ',' + c.decDeg.toFixed(2),
+                                ra: c.raDeg / 15,
+                                dec: c.decDeg
+                            };
+                            // Update the target FOV rectangle without
+                            // mounting a redraw loop — _pushSkyFovOverlays
+                            // is the cheap end-to-end refresh.
+                            this._pushSkyFovOverlays();
                         }
                         break;
                     case 'map-click':
@@ -4434,29 +4456,49 @@ function ninaApp() {
         },
 
         updateSkyCameraFov() {
-            if (!this._celestialReady) return;
-            this._ensureFovLayers();
-            if (!this.aladinShowFov) {
-                this._fovMountGeo = null;
-                this._fovMountAnchor = null;
-                try { Celestial.redraw(); } catch {}
+            // SWE-5: push the mount+target FOV rectangles to the
+            // stellarium-web-engine iframe via postMessage instead of
+            // mutating the old d3-celestial layers. The bridge owns
+            // a single 'polaris-fov' layer with up to 3 geojson
+            // objects (mount blue, target red dashed, mosaic yellow);
+            // we re-send the full overlay state on every call.
+            this._pushSkyFovOverlays();
+        },
+
+        // SWE-5: build the {widthDeg, heightDeg, rotationDeg} pair from
+        // the active rig + connected camera and post a set-fov-overlays
+        // message. Mount FOV anchors on the live mount RA/Dec, target
+        // FOV anchors on skyTarget. Either side can be null to clear it.
+        _pushSkyFovOverlays() {
+            if (!this.aladinShowFov || !(this.fov?.width > 0)) {
+                this._skySendMessage({ type: 'set-fov-overlays',
+                    mount: null, target: null });
                 return;
             }
-            // Mount FOV (blue, solid rectangle + cross+dot marker)
-            // anchored at the live mount RA/Dec.
+            const w = this.fov.width, h = this.fov.height;
+            const rot = (this.fov.rotationDeg || this.solveRotationDeg || 0);
+
+            let mount = null;
             if (this.mount?.connected
                 && this.mount.ra != null && this.mount.dec != null) {
-                this._fovMountGeo = this._buildFovRing(this.mount.ra, this.mount.dec);
-                this._fovMountAnchor = { ra: this.mount.ra, dec: this.mount.dec };
-            } else {
-                this._fovMountGeo = null;
-                this._fovMountAnchor = null;
+                mount = {
+                    raDeg: this.mount.ra * 15,
+                    decDeg: this.mount.dec,
+                    widthDeg: w, heightDeg: h, rotationDeg: rot
+                };
             }
-            // Target FOV is computed inside the layer's redraw() callback
-            // from the live map centre — no need to set state here.
-            try { Celestial.redraw(); } catch (e) {
-                console.warn('FOV redraw failed', e);
+
+            let target = null;
+            if (this.skyTarget
+                && (this.skyTarget.ra != null) && (this.skyTarget.dec != null)) {
+                target = {
+                    raDeg: this.skyTarget.ra * 15,
+                    decDeg: this.skyTarget.dec,
+                    widthDeg: w, heightDeg: h, rotationDeg: rot
+                };
             }
+
+            this._skySendMessage({ type: 'set-fov-overlays', mount, target });
         },
 
         // Pixel readout: convert mouse event coords to source-image coords +
