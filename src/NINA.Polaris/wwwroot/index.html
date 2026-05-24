@@ -4514,9 +4514,23 @@
                         </div>
                     </div>
 
-                    <label>Latitude<input type="number" x-model.number="settings.latitude" step="0.001" class="input-md"></label>
-                    <label>Longitude<input type="number" x-model.number="settings.longitude" step="0.001" class="input-md"></label>
-                    <label>Altitude (m)<input type="number" x-model.number="settings.altitude" step="1" class="input-sm"></label>
+                    <!-- Two-column grid keeps the labels right-aligned
+                         against a single fixed-width column and the
+                         inputs stretching to the same width on the
+                         right, so the three coord fields line up
+                         neatly instead of each label/input pair
+                         sizing independently. -->
+                    <div class="coords-grid">
+                        <label for="settings-lat">Latitude</label>
+                        <input id="settings-lat" type="number" x-model.number="settings.latitude"
+                               step="0.001" class="input-md">
+                        <label for="settings-lon">Longitude</label>
+                        <input id="settings-lon" type="number" x-model.number="settings.longitude"
+                               step="0.001" class="input-md">
+                        <label for="settings-alt">Altitude (m)</label>
+                        <input id="settings-alt" type="number" x-model.number="settings.altitude"
+                               step="1" class="input-md">
+                    </div>
                 </div>
 
                 <div class="settings-section">

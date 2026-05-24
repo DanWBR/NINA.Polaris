@@ -91,6 +91,29 @@ html, body {
    native <datalist> dropdown — see <script> in index.html above
    the body for the controller). Glassy panel anchored under the
    focused exposure input; one button per preset, no filtering. */
+/* Two-column label + input grid used by the location section in
+   Settings. Labels right-align against a fixed first column;
+   inputs share a single fixed width in the second column so the
+   three rows (Latitude / Longitude / Altitude) line up neatly. */
+.coords-grid {
+    display: grid;
+    grid-template-columns: max-content 180px;
+    gap: 8px 14px;
+    align-items: center;
+    max-width: 380px;
+}
+.coords-grid > label {
+    text-align: right;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+.coords-grid > input {
+    /* Override the per-class width so all three coord inputs end
+       up at the column's 180 px even though they previously had
+       .input-md / .input-sm with different widths. */
+    width: 100%;
+}
+
 .exposure-presets-popover {
     position: fixed;
     z-index: 9000;
