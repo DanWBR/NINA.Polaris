@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.3.7-swe3';
+    var BRIDGE_VERSION = '0.3.8-swe3';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -244,6 +244,60 @@
             // monitorRunDependencies fires on every addRunDependency /
             // removeRunDependency call, so a stuck >0 count surfaces
             // immediately in the console.
+            // onReady extracted into a named function so we can call it
+            // manually from the Module.ready.then() handler below if the
+            // engine's "if (Module.onReady) Module.onReady(Module)" line
+            // doesn't fire on its own (which is the case in this build —
+            // Module.core gets set inside onRuntimeInitialized but the
+            // onReady invocation that follows never reaches us).
+            function onEngineReady(stel) {
+                if (window.__stel) return;       // idempotent — engine may try twice
+                window.__stel = stel;            // exposed for SWE-4 RPC handlers
+
+                try {
+                    var core = stel.core;
+                    core.stars.addDataSource({ url: SKYDATA_BASE + 'stars' });
+                    core.skycultures.addDataSource({
+                        url: SKYDATA_BASE + 'skycultures/western',
+                        key: 'western'
+                    });
+                    core.dsos.addDataSource({ url: SKYDATA_BASE + 'dso' });
+                    core.landscapes.addDataSource({
+                        url: SKYDATA_BASE + 'landscapes/guereins',
+                        key: 'guereins'
+                    });
+                    core.milkyway.addDataSource({
+                        url: SKYDATA_BASE + 'surveys/milkyway'
+                    });
+                    core.minor_planets.addDataSource({
+                        url: SKYDATA_BASE + 'mpcorb.dat',
+                        key: 'mpc_asteroids'
+                    });
+                    core.planets.addDataSource({
+                        url: SKYDATA_BASE + 'surveys/sso/moon',
+                        key: 'moon'
+                    });
+                    core.planets.addDataSource({
+                        url: SKYDATA_BASE + 'surveys/sso/sun',
+                        key: 'sun'
+                    });
+                    console.log('[Sky] data sources registered (base: ' + SKYDATA_BASE + ')');
+                } catch (dsErr) {
+                    console.error('[Sky] addDataSource failed:', dsErr);
+                }
+
+                postToParent({
+                    type: 'ready',
+                    version: BRIDGE_VERSION,
+                    webgl: true,
+                    webgl2: true,
+                    engineLoaded: true,
+                    dataBase: SKYDATA_BASE,
+                    __from: 'sky-bridge'
+                });
+                console.log('[Sky] engine onReady fired — bridge v' + BRIDGE_VERSION);
+            }
+
             var modulePromise = window.StelWebEngine({
                 wasmFile: skyBaseUrl() + 'js/wasm/stellarium-web-engine.wasm',
                 canvas: document.getElementById('stel-canvas'),
@@ -253,67 +307,7 @@
                 monitorRunDependencies: function (left) {
                     console.log('[Sky emcc runDependencies] now=' + left);
                 },
-                onReady: function (stel) {
-                    window.__stel = stel;       // exposed for SWE-4 RPC handlers
-
-                    // SWE-3: register HiPS + auxiliary data sources.
-                    // The engine fetches tiles lazily; URLs that 404
-                    // (because the user hasn't run the fetch script
-                    // yet) get logged in DevTools as failed requests
-                    // but don't crash anything — the engine renders
-                    // empty for those subsystems.
-                    //
-                    // Mirror the live Stellarium Web's data layout
-                    // exactly so the same SkyCulture keys ("western"),
-                    // landscape keys ("guereins"), and survey keys
-                    // ("moon" / "sun") resolve identically.
-                    try {
-                        var core = stel.core;
-                        core.stars.addDataSource({ url: SKYDATA_BASE + 'stars' });
-                        core.skycultures.addDataSource({
-                            url: SKYDATA_BASE + 'skycultures/western',
-                            key: 'western'
-                        });
-                        core.dsos.addDataSource({ url: SKYDATA_BASE + 'dso' });
-                        core.landscapes.addDataSource({
-                            url: SKYDATA_BASE + 'landscapes/guereins',
-                            key: 'guereins'
-                        });
-                        core.milkyway.addDataSource({
-                            url: SKYDATA_BASE + 'surveys/milkyway'
-                        });
-                        core.minor_planets.addDataSource({
-                            url: SKYDATA_BASE + 'mpcorb.dat',
-                            key: 'mpc_asteroids'
-                        });
-                        core.planets.addDataSource({
-                            url: SKYDATA_BASE + 'surveys/sso/moon',
-                            key: 'moon'
-                        });
-                        core.planets.addDataSource({
-                            url: SKYDATA_BASE + 'surveys/sso/sun',
-                            key: 'sun'
-                        });
-                        console.log('[Sky] data sources registered (base: ' + SKYDATA_BASE + ')');
-                    } catch (dsErr) {
-                        // The engine's addDataSource API can change
-                        // between versions — surface a clear error
-                        // rather than letting the engine render an
-                        // uninformative blank sky.
-                        console.error('[Sky] addDataSource failed:', dsErr);
-                    }
-
-                    postToParent({
-                        type: 'ready',
-                        version: BRIDGE_VERSION,
-                        webgl: true,
-                        webgl2: true,
-                        engineLoaded: true,
-                        dataBase: SKYDATA_BASE,
-                        __from: 'sky-bridge'
-                    });
-                    console.log('[Sky] engine onReady — bridge v' + BRIDGE_VERSION);
-                }
+                onReady: onEngineReady
             });
             // StelWebEngine returns Module.ready (a Promise). If init
             // never completes, the promise stays pending forever — but
@@ -330,20 +324,23 @@
                         console.log('  canvas attached:', !!mod.canvas);
                         console.log('  Module.core:', typeof mod.core,
                                     'Module.observer:', typeof mod.observer);
-                        // If onRuntimeInitialized was supposed to set
-                        // .core but didn't, it threw silently. Re-invoke
-                        // it inside a try/catch so we see the error.
-                        if (!mod.core && typeof mod.onRuntimeInitialized === 'function') {
-                            console.log('[Sky] Module.core is undefined — onRuntimeInitialized failed.'
-                                + ' Re-invoking under try/catch to capture the error…');
-                            try {
-                                mod.onRuntimeInitialized();
-                                console.log('[Sky] manual re-invoke returned. Module.core now:',
-                                    typeof mod.core);
-                            } catch (e) {
-                                console.error('[Sky] onRuntimeInitialized THREW:', e,
-                                    '\n  stack:', e && e.stack);
-                            }
+                        console.log('  Module.onReady:', typeof mod.onReady,
+                                    'window.__stel:', typeof window.__stel);
+                        // Workaround: in this minified build of
+                        // stellarium-web-engine the trailing
+                        // "if (Module.onReady) Module.onReady(Module)"
+                        // inside onRuntimeInitialized doesn't fire even
+                        // when Module.core is set (verified by
+                        // diagnostic). Drive it ourselves with the
+                        // resolved Module — onEngineReady is idempotent
+                        // so it's a no-op if the engine ever does call
+                        // us first.
+                        if (mod.core && !window.__stel) {
+                            console.log('[Sky] Module.core set but our onReady never fired. '
+                                + 'Driving it manually with the resolved Module.');
+                            try { onEngineReady(mod); }
+                            catch (e) { console.error('[Sky] manual onEngineReady THREW:', e,
+                                '\n  stack:', e && e.stack); }
                         }
                     },
                     function (err) { console.error('[Sky] Module.ready REJECTED:', err); }
