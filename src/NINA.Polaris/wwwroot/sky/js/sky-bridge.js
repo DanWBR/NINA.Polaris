@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.8.2-swe5';
+    var BRIDGE_VERSION = '0.8.1-swe5';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -208,31 +208,11 @@
                 stel.core.fov = fovDeg * stel.D2R;
             }
             if (objHint) {
-                // Smooth-pan to the picked target. Prefer stel.lookAt
-                // (animated camera move via ICRS unit vector, NO
-                // persistent lock) over stel.pointAndLock so that the
-                // user's subsequent mouse-drag isn't constantly pulled
-                // back by the lock — pointAndLock would otherwise keep
-                // re-centring the object every frame and made
-                // manual framing impossible after a search/click.
-                // Still set core.selection so the engine highlights
-                // the target and the click handler can read it back.
-                try {
-                    var raRadIc  = raDeg  * stel.D2R;
-                    var decRadIc = decDeg * stel.D2R;
-                    var cdec = Math.cos(decRadIc);
-                    var pos = [
-                        cdec * Math.cos(raRadIc),
-                        cdec * Math.sin(raRadIc),
-                        Math.sin(decRadIc)
-                    ];
-                    if (typeof stel.lookAt === 'function') {
-                        stel.lookAt(pos, 0.7);
-                        try { stel.core.selection = objHint; } catch (_) { }
-                        return true;
-                    }
-                } catch (lookErr) {
-                    console.warn('[Sky] stel.lookAt path failed, falling through:', lookErr);
+                // pointAndLock keeps the object centred as time advances.
+                if (typeof stel.pointAndLock === 'function') {
+                    stel.pointAndLock(objHint);
+                    stel.core.selection = objHint;
+                    return true;
                 }
             }
             // Direct RA/Dec → altaz via spherical trig. Mirrors the
