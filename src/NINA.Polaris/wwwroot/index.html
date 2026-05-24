@@ -24,12 +24,146 @@
          from the camera's minimum supported exposure up to 1000s.
          Single source of truth — tweak the EXPOSURE_PRESETS_ALL
          array in app.js and every exposure field in the app picks
-         up the new list. -->
+         up the new list.
+
+         Kept around for browser-native fallback ONLY when our custom
+         popover (see below) isn't running — in normal operation the
+         JS strips the list= attribute off matched inputs and renders
+         its own popover that always shows the FULL preset list,
+         unfiltered. The native datalist filters by what the user has
+         typed (typing "3" only shows 3/30/300), which the user
+         explicitly didn't want. -->
     <datalist id="exposure-presets">
         <template x-for="v in exposurePresets()" :key="v">
             <option :value="v"></option>
         </template>
     </datalist>
+
+    <!-- Custom always-show-all exposure preset popover.
+         Self-contained vanilla JS (no Alpine deps so it's available
+         the moment Alpine hydrates the inputs). On every focus into
+         an input that originally carried list="exposure-presets",
+         opens a floating <ul> of every preset value from the same
+         exposurePresets() helper — no filtering, no rearrangement.
+         Click a value → writes it to the input + dispatches input
+         and change events so Alpine's x-model.number picks the new
+         value up. -->
+    <div id="exposure-presets-popover" class="exposure-presets-popover" hidden></div>
+    <script>
+        (function () {
+            'use strict';
+            // Read the preset list off the Alpine root component so
+            // future per-camera tweaks (minimum exposure, log-scale
+            // additions) propagate automatically.
+            function readPresets() {
+                var root = document.querySelector('[x-data]');
+                try {
+                    if (root && root._x_dataStack && typeof root._x_dataStack[0].exposurePresets === 'function') {
+                        return root._x_dataStack[0].exposurePresets();
+                    }
+                } catch (_) { /* Alpine not ready yet */ }
+                // Fallback hardcoded list — kept in sync with
+                // EXPOSURE_PRESETS_ALL in app.js. Used only during
+                // the brief window before Alpine hydrates.
+                return [0.0001, 0.001, 0.01, 0.05, 0.1, 0.5, 1, 2, 3, 4, 5,
+                        10, 15, 20, 30, 45, 60, 90, 120, 150, 180, 300, 600, 1000];
+            }
+
+            var pop = null;
+            var activeInput = null;
+
+            function ensurePop() {
+                if (pop) return pop;
+                pop = document.getElementById('exposure-presets-popover');
+                if (!pop) return null;
+                // Click delegation on the popover writes the chosen
+                // preset back to whichever input is currently active.
+                pop.addEventListener('mousedown', function (ev) {
+                    // mousedown (not click) so focus stays on input —
+                    // a click would blur the input and close us early.
+                    var t = ev.target.closest('[data-exposure-value]');
+                    if (!t || !activeInput) return;
+                    ev.preventDefault();
+                    var v = t.getAttribute('data-exposure-value');
+                    activeInput.value = v;
+                    activeInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    activeInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    hide();
+                });
+                return pop;
+            }
+
+            function show(input) {
+                var p = ensurePop();
+                if (!p) return;
+                activeInput = input;
+                var presets = readPresets();
+                p.innerHTML = presets.map(function (v) {
+                    return '<button type="button" class="exposure-preset-item" data-exposure-value="'
+                        + v + '">' + v + ' s</button>';
+                }).join('');
+                var rect = input.getBoundingClientRect();
+                p.style.left = rect.left + 'px';
+                p.style.top = (rect.bottom + 2) + 'px';
+                p.style.minWidth = Math.max(rect.width, 80) + 'px';
+                p.hidden = false;
+            }
+
+            function hide() {
+                if (pop) pop.hidden = true;
+                activeInput = null;
+            }
+
+            // Strip the native `list` attribute on first encounter so
+            // the browser's filtering dropdown stays out of the way.
+            // Marker stays as data-exposure-presets so we can still
+            // identify exposure inputs after the strip.
+            function disarmNative(el) {
+                if (el.getAttribute('list') === 'exposure-presets') {
+                    el.removeAttribute('list');
+                    el.setAttribute('data-exposure-presets', '1');
+                }
+            }
+
+            document.addEventListener('focusin', function (ev) {
+                var el = ev.target;
+                if (!(el instanceof HTMLInputElement)) return;
+                if (el.getAttribute('list') === 'exposure-presets'
+                    || el.hasAttribute('data-exposure-presets')) {
+                    disarmNative(el);
+                    show(el);
+                }
+            });
+
+            document.addEventListener('focusout', function (ev) {
+                // Defer hide so a click inside the popover can fire
+                // its own mousedown handler (which calls hide itself).
+                setTimeout(function () {
+                    if (!activeInput || document.activeElement !== activeInput) hide();
+                }, 100);
+            });
+
+            document.addEventListener('keydown', function (ev) {
+                if (ev.key === 'Escape' && activeInput) {
+                    hide();
+                    activeInput && activeInput.blur();
+                }
+            });
+
+            // Reposition on resize / scroll while open so the popover
+            // doesn't drift away from its anchor input.
+            window.addEventListener('resize', function () {
+                if (activeInput && pop && !pop.hidden) {
+                    var r = activeInput.getBoundingClientRect();
+                    pop.style.left = r.left + 'px';
+                    pop.style.top = (r.bottom + 2) + 'px';
+                }
+            });
+            window.addEventListener('scroll', function () {
+                if (activeInput && pop && !pop.hidden) hide();
+            }, true);
+        })();
+    </script>
 
     <!-- Status Bar -->
     <header class="status-bar">
