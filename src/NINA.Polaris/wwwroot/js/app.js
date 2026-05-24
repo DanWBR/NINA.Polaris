@@ -9348,7 +9348,16 @@ function ninaApp() {
             }
             if (eq.camera) {
                 this.cameraTemp = eq.camera.temperature;
-                this.selectedCamera = eq.camera.name;
+                // ONLY mirror the camera name as "selectedCamera" when
+                // the backend reports it as actually CONNECTED. The
+                // EquipmentManager keeps Camera!=null after the user
+                // disconnects (the device stays selected; only the
+                // physical link is closed) — without this guard, every
+                // status tick after a disconnect re-asserts
+                // selectedCamera = name and the UI toggle flips back
+                // ON within ~1 s, making the camera look like it
+                // refuses to disconnect.
+                this.selectedCamera = eq.camera.connected ? eq.camera.name : null;
                 // Mirror the connected device into the RIGS-tab dropdown
                 // so it shows the actual selection instead of "Select
                 // device" on page-refresh-while-connected. Only set
@@ -9407,7 +9416,13 @@ function ninaApp() {
                     parked: eq.telescope.parked, pierSide: eq.telescope.pierSide,
                     connected: eq.telescope.connected
                 });
-                this.selectedTelescope = eq.telescope.name;
+                // Same "disconnect-doesn't-stick" guard as the camera
+                // above — the EquipmentManager keeps Telescope!=null
+                // after Disconnect, so the WS keeps echoing the name.
+                // Only mirror it to selectedTelescope when the
+                // backend says it's actually connected.
+                this.selectedTelescope = eq.telescope.connected
+                    ? eq.telescope.name : null;
                 if (!this.equipMountChoice && eq.telescope.name) {
                     this.equipMountChoice = eq.telescope.name;
                 }
@@ -9433,21 +9448,28 @@ function ninaApp() {
                 this.focusPosition = eq.focuser.position;
                 this.focusTemp = eq.focuser.temperature;
                 this.focusMoving = eq.focuser.moving;
-                this.focusConnected = true;
-                this.selectedFocuser = eq.focuser.name;
+                // Honour the backend's connected flag instead of
+                // assuming "the focuser is in the payload, so it's
+                // connected" — same disconnect-doesn't-stick bug the
+                // camera/telescope had. Treat missing 'connected'
+                // (older server build) as true for backward compat.
+                const focuserOnline = eq.focuser.connected !== false;
+                this.focusConnected = focuserOnline;
+                this.selectedFocuser = focuserOnline ? eq.focuser.name : null;
                 if (!this.equipFocuserChoice && eq.focuser.name) {
                     this.equipFocuserChoice = eq.focuser.name;
                 }
             }
             if (eq.filterWheel) {
+                const fwOnline = eq.filterWheel.connected !== false;
                 this.filterWheel = {
-                    connected: true,
+                    connected: fwOnline,
                     position: eq.filterWheel.position,
                     currentFilter: eq.filterWheel.currentFilter,
                     filters: eq.filterWheel.filters || [],
                     moving: eq.filterWheel.moving
                 };
-                this.selectedFilterWheel = eq.filterWheel.name;
+                this.selectedFilterWheel = fwOnline ? eq.filterWheel.name : null;
                 if (!this.equipFilterChoice && eq.filterWheel.name) {
                     this.equipFilterChoice = eq.filterWheel.name;
                 }

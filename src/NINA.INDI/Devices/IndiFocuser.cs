@@ -6,6 +6,14 @@ public class IndiFocuser {
     private readonly IndiClient _client;
 
     public string DeviceName { get; }
+    /// <summary>
+    /// True only when the INDI client is up AND the device's per-device
+    /// CONNECTION switch is in the CONNECT state. See
+    /// <see cref="IndiCamera.IsConnected"/> for the rationale.
+    /// </summary>
+    public bool IsConnected
+        => _client.IsConnected
+           && _client.GetSwitch(DeviceName, "CONNECTION", "CONNECT");
     public int Position => (int)_client.GetNumber(DeviceName, "ABS_FOCUS_POSITION", "FOCUS_ABSOLUTE_POSITION");
     public double Temperature => _client.GetNumber(DeviceName, "FOCUS_TEMPERATURE", "TEMPERATURE");
     public int MaxPosition => (int)_client.GetNumber(DeviceName, "FOCUS_MAX", "FOCUS_MAX_VALUE");

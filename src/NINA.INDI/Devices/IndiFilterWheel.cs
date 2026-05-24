@@ -6,6 +6,14 @@ public class IndiFilterWheel {
     private readonly IndiClient _client;
 
     public string DeviceName { get; }
+    /// <summary>
+    /// True only when the INDI client is up AND the device's per-device
+    /// CONNECTION switch is in the CONNECT state. See
+    /// <see cref="IndiCamera.IsConnected"/> for the rationale.
+    /// </summary>
+    public bool IsConnected
+        => _client.IsConnected
+           && _client.GetSwitch(DeviceName, "CONNECTION", "CONNECT");
 
     public int Position {
         get => (int)_client.GetNumber(DeviceName, "FILTER_SLOT", "FILTER_SLOT_VALUE");

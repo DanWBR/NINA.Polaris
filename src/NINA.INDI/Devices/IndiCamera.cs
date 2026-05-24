@@ -26,7 +26,18 @@ public class IndiCamera : ICamera {
     public int EmptyStreamFrameCount => _emptyStreamFrameCount;
 
     public string DeviceName { get; }
-    public bool IsConnected => _client.IsConnected;
+    /// <summary>
+    /// True only when the INDI client is up AND the device's per-device
+    /// CONNECTION switch is in the CONNECT state. The legacy
+    /// implementation just delegated to <c>_client.IsConnected</c> (the
+    /// global server link), so the property reported true even after
+    /// the user disconnected the device through the UI — causing the
+    /// frontend toggle to flip itself back on within the next status
+    /// tick. Reading the actual CONNECTION switch fixes that.
+    /// </summary>
+    public bool IsConnected
+        => _client.IsConnected
+           && _client.GetSwitch(DeviceName, "CONNECTION", "CONNECT");
 
     public CameraStates State {
         get {

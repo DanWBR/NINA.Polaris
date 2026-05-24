@@ -8,7 +8,14 @@ public class IndiTelescope : ITelescope {
     private readonly IndiClient _client;
 
     public string DeviceName { get; }
-    public bool IsConnected => _client.IsConnected;
+    /// <summary>
+    /// True only when the INDI client is up AND the device's per-device
+    /// CONNECTION switch is in the CONNECT state. See
+    /// <see cref="IndiCamera.IsConnected"/> for the rationale.
+    /// </summary>
+    public bool IsConnected
+        => _client.IsConnected
+           && _client.GetSwitch(DeviceName, "CONNECTION", "CONNECT");
 
     /// <summary>INDI mounts come in all shapes. Default to the
     /// GEM capability profile — for the common WiFi alt-az bodies

@@ -324,6 +324,7 @@ public class EquipmentManager : IDisposable {
         if (Focuser != null) {
             status["focuser"] = new {
                 name = Focuser.DeviceName,
+                connected = Focuser.IsConnected,
                 position = Focuser.Position,
                 temperature = Safe(Focuser.Temperature),
                 maxPosition = Focuser.MaxPosition,
@@ -334,6 +335,7 @@ public class EquipmentManager : IDisposable {
         if (FilterWheel != null) {
             status["filterWheel"] = new {
                 name = FilterWheel.DeviceName,
+                connected = FilterWheel.IsConnected,
                 position = FilterWheel.Position,
                 currentFilter = FilterWheel.CurrentFilterName,
                 filters = FilterWheel.FilterNames,
