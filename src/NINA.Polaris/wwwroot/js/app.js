@@ -4479,29 +4479,14 @@ function ninaApp() {
             });
         },
 
-        // Mount-connected click → plain slew to the picked card's exact
-        // coordinates. No plate solve / re-centre — user explicitly asked
-        // for slew-only here, so the mount goes where its model says the
-        // coords are and stops. For a precise centring run, use the
-        // Slew & Center button on the SKY tab afterwards.
-        //
-        // Bug fix: previously chained into slewAndCenter() which reads
-        // the *current map centre* from the engine via _skyGetCenter().
-        // Right after tab-switching that centre may still be the mount
-        // position (tween hasn't run), so the mount slewed to where it
-        // already was. We now POST item.raHours/decDeg straight to the
-        // bare /api/telescope/slew endpoint.
+        // "Center" action — purely a map operation. Picks the card as
+        // the SKY target (opens the info card, centres the engine on
+        // the coords, refreshes FOV overlays). Does NOT move the mount.
+        // The button used to slew; the user explicitly asked that the
+        // mount stay put — slewing now lives on the SKY tab's
+        // Slew / Slew & Center overlays after the map is positioned.
         async tonightGoTo(item) {
             this.tonightPickTarget(item);
-            try {
-                await this.apiPost('/api/telescope/slew', {
-                    ra: item.raHours,
-                    dec: item.decDeg
-                });
-                this.toast('Slewing to ' + item.name, 'ok');
-            } catch (e) {
-                this.toast('Slew failed: ' + (e.message || ''), 'error');
-            }
         },
 
         // Helper: mark a card's thumb as failed-to-load. If we were

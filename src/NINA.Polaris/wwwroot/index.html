@@ -3188,13 +3188,15 @@
                                 <div class="tonight-compass-label" x-text="Math.round(item.currentAzDeg) + '° ' + azCardinal(item.currentAzDeg)"></div>
                                 <div class="tonight-alt-now" x-text="item.currentAltDeg + '° alt'"></div>
                             </div>
-                            <div class="tonight-actions" x-show="mount.connected">
-                                <!-- Slew only — no plate-solve / re-centre.
-                                     Disabled while the mount is mid-slew. -->
+                            <div class="tonight-actions">
+                                <!-- Map-only: select this object as the SKY
+                                     target, open the info card, centre the
+                                     engine on it. Does not move the mount —
+                                     for that, use Slew or Slew & Center on
+                                     the SKY tab after the map is positioned. -->
                                 <button class="btn btn-sm btn-primary"
                                         @click="tonightGoTo(item)"
-                                        :disabled="mount.slewing"
-                                        title="Slew the mount to this object (no plate solve)">Go to</button>
+                                        title="Open this object in the SKY tab and centre the map (mount stays put)">Center</button>
                             </div>
                         </div>
                     </template>
