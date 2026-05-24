@@ -84,6 +84,11 @@ function ninaApp() {
         // in localStorage so the panel comes back where the user left
         // it. _drag is transient state held during a mouse/touch drag.
         mountPanel: { x: 24, y: 80, visible: true },
+        // Live-camera preview floats next to the mount panel by
+        // default. Shares the same draggable + persist pattern.
+        // Visibility flag lives in slewPreviewVisible above so the
+        // floating 📷 Camera pill keeps the same hook.
+        cameraPanel: { x: 24, y: 360 },
         _mountDrag: null,
 
         // Focus
@@ -953,7 +958,11 @@ function ninaApp() {
             this.loadCameraDrivers();
             this.loadMountDrivers();
             this.restoreMountPanel();
-            window.addEventListener('resize', () => this._clampMountPanel());
+            this.restoreCameraPanel();
+            window.addEventListener('resize', () => {
+                this._clampMountPanel();
+                this._clampCameraPanel();
+            });
             this.fetchPhd2ProcessStatus();
             this.fetchPhd2InstallInfo();
         },
@@ -6740,6 +6749,75 @@ function ninaApp() {
             window.removeEventListener('touchend', endHandler);
             window.removeEventListener('touchcancel', endHandler);
             this.persistMountPanel();
+        },
+
+        // --- Camera preview floating panel (mirror of mountPanel) ---
+
+        restoreCameraPanel() {
+            try {
+                const raw = localStorage.getItem('cameraPanel');
+                if (!raw) return;
+                const saved = JSON.parse(raw);
+                if (typeof saved.x === 'number') this.cameraPanel.x = saved.x;
+                if (typeof saved.y === 'number') this.cameraPanel.y = saved.y;
+                this._clampCameraPanel();
+            } catch { /* corrupt — ignore */ }
+        },
+
+        persistCameraPanel() {
+            try {
+                localStorage.setItem('cameraPanel', JSON.stringify({
+                    x: this.cameraPanel.x, y: this.cameraPanel.y
+                }));
+            } catch { /* non-fatal */ }
+        },
+
+        _clampCameraPanel() {
+            const w = window.innerWidth, h = window.innerHeight;
+            const minX = -240, maxX = w - 80;
+            const minY = 0, maxY = h - 32;
+            this.cameraPanel.x = Math.max(minX, Math.min(maxX, this.cameraPanel.x));
+            this.cameraPanel.y = Math.max(minY, Math.min(maxY, this.cameraPanel.y));
+        },
+
+        cameraPanelDragStart(ev) {
+            const isTouch = ev.type === 'touchstart';
+            const point = isTouch ? ev.touches[0] : ev;
+            this._cameraDrag = {
+                offsetX: point.clientX - this.cameraPanel.x,
+                offsetY: point.clientY - this.cameraPanel.y,
+                touch: isTouch
+            };
+            const move = (e) => this._cameraPanelDragMove(e);
+            const end = () => this._cameraPanelDragEnd(move, end);
+            if (isTouch) {
+                window.addEventListener('touchmove', move, { passive: false });
+                window.addEventListener('touchend', end);
+                window.addEventListener('touchcancel', end);
+            } else {
+                window.addEventListener('mousemove', move);
+                window.addEventListener('mouseup', end);
+            }
+            ev.preventDefault();
+        },
+
+        _cameraPanelDragMove(ev) {
+            if (!this._cameraDrag) return;
+            const point = this._cameraDrag.touch ? ev.touches[0] : ev;
+            this.cameraPanel.x = point.clientX - this._cameraDrag.offsetX;
+            this.cameraPanel.y = point.clientY - this._cameraDrag.offsetY;
+            this._clampCameraPanel();
+            if (ev.cancelable) ev.preventDefault();
+        },
+
+        _cameraPanelDragEnd(moveHandler, endHandler) {
+            this._cameraDrag = null;
+            window.removeEventListener('mousemove', moveHandler);
+            window.removeEventListener('mouseup', endHandler);
+            window.removeEventListener('touchmove', moveHandler);
+            window.removeEventListener('touchend', endHandler);
+            window.removeEventListener('touchcancel', endHandler);
+            this.persistCameraPanel();
         },
 
         // --- Focuser ---

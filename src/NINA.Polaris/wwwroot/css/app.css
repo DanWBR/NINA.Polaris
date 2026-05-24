@@ -1071,28 +1071,72 @@ label select.input-sm {
     color: #fff;
 }
 
-/* × close button on the live-preview inset — same dismissal
-   affordance the mount panel has. Positions top-right of the
-   inset so it doesn't sit on top of the canvas content. */
-.slew-preview-close {
-    position: absolute;
-    top: 4px;
-    right: 4px;
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    background: rgba(0, 0, 0, 0.55);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 50%;
+/* Live-camera floating panel — clone of .mount-float-panel so the
+   two windows read as a matched draggable set. Slightly wider to
+   accommodate the live preview canvas without squishing 4:3 frames. */
+.cam-float-panel {
+    position: fixed;
+    z-index: 90;
+    width: 360px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.35);
+    user-select: none;
+    -webkit-user-select: none;
+}
+.cam-float-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
+    border-top-left-radius: var(--radius);
+    border-top-right-radius: var(--radius);
+    cursor: move;
+    font-size: 12px;
+    font-weight: 600;
     color: var(--text-primary);
-    font-size: 14px;
+    touch-action: none;
+}
+.cam-float-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.cam-float-sub {
+    font-weight: 400;
+    color: var(--text-secondary);
+    font-size: 11px;
+    margin-left: 4px;
+}
+.cam-float-close {
+    background: transparent;
+    border: 0;
+    color: var(--text-secondary);
+    font-size: 18px;
     line-height: 1;
     cursor: pointer;
-    z-index: 2;
+    padding: 0 4px;
+    border-radius: 4px;
 }
-.slew-preview-close:hover {
-    background: rgba(0, 0, 0, 0.85);
-    border-color: rgba(255, 255, 255, 0.4);
+.cam-float-close:hover {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+.cam-float-body {
+    padding: 8px;
+    /* Hold the canvas in a 16:9 box so it doesn't collapse to 0 height
+       (canvas with no intrinsic size + flex parent = 0px tall). The
+       canvas itself uses object-fit:contain so 4:3 sensor frames
+       letterbox cleanly inside this box. */
+    aspect-ratio: 16 / 9;
+    background: #000;
+    border-bottom-left-radius: var(--radius);
+    border-bottom-right-radius: var(--radius);
+    overflow: hidden;
 }
 .mount-float-reopen:hover {
     background: var(--accent);

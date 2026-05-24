@@ -2606,24 +2606,38 @@
 
             <!-- SKY EXPLORER -->
             <div x-show="tab === 'sky'" class="tab-panel tab-panel-sky">
-                <!-- Slew preview inset — live camera feed window over
-                     the sky map. SlewPreviewService still drives the
-                     camera stream (auto-on during slews when nothing
-                     else owns the camera); the multi-canvas renderer
-                     mirrors frames to #slewPreviewCanvas the same way
-                     it does for LIVE / PREVIEW / Focus canvases.
-                     Visibility is gated by an extra user toggle
-                     (`slewPreviewVisible`) so power users can hide
-                     the window even while it's active and bring it
-                     back via the 📷 Camera pill below. -->
-                <div class="slew-preview-inset"
+                <!-- Slew preview floating panel — live camera feed
+                     over the sky map. Same draggable-panel pattern
+                     as the Mount control: title bar with × button,
+                     position persisted across reloads, "📷 Camera"
+                     pill re-opens when dismissed. SlewPreviewService
+                     still drives the underlying camera stream
+                     (auto-on during slews when nothing else owns
+                     the camera); slewPreviewVisible gates show/hide. -->
+                <div class="cam-float-panel"
                      x-show="slewPreview?.active && slewPreviewVisible"
-                     x-cloak>
-                    <div class="slew-preview-label">📷 Slewing — live view</div>
-                    <button class="slew-preview-close"
-                            @click="slewPreviewVisible = false; persistSlewPreviewToggle()"
-                            title="Hide live camera preview">×</button>
-                    <canvas id="slewPreviewCanvas" class="slew-preview-canvas"></canvas>
+                     x-cloak
+                     :style="`left: ${cameraPanel.x}px; top: ${cameraPanel.y}px;`">
+                    <div class="cam-float-header"
+                         @mousedown="cameraPanelDragStart($event)"
+                         @touchstart="cameraPanelDragStart($event)">
+                        <span class="cam-float-title">
+                            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                                <path d="M4 7h3l2-2h6l2 2h3v12H4z" fill="none"
+                                      stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                                <circle cx="12" cy="13" r="3.5" fill="none"
+                                        stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            Camera
+                            <span class="cam-float-sub">Slewing — live view</span>
+                        </span>
+                        <button class="cam-float-close"
+                                @click.stop="slewPreviewVisible = false; persistSlewPreviewToggle()"
+                                title="Hide">×</button>
+                    </div>
+                    <div class="cam-float-body">
+                        <canvas id="slewPreviewCanvas" class="slew-preview-canvas"></canvas>
+                    </div>
                 </div>
                 <div class="sky-toolbar">
                     <input type="text" class="search-input" placeholder="Search object (M31, NGC 7000, Orion...)"
