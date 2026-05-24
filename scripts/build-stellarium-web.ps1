@@ -32,6 +32,32 @@ $content = $content -replace "`r", ""
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText($shScript, $content, $utf8NoBom)
 
+# Also normalise the stellarium-web-engine submodule tree. The
+# in-container `sed -i` should handle this, but Docker Desktop's
+# Windows bind-mount layer doesn't always propagate the writes back
+# to the host filesystem reliably — the next compile reads CRLF
+# again. Doing the strip from PowerShell direct on NTFS is more
+# reliable. Whitelist by extension so we don't clobber binaries.
+$submodulePath = Join-Path (Split-Path -Parent $scriptDir) 'external\stellarium-web-engine'
+if (Test-Path $submodulePath) {
+    Write-Host "→ Normalising line endings under $submodulePath (may take ~30s)"
+    $extensions = @('*.c', '*.h', '*.cpp', '*.hpp', '*.cc', '*.hh', '*.inl',
+                    '*.py', '*.js', '*.json', '*.glsl', '*.frag', '*.vert',
+                    '*.shader', '*.txt', '*.md', '*.css', '*.html', '*.htm',
+                    'SConstruct', 'SConscript', 'Makefile', '*.mk', '*.sh')
+    $files = Get-ChildItem -Path $submodulePath -Recurse -File -Include $extensions
+    $fixed = 0
+    foreach ($f in $files) {
+        $raw = [System.IO.File]::ReadAllBytes($f.FullName)
+        if ($raw -contains 13) {
+            $text = [System.Text.Encoding]::UTF8.GetString($raw) -replace "`r", ""
+            [System.IO.File]::WriteAllText($f.FullName, $text, $utf8NoBom)
+            $fixed++
+        }
+    }
+    Write-Host "  rewrote $fixed file(s) (skipped $($files.Count - $fixed) already LF)"
+}
+
 # Hand off to bash. Git Bash on Windows installs at one of these paths;
 # fall back to PATH lookup.
 $bashCandidates = @(
