@@ -4083,6 +4083,15 @@
                             @click="studioOpenIntegrateDialog()">
                         ✧ Integrate (stack)
                     </button>
+                    <!-- ED-7: hand the single-selected frame to the
+                         Lightroom-style editor. One frame at a time —
+                         the editor opens a single session per file. -->
+                    <button class="btn btn-sm"
+                            :disabled="studio.selectedIds.length !== 1"
+                            @click="studioOpenInEditor()"
+                            title="Open this frame in the Lightroom-style editor">
+                        🎨 Open in editor
+                    </button>
                 </div>
 
                 <!-- ST-3: Master integration modal -->
@@ -4551,6 +4560,19 @@
                             :disabled="files.selectedPaths.length !== 1">✏ Rename</button>
                     <button class="btn btn-sm btn-danger" @click="filesDelete()"
                             :disabled="files.selectedPaths.length === 0">🗑 Delete</button>
+                    <!-- Open the selected file in the Lightroom-style editor.
+                         Disabled unless exactly one file is selected — the
+                         editor opens one frame at a time. Supported types
+                         (FITS/XISF/PNG/JPG/TIFF) aren't gated here; the
+                         server's /api/editor/load rejects unsupported
+                         extensions with a clear error toast. -->
+                    <button class="btn btn-sm"
+                            :disabled="files.selectedPaths.length !== 1
+                                       || filesSelectedDir() != null"
+                            @click="filesOpenInEditor()"
+                            title="Open this file in the Lightroom-style editor">
+                        🎨 Edit
+                    </button>
                     <!-- GraXpert dropdown: only when binary detected.
                          BGE is always offered; decon/denoise are gated
                          on the v3.0+ flag from /api/graxpert/status. -->

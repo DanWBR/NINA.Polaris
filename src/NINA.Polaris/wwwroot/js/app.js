@@ -3547,6 +3547,24 @@ function ninaApp() {
             }
         },
 
+        // ─── ED-7: hand a Library frame to the Editor ──────────────────
+        // Looks up the single-selected frame's filesystem path, switches
+        // to the EDITOR tab, then calls editorLoad which kicks off the
+        // session lifecycle (load → render initial preview + cached
+        // original → hydrate sidecar edits if present).
+        async studioOpenInEditor() {
+            if (this.studio.selectedIds.length !== 1) return;
+            const id = this.studio.selectedIds[0];
+            const frame = this.studio.frames.find(f => f.id === id);
+            if (!frame || !frame.path) {
+                this.toast('Frame has no path on disk', 'warn');
+                return;
+            }
+            this.tab = 'editor';
+            await this.$nextTick();
+            await this.editorLoad(frame.path);
+        },
+
         // ─── ST-5: Batch stack (integrate) ──────────────────────────────
 
         studioOpenIntegrateDialog() {
@@ -4731,6 +4749,21 @@ function ninaApp() {
             this.imageViewerUrl = url;
             this.imageViewerTitle = title || 'Image Viewer';
             this.openImageViewer();
+        },
+
+        // --- Open in editor (ED-7) ------------------------------------
+        // Hand the currently-selected file off to the EDITOR tab. We
+        // grab the path from selectedPaths (already filtered to exactly
+        // one entry by the button's :disabled), switch tabs, and call
+        // editorLoad which handles the rest of the session lifecycle.
+        async filesOpenInEditor() {
+            if (this.files.selectedPaths.length !== 1) return;
+            const path = this.files.selectedPaths[0];
+            this.tab = 'editor';
+            // wait for the tab to mount (editorState bindings need to
+            // exist before editorLoad runs) — one tick is plenty.
+            await this.$nextTick();
+            await this.editorLoad(path);
         },
 
         // --- Studio root setter ---------------------------------------

@@ -44,6 +44,10 @@ Each tab in the sidebar has its own page. Read the ones you need:
   planner, tonight's best altitudes.
 - **[STUDIO](studio.md)** — post-processing: frame browser, master
   generation, calibration, batch stacking, debayer + BGE + NR + sharpen.
+- **[EDITOR](editor.md)** — Lightroom-style non-destructive editor with
+  sliders for Light / Color / Effects / Detail + JPEG/PNG/TIFF export
+  with quality + resize. Sidecar JSON (`.edit.json`) preserves your
+  edits next to the source file.
 - **[FILES](files.md)** — server-side file explorer.
 - **[Relay (remote access)](relay.md)** — TLS-tunneled access from
   outside your LAN.
