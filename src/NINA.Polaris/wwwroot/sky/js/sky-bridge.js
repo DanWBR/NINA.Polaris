@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.3.5-swe3';
+    var BRIDGE_VERSION = '0.3.6-swe3';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -237,9 +237,22 @@
             // with addDataSource. skyBaseUrl() returns the absolute URL
             // of /sky/ so prepending it lands the wasm at the right
             // /sky/js/wasm/... path.
-            window.StelWebEngine({
+            // Persistent diagnostic hooks. emscripten swallows native
+            // errors silently; without these, an asset-preload that
+            // never resolves (runDependencies > 0 after preRun) leaves
+            // the engine init pending forever with no observable error.
+            // monitorRunDependencies fires on every addRunDependency /
+            // removeRunDependency call, so a stuck >0 count surfaces
+            // immediately in the console.
+            var modulePromise = window.StelWebEngine({
                 wasmFile: skyBaseUrl() + 'js/wasm/stellarium-web-engine.wasm',
                 canvas: document.getElementById('stel-canvas'),
+                print: function (s) { console.log('[Sky emcc stdout]', s); },
+                printErr: function (s) { console.error('[Sky emcc stderr]', s); },
+                onAbort: function (what) { console.error('[Sky emcc ABORT]', what); },
+                monitorRunDependencies: function (left) {
+                    console.log('[Sky emcc runDependencies] now=' + left);
+                },
                 onReady: function (stel) {
                     window.__stel = stel;       // exposed for SWE-4 RPC handlers
 
@@ -302,6 +315,25 @@
                     console.log('[Sky] engine onReady — bridge v' + BRIDGE_VERSION);
                 }
             });
+            // StelWebEngine returns Module.ready (a Promise). If init
+            // never completes, the promise stays pending forever — but
+            // if WASM compile/instantiate or _core_init rejects, the
+            // promise carries the real error. Catch it so we see it.
+            if (modulePromise && typeof modulePromise.then === 'function') {
+                modulePromise.then(
+                    function (mod) { console.log('[Sky] Module.ready RESOLVED'); },
+                    function (err) { console.error('[Sky] Module.ready REJECTED:', err); }
+                );
+            }
+            // Watchdog: if onReady doesn't fire in 10s, log a hint so
+            // we don't sit forever wondering why the sky's blank.
+            setTimeout(function () {
+                if (!window.__stel) {
+                    console.warn('[Sky] WATCHDOG: 10s elapsed and onReady never fired. '
+                        + 'Check [Sky emcc runDependencies] logs above — '
+                        + 'a stuck >0 value means an asset preload never resolved.');
+                }
+            }, 10000);
         } catch (e) {
             console.error('[Sky] StelWebEngine init failed:', e);
             setStatus('Sky engine init failed — see DevTools console.');
