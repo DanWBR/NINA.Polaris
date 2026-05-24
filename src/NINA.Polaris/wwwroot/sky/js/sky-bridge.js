@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.6.2-swe5';
+    var BRIDGE_VERSION = '0.6.3-swe5';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -233,22 +233,67 @@
 
     // Read the current centre of the map back as RA/Dec ICRS + fov.
     // Uses observer.yaw/pitch (altaz) → OBSERVED → CIRS → ICRF.
+    // Compute view-centre RA/Dec from observer altaz + LST via direct
+    // spherical trig. Avoids the engine's convertFrame chain which is
+    // intermittently flaky in this minified build (silently returns
+    // null/NaN). All inputs are direct numeric attributes on the
+    // observer — same source the parallactic-angle calc already uses.
+    //
+    //   sin(δ) = sin(alt)·sin(φ) + cos(alt)·cos(φ)·cos(A_north)
+    //   sin(H) = −sin(A_north)·cos(alt) / cos(δ)
+    //   cos(H) = (sin(alt) − sin(δ)·sin(φ)) / (cos(δ)·cos(φ))
+    //   RA   = LST − H
+    //
+    // where A_north is azimuth measured from north going east. The
+    // stellarium engine appears to use that same convention (yaw=0
+    // points north). LST derived via Greenwich apparent sidereal time
+    // from observer.utc (MJD) plus observer.longitude.
     function skyGetCenter() {
         if (!window.__stel) return null;
         var stel = window.__stel;
         try {
             var obs = stel.core.observer;
-            var observed = stel.s2c([obs.yaw, obs.pitch]);
-            var icrf = stel.convertFrame(obs, 'OBSERVED', 'ICRF', observed);
-            var radec = stel.c2s(icrf);
-            var raDeg = stel.anp(radec[0]) / stel.D2R;
-            var decDeg = stel.anpm(radec[1]) / stel.D2R;
-            var fovDeg = stel.core.fov / stel.D2R;
-            // Don't emit garbage: if any component is non-finite (engine
-            // can produce NaN during transient init states) return null
-            // so the parent's Number.isFinite guards short-circuit
-            // cleanly instead of skyTarget.ra ending up as NaN → null
-            // in JSON → backend rejecting the SlewAndCenterRequest.
+            var phi = obs.latitude;
+            var A   = obs.yaw;
+            var alt = obs.pitch;
+            var mjd = obs.utc;
+            var lng = obs.longitude;
+            var fov = stel.core.fov;
+            if (![phi, A, alt, mjd, lng, fov].every(function (v) {
+                return typeof v === 'number' && isFinite(v);
+            })) return null;
+
+            var sinPhi = Math.sin(phi), cosPhi = Math.cos(phi);
+            var sinAlt = Math.sin(alt), cosAlt = Math.cos(alt);
+            var sinA   = Math.sin(A),   cosA   = Math.cos(A);
+
+            var sinDec = sinAlt * sinPhi + cosAlt * cosPhi * cosA;
+            // Clamp to safe domain for asin.
+            if (sinDec >  1) sinDec =  1;
+            if (sinDec < -1) sinDec = -1;
+            var dec = Math.asin(sinDec);
+            var cosDec = Math.cos(dec);
+            if (Math.abs(cosDec) < 1e-12) cosDec = 1e-12;
+
+            var sinH = -sinA * cosAlt / cosDec;
+            var cosH = (sinAlt - sinDec * sinPhi) / (cosDec * cosPhi);
+            var H = Math.atan2(sinH, cosH);
+
+            // LST: Greenwich apparent sidereal time from MJD + longitude.
+            //   gst (rad) = 2π · fracpart((mjd − 51544.5)·1.00273790935 + 0.7790572732640)
+            var T = mjd - 51544.5;
+            var gstFrac = (T * 1.00273790935 + 0.7790572732640) % 1;
+            if (gstFrac < 0) gstFrac += 1;
+            var gst = 2 * Math.PI * gstFrac;
+            var lst = gst + lng;
+
+            var raRad = lst - H;
+            // Normalise RA to [0, 2π).
+            raRad = ((raRad % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+
+            var raDeg  = raRad / stel.D2R;
+            var decDeg = dec   / stel.D2R;
+            var fovDeg = fov   / stel.D2R;
             if (!isFinite(raDeg) || !isFinite(decDeg) || !isFinite(fovDeg)) {
                 return null;
             }
