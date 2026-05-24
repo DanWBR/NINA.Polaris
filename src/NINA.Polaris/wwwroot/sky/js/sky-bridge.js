@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.6.9-swe5';
+    var BRIDGE_VERSION = '0.7.0-swe5';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -414,18 +414,25 @@
             'stroke-opacity': 0.35,
             'stroke-glow': false
         };
-        // Single combined label along the TOP edge of the rectangle
-        // (= top of the camera sensor in its own rotated orientation).
-        // skyFovRect corner order: ring[3] top-left, ring[2] top-right,
-        // so the top-edge midpoint averages those two. text-rotate =
-        // rectangle rotation keeps the label aligned with the edge as
-        // the sensor rotates.
+        // Single combined label along the TOP edge of the rectangle.
+        // text-rotate must compose the camera rotation (rot) with the
+        // PROJECTION rotation induced by alt-az → screen — i.e. the
+        // parallactic angle at the rectangle's centre. Without the
+        // parallactic component the label stays screen-horizontal
+        // even when the engine projects the rectangle at a tilt
+        // (which is what the user noticed: "só o label do FOV da
+        // montagem que não gira").
         var rotPositive = ((rot % 360) + 360) % 360;
         var labelText = 'Scope  ' + w.toFixed(2) + '° × ' + h.toFixed(2)
             + '°  Rotation ' + rotPositive.toFixed(1) + '°';
         var midTop = [(ring[2][0] + ring[3][0]) / 2, (ring[2][1] + ring[3][1]) / 2];
-        // Text colour = stroke_color * stroke_opacity in the engine
-        // renderer; stroke-opacity must be > 0 or text is invisible.
+        var parallactic = skyParallacticAt(raDeg, decDeg);
+        var textRotate = rot + parallactic;
+        // Engine parses text-rotate as -degrees * DD2R, so positive
+        // here rotates text counter-clockwise on screen. Match the
+        // visible rectangle orientation by negating the parallactic
+        // contribution if the rectangle visibly tilts the other way
+        // — adjust the sign here if testing shows it's reversed.
         var labelProps = {
             stroke: color,
             'stroke-opacity': 1,
@@ -435,7 +442,7 @@
             title: labelText,
             'text-anchor': 'bottom',
             'text-offset': [0, -6],
-            'text-rotate': rotPositive
+            'text-rotate': textRotate
         };
         return {
             type: 'FeatureCollection',
@@ -475,6 +482,44 @@
     // Sign convention depends on which way the engine measures
     // azimuth. We negate at the end if the box rotates the wrong way
     // — easy fix from console.
+    // Parallactic angle at a specific RA/Dec (degrees). Same trig as
+    // skyParallacticAngleDeg but with caller-supplied coords instead
+    // of the view centre — used to align the mount rectangle's label
+    // with how the engine renders the rectangle (projection-induced
+    // rotation on the screen).
+    //
+    //   q = atan2( sin(H),  tan(φ)·cos(δ) − sin(δ)·cos(H) )
+    //
+    // where H = LST − RA, φ = observer latitude. LST derived from
+    // observer.utc via Greenwich apparent sidereal time, same as
+    // skyGetCenter / skyLookAt.
+    function skyParallacticAt(raDeg, decDeg) {
+        try {
+            var stel = window.__stel;
+            if (!stel || !stel.core || !stel.core.observer) return 0;
+            var obs = stel.core.observer;
+            var phi = obs.latitude;
+            var mjd = obs.utc;
+            var lng = obs.longitude;
+            if (![phi, mjd, lng].every(function (v) {
+                return typeof v === 'number' && isFinite(v);
+            })) return 0;
+            var T = mjd - 51544.5;
+            var gstFrac = (T * 1.00273790935 + 0.7790572732640) % 1;
+            if (gstFrac < 0) gstFrac += 1;
+            var lst = 2 * Math.PI * gstFrac + lng;
+            var raRad = raDeg * stel.D2R;
+            var decRad = decDeg * stel.D2R;
+            var H = lst - raRad;
+            var sinH = Math.sin(H), cosH = Math.cos(H);
+            var sinD = Math.sin(decRad), cosD = Math.cos(decRad);
+            var q = Math.atan2(sinH, Math.tan(phi) * cosD - sinD * cosH);
+            return q / stel.D2R;
+        } catch (e) {
+            return 0;
+        }
+    }
+
     function skyParallacticAngleDeg() {
         try {
             var stel = window.__stel;
