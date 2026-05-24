@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.3.3-swe3';
+    var BRIDGE_VERSION = '0.3.4-swe3';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -158,10 +158,27 @@
 
     // -----------------------------------------------------------------
     // Init: detect WebGL, announce ready (or unavailable) to parent,
-    // and update the on-screen status. Wrap in a load handler so the
-    // canvas is definitely in the DOM.
+    // and update the on-screen status.
+    //
+    // Originally listened for window 'load', but Visual Studio's
+    // BrowserLink injects long-lived SignalR connections
+    // (/_vs/browserLink + negotiate?clientProtocol=2.1 + websocket
+    // connect) that stay 'Pending' for the entire page lifetime in
+    // dev mode. Some of those XHRs were holding the 'load' event back
+    // and the bridge never reached its init — engine .js had loaded
+    // (StelWebEngine on window) and engine WASM was cached, but
+    // StelWebEngine({}) was never invoked, so onReady never fired,
+    // __stel stayed undefined, and addDataSource was never called.
+    // Console diagnostic confirmed: status panel still showed the
+    // initial 'Loading sky engine…' HTML — setStatus(null) below
+    // never ran.
+    //
+    // The canvas is in the DOM as soon as the parser passes <body>,
+    // so DOMContentLoaded is enough. Run synchronously when the DOM
+    // is already past 'loading' (covers the case where sky-bridge.js
+    // gets cached and parses after DOMContentLoaded already fired).
     // -----------------------------------------------------------------
-    window.addEventListener('load', function () {
+    function bootBridge() {
         var caps = detectWebGL();
         if (!caps.webgl2) {
             setStatus(
@@ -288,5 +305,18 @@
                 __from: 'sky-bridge'
             });
         }
-    });
+    }
+
+    // Fire bootBridge() as soon as the DOM is ready. If the document is
+    // already past 'loading' (sky-bridge.js cached + parsed after
+    // DOMContentLoaded), run synchronously on the next microtask so we
+    // don't lose the boot. Otherwise wait for DOMContentLoaded — the
+    // canvas is in the DOM by then; window 'load' is the wrong signal
+    // because dev-time injections (BrowserLink SignalR) can keep
+    // pending XHRs open and indefinitely delay it.
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bootBridge);
+    } else {
+        Promise.resolve().then(bootBridge);
+    }
 })();

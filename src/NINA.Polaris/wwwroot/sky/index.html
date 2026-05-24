@@ -87,19 +87,24 @@
             rel="noopener">source</a>
     </div>
 
-    <!-- SWE-2: stellarium-web-engine WASM loader. Marked async +
-         given an explicit onerror so the bridge can fall through to
-         "engine missing — run scripts/build-stellarium-web.sh"
-         status when the file hasn't been built into js/wasm/ yet.
+    <!-- SWE-2: stellarium-web-engine WASM loader.
+         SWE-3-bugfix: dropped the `async` attribute. Originally `async`
+         so a 404 (engine not built yet) wouldn't block the page paint,
+         but in practice this raced the bridge's DOMContentLoaded boot:
+         StelWebEngine could still be undefined when sky-bridge.js fired
+         and the bridge would bail out with the "engine missing" path,
+         even though the script eventually loaded a few ms later. The
+         file is only 76 KB and we ship it in-repo so a sync load is
+         imperceptible. onerror still logs the clear "build me" hint
+         when the file genuinely is missing.
          Once StelWebEngine is on the window, sky-bridge.js below
-         calls it from its load handler. -->
+         picks it up at DOMContentLoaded. -->
     <script>
-        // Flag the bridge will check. Flips to true if the engine
-        // .js loads successfully; stays false on 404 (uncommitted
-        // build) so the bridge shows a clear message.
+        // Flag the bridge can still consult — kept for backwards
+        // compatibility with diagnostic snippets we've shared.
         window.__skyEngineScriptLoaded = false;
     </script>
-    <script src="js/wasm/stellarium-web-engine.js" async
+    <script src="js/wasm/stellarium-web-engine.js"
             onload="window.__skyEngineScriptLoaded = true;"
             onerror="console.warn('[Sky] engine .js not present yet — run scripts/build-stellarium-web.sh')"></script>
     <script src="js/sky-bridge.js"></script>
