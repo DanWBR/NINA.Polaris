@@ -46,18 +46,20 @@
     // message instead of a generic failure).
     // -----------------------------------------------------------------
     function detectWebGL() {
-        var canvas = document.getElementById('stel-canvas');
-        if (!canvas) return { webgl: false, webgl2: false };
+        // CRITICAL: don't probe the real #stel-canvas. Once a canvas
+        // is associated with a graphics context, subsequent getContext
+        // calls with a different `contextType` return null. The
+        // engine's getContext('webgl2') would then come back undefined
+        // and __glGenObject would crash with:
+        //   Cannot read properties of undefined (reading 'createTexture')
+        //
+        // Use a throwaway off-DOM canvas for the capability probe.
+        var probe = document.createElement('canvas');
         var gl2 = null, gl1 = null;
-        try { gl2 = canvas.getContext('webgl2'); } catch (e) { /* swallow */ }
-        try { gl1 = canvas.getContext('webgl') || canvas.getContext('experimental-webgl'); }
+        try { gl2 = probe.getContext('webgl2'); } catch (e) { /* swallow */ }
+        try { gl1 = probe.getContext('webgl') || probe.getContext('experimental-webgl'); }
         catch (e) { /* swallow */ }
-        // Release the contexts so SWE-2's StelWebEngine() can grab the
-        // canvas without contention. WebGL contexts can't be reattached
-        // after the first getContext call, so we don't free anything —
-        // we just lose the references. (The engine will call getContext
-        // itself when it initialises and either get the same context or
-        // a no-op extension.)
+        // Drop the throwaway — GC reclaims it once the function returns.
         return { webgl: !!gl1 || !!gl2, webgl2: !!gl2 };
     }
 
