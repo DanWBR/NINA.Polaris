@@ -1832,12 +1832,22 @@ label select.input-sm {
     align-items: center;
     gap: 6px;
     font-size: 12px;
+    line-height: 1;
     color: var(--text-secondary);
     cursor: pointer;
     user-select: none;
     margin-left: auto;
+    align-self: center;
+    /* Match the surrounding buttons' vertical footprint so the
+       checkbox row sits on the same baseline as Search/Filters/
+       Stellarium even when the label wraps. */
+    min-height: 32px;
 }
-.sky-autocenter-toggle input { cursor: pointer; }
+.sky-autocenter-toggle input {
+    cursor: pointer;
+    margin: 0;
+    vertical-align: middle;
+}
 
 /* Sky tab is a flex column: search bar / map / toolbar / actions. The map
    takes whatever vertical space is left after the rest of the rows are
