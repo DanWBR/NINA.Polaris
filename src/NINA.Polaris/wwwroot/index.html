@@ -2553,11 +2553,74 @@
                      return fetch results without CORS noise. AGPLv3
                      boundary: everything inside /sky/ (engine, bridge,
                      skydata) is AGPL; the parent app stays MPL 2.0. -->
-                <iframe id="skyFrame" src="/sky/"
-                        class="sky-viewer sky-viewer-iframe"
-                        style="border:0;"
-                        sandbox="allow-scripts allow-same-origin"
-                        title="Stellarium Web sky map"></iframe>
+                <div class="sky-viewer-wrap">
+                    <iframe id="skyFrame" src="/sky/"
+                            class="sky-viewer sky-viewer-iframe"
+                            style="border:0;"
+                            sandbox="allow-scripts allow-same-origin"
+                            title="Stellarium Web sky map"></iframe>
+                    <!-- SWE-5: Stellarium Web-style object info card.
+                         Floats over the iframe on the left, translucent.
+                         Populated by the bridge's 'map-click' message
+                         which includes a rich object payload (name,
+                         types, magnitude, distance, radius, RA/Dec).
+                         Photo, when available, comes from the
+                         /api/sky/image endpoint already powering the
+                         Tonight's Best cards. -->
+                    <div class="sky-info-card" x-show="skyInfo.visible" x-cloak
+                         @click.stop>
+                        <button class="sky-info-close" @click="skyInfo.visible = false"
+                                title="Close">×</button>
+                        <div class="sky-info-head">
+                            <div class="sky-info-thumb"
+                                 :style="skyInfo.imageUrl ? 'background-image:url(\'' + skyInfo.imageUrl + '\')' : ''">
+                                <span x-show="!skyInfo.imageUrl" x-text="skyInfo.icon || '★'"></span>
+                            </div>
+                            <div class="sky-info-title-block">
+                                <h3 class="sky-info-title" x-text="skyInfo.title"></h3>
+                                <p class="sky-info-subtitle" x-text="skyInfo.subtitle"></p>
+                            </div>
+                        </div>
+                        <table class="sky-info-stats">
+                            <tr x-show="skyInfo.magnitude != null">
+                                <td>Magnitude</td>
+                                <td x-text="skyInfo.magnitude != null ? skyInfo.magnitude.toFixed(2) : ''"></td>
+                            </tr>
+                            <tr x-show="skyInfo.distanceKm != null">
+                                <td>Distance</td>
+                                <td x-text="skyInfo.distanceKm != null ? (skyInfo.distanceKm.toLocaleString() + ' km') : ''"></td>
+                            </tr>
+                            <tr x-show="skyInfo.radiusKm != null">
+                                <td>Radius</td>
+                                <td x-text="skyInfo.radiusKm != null ? (skyInfo.radiusKm.toLocaleString() + ' km') : ''"></td>
+                            </tr>
+                            <tr x-show="Number.isFinite(skyInfo.raDeg)">
+                                <td>Ra/Dec</td>
+                                <td>
+                                    <span x-text="formatRA(skyInfo.raDeg / 15)"></span>
+                                    <span style="margin-left:8px"
+                                          x-text="formatDec(skyInfo.decDeg)"></span>
+                                </td>
+                            </tr>
+                            <tr x-show="skyInfo.types?.length">
+                                <td>Type</td>
+                                <td x-text="(skyInfo.types || []).join(', ')"></td>
+                            </tr>
+                        </table>
+                        <div class="sky-info-actions">
+                            <button class="btn btn-sm btn-primary"
+                                    @click="skyInfoSlewCenter()"
+                                    :disabled="!mount.connected || !Number.isFinite(skyInfo.raDeg)">
+                                Slew &amp; Center
+                            </button>
+                            <button class="btn btn-sm"
+                                    @click="skyInfoAddToSequence()"
+                                    :disabled="!skyInfo.title">
+                                Add to Sequence
+                            </button>
+                        </div>
+                    </div>
+                </div>
                 <!-- SWE-5 cleanup: dropped the FOV input + Show-camera-FOV
                      checkbox. Engine FOV is controlled by the user's
                      mouse-wheel zoom on the iframe — keeping an extra

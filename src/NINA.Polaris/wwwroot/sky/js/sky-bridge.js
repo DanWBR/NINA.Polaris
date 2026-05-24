@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.7.2-swe5';
+    var BRIDGE_VERSION = '0.8.0-swe5';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -825,6 +825,68 @@
     // the celestial coordinate under the mouse so it can populate the
     // Slew & Center workflow.
     // -----------------------------------------------------------------
+    // Extract a rich info object from an engine selection. Used by the
+    // click handler to populate the info card on the left.
+    function skyRichObjectInfo(obj) {
+        if (!obj || !window.__stel) return null;
+        var stel = window.__stel;
+        var result = {};
+        try {
+            // Names: first cleaned designation as title, second as subtitle.
+            if (typeof obj.designations === 'function') {
+                var names = obj.designations() || [];
+                result.names = names.slice(0, 6).map(function (n) {
+                    return String(n).replace(/^NAME /, '');
+                });
+                result.name = result.names[0] || '';
+                result.subtitle = result.names[1] || '';
+            }
+            // Types: first one is the most-specific (Sao, Gal, Neb, ...).
+            try {
+                if (typeof obj.getInfo === 'function') {
+                    var types = obj.getInfo('TYPES');
+                    if (Array.isArray(types)) result.types = types.slice(0, 3);
+                }
+            } catch (e) { /* not all objects have types */ }
+            // Magnitude (apparent visual).
+            try {
+                if (typeof obj.getInfo === 'function') {
+                    var vmag = obj.getInfo('VMAG');
+                    if (typeof vmag === 'number' && isFinite(vmag)) {
+                        result.magnitude = vmag;
+                    }
+                }
+            } catch (e) {}
+            // Distance.
+            try {
+                if (typeof obj.getInfo === 'function') {
+                    var d = obj.getInfo('DISTANCE');  // metres
+                    if (typeof d === 'number' && isFinite(d) && d > 0) {
+                        result.distanceMeters = d;
+                    }
+                }
+            } catch (e) {}
+            // Radius (planetary objects, in metres).
+            try {
+                if (typeof obj.getInfo === 'function') {
+                    var r = obj.getInfo('RADIUS');
+                    if (typeof r === 'number' && isFinite(r) && r > 0) {
+                        result.radiusMeters = r;
+                    }
+                }
+            } catch (e) {}
+            // RA/Dec ICRS J2000.
+            var basic = skyObjectInfo(obj);
+            if (basic) {
+                result.raDeg = basic.raDeg;
+                result.decDeg = basic.decDeg;
+            }
+        } catch (e) {
+            console.warn('[Sky] skyRichObjectInfo failed:', e);
+        }
+        return result;
+    }
+
     document.addEventListener('click', function (ev) {
         if (!window.__stel) return;
         var canvas = document.getElementById('stel-canvas');
@@ -834,37 +896,42 @@
         var y = ev.clientY - rect.top;
         var stel = window.__stel;
         try {
-            var hit = null, objName = null;
-            // Engine sometimes exposes core.pick(x,y) for hit-testing.
-            if (typeof stel.core.pick === 'function') {
-                hit = stel.core.pick(x, y);
-                if (hit) {
-                    var info = skyObjectInfo(hit);
-                    if (info) {
-                        objName = info.name;
-                        postToParent({
-                            type: 'map-click',
-                            raDeg: info.raDeg, decDeg: info.decDeg,
-                            objectName: objName,
-                            __from: 'sky-bridge'
-                        });
-                        return;
+            // The engine handles clicks itself — it selects whatever is
+            // under the cursor and sets stel.core.selection. Defer one
+            // tick to read the new selection. If nothing got selected,
+            // fall back to "click was in empty sky" and just emit coords.
+            setTimeout(function () {
+                try {
+                    var sel = stel.core.selection;
+                    if (sel) {
+                        var rich = skyRichObjectInfo(sel);
+                        if (rich && Number.isFinite(rich.raDeg)
+                            && Number.isFinite(rich.decDeg)) {
+                            postToParent({
+                                type: 'map-click',
+                                raDeg: rich.raDeg, decDeg: rich.decDeg,
+                                objectName: rich.name || null,
+                                object: rich,
+                                __from: 'sky-bridge'
+                            });
+                            return;
+                        }
                     }
+                    // No selection — empty sky click. Return the
+                    // engine's current map centre as a fallback.
+                    var centre = skyGetCenter();
+                    postToParent({
+                        type: 'map-click',
+                        raDeg: centre ? centre.raDeg : null,
+                        decDeg: centre ? centre.decDeg : null,
+                        objectName: null,
+                        screenX: x, screenY: y,
+                        __from: 'sky-bridge'
+                    });
+                } catch (selErr) {
+                    console.warn('[Sky] selection read failed:', selErr);
                 }
-            }
-            // No object under cursor — return the sky coord at the click.
-            // Engine helper screenToCanonical / convertFrame chain isn't
-            // documented stably across builds; emit the screen coord + the
-            // current map centre so the parent can fall back to it.
-            var centre = skyGetCenter();
-            postToParent({
-                type: 'map-click',
-                raDeg: centre ? centre.raDeg : null,
-                decDeg: centre ? centre.decDeg : null,
-                objectName: null,
-                screenX: x, screenY: y,
-                __from: 'sky-bridge'
-            });
+            }, 80);
         } catch (e) {
             console.warn('[Sky] click handler failed:', e);
         }

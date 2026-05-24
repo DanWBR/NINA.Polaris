@@ -106,6 +106,25 @@ function ninaApp() {
         // Sky
         skySearch: '',
         skyTarget: null,
+
+        // SWE-5: object-info card overlay on the sky map. Populated
+        // when the bridge emits a map-click with a rich object payload
+        // (the user clicked on a recognised star/DSO/planet rather
+        // than empty sky). The thumbnail comes from the same /api/sky/
+        // image endpoint Tonight's Best already consumes.
+        skyInfo: {
+            visible: false,
+            title: '',
+            subtitle: '',
+            icon: '',
+            imageUrl: '',
+            magnitude: null,
+            distanceKm: null,
+            radiusKm: null,
+            raDeg: null,
+            decDeg: null,
+            types: null,
+        },
         skyResults: [],
         skyShowResults: false,
         slewCenterJobId: null,
@@ -2294,27 +2313,23 @@ function ninaApp() {
                         }
                         break;
                     case 'map-click':
-                        // User clicked the sky map. If we got an
-                        // object name, route to selectSkyTarget so the
-                        // existing Slew & Center / planning UI picks
-                        // it up. Otherwise stash the raw coords as the
-                        // current target. Guard against NaN/null coords
-                        // — those silently serialise as JSON null and
-                        // crash the server-side SlewAndCenterRequest
-                        // parser (non-nullable double).
-                        if (Number.isFinite(msg.raDeg) && Number.isFinite(msg.decDeg)) {
-                            if (msg.objectName) {
-                                this.selectSkyTarget({
-                                    name: msg.objectName,
-                                    ra: msg.raDeg / 15, dec: msg.decDeg,
-                                    type: 'click', magnitude: null
-                                });
-                            } else {
-                                this.skyTarget = {
-                                    name: 'Click ' + msg.raDeg.toFixed(2) + ',' + msg.decDeg.toFixed(2),
-                                    ra: msg.raDeg / 15, dec: msg.decDeg
-                                };
-                            }
+                        if (!Number.isFinite(msg.raDeg) || !Number.isFinite(msg.decDeg)) break;
+                        if (msg.object && msg.object.name) {
+                            this._populateSkyInfo(msg.object);
+                        } else if (msg.objectName) {
+                            this._populateSkyInfo({
+                                name: msg.objectName,
+                                raDeg: msg.raDeg, decDeg: msg.decDeg
+                            });
+                        } else {
+                            // Empty-sky click — close any open card and
+                            // stash coords as skyTarget so a follow-up
+                            // Slew & Center has somewhere to go.
+                            this.skyInfo.visible = false;
+                            this.skyTarget = {
+                                name: 'Click ' + msg.raDeg.toFixed(2) + ',' + msg.decDeg.toFixed(2),
+                                ra: msg.raDeg / 15, dec: msg.decDeg
+                            };
                         }
                         break;
                     default:
@@ -8053,6 +8068,71 @@ function ninaApp() {
             } catch (e) {
                 this.toast('Sky search failed', 'error');
             }
+        },
+
+        // SWE-5: take a bridge rich-object payload and project it onto
+        // the skyInfo card state. Also seeds skyTarget so Slew &
+        // Center actions outside the card still go somewhere sensible.
+        async _populateSkyInfo(obj) {
+            if (!obj) return;
+            // Icon character based on the first type. Stellarium type
+            // codes ("Pla", "Gal", "Neb", "Sao", "OpC", "GlC", ...).
+            const firstType = (obj.types && obj.types[0]) || '';
+            const isPlanet = /^(Pla|Moo|Sun|Com|MPl)/i.test(firstType);
+            const isStar = /^(Sao|Pul|PNe|\\*)/i.test(firstType) || (!firstType && obj.magnitude != null && obj.magnitude < 7);
+            const icon = isPlanet ? '🌑' : isStar ? '★' : '☆';
+
+            // Subtitle: prefer explicit one from bridge, else the type label.
+            const subtitle = obj.subtitle
+                || (obj.types ? obj.types.join(' · ') : '');
+
+            this.skyInfo = {
+                visible: true,
+                title: obj.name || 'Unknown',
+                subtitle: subtitle,
+                icon: icon,
+                imageUrl: '',         // filled async below
+                magnitude: typeof obj.magnitude === 'number' ? obj.magnitude : null,
+                distanceKm: typeof obj.distanceMeters === 'number'
+                    ? Math.round(obj.distanceMeters / 1000) : null,
+                radiusKm: typeof obj.radiusMeters === 'number'
+                    ? Math.round(obj.radiusMeters / 1000) : null,
+                raDeg: typeof obj.raDeg === 'number' ? obj.raDeg : null,
+                decDeg: typeof obj.decDeg === 'number' ? obj.decDeg : null,
+                types: obj.types || null,
+            };
+
+            // Also stash as skyTarget so the existing Slew & Center
+            // button below the map picks it up.
+            if (Number.isFinite(obj.raDeg) && Number.isFinite(obj.decDeg)) {
+                this.skyTarget = {
+                    name: obj.name,
+                    ra: obj.raDeg / 15,
+                    dec: obj.decDeg
+                };
+            }
+
+            // Async fetch the thumbnail from the Tonight's Best image
+            // endpoint. Card opens immediately with the icon fallback;
+            // the photo slides in if our catalog knows the name.
+            try {
+                const r = await this.apiGet(`/api/sky/image?name=${encodeURIComponent(obj.name)}`);
+                if (r && r.available && r.thumbnailUrl
+                    && this.skyInfo.title === obj.name) {
+                    this.skyInfo.imageUrl = r.thumbnailUrl;
+                }
+            } catch (e) { /* no photo, keep icon */ }
+        },
+
+        // Card action: route Slew & Center via the existing path.
+        async skyInfoSlewCenter() {
+            // _currentSlewTarget already falls back to skyTarget which
+            // _populateSkyInfo populated. Trigger the full workflow.
+            return this.slewAndCenter();
+        },
+
+        skyInfoAddToSequence() {
+            if (this.skyTarget) this.addToSequence();
         },
 
         selectSkyTarget(obj) {
