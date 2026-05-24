@@ -147,26 +147,29 @@
             pointer-events: none;
             letter-spacing: 0.5px;
         }
-        /* "Target" — bottom-left corner, just inside the rectangle. */
+        /* SWE-5: labels ride along the TOP edge of the rectangle,
+           which represents the top of the camera sensor in its own
+           rotated orientation. Because they're children of
+           #sky-target-fov they inherit its CSS rotation transform,
+           so as the sensor rotates the labels follow that edge. */
         #sky-target-fov .fov-label-corner {
-            left: 6px;
-            bottom: 6px;
-        }
-        /* Rotation + size: both vertical, stacked on the outside of
-           the LEFT edge. Rotation upper half, size lower half. */
-        #sky-target-fov .fov-label-edge-rot,
-        #sky-target-fov .fov-label-edge-size {
-            left: -8px;
-            writing-mode: vertical-rl;
-            transform: rotate(180deg);
+            /* "Target" — top-left corner, just outside the rectangle. */
+            left: 0;
+            bottom: 100%;
+            margin-bottom: 4px;
         }
         #sky-target-fov .fov-label-edge-rot {
-            bottom: 50%;
-            margin-bottom: 6px;
+            /* Rotation — outside the top edge, centred-right. */
+            right: 0;
+            bottom: 100%;
+            margin-bottom: 4px;
         }
         #sky-target-fov .fov-label-edge-size {
-            top: 50%;
-            margin-top: 6px;
+            /* W° × H° — outside the top edge, centred-left. */
+            left: 50%;
+            bottom: 100%;
+            margin-bottom: 4px;
+            transform: translateX(-50%);
         }
     </style>
 </head>

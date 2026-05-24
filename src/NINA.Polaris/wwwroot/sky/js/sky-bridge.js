@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.6.7-swe5';
+    var BRIDGE_VERSION = '0.6.8-swe5';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -414,21 +414,23 @@
             'stroke-opacity': 0.35,
             'stroke-glow': false
         };
-        // ASIAIR-style edge labels. Use Point features with title +
-        // text-offset (engine renders title text near the point).
-        //   - "Scope" at the corner ring[0] (bottom-left of unrotated)
-        //   - "Rotation XXX.X°" at the midpoint of the left edge
-        //   - "W° × H°" at the midpoint of the bottom edge
+        // ASIAIR-style edge labels along the TOP edge of the rectangle
+        // (the edge representing the top of the camera sensor in its
+        // own rotated orientation). skyFovRect corner order:
+        //   ring[0] bottom-left, ring[1] bottom-right,
+        //   ring[2] top-right,   ring[3] top-left
+        // So the TOP edge runs ring[3] → ring[2].
+        //   - "Scope"             at ring[3] (top-left corner)
+        //   - "W° × H°"           at top-edge midpoint
+        //   - "Rotation XXX.X°"   at ring[2] (top-right corner)
+        // All three with text-rotate = rectangle rotation so the
+        // labels read along the edge as the sensor rotates.
         var rotPositive = ((rot % 360) + 360) % 360;
         var rotText = 'Rotation ' + rotPositive.toFixed(1) + '°';
         var sizeText = w.toFixed(2) + '° × ' + h.toFixed(2) + '°';
-        // Midpoints of two edges (averaged corners). ring is the
-        // closed-polygon list [p0,p1,p2,p3,p0].
-        var midLeft = [(ring[0][0] + ring[3][0]) / 2, (ring[0][1] + ring[3][1]) / 2];
-        var midBottom = [(ring[0][0] + ring[1][0]) / 2, (ring[0][1] + ring[1][1]) / 2];
-        // text colour comes from stroke_color * stroke_opacity in the
-        // engine's geojson title renderer — stroke-opacity:0 hides the
-        // text completely. Keep it at 1.
+        var midTop = [(ring[2][0] + ring[3][0]) / 2, (ring[2][1] + ring[3][1]) / 2];
+        // Text colour = stroke_color * stroke_opacity in the engine
+        // renderer. stroke-opacity must be > 0 or text is invisible.
         var labelStyle = {
             stroke: color,
             'stroke-opacity': 1,
@@ -439,8 +441,9 @@
         function labelFeature(coord, text, anchor, offset) {
             var p = Object.assign({}, labelStyle, {
                 title: text,
-                'text-anchor': anchor || 'center',
-                'text-offset': offset || [0, 0]
+                'text-anchor': anchor || 'top',
+                'text-offset': offset || [0, -6],
+                'text-rotate': rotPositive
             });
             return { type: 'Feature', properties: p,
                 geometry: { type: 'Point', coordinates: coord } };
@@ -454,9 +457,9 @@
                   geometry: { type: 'LineString', coordinates: hLine } },
                 { type: 'Feature', properties: crossProps,
                   geometry: { type: 'LineString', coordinates: vLine } },
-                labelFeature(ring[0], 'Scope', 'bottom'),
-                labelFeature(midLeft, rotText, 'bottom'),
-                labelFeature(midBottom, sizeText, 'top')
+                labelFeature(ring[3], 'Scope',  'top', [-2, -6]),
+                labelFeature(midTop,  sizeText, 'top', [0,  -6]),
+                labelFeature(ring[2], rotText,  'top', [2,  -6])
             ]
         };
     }

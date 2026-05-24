@@ -83,21 +83,46 @@ public class SlewCenterService {
                 return;
             }
 
+            // Don't bail upfront if no plate solver is available — the
+            // user explicitly asked to slew, and they value the mount
+            // physically moving to the target far more than they value
+            // the centering pass. So perform a single Slew step first,
+            // then fail with the same diagnostic IF (and only if) we
+            // were about to attempt a solve.
+            //
+            // Surface the same multi-solver diagnostic in the failure
+            // path so the user still gets actionable install / API-key
+            // guidance — just AFTER the mount has moved.
+            string solverUnavailableError = null;
             if (!_solver.IsAvailable) {
-                // List every configured solver + why each one isn't ready,
-                // so the user sees the full picture instead of just
-                // "ASTAP not available" (which is misleading when they've
-                // never configured ASTAP and were hoping the
-                // astrometry.net online fallback would do the work).
                 var lines = _solver.AllSolvers.Select(s =>
                     "  • " + s.DisplayName + " — "
                     + (s.IsAvailable ? "ready"
                        : s is AstrometryNetOnlineSolver
                            ? "needs PlateSolve:AstrometryApiKey in appsettings"
                            : "binary not found"));
-                job.Error = "No plate solver available. Install one OR set an API key:\n"
+                solverUnavailableError =
+                    "Slew completed. Centering skipped — no plate solver available:\n"
                     + string.Join("\n", lines)
-                    + "\nTip: use Slew Only if you just want to point the mount without centering.";
+                    + "\nTip: install a solver or use Slew Only to skip this message.";
+            }
+
+            if (solverUnavailableError != null) {
+                // Slew once, then short-circuit to Failed with the
+                // diagnostic — bypasses the iteration loop entirely
+                // because every iteration relies on a working solver.
+                job.State = SlewCenterState.Slewing;
+                _logger.LogInformation("Slew-only fallback: slewing to RA={Ra:F4} Dec={Dec:F4} (no plate solver)",
+                    job.TargetRa, job.TargetDec);
+                try {
+                    await _equip.Telescope.SlewAsync(job.TargetRa, job.TargetDec, ct);
+                    await WaitForSlewComplete(ct);
+                } catch (Exception slewEx) {
+                    job.Error = "Slew failed: " + slewEx.Message;
+                    job.State = SlewCenterState.Failed;
+                    return;
+                }
+                job.Error = solverUnavailableError;
                 job.State = SlewCenterState.Failed;
                 return;
             }
