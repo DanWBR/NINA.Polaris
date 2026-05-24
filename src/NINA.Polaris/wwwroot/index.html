@@ -4293,31 +4293,36 @@
                  x-init="$watch('tab', t => { if (t === 'settings') loadSimulatorSettings(); })">
                 <div class="panel-header">Settings</div>
 
-                <!-- Appearance / interface scale. Lets the user dial
-                     the whole UI smaller (mobiles, small monitors) or
-                     bigger (large TVs at the observatory) without
-                     having to fight the media-query default. The
-                     slider writes to body.style.zoom in real time
-                     and persists to localStorage. -->
+                <!-- Appearance / interface scale. Slider writes to a
+                     draft value (uiZoomDraft) while you drag — the
+                     actual page zoom only updates when you click
+                     Apply. The real-time variant we had before made
+                     the slider impossible to aim because the UI
+                     reflowed under your cursor on every input tick. -->
                 <div class="settings-section">
                     <h3>Appearance</h3>
-                    <label style="display:flex; align-items:center; gap:12px; max-width:520px">
+                    <label style="display:flex; align-items:center; gap:12px; max-width:560px">
                         <span style="min-width:90px">UI scale</span>
                         <input type="range" min="0.5" max="1.5" step="0.05"
-                               x-model.number="uiZoom"
-                               @input="applyUiZoom()"
+                               x-model.number="uiZoomDraft"
                                style="flex:1">
                         <span class="text-muted" style="min-width:56px; text-align:right"
-                              x-text="Math.round(uiZoom * 100) + '%'"></span>
+                              x-text="Math.round(uiZoomDraft * 100) + '%'"></span>
+                        <button class="btn btn-sm btn-primary"
+                                @click="applyUiZoom()"
+                                :disabled="Math.abs(uiZoomDraft - uiZoom) < 0.001"
+                                title="Apply the new UI scale">
+                            Apply
+                        </button>
                         <button class="btn btn-sm" @click="resetUiZoom()"
                                 title="Reset to viewport-based default (100%, or 85%/75% on smaller screens)">
                             Reset
                         </button>
                     </label>
-                    <p class="text-muted" style="font-size: 12px; margin-top: 6px; max-width:520px">
-                        Scales the whole interface up or down in real time. Useful for
-                        cramming more onto a phone (drag below 100%) or making the night-mode
-                        UI legible across the observatory (drag above). Persists per browser.
+                    <p class="text-muted" style="font-size: 12px; margin-top: 6px; max-width:560px">
+                        Drag the slider, then click <strong>Apply</strong> to scale the whole
+                        interface. Smaller values fit more onto a phone; larger values make
+                        the night-mode UI legible across the observatory. Persists per browser.
                     </p>
                 </div>
 

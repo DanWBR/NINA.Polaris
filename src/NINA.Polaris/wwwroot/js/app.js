@@ -125,15 +125,19 @@ function ninaApp() {
         // otherwise) or when the user prefers a cleaner vector view.
         skyDssVisible: true,
 
-        // Global UI zoom (CSS body { zoom: X }). Lets the user
-        // shrink/grow the entire interface in real time via the
-        // Appearance slider in Settings. Initial value comes from
-        // localStorage if set, otherwise from the viewport-based
-        // media-query default (1.0 desktop, 0.85 ≤960px, 0.75
-        // ≤640px) so first-load on a phone still gets the smaller
-        // UI. Slider writes inline style on <body>, which always
-        // wins over the CSS @media rules.
+        // Global UI zoom (CSS body { zoom: X }). uiZoom is the
+        // committed/applied value (what's currently on
+        // body.style.zoom); uiZoomDraft is the slider position
+        // while the user is dragging. They sync only when Apply
+        // (or Reset) is clicked — without that two-step, the
+        // page reflowed under the slider's own cursor on every
+        // input tick and aiming a value became impossible.
+        // First-paint default comes from localStorage if set,
+        // otherwise from the viewport-based @media defaults (1.0
+        // desktop, 0.85 ≤960px, 0.75 ≤640px) so phones still get
+        // the smaller UI on first load.
         uiZoom: 1.0,
+        uiZoomDraft: 1.0,
 
         // SWE-5: object-info card overlay on the sky map. Populated
         // when the bridge emits a map-click with a rich object payload
@@ -878,6 +882,7 @@ function ninaApp() {
             this.uiZoom = zoomSaved != null
                 ? Math.max(0.5, Math.min(1.5, parseFloat(zoomSaved) || 1.0))
                 : this._defaultUiZoom();
+            this.uiZoomDraft = this.uiZoom;
             this.applyUiZoom();
 
             // Re-render the cached frame whenever the user switches
@@ -1037,13 +1042,14 @@ function ninaApp() {
             return 1.0;
         },
 
-        // Push the current uiZoom value as an inline body style. The
-        // inline style outranks the @media-keyed `body { zoom: 0.85 }`
-        // rules so the slider always wins, including at the same
-        // breakpoint. Persist alongside.
+        // Commit uiZoomDraft (slider position) → uiZoom (live page
+        // zoom). The inline body style outranks the @media-keyed
+        // `body { zoom: 0.85 }` rules so the slider always wins,
+        // including at the same breakpoint. Persist alongside.
         applyUiZoom() {
-            const z = Math.max(0.5, Math.min(1.5, +this.uiZoom || 1.0));
+            const z = Math.max(0.5, Math.min(1.5, +this.uiZoomDraft || 1.0));
             this.uiZoom = z;
+            this.uiZoomDraft = z;
             document.body.style.zoom = String(z);
             try { localStorage.setItem('nina-ui-zoom', String(z)); }
             catch (_) { /* private mode etc. */ }
@@ -1052,11 +1058,15 @@ function ninaApp() {
         // Drop the user's explicit pick and fall back to whatever the
         // viewport-based default is right now. Useful when the user
         // moved between window sizes (e.g. docking a tablet) and
-        // wants the auto default again.
+        // wants the auto default again. Syncs both committed value
+        // and the slider so the next Apply isn't comparing stale
+        // numbers.
         resetUiZoom() {
             try { localStorage.removeItem('nina-ui-zoom'); } catch (_) { }
-            this.uiZoom = this._defaultUiZoom();
-            document.body.style.zoom = String(this.uiZoom);
+            const z = this._defaultUiZoom();
+            this.uiZoom = z;
+            this.uiZoomDraft = z;
+            document.body.style.zoom = String(z);
         },
 
         // Toast notification (auto-dismiss)
