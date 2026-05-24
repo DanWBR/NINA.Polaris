@@ -3418,12 +3418,12 @@ label select.input-sm {
     background: var(--bg-secondary);
     overflow: hidden;
     transition: border-color var(--transition);
-    /* Every RIGS card gets a tall 800 px floor so a Camera with cooler
+    /* Every RIGS card gets a 400 px floor so a Camera with cooler
        chart + cooler controls + sensor metadata + connect toggle has
-       plenty of headroom without scrolling, and empty cards stay
-       visually consistent with the bigger ones. No max-height — let
-       cards grow further when an even taller device shows up. */
-    min-height: 800px;
+       enough headroom without scrolling, and empty cards stay
+       visually consistent. No max-height — taller devices grow as
+       needed. */
+    min-height: 400px;
     display: flex;
     flex-direction: column;
 }
