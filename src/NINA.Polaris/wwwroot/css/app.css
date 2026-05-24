@@ -64,6 +64,48 @@ html, body {
     -webkit-tap-highlight-color: transparent;
 }
 
+/* ====================================================================
+   Universal scrollbar treatment — match the sidebar's thin glass look
+   across every scrollable element in the app (modals, file lists,
+   activity bar overflow, equipment card bodies, sequence trees, etc).
+   Single source of truth: change here, every scrollbar follows.
+
+   - Firefox honours the two `scrollbar-*` properties.
+   - WebKit / Blink uses the pseudo-elements. Pseudo rules only fire
+     on elements that actually overflow, so applying via `*` has no
+     runtime cost on non-scrolling elements.
+   - Up/down buttons hidden — the icon column was the prototype and
+     they look out of place in our dark UI.
+   - height:4px lets horizontal scrollbars (chip rows) share the
+     same slim look as vertical ones.
+   ==================================================================== */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+*::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+*::-webkit-scrollbar-track {
+    background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.14);
+    border-radius: 2px;
+}
+*::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+*::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+}
+*::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
 /* Status Bar */
 .status-bar {
     display: flex;
