@@ -1,3 +1,4 @@
+using System.Net.Sockets;
 using Makaretu.Dns;
 
 namespace NINA.Polaris.Services;
@@ -42,7 +43,23 @@ public class MdnsService : IHostedService, IDisposable {
             _mdns = new MulticastService();
             _discovery = new ServiceDiscovery(_mdns);
 
-            var profile = new ServiceProfile(instanceName, "_nina._tcp", (ushort)port);
+            // Collect every routable local IPv4 / IPv6 address so we
+            // can register A / AAAA records under {instanceName}.local.
+            // Without this, the ServiceProfile only registers an SRV
+            // record pointing at Environment.MachineName.local — that's
+            // discoverable by mDNS browsers but http://polaris.local
+            // doesn't resolve, which defeats the whole point of the
+            // friendly URL. Filter out the loopback addresses; they
+            // wouldn't help a remote browser.
+            var addresses = MulticastService.GetIPAddresses()
+                .Where(addr =>
+                    (addr.AddressFamily == AddressFamily.InterNetwork
+                     || addr.AddressFamily == AddressFamily.InterNetworkV6)
+                    && !System.Net.IPAddress.IsLoopback(addr))
+                .ToList();
+
+            var profile = new ServiceProfile(
+                instanceName, "_nina._tcp", (ushort)port, addresses);
             profile.AddProperty("version", "1.0");
             profile.AddProperty("path", "/");
             profile.AddProperty("hostname", hostname);
@@ -51,8 +68,9 @@ public class MdnsService : IHostedService, IDisposable {
             _mdns.Start();
 
             _logger.LogInformation(
-                "mDNS advertising as {Instance}._nina._tcp.local on port {Port} (hostname: {Hostname})",
-                instanceName, port, hostname);
+                "mDNS advertising as {Instance}._nina._tcp.local at "
+                + "{HostName}:{Port} (machine: {Hostname}, {AddrCount} IPs)",
+                instanceName, profile.HostName, port, hostname, addresses.Count);
         } catch (Exception ex) {
             _logger.LogWarning(ex, "mDNS announcer failed to start — continuing without LAN discovery");
             _mdns = null;
