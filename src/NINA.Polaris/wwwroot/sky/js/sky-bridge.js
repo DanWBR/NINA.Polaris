@@ -147,12 +147,17 @@
         // initialises into an empty starfield, which is enough to
         // verify the WASM pipeline is alive.
         try {
+            // Hide the loading-status panel as soon as we kick off
+            // engine init — the engine starts drawing the atmosphere
+            // + sun within a frame or two, and the placeholder text
+            // would obscure that visual confirmation. onReady (below)
+            // is a separate signal that the JS bridge can be called.
+            setStatus(null);
             window.StelWebEngine({
                 wasmFile: 'js/wasm/stellarium-web-engine.wasm',
                 canvas: document.getElementById('stel-canvas'),
                 onReady: function (stel) {
                     window.__stel = stel;       // exposed for SWE-4 RPC handlers
-                    setStatus(null);             // hide loading panel
                     postToParent({
                         type: 'ready',
                         version: BRIDGE_VERSION,
