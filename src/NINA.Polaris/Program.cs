@@ -326,5 +326,9 @@ app.MapIndiEndpoints();
 // WebSocket streams
 app.Map("/ws/image-stream", ImageStreamHandler.Handle);
 app.Map("/ws/status", StatusStreamHandler.Handle);
+// Remote terminal — gated by Terminal:Enabled in appsettings. The
+// handler itself returns 403 when disabled so a curious client can
+// still see why the endpoint exists.
+app.Map("/ws/terminal", TerminalSocketHandler.Handle);
 
 app.Run();

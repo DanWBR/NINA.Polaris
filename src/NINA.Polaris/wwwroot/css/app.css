@@ -91,6 +91,56 @@ html, body {
    native <datalist> dropdown — see <script> in index.html above
    the body for the controller). Glassy panel anchored under the
    focused exposure input; one button per preset, no filtering. */
+/* Remote terminal section in Settings — form row + xterm mount. */
+.term-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: end;
+    margin-top: 8px;
+    max-width: 720px;
+}
+.term-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.term-form .btn {
+    height: 32px;
+}
+.term-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 8px 0;
+    max-width: 720px;
+}
+.term-conn-info {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+}
+.term-error {
+    margin: 8px 0;
+    font-size: 12px;
+    max-width: 720px;
+}
+.term-mount {
+    /* Fixed height so xterm.js has something to measure on open();
+       the FitAddon then computes rows to fill it. 420 px is roughly
+       a 24-row terminal at our 13 px font + line-height. */
+    height: 420px;
+    background: #0b0f18;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 6px;
+    overflow: hidden;
+    margin-top: 6px;
+}
+
 /* Two-column label + input grid used by the location section in
    Settings. Labels right-align against a fixed first column;
    inputs share a single fixed width in the second column so the

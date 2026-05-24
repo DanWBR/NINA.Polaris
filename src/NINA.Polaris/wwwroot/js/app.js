@@ -130,6 +130,19 @@ function ninaApp() {
         // otherwise) or when the user prefers a cleaner vector view.
         skyDssVisible: true,
 
+        // Remote terminal (xterm.js + /ws/terminal SSH bridge).
+        // Credentials are never persisted — every Connect prompts
+        // again. Terminal:Enabled=false on the server returns 403
+        // and the section still renders the form but Connect toasts
+        // the error and stops. _term* fields hold the running xterm
+        // + WebSocket + addon so we can tear down cleanly.
+        term: {
+            host: 'localhost', port: 22, user: '', password: '',
+            connected: false, connecting: false, lastError: ''
+        },
+        _termInstance: null, _termSocket: null, _termFitAddon: null,
+        _termResizeObserver: null,
+
         // Global UI zoom (CSS body { zoom: X }). uiZoom is the
         // committed/applied value (what's currently on
         // body.style.zoom); uiZoomDraft is the slider position
@@ -1050,6 +1063,123 @@ function ninaApp() {
             const min = (this.equipCameraInfo && this.equipCameraInfo.minExposure)
                 || 0.0001;
             return EXPOSURE_PRESETS_ALL.filter(v => v >= min);
+        },
+
+        // ----- Remote terminal (xterm.js + SSH via /ws/terminal) -----
+
+        async termConnect() {
+            if (this.term.connected || this.term.connecting) return;
+            if (!this.term.host || !this.term.user) {
+                this.term.lastError = 'Host and user are required.';
+                return;
+            }
+            if (typeof Terminal === 'undefined') {
+                this.term.lastError = 'xterm.js failed to load. Check the network tab.';
+                return;
+            }
+            this.term.connecting = true;
+            this.term.lastError = '';
+
+            // Build xterm instance fresh on every Connect — recycling
+            // across sessions leaks DOM state from the previous host.
+            this._termInstance = new Terminal({
+                cursorBlink: true,
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                fontSize: 13,
+                theme: { background: '#0b0f18', foreground: '#e6ecf5' },
+                scrollback: 5000,
+            });
+            this._termFitAddon = new FitAddon.FitAddon();
+            this._termInstance.loadAddon(this._termFitAddon);
+
+            const mount = this.$refs.termMount;
+            mount.innerHTML = '';
+            this._termInstance.open(mount);
+            // First fit AFTER open() so the size matches the actual
+            // mounted DOM box (xterm needs the parent's metrics).
+            this.$nextTick(() => { try { this._termFitAddon.fit(); } catch { } });
+
+            // Resize observer keeps the terminal grid in sync with
+            // the panel width on window resize / sidebar toggle.
+            this._termResizeObserver = new ResizeObserver(() => {
+                try {
+                    this._termFitAddon.fit();
+                    if (this._termSocket?.readyState === WebSocket.OPEN) {
+                        this._termSocket.send(JSON.stringify({
+                            type: 'resize',
+                            cols: this._termInstance.cols,
+                            rows: this._termInstance.rows
+                        }));
+                    }
+                } catch { /* observer fires after teardown sometimes */ }
+            });
+            this._termResizeObserver.observe(mount);
+
+            // Open the WebSocket bridge.
+            const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const url = wsProto + '//' + location.host + '/ws/terminal';
+            const ws = new WebSocket(url);
+            ws.binaryType = 'arraybuffer';
+            this._termSocket = ws;
+
+            ws.onopen = () => {
+                // Auth handshake: single JSON frame with creds + PTY size.
+                // Server keeps them only in memory for this socket's life.
+                ws.send(JSON.stringify({
+                    type: 'auth',
+                    host: this.term.host,
+                    port: this.term.port,
+                    user: this.term.user,
+                    password: this.term.password,
+                    cols: this._termInstance.cols,
+                    rows: this._termInstance.rows
+                }));
+                // Wipe the password field as soon as the byte is on the
+                // wire so it doesn't sit visible in the form.
+                this.term.password = '';
+                this.term.connecting = false;
+                this.term.connected = true;
+            };
+            ws.onmessage = (ev) => {
+                // Server frames are UTF-8 strings (SSH stdout/stderr).
+                const data = typeof ev.data === 'string'
+                    ? ev.data
+                    : new TextDecoder().decode(new Uint8Array(ev.data));
+                this._termInstance.write(data);
+            };
+            ws.onerror = () => {
+                this.term.lastError = 'WebSocket error. Is Terminal:Enabled=true on the server?';
+            };
+            ws.onclose = (ev) => {
+                this.term.connected = false;
+                this.term.connecting = false;
+                if (ev.code !== 1000 && !this.term.lastError) {
+                    this.term.lastError = 'Disconnected (' + (ev.reason || 'code ' + ev.code) + ')';
+                }
+                this._termCleanup();
+            };
+
+            // Pipe local keystrokes → server.
+            this._termInstance.onData((data) => {
+                if (ws.readyState === WebSocket.OPEN) ws.send(data);
+            });
+        },
+
+        termDisconnect() {
+            try { this._termSocket?.close(1000, 'user disconnect'); }
+            catch { /* may already be closed */ }
+            this._termCleanup();
+            this.term.connected = false;
+            this.term.connecting = false;
+        },
+
+        _termCleanup() {
+            try { this._termResizeObserver?.disconnect(); } catch { }
+            this._termResizeObserver = null;
+            try { this._termInstance?.dispose(); } catch { }
+            this._termInstance = null;
+            this._termFitAddon = null;
+            this._termSocket = null;
         },
 
         // Mirror the CSS @media rules in the head section of app.css:

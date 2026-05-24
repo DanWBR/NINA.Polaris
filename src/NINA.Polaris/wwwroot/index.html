@@ -15,6 +15,10 @@
     <!-- SWE-3-bugfix: celestial.css dropped — SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
+    <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
+         "Remote terminal" section renders the right font + colors as
+         soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
+    <link rel="stylesheet" href="/js/lib/xterm/xterm.css">
 </head>
 <body x-data="ninaApp()" x-init="init()">
 
@@ -4401,6 +4405,66 @@
                     </p>
                 </div>
 
+                <!-- Remote terminal — opens an SSH shell from the
+                     browser via xterm.js + a WebSocket bridge to
+                     SSH.NET on the server. Useful when Polaris is
+                     running headless on a Raspberry Pi and you need
+                     to restart a service (indi, phd2) without
+                     plugging in a screen. Gated by Terminal:Enabled
+                     in appsettings (default false) — the backend
+                     returns 403 otherwise.
+                     No auto-login: every Connect prompts for user +
+                     password again, and credentials never persist. -->
+                <div class="settings-section">
+                    <h3>Remote terminal</h3>
+                    <p class="text-muted" style="font-size: 12px; max-width:560px">
+                        SSH into the Polaris host (or any other Linux box on your LAN)
+                        from the browser. Credentials are sent per-session and never
+                        saved. Enable on the server with
+                        <code>Terminal:Enabled = true</code> in <code>appsettings.json</code>.
+                    </p>
+                    <div class="term-form" x-show="!term.connected">
+                        <label>Host
+                            <input type="text" x-model="term.host" class="input-md"
+                                   placeholder="localhost or 192.168.x.x">
+                        </label>
+                        <label>Port
+                            <input type="number" x-model.number="term.port" class="input-sm" min="1" max="65535">
+                        </label>
+                        <label>User
+                            <input type="text" x-model="term.user" class="input-md"
+                                   autocomplete="off">
+                        </label>
+                        <label>Password
+                            <input type="password" x-model="term.password" class="input-md"
+                                   autocomplete="off" @keyup.enter="termConnect()">
+                        </label>
+                        <button class="btn btn-primary"
+                                @click="termConnect()"
+                                :disabled="!term.host || !term.user || term.connecting">
+                            <span x-show="!term.connecting">Connect</span>
+                            <span x-show="term.connecting">Connecting…</span>
+                        </button>
+                    </div>
+                    <div class="term-actions" x-show="term.connected" x-cloak>
+                        <span class="term-conn-info">
+                            <span class="status-indicator-sm ok">connected</span>
+                            <span x-text="term.user + '@' + term.host + ':' + term.port"></span>
+                        </span>
+                        <button class="btn btn-sm btn-danger" @click="termDisconnect()">
+                            Disconnect
+                        </button>
+                    </div>
+                    <div class="term-error text-warn"
+                         x-show="term.lastError" x-cloak
+                         x-text="term.lastError"></div>
+                    <!-- Live terminal — xterm.js mounts here. Hidden
+                         until we have a session so the page doesn't
+                         render an empty black box on first paint. -->
+                    <div class="term-mount" x-show="term.connected || term.lastError"
+                         x-cloak x-ref="termMount"></div>
+                </div>
+
                 <div class="settings-section">
                     <h3>INDI Server</h3>
                     <label>Host<input type="text" x-model="settings.indiHost" class="input-md"></label>
@@ -5415,6 +5479,12 @@
          rendered by the stellarium-web-engine iframe at /sky/ (separate
          AGPL boundary). -->
     <script src="/js/lib/suncalc/suncalc.js"></script>
+    <!-- xterm.js + addon-fit power the SETTINGS → Remote terminal
+         section. Loaded eagerly so the Connect button works on the
+         user's first click without a defer roundtrip. MIT, vendored
+         under js/lib/xterm/. -->
+    <script src="/js/lib/xterm/xterm.js"></script>
+    <script src="/js/lib/xterm/xterm-addon-fit.js"></script>
     <!-- Pure-JS LZ4 block decoder — required for the raw uint16 image
          stream over /ws/image-stream. Without it every raw frame falls
          through to the REST preview fallback and hammers a 404 loop. -->
