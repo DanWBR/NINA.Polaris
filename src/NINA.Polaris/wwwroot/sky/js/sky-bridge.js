@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.6.1-swe5';
+    var BRIDGE_VERSION = '0.6.2-swe5';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -344,48 +344,42 @@
     // engine's current core.fov, mapped to the canvas pixel dimensions.
     // Always at viewport centre — that's the whole point ("the planning
     // rectangle is wherever the user is looking right now").
-    // Parallactic angle q (radians) at the given view centre. This is
-    // the angle between celestial north and the local zenith direction
-    // — equivalently, the rotation we need to apply to a celestial-
-    // aligned rectangle so it matches what the alt-az-projected engine
-    // viewport is showing.
+    // Parallactic angle q (degrees) computed directly from observer
+    // altaz + latitude — no convertFrame, no LST, no RA/Dec round-
+    // trip needed. The engine's observer.yaw/pitch (altaz of the view
+    // centre) is always populated and accessible without going through
+    // SweObj string allocation.
     //
-    //   q = atan2( sin(HA),  tan(φ)·cos(δ) − sin(δ)·cos(HA) )
+    // Formula from spherical trig:
+    //   q = atan2( sin(A) · cos(φ),
+    //              sin(φ) · cos(alt) − sin(alt) · cos(φ) · cos(A) )
     //
-    // φ = observer latitude
-    // HA = LST − RA  (hour angle of the view centre)
-    // δ = view centre declination
+    // where:
+    //   A   = observer.yaw   (azimuth, radians)
+    //   alt = observer.pitch (altitude, radians)
+    //   φ   = observer.latitude
+    //
+    // Sign convention depends on which way the engine measures
+    // azimuth. We negate at the end if the box rotates the wrong way
+    // — easy fix from console.
     function skyParallacticAngleDeg() {
         try {
             var stel = window.__stel;
             if (!stel || !stel.core || !stel.core.observer) return 0;
             var obs = stel.core.observer;
-            var phi = obs.latitude;                    // already radians
-            // LST: engine doesn't always expose it cleanly; derive via
-            // Greenwich apparent sidereal time from observer.utc plus
-            // longitude. Engine stores utc as Modified Julian Date.
-            // Greenwich MST in radians:
-            //   gst = 2π · ((mjd - 51544.5) · 1.00273790935 + 0.7790572732640)
-            //   (fractional radians, modulo 2π)
-            var mjd = obs.utc;
-            if (typeof mjd !== 'number' || !isFinite(mjd)) return 0;
-            var T = (mjd - 51544.5);
-            var gst = 2 * Math.PI * ((T * 1.00273790935 + 0.7790572732640) % 1);
-            var lst = gst + obs.longitude;             // local sidereal time
-            // View centre RA/Dec from observer.yaw/pitch via altaz→icrf.
-            // We just need the radec values; convertFrame may not be
-            // reliable in this build, but observer.{ra,dec} aren't
-            // direct attributes either. Cheapest robust path: use the
-            // last centre we emitted via skyGetCenter.
-            var c = skyGetCenter();
-            if (!c) return 0;
-            var raRad = c.raDeg * stel.D2R;
-            var decRad = c.decDeg * stel.D2R;
-            var H = lst - raRad;
-            var sinH = Math.sin(H), cosH = Math.cos(H);
-            var sinD = Math.sin(decRad), cosD = Math.cos(decRad);
-            var tanPhi = Math.tan(phi);
-            var q = Math.atan2(sinH, tanPhi * cosD - sinD * cosH);
+            var phi = obs.latitude;
+            var A   = obs.yaw;
+            var alt = obs.pitch;
+            if (typeof phi !== 'number' || !isFinite(phi)) return 0;
+            if (typeof A   !== 'number' || !isFinite(A))   return 0;
+            if (typeof alt !== 'number' || !isFinite(alt)) return 0;
+            var sinA = Math.sin(A), cosA = Math.cos(A);
+            var sinPhi = Math.sin(phi), cosPhi = Math.cos(phi);
+            var sinAlt = Math.sin(alt), cosAlt = Math.cos(alt);
+            var q = Math.atan2(
+                sinA * cosPhi,
+                sinPhi * cosAlt - sinAlt * cosPhi * cosA
+            );
             return q / stel.D2R;
         } catch (e) {
             console.warn('[Sky] parallactic angle calc failed:', e);
