@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.8.5-swe5';
+    var BRIDGE_VERSION = '0.9.0-swe5';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -901,6 +901,16 @@
                 // clear that overlay.
                 skySetFovOverlays(msg.mount || null, msg.target || null, msg.mosaic || null);
                 break;
+            case 'set-dss-visible':
+                // Parent toggle for the DSS Color HiPS streamed from
+                // CDS Strasbourg. Turn off when offline (no network) or
+                // when the user prefers the bare vector + bundled
+                // milkyway background.
+                try {
+                    if (stel.core && stel.core.dss)
+                        stel.core.dss.visible = !!msg.visible;
+                } catch (e) { console.warn('[Sky] DSS toggle failed:', e); }
+                break;
             default:
                 console.log('[Sky] unknown message type:', msg.type);
         }
@@ -1197,6 +1207,33 @@
                     core.milkyway.addDataSource({
                         url: SKYDATA_BASE + 'surveys/milkyway'
                     });
+                    // High-resolution deep-sky background via the DSS
+                    // Color HiPS streamed from CDS Strasbourg. Streams
+                    // HEALPix tiles on demand (no bundle cost), and
+                    // unlocks the "you can see actual nebulae/galaxies"
+                    // experience when zooming in past a few degrees.
+                    // The bundled milkyway survey is hips_order=0 only
+                    // (a single low-res panorama) — without DSS, zoom
+                    // just makes the same blurred background bigger.
+                    //
+                    // Visibility is toggled by the parent app via the
+                    // 'set-dss-visible' message; default ON since this
+                    // is the whole point of having the engine vs the
+                    // old d3-celestial vector renderer. Falls back
+                    // silently if the user is offline (engine logs a
+                    // tile 404, stars/DSO/milkyway still render).
+                    //
+                    // Attribution: STScI/NASA, healpixed by CDS — see
+                    // upstream stellarium-web data-credits-dialog.vue
+                    // for the full text we mirror in our footer.
+                    try {
+                        core.dss.addDataSource({
+                            url: 'https://alasky.cds.unistra.fr/DSS/DSSColor'
+                        });
+                        core.dss.visible = true;
+                    } catch (dssErr) {
+                        console.warn('[Sky] DSS hookup failed:', dssErr);
+                    }
                     core.minor_planets.addDataSource({
                         url: SKYDATA_BASE + 'mpcorb.dat',
                         key: 'mpc_asteroids'

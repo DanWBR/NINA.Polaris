@@ -117,6 +117,14 @@ function ninaApp() {
         // ON to match the previous behaviour.
         skyAutoCenterOnSelect: true,
 
+        // User toggle: stream the DSS Color HiPS from CDS Strasbourg
+        // as a deep-sky background image. Default ON — the whole
+        // point of having a real engine vs a vector renderer is
+        // seeing the actual sky when you zoom into a target. Turn
+        // off when offline (the engine logs HEALPix tile 404s
+        // otherwise) or when the user prefers a cleaner vector view.
+        skyDssVisible: true,
+
         // SWE-5: object-info card overlay on the sky map. Populated
         // when the bridge emits a map-click with a rich object payload
         // (the user clicked on a recognised star/DSO/planet rather
@@ -834,6 +842,15 @@ function ninaApp() {
             }
             this.$watch('skyAutoCenterOnSelect', (v) => {
                 localStorage.setItem('nina-sky-autocenter', v ? '1' : '0');
+            });
+
+            // DSS background toggle — same pattern.
+            const dssSaved = localStorage.getItem('nina-sky-dss');
+            if (dssSaved !== null) {
+                this.skyDssVisible = dssSaved !== '0';
+            }
+            this.$watch('skyDssVisible', (v) => {
+                localStorage.setItem('nina-sky-dss', v ? '1' : '0');
             });
 
             // Re-render the cached frame whenever the user switches
@@ -2174,6 +2191,16 @@ function ninaApp() {
             this._skySendMessage({ type: 'set-time', utc: Date.now() });
         },
 
+        // SWE: push the DSS background visibility to the bridge. Called
+        // on the SKY toolbar checkbox change AND right after 'ready'
+        // (so the persisted localStorage choice is honoured on reload
+        // — the bridge defaults to ON inside its own data-source
+        // registration, but if the user had it off we need to push
+        // that across).
+        _skyToggleDss() {
+            this._skySendMessage({ type: 'set-dss-visible', visible: !!this.skyDssVisible });
+        },
+
         // Async search via the engine. Returns Promise<result|null>.
         // result = { name, raDeg, decDeg, magnitude }. Keyed by query
         // so concurrent searches resolve independently.
@@ -2261,6 +2288,13 @@ function ninaApp() {
                         // 2009 — that's what the unconfigured engine
                         // starts at).
                         this._skyPushObserverAndTime();
+                        // SWE: honour persisted DSS toggle. The bridge
+                        // defaults to ON during data-source registration,
+                        // so we only need to push a message if the user
+                        // turned it OFF previously — but pushing both
+                        // ways is harmless and keeps the bridge/UI in
+                        // sync deterministically.
+                        this._skyToggleDss();
                         // SWE-5: ASIAIR-style initial framing. If the
                         // mount is connected at ready time, centre the
                         // view on mount.ra/dec at FOV=15°. Then seed
