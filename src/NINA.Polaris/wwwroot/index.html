@@ -4293,6 +4293,34 @@
                  x-init="$watch('tab', t => { if (t === 'settings') loadSimulatorSettings(); })">
                 <div class="panel-header">Settings</div>
 
+                <!-- Appearance / interface scale. Lets the user dial
+                     the whole UI smaller (mobiles, small monitors) or
+                     bigger (large TVs at the observatory) without
+                     having to fight the media-query default. The
+                     slider writes to body.style.zoom in real time
+                     and persists to localStorage. -->
+                <div class="settings-section">
+                    <h3>Appearance</h3>
+                    <label style="display:flex; align-items:center; gap:12px; max-width:520px">
+                        <span style="min-width:90px">UI scale</span>
+                        <input type="range" min="0.5" max="1.5" step="0.05"
+                               x-model.number="uiZoom"
+                               @input="applyUiZoom()"
+                               style="flex:1">
+                        <span class="text-muted" style="min-width:56px; text-align:right"
+                              x-text="Math.round(uiZoom * 100) + '%'"></span>
+                        <button class="btn btn-sm" @click="resetUiZoom()"
+                                title="Reset to viewport-based default (100%, or 85%/75% on smaller screens)">
+                            Reset
+                        </button>
+                    </label>
+                    <p class="text-muted" style="font-size: 12px; margin-top: 6px; max-width:520px">
+                        Scales the whole interface up or down in real time. Useful for
+                        cramming more onto a phone (drag below 100%) or making the night-mode
+                        UI legible across the observatory (drag above). Persists per browser.
+                    </p>
+                </div>
+
                 <div class="settings-section">
                     <h3>INDI Server</h3>
                     <label>Host<input type="text" x-model="settings.indiHost" class="input-md"></label>

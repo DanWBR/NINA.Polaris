@@ -125,6 +125,16 @@ function ninaApp() {
         // otherwise) or when the user prefers a cleaner vector view.
         skyDssVisible: true,
 
+        // Global UI zoom (CSS body { zoom: X }). Lets the user
+        // shrink/grow the entire interface in real time via the
+        // Appearance slider in Settings. Initial value comes from
+        // localStorage if set, otherwise from the viewport-based
+        // media-query default (1.0 desktop, 0.85 ≤960px, 0.75
+        // ≤640px) so first-load on a phone still gets the smaller
+        // UI. Slider writes inline style on <body>, which always
+        // wins over the CSS @media rules.
+        uiZoom: 1.0,
+
         // SWE-5: object-info card overlay on the sky map. Populated
         // when the bridge emits a map-click with a rich object payload
         // (the user clicked on a recognised star/DSO/planet rather
@@ -861,6 +871,15 @@ function ninaApp() {
                 localStorage.setItem('nina-sky-dss', v ? '1' : '0');
             });
 
+            // UI zoom: load explicit user value if previously set,
+            // else derive from current viewport so phones / tablets
+            // start at the same scale as the CSS @media rules.
+            const zoomSaved = localStorage.getItem('nina-ui-zoom');
+            this.uiZoom = zoomSaved != null
+                ? Math.max(0.5, Math.min(1.5, parseFloat(zoomSaved) || 1.0))
+                : this._defaultUiZoom();
+            this.applyUiZoom();
+
             // Re-render the cached frame whenever the user switches
             // tabs. Fixes the classic "last snap painted on PREVIEW,
             // user switches to VIDEO, sees black canvas" — the
@@ -1004,6 +1023,40 @@ function ninaApp() {
             const min = (this.equipCameraInfo && this.equipCameraInfo.minExposure)
                 || 0.0001;
             return EXPOSURE_PRESETS_ALL.filter(v => v >= min);
+        },
+
+        // Mirror the CSS @media rules in the head section of app.css:
+        // ≤640 → 0.75, ≤960 → 0.85, otherwise 1.0. Used both as the
+        // first-paint default before any persisted preference is
+        // loaded AND as the value the Reset button restores to.
+        _defaultUiZoom() {
+            try {
+                if (window.matchMedia('(max-width: 640px)').matches) return 0.75;
+                if (window.matchMedia('(max-width: 960px)').matches) return 0.85;
+            } catch (_) { /* matchMedia missing in very old browsers */ }
+            return 1.0;
+        },
+
+        // Push the current uiZoom value as an inline body style. The
+        // inline style outranks the @media-keyed `body { zoom: 0.85 }`
+        // rules so the slider always wins, including at the same
+        // breakpoint. Persist alongside.
+        applyUiZoom() {
+            const z = Math.max(0.5, Math.min(1.5, +this.uiZoom || 1.0));
+            this.uiZoom = z;
+            document.body.style.zoom = String(z);
+            try { localStorage.setItem('nina-ui-zoom', String(z)); }
+            catch (_) { /* private mode etc. */ }
+        },
+
+        // Drop the user's explicit pick and fall back to whatever the
+        // viewport-based default is right now. Useful when the user
+        // moved between window sizes (e.g. docking a tablet) and
+        // wants the auto default again.
+        resetUiZoom() {
+            try { localStorage.removeItem('nina-ui-zoom'); } catch (_) { }
+            this.uiZoom = this._defaultUiZoom();
+            document.body.style.zoom = String(this.uiZoom);
         },
 
         // Toast notification (auto-dismiss)
