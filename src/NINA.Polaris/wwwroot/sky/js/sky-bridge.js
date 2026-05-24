@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.1.0-swe1';
+    var BRIDGE_VERSION = '0.2.0-swe2';
 
     // -----------------------------------------------------------------
     // WebGL detection.
@@ -114,19 +114,67 @@
             return;
         }
 
-        // SWE-1: engine not loaded yet, just say we're alive so the
-        // parent can verify the bridge round-trip in DevTools. SWE-2
-        // will move this announcement into the engine's onReady
-        // callback and include the real version string.
-        setStatus('Bridge ready · engine loads in SWE-2');
-        postToParent({
-            type: 'ready',
-            version: BRIDGE_VERSION,
-            webgl: true,
-            webgl2: true,
-            engineLoaded: false,
-            __from: 'sky-bridge'
-        });
-        console.log('[Sky] bridge ready v' + BRIDGE_VERSION + ' webgl2=true');
+        // SWE-2: attempt to boot the WASM engine. The <script> tag
+        // for js/wasm/stellarium-web-engine.js loads asynchronously
+        // (with onerror logging a clear "build me" hint), so check
+        // both whether it got injected AND whether StelWebEngine
+        // arrived on the window.
+        //
+        // If the engine .js wasn't built yet (404), tell the parent
+        // we're up but the engine is missing — the parent can show
+        // a one-time toast asking the dev to run build-stellarium-web.sh
+        // without breaking anything.
+        if (typeof window.StelWebEngine !== 'function') {
+            setStatus('Sky engine WASM not built yet — run scripts/build-stellarium-web.sh from the repo root.');
+            postToParent({
+                type: 'ready',
+                version: BRIDGE_VERSION,
+                webgl: true,
+                webgl2: true,
+                engineLoaded: false,
+                engineMissing: true,
+                __from: 'sky-bridge'
+            });
+            console.warn('[Sky] bridge ready v' + BRIDGE_VERSION + ' — engine missing');
+            return;
+        }
+
+        // Engine .js is loaded. Boot it; it will fetch the .wasm
+        // sidecar from the same directory. SWE-3 fills in the data
+        // sources (stars / DSOs / surveys / etc.); for now the engine
+        // initialises into an empty starfield, which is enough to
+        // verify the WASM pipeline is alive.
+        try {
+            window.StelWebEngine({
+                wasmFile: 'js/wasm/stellarium-web-engine.wasm',
+                canvas: document.getElementById('stel-canvas'),
+                onReady: function (stel) {
+                    window.__stel = stel;       // exposed for SWE-4 RPC handlers
+                    setStatus(null);             // hide loading panel
+                    postToParent({
+                        type: 'ready',
+                        version: BRIDGE_VERSION,
+                        webgl: true,
+                        webgl2: true,
+                        engineLoaded: true,
+                        __from: 'sky-bridge'
+                    });
+                    console.log('[Sky] engine onReady — bridge v' + BRIDGE_VERSION);
+                }
+            });
+        } catch (e) {
+            console.error('[Sky] StelWebEngine init failed:', e);
+            setStatus('Sky engine init failed — see DevTools console.');
+            postToParent({
+                type: 'ready',
+                version: BRIDGE_VERSION,
+                webgl: true,
+                webgl2: true,
+                engineLoaded: false,
+                engineMissing: false,
+                engineInitError: String(e && e.message || e),
+                __from: 'sky-bridge'
+            });
+        }
     });
 })();

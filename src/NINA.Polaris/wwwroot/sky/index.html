@@ -87,6 +87,21 @@
             rel="noopener">source</a>
     </div>
 
+    <!-- SWE-2: stellarium-web-engine WASM loader. Marked async +
+         given an explicit onerror so the bridge can fall through to
+         "engine missing — run scripts/build-stellarium-web.sh"
+         status when the file hasn't been built into js/wasm/ yet.
+         Once StelWebEngine is on the window, sky-bridge.js below
+         calls it from its load handler. -->
+    <script>
+        // Flag the bridge will check. Flips to true if the engine
+        // .js loads successfully; stays false on 404 (uncommitted
+        // build) so the bridge shows a clear message.
+        window.__skyEngineScriptLoaded = false;
+    </script>
+    <script src="js/wasm/stellarium-web-engine.js" async
+            onload="window.__skyEngineScriptLoaded = true;"
+            onerror="console.warn('[Sky] engine .js not present yet — run scripts/build-stellarium-web.sh')"></script>
     <script src="js/sky-bridge.js"></script>
 </body>
 </html>

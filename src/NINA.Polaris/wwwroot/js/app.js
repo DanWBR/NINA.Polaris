@@ -2122,8 +2122,18 @@ function ninaApp() {
                         this._skyBridgeReady = true;
                         this._skyBridgeVersion = msg.version || 'unknown';
                         this._skyEngineLoaded = !!msg.engineLoaded;
+                        this._skyEngineMissing = !!msg.engineMissing;
                         console.log('[Polaris] Sky bridge ready v' + this._skyBridgeVersion
-                            + ' webgl2=' + msg.webgl2 + ' engineLoaded=' + msg.engineLoaded);
+                            + ' webgl2=' + msg.webgl2 + ' engineLoaded=' + msg.engineLoaded
+                            + (msg.engineMissing ? ' (engine WASM not built — run scripts/build-stellarium-web.sh)' : ''));
+                        // Surface a one-time, non-blocking dev toast
+                        // when the WASM build hasn't been committed
+                        // yet. Production users won't see this — by
+                        // SWE-3 the engine is bundled with publish.
+                        if (msg.engineMissing && !this._skyEngineMissingToasted) {
+                            this._skyEngineMissingToasted = true;
+                            this.toast('Sky engine not built yet — run scripts/build-stellarium-web.sh', 'warn', 6000);
+                        }
                         // Flush anything queued before the bridge was up.
                         const queued = this._skyPending || [];
                         this._skyPending = [];

@@ -1,0 +1,3 @@
+[submodule "external/stellarium-web-engine"]
+	path = external/stellarium-web-engine
+	url = https://github.com/Stellarium/stellarium-web-engine.git
