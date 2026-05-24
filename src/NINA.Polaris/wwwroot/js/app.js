@@ -2126,6 +2126,64 @@ function ninaApp() {
             }
         },
 
+        // SWE-4: convenience wrappers around _skySendMessage. Each one
+        // is one of the documented bridge message types from
+        // sky-bridge.js's skyHandleMessage switch.
+        _skyPushObserverAndTime() {
+            const lat = this.settings.latitude;
+            const lng = this.settings.longitude;
+            if (typeof lat === 'number' && typeof lng === 'number') {
+                this._skySendMessage({ type: 'set-observer', lat, lng });
+            }
+            this._skySendMessage({ type: 'set-time', utc: Date.now() });
+        },
+
+        // Async search via the engine. Returns Promise<result|null>.
+        // result = { name, raDeg, decDeg, magnitude }. Keyed by query
+        // so concurrent searches resolve independently.
+        _skySearch(query) {
+            return new Promise(resolve => {
+                this._skySearchPending = this._skySearchPending || {};
+                this._skySearchPending[query] = resolve;
+                this._skySendMessage({ type: 'search', query });
+                // 5s timeout — engine returns sync once ready, but
+                // belt-and-suspenders if a queued search gets stuck.
+                setTimeout(() => {
+                    if (this._skySearchPending && query in this._skySearchPending) {
+                        delete this._skySearchPending[query];
+                        resolve(null);
+                    }
+                }, 5000);
+            });
+        },
+
+        // Aim the engine camera at RA (hours) / Dec (degrees). fovDeg
+        // optional. Use this in place of the old Celestial.rotate.
+        _skyLookAt(raHours, decDeg, fovDeg, objectName) {
+            this._skySendMessage({
+                type: 'look-at',
+                raDeg: (raHours || 0) * 15,
+                decDeg: decDeg || 0,
+                fovDeg: fovDeg || undefined,
+                objectName: objectName || undefined
+            });
+        },
+
+        // Read back the current map centre. Async — engine replies via
+        // 'center' message. Returns Promise<{raDeg,decDeg,fovDeg}|null>.
+        _skyGetCenter() {
+            return new Promise(resolve => {
+                this._skyCenterPending = resolve;
+                this._skySendMessage({ type: 'get-center' });
+                setTimeout(() => {
+                    if (this._skyCenterPending === resolve) {
+                        this._skyCenterPending = null;
+                        resolve(null);
+                    }
+                }, 2000);
+            });
+        },
+
         _initSkyBridge() {
             if (this._skyBridgeInstalled) return;
             this._skyBridgeInstalled = true;
@@ -2160,18 +2218,54 @@ function ninaApp() {
                         const queued = this._skyPending || [];
                         this._skyPending = [];
                         for (const q of queued) this._skySendMessage(q);
+                        // SWE-4: push the observer + time once the
+                        // engine is ready so the sky reflects the
+                        // active site + current UTC immediately
+                        // rather than the engine's default (Geneva,
+                        // 2009 — that's what the unconfigured engine
+                        // starts at).
+                        this._skyPushObserverAndTime();
                         break;
                     case 'webgl-unavailable':
                         this._skyWebGLAvailable = false;
                         console.warn('[Polaris] Sky engine: WebGL2 unavailable, fallback in place');
                         break;
                     case 'search-result':
+                        // SWE-4: resolve the pending search promise so
+                        // the caller (search box) can update results
+                        // without polling. Keyed by query string in
+                        // case multiple searches are inflight.
+                        if (this._skySearchPending && msg.query in this._skySearchPending) {
+                            const cb = this._skySearchPending[msg.query];
+                            delete this._skySearchPending[msg.query];
+                            try { cb(msg.result); } catch (e) { console.warn(e); }
+                        }
+                        break;
                     case 'center':
+                        if (this._skyCenterPending) {
+                            const cb = this._skyCenterPending;
+                            this._skyCenterPending = null;
+                            try { cb(msg.center); } catch (e) { console.warn(e); }
+                        }
+                        break;
                     case 'map-click':
-                        // SWE-4 will wire these into the UI flows. For
-                        // now just log so we can verify the round-trip
-                        // works during smoke testing.
-                        console.log('[Polaris] Sky → ' + msg.type, msg);
+                        // User clicked the sky map. If we got an
+                        // object name, route to selectSkyTarget so the
+                        // existing Slew & Center / planning UI picks
+                        // it up. Otherwise stash the raw coords as the
+                        // current target.
+                        if (msg.objectName) {
+                            this.selectSkyTarget({
+                                name: msg.objectName,
+                                ra: msg.raDeg / 15, dec: msg.decDeg,
+                                type: 'click', magnitude: null
+                            });
+                        } else if (typeof msg.raDeg === 'number') {
+                            this.skyTarget = {
+                                name: 'Click ' + msg.raDeg.toFixed(2) + ',' + msg.decDeg.toFixed(2),
+                                ra: msg.raDeg / 15, dec: msg.decDeg
+                            };
+                        }
                         break;
                     default:
                         console.log('[Polaris] Sky → unknown:', msg.type, msg);
@@ -4112,6 +4206,15 @@ function ninaApp() {
             const d = new Date();
             const pad = n => n.toString().padStart(2, '0');
             this.skyClock = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+            // SWE-4: keep the engine's observer.utc in sync so the
+            // moon, sun, planets render at the right phase/altitude.
+            // Throttle to once every 30 ticks (~30s) — the engine
+            // interpolates per-frame internally, so we don't need to
+            // push the clock every second.
+            this._skyTimePushTick = (this._skyTimePushTick || 0) + 1;
+            if (this._skyTimePushTick % 30 === 0 && this._skyBridgeReady) {
+                this._skySendMessage({ type: 'set-time', utc: Date.now() });
+            }
         },
 
         setSkyFov() {
@@ -4128,11 +4231,15 @@ function ninaApp() {
         },
 
         skyGoToMount() {
-            if (!this._celestialReady) return;
+            // SWE-4: removed Celestial.rotate dependency. Now drives
+            // the stellarium-web-engine iframe via _skyLookAt. The
+            // _celestialReady gate has been retired with d3 — instead
+            // we trust _skySendMessage to queue the message if the
+            // bridge hasn't announced ready yet.
             const ra  = this.mount?.ra  ?? (this.skyTarget?.ra)  ?? 0;
             const dec = this.mount?.dec ?? (this.skyTarget?.dec) ?? 0;
             const decClamped = Math.max(-89.5, Math.min(89.5, dec));
-            try { Celestial.rotate({ center: [ra * 15, decClamped, 0] }); } catch {}
+            this._skyLookAt(ra, decClamped, undefined, null);
         },
 
         // ASIAIR-style two-FOV overlay on the sky map:
@@ -7844,6 +7951,22 @@ function ninaApp() {
             this.skyTarget = obj;
             this.skyShowResults = false;
             this._goToSelectedTarget();
+            // SWE-4: also tell the stellarium-web-engine iframe to
+            // re-aim its camera at the picked target so the visible
+            // map matches the planning UI selection. Uses pointAndLock
+            // when an object name is recognised by the engine, falling
+            // back to direct yaw/pitch from coords otherwise.
+            if (obj && (obj.ra != null) && (obj.dec != null)) {
+                // Default to a reasonable framing FOV. If the camera
+                // FOV (computed from sensor + focal length) is known
+                // and smaller, use 4x that so the target is comfortably
+                // in view rather than zoomed-to-pixel.
+                let fovDeg = 5.0;
+                if (this.fov && this.fov.width > 0) {
+                    fovDeg = Math.max(this.fov.width * 4, 1);
+                }
+                this._skyLookAt(obj.ra, obj.dec, fovDeg, obj.name || null);
+            }
         },
 
         // ASIAIR-style "Slew & Center to whatever's framed in the

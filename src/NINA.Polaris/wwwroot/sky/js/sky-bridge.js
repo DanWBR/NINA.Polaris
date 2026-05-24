@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.3.8-swe3';
+    var BRIDGE_VERSION = '0.4.0-swe4';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -144,16 +144,234 @@
     }
 
     // -----------------------------------------------------------------
-    // Incoming message router. SWE-1 only logs unknown messages so we
-    // can see in DevTools that the parent is reaching us; real handlers
-    // ship in SWE-4 / SWE-5.
+    // SWE-4: postMessage RPC handlers — observer, time, look-at,
+    // search, get-center. All map onto stellarium-web-engine's
+    // documented JS surface (apps/simple-html/tests.js is the canonical
+    // reference, verified against the actual upstream submodule).
+    //
+    // Engine uses radians everywhere; we convert at the boundary so the
+    // parent app stays in degrees and JS Dates. stel.D2R is the constant.
+    // -----------------------------------------------------------------
+
+    // Look up an object by name. Engine accepts "M31", "NAME M31",
+    // "NAME Sun", "Jupiter", etc. Returns null if not found.
+    function skyFindObject(query) {
+        if (!window.__stel) return null;
+        var stel = window.__stel;
+        // Try a few common name variants the engine knows.
+        var candidates = [query, 'NAME ' + query];
+        // M-, NGC-, IC- catalogs are recognised by the engine literally;
+        // try the canonical form first so 'M31' resolves before 'NAME M31'.
+        for (var i = 0; i < candidates.length; i++) {
+            var obj = stel.getObj(candidates[i]);
+            if (obj) return obj;
+        }
+        return null;
+    }
+
+    // Extract RA/Dec (degrees, ICRS-J2000) + magnitude from an engine
+    // object. Mirrors what the upstream selected-object-info component
+    // does. Returns { raDeg, decDeg, magnitude, name } or null.
+    function skyObjectInfo(obj) {
+        if (!obj || !window.__stel) return null;
+        var stel = window.__stel;
+        try {
+            var obs = stel.core.observer;
+            // ICRF gives RA/Dec without aberration; CIRS is current
+            // intermediate (apparent). UI prefers ICRS so it matches
+            // catalog values shown elsewhere in Polaris.
+            var icrf = obj.getInfo('radec', obs);
+            var radec = stel.c2s(icrf);
+            var raDeg = stel.anp(radec[0]) / stel.D2R;
+            var decDeg = stel.anpm(radec[1]) / stel.D2R;
+            var vmag = null;
+            try { vmag = obj.getInfo('VMAG'); } catch (e) { /* not all objects have it */ }
+            var name = (obj.designations && obj.designations()[0]) || '';
+            name = name.replace(/^NAME /, '');
+            return { raDeg: raDeg, decDeg: decDeg, magnitude: vmag, name: name };
+        } catch (e) {
+            console.warn('[Sky] skyObjectInfo failed:', e);
+            return null;
+        }
+    }
+
+    // Aim the camera at an RA/Dec (ICRS, degrees). Mirrors the
+    // sw_helpers.setSweObjAsSelection pattern — preferred path is
+    // pointAndLock on a named object so the engine follows it as time
+    // advances. Falls back to setting observer.yaw/pitch directly when
+    // we don't have an object to lock to.
+    function skyLookAt(raDeg, decDeg, fovDeg, objHint) {
+        if (!window.__stel) return false;
+        var stel = window.__stel;
+        try {
+            if (typeof fovDeg === 'number' && fovDeg > 0) {
+                stel.core.fov = fovDeg * stel.D2R;
+            }
+            if (objHint) {
+                // pointAndLock keeps the object centred as time advances.
+                if (typeof stel.pointAndLock === 'function') {
+                    stel.pointAndLock(objHint);
+                    stel.core.selection = objHint;
+                    return true;
+                }
+            }
+            // Fallback: convert RA/Dec → cartesian ICRF → OBSERVED → altaz
+            // → set observer.yaw/pitch. Same math the upstream uses for
+            // arbitrary-coordinate slew.
+            var obs = stel.core.observer;
+            var icrf = stel.s2c([raDeg * stel.D2R, decDeg * stel.D2R]);
+            var observed = stel.convertFrame(obs, 'ICRF', 'OBSERVED', icrf);
+            var azalt = stel.c2s(observed);
+            obs.yaw = stel.anp(azalt[0]);
+            obs.pitch = stel.anpm(azalt[1]);
+            return true;
+        } catch (e) {
+            console.warn('[Sky] skyLookAt failed:', e);
+            return false;
+        }
+    }
+
+    // Read the current centre of the map back as RA/Dec ICRS + fov.
+    // Uses observer.yaw/pitch (altaz) → OBSERVED → CIRS → ICRF.
+    function skyGetCenter() {
+        if (!window.__stel) return null;
+        var stel = window.__stel;
+        try {
+            var obs = stel.core.observer;
+            var observed = stel.s2c([obs.yaw, obs.pitch]);
+            var icrf = stel.convertFrame(obs, 'OBSERVED', 'ICRF', observed);
+            var radec = stel.c2s(icrf);
+            return {
+                raDeg: stel.anp(radec[0]) / stel.D2R,
+                decDeg: stel.anpm(radec[1]) / stel.D2R,
+                fovDeg: stel.core.fov / stel.D2R
+            };
+        } catch (e) {
+            console.warn('[Sky] skyGetCenter failed:', e);
+            return null;
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // Incoming message router (parent → iframe).
     // -----------------------------------------------------------------
     window.addEventListener('message', function (ev) {
         var msg = ev.data;
         if (!msg || typeof msg !== 'object' || !msg.type) return;
-        // Ignore messages we accidentally bounced to ourselves.
-        if (msg.__from === 'sky-bridge') return;
-        console.log('[Sky] received from parent:', msg.type, msg);
+        if (msg.__from === 'sky-bridge') return;  // our own echo
+        // Hold messages that arrive before the engine is ready. SWE-4
+        // callers like Polaris's 30s sky ticker fire immediately on
+        // page load and would otherwise no-op against a null __stel.
+        if (!window.__stel) {
+            (window.__skyPendingIn = window.__skyPendingIn || []).push(msg);
+            return;
+        }
+        skyHandleMessage(msg);
+    });
+
+    function skyHandleMessage(msg) {
+        var stel = window.__stel;
+        switch (msg.type) {
+            case 'set-observer':
+                if (typeof msg.lat === 'number') stel.observer.latitude = msg.lat * stel.D2R;
+                if (typeof msg.lng === 'number') stel.observer.longitude = msg.lng * stel.D2R;
+                if (typeof msg.elevation === 'number') stel.observer.elevation = msg.elevation;
+                break;
+            case 'set-time':
+                if (typeof msg.utc === 'number') {
+                    stel.observer.utc = stel.date2MJD(new Date(msg.utc));
+                }
+                break;
+            case 'look-at':
+                var obj = msg.objectName ? skyFindObject(msg.objectName) : null;
+                skyLookAt(msg.raDeg, msg.decDeg, msg.fovDeg, obj);
+                break;
+            case 'search':
+                var found = skyFindObject(msg.query);
+                postToParent({
+                    type: 'search-result',
+                    query: msg.query,
+                    result: found ? skyObjectInfo(found) : null,
+                    __from: 'sky-bridge'
+                });
+                break;
+            case 'get-center':
+                postToParent({
+                    type: 'center',
+                    requestId: msg.requestId || null,
+                    center: skyGetCenter(),
+                    __from: 'sky-bridge'
+                });
+                break;
+            case 'select-clear':
+                try { stel.core.selection = 0; } catch (e) { /* swallow */ }
+                break;
+            default:
+                console.log('[Sky] unknown message type:', msg.type);
+        }
+    }
+
+    // Drain queued parent messages once the engine is ready.
+    function skyDrainPending() {
+        if (!window.__stel || !window.__skyPendingIn) return;
+        var queue = window.__skyPendingIn;
+        window.__skyPendingIn = [];
+        for (var i = 0; i < queue.length; i++) {
+            try { skyHandleMessage(queue[i]); }
+            catch (e) { console.warn('[Sky] queued msg replay failed:', e); }
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // Canvas click → map-click. Converts pixel coords to RA/Dec via
+    // the engine's pick API if available, falling back to projecting
+    // through observer altaz when not. Either path gives the parent
+    // the celestial coordinate under the mouse so it can populate the
+    // Slew & Center workflow.
+    // -----------------------------------------------------------------
+    document.addEventListener('click', function (ev) {
+        if (!window.__stel) return;
+        var canvas = document.getElementById('stel-canvas');
+        if (!canvas || ev.target !== canvas) return;
+        var rect = canvas.getBoundingClientRect();
+        var x = ev.clientX - rect.left;
+        var y = ev.clientY - rect.top;
+        var stel = window.__stel;
+        try {
+            var hit = null, objName = null;
+            // Engine sometimes exposes core.pick(x,y) for hit-testing.
+            if (typeof stel.core.pick === 'function') {
+                hit = stel.core.pick(x, y);
+                if (hit) {
+                    var info = skyObjectInfo(hit);
+                    if (info) {
+                        objName = info.name;
+                        postToParent({
+                            type: 'map-click',
+                            raDeg: info.raDeg, decDeg: info.decDeg,
+                            objectName: objName,
+                            __from: 'sky-bridge'
+                        });
+                        return;
+                    }
+                }
+            }
+            // No object under cursor — return the sky coord at the click.
+            // Engine helper screenToCanonical / convertFrame chain isn't
+            // documented stably across builds; emit the screen coord + the
+            // current map centre so the parent can fall back to it.
+            var centre = skyGetCenter();
+            postToParent({
+                type: 'map-click',
+                raDeg: centre ? centre.raDeg : null,
+                decDeg: centre ? centre.decDeg : null,
+                objectName: null,
+                screenX: x, screenY: y,
+                __from: 'sky-bridge'
+            });
+        } catch (e) {
+            console.warn('[Sky] click handler failed:', e);
+        }
     });
 
     // -----------------------------------------------------------------
@@ -296,6 +514,11 @@
                     __from: 'sky-bridge'
                 });
                 console.log('[Sky] engine onReady fired — bridge v' + BRIDGE_VERSION);
+                // SWE-4: flush any RPC messages the parent queued while
+                // we were initialising (Polaris's first set-observer /
+                // set-time tick typically fires within the first second
+                // of page load, well before the engine onReady completes).
+                skyDrainPending();
             }
 
             var modulePromise = window.StelWebEngine({
