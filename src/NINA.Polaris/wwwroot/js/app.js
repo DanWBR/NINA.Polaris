@@ -369,6 +369,13 @@ function ninaApp() {
             enabled: true, active: false, slewing: false, captureIdle: true,
             lastCheckedAt: null, lastError: null
         },
+        // User toggle for whether the camera preview WINDOW is shown
+        // when SlewPreviewService says a stream is live. Defaults to
+        // true so the existing auto-show behaviour stays the same on
+        // first run. The × button on the inset flips this to false;
+        // the floating "📷 Camera" pill flips it back to true.
+        // Persisted in localStorage so the choice survives reloads.
+        slewPreviewVisible: true,
 
         // Activity bar (bottom). Populated from the status WS message
         // each second. host comes from HostMetricsService; sirilActiveJobs
@@ -865,6 +872,12 @@ function ninaApp() {
             this.$watch('skyAutoCenterOnSelect', (v) => {
                 localStorage.setItem('nina-sky-autocenter', v ? '1' : '0');
             });
+
+            // Camera preview window show/hide preference.
+            try {
+                const v = localStorage.getItem('slewPreviewVisible');
+                if (v !== null) this.slewPreviewVisible = v !== '0';
+            } catch { /* ignore */ }
 
             // DSS background toggle — same pattern.
             const dssSaved = localStorage.getItem('nina-sky-dss');
@@ -6662,6 +6675,17 @@ function ninaApp() {
                     visible: this.mountPanel.visible
                 }));
             } catch { /* storage full / disabled — non-fatal */ }
+        },
+
+        // Persist the user's show/hide preference for the camera
+        // preview window. Called from the inset's × button and from
+        // the floating 📷 Camera pill so the choice survives reloads
+        // — the auto-driven `slewPreview.active` keeps its own state.
+        persistSlewPreviewToggle() {
+            try {
+                localStorage.setItem('slewPreviewVisible',
+                    this.slewPreviewVisible ? '1' : '0');
+            } catch { /* non-fatal */ }
         },
 
         // Keep the panel header on-screen when the window resizes or

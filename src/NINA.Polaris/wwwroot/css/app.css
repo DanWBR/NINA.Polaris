@@ -1040,7 +1040,8 @@ label select.input-sm {
     font-size: 11px;
 }
 /* Re-open pill (bottom-right of the Sky tab) */
-.mount-float-reopen {
+.mount-float-reopen,
+.camera-float-reopen {
     position: fixed;
     z-index: 89;
     right: 16px;
@@ -1061,6 +1062,37 @@ label select.input-sm {
     font-weight: 600;
     cursor: pointer;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+/* Camera pill stacks above the Mount pill when both are visible so
+   they don't overlap. ~36 px clear (pill height + small gap). */
+.camera-float-reopen { bottom: 132px; }
+.camera-float-reopen:hover {
+    background: var(--accent);
+    color: #fff;
+}
+
+/* × close button on the live-preview inset — same dismissal
+   affordance the mount panel has. Positions top-right of the
+   inset so it doesn't sit on top of the canvas content. */
+.slew-preview-close {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 50%;
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 2;
+}
+.slew-preview-close:hover {
+    background: rgba(0, 0, 0, 0.85);
+    border-color: rgba(255, 255, 255, 0.4);
 }
 .mount-float-reopen:hover {
     background: var(--accent);

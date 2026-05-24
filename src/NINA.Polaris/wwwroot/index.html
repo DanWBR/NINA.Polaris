@@ -2606,14 +2606,23 @@
 
             <!-- SKY EXPLORER -->
             <div x-show="tab === 'sky'" class="tab-panel tab-panel-sky">
-                <!-- Slew preview inset — auto-shows the live camera feed
-                     while the mount is slewing and nothing else is using
-                     the camera. SlewPreviewService drives the camera
-                     stream; the multi-canvas renderer mirrors frames to
-                     #slewPreviewCanvas the same way it does for LIVE /
-                     PREVIEW / Focus canvases. -->
-                <div class="slew-preview-inset" x-show="slewPreview?.active" x-cloak>
+                <!-- Slew preview inset — live camera feed window over
+                     the sky map. SlewPreviewService still drives the
+                     camera stream (auto-on during slews when nothing
+                     else owns the camera); the multi-canvas renderer
+                     mirrors frames to #slewPreviewCanvas the same way
+                     it does for LIVE / PREVIEW / Focus canvases.
+                     Visibility is gated by an extra user toggle
+                     (`slewPreviewVisible`) so power users can hide
+                     the window even while it's active and bring it
+                     back via the 📷 Camera pill below. -->
+                <div class="slew-preview-inset"
+                     x-show="slewPreview?.active && slewPreviewVisible"
+                     x-cloak>
                     <div class="slew-preview-label">📷 Slewing — live view</div>
+                    <button class="slew-preview-close"
+                            @click="slewPreviewVisible = false; persistSlewPreviewToggle()"
+                            title="Hide live camera preview">×</button>
                     <canvas id="slewPreviewCanvas" class="slew-preview-canvas"></canvas>
                 </div>
                 <div class="sky-toolbar">
@@ -2952,6 +2961,27 @@
                         <path d="M12 2L2 22h20L12 2z" fill="none" stroke="currentColor" stroke-width="2"/>
                     </svg>
                     Mount
+                </button>
+
+                <!-- Re-open pill for the live camera preview inset.
+                     Same glassy pill style as the Mount one, stacked
+                     above it. Shown whenever a slew preview is
+                     actively streaming but the user has hidden the
+                     window (via the inset's × button). Lets them
+                     bring the window back without waiting for the
+                     next slew. -->
+                <button class="camera-float-reopen"
+                        x-show="slewPreview?.active && !slewPreviewVisible"
+                        x-cloak
+                        @click="slewPreviewVisible = true; persistSlewPreviewToggle()"
+                        title="Show live camera preview">
+                    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                        <path d="M4 7h3l2-2h6l2 2h3v12H4z" fill="none"
+                              stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                        <circle cx="12" cy="13" r="3.5" fill="none"
+                                stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                    Camera
                 </button>
             </div>
 
