@@ -147,25 +147,12 @@
             pointer-events: none;
             letter-spacing: 0.5px;
         }
-        /* SWE-5: labels ride along the TOP edge of the rectangle,
-           which represents the top of the camera sensor in its own
-           rotated orientation. Because they're children of
-           #sky-target-fov they inherit its CSS rotation transform,
-           so as the sensor rotates the labels follow that edge. */
-        #sky-target-fov .fov-label-corner {
-            /* "Target" — top-left corner, just outside the rectangle. */
-            left: 0;
-            bottom: 100%;
-            margin-bottom: 4px;
-        }
-        #sky-target-fov .fov-label-edge-rot {
-            /* Rotation — outside the top edge, centred-right. */
-            right: 0;
-            bottom: 100%;
-            margin-bottom: 4px;
-        }
-        #sky-target-fov .fov-label-edge-size {
-            /* W° × H° — outside the top edge, centred-left. */
+        /* SWE-5: ONE combined label above the top edge ("Target —
+           4.01°×2.28° — Rotation 106.1°"). Inherits the rectangle's
+           CSS rotation transform so it slides along the top edge as
+           the sensor rotates. Centred horizontally, single line, no
+           overlap risk because there's only one element. */
+        #sky-target-fov .fov-label-top {
             left: 50%;
             bottom: 100%;
             margin-bottom: 4px;
@@ -176,9 +163,7 @@
 <body>
     <canvas id="stel-canvas"></canvas>
     <div id="sky-target-fov">
-        <span class="fov-label fov-label-corner">Target</span>
-        <span class="fov-label fov-label-edge-rot" id="sky-target-rotlabel">Rotation 0.0°</span>
-        <span class="fov-label fov-label-edge-size" id="sky-target-sizelabel">0° × 0°</span>
+        <span class="fov-label fov-label-top" id="sky-target-label">Target</span>
     </div>
     <div id="sky-status"><div class="msg">Loading sky engine…</div></div>
     <div id="sky-footer">

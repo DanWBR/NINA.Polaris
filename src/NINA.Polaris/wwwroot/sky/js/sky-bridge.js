@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.6.8-swe5';
+    var BRIDGE_VERSION = '0.6.9-swe5';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -414,40 +414,29 @@
             'stroke-opacity': 0.35,
             'stroke-glow': false
         };
-        // ASIAIR-style edge labels along the TOP edge of the rectangle
-        // (the edge representing the top of the camera sensor in its
-        // own rotated orientation). skyFovRect corner order:
-        //   ring[0] bottom-left, ring[1] bottom-right,
-        //   ring[2] top-right,   ring[3] top-left
-        // So the TOP edge runs ring[3] → ring[2].
-        //   - "Scope"             at ring[3] (top-left corner)
-        //   - "W° × H°"           at top-edge midpoint
-        //   - "Rotation XXX.X°"   at ring[2] (top-right corner)
-        // All three with text-rotate = rectangle rotation so the
-        // labels read along the edge as the sensor rotates.
+        // Single combined label along the TOP edge of the rectangle
+        // (= top of the camera sensor in its own rotated orientation).
+        // skyFovRect corner order: ring[3] top-left, ring[2] top-right,
+        // so the top-edge midpoint averages those two. text-rotate =
+        // rectangle rotation keeps the label aligned with the edge as
+        // the sensor rotates.
         var rotPositive = ((rot % 360) + 360) % 360;
-        var rotText = 'Rotation ' + rotPositive.toFixed(1) + '°';
-        var sizeText = w.toFixed(2) + '° × ' + h.toFixed(2) + '°';
+        var labelText = 'Scope  ' + w.toFixed(2) + '° × ' + h.toFixed(2)
+            + '°  Rotation ' + rotPositive.toFixed(1) + '°';
         var midTop = [(ring[2][0] + ring[3][0]) / 2, (ring[2][1] + ring[3][1]) / 2];
         // Text colour = stroke_color * stroke_opacity in the engine
-        // renderer. stroke-opacity must be > 0 or text is invisible.
-        var labelStyle = {
+        // renderer; stroke-opacity must be > 0 or text is invisible.
+        var labelProps = {
             stroke: color,
             'stroke-opacity': 1,
             'stroke-width': 0,
             fill: color,
-            'fill-opacity': 0
+            'fill-opacity': 0,
+            title: labelText,
+            'text-anchor': 'bottom',
+            'text-offset': [0, -6],
+            'text-rotate': rotPositive
         };
-        function labelFeature(coord, text, anchor, offset) {
-            var p = Object.assign({}, labelStyle, {
-                title: text,
-                'text-anchor': anchor || 'top',
-                'text-offset': offset || [0, -6],
-                'text-rotate': rotPositive
-            });
-            return { type: 'Feature', properties: p,
-                geometry: { type: 'Point', coordinates: coord } };
-        }
         return {
             type: 'FeatureCollection',
             features: [
@@ -457,9 +446,8 @@
                   geometry: { type: 'LineString', coordinates: hLine } },
                 { type: 'Feature', properties: crossProps,
                   geometry: { type: 'LineString', coordinates: vLine } },
-                labelFeature(ring[3], 'Scope',  'top', [-2, -6]),
-                labelFeature(midTop,  sizeText, 'top', [0,  -6]),
-                labelFeature(ring[2], rotText,  'top', [2,  -6])
+                { type: 'Feature', properties: labelProps,
+                  geometry: { type: 'Point', coordinates: midTop } }
             ]
         };
     }
@@ -559,15 +547,15 @@
         el.style.transform = 'translate(-50%, -50%) rotate(' + rotDeg.toFixed(2) + 'deg)';
         el.style.display = 'block';
 
-        // SWE-5: ASIAIR-style edge labels. Rotation reads positive in
-        // [0, 360) for consistency with how the ASIAIR / N.I.N.A. solver
-        // report frame angles.
+        // SWE-5: single combined label "Target — W°×H° — Rotation X°"
+        // above the top edge. Rotation in [0, 360) to match ASIAIR /
+        // N.I.N.A. solver convention.
         var rotPositive = ((rotDeg % 360) + 360) % 360;
-        var rotLabel = document.getElementById('sky-target-rotlabel');
-        if (rotLabel) rotLabel.textContent = 'Rotation ' + rotPositive.toFixed(1) + '°';
-        var sizeLabel = document.getElementById('sky-target-sizelabel');
-        if (sizeLabel) sizeLabel.textContent =
-            target.widthDeg.toFixed(2) + '° × ' + target.heightDeg.toFixed(2) + '°';
+        var label = document.getElementById('sky-target-label');
+        if (label) label.textContent =
+            'Target  ' + target.widthDeg.toFixed(2) + '° × '
+            + target.heightDeg.toFixed(2) + '°  Rotation '
+            + rotPositive.toFixed(1) + '°';
 
         console.log('[Sky] target FOV box: ' + wPx.toFixed(0) + '×' + hPx.toFixed(0)
             + 'px (engineFov=' + engineFovDeg.toFixed(2) + '°, cam='
