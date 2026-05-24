@@ -1,10 +1,35 @@
 using System.Runtime.InteropServices.JavaScript;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using NINA.Image.Editor;
 using NINA.Image.ImageAnalysis;
 using NINA.Image.ImageData;
 
 namespace NINA.Polaris.Wasm;
+
+/// <summary>
+/// Source-generated JSON metadata for the editor's <see cref="EditParams"/>
+/// graph. Required under WASM AOT with full trimming — without this the
+/// trimmer strips the property setters/ctors that reflection-based
+/// <c>JsonSerializer.Deserialize&lt;EditParams&gt;</c> needs, and slider
+/// edits silently deserialise to all-defaults (so the WASM preview shows
+/// the unedited image regardless of slider state). The source generator
+/// emits the exact metadata at compile time and roots the types from the
+/// trimmer's perspective.
+/// </summary>
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(EditParams))]
+[JsonSerializable(typeof(WhiteBalanceParams))]
+[JsonSerializable(typeof(LightParams))]
+[JsonSerializable(typeof(ColorParams))]
+[JsonSerializable(typeof(DetailParams))]
+[JsonSerializable(typeof(EffectsParams))]
+[JsonSerializable(typeof(ToneCurveParams))]
+[JsonSerializable(typeof(CurvePoint))]
+[JsonSerializable(typeof(CropParams))]
+[JsonSerializable(typeof(IReadOnlyList<CurvePoint>))]
+[JsonSerializable(typeof(List<CurvePoint>))]
+internal partial class EditorJsonContext : JsonSerializerContext { }
 
 /// <summary>
 /// JS-callable surface for the browser-side live-stack module.
@@ -41,7 +66,7 @@ public static partial class Interop {
     /// works. Bump the suffix on protocol-breaking changes so a
     /// stale cached bundle is detectable.</summary>
     [JSExport]
-    public static string Ping() => "pong v0.3 (CLST-3 stacker + ED-6 editor)";
+    public static string Ping() => "pong v0.4 (CLST-3 stacker + ED-6 editor + JsonContext)";
 
     /// <summary>Reset accumulator buffers + reference frame. Called
     /// by the page's "Reset" button + automatically on page load
@@ -172,9 +197,6 @@ public static partial class Interop {
     private static int _editorWidth;
     private static int _editorHeight;
     private static int _editorChannels;
-    private static JsonSerializerOptions _editorJsonOpts = new() {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
 
     /// <summary>
     /// Hand the WASM module a decoded working buffer (8-bit pixel space,
@@ -212,9 +234,10 @@ public static partial class Interop {
 
         EditParams edits;
         try {
-            edits = JsonSerializer.Deserialize<EditParams>(editsJson, _editorJsonOpts)
+            edits = JsonSerializer.Deserialize(editsJson, EditorJsonContext.Default.EditParams)
                     ?? EditParams.Defaults;
-        } catch {
+        } catch (Exception ex) {
+            Console.WriteLine($"[Polaris.Wasm] EditorApplyEdit: edits deserialise failed: {ex.Message}");
             edits = EditParams.Defaults;
         }
 
@@ -277,9 +300,10 @@ public static partial class Interop {
 
         EditParams edits;
         try {
-            edits = JsonSerializer.Deserialize<EditParams>(editsJson, _editorJsonOpts)
+            edits = JsonSerializer.Deserialize(editsJson, EditorJsonContext.Default.EditParams)
                     ?? EditParams.Defaults;
-        } catch {
+        } catch (Exception ex) {
+            Console.WriteLine($"[Polaris.Wasm] EditorComputeHistogram: edits deserialise failed: {ex.Message}");
             edits = EditParams.Defaults;
         }
 
