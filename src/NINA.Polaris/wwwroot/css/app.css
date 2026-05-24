@@ -1886,9 +1886,13 @@ label select.input-sm {
    tab's content area. */
 .sky-viewer-wrap {
     position: relative;
-    flex: 0 0 auto;
-    height: calc(100vh - 380px) !important;
-    min-height: 280px !important;
+    /* Removed the old .sky-info-panel below the iframe, so let the
+       map take whatever vertical space is left after the toolbar +
+       legend + slew progress row + activity-bar cushion. flex:1
+       grows it; tiny min-height keeps it readable on very short
+       viewports (older laptops). */
+    flex: 1 1 auto;
+    min-height: 320px;
     width: 100%;
 }
 .sky-viewer-wrap > .sky-viewer-iframe {
@@ -1987,6 +1991,30 @@ label select.input-sm {
     font-variant-numeric: tabular-nums;
     font-size: 12px;
 }
+/* Translucent action bar pinned to the bottom-left of the iframe.
+   Same glassy treatment as .sky-info-card so the two overlays read
+   as a matched pair. pointer-events:auto on each button so they
+   stay clickable through the absolutely-positioned wrapper. */
+.sky-map-overlay-actions {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding: 8px;
+    background: rgba(8, 12, 22, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 5;
+    pointer-events: auto;
+}
+.sky-map-overlay-actions .btn {
+    white-space: nowrap;
+}
+
 .sky-info-chart-wrap {
     /* Compact altitude track strip between the stats table and the
        action buttons. 110 px tall is enough to read peak/trough
