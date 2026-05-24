@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.6.4-swe5';
+    var BRIDGE_VERSION = '0.6.5-swe5';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -385,35 +385,47 @@
     }
 
     function skyFovGeoJson(centre, color, glow) {
-        var ring = skyFovRect(centre.raDeg, centre.decDeg,
-            centre.widthDeg, centre.heightDeg, centre.rotationDeg || 0);
-        // stellarium-web-engine's geojson parser only knows: stroke,
-        // fill (both #RRGGBB), stroke-width, stroke-opacity,
-        // fill-opacity, stroke-glow (bool). No stroke-dasharray.
-        //
-        // The engine multiplies feature_color by painter_->color
-        // (atmosphere brightness etc.), which washes the rectangles
-        // out badly during daytime renders. Compensate with:
-        //   * stroke-glow on both — engine adds a halo that survives
-        //     the painter multiply
-        //   * stroke-width 5 — thick enough to read at typical zooms
-        //   * fill-opacity 0 — fill gets washed to near-transparent
-        //     anyway; cleaner to just rely on stroke + glow for the
-        //     visual.
+        var raDeg = centre.raDeg, decDeg = centre.decDeg;
+        var w = centre.widthDeg, h = centre.heightDeg;
+        var rot = centre.rotationDeg || 0;
+        var ring = skyFovRect(raDeg, decDeg, w, h, rot);
+        // Engine geojson parser only knows: stroke, fill, stroke-width,
+        // stroke-opacity, fill-opacity, stroke-glow.
+        var props = {
+            stroke: color,
+            'stroke-width': 2,
+            'stroke-opacity': 1,
+            'stroke-glow': true,
+            fill: color,
+            'fill-opacity': 0.0
+        };
+        // Crosshair: two LineString features through the centre, edge
+        // midpoint to edge midpoint, matching the rotation of the
+        // rectangle. Built with the same tangent-plane helper so the
+        // dec scaling stays consistent with the perimeter ring.
+        var crossH = skyFovRect(raDeg, decDeg, w, 0, rot); // horizontal line at mid-height
+        var crossV = skyFovRect(raDeg, decDeg, 0, h, rot); // vertical line at mid-width
+        // skyFovRect returns 5-pt closed polygons; for a 0-height /
+        // 0-width "rectangle" the first two points are the line we
+        // want. Take points 0 and 1.
+        var hLine = [crossH[0], crossH[1]];
+        var vLine = [crossV[0], crossV[1]];
+        var crossProps = {
+            stroke: color,
+            'stroke-width': 1,
+            'stroke-opacity': 0.35,
+            'stroke-glow': false
+        };
         return {
             type: 'FeatureCollection',
-            features: [{
-                type: 'Feature',
-                properties: {
-                    stroke: color,
-                    'stroke-width': 5,
-                    'stroke-opacity': 1,
-                    'stroke-glow': true,
-                    fill: color,
-                    'fill-opacity': glow ? 0.0 : 0.08
-                },
-                geometry: { type: 'Polygon', coordinates: [ring] }
-            }]
+            features: [
+                { type: 'Feature', properties: props,
+                  geometry: { type: 'Polygon', coordinates: [ring] } },
+                { type: 'Feature', properties: crossProps,
+                  geometry: { type: 'LineString', coordinates: hLine } },
+                { type: 'Feature', properties: crossProps,
+                  geometry: { type: 'LineString', coordinates: vLine } }
+            ]
         };
     }
 

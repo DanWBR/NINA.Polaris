@@ -2558,30 +2558,29 @@
                         style="border:0;"
                         sandbox="allow-scripts allow-same-origin"
                         title="Stellarium Web sky map"></iframe>
+                <!-- SWE-5 cleanup: dropped the FOV input + Show-camera-FOV
+                     checkbox. Engine FOV is controlled by the user's
+                     mouse-wheel zoom on the iframe — keeping an extra
+                     UI knob duplicated the control. The camera FOV
+                     overlay is always on (blue mount + red target are
+                     central to the planning UX, so there's no use
+                     case for hiding them). Legend + live size readout
+                     stay in case the user wants to confirm. Center on
+                     mount moved to the action-button row below. -->
                 <div class="sky-survey-row">
-                    <label>FOV
+                    <span class="text-muted" style="font-size:10px;display:inline-flex;align-items:center;gap:8px"
+                          :title="'sensor ' + (settings.sensorWidth?.toFixed(1) || '?') + '×' + (settings.sensorHeight?.toFixed(1) || '?') + ' mm · focal ' + (settings.focalLength || '?') + ' mm'">
                         <span style="display:inline-flex;align-items:center;gap:4px">
-                            <input type="number" class="input-sm" x-model.number="aladinFov" min="1" max="180" step="1"
-                                   @change="setSkyFov()">
-                            <span>°</span>
+                            <span style="display:inline-block;width:14px;height:0;border-top:3px solid #1e40af;box-shadow:0 0 4px #1e40af"></span>
+                            mount
                         </span>
-                    </label>
-                    <label class="seq-dither-checkbox"
-                           title="Blue rectangle: mount's current pointing. Red dashed: planning target (the DSO you searched). Size is computed from Main Telescope focal length + connected camera sensor.">
-                        <input type="checkbox" x-model="aladinShowFov" @change="updateSkyCameraFov()">
-                        Show camera FOV
-                        <span x-show="aladinShowFov" class="text-muted" style="margin-left:6px;font-size:10px">
-                            <span style="display:inline-block;width:10px;height:0;border-top:2px solid #3b82f6;vertical-align:middle"></span>
-                            mount ·
-                            <span style="display:inline-block;width:10px;height:0;border-top:2px dashed #ef4444;vertical-align:middle"></span>
+                        <span style="display:inline-flex;align-items:center;gap:4px">
+                            <span style="display:inline-block;width:14px;height:0;border-top:3px solid #ef4444;box-shadow:0 0 4px #ef4444"></span>
                             target
                         </span>
-                        <span x-show="aladinShowFov && fov.width > 0" class="text-muted"
-                              style="margin-left:6px;font-size:10px"
-                              :title="'sensor ' + (settings.sensorWidth?.toFixed(1) || '?') + '×' + (settings.sensorHeight?.toFixed(1) || '?') + ' mm · focal ' + (settings.focalLength || '?') + ' mm'"
-                              x-text="fov.width.toFixed(2) + '° × ' + fov.height.toFixed(2) + '°'"></span>
-                    </label>
-                    <button class="btn btn-sm" @click="skyGoToMount()" :disabled="!mount.connected">Center on mount</button>
+                        <span x-show="fov.width > 0"
+                              x-text="'· ' + fov.width.toFixed(2) + '° × ' + fov.height.toFixed(2) + '°'"></span>
+                    </span>
                     <span class="muted" style="font-size:11px;margin-left:auto">
                         Live · <span x-text="settings.latitude.toFixed(2) + '°, ' + settings.longitude.toFixed(2) + '°'"></span>
                         · <span x-text="skyClock"></span> UTC
@@ -2639,6 +2638,8 @@
                         <button class="btn" @click="slewToCurrent()"
                                 :disabled="!mount.connected"
                                 :title="!mount.connected ? 'Connect a mount first' : 'Slew without plate-solve to the centre of the red target FOV'">Slew Only</button>
+                        <button class="btn" @click="skyGoToMount()" :disabled="!mount.connected"
+                                :title="!mount.connected ? 'Connect a mount first' : 'Re-centre the sky map on where the mount is currently pointing'">Center on mount</button>
                         <button class="btn" @click="addToSequence()" :disabled="!skyTarget"
                                 :title="!skyTarget ? 'Search and pick a named target first' : 'Append this target to the active sequence'">Add to Sequence</button>
                         <button class="btn" @click="loadAltitudeChart()" :disabled="!skyTarget"
