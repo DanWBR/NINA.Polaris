@@ -142,7 +142,15 @@ function ninaApp() {
             raDeg: null,
             decDeg: null,
             types: null,
+            // Populated async from /api/sky/altitude. samples = altitude
+            // track tonight (sunset → sunrise, 15 min step); transit /
+            // setText = human-readable "time-to-meridian" + "time-to-
+            // horizon" derived from the same track on the client.
+            altitudeSamples: null,
+            transitText: '',
+            setText: '',
         },
+        _skyInfoChart: null,
         skyResults: [],
         skyShowResults: false,
         slewCenterJobId: null,
@@ -8165,7 +8173,18 @@ function ninaApp() {
                 raDeg: typeof obj.raDeg === 'number' ? obj.raDeg : null,
                 decDeg: typeof obj.decDeg === 'number' ? obj.decDeg : null,
                 types: obj.types || null,
+                altitudeSamples: null,
+                transitText: '',
+                setText: '',
             };
+
+            // Tear down any previous chart instance — Chart.js leaks
+            // the canvas otherwise and the next render throws "Canvas
+            // is already in use".
+            if (this._skyInfoChart) {
+                try { this._skyInfoChart.destroy(); } catch (_) { }
+                this._skyInfoChart = null;
+            }
 
             // Also stash as skyTarget so the existing Slew & Center
             // button below the map picks it up.
@@ -8195,6 +8214,110 @@ function ninaApp() {
                     this.skyInfo.imageUrl = r.thumbnailUrl;
                 }
             } catch (e) { /* no photo, keep icon */ }
+
+            // Altitude chart + meridian/horizon times. Same endpoint
+            // Tonight's Best uses (/api/sky/altitude → samples over the
+            // observer's twilight window, 15 min step). We compute the
+            // human-readable time-to-meridian-transit and
+            // time-to-horizon-set client-side from the samples so the
+            // numbers stay consistent with what's plotted.
+            if (Number.isFinite(obj.raDeg) && Number.isFinite(obj.decDeg)) {
+                try {
+                    const raHours = obj.raDeg / 15;
+                    const data = await this.apiGet(
+                        `/api/sky/altitude?ra=${raHours}&dec=${obj.decDeg}&stepMinutes=15`);
+                    if (data && Array.isArray(data.samples) && data.samples.length > 0
+                        && this.skyInfo.title === obj.name) {
+                        this.skyInfo.altitudeSamples = data.samples;
+                        const events = this._skyInfoComputeEvents(data.samples);
+                        this.skyInfo.transitText = events.transitText;
+                        this.skyInfo.setText = events.setText;
+                        // Render after Alpine commits the DOM — the
+                        // canvas only exists once skyInfo.altitudeSamples
+                        // flips x-show on.
+                        this.$nextTick(() => this._renderSkyInfoChart());
+                    }
+                } catch (e) { /* leave chart hidden if altitude lookup fails */ }
+            }
+        },
+
+        // From an altitude track [{utc, altitudeDeg}], find the time of
+        // the peak (≈ meridian transit) and the first time after now
+        // when the object drops below the horizon. Returns short labels
+        // ready to drop into the card.
+        _skyInfoComputeEvents(samples) {
+            const now = Date.now();
+            let peakIdx = 0;
+            for (let i = 1; i < samples.length; i++) {
+                if (samples[i].altitudeDeg > samples[peakIdx].altitudeDeg) peakIdx = i;
+            }
+            const peakUtc = new Date(samples[peakIdx].utc).getTime();
+            // Horizon set: first sample after now where altitude goes
+            // ≤ 0. If the object never sets within tonight's window,
+            // walk back to the last positive-altitude sample and label
+            // it as "stays up".
+            let setUtc = null;
+            for (let i = 0; i < samples.length; i++) {
+                const t = new Date(samples[i].utc).getTime();
+                if (t < now) continue;
+                if (samples[i].altitudeDeg <= 0) { setUtc = t; break; }
+            }
+            return {
+                transitText: this._skyInfoFormatDelta(peakUtc, now,
+                    peakUtc < now ? 'past' : 'until'),
+                setText: setUtc != null
+                    ? this._skyInfoFormatDelta(setUtc, now, 'until')
+                    : (samples[samples.length - 1].altitudeDeg > 0
+                        ? 'stays up tonight' : 'below horizon now'),
+            };
+        },
+
+        _skyInfoFormatDelta(when, now, dir) {
+            const deltaMin = Math.round((when - now) / 60000);
+            const abs = Math.abs(deltaMin);
+            const h = Math.floor(abs / 60), m = abs % 60;
+            const hm = h > 0 ? `${h}h ${m}m` : `${m}m`;
+            return dir === 'past' ? `${hm} ago` : `in ${hm}`;
+        },
+
+        _renderSkyInfoChart() {
+            const cv = this.$refs.skyInfoChart;
+            if (!cv || !this.skyInfo.altitudeSamples) return;
+            if (this._skyInfoChart) {
+                try { this._skyInfoChart.destroy(); } catch (_) { }
+                this._skyInfoChart = null;
+            }
+            const t = (typeof getNightTheme === 'function')
+                ? getNightTheme() : { tick: '#9ca3af', grid: 'rgba(255,255,255,0.08)' };
+            const samples = this.skyInfo.altitudeSamples;
+            const labels = samples.map(s =>
+                new Date(s.utc).toLocaleTimeString('en-GB',
+                    { hour: '2-digit', minute: '2-digit' }));
+            const data = samples.map(s => s.altitudeDeg);
+            this._skyInfoChart = new Chart(cv.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        data, borderColor: '#64b5f6',
+                        backgroundColor: 'rgba(100,181,246,0.18)',
+                        fill: true, tension: 0.3, pointRadius: 0,
+                        borderWidth: 1.5,
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, animation: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: t.tick, font: { size: 9 },
+                                      maxTicksLimit: 6 },
+                             grid: { color: t.grid } },
+                        y: { min: -10, max: 90,
+                             ticks: { color: t.tick, font: { size: 9 } },
+                             grid: { color: t.grid } }
+                    }
+                }
+            });
         },
 
         // Card action: route Slew & Center via the existing path.

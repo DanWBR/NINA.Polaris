@@ -2615,7 +2615,23 @@
                                 <td>Type</td>
                                 <td x-text="(skyInfo.types || []).join(', ')"></td>
                             </tr>
+                            <tr x-show="skyInfo.transitText">
+                                <td>Meridian</td>
+                                <td x-text="skyInfo.transitText"></td>
+                            </tr>
+                            <tr x-show="skyInfo.setText">
+                                <td>Horizon</td>
+                                <td x-text="skyInfo.setText"></td>
+                            </tr>
                         </table>
+                        <!-- Altitude vs time chart over tonight's window.
+                             Same look as Tonight's Best cards. Lazy-rendered
+                             into a Chart.js line when skyInfo.altitudeSamples
+                             arrives from /api/sky/altitude. -->
+                        <div class="sky-info-chart-wrap"
+                             x-show="skyInfo.altitudeSamples && skyInfo.altitudeSamples.length > 0">
+                            <canvas class="sky-info-chart" x-ref="skyInfoChart"></canvas>
+                        </div>
                         <div class="sky-info-actions">
                             <button class="btn btn-sm btn-primary"
                                     @click="skyInfoSlewCenter()"

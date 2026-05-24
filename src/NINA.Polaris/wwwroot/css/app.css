@@ -1987,6 +1987,18 @@ label select.input-sm {
     font-variant-numeric: tabular-nums;
     font-size: 12px;
 }
+.sky-info-chart-wrap {
+    /* Compact altitude track strip between the stats table and the
+       action buttons. 110 px tall is enough to read peak/trough
+       without taking over the card. */
+    height: 110px;
+    margin: 0 0 12px 0;
+    position: relative;
+}
+.sky-info-chart {
+    width: 100% !important;
+    height: 100% !important;
+}
 .sky-info-actions {
     display: flex;
     gap: 6px;

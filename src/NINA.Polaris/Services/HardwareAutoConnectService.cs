@@ -27,6 +27,7 @@ public class HardwareAutoConnectService : IHostedService {
     private readonly EquipmentManager _equip;
     private readonly ProfileService _profiles;
     private readonly NotificationService _notify;
+    private readonly PHD2Client _phd2;
     private readonly ILogger<HardwareAutoConnectService> _logger;
     private CancellationTokenSource? _cts;
     private Task? _runner;
@@ -38,6 +39,7 @@ public class HardwareAutoConnectService : IHostedService {
         EquipmentManager equip,
         ProfileService profiles,
         NotificationService notify,
+        PHD2Client phd2,
         ILogger<HardwareAutoConnectService> logger) {
         _config = config;
         _indiClient = indiClient;
@@ -45,6 +47,7 @@ public class HardwareAutoConnectService : IHostedService {
         _equip = equip;
         _profiles = profiles;
         _notify = notify;
+        _phd2 = phd2;
         _logger = logger;
     }
 
@@ -78,6 +81,15 @@ public class HardwareAutoConnectService : IHostedService {
 
             // -------- Alpaca (independent — runs even if INDI fails) --------
             await TryDiscoverAlpacaAsync(ct);
+
+            // -------- PHD2 (independent — runs even if INDI/Alpaca fail) --
+            // PHD2 lives in its own process (often on the same host as
+            // Polaris) and is reachable over a local TCP socket. Dial it
+            // the same way we dial INDI: short timeout, single attempt,
+            // toast the outcome. If PHD2AutoStartService just spawned
+            // it 2-3s earlier this catches the freshly-bound port; if
+            // PHD2 isn't running the user wires it manually from GUIDE.
+            await TryConnectPhd2Async(ct);
 
             // -------- Active rig equipment --------
             // Equipment selections in the rig might point at INDI device
@@ -119,6 +131,28 @@ public class HardwareAutoConnectService : IHostedService {
             _logger.LogInformation(ex, "Auto-connect to INDI {Host}:{Port} failed", _indiClient.Host, _indiClient.Port);
             _notify.Push("warn", $"INDI unavailable at {_indiClient.Host}:{_indiClient.Port} — connect manually from Rigs.");
             return false;
+        }
+    }
+
+    private async Task TryConnectPhd2Async(CancellationToken ct) {
+        if (_phd2.IsConnected) {
+            _notify.Push("ok", $"PHD2 already connected ({_phd2.Host}:{_phd2.Port})");
+            return;
+        }
+        // Honour the per-rig PHD2 host/port if a rig is active and has
+        // them set; otherwise fall back to the PHD2Client defaults.
+        var rig = _profiles.ActiveEquipmentProfile;
+        var host = !string.IsNullOrWhiteSpace(rig?.PHD2Host) ? rig!.PHD2Host : "localhost";
+        var port = rig?.PHD2Port > 0 ? rig.PHD2Port : 4400;
+        try {
+            _notify.Push("info", $"Connecting PHD2 {host}:{port}…", 2500);
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(5));
+            await _phd2.ConnectAsync(host, port, timeoutCts.Token);
+            _notify.Push("ok", $"PHD2 connected ({host}:{port})");
+        } catch (Exception ex) {
+            _logger.LogInformation(ex, "Auto-connect to PHD2 {Host}:{Port} failed", host, port);
+            _notify.Push("warn", $"PHD2 unavailable at {host}:{port} — connect manually from Guide.");
         }
     }
 
