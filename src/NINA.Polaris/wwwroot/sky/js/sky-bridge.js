@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.8.0-swe5';
+    var BRIDGE_VERSION = '0.8.1-swe5';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -886,6 +886,38 @@
         }
         return result;
     }
+
+    // Release pointAndLock as soon as the user drags the canvas, so the
+    // engine doesn't keep snapping the map back to the previously picked
+    // object. A small movement threshold avoids releasing on a stationary
+    // click (the click handler below uses the engine's own selection
+    // path, which should keep working without manual lock fiddling).
+    (function installDragUnlock() {
+        var canvas = document.getElementById('stel-canvas');
+        if (!canvas) return;
+        var downX = 0, downY = 0, tracking = false;
+        var THRESHOLD_PX = 4;
+        canvas.addEventListener('pointerdown', function (ev) {
+            downX = ev.clientX; downY = ev.clientY; tracking = true;
+        });
+        canvas.addEventListener('pointermove', function (ev) {
+            if (!tracking) return;
+            var dx = ev.clientX - downX, dy = ev.clientY - downY;
+            if (dx * dx + dy * dy < THRESHOLD_PX * THRESHOLD_PX) return;
+            tracking = false;  // only release once per drag
+            var stel = window.__stel;
+            if (!stel || !stel.core) return;
+            try {
+                // pointAndLock sets core.lock to the followed object.
+                // Clearing it to 0 (engine's "no lock" sentinel) lets
+                // the user's drag take effect without the engine
+                // re-centring on the locked target every frame.
+                if (stel.core.lock) stel.core.lock = 0;
+            } catch (e) { /* engine may not expose lock — best effort */ }
+        });
+        canvas.addEventListener('pointerup', function () { tracking = false; });
+        canvas.addEventListener('pointercancel', function () { tracking = false; });
+    })();
 
     document.addEventListener('click', function (ev) {
         if (!window.__stel) return;
