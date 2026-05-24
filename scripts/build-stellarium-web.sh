@@ -71,89 +71,103 @@ echo "→ Building stellarium-web-engine (this takes 3-10 minutes)..."
 export MSYS_NO_PATHCONV=1
 export MSYS2_ARG_CONV_EXCL='*'
 
-# Don't override the container's default user with --user 1000:1000.
-# emscripten/emsdk's image already runs as 'emscripten' (UID 1000) with
-# HOME=/home/emscripten, so `pip install --user` writes to a real
-# user-owned dir. Passing the host UID (which on Git Bash returns the
-# Windows user's huge SID-derived number) creates a phantom user with
-# HOME=/ → 'Permission denied: /.local'. On Linux this would also
-# matter for output file ownership; Docker Desktop on Windows/macOS
-# handles host↔container ownership through its VM layer regardless.
+# Write the in-container script to a file inside the submodule (which
+# is already bind-mounted into the container at /src). Using a quoted
+# heredoc ('INNER_EOF') means the host bash treats the content
+# LITERALLY — no $ expansion, no backslash escapes, no quoting drama.
+# This is more robust than passing a long multi-line `bash -c "..."`
+# string, where Git Bash's argument parsing on Windows occasionally
+# truncates the command and lets the rest of the heredoc fall back
+# to the OUTER bash as commands (caught a "source /emsdk/emsdk_env.sh:
+# No such file or directory" reported against the build-stellarium-web.sh
+# host path that way).
+INNER_SCRIPT="${SUBMODULE_DIR}/.polaris-build-inner.sh"
+cat > "${INNER_SCRIPT}" << 'INNER_EOF'
+#!/bin/bash
+set -e
+
+# The emscripten/emsdk image ships Python + Emscripten but NOT
+# scons. Upstream's Makefile invokes 'emscons scons', which is a
+# wrapper that prepends emsdk env vars to a system 'scons' binary.
+# Install scons in the container's own scope (root inside the
+# default image — fine for a one-shot build).
+echo '→ Installing scons in container'
+pip install --quiet --user scons
+export PATH="$HOME/.local/bin:$PATH"
+
+# Belt-and-suspenders for Windows checkouts: strip CRLF from every
+# text source file in the submodule tree. Git on Windows checks the
+# submodule out with autocrlf=true unless the parent .gitattributes
+# pins it. CRLF breaks:
+#   - Python shebangs ('#!/usr/bin/python3\r' → ENOENT)
+#   - shader sources (auto-embedded into .inl as C string literals
+#     — trailing \r becomes a stray byte inside the literal and
+#     clang reports "missing terminating '\"' character" for
+#     thousands of lines)
+#   - SCons / Make text parsing
+#
+# The durable fix is the '-text' rule for
+# external/stellarium-web-engine/** in the repo root .gitattributes.
+# This in-container strip handles already-checked-out trees so the
+# user doesn't have to nuke + re-init the submodule. Whitelist by
+# extension so we don't clobber binaries.
+echo '→ Stripping CRLF from source files'
+find . -type f \
+    \( -name '*.c'  -o -name '*.h'  -o -name '*.cpp' -o -name '*.hpp' \
+    -o -name '*.cc' -o -name '*.hh' -o -name '*.inl' -o -name '*.py' \
+    -o -name '*.js' -o -name '*.json' -o -name '*.glsl' -o -name '*.frag' \
+    -o -name '*.vert' -o -name '*.shader' -o -name '*.txt' -o -name '*.md' \
+    -o -name '*.css' -o -name '*.html' -o -name '*.htm' \
+    -o -name 'SConstruct' -o -name 'SConscript' -o -name 'Makefile' \
+    -o -name '*.mk' -o -name '*.sh' \) \
+    -exec sed -i 's/\r$//' {} +
+chmod +x tools/*.py 2>/dev/null || true
+
+# Upstream tools/*.py shebangs are '#!/usr/bin/python3', which only
+# resolves on Debian-style images. emscripten/emsdk has python3 at
+# /emsdk/python/... — rewrite shebangs to env-based lookup.
+echo '→ Patching shebangs in tools/*.py'
+for f in tools/*.py; do
+    if [ -f "$f" ] && head -1 "$f" | grep -q '^#!/usr/bin/python3$'; then
+        sed -i '1s|^#!/usr/bin/python3$|#!/usr/bin/env python3|' "$f"
+    fi
+done
+
+echo '→ Configuring Emscripten environment'
+source /emsdk/emsdk_env.sh
+
+echo '→ Cleaning previous build artefacts'
+rm -rf build/
+
+# Bypass 'make js' (which hard-codes 'scons mode=release' without
+# werror=0) and call scons directly. werror=0 makes the "linker
+# setting ignored during compilation" warnings stay warnings instead
+# of being promoted to errors (upstream's SConstruct passes
+# linker-only flags on per-file compiles).
+echo '→ Running emscons scons mode=release werror=0 (-j8)'
+emscons scons -j8 mode=release werror=0
+INNER_EOF
+
+chmod +x "${INNER_SCRIPT}"
+
+# Run the inner script inside the container. Drop --user — the
+# image's default 'emscripten' user (UID 1000) has HOME=/home/emscripten
+# so pip --user works there. (Actually the recent change runs as
+# root inside the container, which also has a writable HOME=/root,
+# so either way pip is fine — emscripten user is the historical
+# pattern, root is what we're using since e26c37d.)
 docker run --rm \
     -v "${SUBMODULE_DIR}:/src" \
     -w /src \
     "${EMSDK_IMAGE}" \
-    bash -c "
-        set -e
-        # The emscripten/emsdk image ships Python + Emscripten but
-        # NOT scons. The upstream Makefile invokes 'emscons scons'
-        # which is just a wrapper that prepends the emsdk env vars
-        # to a system 'scons' binary — install it via pip in the
-        # container's own scope (we're running as the host user so
-        # use --user to avoid needing root).
-        echo '→ Installing scons in container'
-        pip install --quiet --user scons
-        # pip --user installs into ~/.local/bin which isn't on
-        # PATH by default for the non-root user inside the image.
-        export PATH=\"\$HOME/.local/bin:\$PATH\"
-        # Belt-and-suspenders for Windows checkouts: strip CRLF
-        # line endings from every text source file in the submodule
-        # tree. Git on Windows checks the submodule out with
-        # autocrlf=true unless the parent .gitattributes pins it,
-        # and CRLF breaks several things:
-        #   - Python shebangs ('#!/usr/bin/python3\r' → ENOENT)
-        #   - shader sources (auto-embedded into .inl as C string
-        #     literals — the trailing \r becomes a stray byte
-        #     inside the literal and clang reports "missing
-        #     terminating '\"' character" for thousands of lines)
-        #   - SCons / Make text parsing
-        #
-        # The durable fix is the '-text' rule for
-        # external/stellarium-web-engine/** in the repo root
-        # .gitattributes. This in-build strip handles already-
-        # checked-out trees so the user doesn't have to nuke +
-        # re-init the submodule.
-        #
-        # Whitelist by extension so we don't accidentally rewrite
-        # genuine binaries (images, .ttf, etc.) that happen to have
-        # 0x0D 0x0A pairs in their byte stream.
-        echo '→ Stripping CRLF from source files'
-        find . -type f \
-            \( -name '*.c'  -o -name '*.h'  -o -name '*.cpp' -o -name '*.hpp' \
-            -o -name '*.cc' -o -name '*.hh' -o -name '*.inl' -o -name '*.py' \
-            -o -name '*.js' -o -name '*.json' -o -name '*.glsl' -o -name '*.frag' \
-            -o -name '*.vert' -o -name '*.shader' -o -name '*.txt' -o -name '*.md' \
-            -o -name '*.css' -o -name '*.html' -o -name '*.htm' \
-            -o -name 'SConstruct' -o -name 'SConscript' -o -name 'Makefile' \
-            -o -name '*.mk' -o -name '*.sh' \) \
-            -exec sed -i 's/\r\$//' {} +
-        # Re-mark the python scripts executable (sed -i doesn't
-        # touch the mode bit but a safety chmod doesn't hurt).
-        chmod +x tools/*.py 2>/dev/null || true
-        # Same problem can hit upstream tools/*.py shebangs even after
-        # CRLF strip — they hard-code '#!/usr/bin/python3' which only
-        # resolves on Debian-style images. emscripten/emsdk has
-        # python3 elsewhere on PATH (typically /emsdk/python/...).
-        # Rewrite to env-based lookup.
-        echo '→ Patching shebangs in tools/*.py'
-        for f in tools/*.py; do
-            if [ -f \"\$f\" ] && head -1 \"\$f\" | grep -q '^#!/usr/bin/python3\$'; then
-                sed -i '1s|^#!/usr/bin/python3\$|#!/usr/bin/env python3|' \"\$f\"
-            fi
-        done
-        echo '→ Configuring Emscripten environment'
-        source /emsdk/emsdk_env.sh
-        echo '→ Cleaning previous build artefacts'
-        rm -rf build/
-        # Bypass 'make js' (which hard-codes 'scons mode=release')
-        # and call scons directly with werror=0 so the per-file
-        # 'linker setting ignored during compilation' warnings stay
-        # warnings instead of being promoted to errors. The Makefile's
-        # only purpose is wrapping 'emscons scons mode=release'; we
-        # add the one flag it lacks.
-        echo '→ Running emscons scons mode=release werror=0 (-j8)'
-        emscons scons -j8 mode=release werror=0
-    "
+    bash /src/.polaris-build-inner.sh
+
+INNER_EXIT=$?
+rm -f "${INNER_SCRIPT}"
+if [ "${INNER_EXIT}" -ne 0 ]; then
+    echo "✗ Inner build script returned ${INNER_EXIT}"
+    exit "${INNER_EXIT}"
+fi
 
 # ---------- collect outputs ----------
 
