@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.8.3-swe5';
+    var BRIDGE_VERSION = '0.8.4-swe5';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -499,14 +499,30 @@
         var labelText = 'Scope ' + w.toFixed(2) + 'x' + h.toFixed(2)
             + ' rot ' + rotPositive.toFixed(1);
         var midTop = [(ring[2][0] + ring[3][0]) / 2, (ring[2][1] + ring[3][1]) / 2];
-        var parallactic = skyParallacticAt(raDeg, decDeg);
+        // Apparent on-screen rotation of the rectangle depends on TWO
+        // parallactic angles: the one at the rectangle's own RA/Dec
+        // (sets how the rect's "celestial-north up" maps to its
+        // local zenith-up) AND the one at the projection center
+        // (sets which way "up" runs on the screen overall, because
+        // the projection's vertical axis is the centre's zenith).
+        //
+        // When the rectangle is right at the screen centre the two
+        // parallactics are equal and cancel, leaving the on-screen
+        // rotation = rot. When the user pans, the centre parallactic
+        // changes — so the screen-rotation of the off-centre rect
+        // rotates by the same amount even though its OWN parallactic
+        // is unchanged. Subtracting the centre parallactic keeps the
+        // label glued to the rect's top edge under any pan.
+        //
         // The engine parses text-rotate as `-degrees * DD2R`
         // (geojson_parser.c line 402) → positive input rotates the
         // text counter-clockwise on screen. CSS `rotate(Xdeg)` is
         // clockwise. Negate here so the mount label tilts in the
         // SAME visible direction as the rectangle (and as the CSS-
         // rotated target label).
-        var textRotate = -(rot + parallactic);
+        var parallacticRect   = skyParallacticAt(raDeg, decDeg);
+        var parallacticCentre = skyParallacticAngleDeg();
+        var textRotate = -(rot + parallacticRect - parallacticCentre);
         var labelProps = {
             stroke: color,
             'stroke-opacity': 1,
@@ -697,6 +713,27 @@
         __skyFovObjs[slot] = null;
     }
 
+    // Cache the most recently received mount overlay so the change
+    // hook can rebuild the geojson with a fresh text-rotate when the
+    // user pans (centre parallactic changes → label needs to be
+    // re-rotated to stay glued to the rectangle's top edge).
+    var __lastMountFov = null;
+
+    function skyRebuildMountGeoJson() {
+        var stel = window.__stel;
+        if (!stel || !__skyFovLayer || !__lastMountFov) return;
+        if (!(__lastMountFov.widthDeg > 0)) return;
+        try {
+            skyRemoveObj('mount');
+            __skyFovObjs.mount = stel.createObj('geojson', {
+                data: skyFovGeoJson(__lastMountFov, '#1e40af', false)
+            });
+            __skyFovLayer.add(__skyFovObjs.mount);
+        } catch (e) {
+            console.warn('[Sky] mount geojson rebuild failed:', e);
+        }
+    }
+
     function skySetFovOverlays(mount, target, mosaic) {
         var stel = window.__stel;
         if (!stel) return;
@@ -710,6 +747,7 @@
         // visible, doesn't need any engine round-trip.
         skyRemoveObj('mount');
         skyRemoveObj('mosaic');
+        __lastMountFov = mount || null;
         console.log('[Sky] set-fov-overlays mount=', mount, 'target=', target);
         try {
             if (mount && mount.widthDeg > 0) {
@@ -783,9 +821,18 @@
                 // Resize the target box on any fov change AND re-rotate
                 // it for the new parallactic angle on any pose change.
                 if (__lastTargetFov) skyUpdateTargetFovBox(__lastTargetFov);
+                // The mount geojson's text-rotate depends on BOTH the
+                // rectangle's parallactic angle AND the projection
+                // centre's parallactic angle (see skyFovGeoJson). The
+                // first is invariant under pan, the second isn't —
+                // so rebuild the mount geojson on every pose change
+                // to keep the label glued to the rect's top edge.
+                // Throttled to the same 10 Hz as the parent 'center'
+                // emit below so we don't thrash createObj/remove.
                 var now = Date.now();
                 if (now - lastEmit < 100) return;
                 lastEmit = now;
+                if (__lastMountFov) skyRebuildMountGeoJson();
                 postToParent({
                     type: 'center',
                     center: skyGetCenter(),
