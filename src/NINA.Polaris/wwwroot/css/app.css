@@ -2553,6 +2553,25 @@ label select.input-sm {
 .settings-section {
     padding: 14px 16px;
     border-bottom: 1px solid var(--border);
+    /* Baseline font-size for every text node inside a settings section.
+       Without this, the top sections that opt-in to `style="font-size: 11px/12px"`
+       inline look noticeably smaller than the bottom sections that inherit
+       the body's 14px default — and once the UI zoom slider is applied, the
+       size delta persists (zoom scales both proportionally, so the gap stays
+       visible). Pinning 12px here unifies the baseline so a single zoom value
+       scales everything to the same effective rendered size. */
+    font-size: 12px;
+}
+
+/* Inputs, selects, textareas inside settings inherit the same baseline so
+   their value text matches the labels around them — otherwise Chrome falls
+   back to its own ~13.33px form-control default and the value pops out
+   visually larger than the surrounding chrome. */
+.settings-section input,
+.settings-section select,
+.settings-section textarea,
+.settings-section button {
+    font-size: inherit;
 }
 
 .settings-section h3 {
@@ -2568,9 +2587,17 @@ label select.input-sm {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 13px;
+    font-size: inherit;
     color: var(--text-secondary);
     margin-bottom: 8px;
+}
+
+/* Paragraphs and helper lines in settings — same as labels.
+   Without this rule a default <p> picks up the user-agent's larger
+   body-derived size. */
+.settings-section p,
+.settings-section .hint {
+    font-size: inherit;
 }
 
 .settings-section .btn {
