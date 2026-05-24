@@ -4502,6 +4502,18 @@ label select.input-sm {
 }
 .editor-slider-row input[type="range"] { width: 100%; }
 
+/* ED-6 compute-mode pill — colour-codes which side is doing the math
+   so the user knows at a glance whether slider drags will hit the
+   network. Disabled state (when WASM not ready) is communicated by
+   the standard :disabled styling. */
+.editor-mode-pill { min-width: 78px; }
+.editor-mode-server { border-color: rgba(148, 163, 184, 0.5); }
+.editor-mode-wasm {
+    border-color: rgba(74, 222, 128, 0.6);
+    background: rgba(74, 222, 128, 0.12);
+    color: #86efac;
+}
+
 .editor-export-modal { min-width: 360px; }
 .editor-export-row {
     display: grid;

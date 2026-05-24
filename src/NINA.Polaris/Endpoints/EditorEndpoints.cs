@@ -140,6 +140,29 @@ public static class EditorEndpoints {
 
         // ─── sessions list (debugging) ───────────────────────────────
         g.MapGet("/sessions", (ImageEditService svc) => Results.Ok(svc.ActiveSessions()));
+
+        // ─── raw working buffer (ED-6) ────────────────────────────────
+        // Streams the decoded + auto-stretched working buffer as raw
+        // bytes for the WASM dispatch. JS calls Interop.EditorLoad with
+        // these bytes once per session, then every slider tick runs
+        // entirely client-side. Dimensions are sent in response headers
+        // so the client doesn't have to round-trip a metadata call.
+        g.MapGet("/raw/{sessionId}", (ImageEditService svc, HttpContext ctx, string sessionId) => {
+            var buf = svc.GetWorkingBuffer(sessionId);
+            if (buf == null) return Results.NotFound(new { error = "Session not found." });
+            var (data, w, h, channels) = buf.Value;
+            ctx.Response.Headers["X-Width"] = w.ToString();
+            ctx.Response.Headers["X-Height"] = h.ToString();
+            ctx.Response.Headers["X-Channels"] = channels.ToString();
+            // Expose the X- headers to fetch() reads from cross-origin
+            // (the Polaris UI is same-origin so this is belt-and-braces,
+            // but Relay tunnels do issue from polaris.run.app to the user's
+            // host — the response goes through the relay and the browser
+            // needs CORS exposure to read custom headers).
+            ctx.Response.Headers["Access-Control-Expose-Headers"] =
+                "X-Width, X-Height, X-Channels";
+            return Results.File(data, "application/octet-stream");
+        });
     }
 
     public record LoadRequest(string Path);

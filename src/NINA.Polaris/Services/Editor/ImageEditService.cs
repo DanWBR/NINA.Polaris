@@ -88,6 +88,23 @@ public class ImageEditService : IDisposable {
             .ToList();
     }
 
+    /// <summary>
+    /// ED-6: hand out the decoded working buffer for the WASM dispatch.
+    /// Returns null if the session id isn't known (caller treats that
+    /// as "fall back to server-mode"). Caller is responsible for
+    /// streaming the byte[] back to the browser with appropriate
+    /// content-type + dimension headers.
+    /// </summary>
+    public (byte[] data, int w, int h, int channels)? GetWorkingBuffer(string sessionId) {
+        if (!_sessions.TryGetValue(sessionId, out var s)) return null;
+        s.Touch();
+        // Return a defensive copy — clients of the API shouldn't see the
+        // session's live buffer (mutating it would silently corrupt
+        // subsequent server-side previews).
+        var copy = (byte[])s.Working.Clone();
+        return (copy, s.Width, s.Height, s.Channels);
+    }
+
     // ─── load ────────────────────────────────────────────────────────
 
     private EditSessionInfo? LoadSync(string path) {

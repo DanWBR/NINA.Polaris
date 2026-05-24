@@ -651,6 +651,14 @@ function ninaApp() {
             showOriginal: false,
             exportModal: false,
             exporting: false,
+            // ED-6 compute target: 'server' is the always-available
+            // fallback; 'wasm' renders client-side via the AOT bundle.
+            // Persists via localStorage so the user's preference survives
+            // a reload. Auto-falls-back to server on bundle load failure.
+            computeMode: 'server',
+            wasmLoaded:  false,    // true once the working buffer is
+                                   // sitting in the WASM heap for the
+                                   // current session
             export: {
                 format: 'jpg',
                 quality: 92,
@@ -4008,10 +4016,58 @@ function ninaApp() {
         // ~1MB per slider tick of dragging).
 
         editorTabOpened() {
-            // Called when the sidebar tab activates. Nothing to load
-            // upfront — user picks a file via dropzone, path field, or
-            // by jumping to STUDIO/FILES and clicking "Open in editor".
-            // Hook here in case we later want recent-files etc.
+            // Restore prior compute-mode preference (default server).
+            // We only honour 'wasm' here if the bundle's actually ready —
+            // saved-pref-says-wasm but bundle-not-loaded yet → stay on
+            // server until the user explicitly flips it.
+            try {
+                const saved = localStorage.getItem('nina-editor-compute');
+                if (saved === 'wasm' && this.wasmReady) {
+                    this.editorState.computeMode = 'wasm';
+                } else {
+                    this.editorState.computeMode = 'server';
+                }
+            } catch { /* private mode */ }
+        },
+
+        // Flip between server-mode and WASM-mode. When entering WASM
+        // for the first time on a session, lazy-fetch the raw working
+        // buffer + hand it to Interop.EditorLoad. Falls back silently
+        // to server if anything fails.
+        async editorToggleComputeMode() {
+            const next = this.editorState.computeMode === 'wasm' ? 'server' : 'wasm';
+            this.editorState.computeMode = next;
+            try { localStorage.setItem('nina-editor-compute', next); } catch { }
+
+            if (next === 'wasm' && this.editorState.session && !this.editorState.wasmLoaded) {
+                await this._editorLoadWasmBuffer();
+            }
+            // Re-render with the new mode.
+            this._editorSchedulePreview();
+        },
+
+        async _editorLoadWasmBuffer() {
+            if (!this.editorState.session) return;
+            if (!globalThis.NINA?.Polaris?.Wasm?.Interop) {
+                console.warn('[Editor] WASM bundle not ready, falling back to server');
+                this.editorState.computeMode = 'server';
+                return;
+            }
+            try {
+                const r = await fetch('/api/editor/raw/' + this.editorState.session);
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const w  = parseInt(r.headers.get('X-Width')  || '0', 10);
+                const h  = parseInt(r.headers.get('X-Height') || '0', 10);
+                const ch = parseInt(r.headers.get('X-Channels') || '1', 10);
+                const bytes = new Uint8Array(await r.arrayBuffer());
+                globalThis.NINA.Polaris.Wasm.Interop.EditorLoad(bytes, w, h, ch);
+                this.editorState.wasmLoaded = true;
+                this.toast('WASM editor ready (' + Math.round(bytes.length / 1024 / 1024) + ' MB loaded)', 'ok');
+            } catch (e) {
+                console.warn('[Editor] WASM buffer fetch failed', e);
+                this.editorState.computeMode = 'server';
+                this.toast('WASM load failed, using server-mode', 'warn');
+            }
         },
 
         async editorLoad(path) {
@@ -4038,8 +4094,15 @@ function ninaApp() {
                 // Hydrate sidecar edits if present, else defaults.
                 this.editorState.edits = info.edits || this._editorDefaultEdits();
                 this.editorState.dirty = false;
+                // Mark WASM buffer stale — new source needs a fresh
+                // EditorLoad before the next ApplyEdit.
+                this.editorState.wasmLoaded = false;
+                if (this.editorState.computeMode === 'wasm') {
+                    await this._editorLoadWasmBuffer();
+                }
                 // Render initial preview + an unedited reference for the
-                // "Hold to compare" button.
+                // "Hold to compare" button (always server-mode — gives a
+                // pristine reference even when WASM is active).
                 await this._editorRenderOriginal();
                 this._editorSchedulePreview();
             } catch (e) {
@@ -4091,6 +4154,12 @@ function ninaApp() {
                 }).catch(() => { /* ignore */ });
             }
             this._editorTeardownBlobs();
+            // Drop the WASM working buffer too — saves 50-200MB heap.
+            if (this.editorState.wasmLoaded && globalThis.NINA?.Polaris?.Wasm?.Interop) {
+                try { globalThis.NINA.Polaris.Wasm.Interop.EditorRelease(); }
+                catch { /* ignore */ }
+            }
+            this.editorState.wasmLoaded = false;
             this.editorState.session = null;
             this.editorState.sourcePath = '';
             this.editorState.edits = {};
@@ -4213,24 +4282,11 @@ function ninaApp() {
             }
             this.editorState.rendering = true;
             try {
-                const r = await fetch('/api/editor/preview', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        sessionId: this.editorState.session,
-                        edits: this.editorState.edits,
-                        maxDim: 1600,
-                        quality: 85
-                    })
-                });
-                if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                const blob = await r.blob();
-                const url = URL.createObjectURL(blob);
-                if (this.editorState.previewUrl) URL.revokeObjectURL(this.editorState.previewUrl);
-                this.editorState.previewUrl = url;
-                // Schedule histogram refresh on idle (don't bother
-                // computing on every slider tick — fire after 250 ms
-                // of quiet)
+                if (this.editorState.computeMode === 'wasm' && this.editorState.wasmLoaded) {
+                    this._editorRunPreviewWasm();
+                } else {
+                    await this._editorRunPreviewServer();
+                }
                 clearTimeout(this._editorHistTimer);
                 this._editorHistTimer = setTimeout(() => this._editorRenderHistogram(), 250);
             } catch (e) {
@@ -4242,6 +4298,69 @@ function ninaApp() {
                     this._editorSchedulePreview();
                 }
             }
+        },
+
+        async _editorRunPreviewServer() {
+            const r = await fetch('/api/editor/preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessionId: this.editorState.session,
+                    edits: this.editorState.edits,
+                    maxDim: 1600,
+                    quality: 85
+                })
+            });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            const blob = await r.blob();
+            const url = URL.createObjectURL(blob);
+            if (this.editorState.previewUrl) URL.revokeObjectURL(this.editorState.previewUrl);
+            this.editorState.previewUrl = url;
+        },
+
+        _editorRunPreviewWasm() {
+            // Synchronous JSExport call — pixels come back as a Uint8Array
+            // we render to the editor canvas via ImageData. No JPEG encode,
+            // no network roundtrip; latency is just the pipeline + canvas
+            // blit.
+            const interop = globalThis.NINA?.Polaris?.Wasm?.Interop;
+            if (!interop) {
+                // Lost the bundle somehow — graceful fallback to server.
+                this.editorState.computeMode = 'server';
+                return this._editorRunPreviewServer();
+            }
+            const editsJson = JSON.stringify(this.editorState.edits || {});
+            const pixels = interop.EditorApplyEdit(editsJson, 1600);
+            const dims = interop.EditorGetOutputDims();
+            const w = dims[0], h = dims[1], ch = dims[2];
+            if (!w || !h) return;
+
+            const canvas = document.getElementById('editorWasmCanvas');
+            if (!canvas) return;
+            if (canvas.width !== w || canvas.height !== h) {
+                canvas.width = w;
+                canvas.height = h;
+            }
+            const ctx = canvas.getContext('2d');
+            const img = ctx.createImageData(w, h);
+            // Expand mono → RGBA or RGB → RGBA. The Canvas only takes
+            // RGBA8888, so we always write 4 bytes/pixel here regardless
+            // of input channel count.
+            const dst = img.data;
+            if (ch === 1) {
+                for (let i = 0, j = 0; i < pixels.length; i++, j += 4) {
+                    const v = pixels[i];
+                    dst[j] = v; dst[j + 1] = v; dst[j + 2] = v; dst[j + 3] = 255;
+                }
+            } else {
+                for (let i = 0, j = 0; i < pixels.length; i += 3, j += 4) {
+                    dst[j]     = pixels[i];
+                    dst[j + 1] = pixels[i + 1];
+                    dst[j + 2] = pixels[i + 2];
+                    dst[j + 3] = 255;
+                }
+            }
+            ctx.putImageData(img, 0, 0);
         },
 
         async _editorRenderOriginal() {
@@ -4269,16 +4388,24 @@ function ninaApp() {
         async _editorRenderHistogram() {
             if (!this.editorState.session) return;
             try {
-                const r = await fetch('/api/editor/histogram', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        sessionId: this.editorState.session,
-                        edits: this.editorState.edits
-                    })
-                });
-                if (!r.ok) return;
-                const hist = await r.json();
+                let hist;
+                if (this.editorState.computeMode === 'wasm' && this.editorState.wasmLoaded
+                    && globalThis.NINA?.Polaris?.Wasm?.Interop) {
+                    // Synchronous; same math as server, no network hop.
+                    hist = globalThis.NINA.Polaris.Wasm.Interop.EditorComputeHistogram(
+                        JSON.stringify(this.editorState.edits || {}));
+                } else {
+                    const r = await fetch('/api/editor/histogram', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            sessionId: this.editorState.session,
+                            edits: this.editorState.edits
+                        })
+                    });
+                    if (!r.ok) return;
+                    hist = await r.json();
+                }
                 this._editorDrawHistogram(hist);
             } catch { /* non-fatal */ }
         },

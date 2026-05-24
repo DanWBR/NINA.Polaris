@@ -3114,6 +3114,19 @@
                     <span class="muted" style="font-size:11px;margin-left:auto"
                           x-show="editorState.session"
                           x-text="editorState.width + '×' + editorState.height + ' · ' + (editorState.channels === 3 ? 'RGB' : 'mono')"></span>
+                    <!-- ED-6 compute mode pill. Shows which side is
+                         doing the math, with a click-to-toggle. Server
+                         is the safe fallback (~500ms preview); WASM
+                         removes the network roundtrip and brings slider
+                         latency down to single-digit frames. -->
+                    <button class="btn btn-sm editor-mode-pill"
+                            :class="editorState.computeMode === 'wasm' ? 'editor-mode-wasm' : 'editor-mode-server'"
+                            @click="editorToggleComputeMode()"
+                            :disabled="!wasmReady"
+                            :title="wasmReady
+                                    ? 'Click to switch between server-side and client-side (WASM) compute'
+                                    : 'WASM bundle not ready — server-mode only'"
+                            x-text="editorState.computeMode === 'wasm' ? '⚡ WASM' : '🖥 Server'"></button>
                     <button class="btn btn-sm" @click="editorReset()" :disabled="!editorState.session"
                             title="Reset all sliders to defaults">↺ Reset</button>
                     <button class="btn btn-sm" @click="editorSaveSidecar()" :disabled="!editorState.session || !editorState.dirty"
@@ -3174,8 +3187,17 @@
                                     title="Close editor and free the session">✕ Close</button>
                         </div>
                         <div class="editor-preview-wrap">
+                            <!-- Server-mode: <img> bound to a JPEG blob URL. -->
                             <img class="editor-preview-img" :src="editorState.previewUrl"
-                                 x-show="editorState.previewUrl && !editorState.showOriginal" alt="preview">
+                                 x-show="editorState.computeMode !== 'wasm' && editorState.previewUrl && !editorState.showOriginal"
+                                 alt="preview">
+                            <!-- WASM-mode: canvas, raw bytes from
+                                 Interop.EditorApplyEdit drawn via
+                                 putImageData. Avoids a JPEG encode in
+                                 WASM (no Skia there) + skips lossy
+                                 compression. -->
+                            <canvas id="editorWasmCanvas" class="editor-preview-img"
+                                    x-show="editorState.computeMode === 'wasm' && !editorState.showOriginal"></canvas>
                             <img class="editor-preview-img" :src="editorState.originalUrl"
                                  x-show="editorState.showOriginal && editorState.originalUrl" alt="original">
                             <div class="editor-preview-spinner" x-show="editorState.rendering">⌛</div>
