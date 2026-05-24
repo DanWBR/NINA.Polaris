@@ -8110,6 +8110,14 @@ function ninaApp() {
                     ra: obj.raDeg / 15,
                     dec: obj.decDeg
                 };
+                // Smooth-pan the engine view to the picked object.
+                // _skyLookAt with an objectName resolves via the
+                // engine's stel.getObj → stel.pointAndLock path,
+                // which animates the centre over a few hundred ms
+                // (much nicer than the instant yaw/pitch jump that
+                // the coord-only fallback does). Keep the engine's
+                // current fov so we don't yank the user's zoom.
+                this._skyLookAt(obj.raDeg / 15, obj.decDeg, undefined, obj.name);
             }
 
             // Async fetch the thumbnail from the Tonight's Best image
