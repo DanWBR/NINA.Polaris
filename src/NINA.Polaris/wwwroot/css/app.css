@@ -2039,16 +2039,16 @@ label select.input-sm {
 
 .sky-viewer,
 #celestial-map.sky-viewer {
-    flex: 0 0 auto;
-    /* Reserve enough viewport for: top bar (40px) + sky-toolbar
-       (~50px) + sky-survey-row (~50px) + sky-info-panel with a
-       selected target (~150px: name + common + aliases + coords +
-       action row) + action-row bottom margin (50px) + activity bar
-       (36px) ≈ 380px. Was 240px which only worked when no DSO was
-       picked — once the user searched M31 the sky-info-panel grew
-       and the action row got clipped past the viewport. */
-    height: calc(100vh - 380px) !important;
-    min-height: 280px !important;
+    /* The old viewport-arithmetic height (calc(100vh - 380px)) was
+       carried over from the d3-celestial era and assumed a 150 px
+       sky-info-panel + 50 px margin below the map. That panel was
+       removed when we moved the slew buttons onto the map itself
+       (commit 90eadb5) — let the iframe inherit 100% from its
+       flex:1 parent (.sky-viewer-wrap) instead. !important
+       because both .sky-viewer and .sky-viewer-iframe land on the
+       same <iframe>, and the legacy rule won the cascade. */
+    height: 100% !important;
+    min-height: 320px;
     width: 100% !important;
     min-width: 0 !important;
     display: block !important;
