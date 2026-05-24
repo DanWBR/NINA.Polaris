@@ -68,6 +68,17 @@ docker run --rm \
     "${EMSDK_IMAGE}" \
     bash -c "
         set -e
+        # The emscripten/emsdk image ships Python + Emscripten but
+        # NOT scons. The upstream Makefile invokes 'emscons scons'
+        # which is just a wrapper that prepends the emsdk env vars
+        # to a system 'scons' binary — install it via pip in the
+        # container's own scope (we're running as the host user so
+        # use --user to avoid needing root).
+        echo '→ Installing scons in container'
+        pip install --quiet --user scons
+        # pip --user installs into ~/.local/bin which isn't on
+        # PATH by default for the non-root user inside the image.
+        export PATH=\"\$HOME/.local/bin:\$PATH\"
         echo '→ Configuring Emscripten environment'
         source /emsdk/emsdk_env.sh
         echo '→ Cleaning previous build artefacts'
