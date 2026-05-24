@@ -796,6 +796,9 @@ label select.input-sm {
     flex-direction: column;
     gap: 8px;
     min-width: 160px;
+    /* Top breathing room so the first row (State: Guiding) doesn't
+       collide with the connect-row's bottom border immediately above. */
+    padding-top: 12px;
     /* Cap so values don't stretch to the right edge of the viewport
        on wide monitors — info-row uses justify-content: space-between,
        so the strong value would otherwise float ~1500px from its label
