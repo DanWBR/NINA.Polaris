@@ -4461,6 +4461,21 @@ function ninaApp() {
                 this._skyLookAt(item.raHours, item.decDeg, fovDeg, item.name);
                 this._pushSkyFovOverlays();
                 if (typeof this.updateSkyCameraFov === 'function') this.updateSkyCameraFov();
+
+                // Open the SKY info card so the user sees the same context
+                // they had on the Tonight card (name, mag, altitude chart,
+                // transit/set times). _populateSkyInfo takes an obj shaped
+                // like a stellarium-web search result, so synthesise one
+                // from the tonight item — types[] becomes [item.type] when
+                // present, subtitle gets the common name if any.
+                this._populateSkyInfo({
+                    name: item.name,
+                    types: item.type ? [item.type] : null,
+                    subtitle: item.commonName || '',
+                    magnitude: typeof item.magnitude === 'number' ? item.magnitude : null,
+                    raDeg: item.raHours * 15,
+                    decDeg: item.decDeg
+                });
             });
         },
 
