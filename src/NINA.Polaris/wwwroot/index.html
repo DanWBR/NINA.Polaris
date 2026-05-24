@@ -2623,6 +2623,12 @@
                                 Slew &amp; Center
                             </button>
                             <button class="btn btn-sm"
+                                    @click="skyInfoSlewOnly()"
+                                    :disabled="!mount.connected || !Number.isFinite(skyInfo.raDeg)"
+                                    title="Slew the mount to the object without the plate-solve centering loop.">
+                                Slew Only
+                            </button>
+                            <button class="btn btn-sm"
                                     @click="skyInfoAddToSequence()"
                                     :disabled="!skyInfo.title">
                                 Add to Sequence

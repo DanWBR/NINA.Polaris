@@ -8204,6 +8204,13 @@ function ninaApp() {
             return this.slewAndCenter();
         },
 
+        // Card action: Slew Only — same target resolution as
+        // skyInfoSlewCenter but skips the plate-solve centering loop.
+        // Mirrors the standalone "Slew Only" button below the map.
+        async skyInfoSlewOnly() {
+            return this.slewToCurrent();
+        },
+
         skyInfoAddToSequence() {
             if (this.skyTarget) this.addToSequence();
         },
