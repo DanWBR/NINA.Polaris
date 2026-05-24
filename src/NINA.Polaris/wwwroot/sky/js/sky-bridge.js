@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.8.1-swe5';
+    var BRIDGE_VERSION = '0.8.3-swe5';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -200,21 +200,34 @@
     // pointAndLock on a named object so the engine follows it as time
     // advances. Falls back to setting observer.yaw/pitch directly when
     // we don't have an object to lock to.
+    // Holds the requestAnimationFrame id of any in-flight
+    // bridge-side pan tween, so a fresh skyLookAt or a manual
+    // drag can abort it.
+    var __panRAF = 0;
+
+    // Cancel any in-flight smooth-pan tween. Exposed via
+    // skyAbortPan() so the drag handler can stop the animation
+    // the moment the user grabs the canvas.
+    function skyAbortPan() {
+        if (__panRAF) {
+            try { cancelAnimationFrame(__panRAF); }
+            catch (e) { /* ignore */ }
+            __panRAF = 0;
+        }
+    }
+
     function skyLookAt(raDeg, decDeg, fovDeg, objHint) {
         if (!window.__stel) return false;
         var stel = window.__stel;
         try {
+            // Cancel any previous in-flight tween before kicking
+            // off a new one or doing a hard set.
+            skyAbortPan();
+
             if (typeof fovDeg === 'number' && fovDeg > 0) {
                 stel.core.fov = fovDeg * stel.D2R;
             }
-            if (objHint) {
-                // pointAndLock keeps the object centred as time advances.
-                if (typeof stel.pointAndLock === 'function') {
-                    stel.pointAndLock(objHint);
-                    stel.core.selection = objHint;
-                    return true;
-                }
-            }
+
             // Direct RA/Dec → altaz via spherical trig. Mirrors the
             // inverse of skyGetCenter — bypasses the minified-build's
             // unreliable stel.convertFrame so look-at actually lands
@@ -253,10 +266,63 @@
             var A = Math.atan2(sinA, cosA);
 
             // Normalise azimuth to [0, 2π).
-            A = ((A % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+            var TWO_PI = 2 * Math.PI;
+            A = ((A % TWO_PI) + TWO_PI) % TWO_PI;
 
-            obs.yaw = A;
-            obs.pitch = alt;
+            // Set selection so the engine highlights the picked object
+            // and the click handler can read it back. Setting selection
+            // does NOT install a follow-lock, unlike pointAndLock —
+            // exactly what we want here so the user's later drag
+            // doesn't get pulled back to the target every frame.
+            if (objHint) {
+                try { stel.core.selection = objHint; } catch (_) { /* best effort */ }
+            }
+
+            // Smooth pan via a JS-side yaw/pitch tween rather than
+            // stel.pointAndLock. pointAndLock sets core.target.lock
+            // which navigation.c re-asserts on EVERY render frame
+            // (line ~116-122 of src/navigation.c) — that's the
+            // mechanism behind the "drag snaps back to selection"
+            // bug. With direct yaw/pitch writes there's no lock and
+            // no fight: the camera lands on the target and then the
+            // user owns the view.
+            //
+            // ~700 ms with smoothstep easing matches the perceived
+            // feel of the old pointAndLock animation closely enough.
+            var startYaw = obs.yaw;
+            var startPitch = obs.pitch;
+            // Pick the shorter way around for azimuth wraparound.
+            var dyaw = A - startYaw;
+            if (dyaw >  Math.PI) dyaw -= TWO_PI;
+            if (dyaw < -Math.PI) dyaw += TWO_PI;
+            var dpitch = alt - startPitch;
+
+            // If the move is tiny, skip the animation entirely.
+            if (Math.abs(dyaw) < 1e-4 && Math.abs(dpitch) < 1e-4) {
+                obs.yaw = A;
+                obs.pitch = alt;
+                return true;
+            }
+
+            var DURATION_MS = 700;
+            var t0 = performance.now();
+            var step = function (now) {
+                var u = Math.min(1, (now - t0) / DURATION_MS);
+                // smoothstep: 3u² − 2u³
+                var s = u * u * (3 - 2 * u);
+                var y = startYaw + dyaw * s;
+                // Re-wrap yaw into [0, 2π) on write so the engine's
+                // own bookkeeping doesn't get a negative or > 2π.
+                y = ((y % TWO_PI) + TWO_PI) % TWO_PI;
+                obs.yaw = y;
+                obs.pitch = startPitch + dpitch * s;
+                if (u < 1) {
+                    __panRAF = requestAnimationFrame(step);
+                } else {
+                    __panRAF = 0;
+                }
+            };
+            __panRAF = requestAnimationFrame(step);
             return true;
         } catch (e) {
             console.warn('[Sky] skyLookAt failed:', e);
@@ -905,15 +971,11 @@
             var dx = ev.clientX - downX, dy = ev.clientY - downY;
             if (dx * dx + dy * dy < THRESHOLD_PX * THRESHOLD_PX) return;
             tracking = false;  // only release once per drag
-            var stel = window.__stel;
-            if (!stel || !stel.core) return;
-            try {
-                // pointAndLock sets core.lock to the followed object.
-                // Clearing it to 0 (engine's "no lock" sentinel) lets
-                // the user's drag take effect without the engine
-                // re-centring on the locked target every frame.
-                if (stel.core.lock) stel.core.lock = 0;
-            } catch (e) { /* engine may not expose lock — best effort */ }
+            // Stop any in-flight bridge-side pan tween (e.g. user
+            // grabbed the canvas mid-animation right after a search
+            // or click). Without this the tween would keep writing
+            // yaw/pitch over the user's drag deltas.
+            skyAbortPan();
         });
         canvas.addEventListener('pointerup', function () { tracking = false; });
         canvas.addEventListener('pointercancel', function () { tracking = false; });
