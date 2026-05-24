@@ -4,6 +4,14 @@
 * text=auto
 
 ###############################################################################
+# Shell scripts must stay LF even on Windows checkouts. bash (running
+# inside Docker containers or WSL) reads CRLF as a literal \r in the
+# token, so `source /emsdk/emsdk_env.sh\r` looks up a non-existent
+# path and fails with a misleading "No such file or directory".
+###############################################################################
+*.sh text eol=lf
+
+###############################################################################
 # stellarium-web-engine submodule: keep upstream line endings verbatim.
 # It's a Unix project — checking it out with CRLF on Windows breaks the
 # Emscripten build (shebangs like '#!/usr/bin/python3' end up as
