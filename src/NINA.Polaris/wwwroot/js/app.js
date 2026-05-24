@@ -2046,23 +2046,14 @@ function ninaApp() {
         // bundled under /js/lib/celestial — zero network required.
 
         initSkyViewer() {
-            const el = document.getElementById('celestial-map');
-            if (!el || el.clientWidth === 0 || el.clientHeight === 0) {
-                setTimeout(() => this.initSkyViewer(), 100);
-                return;
-            }
-            if (typeof Celestial === 'undefined') {
-                setTimeout(() => this.initSkyViewer(), 200);
-                return;
-            }
-            if (this._celestialReady) {
-                // Use the full container width — CSS clips the over-tall
-                // SVG vertically so the circle spans edge-to-edge.
-                const size = Math.max(300, el.clientWidth);
-                try { Celestial.resize({ width: size }); } catch {}
-                return;
-            }
-            this._buildCelestial(el);
+            // SWE-3-bugfix: d3-celestial removed. The SKY tab now hosts
+            // the stellarium-web-engine iframe (#skyFrame), which boots
+            // itself from /sky/index.html — no host-side initialisation
+            // needed here. Kept the method as a no-op so the sidebar
+            // button + Home card click handlers (tab='sky';
+            // initSkyViewer()) still call through without an undefined
+            // method error. SWE-4 will replace this with a postMessage
+            // refresh tick (e.g. push observer+time on tab activation).
         },
 
         // ---------------------------------------------------------------

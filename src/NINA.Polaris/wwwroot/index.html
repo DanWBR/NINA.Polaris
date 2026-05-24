@@ -12,7 +12,8 @@
          have no internet. -->
     <link rel="preload" href="/css/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="/css/app.css">
-    <link rel="stylesheet" href="/js/lib/celestial/celestial.css">
+    <!-- SWE-3-bugfix: celestial.css dropped — SKY tab is now the
+         stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
 </head>
 <body x-data="ninaApp()" x-init="init()">
@@ -2527,23 +2528,19 @@
                     </template>
                 </div>
 
-                <!-- d3-celestial renders into this div. Sized via the .sky-viewer CSS rule. -->
-                <div id="celestial-map" class="sky-viewer"></div>
-                <!-- SWE-1: stellarium-web-engine sub-app, hosted in an
-                     iframe to keep its AGPLv3 license boundary clear
-                     from the MPL 2.0 main app. Hidden via position:
-                     absolute + visibility:hidden until SWE-4 flips
-                     it. Using position:absolute (not display:none)
-                     so the engine renders its first frame without a
-                     0×0 viewport — needed to keep WebGL state alive
-                     for the postMessage RPC tests. sandbox keeps
-                     allow-same-origin so postMessage can return fetch
-                     results without CORS noise. -->
+                <!-- SWE-3-bugfix: d3-celestial removed; stellarium-web-engine
+                     iframe is now the primary sky renderer. Sized via
+                     the .sky-viewer CSS rule the old div used, so the
+                     surrounding toolbar / FOV controls / Slew & Center
+                     progress / search results layout doesn't shift.
+                     sandbox keeps allow-same-origin so postMessage can
+                     return fetch results without CORS noise. AGPLv3
+                     boundary: everything inside /sky/ (engine, bridge,
+                     skydata) is AGPL; the parent app stays MPL 2.0. -->
                 <iframe id="skyFrame" src="/sky/"
-                        class="sky-viewer-iframe"
-                        style="position:absolute; left:-10000px; top:-10000px; width:600px; height:400px; visibility:hidden; border:0;"
+                        class="sky-viewer sky-viewer-iframe"
+                        style="border:0;"
                         sandbox="allow-scripts allow-same-origin"
-                        loading="lazy"
                         title="Stellarium Web sky map"></iframe>
                 <div class="sky-survey-row">
                     <label>FOV
@@ -5051,9 +5048,9 @@
     <script src="/js/lib/chart.umd.min.js"></script>
     <script src="/js/lib/openseadragon/openseadragon.min.js"></script>
     <script src="/js/lib/sortable.min.js"></script>
-    <script src="/js/lib/celestial/d3.min.js"></script>
-    <script src="/js/lib/celestial/d3.geo.projection.min.js"></script>
-    <script src="/js/lib/celestial/celestial.min.js"></script>
+    <!-- SWE-3-bugfix: d3-celestial scripts removed; the SKY tab is now
+         rendered by the stellarium-web-engine iframe at /sky/ (separate
+         AGPL boundary). -->
     <script src="/js/lib/suncalc/suncalc.js"></script>
     <!-- Pure-JS LZ4 block decoder — required for the raw uint16 image
          stream over /ws/image-stream. Without it every raw frame falls
