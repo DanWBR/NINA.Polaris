@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.6.3-swe5';
+    var BRIDGE_VERSION = '0.6.4-swe5';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -215,15 +215,48 @@
                     return true;
                 }
             }
-            // Fallback: convert RA/Dec → cartesian ICRF → OBSERVED → altaz
-            // → set observer.yaw/pitch. Same math the upstream uses for
-            // arbitrary-coordinate slew.
+            // Direct RA/Dec → altaz via spherical trig. Mirrors the
+            // inverse of skyGetCenter — bypasses the minified-build's
+            // unreliable stel.convertFrame so look-at actually lands
+            // where we asked it to.
             var obs = stel.core.observer;
-            var icrf = stel.s2c([raDeg * stel.D2R, decDeg * stel.D2R]);
-            var observed = stel.convertFrame(obs, 'ICRF', 'OBSERVED', icrf);
-            var azalt = stel.c2s(observed);
-            obs.yaw = stel.anp(azalt[0]);
-            obs.pitch = stel.anpm(azalt[1]);
+            var phi = obs.latitude;
+            var mjd = obs.utc;
+            var lng = obs.longitude;
+            if (![phi, mjd, lng].every(function (v) {
+                return typeof v === 'number' && isFinite(v);
+            })) return false;
+
+            // LST via Greenwich apparent sidereal time (same formula
+            // as skyGetCenter, inverted direction).
+            var T = mjd - 51544.5;
+            var gstFrac = (T * 1.00273790935 + 0.7790572732640) % 1;
+            if (gstFrac < 0) gstFrac += 1;
+            var lst = 2 * Math.PI * gstFrac + lng;
+
+            var raRad  = raDeg  * stel.D2R;
+            var decRad = decDeg * stel.D2R;
+            var H = lst - raRad;
+            var sinH = Math.sin(H), cosH = Math.cos(H);
+            var sinDec = Math.sin(decRad), cosDec = Math.cos(decRad);
+            var sinPhi = Math.sin(phi),    cosPhi = Math.cos(phi);
+
+            var sinAlt = sinDec * sinPhi + cosDec * cosPhi * cosH;
+            if (sinAlt >  1) sinAlt =  1;
+            if (sinAlt < -1) sinAlt = -1;
+            var alt = Math.asin(sinAlt);
+            var cosAlt = Math.cos(alt);
+            if (Math.abs(cosAlt) < 1e-12) cosAlt = 1e-12;
+
+            var sinA = -sinH * cosDec / cosAlt;
+            var cosA = (sinDec - sinAlt * sinPhi) / (cosAlt * cosPhi);
+            var A = Math.atan2(sinA, cosA);
+
+            // Normalise azimuth to [0, 2π).
+            A = ((A % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+
+            obs.yaw = A;
+            obs.pitch = alt;
             return true;
         } catch (e) {
             console.warn('[Sky] skyLookAt failed:', e);
