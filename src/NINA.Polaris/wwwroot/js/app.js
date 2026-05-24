@@ -755,6 +755,14 @@ function ninaApp() {
             setInterval(() => this.updateClock(), 1000);
             this.updateFov();
 
+            // SWE-1: stand up the postMessage bridge to the Sky
+            // sub-application iframe (/sky/index.html). The iframe
+            // posts back { type: "ready" } once it's loaded; until
+            // then any _skySendMessage call queues. The engine itself
+            // ships in SWE-2 — for now this just confirms the round-trip
+            // is alive in DevTools.
+            this._initSkyBridge();
+
             // CLST-2: listen for the WASM module's "ready" signal so
             // we can flip the offload-capable flag + log it. CLST-4
             // turns this into the actual frame-pipeline dispatch.
@@ -2055,6 +2063,88 @@ function ninaApp() {
                 return;
             }
             this._buildCelestial(el);
+        },
+
+        // ---------------------------------------------------------------
+        // SWE-1: stellarium-web-engine bridge (postMessage RPC to the
+        // /sky/ sub-application iframe).
+        //
+        // The engine itself lands in SWE-2; this commit only wires the
+        // round-trip — message listener that absorbs the bridge's
+        // "ready" + a helper to push commands the other way. d3-celestial
+        // continues to do the actual rendering until SWE-4 swaps
+        // visibility and SWE-6 deletes it.
+        //
+        // Why a helper instead of inline postMessage calls everywhere:
+        // - Centralised guard against the iframe not having loaded yet
+        //   (early calls get queued via _skyPending).
+        // - Single place to wrap targetOrigin / debug logging if we
+        //   tighten security later.
+        // ---------------------------------------------------------------
+
+        _skySendMessage(msg) {
+            if (!msg || !msg.type) return;
+            const frame = document.getElementById('skyFrame');
+            if (!frame || !frame.contentWindow) {
+                // Iframe not in DOM yet (page still loading). Queue and
+                // flush when "ready" arrives.
+                this._skyPending = this._skyPending || [];
+                this._skyPending.push(msg);
+                return;
+            }
+            if (!this._skyBridgeReady) {
+                this._skyPending = this._skyPending || [];
+                this._skyPending.push(msg);
+                return;
+            }
+            try {
+                frame.contentWindow.postMessage(msg, '*');
+            } catch (e) {
+                console.warn('[Polaris→Sky] postMessage failed', e);
+            }
+        },
+
+        _initSkyBridge() {
+            if (this._skyBridgeInstalled) return;
+            this._skyBridgeInstalled = true;
+            this._skyBridgeReady = false;
+            this._skyPending = [];
+
+            window.addEventListener('message', (ev) => {
+                const msg = ev.data;
+                if (!msg || typeof msg !== 'object' || !msg.type) return;
+                // Only accept messages that came from our own bridge — by
+                // convention every bridge message carries __from === 'sky-bridge'.
+                if (msg.__from !== 'sky-bridge') return;
+
+                switch (msg.type) {
+                    case 'ready':
+                        this._skyBridgeReady = true;
+                        this._skyBridgeVersion = msg.version || 'unknown';
+                        this._skyEngineLoaded = !!msg.engineLoaded;
+                        console.log('[Polaris] Sky bridge ready v' + this._skyBridgeVersion
+                            + ' webgl2=' + msg.webgl2 + ' engineLoaded=' + msg.engineLoaded);
+                        // Flush anything queued before the bridge was up.
+                        const queued = this._skyPending || [];
+                        this._skyPending = [];
+                        for (const q of queued) this._skySendMessage(q);
+                        break;
+                    case 'webgl-unavailable':
+                        this._skyWebGLAvailable = false;
+                        console.warn('[Polaris] Sky engine: WebGL2 unavailable, fallback in place');
+                        break;
+                    case 'search-result':
+                    case 'center':
+                    case 'map-click':
+                        // SWE-4 will wire these into the UI flows. For
+                        // now just log so we can verify the round-trip
+                        // works during smoke testing.
+                        console.log('[Polaris] Sky → ' + msg.type, msg);
+                        break;
+                    default:
+                        console.log('[Polaris] Sky → unknown:', msg.type, msg);
+                }
+            });
         },
 
         // Tears down + rebuilds the celestial widget. Called when the user

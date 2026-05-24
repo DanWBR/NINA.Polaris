@@ -2529,6 +2529,19 @@
 
                 <!-- d3-celestial renders into this div. Sized via the .sky-viewer CSS rule. -->
                 <div id="celestial-map" class="sky-viewer"></div>
+                <!-- SWE-1: stellarium-web-engine sub-app, hosted in an
+                     iframe to keep its AGPLv3 license boundary clear
+                     from the MPL 2.0 main app. Initially hidden — SWE-4
+                     flips visibility once the postMessage RPC is wired
+                     and SWE-6 removes the d3 div above. sandbox keeps
+                     allow-same-origin so postMessage can return fetch
+                     results without CORS noise. -->
+                <iframe id="skyFrame" src="/sky/"
+                        class="sky-viewer sky-viewer-iframe"
+                        style="display:none; border:0;"
+                        sandbox="allow-scripts allow-same-origin"
+                        loading="lazy"
+                        title="Stellarium Web sky map"></iframe>
                 <div class="sky-survey-row">
                     <label>FOV
                         <span style="display:inline-flex;align-items:center;gap:4px">
