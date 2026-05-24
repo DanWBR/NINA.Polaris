@@ -44,23 +44,34 @@ public class MdnsService : IHostedService, IDisposable {
             _mdns = new MulticastService();
             _discovery = new ServiceDiscovery(_mdns);
 
-            // Collect every routable local IPv4 / IPv6 address so we
-            // can register A / AAAA records under {instanceName}.local.
-            // Without this, the ServiceProfile only registers an SRV
-            // record pointing at Environment.MachineName.local — that's
-            // discoverable by mDNS browsers but http://polaris.local
-            // doesn't resolve, which defeats the whole point of the
-            // friendly URL. Filter out the loopback addresses; they
-            // wouldn't help a remote browser.
+            // Use the 3-arg ServiceProfile constructor so HostName lands
+            // as `{instanceName}.local` — the 4-arg one that accepts an
+            // address list builds HostName as
+            // `{instanceName}.{servicePrefix}.local` instead
+            // (so polaris-app + _nina._tcp came out as
+            // `polaris-app.nina.local`, which is not what users type
+            // into a browser). Then we attach A/AAAA records to that
+            // HostName manually with the routable local IPs.
+            var profile = new ServiceProfile(instanceName, "_nina._tcp", (ushort)port);
+
             var addresses = MulticastService.GetIPAddresses()
                 .Where(addr =>
                     (addr.AddressFamily == AddressFamily.InterNetwork
                      || addr.AddressFamily == AddressFamily.InterNetworkV6)
                     && !System.Net.IPAddress.IsLoopback(addr))
                 .ToList();
+            foreach (var ip in addresses) {
+                if (ip.AddressFamily == AddressFamily.InterNetwork) {
+                    profile.Resources.Add(new ARecord {
+                        Name = profile.HostName, Address = ip
+                    });
+                } else {
+                    profile.Resources.Add(new AAAARecord {
+                        Name = profile.HostName, Address = ip
+                    });
+                }
+            }
 
-            var profile = new ServiceProfile(
-                instanceName, "_nina._tcp", (ushort)port, addresses);
             profile.AddProperty("version", "1.0");
             profile.AddProperty("path", "/");
             profile.AddProperty("hostname", hostname);
