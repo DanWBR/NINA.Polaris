@@ -186,7 +186,15 @@ cp "${BUILT_WASM}" "${OUTPUT_DIR}/stellarium-web-engine.wasm"
 
 JS_SIZE=$(du -h "${OUTPUT_DIR}/stellarium-web-engine.js" | cut -f1)
 WASM_SIZE=$(du -h "${OUTPUT_DIR}/stellarium-web-engine.wasm" | cut -f1)
-PINNED_SHA=$(git -C "${SUBMODULE_DIR}" rev-parse --short HEAD)
+# git.exe on Windows doesn't understand the /c/Users/... paths Git
+# Bash uses when MSYS_NO_PATHCONV=1 is set (which we set for the
+# docker invocation). Unset it just for this command, and run from
+# inside the directory so git defaults to the local repo without
+# needing a path argument.
+PINNED_SHA=$(unset MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+             cd "${SUBMODULE_DIR}" 2>/dev/null \
+                && git rev-parse --short HEAD 2>/dev/null \
+                || echo unknown)
 
 echo ""
 echo "✓ Build complete (pinned at ${PINNED_SHA})"
