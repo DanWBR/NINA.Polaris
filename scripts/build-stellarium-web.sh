@@ -86,22 +86,39 @@ docker run --rm \
         # PATH by default for the non-root user inside the image.
         export PATH=\"\$HOME/.local/bin:\$PATH\"
         # Belt-and-suspenders for Windows checkouts: strip CRLF
-        # line endings from tools/*.py (and a few key text files
-        # SCons reads) so shebangs and Python files exec correctly.
-        # The proper fix is the '-text' rule for
+        # line endings from every text source file in the submodule
+        # tree. Git on Windows checks the submodule out with
+        # autocrlf=true unless the parent .gitattributes pins it,
+        # and CRLF breaks several things:
+        #   - Python shebangs ('#!/usr/bin/python3\r' → ENOENT)
+        #   - shader sources (auto-embedded into .inl as C string
+        #     literals — the trailing \r becomes a stray byte
+        #     inside the literal and clang reports "missing
+        #     terminating '\"' character" for thousands of lines)
+        #   - SCons / Make text parsing
+        #
+        # The durable fix is the '-text' rule for
         # external/stellarium-web-engine/** in the repo root
-        # .gitattributes — that prevents Git on Windows from doing
-        # the lossy LF→CRLF translation on the next fresh
-        # submodule checkout. This in-build sed handles already-
+        # .gitattributes. This in-build strip handles already-
         # checked-out trees so the user doesn't have to nuke +
         # re-init the submodule.
-        echo '→ Stripping CRLF from tools/*.py + SConscripts'
-        for f in tools/*.py SConstruct SConscript; do
-            if [ -f \"\$f\" ]; then
-                tr -d '\r' < \"\$f\" > \"\$f.tmp\" && mv \"\$f.tmp\" \"\$f\"
-                chmod +x \"\$f\" 2>/dev/null || true
-            fi
-        done
+        #
+        # Whitelist by extension so we don't accidentally rewrite
+        # genuine binaries (images, .ttf, etc.) that happen to have
+        # 0x0D 0x0A pairs in their byte stream.
+        echo '→ Stripping CRLF from source files'
+        find . -type f \
+            \( -name '*.c'  -o -name '*.h'  -o -name '*.cpp' -o -name '*.hpp' \
+            -o -name '*.cc' -o -name '*.hh' -o -name '*.inl' -o -name '*.py' \
+            -o -name '*.js' -o -name '*.json' -o -name '*.glsl' -o -name '*.frag' \
+            -o -name '*.vert' -o -name '*.shader' -o -name '*.txt' -o -name '*.md' \
+            -o -name '*.css' -o -name '*.html' -o -name '*.htm' \
+            -o -name 'SConstruct' -o -name 'SConscript' -o -name 'Makefile' \
+            -o -name '*.mk' -o -name '*.sh' \) \
+            -exec sed -i 's/\r\$//' {} +
+        # Re-mark the python scripts executable (sed -i doesn't
+        # touch the mode bit but a safety chmod doesn't hurt).
+        chmod +x tools/*.py 2>/dev/null || true
         # Same problem can hit upstream tools/*.py shebangs even after
         # CRLF strip — they hard-code '#!/usr/bin/python3' which only
         # resolves on Debian-style images. emscripten/emsdk has
