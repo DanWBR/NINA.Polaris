@@ -47,11 +47,17 @@ Each tab in the sidebar has its own page. Read the ones you need:
 - **[FILES](files.md)** — server-side file explorer.
 - **[Relay (remote access)](relay.md)** — TLS-tunneled access from
   outside your LAN.
+- **[Remote terminal](remote-terminal.md)** — embedded SSH terminal
+  (xterm.js + SSH.NET) in SETTINGS. Restart services on a headless Pi
+  from the browser, without plugging in a screen.
 
 ## Reference
 
 - **[Glossary](GLOSSARY.md)** — every astrophotography term used in this
   guide explained in two lines. Read in any order.
+- **[Requirements](../../REQUIREMENTS.md)** — full Windows + Linux (RPi)
+  tooling matrix, what's required vs optional per feature, firewall
+  rules, hardware sizing.
 - **[Troubleshooting](troubleshooting.md)** — common problems + fixes.
 - **[FAQ](faq.md)** — questions that come up a lot.
 

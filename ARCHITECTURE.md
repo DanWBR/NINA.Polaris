@@ -14,6 +14,9 @@ two things to the browser:
 2. **WebSocket** streams:
    - `/ws/status` — 1Hz JSON broadcast of all service state
    - `/ws/image-stream` — binary JPEG/raw frames as they're captured
+   - `/ws/terminal` — bidirectional SSH bridge for the in-browser
+     xterm.js terminal (gated by `Terminal:Enabled`, see
+     `TerminalSocketHandler`)
 
 The browser runs a single **Alpine.js** SPA from `wwwroot/index.html`
 that subscribes to those streams + issues commands through the REST
@@ -313,7 +316,15 @@ registered with `AddHostedService`:
 - `Phd2GuiSessionService` — boots xpra session if `AutoStart=true`
 - `SlewPreviewService` — 1s poll loop for mount-slewing detection
 - `HostMetricsService` — CPU + RAM sampler
-- `MdnsService` — broadcasts `nina._tcp.local`
+- `MdnsService` — broadcasts the `_nina._tcp.local` service AND
+  publishes A/AAAA records under `{instanceName}.local` (default
+  `polaris-app.local`) pointing at every routable local IP, so the
+  service is both discoverable in a Bonjour browser AND directly
+  resolvable by hostname for typing into a URL bar. The HostName
+  is set explicitly + the auto-generated SRV target patched
+  because Makaretu's 4-arg ServiceProfile constructor derives a
+  malformed `{instance}.{servicePrefix}.local` HostName instead of
+  the expected `{instance}.local`.
 - `PluginLoaderService` — discovers MEF plugins
 - `RelayClient` — maintains tunnel to relay server (when enabled)
 

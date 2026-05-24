@@ -50,6 +50,8 @@ Browser (laptop / tablet / phone)        Raspberry Pi / Mini PC
   - [Remote Access (Relay Server)](#remote-access-relay-server)
   - [Network Resilience](#network-resilience)
   - [Discovery & Cross-Platform Drivers](#discovery--cross-platform-drivers)
+  - [Remote Terminal (SSH from the browser)](#remote-terminal-ssh-from-the-browser)
+  - [Polar Alignment (TPPA)](#polar-alignment-tppa)
 - [Architecture](#architecture)
   - [Technology Stack](#technology-stack)
 - [Getting Started](#getting-started)
@@ -60,6 +62,11 @@ Browser (laptop / tablet / phone)        Raspberry Pi / Mini PC
 - [Support the project](#support-the-project)
 - [Contributing](#contributing)
 - [License](#license)
+
+> **Looking for the full tooling matrix?** See [REQUIREMENTS.md](REQUIREMENTS.md)
+> for the complete required + optional dependency list per platform
+> (Windows / Linux ARM-RPi / Linux x64), with firewall rules and hardware
+> sizing guidance.
 
 ## Features
 
@@ -787,8 +794,38 @@ Built for unreliable field WiFi:
 
 ### Discovery & Cross-Platform Drivers
 
-- **mDNS announcer** — host reachable at `nina-<hostname>.local:5000` from any device on the LAN (no IP needed)
+- **mDNS announcer** — host reachable at `polaris-app.local:5000` from any device on the LAN (no IP needed). Override the instance name via `Mdns:InstanceName` in `appsettings.json` if you need a different label (e.g. multiple Polaris instances on the same network).
 - **Alpaca (ASCOM HTTP) support** — UDP discovery on port 32227 plus base Camera / Telescope wrappers, so you can drive Windows-only ASCOM drivers exposed over the network
+
+### Remote Terminal (SSH from the browser)
+
+Embedded xterm.js + SSH.NET bridge under SETTINGS → **Remote terminal**.
+Opens an interactive shell against any LAN host (or `localhost` for the
+Polaris host itself), so you can restart `indiserver`, tail logs, or
+`sudo systemctl status` something on a headless Pi without plugging in a
+screen.
+
+- Off by default — set `Terminal:Enabled = true` in `appsettings.json` to
+  expose the `/ws/terminal` endpoint
+- No auto-login — credentials are entered per session and never persisted
+- 10-minute idle timeout closes abandoned sessions server-side
+- Resizes with the panel; supports `vim`, `htop`, `tmux`, colours, scrollback
+
+See [docs/user-guide/remote-terminal.md](docs/user-guide/remote-terminal.md).
+
+### Polar Alignment (TPPA)
+
+Three-point polar alignment built into the **POLAR** sidebar tab. Slews the
+mount to three configurable RA positions, plate-solves at each, computes
+the mount axis vs the true celestial pole, and reports azimuth + altitude
+errors in arcminutes. Hemisphere-aware (works in both N + S latitudes).
+
+- **Refine** mode loops capture + solve in real time so you watch the
+  error vector shrink as you adjust the tripod knobs (SharpCap-style UX,
+  red → amber → green overlay on the live frame)
+- Per-rig parameters (slew step, exposure, settle, gain) saved in the
+  active equipment profile
+- Cancel mid-flight via the standard panic-stop control
 
 ## Architecture
 
@@ -863,9 +900,17 @@ nina-polaris/
 
 ### Prerequisites
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (for building)
-- [INDI](https://www.indilib.org/) server and drivers (Linux) — `sudo apt install indi-full`
-- [ASTAP](https://www.rongent.com/astap/) (optional, for plate solving)
+Minimum to build + run from source:
+
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- Git (with submodules: stellarium-web-engine is pulled at build time)
+- On Linux for hardware control: `sudo apt install indi-full`
+- Optional plate-solving: [ASTAP](https://www.hnsky.org/astap.htm) +
+  H17/H18 database
+
+For the complete tooling matrix — Windows + Linux ARM (Raspberry Pi) +
+Linux x64, required vs optional per feature, firewall rules, hardware
+sizing — see **[REQUIREMENTS.md](REQUIREMENTS.md)**.
 
 ### Build & Run (Development)
 

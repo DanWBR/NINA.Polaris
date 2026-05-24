@@ -203,6 +203,36 @@ Two endpoints, two very different cadences:
 - Adaptive bandwidth: if the WS send queue backs up, the next frame is
   dropped (UI sees a tick missing rather than the whole stream stalling)
 
+### `/ws/terminal` (TerminalSocketHandler)
+
+- Bridges an xterm.js terminal in the browser to a real SSH shell
+  on the configured host via SSH.NET (`Renci.SshNet`)
+- One WebSocket = one SSH session. First WS frame is a JSON
+  `{type:"auth", host, port, user, password, cols, rows}` —
+  credentials live only in memory for the socket's lifetime,
+  never persisted, no auto-reconnect
+- Bidirectional pump: client keystrokes → SSH stdin; SSH stdout
+  → WebSocket text frames at ~50 ms polling. Resize via JSON
+  `{type:"resize", cols, rows}` forwarded to the SSH PTY
+- Gated by `Terminal:Enabled = true` in `appsettings.json` —
+  returns 403 otherwise so a deploy without opt-in has zero
+  shell-exposure surface
+- 10-minute idle watchdog closes abandoned sessions server-side
+- Powers SETTINGS → "Remote terminal" for headless-Pi service
+  management (restart `indiserver`, tail logs, etc.) without
+  needing to plug in a screen
+
+## A note on cancelling mount motion
+
+`SlewCenterService.CancelJob(jobId)` cancels the orchestrator
+CTS AND fires `Telescope.AbortSlewAsync()` so the mount actually
+halts mid-flight rather than completing the in-flight `SlewAsync`
+before stopping. The frontend's "panic Stop" affordance
+(top-centre overlay on the SKY map) calls a single
+`stopAnySlew()` helper that hits both `cancelSlewCenter()` AND
+`/api/telescope/abort` unconditionally — so a raw "Slew Only"
+(no job id) also stops via the second branch.
+
 ## Frontend (wwwroot/)
 
 No build pipeline. The HTML is the HTML, the JS is the JS.
