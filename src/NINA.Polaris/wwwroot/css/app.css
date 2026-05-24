@@ -3418,14 +3418,12 @@ label select.input-sm {
     background: var(--bg-secondary);
     overflow: hidden;
     transition: border-color var(--transition);
-    /* Keeps every card the same visible height even when its body has
-       only a placeholder dropdown — avoids the squished look when no
-       device is selected yet. Capped at max-height so a device with
-       lots of metadata (Camera with cooler chart + properties, Mount
-       with full ephemeris) gets its own scrollbar instead of pushing
-       the page layout around. */
-    min-height: 220px;
-    max-height: 420px;
+    /* Every RIGS card gets a tall 800 px floor so a Camera with cooler
+       chart + cooler controls + sensor metadata + connect toggle has
+       plenty of headroom without scrolling, and empty cards stay
+       visually consistent with the bigger ones. No max-height — let
+       cards grow further when an even taller device shows up. */
+    min-height: 800px;
     display: flex;
     flex-direction: column;
 }

@@ -8211,6 +8211,13 @@ function ninaApp() {
         selectSkyTarget(obj) {
             this.skyTarget = obj;
             this.skyShowResults = false;
+            // Atlas-filter result list shares the same dismissal
+            // pattern as the free-text search dropdown: once the
+            // user picks one, drop the list and collapse the filter
+            // panel — otherwise it sits open over the map forever
+            // with no obvious close affordance.
+            this.atlasResults = [];
+            this.showAtlasFilters = false;
             this._goToSelectedTarget();
             // SWE-4: also tell the stellarium-web-engine iframe to
             // re-aim its camera at the picked target so the visible
