@@ -2633,15 +2633,22 @@
                             <canvas class="sky-info-chart" x-ref="skyInfoChart"></canvas>
                         </div>
                         <div class="sky-info-actions">
+                            <button class="btn btn-sm"
+                                    @click="skyInfoCenterMap()"
+                                    :disabled="!Number.isFinite(skyInfo.raDeg)"
+                                    title="Smooth-pan the SKY map view to this object. Does not move the mount.">
+                                Center
+                            </button>
                             <button class="btn btn-sm btn-primary"
                                     @click="skyInfoSlewCenter()"
-                                    :disabled="!mount.connected || !Number.isFinite(skyInfo.raDeg)">
+                                    :disabled="!mount.connected || !Number.isFinite(skyInfo.raDeg)"
+                                    title="Slew the mount + plate-solve loop to whatever is framed by the red target FOV (the map centre).">
                                 Slew &amp; Center
                             </button>
                             <button class="btn btn-sm"
                                     @click="skyInfoSlewOnly()"
                                     :disabled="!mount.connected || !Number.isFinite(skyInfo.raDeg)"
-                                    title="Slew the mount to the object without the plate-solve centering loop.">
+                                    title="Slew the mount to whatever is framed by the red target FOV (the map centre), without the plate-solve centering loop.">
                                 Slew Only
                             </button>
                             <button class="btn btn-sm"

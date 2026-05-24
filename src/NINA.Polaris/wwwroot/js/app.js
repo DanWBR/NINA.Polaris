@@ -8320,6 +8320,20 @@ function ninaApp() {
             });
         },
 
+        // Card action: smoothly pan the SKY map view to the object
+        // without touching the mount. Mirrors the auto-center-on-
+        // select pan, but explicit so the user can still trigger it
+        // when Auto-center on select is off. The mount-side Slew
+        // buttons continue to target whatever's framed in the red
+        // target FOV — i.e. the live map centre — which is now this
+        // object after Center is clicked.
+        async skyInfoCenterMap() {
+            if (!Number.isFinite(this.skyInfo.raDeg)
+                || !Number.isFinite(this.skyInfo.decDeg)) return;
+            this._skyLookAt(this.skyInfo.raDeg / 15, this.skyInfo.decDeg,
+                undefined, this.skyInfo.title);
+        },
+
         // Card action: route Slew & Center via the existing path.
         async skyInfoSlewCenter() {
             // _currentSlewTarget already falls back to skyTarget which
