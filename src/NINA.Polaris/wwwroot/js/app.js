@@ -8043,6 +8043,17 @@ function ninaApp() {
                 };
                 this.skyShowResults = false;
                 this._goToSelectedTarget();
+                // Open the translucent info card on the left so the
+                // imported Stellarium target has the same visual
+                // treatment as a click or local-catalog search.
+                this._populateSkyInfo({
+                    name: t.name,
+                    subtitle: t.type || 'Stellarium',
+                    raDeg: t.raHours * 15,
+                    decDeg: t.decDeg,
+                    magnitude: typeof t.magnitude === 'number' ? t.magnitude : null,
+                    types: t.type ? [t.type] : null
+                });
                 this.toast('Loaded from Stellarium: ' + t.name, 'ok');
             } catch (e) {
                 this.toast('Stellarium fetch failed: ' + e.message, 'error');
@@ -8153,15 +8164,26 @@ function ninaApp() {
             // when an object name is recognised by the engine, falling
             // back to direct yaw/pitch from coords otherwise.
             if (obj && (obj.ra != null) && (obj.dec != null)) {
-                // Default to a reasonable framing FOV. If the camera
-                // FOV (computed from sensor + focal length) is known
-                // and smaller, use 4x that so the target is comfortably
-                // in view rather than zoomed-to-pixel.
-                let fovDeg = 5.0;
-                if (this.fov && this.fov.width > 0) {
-                    fovDeg = Math.max(this.fov.width * 4, 1);
-                }
-                this._skyLookAt(obj.ra, obj.dec, fovDeg, obj.name || null);
+                // Project the catalog search hit onto the same
+                // rich-object shape the bridge's map-click handler
+                // emits, then route through _populateSkyInfo so the
+                // translucent left-side card opens with the object's
+                // name, magnitude, type, RA/Dec, and (async) the
+                // Tonight's Best thumbnail when our offline catalog
+                // knows it. _populateSkyInfo also does the smooth
+                // _skyLookAt(... pointAndLock) animation, so we don't
+                // need a separate look-at call here.
+                const types = obj.type ? [obj.type] : null;
+                const subtitle = obj.commonName && obj.commonName !== obj.name
+                    ? obj.commonName : null;
+                this._populateSkyInfo({
+                    name: obj.name,
+                    subtitle: subtitle,
+                    raDeg: obj.ra * 15,
+                    decDeg: obj.dec,
+                    magnitude: typeof obj.magnitude === 'number' ? obj.magnitude : null,
+                    types: types
+                });
             }
         },
 
