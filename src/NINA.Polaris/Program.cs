@@ -191,8 +191,30 @@ contentTypes.Mappings[".webcil"] = "application/octet-stream";
 contentTypes.Mappings[".wasm"] = "application/wasm";
 contentTypes.Mappings[".br"] = "application/octet-stream";
 contentTypes.Mappings[".gz"] = "application/octet-stream";
+// SWE-3-bugfix: stellarium-web-engine HiPS tile pyramids ship
+// as .eph (binary ephemeris) and the per-survey `properties`
+// metadata files have NO extension at all. The default static
+// middleware refuses both — silently 404s and the engine then
+// renders an empty sky with no console error. Map .eph here and
+// add a scoped ServeUnknownFileTypes pass below for the no-ext
+// `properties` files inside /sky/data/skydata/.
+contentTypes.Mappings[".eph"] = "application/octet-stream";
 app.UseStaticFiles(new StaticFileOptions {
     ContentTypeProvider = contentTypes
+});
+
+// SWE-3-bugfix continued: second pass scoped to the Stellarium
+// skydata directory only, with ServeUnknownFileTypes=true so the
+// extensionless `properties` files (one per survey/landscape/
+// skyculture) get a Content-Type and don't 404. Scoped to the
+// skydata path so this never accidentally serves obscure
+// extensionless files from elsewhere in wwwroot.
+app.UseStaticFiles(new StaticFileOptions {
+    RequestPath = "/sky/data",
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(
+        Path.Combine(builder.Environment.WebRootPath, "sky", "data")),
+    ServeUnknownFileTypes = true,
+    DefaultContentType = "application/octet-stream"
 });
 app.UseWebSockets();
 
