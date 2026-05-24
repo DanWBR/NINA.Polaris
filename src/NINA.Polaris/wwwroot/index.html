@@ -3189,9 +3189,12 @@
                                 <div class="tonight-alt-now" x-text="item.currentAltDeg + '° alt'"></div>
                             </div>
                             <div class="tonight-actions" x-show="mount.connected">
+                                <!-- Slew only — no plate-solve / re-centre.
+                                     Disabled while the mount is mid-slew. -->
                                 <button class="btn btn-sm btn-primary"
                                         @click="tonightGoTo(item)"
-                                        :disabled="slewCenterJobId">Go to</button>
+                                        :disabled="mount.slewing"
+                                        title="Slew the mount to this object (no plate solve)">Go to</button>
                             </div>
                         </div>
                     </template>

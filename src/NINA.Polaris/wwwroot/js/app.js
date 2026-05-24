@@ -4464,31 +4464,28 @@ function ninaApp() {
             });
         },
 
-        // Mount-connected click → slew + plate solve + centre, on the
-        // picked card's exact coordinates.
+        // Mount-connected click → plain slew to the picked card's exact
+        // coordinates. No plate solve / re-centre — user explicitly asked
+        // for slew-only here, so the mount goes where its model says the
+        // coords are and stops. For a precise centring run, use the
+        // Slew & Center button on the SKY tab afterwards.
         //
-        // Bug fix: previously this called slewAndCenter() with no args,
-        // which reads the *current map centre* from the engine via
-        // _skyGetCenter(). Right after tab-switching that centre may
-        // still be the mount position (tween hasn't run), so the mount
-        // slewed to where it already was. POST the card's coords
-        // directly to the slew-and-center endpoint instead — no
-        // dependence on the map state.
+        // Bug fix: previously chained into slewAndCenter() which reads
+        // the *current map centre* from the engine via _skyGetCenter().
+        // Right after tab-switching that centre may still be the mount
+        // position (tween hasn't run), so the mount slewed to where it
+        // already was. We now POST item.raHours/decDeg straight to the
+        // bare /api/telescope/slew endpoint.
         async tonightGoTo(item) {
             this.tonightPickTarget(item);
             try {
-                const resp = await this.apiPost('/api/sky/slew-and-center', {
+                await this.apiPost('/api/telescope/slew', {
                     ra: item.raHours,
-                    dec: item.decDeg,
-                    toleranceArcsec: 30
+                    dec: item.decDeg
                 });
-                const data = await resp.json();
-                this.slewCenterJobId = data.jobId;
-                this.slewCenterStatus = { state: 'pending', iteration: 0 };
-                this.toast('Slew & center to ' + item.name, 'ok');
-                this.startSlewCenterPolling();
+                this.toast('Slewing to ' + item.name, 'ok');
             } catch (e) {
-                this.toast('Slew & center failed: ' + (e.message || ''), 'error');
+                this.toast('Slew failed: ' + (e.message || ''), 'error');
             }
         },
 
