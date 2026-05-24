@@ -26,14 +26,13 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SUBMODULE_DIR="${REPO_ROOT}/external/stellarium-web-engine"
 OUTPUT_DIR="${REPO_ROOT}/src/NINA.Polaris/wwwroot/sky/js/wasm"
-# Pinned Emscripten version. Stellarium-web-engine's SConscript
-# passes linker-only flags (MODULARIZE, ALLOW_MEMORY_GROWTH,
-# EXPORT_NAME, ...) on every per-file compile invocation. Emscripten
-# 3.1+ promotes the resulting "unused command-line argument" warning
-# to a hard error under -Werror, breaking the build. 3.0.x is the
-# last permissive series; pin to that until upstream cleans the
-# flag separation (or until we maintain a fork that does).
-EMSDK_IMAGE="emscripten/emsdk:3.0.1"
+# Pinned Emscripten version. Stay on the cached 3.1.45 image —
+# the build incompatibility isn't the emsdk version, it's
+# upstream's SConstruct passing linker-only flags (MODULARIZE,
+# ALLOW_MEMORY_GROWTH, EXPORT_NAME, ...) on per-file compile
+# invocations. Modern emcc rejects this under -Werror. We disable
+# -Werror via scons's `werror=0` flag below, so any emsdk works.
+EMSDK_IMAGE="emscripten/emsdk:3.1.45"
 
 # ---------- preflight ----------
 
@@ -118,8 +117,14 @@ docker run --rm \
         source /emsdk/emsdk_env.sh
         echo '→ Cleaning previous build artefacts'
         rm -rf build/
-        echo '→ Running make js'
-        make js
+        # Bypass 'make js' (which hard-codes 'scons mode=release')
+        # and call scons directly with werror=0 so the per-file
+        # 'linker setting ignored during compilation' warnings stay
+        # warnings instead of being promoted to errors. The Makefile's
+        # only purpose is wrapping 'emscons scons mode=release'; we
+        # add the one flag it lacks.
+        echo '→ Running emscons scons mode=release werror=0 (-j8)'
+        emscons scons -j8 mode=release werror=0
     "
 
 # ---------- collect outputs ----------
