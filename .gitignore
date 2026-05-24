@@ -383,3 +383,8 @@ src/NINA.Polaris/calibration/
 src/NINA.Polaris/calibrated/
 src/NINA.Polaris/integrated/
 src/NINA.Polaris/processed/
+
+# SWE-3: Stellarium Web HiPS skydata. ~500MB-1GB; fetched via
+# scripts/fetch-stellarium-skydata.sh. Excluded from git but
+# included in publish output via csproj Content Include.
+src/NINA.Polaris/wwwroot/sky/data/skydata/

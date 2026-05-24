@@ -34,7 +34,15 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.2.0-swe2';
+    var BRIDGE_VERSION = '0.3.0-swe3';
+
+    // SWE-3: where the engine looks for HiPS data. Default is the
+    // mirrored copy under wwwroot/sky/data/skydata/ (populated by
+    // scripts/fetch-stellarium-skydata.sh). Set window.__skyDataBase
+    // BEFORE this script loads to override — useful for poking at
+    // the live CloudFront copy during development:
+    //   window.__skyDataBase = 'https://d3ufh70wg9uzo4.cloudfront.net/skydata/';
+    var SKYDATA_BASE = window.__skyDataBase || 'data/skydata/';
 
     // -----------------------------------------------------------------
     // WebGL detection.
@@ -158,12 +166,61 @@
                 canvas: document.getElementById('stel-canvas'),
                 onReady: function (stel) {
                     window.__stel = stel;       // exposed for SWE-4 RPC handlers
+
+                    // SWE-3: register HiPS + auxiliary data sources.
+                    // The engine fetches tiles lazily; URLs that 404
+                    // (because the user hasn't run the fetch script
+                    // yet) get logged in DevTools as failed requests
+                    // but don't crash anything — the engine renders
+                    // empty for those subsystems.
+                    //
+                    // Mirror the live Stellarium Web's data layout
+                    // exactly so the same SkyCulture keys ("western"),
+                    // landscape keys ("guereins"), and survey keys
+                    // ("moon" / "sun") resolve identically.
+                    try {
+                        var core = stel.core;
+                        core.stars.addDataSource({ url: SKYDATA_BASE + 'stars' });
+                        core.skycultures.addDataSource({
+                            url: SKYDATA_BASE + 'skycultures/western',
+                            key: 'western'
+                        });
+                        core.dsos.addDataSource({ url: SKYDATA_BASE + 'dso' });
+                        core.landscapes.addDataSource({
+                            url: SKYDATA_BASE + 'landscapes/guereins',
+                            key: 'guereins'
+                        });
+                        core.milkyway.addDataSource({
+                            url: SKYDATA_BASE + 'surveys/milkyway'
+                        });
+                        core.minor_planets.addDataSource({
+                            url: SKYDATA_BASE + 'mpcorb.dat',
+                            key: 'mpc_asteroids'
+                        });
+                        core.planets.addDataSource({
+                            url: SKYDATA_BASE + 'surveys/sso/moon',
+                            key: 'moon'
+                        });
+                        core.planets.addDataSource({
+                            url: SKYDATA_BASE + 'surveys/sso/sun',
+                            key: 'sun'
+                        });
+                        console.log('[Sky] data sources registered (base: ' + SKYDATA_BASE + ')');
+                    } catch (dsErr) {
+                        // The engine's addDataSource API can change
+                        // between versions — surface a clear error
+                        // rather than letting the engine render an
+                        // uninformative blank sky.
+                        console.error('[Sky] addDataSource failed:', dsErr);
+                    }
+
                     postToParent({
                         type: 'ready',
                         version: BRIDGE_VERSION,
                         webgl: true,
                         webgl2: true,
                         engineLoaded: true,
+                        dataBase: SKYDATA_BASE,
                         __from: 'sky-bridge'
                     });
                     console.log('[Sky] engine onReady — bridge v' + BRIDGE_VERSION);

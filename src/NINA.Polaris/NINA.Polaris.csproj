@@ -60,4 +60,21 @@
     <EmbeddedResource Include="Resources\SirilScripts\*.ssf" />
   </ItemGroup>
 
+  <!-- SWE-3: Stellarium Web HiPS skydata. Gitignored (~500MB-1GB,
+       fetched via scripts/fetch-stellarium-skydata.sh) but copied to
+       publish output recursively so a `dotnet publish` from a machine
+       with skydata present bundles it into the release.
+       CopyToPublishDirectory=PreserveNewest avoids the expensive copy
+       on incremental publishes when nothing changed. The Web SDK's
+       default wwwroot/** include already covers everything else under
+       wwwroot/sky/; this rule is solely about the gitignored subtree
+       — without it, `dotnet publish` would skip the data folder
+       because it's not in the project's tracked content. -->
+  <ItemGroup>
+    <Content Include="wwwroot\sky\data\skydata\**\*"
+             CopyToOutputDirectory="Never"
+             CopyToPublishDirectory="PreserveNewest"
+             Visible="false" />
+  </ItemGroup>
+
 </Project>
