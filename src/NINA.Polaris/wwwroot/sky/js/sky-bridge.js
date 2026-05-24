@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.6.0-swe5';
+    var BRIDGE_VERSION = '0.6.1-swe5';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -344,6 +344,55 @@
     // engine's current core.fov, mapped to the canvas pixel dimensions.
     // Always at viewport centre — that's the whole point ("the planning
     // rectangle is wherever the user is looking right now").
+    // Parallactic angle q (radians) at the given view centre. This is
+    // the angle between celestial north and the local zenith direction
+    // — equivalently, the rotation we need to apply to a celestial-
+    // aligned rectangle so it matches what the alt-az-projected engine
+    // viewport is showing.
+    //
+    //   q = atan2( sin(HA),  tan(φ)·cos(δ) − sin(δ)·cos(HA) )
+    //
+    // φ = observer latitude
+    // HA = LST − RA  (hour angle of the view centre)
+    // δ = view centre declination
+    function skyParallacticAngleDeg() {
+        try {
+            var stel = window.__stel;
+            if (!stel || !stel.core || !stel.core.observer) return 0;
+            var obs = stel.core.observer;
+            var phi = obs.latitude;                    // already radians
+            // LST: engine doesn't always expose it cleanly; derive via
+            // Greenwich apparent sidereal time from observer.utc plus
+            // longitude. Engine stores utc as Modified Julian Date.
+            // Greenwich MST in radians:
+            //   gst = 2π · ((mjd - 51544.5) · 1.00273790935 + 0.7790572732640)
+            //   (fractional radians, modulo 2π)
+            var mjd = obs.utc;
+            if (typeof mjd !== 'number' || !isFinite(mjd)) return 0;
+            var T = (mjd - 51544.5);
+            var gst = 2 * Math.PI * ((T * 1.00273790935 + 0.7790572732640) % 1);
+            var lst = gst + obs.longitude;             // local sidereal time
+            // View centre RA/Dec from observer.yaw/pitch via altaz→icrf.
+            // We just need the radec values; convertFrame may not be
+            // reliable in this build, but observer.{ra,dec} aren't
+            // direct attributes either. Cheapest robust path: use the
+            // last centre we emitted via skyGetCenter.
+            var c = skyGetCenter();
+            if (!c) return 0;
+            var raRad = c.raDeg * stel.D2R;
+            var decRad = c.decDeg * stel.D2R;
+            var H = lst - raRad;
+            var sinH = Math.sin(H), cosH = Math.cos(H);
+            var sinD = Math.sin(decRad), cosD = Math.cos(decRad);
+            var tanPhi = Math.tan(phi);
+            var q = Math.atan2(sinH, tanPhi * cosD - sinD * cosH);
+            return q / stel.D2R;
+        } catch (e) {
+            console.warn('[Sky] parallactic angle calc failed:', e);
+            return 0;
+        }
+    }
+
     function skyUpdateTargetFovBox(target) {
         __lastTargetFov = target || null;
         var el = document.getElementById('sky-target-fov');
@@ -372,15 +421,28 @@
         var pxPerDeg = refPx / engineFovDeg;
         var wPx = target.widthDeg * pxPerDeg;
         var hPx = target.heightDeg * pxPerDeg;
-        // Apply rotation if any (camera roll angle from plate-solve).
-        var rotDeg = target.rotationDeg || 0;
+        // SWE-5: rotation has two sources composed together:
+        //   1. The CAMERA's roll angle from the plate solve / rotator
+        //      (target.rotationDeg from the parent — usually 0 when no
+        //      rotator + no solve).
+        //   2. The PARALLACTIC angle at the view centre — this is the
+        //      angle between celestial north and the engine's "screen
+        //      up" direction. Without it, the rectangle stays aligned
+        //      with screen up but the surrounding sky rotates around it
+        //      as the user drags. With it, the rectangle stays glued
+        //      to the celestial frame the same way an equatorial-mount
+        //      camera does.
+        var cameraRollDeg = target.rotationDeg || 0;
+        var parallacticDeg = skyParallacticAngleDeg();
+        var rotDeg = cameraRollDeg + parallacticDeg;
         el.style.width = wPx + 'px';
         el.style.height = hPx + 'px';
-        el.style.transform = 'translate(-50%, -50%) rotate(' + rotDeg + 'deg)';
+        el.style.transform = 'translate(-50%, -50%) rotate(' + rotDeg.toFixed(2) + 'deg)';
         el.style.display = 'block';
         console.log('[Sky] target FOV box: ' + wPx.toFixed(0) + '×' + hPx.toFixed(0)
             + 'px (engineFov=' + engineFovDeg.toFixed(2) + '°, cam='
-            + target.widthDeg.toFixed(2) + '°)');
+            + target.widthDeg.toFixed(2) + '°, rot=' + rotDeg.toFixed(1)
+            + '° = cam ' + cameraRollDeg.toFixed(1) + '° + parallactic ' + parallacticDeg.toFixed(1) + '°)');
     }
 
     function skyRemoveObj(slot) {
@@ -456,17 +518,30 @@
         var stel = window.__stel;
         if (!stel || typeof stel.change !== 'function') return;
         var lastEmit = 0;
+        var lastFov = -1;
+        var lastYaw = NaN, lastPitch = NaN;
         try {
+            // Listen on every change; the engine emits a lot of these
+            // (planets, atmosphere, etc.) so dedup ourselves by reading
+            // the values we actually care about and bailing when they
+            // haven't moved meaningfully. The minified build attr names
+            // aren't always stable, so a broad filter is more reliable
+            // than `if (attr === 'core.fov')`.
             stel.change(function (obj, attr) {
-                if (!attr) return;
-                if (attr !== 'observer.yaw' && attr !== 'observer.pitch'
-                    && attr !== 'core.fov') return;
-                // core.fov change → resize the screen-anchored target
-                // box. Cheap: just re-measures DOM and reapplies CSS,
-                // doesn't talk to the engine for centre.
-                if (attr === 'core.fov' && __lastTargetFov) {
-                    skyUpdateTargetFovBox(__lastTargetFov);
-                }
+                var core = stel.core;
+                if (!core) return;
+                var fov = core.fov;
+                var obs = core.observer;
+                if (!obs) return;
+                var yaw = obs.yaw, pitch = obs.pitch;
+                var fovChanged = isFinite(fov) && fov !== lastFov;
+                var poseChanged = (yaw !== lastYaw) || (pitch !== lastPitch);
+                if (!fovChanged && !poseChanged) return;
+                if (fovChanged) lastFov = fov;
+                if (poseChanged) { lastYaw = yaw; lastPitch = pitch; }
+                // Resize the target box on any fov change AND re-rotate
+                // it for the new parallactic angle on any pose change.
+                if (__lastTargetFov) skyUpdateTargetFovBox(__lastTargetFov);
                 var now = Date.now();
                 if (now - lastEmit < 100) return;
                 lastEmit = now;
