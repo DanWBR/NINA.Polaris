@@ -95,6 +95,8 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Studio.MasterFrameService>()
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.CalibrationService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.BatchStackingService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.FrameOperationsService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Editor.ImageEditService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Editor.EditSidecarStore>();
 builder.Services.AddSingleton<FileBrowserService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.SirilService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.GraXpertService>();
@@ -315,6 +317,7 @@ app.MapSkyEndpoints();
 app.MapSystemEndpoints();
 app.MapImageEndpoints();
 app.MapStudioEndpoints();
+app.MapEditorEndpoints();
 app.MapFilesEndpoints();
 app.MapSirilEndpoints();
 app.MapGraXpertEndpoints();
