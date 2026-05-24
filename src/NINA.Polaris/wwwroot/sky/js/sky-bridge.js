@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.6.6-swe5';
+    var BRIDGE_VERSION = '0.6.7-swe5';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -426,16 +426,21 @@
         // closed-polygon list [p0,p1,p2,p3,p0].
         var midLeft = [(ring[0][0] + ring[3][0]) / 2, (ring[0][1] + ring[3][1]) / 2];
         var midBottom = [(ring[0][0] + ring[1][0]) / 2, (ring[0][1] + ring[1][1]) / 2];
+        // text colour comes from stroke_color * stroke_opacity in the
+        // engine's geojson title renderer — stroke-opacity:0 hides the
+        // text completely. Keep it at 1.
         var labelStyle = {
+            stroke: color,
+            'stroke-opacity': 1,
+            'stroke-width': 0,
             fill: color,
-            'fill-opacity': 1,
-            'stroke-opacity': 0
+            'fill-opacity': 0
         };
-        function labelFeature(coord, text, anchor) {
+        function labelFeature(coord, text, anchor, offset) {
             var p = Object.assign({}, labelStyle, {
                 title: text,
                 'text-anchor': anchor || 'center',
-                'text-offset': [0, 0]
+                'text-offset': offset || [0, 0]
             });
             return { type: 'Feature', properties: p,
                 geometry: { type: 'Point', coordinates: coord } };

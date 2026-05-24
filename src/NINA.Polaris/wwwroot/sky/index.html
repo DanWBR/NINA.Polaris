@@ -128,10 +128,14 @@
             );
         }
         /* SWE-5: ASIAIR-style edge labels on the target rectangle.
-           - .fov-label-corner    → "Target" at bottom-left corner
-           - .fov-label-edge-vert → "Rotation XXX.X°" along the LEFT
-             edge, rotated -90° so text reads upward
-           - .fov-label-edge-horz → "W° × H°" along the BOTTOM edge */
+           Mirrors the layout from the asiair screenshot the user
+           provided: "Target" at bottom-left corner inside, then
+           "Rotation XXX.X°" and "W° × H°" both running vertically
+           along the OUTSIDE of the left edge, stacked. Text uses
+           writing-mode: vertical-rl which rotates glyphs naturally
+           top-to-bottom — paired with rotate(180deg) we flip to
+           bottom-to-top so labels read upward as the eye usually
+           expects on a side label. */
         .fov-label {
             position: absolute;
             font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
@@ -143,20 +147,26 @@
             pointer-events: none;
             letter-spacing: 0.5px;
         }
+        /* "Target" — bottom-left corner, just inside the rectangle. */
         #sky-target-fov .fov-label-corner {
-            left: 4px;
-            bottom: 4px;
+            left: 6px;
+            bottom: 6px;
         }
-        #sky-target-fov .fov-label-edge-vert {
-            left: -6px;
+        /* Rotation + size: both vertical, stacked on the outside of
+           the LEFT edge. Rotation upper half, size lower half. */
+        #sky-target-fov .fov-label-edge-rot,
+        #sky-target-fov .fov-label-edge-size {
+            left: -8px;
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+        }
+        #sky-target-fov .fov-label-edge-rot {
+            bottom: 50%;
+            margin-bottom: 6px;
+        }
+        #sky-target-fov .fov-label-edge-size {
             top: 50%;
-            transform-origin: 0 0;
-            transform: translateY(-50%) rotate(-90deg) translateY(-100%);
-        }
-        #sky-target-fov .fov-label-edge-horz {
-            bottom: -18px;
-            left: 50%;
-            transform: translateX(-50%);
+            margin-top: 6px;
         }
     </style>
 </head>
@@ -164,8 +174,8 @@
     <canvas id="stel-canvas"></canvas>
     <div id="sky-target-fov">
         <span class="fov-label fov-label-corner">Target</span>
-        <span class="fov-label fov-label-edge-vert" id="sky-target-rotlabel">Rotation 0.0°</span>
-        <span class="fov-label fov-label-edge-horz" id="sky-target-sizelabel">0° × 0°</span>
+        <span class="fov-label fov-label-edge-rot" id="sky-target-rotlabel">Rotation 0.0°</span>
+        <span class="fov-label fov-label-edge-size" id="sky-target-sizelabel">0° × 0°</span>
     </div>
     <div id="sky-status"><div class="msg">Loading sky engine…</div></div>
     <div id="sky-footer">
