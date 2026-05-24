@@ -172,6 +172,32 @@ app.Services.GetRequiredService<LiveStackTriggersService>();
     profiles.EquipmentProfileActivated += _ => EvaluateMode("rig-switch");
 }
 
+// SWE-3-bugfix: strip CSP for /sky/* responses. The ASP.NET dev-time
+// browser refresh middleware injects a strict Content-Security-Policy
+// header (no 'unsafe-eval', no 'wasm-unsafe-eval') into HTML responses.
+// stellarium-web-engine's Emscripten runtime calls addFunction() during
+// init, which internally uses `new Function(...)` to build callback
+// trampolines — CSP blocks that and the engine never reaches onReady,
+// so addDataSource never fires and the sky stays empty with no Network
+// requests to skydata at all (matches the symptom we hit).
+//
+// Easiest correct fix: remove the CSP header entirely for the /sky/
+// sub-app via Response.OnStarting (which runs AFTER all upstream
+// middlewares have set their headers and BEFORE the body streams).
+// The iframe is sandboxed by the parent's sandbox attribute already,
+// so dropping CSP on /sky/ doesn't widen the attack surface — the
+// surface is bounded by the iframe sandbox.
+app.Use(async (ctx, next) => {
+    if (ctx.Request.Path.StartsWithSegments("/sky")) {
+        ctx.Response.OnStarting(() => {
+            ctx.Response.Headers.Remove("Content-Security-Policy");
+            ctx.Response.Headers.Remove("Content-Security-Policy-Report-Only");
+            return Task.CompletedTask;
+        });
+    }
+    await next();
+});
+
 app.UseDefaultFiles();
 // CLST-2: the WASM AppBundle includes extensions ASP.NET Core's
 // default FileExtensionContentTypeProvider doesn't know about
