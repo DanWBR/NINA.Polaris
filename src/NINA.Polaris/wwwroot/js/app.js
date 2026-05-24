@@ -4508,7 +4508,8 @@ function ninaApp() {
 
             let mount = null;
             if (this.mount?.connected
-                && this.mount.ra != null && this.mount.dec != null) {
+                && Number.isFinite(this.mount.ra)
+                && Number.isFinite(this.mount.dec)) {
                 mount = {
                     raDeg: this.mount.ra * 15,
                     decDeg: this.mount.dec,
@@ -4518,13 +4519,23 @@ function ninaApp() {
 
             let target = null;
             if (this.skyTarget
-                && (this.skyTarget.ra != null) && (this.skyTarget.dec != null)) {
+                && Number.isFinite(this.skyTarget.ra)
+                && Number.isFinite(this.skyTarget.dec)) {
                 target = {
                     raDeg: this.skyTarget.ra * 15,
                     decDeg: this.skyTarget.dec,
                     widthDeg: w, heightDeg: h, rotationDeg: rot
                 };
             }
+
+            // Helpful diagnostic when "where's my FOV rectangle?" comes up:
+            // logs whether the parent decided to send a mount/target side
+            // and why (e.g. mount: false because mount.connected is false).
+            console.log('[Polaris] _pushSkyFovOverlays mount=',
+                mount ? `${mount.raDeg.toFixed(2)}°/${mount.decDeg.toFixed(2)}°` : 'null',
+                'target=',
+                target ? `${target.raDeg.toFixed(2)}°/${target.decDeg.toFixed(2)}°` : 'null',
+                'fov=', w.toFixed(2) + '°×' + h.toFixed(2) + '°');
 
             this._skySendMessage({ type: 'set-fov-overlays', mount, target });
         },

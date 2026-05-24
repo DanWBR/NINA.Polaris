@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.5.1-swe5';
+    var BRIDGE_VERSION = '0.5.2-swe5';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -306,22 +306,28 @@
         return ring;
     }
 
-    function skyFovGeoJson(centre, color, dashed) {
+    function skyFovGeoJson(centre, color, glow) {
         var ring = skyFovRect(centre.raDeg, centre.decDeg,
             centre.widthDeg, centre.heightDeg, centre.rotationDeg || 0);
-        var props = {
-            stroke: color,
-            'stroke-width': dashed ? 2 : 2,
-            'stroke-opacity': 1,
-            fill: color,
-            'fill-opacity': 0.05
-        };
-        if (dashed) props['stroke-dasharray'] = '6,4';
+        // stellarium-web-engine's geojson parser only knows: stroke,
+        // fill (both #RRGGBB), stroke-width, stroke-opacity,
+        // fill-opacity, stroke-glow (bool). No stroke-dasharray — so
+        // we lean on stroke-glow:true for the target rectangle to give
+        // it visual differentiation from the solid mount rectangle
+        // when both happen to draw at the same RA/Dec (e.g. mount
+        // sitting on the planned target).
         return {
             type: 'FeatureCollection',
             features: [{
                 type: 'Feature',
-                properties: props,
+                properties: {
+                    stroke: color,
+                    'stroke-width': glow ? 4 : 3,
+                    'stroke-opacity': 1,
+                    'stroke-glow': !!glow,
+                    fill: color,
+                    'fill-opacity': 0.12
+                },
                 geometry: { type: 'Polygon', coordinates: [ring] }
             }]
         };
@@ -347,18 +353,24 @@
         skyRemoveObj('mount');
         skyRemoveObj('target');
         skyRemoveObj('mosaic');
+        console.log('[Sky] set-fov-overlays mount=', mount, 'target=', target);
         try {
             if (mount && mount.widthDeg > 0) {
                 __skyFovObjs.mount = stel.createObj('geojson', {
-                    data: skyFovGeoJson(mount, '#3b82f6', false)
+                    data: skyFovGeoJson(mount, '#1e40af', false)  // dark blue, solid
                 });
                 __skyFovLayer.add(__skyFovObjs.mount);
+                console.log('[Sky] mount FOV rect created at RA=' + mount.raDeg.toFixed(2)
+                    + '° Dec=' + mount.decDeg.toFixed(2) + '° size=' + mount.widthDeg.toFixed(2)
+                    + '°×' + mount.heightDeg.toFixed(2) + '°');
             }
             if (target && target.widthDeg > 0) {
                 __skyFovObjs.target = stel.createObj('geojson', {
-                    data: skyFovGeoJson(target, '#ef4444', true)
+                    data: skyFovGeoJson(target, '#ef4444', true)  // red, glow
                 });
                 __skyFovLayer.add(__skyFovObjs.target);
+                console.log('[Sky] target FOV rect created at RA=' + target.raDeg.toFixed(2)
+                    + '° Dec=' + target.decDeg.toFixed(2) + '° (glow)');
             }
             if (mosaic && mosaic.tiles && mosaic.tiles.length) {
                 // Mosaic grid: one polygon per tile, yellow.
