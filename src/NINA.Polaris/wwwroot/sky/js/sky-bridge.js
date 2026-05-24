@@ -34,7 +34,7 @@
 (function () {
     'use strict';
 
-    var BRIDGE_VERSION = '0.7.0-swe5';
+    var BRIDGE_VERSION = '0.7.1-swe5';
 
     // -----------------------------------------------------------------
     // CRITICAL: stellarium-web-engine's emscripten layer can't resolve
@@ -422,9 +422,16 @@
         // even when the engine projects the rectangle at a tilt
         // (which is what the user noticed: "só o label do FOV da
         // montagem que não gira").
+        // Engine geojson title is rendered via paint_text → NanoVG,
+        // which in the upstream simple-html demo wraps long strings at
+        // the first space when no font is explicitly loaded (we don't
+        // call stel.setFont). Confirmed in user testing: a long
+        // "Scope  W° × H°  Rotation X°" came out as "Scope" + "4.01"
+        // stacked vertically. Use a single hyphen-joined token with
+        // NO inner whitespace so the renderer can't wrap.
         var rotPositive = ((rot % 360) + 360) % 360;
-        var labelText = 'Scope  ' + w.toFixed(2) + '° × ' + h.toFixed(2)
-            + '°  Rotation ' + rotPositive.toFixed(1) + '°';
+        var labelText = 'Scope ' + w.toFixed(2) + 'x' + h.toFixed(2)
+            + ' rot ' + rotPositive.toFixed(1);
         var midTop = [(ring[2][0] + ring[3][0]) / 2, (ring[2][1] + ring[3][1]) / 2];
         var parallactic = skyParallacticAt(raDeg, decDeg);
         var textRotate = rot + parallactic;
