@@ -5882,8 +5882,18 @@
                     </select>
                 </label>
                 <label>Deconvolution Strength
-                    <input type="number" class="input-sm" step="0.05" min="0" max="1"
-                           x-model.number="graxpert.modalDeconStrength">
+                    <!-- GX-12p: slider + numeric readout. Touch-friendly
+                         on iPhone (the type=number stepper is tiny + the
+                         iOS soft keyboard hides half the modal). Value
+                         pinned 0..1 with 0.05 step to match the granularity
+                         the underlying model actually responds to. -->
+                    <span class="graxpert-strength-row">
+                        <input type="range" class="graxpert-strength-slider"
+                               step="0.05" min="0" max="1"
+                               x-model.number="graxpert.modalDeconStrength">
+                        <span class="graxpert-strength-value"
+                              x-text="graxpert.modalDeconStrength.toFixed(2)"></span>
+                    </span>
                 </label>
                 <label>Image FWHM (in pixels)
                     <input type="number" class="input-sm" step="0.1" min="0.5" max="20"
@@ -5913,8 +5923,14 @@
                     </select>
                 </label>
                 <label>Strength
-                    <input type="number" class="input-sm" step="0.05" min="0" max="1"
-                           x-model.number="graxpert.modalDenoiseStrength">
+                    <!-- GX-12p: slider — see Decon for rationale. -->
+                    <span class="graxpert-strength-row">
+                        <input type="range" class="graxpert-strength-slider"
+                               step="0.05" min="0" max="1"
+                               x-model.number="graxpert.modalDenoiseStrength">
+                        <span class="graxpert-strength-value"
+                              x-text="graxpert.modalDenoiseStrength.toFixed(2)"></span>
+                    </span>
                 </label>
             </div>
 

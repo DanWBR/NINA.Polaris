@@ -4749,6 +4749,34 @@ label select.input-sm {
        is AFTER; at split=100% the whole image is BEFORE. */
     clip-path: inset(0 0 0 var(--split));
 }
+/* GX-12p: Strength sliders in the Denoise / Decon modals.
+   Replaces the type=number stepper that was too small to hit
+   accurately on iPhone (and triggered the iOS soft keyboard,
+   which hides half the modal). Slider sits in a flex row with
+   the numeric value to the right so the user always sees the
+   exact float they're committing to. */
+.graxpert-strength-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+.graxpert-strength-slider {
+    flex: 1 1 auto;
+    min-width: 0;        /* let flex shrink instead of overflowing */
+    height: 28px;        /* generous touch target on mobile (Apple HIG ≥ 44pt total, padding bumps it there) */
+    accent-color: var(--accent, #5b8def);
+    cursor: pointer;
+}
+.graxpert-strength-value {
+    flex: 0 0 auto;
+    min-width: 3em;
+    text-align: right;
+    font-variant-numeric: tabular-nums;   /* number doesn't dance as you drag */
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
 .graxpert-compare-handle {
     /* GX-11c: the handle is a 40-px-wide invisible HIT TARGET
        centred on the split column. The visible 2-px bar + the
