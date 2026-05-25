@@ -706,6 +706,33 @@
         return dst;
     }
 
+    // GX-12m: iOS-friendly variant — pad + normalize-to-0..1 in a
+    // single Float32 pass, skipping the intermediate Uint16 buffer
+    // entirely. The Denoise pipeline used to call padEdge() then
+    // immediately copy-divide into a Float32Array, holding BOTH
+    // buffers (Uint16 padded + Float32 normalized) in memory at the
+    // same time — a transient 13 MB-per-channel peak that pushed
+    // iPhone Safari over its OOM kill threshold on RGB masters. By
+    // folding both steps here, peak usage drops to just the Float32
+    // result, and we never have to allocate the Uint16 staging buffer.
+    function padEdgeFloat32Normalized(src, w, h, padX, padY) {
+        const pw = w + 2 * padX;
+        const ph = h + 2 * padY;
+        const dst = new Float32Array(pw * ph);
+        const INV = 1 / 65535;
+        for (let y = 0; y < ph; y++) {
+            const sy = Math.max(0, Math.min(h - 1, y - padY));
+            const srcRow = sy * w;
+            const dstRow = y * pw;
+            const leftVal = src[srcRow] * INV;
+            for (let x = 0; x < padX; x++) dst[dstRow + x] = leftVal;
+            for (let x = 0; x < w; x++) dst[dstRow + padX + x] = src[srcRow + x] * INV;
+            const rightVal = src[srcRow + w - 1] * INV;
+            for (let x = 0; x < padX; x++) dst[dstRow + padX + w + x] = rightVal;
+        }
+        return dst;
+    }
+
     // ───────────────────────────────────────────────────────────────
     // GX-3: Denoise pipeline (v2 / v3). Tile-based — stride 128,
     // window 256, 64-pixel context margin per tile edge. Output of
@@ -839,13 +866,19 @@
             const ith = Math.ceil(height / STRIDE);
             const padW = itw * STRIDE + 2 * MARGIN;
             const padH = ith * STRIDE + 2 * MARGIN;
-            const padded = padEdge(pixels, width, height,
+            // GX-12m: single-pass pad + normalize → no intermediate
+            // Uint16 buffer. Cuts peak memory by ~13 MB per channel on
+            // a typical RGB master; the saved transient is enough to
+            // keep an iPhone Safari tab under its OOM kill threshold
+            // for v2 on RGB. v3 (456 MB model) is still borderline.
+            // `let` (not const) so we can null it after the tile loop
+            // and let JSC reclaim the ~26 MB before allocating `dst`.
+            let planeF = padEdgeFloat32Normalized(
+                pixels, width, height,
                 (padW - width) / 2 | 0, (padH - height) / 2 | 0);
             await _yieldToBrowser();
 
             // Global median + MAD on the padded plane (downsampled).
-            const planeF = new Float32Array(padded.length);
-            for (let i = 0; i < padded.length; i++) planeF[i] = padded[i] / 65535;
             const { median, mad } = medianMadSampled(planeF);
             await _yieldToBrowser();
 
@@ -923,6 +956,13 @@
                 }
             }
             const inferenceMs = performance.now() - t0;
+
+            // GX-12m: drop the padded normalized plane once tiles are
+            // done — the trim+blend pass only needs `out` and the
+            // original `pixels`. On iOS this frees ~26 MB per channel
+            // (Float32, padded dimensions) BEFORE we allocate `dst`,
+            // giving the OOM headroom a small but real boost.
+            planeF = null;
 
             // Trim padding + apply strength blend against the original.
             //
