@@ -361,6 +361,19 @@ public class UserProfile {
     public double GraXpertDeconPsfSize { get; set; } = 4.0;
     public double GraXpertDenoiseStrength { get; set; } = 0.5;
 
+    // GX-1: ONNX in-browser inference for GraXpert AI ops. The server
+    // hosts the .onnx model files (Onnx:ModelsPath points at any dir
+    // containing them; GraXpert's models/ layout — {family}-ai-models/
+    // {version}/model.onnx — is auto-detected) and serves bytes via
+    // /api/onnx/model/... The browser fetches once, caches in IndexedDB
+    // by SHA-256 hash, runs inference locally via onnxruntime-web.
+    // LicenseAcknowledged tracks the CC BY-NC-SA 4.0 consent the user
+    // gave (models are non-commercial; consent is per-install).
+    public string OnnxModelsPath { get; set; } = "";
+    public bool OnnxLicenseAcknowledged { get; set; } = false;
+    public string OnnxDefaultDenoiseVersion { get; set; } = "2.0.0";
+    public bool OnnxPreferCli { get; set; } = false;
+
     // Image output
     public string ImageOutputDir { get; set; } = "";
     public string ImageNamePattern { get; set; } = "{target}_{filter}_{exposure}s_{date}_{seq}";

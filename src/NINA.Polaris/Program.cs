@@ -97,6 +97,7 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Studio.BatchStackingService>
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.FrameOperationsService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Editor.ImageEditService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Editor.EditSidecarStore>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Onnx.OnnxModelRegistry>();
 builder.Services.AddSingleton<FileBrowserService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.SirilService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.GraXpertService>();
@@ -318,9 +319,19 @@ app.MapSystemEndpoints();
 app.MapImageEndpoints();
 app.MapStudioEndpoints();
 app.MapEditorEndpoints();
+app.MapOnnxEndpoints();
 app.MapFilesEndpoints();
 app.MapSirilEndpoints();
 app.MapGraXpertEndpoints();
+
+// GX-1: kick off an initial walk of the configured Onnx:ModelsPath
+// so /api/onnx/manifest is populated before the first browser request.
+// Hash compute stays lazy (RescanAsync only stat-walks; SHA-256 runs
+// on first /manifest GET).
+_ = Task.Run(async () => {
+    try { await app.Services.GetRequiredService<NINA.Polaris.Services.Onnx.OnnxModelRegistry>().RescanAsync(); }
+    catch (Exception ex) { app.Logger.LogWarning(ex, "OnnxModelRegistry initial scan failed"); }
+});
 
 // Live stacking + INDI
 app.MapLiveStackEndpoints();
