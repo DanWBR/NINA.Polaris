@@ -4540,7 +4540,42 @@ label select.input-sm {
     color: #86efac;
 }
 
-.editor-export-modal { min-width: 360px; }
+/* Editor export modal — backdrop covers the viewport, frame floats
+   centred. Mirrors the .siril-modal pattern (same z-index + dim) so
+   it stacks correctly with toasts (which sit at z-index ~2000). */
+.editor-export-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.78);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+.editor-export-modal {
+    min-width: 360px;
+    max-width: 520px;
+    width: 100%;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px;
+    color: var(--text-primary);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+.editor-export-modal h3 {
+    margin: 0 0 14px 0;
+    font-size: 16px;
+}
+.editor-export-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
+}
 .editor-export-row {
     display: grid;
     grid-template-columns: 80px 1fr auto;

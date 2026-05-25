@@ -3329,10 +3329,16 @@
                 </div>
             </div>
 
-            <!-- Export modal — quality + format + resize. ED-5. -->
-            <div class="modal-backdrop" x-show="editorState.exportModal" x-cloak
+            <!-- Export modal — quality + format + resize. ED-5.
+                 NOTE: uses .editor-export-backdrop / .editor-export-modal
+                 (NOT the generic .modal-backdrop / .modal which don't
+                 exist in our CSS). The original markup pointed at
+                 unknown classes so the modal rendered invisibly in
+                 the document flow — the Export… header button "did
+                 nothing" from the user's POV. -->
+            <div class="editor-export-backdrop" x-show="editorState.exportModal" x-cloak
                  @click.self="editorState.exportModal = false">
-                <div class="modal editor-export-modal">
+                <div class="editor-export-modal">
                     <h3>Export</h3>
                     <label class="editor-export-row">
                         <span>Format</span>
@@ -3362,7 +3368,7 @@
                     <p class="hint">
                         Output: <code x-text="editorExportOutputPreview()"></code>
                     </p>
-                    <div class="modal-actions">
+                    <div class="editor-export-actions">
                         <button class="btn" @click="editorState.exportModal = false">Cancel</button>
                         <button class="btn btn-primary" @click="editorDoExport()"
                                 :disabled="editorState.exporting">
