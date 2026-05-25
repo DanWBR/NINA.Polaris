@@ -405,3 +405,4 @@ src/NINA.Polaris/processed/
 # directory structure survives a clone — operators drop their own
 # models in matching the GraXpert layout (see README.md).
 src/NINA.Polaris/wwwroot/graxpert/models/**/*.onnx
+nanobanana-output/
