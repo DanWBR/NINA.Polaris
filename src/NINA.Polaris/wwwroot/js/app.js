@@ -8604,9 +8604,10 @@ function ninaApp() {
                 this.graxpert.browserPhase = 'done';
                 this.toast('Browser GraXpert done — ' + written.length
                           + ' / ' + paths.length + ' written', 'ok');
-                if (this.tab === 'files') {
-                    try { await this.filesReload(); } catch {}
-                }
+                // UX: auto-close + select the new siblings.
+                // failedCount === (paths.length - written.length).
+                await this._graxpertHandleCompletion(
+                    written, paths.length - written.length);
             } catch (e) {
                 console.error('[GraXpert browser] failed', e);
                 this.toast('Browser run failed: ' + (e.message || ''), 'error');
@@ -8650,6 +8651,55 @@ function ninaApp() {
             return j.path;
         },
 
+        // UX: close the GraXpert modal after a successful run + (when on
+        // FILES) refresh the directory and pre-select the new sibling(s)
+        // so the user lands on them instead of staring at a static
+        // "done" modal they have to dismiss manually. Both browser-mode
+        // (_graxpertRunInBrowser) and CLI-mode (_graxpertStartPolling)
+        // call this on completion. failedCount > 0 keeps the modal
+        // open so the user can read the error context — auto-closing on
+        // partial failure would hide the diagnostics.
+        async _graxpertHandleCompletion(writtenPaths, failedCount) {
+            if (failedCount > 0) return;
+            // Close + null-out the modal flag. graxpertCloseModal also
+            // tears down any CLI poll timer so we don't keep hitting
+            // the server after the modal goes away.
+            this.graxpertCloseModal();
+            if (this.tab !== 'files') return;
+            try { await this.filesReload(); }
+            catch { /* non-fatal — selection step below is best-effort */ }
+            if (!writtenPaths || writtenPaths.length === 0) return;
+            // Pre-select the new siblings so they're visually
+            // distinguished from the source. Filter against the actual
+            // entries the listing just returned so a path that doesn't
+            // belong to the current cwd (output went to a different
+            // folder) doesn't silently leave a dangling selection.
+            // Match server-emitted paths against entry.fullPath. Both
+            // sides come from the same backend so the separator
+            // (Win: '\\', Linux: '/') is consistent — no normalize
+            // needed. Case-insensitive on Windows is also fine since
+            // Windows fs is case-insensitive and a mismatch would be
+            // a server bug, not a UX one.
+            const isWin = navigator.platform.startsWith('Win');
+            const eq = isWin
+                ? (a, b) => a.toLowerCase() === b.toLowerCase()
+                : (a, b) => a === b;
+            const inCwd = writtenPaths.filter(p =>
+                this.files.entries.some(e => eq(e.fullPath, p)));
+            if (inCwd.length === 0) return;
+            this.files.selectedPaths = inCwd.slice();
+            // Scroll the first match into view on the next render tick
+            // so Alpine has actually painted the highlighted row.
+            this.$nextTick(() => {
+                const first = inCwd[0];
+                const row = document.querySelector(
+                    '[data-files-row-path="' + CSS.escape(first) + '"]');
+                if (row && typeof row.scrollIntoView === 'function') {
+                    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            });
+        },
+
         _graxpertStartPolling() {
             if (this.graxpert._pollTimer) clearInterval(this.graxpert._pollTimer);
             this.graxpert._pollTimer = setInterval(async () => {
@@ -8663,11 +8713,14 @@ function ninaApp() {
                         this.graxpert._pollTimer = null;
                         const msg = `GraXpert done — ${job.done} ok, ${job.failed} failed`;
                         this.toast(msg, job.failed ? 'warn' : 'ok');
-                        if (this.tab === 'files') {
-                            // Refresh the FILES listing so new _bge/_decon/_denoise
-                            // siblings show up immediately.
-                            try { await this.filesReload(); } catch {}
-                        }
+                        // UX: auto-close + select the new siblings.
+                        // GraXpertBatchJob.Results carries the full
+                        // output path for each finished file; map to
+                        // a flat string[] for _graxpertHandleCompletion.
+                        const written = (job.results || [])
+                            .map(r => r.outputPath)
+                            .filter(p => !!p);
+                        await this._graxpertHandleCompletion(written, job.failed || 0);
                     }
                 } catch (e) { /* transient — keep polling */ }
             }, 1500);

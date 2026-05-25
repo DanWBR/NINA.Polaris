@@ -4754,6 +4754,7 @@
                                     :class="{ selected: files.selectedPaths.includes(entry.fullPath),
                                               'files-row-dir': entry.isDirectory,
                                               'files-row-hidden': entry.isHidden }"
+                                    :data-files-row-path="entry.fullPath"
                                     @click="filesToggleSelect(entry.fullPath, $event)"
                                     @dblclick="entry.isDirectory ? filesCd(entry.fullPath) : filesOpenPreview(entry)">
                                     <td class="files-col-sel">
