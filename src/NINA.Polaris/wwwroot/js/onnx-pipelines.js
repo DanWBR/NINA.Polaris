@@ -467,6 +467,25 @@
         return { median, mad };
     }
 
+    // GX-12m2: same math as medianMadSampled but reads from a raw
+    // Uint16 buffer + normalizes inline (× 1/65535). Lets the Denoise
+    // pipeline skip allocating a full Float32 copy of the plane just
+    // to compute median + MAD — saves ~26 MB / channel on iOS.
+    function medianMadSampledFromUint16(pixels) {
+        const N = Math.min(pixels.length, 4000);
+        const samples = new Float32Array(N);
+        const step = pixels.length / N;
+        const INV = 1 / 65535;
+        for (let i = 0; i < N; i++) samples[i] = pixels[Math.floor(i * step)] * INV;
+        const sorted = Array.from(samples).sort((a, b) => a - b);
+        const median = sorted[N >> 1];
+        const dev = new Float32Array(N);
+        for (let i = 0; i < N; i++) dev[i] = Math.abs(samples[i] - median);
+        const devSorted = Array.from(dev).sort((a, b) => a - b);
+        const mad = devSorted[N >> 1] || 1e-6;
+        return { median, mad };
+    }
+
     /** Cheap separable box-blur 3-pass ~Gaussian on a Float32 plane.
      *  Matches the radius used elsewhere in EditPipeline; for a fixed
      *  256x256 working plane this is sub-millisecond. */
@@ -850,44 +869,52 @@
 
             const session = await loadSession(family, version, opts.onProgress);
 
-            // GX-9 (UX): for a typical drizzle-2x master the padded
-            // plane is 25-50M ushorts. The sync padEdge + planeF
-            // normalize together hold the main thread for ~1-2s.
-            // Yield around them so the browser repaints the "loading
-            // model" → "preparing" transition without freezing.
+            // GX-12m2: zero-copy tile reads. We previously allocated a
+            // full padded Float32 plane (~26 MB / channel on a 3000×2000
+            // master) PLUS a full padded Float32 output buffer (same
+            // size). On iOS RGB that triple-allocation (planeF + out +
+            // pixels held simultaneously) crested Safari's per-tab OOM
+            // kill threshold even for v2.
+            //
+            // New shape: tile loop reads raw `pixels` with edge-clamp
+            // padding via paddedRead(), normalizes inline, writes the
+            // blended Uint16 result straight into `dst`. No padded
+            // Float32 buffers exist anywhere. Peak per channel drops
+            // from ~64 MB to ~14 MB (dst + tensorData scratch).
             if (opts.onProgress) opts.onProgress('preparing', null);
             await _yieldToBrowser();
 
-            // Tile grid + padded source. itw/ith are the inner-tile
-            // counts; the padded buffer is sized so the last tile's
-            // inner region just covers the source edge (then we trim
-            // to the original dimensions at the very end).
+            // Tile grid. `padW`/`padH`/`offsetX`/`offsetY` stay as
+            // logical coordinates — they describe WHERE in a virtual
+            // padded plane each tile lives, but we never materialise
+            // that plane. `offsetX` / `offsetY` are how many phantom
+            // padding pixels precede the real frame on the left/top
+            // edge; subtracting them maps from padded coords back to
+            // raw-pixel coords for the edge-clamp read.
             const itw = Math.ceil(width  / STRIDE);
             const ith = Math.ceil(height / STRIDE);
             const padW = itw * STRIDE + 2 * MARGIN;
             const padH = ith * STRIDE + 2 * MARGIN;
-            // GX-12m: single-pass pad + normalize → no intermediate
-            // Uint16 buffer. Cuts peak memory by ~13 MB per channel on
-            // a typical RGB master; the saved transient is enough to
-            // keep an iPhone Safari tab under its OOM kill threshold
-            // for v2 on RGB. v3 (456 MB model) is still borderline.
-            // `let` (not const) so we can null it after the tile loop
-            // and let JSC reclaim the ~26 MB before allocating `dst`.
-            let planeF = padEdgeFloat32Normalized(
-                pixels, width, height,
-                (padW - width) / 2 | 0, (padH - height) / 2 | 0);
-            await _yieldToBrowser();
+            const offsetX = (padW - width) / 2 | 0;
+            const offsetY = (padH - height) / 2 | 0;
+            const INV = 1 / 65535;
 
-            // Global median + MAD on the padded plane (downsampled).
-            const { median, mad } = medianMadSampled(planeF);
-            await _yieldToBrowser();
+            // Helper: clamp-read from raw pixels, normalize to 0..1.
+            // px, py are coords in the PADDED virtual plane.
+            function paddedRead(px, py) {
+                let x = px - offsetX;
+                let y = py - offsetY;
+                if (x < 0) x = 0;
+                else if (x >= width) x = width - 1;
+                if (y < 0) y = 0;
+                else if (y >= height) y = height - 1;
+                return pixels[y * width + x] * INV;
+            }
 
-            // Output canvas (padded). We'll trim back at the end.
-            // GX-12m: padded buffer is gone — use planeF.length (same
-            // size, padW × padH Float32). The previous build still
-            // referenced `padded` here, throwing ReferenceError at
-            // first call.
-            const out = new Float32Array(planeF.length);
+            // Global median + MAD: sample raw pixels directly +
+            // normalize inline, no big intermediate buffer.
+            const { median, mad } = medianMadSampledFromUint16(pixels);
+            await _yieldToBrowser();
 
             const ort = await loadOrtWeb();
             const inputName  = session.inputNames[0];
@@ -895,32 +922,43 @@
             const totalTiles = itw * ith;
             let processed = 0;
             const t0 = performance.now();
-            // GX-9 (diag): the very first tile timing reveals the
-            // backend's real cost — if a 256×256 inference takes
-            // hundreds of ms on a discrete GPU something is wrong
-            // (CPU fallback, or per-tile bridge overhead dominating).
             let firstTileMs = null;
+
+            // GX-12b: blend-mask threshold (bright pixels keep original,
+            // sub-threshold background gets denoised).
+            const thresholdNorm = CLIP / 0.04 * mad + median;
+            // Output buffer — only the trimmed final dimensions, no padding.
+            const dst = new Uint16Array(width * height);
+            // Tile tensor reused across iterations? No — ort.Tensor takes
+            // ownership of the backing Float32Array, so each tile needs
+            // a fresh allocation. The reuse trick fights with ORT Web.
+            const tensorData = new Float32Array(TILE * TILE * 3);
+            const invMadScaled = 0.04 / mad;        // for normalize hot loop
+            const madPerNorm   = mad / 0.04;        // for denormalize
 
             for (let ty = 0; ty < ith; ty++) {
                 for (let tx = 0; tx < itw; tx++) {
                     const sx = tx * STRIDE;
                     const sy = ty * STRIDE;
 
-                    // Build the tile's [256,256,3] NHWC float32 input.
-                    // Mono input → replicate the channel.
-                    const tensorData = new Float32Array(TILE * TILE * 3);
+                    // Build the tile's [1,256,256,3] NHWC float32 input
+                    // by reading raw pixels through paddedRead.
+                    // Triplicate mono into all 3 channels (model expects RGB).
                     for (let y = 0; y < TILE; y++) {
-                        const srcRow = (sy + y) * padW + sx;
                         const dstRow = y * TILE;
+                        const py = sy + y;
                         for (let x = 0; x < TILE; x++) {
-                            const v = planeF[srcRow + x];
-                            const n = Math.max(-CLIP, Math.min(CLIP,
-                                ((v - median) / mad) * 0.04));
-                            tensorData[(dstRow + x) * 3]     = n;
-                            tensorData[(dstRow + x) * 3 + 1] = n;
-                            tensorData[(dstRow + x) * 3 + 2] = n;
+                            const v = paddedRead(sx + x, py);
+                            let n = (v - median) * invMadScaled;
+                            if (n >  CLIP) n =  CLIP;
+                            else if (n < -CLIP) n = -CLIP;
+                            const base = (dstRow + x) * 3;
+                            tensorData[base]     = n;
+                            tensorData[base + 1] = n;
+                            tensorData[base + 2] = n;
                         }
                     }
+                    // Wrap in tensor (no copy — view onto tensorData).
                     const inputTensor = new ort.Tensor('float32',
                         tensorData, [1, TILE, TILE, 3]);
                     const tileT0 = performance.now();
@@ -935,20 +973,34 @@
                     }
                     const outData = result[outputName].data;
 
-                    // Extract inner [MARGIN:MARGIN+STRIDE] from each
-                    // axis, average the 3 channels back to mono, and
-                    // place into the padded output canvas.
+                    // Extract inner [MARGIN:MARGIN+STRIDE] from the
+                    // tile output, denormalize + average channels, apply
+                    // the blend-mask + strength blend, and write Uint16
+                    // straight into `dst`. The tile's inner region maps
+                    // to padded coords (sx+MARGIN, sy+MARGIN); we
+                    // subtract offsetX/offsetY to get raw-pixel coords.
                     for (let y = 0; y < STRIDE; y++) {
+                        const padY = sy + MARGIN + y;
+                        const rawY = padY - offsetY;
+                        if (rawY < 0 || rawY >= height) continue;
                         const tileRow = (MARGIN + y) * TILE + MARGIN;
-                        const outRow  = (sy + MARGIN + y) * padW + (sx + MARGIN);
+                        const rawRow  = rawY * width;
                         for (let x = 0; x < STRIDE; x++) {
+                            const padX = sx + MARGIN + x;
+                            const rawX = padX - offsetX;
+                            if (rawX < 0 || rawX >= width) continue;
                             const i3 = (tileRow + x) * 3;
-                            const r = outData[i3];
-                            const g = outData[i3 + 1];
-                            const b = outData[i3 + 2];
-                            // Denormalize + average.
-                            const denorm = ((r + g + b) / 3) * mad / 0.04 + median;
-                            out[outRow + x] = denorm;
+                            // Denormalize + average the 3 (replicated) channels.
+                            const denoised = ((outData[i3] + outData[i3 + 1]
+                                + outData[i3 + 2]) / 3) * madPerNorm + median;
+                            const orig = pixels[rawRow + rawX] * INV;
+                            // Mask: bright pixels (above CLIP threshold)
+                            // keep the original; only sub-threshold
+                            // background gets the model's output.
+                            const masked = orig < thresholdNorm ? denoised : orig;
+                            const blended = masked * strength + orig * (1 - strength);
+                            const u = (blended * 65535 + 0.5) | 0;
+                            dst[rawRow + rawX] = u < 0 ? 0 : (u > 65535 ? 65535 : u);
                         }
                     }
 
@@ -960,51 +1012,6 @@
                 }
             }
             const inferenceMs = performance.now() - t0;
-
-            // GX-12m: drop the padded normalized plane once tiles are
-            // done — the trim+blend pass only needs `out` and the
-            // original `pixels`. On iOS this frees ~26 MB per channel
-            // (Float32, padded dimensions) BEFORE we allocate `dst`,
-            // giving the OOM headroom a small but real boost.
-            planeF = null;
-
-            // Trim padding + apply strength blend against the original.
-            //
-            // GX-12b: port GraXpert's blend_images mask. The denoise
-            // model is trained ONLY for low-amplitude background noise;
-            // applying it to bright stars + DSO cores blurs them, then
-            // the blend with original at strength<1 just averages-out
-            // the damage. Symptom (user report): "no diff visible at
-            // strength=1.0" — because the model damages stars AND
-            // smooths background, the re-stretched preview looks
-            // almost identical to the original.
-            //
-            // Fix: pixels whose NORMALIZED value > CLIP (the model
-            // threshold, 1.0 for v3 / 10.0 for v2) are restored from
-            // the original. In source-brightness space that maps to
-            // `threshold = CLIP / 0.04 * mad + median`. Stars stay
-            // crisp; background gets the model's denoising; the
-            // strength slider then blends the masked-denoised output
-            // against the original.
-            const thresholdNorm = CLIP / 0.04 * mad + median;
-            const offsetX = (padW - width) / 2 | 0;
-            const offsetY = (padH - height) / 2 | 0;
-            const dst = new Uint16Array(width * height);
-            for (let y = 0; y < height; y++) {
-                const srcRow = (offsetY + y) * padW + offsetX;
-                const origRow = y * width;
-                for (let x = 0; x < width; x++) {
-                    const denoised = out[srcRow + x];        // 0..1
-                    const orig = pixels[origRow + x] / 65535;
-                    // Mask: bright pixels keep the original; only
-                    // sub-threshold background goes through the model.
-                    const masked = orig < thresholdNorm ? denoised : orig;
-                    // Strength still blends masked-denoised vs original.
-                    const blended = masked * strength + orig * (1 - strength);
-                    dst[origRow + x] = Math.max(0, Math.min(65535,
-                        Math.round(blended * 65535)));
-                }
-            }
 
             return {
                 pixels: dst,
