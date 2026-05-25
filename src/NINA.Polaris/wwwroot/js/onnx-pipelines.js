@@ -208,16 +208,22 @@
      */
     let _pickedBackends = null;
 
-    // GX-12m4: iOS Safari Denoise OOM root cause is WebGPU memory
-    // pressure. BGE works (single 256×256 pass, ~few MB of GPU
-    // intermediates) but Denoise tiles for ~5-10 minutes hitting
-    // session.run() hundreds of times — each call leaks small GPU
-    // buffers that iOS Safari counts against the page's memory
-    // budget. iPhone Safari kills the tab when this crests ~1 GB.
-    // WASM stays in CPU memory which has higher limits and is more
-    // forgiving (incremental allocation, deterministic GC).
-    // Force WASM on iOS to trade speed (CPU is 5-10× slower than
-    // GPU here) for tab survival.
+    // GX-12m4 / GX-12n4: iOS WebGPU is fine for small models but OOM-
+    // kills the tab on the FP32 Denoise weights. Original symptom:
+    // BGE works (single 256×256 pass, ~few MB of GPU intermediates)
+    // but Denoise's hundreds of session.run() calls accumulate small
+    // GPU buffers iOS Safari counts against the ~1 GB per-tab budget.
+    //
+    // The threshold below splits "definitely safe on iOS WebGPU"
+    // from "high risk of tab kill". 200 MB chosen because:
+    //   • Denoise v2 FP16 is ~142 MB → WebGPU works (~10× faster).
+    //   • Denoise v2 FP32 is 284 MB → WebGPU usually crashes.
+    //   • Denoise v3 FP32 is 456 MB → WebGPU always crashes.
+    //   • Denoise v3 FP16 is ~228 MB → borderline; we err to WASM.
+    //   • BGE / Decon FP32 fit below this and have been verified
+    //     to run on iOS WebGPU without crashing.
+    const IOS_WEBGPU_MAX_MODEL_BYTES = 200 * 1024 * 1024;
+
     function _isIOSForOnnx() {
         if (typeof navigator === 'undefined') return false;
         const ua = navigator.userAgent || '';
@@ -228,8 +234,36 @@
         return false;
     }
 
-    async function pickBackends() {
-        if (_pickedBackends) return _pickedBackends;
+    // GX-12n4: pickBackends now takes the model's on-disk size so the
+    // iOS gate can be conditional — small models keep WebGPU (fast),
+    // large ones force WASM (safe). Cache is per-(iOS_threshold)
+    // bucket so we don't re-probe the GPU adapter on every call.
+    async function pickBackends(modelSizeBytes) {
+        const iOS = _isIOSForOnnx();
+        if (iOS) {
+            // On iOS the decision varies per-model — no global memo.
+            const sizeOk = !modelSizeBytes
+                || modelSizeBytes <= IOS_WEBGPU_MAX_MODEL_BYTES;
+            if (!sizeOk) {
+                const ortReg = (window.OnnxRegistry || {});
+                ortReg.__lastBackend = 'wasm';
+                ortReg.__adapterInfo = {
+                    skippedReason: 'iOS + model ' + (modelSizeBytes / (1024 * 1024)).toFixed(0)
+                        + ' MB exceeds the ' + (IOS_WEBGPU_MAX_MODEL_BYTES / (1024 * 1024))
+                        + ' MB WebGPU cap on iPhone Safari',
+                };
+                console.log('[OnnxRegistry] iOS + large model — forcing WASM '
+                    + '(' + (modelSizeBytes / (1024 * 1024)).toFixed(0) + ' MB > '
+                    + (IOS_WEBGPU_MAX_MODEL_BYTES / (1024 * 1024)) + ' MB iOS WebGPU cap).');
+                return ['wasm'];
+            }
+            // Small model on iOS → fall through to the WebGPU probe.
+            // Reset memo so a subsequent large-model call re-evaluates.
+            _pickedBackends = null;
+        } else if (_pickedBackends) {
+            // Non-iOS: stable per-page, memoise the probe.
+            return _pickedBackends;
+        }
         // navigator.gpu just means the API exists — Edge / Chrome
         // ship the surface even on systems without a working adapter
         // (no GPU, GPU driver too old, browser flag disabled, running
@@ -239,18 +273,6 @@
         let chosen;
         let adapterInfo = null;
         let probeNotes = [];
-        // GX-12m4: skip WebGPU on iOS to avoid OOM kills (see comment
-        // on _isIOSForOnnx). Lands here BEFORE the requestAdapter
-        // attempt so we don't even allocate a GPU adapter handle.
-        if (_isIOSForOnnx()) {
-            _pickedBackends = ['wasm'];
-            const ortReg = (window.OnnxRegistry || {});
-            ortReg.__lastBackend = 'wasm';
-            ortReg.__adapterInfo = { skippedReason: 'iOS WebGPU avoided to prevent OOM kill' };
-            console.log('[OnnxRegistry] iOS detected — forcing WASM backend '
-                + '(WebGPU would crash the tab during Denoise tile loop).');
-            return _pickedBackends;
-        }
         const hasNavGpu = typeof navigator !== 'undefined' && navigator.gpu
                           && typeof navigator.gpu.requestAdapter === 'function';
         if (!hasNavGpu) {
@@ -386,7 +408,10 @@
         // user sees "loading model" before the freeze starts.
         await _yieldToBrowser();
         const ort = await loadOrtWeb();
-        const ep = await pickBackends();
+        // GX-12n4: pass the model size so iOS can choose WebGPU for
+        // small models (FP16 / BGE / Decon — fast) and WASM for big
+        // ones (FP32 Denoise — would OOM the tab on WebGPU).
+        const ep = await pickBackends(entry.sizeBytes);
         let session;
         try {
             session = await ort.InferenceSession.create(bytes, {
