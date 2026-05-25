@@ -5226,6 +5226,44 @@ label select.input-sm {
     transition: width 0.3s ease;
 }
 
+/* NET-1: client↔server throughput readout. Two rows stacked tight
+   so the pair occupies a single bar-height slot. Pulse animation
+   brightens + scales the arrow briefly when bytes arrive, giving
+   an LED-style activity hint the eye picks up faster than the
+   changing number. */
+.activity-net {
+    display: inline-flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 1px;
+    margin-right: 10px;
+    flex-shrink: 0;
+    font-size: 10px;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    min-width: 78px;
+}
+.activity-net-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+.activity-net-arrow {
+    width: 10px;
+    text-align: center;
+    transition: filter 80ms ease-out, transform 80ms ease-out;
+    will-change: filter, transform;
+}
+.activity-net-rx .activity-net-arrow { color: #86efac; }   /* green */
+.activity-net-tx .activity-net-arrow { color: #93c5fd; }   /* blue */
+.activity-net-row.net-pulse .activity-net-arrow {
+    filter: drop-shadow(0 0 4px currentColor) brightness(1.5);
+    transform: scale(1.25);
+}
+.activity-net-rate { color: var(--text-primary); }
+
 /* Host metrics block on the right side. */
 .activity-bar-host {
     display: flex;

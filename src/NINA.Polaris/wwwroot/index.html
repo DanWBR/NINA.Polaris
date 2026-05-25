@@ -5266,6 +5266,22 @@
             </template>
         </div>
         <span style="flex:1"></span>
+        <!-- NET-1: client↔server traffic. Two stacked rows (↓ rx, ↑ tx)
+             with auto-scaled units. Pulse class lights up briefly when
+             bytes arrive — gives an LED-style "data flowing" hint that's
+             more legible than the changing number alone. -->
+        <div class="activity-net" :title="netTooltip()">
+            <span class="activity-net-row activity-net-rx"
+                  :class="{ 'net-pulse': net.rxPulse }">
+                <span class="activity-net-arrow">↓</span>
+                <span class="activity-net-rate" x-text="formatBytesPerSec(net.rxRate)"></span>
+            </span>
+            <span class="activity-net-row activity-net-tx"
+                  :class="{ 'net-pulse': net.txPulse }">
+                <span class="activity-net-arrow">↑</span>
+                <span class="activity-net-rate" x-text="formatBytesPerSec(net.txRate)"></span>
+            </span>
+        </div>
         <div class="activity-bar-host" x-show="host.cpuPercent != null || host.device" x-cloak>
             <!-- Hardware identification — detected once at startup
                  (HostInfo.cs). Tooltip carries the full model/OS;

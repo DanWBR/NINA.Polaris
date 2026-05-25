@@ -417,6 +417,31 @@ function ninaApp() {
         sirilActiveJobs: [],
         graXpertActiveJobs: [],
 
+        // NET-1: client-side network activity indicator. rxRate/txRate
+        // are bytes/sec averaged over a sliding 3s window so brief
+        // 0-byte gaps don't flicker the readout to zero. rxPulse/txPulse
+        // are momentary booleans that drive a 120ms CSS keyframe each
+        // time bytes arrive — gives a LED-style "data flowing"
+        // confirmation that's easier to spot than the changing number.
+        // rxTotal/txTotal cumulate session bytes for the hover tooltip.
+        net: {
+            rxRate: 0, txRate: 0,
+            rxPulse: false, txPulse: false,
+            rxTotal: 0, txTotal: 0,
+        },
+        // Internal: deltas accumulated since last meter tick. Tick
+        // reads + zeroes them. Separate from the rolling window samples
+        // so the meter can compute "bytes in last 3s" cheaply.
+        _netDeltaRx: 0,
+        _netDeltaTx: 0,
+        // Rolling samples for 3s window. {tMs, dRx, dTx} pushed at each
+        // tick; entries older than 3000ms dropped before computing the
+        // displayed rate.
+        _netSamples: [],
+        // Tracks the last PerformanceResourceTiming index we counted so
+        // each tick only sums new entries (no double-count).
+        _netRtLastIdx: 0,
+
         // SIM-6: built-in equipment simulator. WS payload populates
         // `simulator` once a second; `simulatorSettings` mirrors the
         // persisted UserProfile fields and is loaded on first Settings
@@ -945,6 +970,11 @@ function ninaApp() {
             setInterval(() => this.updateClock(), 1000);
             this.updateFov();
 
+            // NET-1: kick the throughput meter immediately. WS opens
+            // moments later — by the time the first frames flow the
+            // tick loop is running and the rolling window absorbs them.
+            this._netStartMeter();
+
             // SWE-1: stand up the postMessage bridge to the Sky
             // sub-application iframe (/sky/index.html). The iframe
             // posts back { type: "ready" } once it's loaded; until
@@ -1091,6 +1121,29 @@ function ninaApp() {
 
             // Deduplicate: if same request is already in flight, return its promise
             if (this._pending[key]) return this._pending[key];
+
+            // NET-1: account for upload bytes (Performance API only
+            // surfaces transferSize for the response). For JSON bodies
+            // that's the stringified length; for FormData we sum file
+            // sizes; for ArrayBuffer / TypedArray it's the byteLength.
+            const body = options.body;
+            if (body) {
+                let txBytes = 0;
+                if (typeof body === 'string') {
+                    txBytes = body.length;
+                } else if (body instanceof ArrayBuffer) {
+                    txBytes = body.byteLength;
+                } else if (body && body.byteLength != null) {
+                    txBytes = body.byteLength;
+                } else if (typeof FormData !== 'undefined' && body instanceof FormData) {
+                    // FormData iterator gives [name, valueOrFile] pairs.
+                    for (const [, v] of body) {
+                        if (v && v.size != null) txBytes += v.size;
+                        else if (typeof v === 'string') txBytes += v.length;
+                    }
+                }
+                if (txBytes > 0) this._netTx(txBytes);
+            }
 
             const timeout = options.timeout || 15000;
             const controller = new AbortController();
@@ -1240,7 +1293,7 @@ function ninaApp() {
                 try {
                     this._termFitAddon.fit();
                     if (this._termSocket?.readyState === WebSocket.OPEN) {
-                        this._termSocket.send(JSON.stringify({
+                        this._wsSendTracked(this._termSocket, JSON.stringify({
                             type: 'resize',
                             cols: this._termInstance.cols,
                             rows: this._termInstance.rows
@@ -1260,7 +1313,7 @@ function ninaApp() {
             ws.onopen = () => {
                 // Auth handshake: single JSON frame with creds + PTY size.
                 // Server keeps them only in memory for this socket's life.
-                ws.send(JSON.stringify({
+                this._wsSendTracked(ws, JSON.stringify({
                     type: 'auth',
                     host: this.term.host,
                     port: this.term.port,
@@ -1280,6 +1333,10 @@ function ninaApp() {
                 const data = typeof ev.data === 'string'
                     ? ev.data
                     : new TextDecoder().decode(new Uint8Array(ev.data));
+                // NET-1: account for both text + binary terminal frames.
+                this._netRx(typeof ev.data === 'string'
+                    ? ev.data.length
+                    : (ev.data.byteLength || 0));
                 this._termInstance.write(data);
             };
             ws.onerror = () => {
@@ -1390,6 +1447,9 @@ function ninaApp() {
             };
 
             ws.onmessage = (evt) => {
+                // NET-1: status frames are JSON text — length is a
+                // reasonable byte-count approximation for ASCII payload.
+                if (typeof evt.data === 'string') this._netRx(evt.data.length);
                 try {
                     this.handleStatusMessage(JSON.parse(evt.data));
                 } catch (e) { }
@@ -1425,12 +1485,12 @@ function ninaApp() {
                 // Otherwise stick with JPEG (universally supported,
                 // server-side stacked preview already encoded).
                 const mode = this.wasmReady ? 'raw' : 'jpeg';
-                ws.send(JSON.stringify({ mode }));
+                this._wsSendTracked(ws, JSON.stringify({ mode }));
                 // Tell the server we can stack client-side. CLST-5 will
                 // act on this (flip LiveStackingService → MetricsOnly).
                 // Until CLST-5 ships the server logs + ignores it;
                 // sending now is benign.
-                ws.send(JSON.stringify({
+                this._wsSendTracked(ws, JSON.stringify({
                     type: 'client-capability',
                     wasm: !!this.wasmReady,
                     wasmVersion: this.wasmVersion || null
@@ -1441,8 +1501,8 @@ function ninaApp() {
             // load because WASM init is async).
             window.addEventListener('nina-wasm-ready', () => {
                 if (ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ mode: 'raw' }));
-                    ws.send(JSON.stringify({
+                    this._wsSendTracked(ws, JSON.stringify({ mode: 'raw' }));
+                    this._wsSendTracked(ws, JSON.stringify({
                         type: 'client-capability',
                         wasm: true,
                         wasmVersion: this.wasmVersion
@@ -1451,7 +1511,9 @@ function ninaApp() {
             }, { once: true });
 
             ws.onmessage = (evt) => {
+                // NET-1: account for both control text + binary frame.
                 if (typeof evt.data === 'string') {
+                    this._netRx(evt.data.length);
                     // Welcome or control message
                     try {
                         const msg = JSON.parse(evt.data);
@@ -1461,6 +1523,7 @@ function ninaApp() {
                     } catch (e) { }
                     return;
                 }
+                this._netRx(evt.data.byteLength || 0);
                 this.handleImageFrame(evt.data);
             };
 
@@ -2004,7 +2067,7 @@ function ninaApp() {
             // orchestrator (LiveStackTriggersService) sees the same
             // numbers it'd get from server-side StarDetector.
             if (this.imageWs && this.imageWs.readyState === WebSocket.OPEN) {
-                this.imageWs.send(JSON.stringify({
+                this._wsSendTracked(this.imageWs, JSON.stringify({
                     type: 'client-stack-progress',
                     frameCount,
                     hfr: hfrX100 / 100,
@@ -4143,6 +4206,9 @@ function ninaApp() {
             try {
                 const fd = new FormData();
                 fd.append('file', file);
+                // NET-1: account for the upload size (Performance API
+                // doesn't surface request body size, only response).
+                if (file?.size) this._netTx(file.size);
                 const r = await fetch('/api/editor/upload', { method: 'POST', body: fd });
                 if (!r.ok) throw new Error(`HTTP ${r.status}`);
                 const j = await r.json();
@@ -10141,6 +10207,146 @@ function ninaApp() {
                 return `${(usedMB / 1024).toFixed(1)} / ${(totalMB / 1024).toFixed(1)} GB`;
             }
             return `${usedMB} / ${totalMB} MB`;
+        },
+
+        // ─── NET-1: network throughput meter ────────────────────────────
+        // Hooks that the WS handlers / wrapped ws.send / apiFetch / raw
+        // editor fetches call to accumulate bytes. A 250ms timer
+        // (_netStartMeter) drains the deltas into a rolling 3s sample
+        // buffer and writes the displayed rxRate / txRate.
+
+        _netRx(bytes) {
+            if (!bytes || bytes <= 0) return;
+            this._netDeltaRx += bytes;
+            this.net.rxTotal += bytes;
+            // Pulse — drop after 120ms so a steady stream looks like a
+            // gentle flicker (each chunk re-arms it) and a one-off
+            // request looks like a single blink.
+            if (!this.net.rxPulse) {
+                this.net.rxPulse = true;
+                clearTimeout(this._netRxPulseT);
+                this._netRxPulseT = setTimeout(() => { this.net.rxPulse = false; }, 120);
+            }
+        },
+        _netTx(bytes) {
+            if (!bytes || bytes <= 0) return;
+            this._netDeltaTx += bytes;
+            this.net.txTotal += bytes;
+            if (!this.net.txPulse) {
+                this.net.txPulse = true;
+                clearTimeout(this._netTxPulseT);
+                this._netTxPulseT = setTimeout(() => { this.net.txPulse = false; }, 120);
+            }
+        },
+
+        // Drain Performance Resource Timing for any HTTP responses
+        // since the last call. transferSize includes the wire bytes
+        // (compression + headers) so it's a tighter proxy for "what
+        // the link saw" than the body length. Clears the buffer to
+        // keep it bounded (browser default cap ~150 entries).
+        _netDrainResourceTimings() {
+            if (typeof performance === 'undefined' || !performance.getEntriesByType) return;
+            const entries = performance.getEntriesByType('resource');
+            if (!entries.length) return;
+            let sum = 0;
+            for (const e of entries) {
+                // transferSize === 0 means cached or CORS-opaque
+                // (we're same-origin so the latter doesn't apply).
+                // encodedBodySize as fallback when transferSize is
+                // missing (older Firefox).
+                const n = e.transferSize || e.encodedBodySize || 0;
+                sum += n;
+            }
+            if (sum > 0) this._netRx(sum);
+            // Drop the buffer so the next call only sees fresh entries.
+            try { performance.clearResourceTimings(); } catch { /* unsupported */ }
+        },
+
+        _netMeterTick() {
+            // Pick up any HTTP traffic the wrappers can't see directly
+            // (image-tag / link-tag / iframe sub-resources, blob URL
+            // fetches the browser issued internally, etc.).
+            this._netDrainResourceTimings();
+
+            const now = Date.now();
+            this._netSamples.push({
+                t: now,
+                rx: this._netDeltaRx,
+                tx: this._netDeltaTx
+            });
+            this._netDeltaRx = 0;
+            this._netDeltaTx = 0;
+
+            // Drop samples older than 3s.
+            const cutoff = now - 3000;
+            while (this._netSamples.length && this._netSamples[0].t < cutoff) {
+                this._netSamples.shift();
+            }
+
+            // Sum window + compute rate. Window length is whatever's
+            // covered by current samples (max 3s) — gives meaningful
+            // numbers on first ticks before the buffer fills.
+            let rx = 0, tx = 0;
+            for (const s of this._netSamples) { rx += s.rx; tx += s.tx; }
+            const spanMs = this._netSamples.length
+                ? Math.max(250, now - this._netSamples[0].t)
+                : 1000;
+            this.net.rxRate = rx * 1000 / spanMs;
+            this.net.txRate = tx * 1000 / spanMs;
+        },
+
+        _netStartMeter() {
+            if (this._netMeterTimer) return;
+            this._netMeterTimer = setInterval(() => this._netMeterTick(), 250);
+        },
+
+        // Auto-scale to B/s · KB/s · MB/s with one decimal. Caller
+        // gets a fixed-width-ish string suitable for a tabular-num
+        // span without jumping width too much across the breakpoints.
+        formatBytesPerSec(bps) {
+            if (!Number.isFinite(bps) || bps <= 0) return '0 B/s';
+            if (bps < 1024) return Math.round(bps) + ' B/s';
+            if (bps < 1024 * 1024) return (bps / 1024).toFixed(1) + ' KB/s';
+            return (bps / (1024 * 1024)).toFixed(1) + ' MB/s';
+        },
+
+        // Tooltip — cumulative session totals + the current window.
+        netTooltip() {
+            const fmtTotal = (b) => {
+                if (b < 1024) return b + ' B';
+                if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
+                if (b < 1024 * 1024 * 1024) return (b / 1024 / 1024).toFixed(1) + ' MB';
+                return (b / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+            };
+            return 'Session totals\n'
+                 + '  ↓ ' + fmtTotal(this.net.rxTotal) + ' received\n'
+                 + '  ↑ ' + fmtTotal(this.net.txTotal) + ' sent';
+        },
+
+        // Wrap ws.send so it goes through _netTx. Returns the bytes
+        // sent so callers that want the count get it back; otherwise
+        // they can ignore.
+        _wsSendTracked(ws, payload) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return 0;
+            let bytes = 0;
+            if (typeof payload === 'string') {
+                // UTF-8 length approximation. Most of our control
+                // frames are pure ASCII JSON so this is exact; even
+                // with multi-byte chars the rough bound is fine for a
+                // throughput gauge.
+                bytes = payload.length;
+            } else if (payload instanceof ArrayBuffer) {
+                bytes = payload.byteLength;
+            } else if (payload && payload.byteLength != null) {
+                // TypedArray / Blob-ish
+                bytes = payload.byteLength;
+            } else if (payload && payload.size != null) {
+                // Blob
+                bytes = payload.size;
+            }
+            ws.send(payload);
+            this._netTx(bytes);
+            return bytes;
         },
 
         // --- Status WebSocket handler ---
