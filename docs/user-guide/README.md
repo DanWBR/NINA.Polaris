@@ -48,6 +48,10 @@ Each tab in the sidebar has its own page. Read the ones you need:
   sliders for Light / Color / Effects / Detail + JPEG/PNG/TIFF export
   with quality + resize. Sidecar JSON (`.edit.json`) preserves your
   edits next to the source file.
+- **[AI inference (ONNX)](onnx-inference.md)** — GraXpert AI models
+  (BGE / Denoise / Decon) running directly in the browser via
+  onnxruntime-web. Server hosts the `.onnx` files; any device with
+  WebGPU or WASM SIMD does the heavy lifting locally.
 - **[FILES](files.md)** — server-side file explorer.
 - **[Relay (remote access)](relay.md)** — TLS-tunneled access from
   outside your LAN.
