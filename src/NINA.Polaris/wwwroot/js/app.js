@@ -8576,11 +8576,33 @@ function ninaApp() {
                     isQuantized: tag !== '',
                 };
             });
-            // Sort: lighter first on iOS (so the picker defaults skew
-            // toward what'll actually run), original-FP32 first elsewhere.
+            // GX-12n2: Sort priority on iOS is NOT just "smallest first".
+            // Order matters because ORT Web's WASM execution provider
+            // (the only backend we use on iOS — WebGPU is force-disabled
+            // there) does NOT include the INT8 quantized operators
+            // bundled in the default ort.webgpu.min.js distribution.
+            // Loading an -int8 model on iOS produces "no backend found"
+            // + an OOM cascade while the runtime allocates buffers
+            // before realising the ops are missing.
+            //
+            // So on iOS the ordering is: FP16 first, then FP32, then
+            // INT8 last (still listed so the user can try it if they
+            // ship a custom ORT Web build with int8 ops, but not the
+            // default pick). Desktop keeps the "non-quantized first"
+            // ordering since FP32 is fastest there with WebGPU.
             const iOS = this._isIOS();
+            const tagPriority = (v) => {
+                if (v.endsWith('-fp16')) return 0;
+                if (v.endsWith('-int8')) return 2;
+                return 1;   // unsuffixed FP32
+            };
             choices.sort((a, b) => {
-                if (iOS) return a.sizeBytes - b.sizeBytes;
+                if (iOS) {
+                    const pa = tagPriority(a.version);
+                    const pb = tagPriority(b.version);
+                    if (pa !== pb) return pa - pb;
+                    return a.sizeBytes - b.sizeBytes;
+                }
                 // Desktop: prefer non-quantized first, then by version.
                 if (a.isQuantized !== b.isQuantized)
                     return a.isQuantized ? 1 : -1;

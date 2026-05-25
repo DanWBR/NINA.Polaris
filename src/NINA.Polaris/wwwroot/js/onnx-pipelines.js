@@ -387,10 +387,33 @@
         await _yieldToBrowser();
         const ort = await loadOrtWeb();
         const ep = await pickBackends();
-        const session = await ort.InferenceSession.create(bytes, {
-            executionProviders: ep,
-            graphOptimizationLevel: 'all',
-        });
+        let session;
+        try {
+            session = await ort.InferenceSession.create(bytes, {
+                executionProviders: ep,
+                graphOptimizationLevel: 'all',
+            });
+        } catch (e) {
+            // GX-12n2: turn ORT's cryptic "no backend found" / "failed
+            // to load model" into something actionable. The most common
+            // cause on iOS is loading an -int8 model — ORT Web's
+            // bundled WASM EP doesn't include the QLinear* operators
+            // needed for INT8 quantized graphs, and the create() call
+            // bails out only after allocating intermediate buffers,
+            // which on iOS Safari cascades into a tab-OOM.
+            const msg = (e && e.message) || String(e);
+            const isQuant = /(-int8|-fp16)$/.test(version);
+            let hint = '';
+            if (version.endsWith('-int8')) {
+                hint = '\n\nINT8 models are not supported by the bundled ' +
+                       'ORT Web WASM runtime. Try -fp16 or the original FP32 ' +
+                       'model instead.';
+            } else if (isQuant) {
+                hint = '\n\nTry switching to the original FP32 model.';
+            }
+            throw new Error('Failed to load ' + family + '/' + version
+                + ': ' + msg + hint);
+        }
         // Another yield so the next user-facing event ('tiles' progress)
         // catches a paint before the synchronous setup that follows.
         await _yieldToBrowser();
