@@ -5315,41 +5315,79 @@
                      GX-2..GX-4. This panel is the operations console:
                      points at the models, shows what's detected, lets
                      the user drop the IndexedDB cache. -->
-                <!-- GX-10: HTTPS endpoints — Chrome gates WebGPU +
-                     SharedArrayBuffer behind a "secure context", so a
-                     LAN client reaching http://polaris.local:5000 can't
-                     use the in-browser AI pipelines. We surface the
-                     self-signed HTTPS URLs here as one-click anchors
-                     so the user has a clear path to the GPU-friendly
-                     origin. Hidden when HTTPS isn't enabled. -->
-                <div class="settings-section" x-show="httpsInfo && httpsInfo.httpsEnabled">
-                    <h3>🔒 HTTPS endpoints (for WebGPU + multi-thread WASM)</h3>
-                    <p class="hint" style="margin-top:0">
-                        Plain HTTP is the default LAN entry point. To unlock
-                        <strong>WebGPU</strong> (client-side AI inference) and
-                        <strong>SharedArrayBuffer</strong> (multi-thread WASM
-                        fallback) Chrome requires a "secure context" —
-                        <code>localhost</code>, or any <code>https://</code>.
-                        Polaris generates a self-signed cert covering every
-                        hostname / LAN IP it can resolve. Click an HTTPS URL
-                        below from the client device; Chrome will warn that
-                        the cert is untrusted; click <em>Advanced → Proceed</em>
-                        once per device. After that, WebGPU lights up.
-                    </p>
-                    <div class="https-info-grid"
-                         x-show="httpsInfo && httpsInfo.exampleHttpsUrls?.length">
-                        <template x-for="url in httpsInfo.exampleHttpsUrls" :key="url">
-                            <a class="https-link" :href="url" target="_blank"
-                               rel="noopener" x-text="url"></a>
-                        </template>
+                <!-- GX-10/11b: HTTPS endpoints section. After the GX-10b
+                     port swap (HTTPS:5000 became the default LAN entry
+                     point) most users land here ALREADY on HTTPS, so the
+                     full "click an URL to upgrade" pitch became noise.
+                     Now this collapses to a tiny <details> with just the
+                     cert fingerprint + alternate URL list when the
+                     client IS already on a secure context. The full
+                     upgrade banner only shows when the user somehow
+                     landed on plain HTTP (legacy bookmark, Server:Http:
+                     Bind=any, etc.) — where it's still actionable. -->
+                <template x-if="httpsInfo && httpsInfo.httpsEnabled">
+                    <div class="settings-section">
+                        <!-- Full upgrade banner: only when NOT on a secure
+                             context. Drives the user to switch origins. -->
+                        <div x-show="!window.isSecureContext">
+                            <h3>🔒 HTTPS endpoints (for WebGPU + multi-thread WASM)</h3>
+                            <p class="hint" style="margin-top:0">
+                                Plain HTTP is what you're on right now — Chrome blocks
+                                <strong>WebGPU</strong> (client-side AI inference) and
+                                <strong>SharedArrayBuffer</strong> (multi-thread WASM
+                                fallback) until the origin is a "secure context"
+                                (<code>localhost</code> or any <code>https://</code>).
+                                Polaris ships a self-signed cert covering every
+                                hostname / LAN IP it can resolve. Click an HTTPS URL
+                                below from the client device; Chrome will warn that
+                                the cert is untrusted; click <em>Advanced → Proceed</em>
+                                once per device. After that, WebGPU lights up.
+                            </p>
+                            <div class="https-info-grid"
+                                 x-show="httpsInfo.exampleHttpsUrls?.length">
+                                <template x-for="url in httpsInfo.exampleHttpsUrls" :key="url">
+                                    <a class="https-link" :href="url" target="_blank"
+                                       rel="noopener" x-text="url"></a>
+                                </template>
+                            </div>
+                            <p class="hint" x-show="httpsInfo.fingerprint">
+                                Certificate SHA-1 fingerprint (verify against the one
+                                Chrome shows in <em>cert details</em> if you want to
+                                be sure):
+                                <code style="user-select:all" x-text="httpsInfo.fingerprint"></code>
+                            </p>
+                        </div>
+                        <!-- Collapsed cert info: shown when already on
+                             secure context. Most users will never expand it,
+                             but the fingerprint + hostname list stays one
+                             click away for the paranoid + for sharing
+                             with a second device. -->
+                        <details x-show="window.isSecureContext"
+                                 class="https-info-collapsed">
+                            <summary>
+                                🔒 <strong>Secure context active</strong> —
+                                WebGPU + multi-thread WASM available.
+                                <span class="hint" style="margin-left:6px">
+                                    Click for cert fingerprint + other endpoint URLs.
+                                </span>
+                            </summary>
+                            <p class="hint" style="margin-top:8px"
+                               x-show="httpsInfo.fingerprint">
+                                Certificate SHA-1 fingerprint:
+                                <code style="user-select:all" x-text="httpsInfo.fingerprint"></code>
+                            </p>
+                            <p class="hint">Other URLs covered by the same cert
+                               (useful when adding a second device):</p>
+                            <div class="https-info-grid"
+                                 x-show="httpsInfo.exampleHttpsUrls?.length">
+                                <template x-for="url in httpsInfo.exampleHttpsUrls" :key="url">
+                                    <a class="https-link" :href="url" target="_blank"
+                                       rel="noopener" x-text="url"></a>
+                                </template>
+                            </div>
+                        </details>
                     </div>
-                    <p class="hint" x-show="httpsInfo && httpsInfo.fingerprint">
-                        Certificate SHA-1 fingerprint (verify against the one
-                        Chrome shows in <em>cert details</em> if you want to
-                        be sure):
-                        <code style="user-select:all" x-text="httpsInfo.fingerprint"></code>
-                    </p>
-                </div>
+                </template>
 
                 <div class="settings-section">
                     <h3>AI inference (ONNX)</h3>
@@ -5981,6 +6019,65 @@
                 <button class="btn btn-primary" @click="onnxLicenseAccept()">
                     I agree — continue
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GX-11: Before/After comparator. Auto-opens at the end of a
+         GraXpert run (browser or CLI) with the source FITS and the
+         freshly-written sibling. Vertical drag handle splits the view:
+         drag left to reveal more of the original, drag right to reveal
+         more of the AI output. Stretched JPEGs come from the same
+         /api/files/preview endpoint the FILES tab uses, so the
+         contrast curves match between sides. -->
+    <div class="graxpert-compare-backdrop" x-show="graxpertCompare.open"
+         x-cloak
+         @click.self="graxpertCloseCompare()"
+         @keydown.escape.window="graxpertCloseCompare()"
+         @mousemove.window="graxpertCompareMove($event)"
+         @mouseup.window="graxpertCompareMouseUp()"
+         @touchmove.window.passive="graxpertCompareMove($event)"
+         @touchend.window="graxpertCompareMouseUp()">
+        <div class="graxpert-compare-shell">
+            <div class="graxpert-compare-header">
+                <strong>Before vs After</strong>
+                <span class="graxpert-compare-label"
+                      x-text="graxpertCompare.pairs[graxpertCompare.index]?.label
+                              || ''"></span>
+                <span class="graxpert-compare-spacer" style="flex:1"></span>
+                <template x-if="graxpertCompare.pairs.length > 1">
+                    <span class="graxpert-compare-nav">
+                        <button class="btn btn-sm" @click="graxpertComparePrev()"
+                                title="Previous file (or arrow keys)">←</button>
+                        <span class="graxpert-compare-idx"
+                              x-text="(graxpertCompare.index + 1) + ' / ' + graxpertCompare.pairs.length"></span>
+                        <button class="btn btn-sm" @click="graxpertCompareNext()"
+                                title="Next file">→</button>
+                    </span>
+                </template>
+                <button class="btn btn-sm" @click="graxpertCloseCompare()">Close</button>
+            </div>
+            <!-- Image stage. Two <img> stacked; the OUT one is the
+                 top layer and clipped by a CSS variable so the left
+                 portion shows the SRC underneath. -->
+            <div class="graxpert-compare-wrap"
+                 :style="'--split:' + (graxpertCompare.split * 100) + '%'">
+                <img class="graxpert-compare-src"
+                     :src="graxpertCompareSrc('src')"
+                     alt="Original"
+                     draggable="false">
+                <img class="graxpert-compare-out"
+                     :src="graxpertCompareSrc('out')"
+                     alt="Processed"
+                     draggable="false">
+                <div class="graxpert-compare-handle"
+                     @mousedown.prevent="graxpertCompareMouseDown($event)"
+                     @touchstart.prevent="graxpertCompareMouseDown($event)">
+                    <div class="graxpert-compare-handle-bar"></div>
+                    <div class="graxpert-compare-handle-grip">↔</div>
+                </div>
+                <span class="graxpert-compare-tag graxpert-compare-tag-src">BEFORE</span>
+                <span class="graxpert-compare-tag graxpert-compare-tag-out">AFTER</span>
             </div>
         </div>
     </div>

@@ -841,6 +841,21 @@ function ninaApp() {
         //          hostnames: [...], exampleHttpsUrls: [...] }
         httpsInfo: null,
 
+        // GX-11: before/after comparator state. Auto-opens at the end
+        // of a GraXpert run (BGE / Denoise / Decon) with the source
+        // FITS and the freshly-written sibling. Slider position is
+        // 0..1 (0=full source, 1=full output, 0.5=split in the middle).
+        // pairs is [{ src, out, label }, ...]; we render only pairs[0]
+        // today, but the array shape leaves room for a future
+        // "step through multiple files" arrow control.
+        graxpertCompare: {
+            open: false,
+            pairs: [],
+            index: 0,
+            split: 0.5,
+            dragging: false,
+        },
+
         // d3-celestial Sky Viewer (offline, BSD-3-Clause).
         // Always renders the live sky from the observer's location at the
         // current UTC time, in horizontal projection — same convention as
@@ -8604,10 +8619,26 @@ function ninaApp() {
                 this.graxpert.browserPhase = 'done';
                 this.toast('Browser GraXpert done — ' + written.length
                           + ' / ' + paths.length + ' written', 'ok');
-                // UX: auto-close + select the new siblings.
-                // failedCount === (paths.length - written.length).
+                // GX-11: build src→out pairs for the comparator. We
+                // need to re-walk because the inner loop pushed only
+                // outPaths to `written` (saveBackground pushes two
+                // entries per source — main result + bg model — so
+                // a positional zip would mis-align). Match by stem.
+                const pairs = [];
+                for (const inPath of paths) {
+                    const stem = inPath.split(/[\\/]+/).pop()
+                        .replace(/\.(fits|fit|fts|xisf)$/i, '');
+                    const match = written.find(o => {
+                        const name = o.split(/[\\/]+/).pop();
+                        return name.startsWith(stem + suffix);
+                    });
+                    if (match) pairs.push({
+                        src: inPath, out: match,
+                        label: inPath.split(/[\\/]+/).pop(),
+                    });
+                }
                 await this._graxpertHandleCompletion(
-                    written, paths.length - written.length);
+                    written, paths.length - written.length, pairs);
             } catch (e) {
                 console.error('[GraXpert browser] failed', e);
                 this.toast('Browser run failed: ' + (e.message || ''), 'error');
@@ -8659,7 +8690,12 @@ function ninaApp() {
         // call this on completion. failedCount > 0 keeps the modal
         // open so the user can read the error context — auto-closing on
         // partial failure would hide the diagnostics.
-        async _graxpertHandleCompletion(writtenPaths, failedCount) {
+        //
+        // GX-11: pairs is an optional [{ src, out, label }, ...] used
+        // to auto-open the before/after comparator. Browser-mode
+        // builds it inline; CLI-mode pairs the modalPaths input list
+        // against the job's results array by index.
+        async _graxpertHandleCompletion(writtenPaths, failedCount, pairs) {
             if (failedCount > 0) return;
             // Close + null-out the modal flag. graxpertCloseModal also
             // tears down any CLI poll timer so we don't keep hitting
@@ -8698,6 +8734,92 @@ function ninaApp() {
                     row.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
             });
+            // GX-11: auto-open the before/after comparator on the
+            // first src→out pair. Filter to pairs that actually have
+            // both ends populated — saveBackground secondary writes
+            // share the same source FITS, so duplicates are dropped.
+            if (pairs && pairs.length) {
+                const seen = new Set();
+                const valid = pairs.filter(p => {
+                    if (!p || !p.src || !p.out) return false;
+                    const k = p.src + '|' + p.out;
+                    if (seen.has(k)) return false;
+                    seen.add(k); return true;
+                });
+                if (valid.length) this.graxpertOpenCompare(valid, 0);
+            }
+        },
+
+        // ─── GX-11: Before/After comparator ──────────────────────────
+        // Modal overlay with two stretched JPEGs of the same dimensions
+        // stacked on top of each other; the top image (output) is
+        // clipped via clip-path to the right of the drag handle so
+        // moving the handle left reveals the source underneath.
+        // pairs: [{ src, out, label }]; index picks which pair to show.
+
+        graxpertOpenCompare(pairs, index) {
+            this.graxpertCompare.pairs = pairs;
+            this.graxpertCompare.index = index || 0;
+            this.graxpertCompare.split = 0.5;
+            this.graxpertCompare.dragging = false;
+            this.graxpertCompare.open = true;
+        },
+
+        graxpertCloseCompare() {
+            this.graxpertCompare.open = false;
+            this.graxpertCompare.dragging = false;
+        },
+
+        graxpertCompareNext() {
+            const n = this.graxpertCompare.pairs.length;
+            if (n <= 1) return;
+            this.graxpertCompare.index =
+                (this.graxpertCompare.index + 1) % n;
+            this.graxpertCompare.split = 0.5;
+        },
+
+        graxpertComparePrev() {
+            const n = this.graxpertCompare.pairs.length;
+            if (n <= 1) return;
+            this.graxpertCompare.index =
+                (this.graxpertCompare.index - 1 + n) % n;
+            this.graxpertCompare.split = 0.5;
+        },
+
+        // URL helper that points the FILES preview endpoint at the
+        // FITS file at full-ish resolution (maxDim=2400 matches what
+        // filesOpenPreview uses — gives us a sharp render without
+        // dragging the full 24 MP through the wire). Cache-busted by
+        // pair index so swapping between pairs reuses cached bytes
+        // for the same image but re-fetches when the path changes.
+        graxpertCompareSrc(side /* 'src' | 'out' */) {
+            const pair = this.graxpertCompare.pairs[this.graxpertCompare.index];
+            if (!pair) return '';
+            const p = pair[side];
+            if (!p) return '';
+            return '/api/files/preview?path=' + encodeURIComponent(p)
+                + '&maxDim=2400';
+        },
+
+        // Mouse / touch handlers for the drag handle. Position is
+        // computed against the comparator wrapper's bounding rect so
+        // it works regardless of viewport size or aspect-letterbox.
+        graxpertCompareMouseDown(ev) {
+            this.graxpertCompare.dragging = true;
+            this.graxpertCompareMove(ev);
+        },
+        graxpertCompareMouseUp() {
+            this.graxpertCompare.dragging = false;
+        },
+        graxpertCompareMove(ev) {
+            if (!this.graxpertCompare.dragging) return;
+            const wrap = document.querySelector('.graxpert-compare-wrap');
+            if (!wrap) return;
+            const rect = wrap.getBoundingClientRect();
+            const clientX = ev.touches && ev.touches[0]
+                ? ev.touches[0].clientX : ev.clientX;
+            const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+            this.graxpertCompare.split = x / rect.width;
         },
 
         _graxpertStartPolling() {
@@ -8720,7 +8842,20 @@ function ninaApp() {
                         const written = (job.results || [])
                             .map(r => r.outputPath)
                             .filter(p => !!p);
-                        await this._graxpertHandleCompletion(written, job.failed || 0);
+                        // GX-11: pair against the modalPaths input
+                        // list. CLI processes inputs in order so a
+                        // positional zip is safe (no per-input split
+                        // like saveBackground in the browser path).
+                        const inputs = this.graxpert.modalPaths || [];
+                        const pairs = [];
+                        for (let i = 0; i < written.length && i < inputs.length; i++) {
+                            pairs.push({
+                                src: inputs[i], out: written[i],
+                                label: inputs[i].split(/[\\/]+/).pop(),
+                            });
+                        }
+                        await this._graxpertHandleCompletion(
+                            written, job.failed || 0, pairs);
                     }
                 } catch (e) { /* transient — keep polling */ }
             }, 1500);

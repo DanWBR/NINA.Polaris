@@ -3220,6 +3220,24 @@ label select.input-sm {
     background: rgba(34, 197, 94, 0.16);
     border-color: var(--accent-success, #4ade80);
 }
+/* GX-11b: collapsed cert-info <details> shown when the user is
+   already on a secure origin. Minimal — just enough to confirm
+   the secure-context check passed without taking real estate. */
+.https-info-collapsed {
+    padding: 8px 12px;
+    background: rgba(34, 197, 94, 0.06);
+    border: 1px solid rgba(34, 197, 94, 0.18);
+    border-radius: 6px;
+}
+.https-info-collapsed summary {
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--accent-success, #4ade80);
+}
+.https-info-collapsed summary::-webkit-details-marker { display: none; }
+.https-info-collapsed[open] {
+    background: rgba(34, 197, 94, 0.04);
+}
 
 /* Connection lost banner */
 .connection-banner {
@@ -4616,6 +4634,136 @@ label select.input-sm {
     gap: 8px;
     margin-top: 18px;
 }
+
+/* GX-11: Before/After comparator. Full-screen overlay with a draggable
+   vertical divider. Two layered <img> tags occupy the same box; the
+   "AFTER" image (top layer) is clipped from the right edge by a CSS
+   variable --split that the JS updates on drag, revealing the "BEFORE"
+   image underneath the unclipped portion. */
+.graxpert-compare-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(2, 6, 12, 0.85);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+.graxpert-compare-shell {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-secondary, #0f1422);
+    border: 1px solid var(--border, #2a3142);
+    border-radius: 10px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+    max-width: 1600px;
+    max-height: 92vh;
+    width: 100%;
+    overflow: hidden;
+}
+.graxpert-compare-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border, #2a3142);
+    background: rgba(255, 255, 255, 0.02);
+    font-size: 13px;
+}
+.graxpert-compare-label {
+    color: var(--text-muted, #94a3b8);
+    font-family: ui-monospace, "JetBrains Mono", "Cascadia Code", monospace;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 50%;
+}
+.graxpert-compare-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.graxpert-compare-idx {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted, #94a3b8);
+    padding: 0 6px;
+}
+.graxpert-compare-wrap {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 320px;
+    background: #000;
+    overflow: hidden;
+    user-select: none;
+    cursor: ew-resize;
+}
+.graxpert-compare-wrap img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    /* Pixel-art rendering is wrong for star-field stretched JPEGs.
+       The default bilinear interpolation is what we want — leave it. */
+    pointer-events: none;
+}
+.graxpert-compare-out {
+    /* Reveal only the portion to the LEFT of the handle. Right edge
+       is clipped progressively as the user drags right (--split grows). */
+    clip-path: inset(0 calc(100% - var(--split)) 0 0);
+}
+.graxpert-compare-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--split);
+    width: 2px;
+    background: rgba(255, 255, 255, 0.85);
+    transform: translateX(-1px);
+    cursor: ew-resize;
+    z-index: 2;
+}
+.graxpert-compare-handle-bar {
+    position: absolute;
+    inset: 0;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+.graxpert-compare-handle-grip {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.92);
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    pointer-events: none;
+}
+.graxpert-compare-tag {
+    position: absolute;
+    top: 10px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    pointer-events: none;
+}
+.graxpert-compare-tag-src { left: 12px; }
+.graxpert-compare-tag-out { right: 12px; }
 .editor-export-row {
     display: grid;
     grid-template-columns: 80px 1fr auto;
