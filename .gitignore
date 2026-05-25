@@ -396,3 +396,12 @@ src/NINA.Polaris/processed/
 # directory indices crawlers can walk anyway. The committed copy
 # comes from external/stellarium-web-engine/apps/test-skydata/
 # under AGPL — copy is verbatim from the submodule.
+
+# GX-12j: bundled GraXpert ONNX models live under
+# wwwroot/graxpert/models/ so OnnxModelRegistry picks them up
+# automatically. The .onnx files are huge (1.5 GB total) and the
+# model license (CC BY-NC-SA 4.0) forbids us from redistributing
+# them. The README + .gitkeep in that directory ARE tracked so the
+# directory structure survives a clone — operators drop their own
+# models in matching the GraXpert layout (see README.md).
+src/NINA.Polaris/wwwroot/graxpert/models/**/*.onnx

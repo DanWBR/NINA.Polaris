@@ -29,8 +29,20 @@ public static class OnnxEndpoints {
                     hash,
                 });
             }
+            // GX-12j: surface enough state for the Settings page to show
+            // a useful banner — "using bundled models from wwwroot" vs
+            // "using configured Onnx:ModelsPath" vs "no models found
+            // anywhere, drop them at <bundled>/graxpert/models".
+            var scanned = reg.LastScannedPath();
+            var bundled = reg.BundledModelsPath;
+            var usingBundled = !string.IsNullOrEmpty(scanned)
+                && string.Equals(Path.GetFullPath(scanned),
+                                  Path.GetFullPath(bundled),
+                                  StringComparison.OrdinalIgnoreCase);
             return Results.Ok(new {
-                modelsPath = reg.LastScannedPath(),
+                modelsPath = scanned,
+                bundledPath = bundled,
+                usingBundled,
                 models = items,
             });
         });

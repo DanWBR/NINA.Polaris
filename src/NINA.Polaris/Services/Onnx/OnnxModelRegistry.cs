@@ -1,6 +1,9 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
+// IWebHostEnvironment lives in Microsoft.AspNetCore.Hosting; the Web
+// SDK's implicit usings include it, but spell it out for clarity.
+using Microsoft.AspNetCore.Hosting;
 
 namespace NINA.Polaris.Services.Onnx;
 
@@ -43,6 +46,13 @@ public class OnnxModelRegistry {
     private readonly ConcurrentDictionary<string, OnnxModelEntry> _models = new();
     private readonly object _scanLock = new();
     private string _lastScannedPath = "";
+    // GX-12j: deploy-friendly bundled-models location. When the user
+    // hasn't pointed Onnx:ModelsPath at anything (or that path doesn't
+    // exist), the registry falls back to {wwwroot}/graxpert/models.
+    // Lets the operator drop the GraXpert weights into the published
+    // app folder on a Pi / mini-PC and have zero config to do — no
+    // Settings round-trip, no env var, no symlink.
+    private readonly string _bundledModelsPath;
 
     // GraXpert layout: "{family-prefix}-ai-models" → canonical family id.
     // Maintained as a static table so a path like
@@ -63,10 +73,37 @@ public class OnnxModelRegistry {
     private static readonly Regex VersionRegex =
         new(@"^\d+\.\d+(\.\d+)?$", RegexOptions.Compiled);
 
-    public OnnxModelRegistry(ProfileService profile, ILogger<OnnxModelRegistry> logger) {
+    public OnnxModelRegistry(ProfileService profile, IWebHostEnvironment env,
+                              ILogger<OnnxModelRegistry> logger) {
         _profile = profile;
         _logger = logger;
+        // env.WebRootPath is the absolute path to wwwroot in the
+        // published layout. In dev (no static files served yet) it can
+        // be null — fall back to {ContentRoot}/wwwroot so this is the
+        // single source of truth regardless of dev vs prod.
+        var webRoot = env.WebRootPath
+            ?? Path.Combine(env.ContentRootPath, "wwwroot");
+        _bundledModelsPath = Path.Combine(webRoot, "graxpert", "models");
     }
+
+    /// <summary>
+    /// GX-12j: Effective directory the registry will scan. Priority is:
+    /// (1) profile's <c>OnnxModelsPath</c> if set AND exists, otherwise
+    /// (2) the bundled <c>wwwroot/graxpert/models</c> if it exists, otherwise
+    /// (3) empty (registry stays empty, UI shows the "configure" banner).
+    /// Public so the Settings UI can surface which path is in use.
+    /// </summary>
+    public string ResolveModelsPath() {
+        var configured = _profile.Active?.OnnxModelsPath ?? "";
+        if (!string.IsNullOrWhiteSpace(configured) && Directory.Exists(configured))
+            return configured;
+        if (Directory.Exists(_bundledModelsPath))
+            return _bundledModelsPath;
+        return "";
+    }
+
+    /// <summary>Diagnostic — the bundled fallback path even when it doesn't exist yet.</summary>
+    public string BundledModelsPath => _bundledModelsPath;
 
     /// <summary>
     /// Snapshot of all currently-registered models. Cheap; intended for
@@ -89,11 +126,16 @@ public class OnnxModelRegistry {
 
     private void RescanSync() {
         lock (_scanLock) {
-            var root = _profile.Active?.OnnxModelsPath ?? "";
+            // GX-12j: resolve effective root via the priority chain
+            // (profile > bundled wwwroot/graxpert/models > empty).
+            var root = ResolveModelsPath();
             _lastScannedPath = root;
 
-            if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root)) {
-                _logger.LogInformation("Onnx rescan: path empty or missing ({Root}) — clearing registry.", root);
+            if (string.IsNullOrWhiteSpace(root)) {
+                _logger.LogInformation(
+                    "Onnx rescan: no models path available (profile unset, " +
+                    "bundled fallback {Bundled} doesn't exist) — clearing registry.",
+                    _bundledModelsPath);
                 _models.Clear();
                 return;
             }
