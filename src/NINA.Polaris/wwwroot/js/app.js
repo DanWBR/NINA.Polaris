@@ -810,6 +810,12 @@ function ninaApp() {
             browserProgress: 0,
         },
 
+        // GX-5: editor "AI" section runtime state. Single in-flight
+        // button across the section — pipelines are heavy + don't
+        // compose with each other anyway. phase is a user-facing
+        // status string for the section's progress line.
+        editorAi: { busy: false, phase: '' },
+
         // GX-1b: in-browser ONNX inference state (GraXpert AI models).
         // manifest mirrors what GET /api/onnx/manifest returns; cacheSize
         // is in bytes (browser IndexedDB store sum). Pipelines (GX-2/3/4)
@@ -4274,6 +4280,102 @@ function ninaApp() {
             // Reset is itself an undoable step — push immediately
             // instead of waiting for the slider-idle timer.
             this._editorPushHistory();
+        },
+
+        // ─── GX-5: AI section runner ────────────────────────────────────
+        // Process the editor's current source file via the matching ONNX
+        // pipeline (browser-local inference), write a sibling FITS, then
+        // load that new file into the same editor session. Treats the
+        // AI result as the new "source" the user keeps editing on.
+        //
+        // Non-destructive in two senses: (a) the original source FITS
+        // stays on disk untouched (sibling is a new file), (b) the
+        // editor's slider state is preserved across the reload (we
+        // re-apply the current `edits` after the new session is open).
+        async editorRunAi(op) {
+            if (this.editorAi.busy) return;
+            if (!this.editorState.session) return;
+            const src = this.editorState.sourcePath;
+            if (!src) {
+                this.toast('Editor has no source path', 'warn');
+                return;
+            }
+            // License consent — same path the FILES tab uses.
+            const ok = await this._ensureOnnxLicenseAccepted();
+            if (!ok) return;
+
+            this.editorAi.busy = true;
+            this.editorAi.phase = 'preparing';
+            try {
+                let pipeline;
+                let runOpts = {};
+                let suffix = '_ai';
+                switch (op) {
+                    case 'background-extraction':
+                        pipeline = new OnnxRegistry.BgePipeline();
+                        runOpts = { correction: this.settings.graxpertBgeCorrection };
+                        suffix = '_bge';
+                        break;
+                    case 'denoising':
+                        pipeline = new OnnxRegistry.DenoisePipeline();
+                        runOpts = {
+                            strength: this.settings.graxpertDenoiseStrength,
+                            version: this.settings.onnxDefaultDenoiseVersion || '2.0.0',
+                        };
+                        suffix = '_denoise';
+                        break;
+                    case 'deconvolution':
+                        pipeline = new OnnxRegistry.DeconPipeline();
+                        runOpts = {
+                            strength: this.settings.graxpertDeconStrength,
+                            psfPixels: this.settings.graxpertDeconPsfSize,
+                            target: 'stars',  // GX-5 v1; UI radio in follow-up
+                        };
+                        suffix = '_decon';
+                        break;
+                    default:
+                        throw new Error('Unknown AI op: ' + op);
+                }
+
+                this.editorAi.phase = 'fetching pixels';
+                const raw = await this._onnxFetchSourcePixels(src);
+                if (!raw) throw new Error('Could not decode source');
+
+                this.editorAi.phase = 'running ' + op;
+                const result = await pipeline.run(
+                    raw.pixels, raw.width, raw.height,
+                    Object.assign({}, runOpts, {
+                        onProgress: (phase, frac) => {
+                            this.editorAi.phase = op + ' — ' + phase
+                              + (frac != null ? ' ' + Math.round(frac * 100) + '%' : '');
+                        }
+                    }));
+
+                this.editorAi.phase = 'saving sibling FITS';
+                const outPath = await this._onnxSaveResult(
+                    src, suffix, result.pixels, result.width,
+                    result.height, result.channels);
+                if (!outPath) throw new Error('Save failed');
+
+                // Preserve the user's current edits across the source
+                // swap — re-apply them on the new session.
+                const savedEdits = JSON.parse(JSON.stringify(
+                    this.editorState.edits || {}));
+
+                this.editorAi.phase = 'reloading editor with ' + outPath.split(/[\\/]+/).pop();
+                this.toast('AI ' + op + ' → ' + outPath.split(/[\\/]+/).pop(), 'ok');
+                await this.editorLoad(outPath);
+                this.editorState.edits = savedEdits;
+                this.editorState.dirty = true;
+                this._editorSchedulePreview();
+                this._editorPushHistory();
+            } catch (e) {
+                console.error('[Editor AI] ' + op, e);
+                this.toast('AI ' + op + ' failed: ' + (e.message || ''), 'error');
+            } finally {
+                this.editorAi.busy = false;
+                this.editorAi.phase = '';
+            }
         },
 
         editorClose() {

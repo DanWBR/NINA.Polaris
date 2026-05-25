@@ -4564,6 +4564,18 @@ label select.input-sm {
     color: #86efac;
 }
 
+/* GX-5: AI section button cluster inside the editor's right panel.
+   Each button picks one pipeline (BGE / Denoise / Decon) and routes
+   through editorRunAi(). Stacked vertically so labels stay readable
+   in the narrow controls column. */
+.editor-ai-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px 12px;
+}
+.editor-ai-buttons .btn { width: 100%; text-align: left; }
+
 /* Editor export modal — backdrop covers the viewport, frame floats
    centred. Mirrors the .siril-modal pattern (same z-index + dim) so
    it stacks correctly with toasts (which sit at z-index ~2000). */

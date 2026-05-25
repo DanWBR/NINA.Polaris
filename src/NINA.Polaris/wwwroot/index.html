@@ -3325,6 +3325,51 @@
                                 </label>
                             </template>
                         </details>
+
+                        <!-- GX-5: AI section. Each button processes the
+                             editor's current source FITS via the matching
+                             ONNX pipeline, writes a sibling FITS, and
+                             auto-loads it into the same editor session
+                             (so the user can keep editing on the AI-cleaned
+                             pixels). Non-destructive: the original source
+                             FITS stays on disk. -->
+                        <details class="editor-section"
+                                 x-show="onnxAvailableForOp('background-extraction')
+                                       || onnxAvailableForOp('denoising')
+                                       || onnxAvailableForOp('deconvolution')">
+                            <summary>AI (GraXpert)</summary>
+                            <div class="editor-ai-buttons">
+                                <button class="btn btn-sm"
+                                        x-show="onnxAvailableForOp('background-extraction')"
+                                        :disabled="editorAi.busy"
+                                        @click="editorRunAi('background-extraction')"
+                                        title="Background extraction — removes gradients">
+                                    🌅 Background
+                                </button>
+                                <button class="btn btn-sm"
+                                        x-show="onnxAvailableForOp('denoising')"
+                                        :disabled="editorAi.busy"
+                                        @click="editorRunAi('denoising')"
+                                        title="Denoise — neural noise reduction">
+                                    🔇 Denoise
+                                </button>
+                                <button class="btn btn-sm"
+                                        x-show="onnxAvailableForOp('deconvolution')"
+                                        :disabled="editorAi.busy"
+                                        @click="editorRunAi('deconvolution')"
+                                        title="Deconvolution — sharpen stars / objects">
+                                    ✨ Deconvolve
+                                </button>
+                            </div>
+                            <p class="hint" x-show="editorAi.busy"
+                               style="margin-top:6px"
+                               x-text="editorAi.phase"></p>
+                            <p class="hint" style="margin-top:6px">
+                                Output saved as a sibling FITS + auto-opened
+                                in this editor. Original source file is not
+                                modified.
+                            </p>
+                        </details>
                     </div>
                 </div>
             </div>
