@@ -8546,68 +8546,6 @@ function ninaApp() {
             return false;
         },
 
-        // GX-12m: estimate peak browser memory the denoise pipeline will
-        // hold + warn the user if the run is likely to OOM-kill the
-        // iOS Safari tab. Returns true if the user confirms (or if the
-        // estimate is safe); false if they cancel. Numbers are
-        // approximations — actual peaks depend on the WebGPU/WASM
-        // backend, ORT runtime overhead, and the model's transient
-        // tensors during inference. Better to over-warn than to crash.
-        async _iosDenoisePreflight() {
-            // Try to fetch one frame's dimensions cheaply so we know
-            // what we're up against. If anything fails, fall through
-            // to a conservative warning rather than blocking the user.
-            let approxMb = 600;   // conservative default
-            let dimsLabel = '';
-            try {
-                const first = this.graxpert.modalPaths[0];
-                if (first) {
-                    const r = await fetch('/api/onnx/source-pixels?path='
-                        + encodeURIComponent(first), { method: 'HEAD' })
-                        .catch(() => null);
-                    if (r && r.ok) {
-                        const w = parseInt(r.headers.get('X-Width'),    10) || 3000;
-                        const h = parseInt(r.headers.get('X-Height'),   10) || 2000;
-                        const ch = parseInt(r.headers.get('X-Channels'), 10) || 1;
-                        const ver = this.graxpert.modalDenoiseVersion || '2.0.0';
-                        // model weights (resident for whole batch)
-                        const modelMb = ver.startsWith('3.') ? 456 : 284;
-                        // peak per channel: padded Float32 (~1.05×) +
-                        // out Float32 (~1.05×) + small tile tensors.
-                        // pixels Uint16 RGB held throughout: 2*w*h*ch/MB
-                        // combined output Uint16 RGB: same as pixels.
-                        const planeMb = (w * h * 4 * 1.05) / (1024 * 1024);
-                        const inputMb = (w * h * 2 * ch) / (1024 * 1024);
-                        // peak ≈ pixels + combined + 2×planeMb (during a
-                        // channel's tile loop, planeF + out coexist) + model
-                        approxMb = Math.round(modelMb + 2 * inputMb + 2 * planeMb + 150);
-                        dimsLabel = `${w}×${h}${ch === 3 ? ' RGB' : ''} · ${ver}`;
-                    }
-                }
-            } catch { /* fall through with default estimate */ }
-
-            // < 700 MB: should comfortably fit even on an iPhone 12.
-            // 700-1000 MB: borderline; warn but let through.
-            // > 1000 MB: very likely to OOM-kill the tab; strong warning.
-            if (approxMb < 700) return true;
-
-            const v3 = (this.graxpert.modalDenoiseVersion || '').startsWith('3.');
-            const lines = [
-                'Denoise on iPhone Safari can OOM-kill the tab silently when peak memory crests ~1 GB (the tab will reload to your home screen with no error).',
-                '',
-                dimsLabel
-                    ? `Estimated peak for ${dimsLabel}: ~${approxMb} MB`
-                    : `Estimated peak: ~${approxMb} MB`,
-                '',
-                v3
-                    ? 'Tip: switch the AI model to v2.0.0 (lighter) before running.'
-                    : 'Tip: try a smaller frame, or toggle "Run in browser" OFF to use the server-side CLI instead.',
-                '',
-                'Continue anyway?',
-            ];
-            return window.confirm(lines.join('\n'));
-        },
-
         graxpertSuffix(op, runOpts) {
             // GX-12i: decon now has two flavours (stars-only vs object-
             // only) picked via the modal Method dropdown. Surface the
@@ -8642,17 +8580,6 @@ function ninaApp() {
             // having to think about it.
             if (this.graxpert.modalRunInBrowser
                 && this.onnxAvailableForOp(this.graxpert.modalOp)) {
-                // GX-12m: iOS Safari pre-flight for Denoise. Mobile
-                // Safari OOM-kills the tab silently when memory peaks
-                // (~1-1.5 GB on iPhone). Denoise v3 (456 MB model) +
-                // an RGB master with Float32 padded plane + tile
-                // tensors crests that on a typical 3000×2000 master.
-                // Warn before launching so the user can pick v2 or
-                // bail to CLI instead of losing the session.
-                if (this.graxpert.modalOp === 'denoising' && this._isIOS()) {
-                    const ok = await this._iosDenoisePreflight();
-                    if (!ok) return;
-                }
                 return this._graxpertRunInBrowser();
             }
             try {
