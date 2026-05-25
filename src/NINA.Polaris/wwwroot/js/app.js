@@ -8739,11 +8739,24 @@ function ninaApp() {
                         runOpts = { correction: this.graxpert.modalCorrection };
                         break;
                     case 'denoising':
+                        pipeline = new OnnxRegistry.DenoisePipeline();
+                        runOpts = {
+                            strength: this.graxpert.modalDenoiseStrength,
+                            version: this.settings.onnxDefaultDenoiseVersion || '2.0.0',
+                        };
+                        break;
                     case 'deconvolution':
-                        this.toast(op + ' browser pipeline ships in GX-3 / GX-4. '
-                                 + 'Toggle off "Run in browser" to use CLI.',
-                                   'warn');
-                        return;
+                        pipeline = new OnnxRegistry.DeconPipeline();
+                        // GraXpert CLI doesn't expose Stars-vs-Objects in
+                        // its single flag set; default to Stars (more
+                        // useful for typical DSO masters). Editor will
+                        // expose a radio in GX-5.
+                        runOpts = {
+                            strength: this.graxpert.modalDeconStrength,
+                            psfPixels: this.graxpert.modalDeconPsfSize,
+                            target: 'stars',
+                        };
+                        break;
                     default:
                         throw new Error('Unknown operation: ' + op);
                 }

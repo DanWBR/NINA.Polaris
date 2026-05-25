@@ -511,6 +511,306 @@
         }
     }
 
+    // ───────────────────────────────────────────────────────────────
+    // Tiling helpers (used by Denoise + Decon).
+    // ───────────────────────────────────────────────────────────────
+
+    /** Pad a Uint16Array mono plane with edge replication. Output is
+     *  (w + 2*padX, h + 2*padY). The math matches what GraXpert does
+     *  in Python: NumPy `pad(..., mode='edge')`. */
+    function padEdge(src, w, h, padX, padY) {
+        const pw = w + 2 * padX;
+        const ph = h + 2 * padY;
+        const dst = new Uint16Array(pw * ph);
+        for (let y = 0; y < ph; y++) {
+            const sy = Math.max(0, Math.min(h - 1, y - padY));
+            const srcRow = sy * w;
+            const dstRow = y * pw;
+            for (let x = 0; x < padX; x++) dst[dstRow + x] = src[srcRow];
+            for (let x = 0; x < w; x++) dst[dstRow + padX + x] = src[srcRow + x];
+            const lastVal = src[srcRow + w - 1];
+            for (let x = 0; x < padX; x++) dst[dstRow + padX + w + x] = lastVal;
+        }
+        return dst;
+    }
+
+    // ───────────────────────────────────────────────────────────────
+    // GX-3: Denoise pipeline (v2 / v3). Tile-based — stride 128,
+    // window 256, 64-pixel context margin per tile edge. Output of
+    // each tile keeps only the inner 128x128 stride region (the
+    // outer 64-px margin existed only to let the model see context
+    // beyond the inner region); inner regions tile perfectly so
+    // there's no blend math to get wrong. Same approach as GraXpert.
+    //
+    // v2 (2.0.0) clip ±10, v3 (3.0.2) clip ±1. Strength blends the
+    // denoised result back against the original to taste.
+    // ───────────────────────────────────────────────────────────────
+
+    class DenoisePipeline {
+        async run(pixels, width, height, opts = {}) {
+            const family = 'denoise';
+            const version = opts.version || '2.0.0';
+            const strength = Math.max(0, Math.min(1,
+                opts.strength != null ? opts.strength : 0.5));
+            const TILE = 256;
+            const STRIDE = 128;
+            const MARGIN = (TILE - STRIDE) / 2;   // 64
+            const CLIP = version.startsWith('3.') ? 1.0 : 10.0;
+
+            const session = await loadSession(family, version, opts.onProgress);
+
+            // Tile grid + padded source. itw/ith are the inner-tile
+            // counts; the padded buffer is sized so the last tile's
+            // inner region just covers the source edge (then we trim
+            // to the original dimensions at the very end).
+            const itw = Math.ceil(width  / STRIDE);
+            const ith = Math.ceil(height / STRIDE);
+            const padW = itw * STRIDE + 2 * MARGIN;
+            const padH = ith * STRIDE + 2 * MARGIN;
+            const padded = padEdge(pixels, width, height,
+                (padW - width) / 2 | 0, (padH - height) / 2 | 0);
+
+            // Global median + MAD on the padded plane (downsampled).
+            const planeF = new Float32Array(padded.length);
+            for (let i = 0; i < padded.length; i++) planeF[i] = padded[i] / 65535;
+            const { median, mad } = medianMadSampled(planeF);
+
+            // Output canvas (padded). We'll trim back at the end.
+            const out = new Float32Array(padded.length);
+
+            const ort = await loadOrtWeb();
+            const inputName  = session.inputNames[0];
+            const outputName = session.outputNames[0];
+            const totalTiles = itw * ith;
+            let processed = 0;
+            const t0 = performance.now();
+
+            for (let ty = 0; ty < ith; ty++) {
+                for (let tx = 0; tx < itw; tx++) {
+                    const sx = tx * STRIDE;
+                    const sy = ty * STRIDE;
+
+                    // Build the tile's [256,256,3] NHWC float32 input.
+                    // Mono input → replicate the channel.
+                    const tensorData = new Float32Array(TILE * TILE * 3);
+                    for (let y = 0; y < TILE; y++) {
+                        const srcRow = (sy + y) * padW + sx;
+                        const dstRow = y * TILE;
+                        for (let x = 0; x < TILE; x++) {
+                            const v = planeF[srcRow + x];
+                            const n = Math.max(-CLIP, Math.min(CLIP,
+                                ((v - median) / mad) * 0.04));
+                            tensorData[(dstRow + x) * 3]     = n;
+                            tensorData[(dstRow + x) * 3 + 1] = n;
+                            tensorData[(dstRow + x) * 3 + 2] = n;
+                        }
+                    }
+                    const inputTensor = new ort.Tensor('float32',
+                        tensorData, [1, TILE, TILE, 3]);
+                    const result = await session.run({ [inputName]: inputTensor });
+                    const outData = result[outputName].data;
+
+                    // Extract inner [MARGIN:MARGIN+STRIDE] from each
+                    // axis, average the 3 channels back to mono, and
+                    // place into the padded output canvas.
+                    for (let y = 0; y < STRIDE; y++) {
+                        const tileRow = (MARGIN + y) * TILE + MARGIN;
+                        const outRow  = (sy + MARGIN + y) * padW + (sx + MARGIN);
+                        for (let x = 0; x < STRIDE; x++) {
+                            const i3 = (tileRow + x) * 3;
+                            const r = outData[i3];
+                            const g = outData[i3 + 1];
+                            const b = outData[i3 + 2];
+                            // Denormalize + average.
+                            const denorm = ((r + g + b) / 3) * mad / 0.04 + median;
+                            out[outRow + x] = denorm;
+                        }
+                    }
+
+                    processed++;
+                    if (opts.onProgress) {
+                        opts.onProgress('tiles',
+                            processed / totalTiles);
+                    }
+                }
+            }
+            const inferenceMs = performance.now() - t0;
+
+            // Trim padding + apply strength blend against the original.
+            const offsetX = (padW - width) / 2 | 0;
+            const offsetY = (padH - height) / 2 | 0;
+            const dst = new Uint16Array(width * height);
+            for (let y = 0; y < height; y++) {
+                const srcRow = (offsetY + y) * padW + offsetX;
+                const origRow = y * width;
+                for (let x = 0; x < width; x++) {
+                    const denoised = out[srcRow + x];        // 0..1
+                    const orig = pixels[origRow + x] / 65535;
+                    const blended = denoised * strength + orig * (1 - strength);
+                    dst[origRow + x] = Math.max(0, Math.min(65535,
+                        Math.round(blended * 65535)));
+                }
+            }
+
+            return {
+                pixels: dst,
+                width, height,
+                channels: 1,
+                stats: { median, mad, totalTiles, inferenceMs, version },
+            };
+        }
+    }
+
+    // ───────────────────────────────────────────────────────────────
+    // GX-4: Deconvolution pipeline (Stars / Objects). Larger tiles
+    // (512), smaller overlap (64 = 12%). Two inputs: the pixels NCHW
+    // [1,1,512,512] + a params tensor [1,2] = [sigma, strength]. The
+    // model emits a residual we subtract from the input.
+    //
+    // Per-tile log-normalize: (log(v − min + 1e-5) − mean) / (std × 0.1).
+    // After subtracting the residual, invert with exp().
+    // ───────────────────────────────────────────────────────────────
+
+    class DeconPipeline {
+        async run(pixels, width, height, opts = {}) {
+            const target = opts.target || 'stars';   // 'stars' | 'objects'
+            const family = target === 'objects' ? 'decon-objects' : 'decon-stars';
+            const version = opts.version
+                || (target === 'objects' ? '1.0.1' : '1.0.0');
+            const psfPixels = Math.max(0.05, Math.min(15,
+                opts.psfPixels != null ? opts.psfPixels : 4.0));
+            const strength = Math.max(0, Math.min(1,
+                opts.strength != null ? opts.strength : 0.5));
+            const sigmaNormalized = Math.max(0.05, Math.min(0.95,
+                psfPixels / 15));
+            const TILE = 512;
+            const STRIDE = 448;
+            const MARGIN = (TILE - STRIDE) / 2;   // 32
+
+            const session = await loadSession(family, version, opts.onProgress);
+
+            const itw = Math.ceil(width  / STRIDE);
+            const ith = Math.ceil(height / STRIDE);
+            const padW = itw * STRIDE + 2 * MARGIN;
+            const padH = ith * STRIDE + 2 * MARGIN;
+            const padded = padEdge(pixels, width, height,
+                (padW - width) / 2 | 0, (padH - height) / 2 | 0);
+            const planeF = new Float32Array(padded.length);
+            for (let i = 0; i < padded.length; i++) planeF[i] = padded[i] / 65535;
+
+            const out = new Float32Array(padded.length);
+            const ort = await loadOrtWeb();
+            const inputNames = session.inputNames;
+            const outputName = session.outputNames[0];
+            // Two inputs: image NCHW + params [B,2]. Param order is
+            // [sigma, strength × 0.95] — matches GraXpert's effective
+            // ceiling of 0.95.
+            const paramsData = new Float32Array(
+                [sigmaNormalized, strength * 0.95]);
+            const paramsTensor = new ort.Tensor('float32',
+                paramsData, [1, 2]);
+            const inputImageName = inputNames.find(n => n.includes('image')) || inputNames[0];
+            const inputParamsName = inputNames.find(n => n !== inputImageName) || inputNames[1];
+            const totalTiles = itw * ith;
+            let processed = 0;
+            const t0 = performance.now();
+
+            for (let ty = 0; ty < ith; ty++) {
+                for (let tx = 0; tx < itw; tx++) {
+                    const sx = tx * STRIDE;
+                    const sy = ty * STRIDE;
+
+                    // Per-tile log-normalize.
+                    const eps = 1e-5;
+                    const tile = new Float32Array(TILE * TILE);
+                    let minV = Infinity;
+                    for (let y = 0; y < TILE; y++) {
+                        const srcRow = (sy + y) * padW + sx;
+                        const dstRow = y * TILE;
+                        for (let x = 0; x < TILE; x++) {
+                            const v = planeF[srcRow + x];
+                            tile[dstRow + x] = v;
+                            if (v < minV) minV = v;
+                        }
+                    }
+                    // logTile = log(v − min + ε)
+                    let mean = 0;
+                    for (let i = 0; i < tile.length; i++) {
+                        tile[i] = Math.log(tile[i] - minV + eps);
+                        mean += tile[i];
+                    }
+                    mean /= tile.length;
+                    let varSum = 0;
+                    for (let i = 0; i < tile.length; i++) {
+                        const d = tile[i] - mean;
+                        varSum += d * d;
+                    }
+                    const std = Math.max(1e-6, Math.sqrt(varSum / tile.length));
+
+                    // Normalize for the model: (v - mean) / (std * 0.1)
+                    const tensorData = new Float32Array(TILE * TILE);
+                    for (let i = 0; i < tile.length; i++) {
+                        tensorData[i] = (tile[i] - mean) / (std * 0.1);
+                    }
+
+                    const inputTensor = new ort.Tensor('float32',
+                        tensorData, [1, 1, TILE, TILE]);
+                    const result = await session.run({
+                        [inputImageName]: inputTensor,
+                        [inputParamsName]: paramsTensor,
+                    });
+                    const residual = result[outputName].data;
+
+                    // Output = input - residual (in normalized space),
+                    // then inverse log-normalize.
+                    for (let y = 0; y < STRIDE; y++) {
+                        const tileRow = (MARGIN + y) * TILE + MARGIN;
+                        const outRow  = (sy + MARGIN + y) * padW + (sx + MARGIN);
+                        for (let x = 0; x < STRIDE; x++) {
+                            const normIn  = tensorData[tileRow + x];
+                            const normRes = residual[tileRow + x];
+                            const normOut = normIn - normRes;
+                            // De-normalize: undo the (mean, std, min)
+                            // captured for this tile.
+                            const logVal = normOut * (std * 0.1) + mean;
+                            const v = Math.exp(logVal) + minV - eps;
+                            out[outRow + x] = v;
+                        }
+                    }
+
+                    processed++;
+                    if (opts.onProgress) {
+                        opts.onProgress('tiles',
+                            processed / totalTiles);
+                    }
+                }
+            }
+            const inferenceMs = performance.now() - t0;
+
+            // Trim padding.
+            const offsetX = (padW - width) / 2 | 0;
+            const offsetY = (padH - height) / 2 | 0;
+            const dst = new Uint16Array(width * height);
+            for (let y = 0; y < height; y++) {
+                const srcRow = (offsetY + y) * padW + offsetX;
+                const dstRow = y * width;
+                for (let x = 0; x < width; x++) {
+                    const v = out[srcRow + x];
+                    dst[dstRow + x] = Math.max(0, Math.min(65535,
+                        Math.round(v * 65535)));
+                }
+            }
+
+            return {
+                pixels: dst,
+                width, height,
+                channels: 1,
+                stats: { totalTiles, inferenceMs, target, version,
+                         sigmaNormalized, strength },
+            };
+        }
+    }
+
     // ─── Public API ─────────────────────────────────────────────────
     window.OnnxRegistry = {
         loadOrtWeb,
@@ -524,5 +824,7 @@
         pickBackends,
         // Pipelines
         BgePipeline,
+        DenoisePipeline,
+        DeconPipeline,
     };
 })();
