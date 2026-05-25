@@ -8468,18 +8468,24 @@ function ninaApp() {
             this.graxpert.modalDeconStrength = this.settings.graxpertDeconStrength;
             this.graxpert.modalDeconPsfSize = this.settings.graxpertDeconPsfSize;
             this.graxpert.modalDenoiseStrength = this.settings.graxpertDenoiseStrength;
-            // GX-12k: hydrate the per-run denoise model version from
-            // the profile default. Modal dropdown can override before
-            // Start; settings remain the long-lived default.
-            // GX-12m: on iOS, force the lighter v2.0.0 default
-            // regardless of what the profile says — v3.0.2's 456 MB
-            // model + Float32 buffers reliably OOM-kills the Safari
-            // tab on RGB masters. User can still pick v3 in the
-            // dropdown if they want to try; the pre-flight will warn
-            // before the run starts.
+            // GX-12k/n: hydrate the per-run denoise model version.
+            //   Desktop → profile default (typically 2.0.0 or 3.0.2 FP32).
+            //   iOS    → smallest available variant. If a quantized
+            //            sibling (2.0.0-fp16 / 2.0.0-int8) exists in
+            //            the manifest, prefer it — that's the only
+            //            way to fit under Safari's per-tab budget.
+            //            Falls back to v2.0.0 FP32 when no quantized
+            //            variant is registered yet.
             const profileDefault = this.settings.onnxDefaultDenoiseVersion || '2.0.0';
-            this.graxpert.modalDenoiseVersion =
-                this._isIOS() ? '2.0.0' : profileDefault;
+            if (this._isIOS()) {
+                // denoiseModelChoices() sorts smallest-first on iOS,
+                // so [0] is the lightest option available.
+                const choices = this.denoiseModelChoices();
+                this.graxpert.modalDenoiseVersion =
+                    (choices[0] && choices[0].version) || '2.0.0';
+            } else {
+                this.graxpert.modalDenoiseVersion = profileDefault;
+            }
             // GX-7: default depends on the user's preference + per-op
             // availability. Force browser-off when there's no model
             // even if the user prefers browser (CLI is the only path).
@@ -8544,6 +8550,52 @@ function ninaApp() {
             if (navigator.platform === 'MacIntel'
                 && navigator.maxTouchPoints > 1) return true;
             return false;
+        },
+
+        // GX-12n: dynamic Denoise model picker — driven by the ONNX
+        // manifest so quantized siblings (e.g. 2.0.0-fp16, 2.0.0-int8
+        // produced by scripts/quantize_onnx_models.py) appear in the
+        // dropdown without any code change. iOS rises the quantized
+        // variants because they're the only ones with a real shot of
+        // not OOM-killing the tab.
+        denoiseModelChoices() {
+            const models = (this.onnx?.manifest?.models || [])
+                .filter(m => m.family === 'denoise');
+            // Build label: "<version> — <sizeMB> MB"
+            const choices = models.map(m => {
+                const mb = m.sizeBytes
+                    ? (m.sizeBytes / (1024 * 1024)).toFixed(0)
+                    : '?';
+                let tag = '';
+                if (m.version.endsWith('-fp16')) tag = ' (FP16)';
+                else if (m.version.endsWith('-int8')) tag = ' (INT8)';
+                return {
+                    version: m.version,
+                    label: `v${m.version} — ${mb} MB${tag}`,
+                    sizeBytes: m.sizeBytes || 0,
+                    isQuantized: tag !== '',
+                };
+            });
+            // Sort: lighter first on iOS (so the picker defaults skew
+            // toward what'll actually run), original-FP32 first elsewhere.
+            const iOS = this._isIOS();
+            choices.sort((a, b) => {
+                if (iOS) return a.sizeBytes - b.sizeBytes;
+                // Desktop: prefer non-quantized first, then by version.
+                if (a.isQuantized !== b.isQuantized)
+                    return a.isQuantized ? 1 : -1;
+                return a.version.localeCompare(b.version);
+            });
+            // Hard fallback when the manifest is empty (server hasn't
+            // rescanned yet) — keep the original built-in choices so
+            // the UI doesn't go blank.
+            if (choices.length === 0) {
+                return [
+                    { version: '2.0.0', label: 'v2.0.0 — ~284 MB',  sizeBytes: 284e6, isQuantized: false },
+                    { version: '3.0.2', label: 'v3.0.2 — ~456 MB',  sizeBytes: 456e6, isQuantized: false },
+                ];
+            }
+            return choices;
         },
 
         graxpertSuffix(op, runOpts) {

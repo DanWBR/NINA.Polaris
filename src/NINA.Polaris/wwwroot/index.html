@@ -5899,9 +5899,17 @@
                  from settings; per-run override here. -->
             <div class="siril-modal-row" x-show="graxpert.modalOp === 'denoising'">
                 <label>AI model
+                    <!-- GX-12n: list every denoise version registered
+                         in the manifest (built-in 2.0.0 / 3.0.2 plus
+                         any quantized siblings produced by
+                         scripts/quantize_onnx_models.py — 2.0.0-fp16,
+                         2.0.0-int8, etc). Label injects the on-disk
+                         size so the user picks knowingly. -->
                     <select class="input-sm" x-model="graxpert.modalDenoiseVersion">
-                        <option value="2.0.0">v2.0.0 — lighter (~284 MB)</option>
-                        <option value="3.0.2">v3.0.2 — stronger (~456 MB)</option>
+                        <template x-for="m in denoiseModelChoices()"
+                                  :key="m.version">
+                            <option :value="m.version" x-text="m.label"></option>
+                        </template>
                     </select>
                 </label>
                 <label>Strength

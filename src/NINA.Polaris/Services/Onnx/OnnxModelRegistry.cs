@@ -67,11 +67,13 @@ public class OnnxModelRegistry {
             ["deconvolution-object-ai-models"] = "decon-objects",
         };
 
-    // Semver-ish (major.minor.patch). The trailing patch is optional
-    // so "1.0" still parses, but we always emit canonical "M.m.p" with
-    // zeros filled if the source dir was shorter.
+    // Semver-ish (major.minor.patch) + optional quantization suffix.
+    // The trailing patch is optional so "1.0" still parses.
+    // GX-12n: also accept "-fp16" / "-int8" tags so quantized models
+    // produced by scripts/quantize_onnx_models.py register as
+    // distinct versions (e.g. "2.0.0-fp16" alongside "2.0.0").
     private static readonly Regex VersionRegex =
-        new(@"^\d+\.\d+(\.\d+)?$", RegexOptions.Compiled);
+        new(@"^\d+\.\d+(\.\d+)?(-(fp16|int8))?$", RegexOptions.Compiled);
 
     public OnnxModelRegistry(ProfileService profile, IWebHostEnvironment env,
                               ILogger<OnnxModelRegistry> logger) {
