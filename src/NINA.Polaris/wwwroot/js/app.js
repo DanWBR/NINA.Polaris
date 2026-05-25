@@ -799,6 +799,13 @@ function ninaApp() {
             // the API request.
             modalDeconTarget: 'stars',
             modalDenoiseStrength: 0.5,
+            // GX-12k: per-run denoise model version. Defaults to the
+            // profile's onnxDefaultDenoiseVersion (settings) when the
+            // modal opens, but the user can override per-run from the
+            // dropdown. Two versions ship: 2.0.0 (lighter, ~284 MB,
+            // safer on iOS) and 3.0.2 (more aggressive, ~456 MB,
+            // ±1 clip — better quality on capable hardware).
+            modalDenoiseVersion: '2.0.0',
             currentJobId: null,
             currentJob: null,
             _pollTimer: null,
@@ -4102,7 +4109,11 @@ function ninaApp() {
                         pipeline = new OnnxRegistry.DenoisePipeline();
                         runOpts = {
                             strength: this.settings.graxpertDenoiseStrength,
-                            version: this.settings.onnxDefaultDenoiseVersion || '2.0.0',
+                            // GX-12k: per-run override via modal dropdown
+                            // (when set), falls back to profile default.
+                            version: this.graxpert?.modalDenoiseVersion
+                                  || this.settings.onnxDefaultDenoiseVersion
+                                  || '2.0.0',
                         };
                         break;
                     case 'deconvolution':
@@ -8457,6 +8468,11 @@ function ninaApp() {
             this.graxpert.modalDeconStrength = this.settings.graxpertDeconStrength;
             this.graxpert.modalDeconPsfSize = this.settings.graxpertDeconPsfSize;
             this.graxpert.modalDenoiseStrength = this.settings.graxpertDenoiseStrength;
+            // GX-12k: hydrate the per-run denoise model version from
+            // the profile default. Modal dropdown can override before
+            // Start; settings remain the long-lived default.
+            this.graxpert.modalDenoiseVersion =
+                this.settings.onnxDefaultDenoiseVersion || '2.0.0';
             // GX-7: default depends on the user's preference + per-op
             // availability. Force browser-off when there's no model
             // even if the user prefers browser (CLI is the only path).
@@ -8565,7 +8581,17 @@ function ninaApp() {
                         // CLI subcommand (deconv-stellar / deconv-obj)
                         // and the output suffix (_decon_stars / _decon_objects).
                         deconTarget: this.graxpert.modalDeconTarget || 'stars',
-                        denoiseStrength: this.graxpert.modalDenoiseStrength
+                        denoiseStrength: this.graxpert.modalDenoiseStrength,
+                        // GX-12k: forward the picked denoise model
+                        // version so CLI runs the same AI variant the
+                        // browser would. GraXpert's `-ai_version` is
+                        // op-agnostic, so only send it for denoise to
+                        // avoid accidentally pinning BGE/decon to a
+                        // value that doesn't exist for those families.
+                        aiVersion: this.graxpert.modalOp === 'denoising'
+                            ? (this.graxpert.modalDenoiseVersion
+                                || this.settings.onnxDefaultDenoiseVersion)
+                            : null
                     })
                 });
                 this.graxpert.currentJobId = r.jobId;
@@ -8640,7 +8666,12 @@ function ninaApp() {
                         pipeline = new OnnxRegistry.DenoisePipeline();
                         runOpts = {
                             strength: this.graxpert.modalDenoiseStrength,
-                            version: this.settings.onnxDefaultDenoiseVersion || '2.0.0',
+                            // GX-12k: per-run model version from the
+                            // modal dropdown (hydrated from settings,
+                            // user can override).
+                            version: this.graxpert.modalDenoiseVersion
+                                  || this.settings.onnxDefaultDenoiseVersion
+                                  || '2.0.0',
                         };
                         break;
                     case 'deconvolution':

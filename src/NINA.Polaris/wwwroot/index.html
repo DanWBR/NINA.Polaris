@@ -5868,7 +5868,18 @@
             </div>
 
             <!-- Denoise controls -->
+            <!-- GX-12k: AI model dropdown — both versions ship in the
+                 GraXpert bundle. v2.0.0 is lighter (~284 MB, ±10 clip,
+                 safer on iOS) and v3.0.2 is more aggressive (~456 MB,
+                 ±1 clip, better quality on desktop / GPU). Default
+                 from settings; per-run override here. -->
             <div class="siril-modal-row" x-show="graxpert.modalOp === 'denoising'">
+                <label>AI model
+                    <select class="input-sm" x-model="graxpert.modalDenoiseVersion">
+                        <option value="2.0.0">v2.0.0 — lighter (~284 MB)</option>
+                        <option value="3.0.2">v3.0.2 — stronger (~456 MB)</option>
+                    </select>
+                </label>
                 <label>Strength
                     <input type="number" class="input-sm" step="0.05" min="0" max="1"
                            x-model.number="graxpert.modalDenoiseStrength">
