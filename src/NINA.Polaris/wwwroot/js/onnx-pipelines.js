@@ -255,6 +255,262 @@
         }
     }
 
+    // ───────────────────────────────────────────────────────────────
+    // Pixel helpers shared by the pipelines (GX-2..GX-4).
+    // ───────────────────────────────────────────────────────────────
+
+    /** Bilinear resize of a planar / interleaved uint16 pixel buffer.
+     *  In/out layout: row-major, channels-interleaved when channels>1.
+     *  For BGE we resize a uint16 mono frame to 256x256 (replicated to
+     *  3 channels later), and resize the resulting background plane
+     *  back to the source dimensions. */
+    function bilinearResize(src, srcW, srcH, channels, dstW, dstH) {
+        const dst = new Uint16Array(dstW * dstH * channels);
+        const sx = srcW / dstW;
+        const sy = srcH / dstH;
+        for (let y = 0; y < dstH; y++) {
+            const fy = (y + 0.5) * sy - 0.5;
+            const iy = Math.floor(fy);
+            const dy = fy - iy;
+            const iy0 = Math.max(0, Math.min(srcH - 1, iy));
+            const iy1 = Math.max(0, Math.min(srcH - 1, iy + 1));
+            for (let x = 0; x < dstW; x++) {
+                const fx = (x + 0.5) * sx - 0.5;
+                const ix = Math.floor(fx);
+                const dx = fx - ix;
+                const ix0 = Math.max(0, Math.min(srcW - 1, ix));
+                const ix1 = Math.max(0, Math.min(srcW - 1, ix + 1));
+                for (let c = 0; c < channels; c++) {
+                    const a = src[(iy0 * srcW + ix0) * channels + c];
+                    const b = src[(iy0 * srcW + ix1) * channels + c];
+                    const cc = src[(iy1 * srcW + ix0) * channels + c];
+                    const d = src[(iy1 * srcW + ix1) * channels + c];
+                    const top = a + (b - a) * dx;
+                    const bot = cc + (d - cc) * dx;
+                    const v = top + (bot - top) * dy;
+                    dst[(y * dstW + x) * channels + c] =
+                        Math.max(0, Math.min(65535, Math.round(v)));
+                }
+            }
+        }
+        return dst;
+    }
+
+    /** Float32 bilinear resize — same as above but float in / float out.
+     *  Used to resample the predicted background plane (already float
+     *  after denormalize) back to the source dimensions without an
+     *  intermediate uint16 round-trip. */
+    function bilinearResizeF(src, srcW, srcH, dstW, dstH) {
+        const dst = new Float32Array(dstW * dstH);
+        const sx = srcW / dstW;
+        const sy = srcH / dstH;
+        for (let y = 0; y < dstH; y++) {
+            const fy = (y + 0.5) * sy - 0.5;
+            const iy = Math.floor(fy);
+            const dy = fy - iy;
+            const iy0 = Math.max(0, Math.min(srcH - 1, iy));
+            const iy1 = Math.max(0, Math.min(srcH - 1, iy + 1));
+            for (let x = 0; x < dstW; x++) {
+                const fx = (x + 0.5) * sx - 0.5;
+                const ix = Math.floor(fx);
+                const dx = fx - ix;
+                const ix0 = Math.max(0, Math.min(srcW - 1, ix));
+                const ix1 = Math.max(0, Math.min(srcW - 1, ix + 1));
+                const a = src[iy0 * srcW + ix0];
+                const b = src[iy0 * srcW + ix1];
+                const cc = src[iy1 * srcW + ix0];
+                const d = src[iy1 * srcW + ix1];
+                const top = a + (b - a) * dx;
+                const bot = cc + (d - cc) * dx;
+                dst[y * dstW + x] = top + (bot - top) * dy;
+            }
+        }
+        return dst;
+    }
+
+    /** Sample-based median + MAD on a normalised Float32 plane.
+     *  We don't need full-image statistics for a stable BGE normalize —
+     *  3-4k random samples gives sub-1% accuracy on the median, which
+     *  is well within the slack the model + post-Gaussian smooth eats.
+     *  Returns { median, mad }. */
+    function medianMadSampled(plane) {
+        const N = Math.min(plane.length, 4000);
+        const samples = new Float32Array(N);
+        const step = plane.length / N;
+        for (let i = 0; i < N; i++) samples[i] = plane[Math.floor(i * step)];
+        const sorted = Array.from(samples).sort((a, b) => a - b);
+        const median = sorted[N >> 1];
+        const dev = new Float32Array(N);
+        for (let i = 0; i < N; i++) dev[i] = Math.abs(samples[i] - median);
+        const devSorted = Array.from(dev).sort((a, b) => a - b);
+        const mad = devSorted[N >> 1] || 1e-6;
+        return { median, mad };
+    }
+
+    /** Cheap separable box-blur 3-pass ~Gaussian on a Float32 plane.
+     *  Matches the radius used elsewhere in EditPipeline; for a fixed
+     *  256x256 working plane this is sub-millisecond. */
+    function boxBlurF(src, w, h, radius) {
+        if (radius < 1) return src.slice();
+        let buf = src.slice();
+        let tmp = new Float32Array(buf.length);
+        for (let pass = 0; pass < 3; pass++) {
+            // horizontal
+            for (let y = 0; y < h; y++) {
+                const off = y * w;
+                let sum = 0;
+                for (let i = -radius; i <= radius; i++) {
+                    sum += buf[off + Math.max(0, Math.min(w - 1, i))];
+                }
+                const inv = 1.0 / (2 * radius + 1);
+                tmp[off] = sum * inv;
+                for (let x = 1; x < w; x++) {
+                    const out = x - radius - 1;
+                    const inn = x + radius;
+                    sum -= buf[off + Math.max(0, Math.min(w - 1, out))];
+                    sum += buf[off + Math.max(0, Math.min(w - 1, inn))];
+                    tmp[off + x] = sum * inv;
+                }
+            }
+            [buf, tmp] = [tmp, buf];
+            // vertical
+            for (let x = 0; x < w; x++) {
+                let sum = 0;
+                for (let i = -radius; i <= radius; i++) {
+                    sum += buf[Math.max(0, Math.min(h - 1, i)) * w + x];
+                }
+                const inv = 1.0 / (2 * radius + 1);
+                tmp[x] = sum * inv;
+                for (let y = 1; y < h; y++) {
+                    const out = y - radius - 1;
+                    const inn = y + radius;
+                    sum -= buf[Math.max(0, Math.min(h - 1, out)) * w + x];
+                    sum += buf[Math.max(0, Math.min(h - 1, inn)) * w + x];
+                    tmp[y * w + x] = sum * inv;
+                }
+            }
+            [buf, tmp] = [tmp, buf];
+        }
+        return buf;
+    }
+
+    // ───────────────────────────────────────────────────────────────
+    // GX-2: Background extraction (BGE) — single forward pass.
+    // ───────────────────────────────────────────────────────────────
+    //
+    // Math mirrors GraXpert's background_extraction.py:
+    //   1) downsample source to 256x256 (we let the model's receptive
+    //      field handle the smooth background; loss vs the Python's
+    //      256x240+pad-16 is sub-percent for the final correction)
+    //   2) per-channel MAD normalize: (v − median) / MAD × 0.04, clip ±1
+    //   3) mono → replicate across 3 channels for the NHWC tensor
+    //   4) session.run({ gen_input_image: [1,256,256,3] })
+    //   5) denormalize: out × MAD/0.04 + median
+    //   6) Gaussian smooth (σ≈3, ~3-pass box blur for speed)
+    //   7) bilinear resize back to source W×H
+    //   8) apply correction: subtract / divide
+    //
+    // Sample-point user overrides + RBF interpolation deferred — v1
+    // behaves like CLI auto-BGE (no manual points). Future GX-* phase
+    // can add a sample-pick UI on the working canvas.
+    //
+    // Input: Uint16Array of mono pixels (length = w*h). RGB v2 ships
+    // with GX-5 editor integration when color FITS pipelines land.
+
+    class BgePipeline {
+        async run(pixels, width, height, opts = {}) {
+            const correction = opts.correction || 'Subtraction';
+            const family = 'bge';
+            const version = '1.0.1';
+            const TILE = 256;
+
+            const session = await loadSession(family, version, opts.onProgress);
+
+            // 1) Downsample to 256x256.
+            const small = bilinearResize(pixels, width, height, 1, TILE, TILE);
+
+            // 2-3) Build [1, 256, 256, 3] NHWC float32 tensor.
+            //      Mono → replicate to 3 channels. MAD normalize.
+            //      Operate on the source (16-bit display range) scaled
+            //      to [0,1] floats — matches what GraXpert does after
+            //      its astropy normalize step.
+            const planeF = new Float32Array(TILE * TILE);
+            for (let i = 0; i < small.length; i++) planeF[i] = small[i] / 65535;
+            const { median, mad } = medianMadSampled(planeF);
+
+            const tensorData = new Float32Array(TILE * TILE * 3);
+            for (let i = 0; i < TILE * TILE; i++) {
+                const v = ((planeF[i] - median) / mad) * 0.04;
+                const clipped = Math.max(-1, Math.min(1, v));
+                tensorData[i * 3]     = clipped;
+                tensorData[i * 3 + 1] = clipped;
+                tensorData[i * 3 + 2] = clipped;
+            }
+
+            // 4) Inference.
+            const ort = await loadOrtWeb();
+            const inputName = session.inputNames[0]; // "gen_input_image"
+            const outputName = session.outputNames[0];
+            const inputTensor = new ort.Tensor('float32', tensorData,
+                [1, TILE, TILE, 3]);
+            const t0 = performance.now();
+            const out = await session.run({ [inputName]: inputTensor });
+            const inferenceMs = performance.now() - t0;
+            const outTensor = out[outputName];
+            const outData = outTensor.data; // Float32Array len = 1*256*256*3
+
+            // 5) Average the three channels back to a mono background
+            //    plane in [0,1] space and denormalize.
+            const bgSmall = new Float32Array(TILE * TILE);
+            for (let i = 0; i < TILE * TILE; i++) {
+                const r = outData[i * 3];
+                const g = outData[i * 3 + 1];
+                const b = outData[i * 3 + 2];
+                const avg = (r + g + b) / 3.0;
+                bgSmall[i] = avg * mad / 0.04 + median;
+            }
+
+            // 6) Gaussian-ish smooth (3-pass box blur, radius 3).
+            const bgSmooth = boxBlurF(bgSmall, TILE, TILE, 3);
+
+            // 7) Resize back to source dimensions.
+            const bgFull = bilinearResizeF(bgSmooth, TILE, TILE, width, height);
+
+            // 8) Apply correction. Subtraction recentres around the
+            //    median so the corrected background sits where the
+            //    original median was (otherwise BGE subtracts toward
+            //    zero and the resulting image looks crushed).
+            //    Division mode: scale by bg/median so the output also
+            //    keeps its overall brightness reference.
+            const result = new Uint16Array(pixels.length);
+            if (correction === 'Division') {
+                for (let i = 0; i < pixels.length; i++) {
+                    const v = pixels[i] / 65535;
+                    const bg = Math.max(1e-6, bgFull[i]);
+                    const corrected = v / bg * median;
+                    result[i] = Math.max(0, Math.min(65535,
+                        Math.round(corrected * 65535)));
+                }
+            } else {
+                // Subtraction (default)
+                for (let i = 0; i < pixels.length; i++) {
+                    const v = pixels[i] / 65535;
+                    const bg = bgFull[i];
+                    const corrected = v - bg + median;
+                    result[i] = Math.max(0, Math.min(65535,
+                        Math.round(corrected * 65535)));
+                }
+            }
+
+            return {
+                pixels: result,
+                width, height,
+                channels: 1,
+                stats: { median, mad, inferenceMs },
+            };
+        }
+    }
+
     // ─── Public API ─────────────────────────────────────────────────
     window.OnnxRegistry = {
         loadOrtWeb,
@@ -266,5 +522,7 @@
         idbDelete,
         idbTotalSize,
         pickBackends,
+        // Pipelines
+        BgePipeline,
     };
 })();

@@ -796,7 +796,18 @@ function ninaApp() {
             modalDenoiseStrength: 0.5,
             currentJobId: null,
             currentJob: null,
-            _pollTimer: null
+            _pollTimer: null,
+            // GX-2: browser-mode (ONNX) run state. Default toggle ON
+            // when an operation has its model available in the
+            // manifest (onnxAvailableForOp). When the user clicks Start,
+            // graxpertStartRun branches on this — true → browser
+            // pipeline, false → existing CLI subprocess.
+            modalRunInBrowser: true,
+            browserActive: false,
+            browserDone: 0,
+            browserTotal: 0,
+            browserPhase: '',
+            browserProgress: 0,
         },
 
         // GX-1b: in-browser ONNX inference state (GraXpert AI models).
@@ -8650,6 +8661,16 @@ function ninaApp() {
                 this.toast('No files selected', 'warn');
                 return;
             }
+            // GX-2: branch on the in-browser toggle. When the operation
+            // has an ONNX model available + the user hasn't opted out,
+            // run the pipeline locally. Otherwise fall through to the
+            // existing CLI subprocess. Toggle defaults to the browser
+            // path so the user gets the in-browser benefits without
+            // having to think about it.
+            if (this.graxpert.modalRunInBrowser
+                && this.onnxAvailableForOp(this.graxpert.modalOp)) {
+                return this._graxpertRunInBrowser();
+            }
             try {
                 const r = await this.apiPost('/api/graxpert/run', null, {
                     method: 'POST',
@@ -8673,6 +8694,139 @@ function ninaApp() {
             } catch (e) {
                 this.toast('GraXpert start failed: ' + (e.message || ''), 'error');
             }
+        },
+
+        // GX-2: returns true when the operation can run via ORT Web —
+        // depends on the bundle being loadable + the matching model
+        // being present in the manifest.
+        onnxAvailableForOp(op) {
+            const models = this.onnx?.manifest?.models || [];
+            if (!models.length) return false;
+            switch (op) {
+                case 'background-extraction':
+                    return models.some(m => m.family === 'bge');
+                case 'denoising':
+                    return models.some(m => m.family === 'denoise');
+                case 'deconvolution':
+                    return models.some(m => m.family === 'decon-stars'
+                                          || m.family === 'decon-objects');
+                default:
+                    return false;
+            }
+        },
+
+        // ─── GX-2: in-browser GraXpert runner ──────────────────────────
+        // For each selected file: GET raw uint16 pixels from the server,
+        // hand them to the matching pipeline, POST the result back as a
+        // sibling FITS. Pipelines (BGE/Denoise/Decon) only differ in the
+        // class instantiated + the params dict; the orchestration here is
+        // shared.
+
+        async _graxpertRunInBrowser() {
+            const paths = [...this.graxpert.modalPaths];
+            this.graxpert.browserActive = true;
+            this.graxpert.browserDone = 0;
+            this.graxpert.browserTotal = paths.length;
+            this.graxpert.browserPhase = 'preparing';
+            this.graxpert.browserProgress = 0;
+            try {
+                const op = this.graxpert.modalOp;
+                let pipeline;
+                let runOpts = {};
+                switch (op) {
+                    case 'background-extraction':
+                        pipeline = new OnnxRegistry.BgePipeline();
+                        runOpts = { correction: this.graxpert.modalCorrection };
+                        break;
+                    case 'denoising':
+                    case 'deconvolution':
+                        this.toast(op + ' browser pipeline ships in GX-3 / GX-4. '
+                                 + 'Toggle off "Run in browser" to use CLI.',
+                                   'warn');
+                        return;
+                    default:
+                        throw new Error('Unknown operation: ' + op);
+                }
+                const suffix = this.graxpertSuffix(op);
+                const written = [];
+                for (let idx = 0; idx < paths.length; idx++) {
+                    const path = paths[idx];
+                    const stem = path.split(/[\\/]+/).pop();
+                    this.graxpert.browserPhase = stem + ' — fetching pixels';
+                    this.graxpert.browserProgress = idx / paths.length;
+
+                    const src = await this._onnxFetchSourcePixels(path);
+                    if (!src) {
+                        this.toast('Skipped ' + stem + ' — could not decode', 'warn');
+                        continue;
+                    }
+
+                    this.graxpert.browserPhase = stem + ' — running ' + op;
+                    const result = await pipeline.run(
+                        src.pixels, src.width, src.height,
+                        Object.assign({}, runOpts, {
+                            onProgress: (phase, frac) => {
+                                this.graxpert.browserPhase = stem + ' — ' + phase
+                                  + (frac != null ? ' ' + Math.round(frac * 100) + '%' : '');
+                            }
+                        }));
+
+                    this.graxpert.browserPhase = stem + ' — saving sibling FITS';
+                    const outPath = await this._onnxSaveResult(
+                        path, suffix, result.pixels, result.width,
+                        result.height, result.channels);
+                    if (outPath) written.push(outPath);
+
+                    this.graxpert.browserDone++;
+                    this.graxpert.browserProgress = (idx + 1) / paths.length;
+                }
+                this.graxpert.browserPhase = 'done';
+                this.toast('Browser GraXpert done — ' + written.length
+                          + ' / ' + paths.length + ' written', 'ok');
+                if (this.tab === 'files') {
+                    try { await this.filesReload(); } catch {}
+                }
+            } catch (e) {
+                console.error('[GraXpert browser] failed', e);
+                this.toast('Browser run failed: ' + (e.message || ''), 'error');
+            } finally {
+                this.graxpert.browserActive = false;
+            }
+        },
+
+        async _onnxFetchSourcePixels(path) {
+            const r = await fetch('/api/onnx/source-pixels?path='
+                + encodeURIComponent(path));
+            if (!r.ok) return null;
+            const w  = parseInt(r.headers.get('X-Width'),    10);
+            const h  = parseInt(r.headers.get('X-Height'),   10);
+            const ch = parseInt(r.headers.get('X-Channels'), 10) || 1;
+            const buf = await r.arrayBuffer();
+            // uint16 LE - DataView would copy; Uint16Array on a buffer
+            // of even-byte length is a zero-copy view if the platform
+            // is LE (which all browsers are).
+            const pixels = new Uint16Array(buf);
+            return { pixels, width: w, height: h, channels: ch };
+        },
+
+        async _onnxSaveResult(source, suffix, pixels, width, height, channels) {
+            const fd = new FormData();
+            fd.append('source',   source);
+            fd.append('suffix',   suffix);
+            fd.append('width',    String(width));
+            fd.append('height',   String(height));
+            fd.append('channels', String(channels));
+            // Wrap the Uint16Array's underlying ArrayBuffer directly —
+            // Blob constructor accepts BufferSource without copying.
+            const blob = new Blob([pixels.buffer]);
+            fd.append('pixels', blob, 'pixels.bin');
+            const r = await fetch('/api/onnx/save', { method: 'POST', body: fd });
+            if (!r.ok) {
+                const e = await r.json().catch(() => null);
+                throw new Error(e?.error || ('HTTP ' + r.status));
+            }
+            const j = await r.json();
+            return j.path;
         },
 
         _graxpertStartPolling() {

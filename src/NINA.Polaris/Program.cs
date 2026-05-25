@@ -98,6 +98,7 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Studio.FrameOperationsServic
 builder.Services.AddSingleton<NINA.Polaris.Services.Editor.ImageEditService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Editor.EditSidecarStore>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Onnx.OnnxModelRegistry>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Onnx.OnnxFileService>();
 builder.Services.AddSingleton<FileBrowserService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.SirilService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.GraXpertService>();

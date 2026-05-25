@@ -5704,6 +5704,37 @@
                 <span x-text="graxpert.modalPaths.length + ' file(s) selected.'"></span>
                 Output: <code x-text="'<input>' + graxpertSuffix(graxpert.modalOp) + '.fits sibling to each input'"></code>
             </p>
+            <!-- GX-2: Run in browser toggle. Default ON when ORT Web is
+                 ready + the model is in the server's manifest + the user
+                 hasn't opted into CLI mode. When ON, dispatches via the
+                 OnnxRegistry pipelines locally; when OFF, falls through
+                 to the existing CLI subprocess (graxpertStartRun). -->
+            <div class="siril-modal-row" x-show="onnxAvailableForOp(graxpert.modalOp)">
+                <label class="checkbox-label">
+                    <input type="checkbox" x-model="graxpert.modalRunInBrowser">
+                    Run in browser (ONNX, no CLI subprocess)
+                </label>
+                <p class="hint" style="margin-top:4px">
+                    Inference runs locally in this tab — works on any device with
+                    WebGPU or WASM SIMD, no GraXpert install required on the
+                    server. First use of each model downloads its ONNX bytes
+                    from the Polaris host.
+                </p>
+            </div>
+            <!-- Browser-mode progress (separate from the CLI progress
+                 block lower down — that one polls the server job, this
+                 one is purely client-side). -->
+            <div class="siril-modal-progress"
+                 x-show="graxpert.browserActive">
+                <div class="siril-modal-progress-bar">
+                    <div class="siril-modal-progress-fill"
+                         :style="'width: ' + Math.round((graxpert.browserProgress || 0) * 100) + '%'"></div>
+                </div>
+                <div class="siril-modal-progress-meta">
+                    <span x-text="graxpert.browserPhase || ''"></span>
+                    <span x-text="(graxpert.browserDone || 0) + ' / ' + (graxpert.browserTotal || 0) + ' done'"></span>
+                </div>
+            </div>
             <p class="hint text-warn"
                x-show="(graxpert.modalOp === 'deconvolution' || graxpert.modalOp === 'denoising')
                        && graxpertPathsLookLikeLights()">
