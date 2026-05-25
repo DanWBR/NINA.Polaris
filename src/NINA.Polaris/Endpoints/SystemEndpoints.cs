@@ -89,6 +89,12 @@ public static class SystemEndpoints {
                 p.GraXpertDeconStrength = update.GraXpertDeconStrength;
                 p.GraXpertDeconPsfSize = update.GraXpertDeconPsfSize;
                 p.GraXpertDenoiseStrength = update.GraXpertDenoiseStrength;
+                // GX-1b: ONNX in-browser inference settings.
+                p.OnnxModelsPath = update.OnnxModelsPath ?? p.OnnxModelsPath;
+                p.OnnxLicenseAcknowledged = update.OnnxLicenseAcknowledged;
+                p.OnnxDefaultDenoiseVersion = update.OnnxDefaultDenoiseVersion
+                                                  ?? p.OnnxDefaultDenoiseVersion;
+                p.OnnxPreferCli = update.OnnxPreferCli;
             });
             return Results.Ok(new { message = "Profile saved" });
         });

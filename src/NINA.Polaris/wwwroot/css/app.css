@@ -3193,6 +3193,30 @@ label select.input-sm {
     font-size: 12px;
 }
 
+/* GX-1b: compact models table in the Settings AI panel. Matches the
+   visual weight of the rest of Settings (small text, muted borders,
+   stable column widths so the hash column doesn't shift). */
+.onnx-models-table {
+    width: 100%;
+    max-width: 640px;
+    border-collapse: collapse;
+    font-size: 11px;
+}
+.onnx-models-table th,
+.onnx-models-table td {
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+}
+.onnx-models-table th {
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 10px;
+}
+.onnx-models-table tr:last-child td { border-bottom: none; }
+
 /* Connection lost banner */
 .connection-banner {
     position: fixed;

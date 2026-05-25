@@ -5244,6 +5244,101 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- GX-1b: ONNX in-browser inference (GraXpert AI models).
+                     User points OnnxModelsPath at a directory that
+                     contains the GraXpert `models/` layout (any clone
+                     of GraXpert works); server scans + serves the
+                     bytes via /api/onnx/model/..., browser caches in
+                     IndexedDB by SHA-256 and runs inference locally
+                     via onnxruntime-web. License modal (CC BY-NC-SA
+                     4.0) gates first use; CLI subprocess kept hidden
+                     behind PreferCli for advanced users.
+
+                     Pipelines (BGE / Denoise / Decon) ship in
+                     GX-2..GX-4. This panel is the operations console:
+                     points at the models, shows what's detected, lets
+                     the user drop the IndexedDB cache. -->
+                <div class="settings-section">
+                    <h3>AI inference (ONNX)</h3>
+                    <p class="hint" style="margin-top:0">
+                        In-browser GraXpert AI (BGE / Denoise / Deconvolution).
+                        Server hosts the model files, your browser fetches them
+                        once and runs inference locally — works on any device
+                        with WebGPU or WASM SIMD (laptops, phones, tablets).
+                    </p>
+                    <label>Models path
+                        <input type="text" class="input-md"
+                               style="width:100%; max-width:560px"
+                               x-model="settings.onnxModelsPath"
+                               @change="(async () => { await saveSettingsToServer(); await onnxRescan(); })()"
+                               placeholder="e.g. C:\Users\you\GraXpert\models">
+                    </label>
+                    <p class="hint">
+                        Point at a directory containing the GraXpert layout
+                        <code>{family}-ai-models/{version}/model.onnx</code>.
+                        Models are not bundled with Polaris — clone the
+                        <a href="https://github.com/Steffenhir/GraXpert" target="_blank" rel="noopener">GraXpert repo</a>
+                        and point at its <code>models/</code> dir, or copy the
+                        <code>.onnx</code> files into a folder of your own.
+                    </p>
+                    <div class="control-row actions" style="margin-top:6px">
+                        <button class="btn btn-sm" @click="onnxRescan()"
+                                :disabled="onnx.scanning">
+                            <span x-show="!onnx.scanning">⟳ Re-scan</span>
+                            <span x-show="onnx.scanning">Scanning…</span>
+                        </button>
+                        <button class="btn btn-sm" @click="onnxClearCache()"
+                                :disabled="onnx.clearingCache"
+                                title="Drop all model bytes cached in your browser's IndexedDB">
+                            <span x-show="!onnx.clearingCache"
+                                  x-text="'🗑 Clear cache (' + formatBytes(onnx.cacheSize) + ')'"></span>
+                            <span x-show="onnx.clearingCache">Clearing…</span>
+                        </button>
+                    </div>
+                    <!-- Models list — empty state when path unset/invalid. -->
+                    <div x-show="onnx.manifest?.models?.length"
+                         style="margin-top:10px">
+                        <table class="onnx-models-table">
+                            <thead>
+                                <tr>
+                                    <th>Family</th>
+                                    <th>Version</th>
+                                    <th style="text-align:right">Size</th>
+                                    <th>Hash</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="m in (onnx.manifest?.models || [])"
+                                          :key="m.family + '/' + m.version">
+                                    <tr>
+                                        <td x-text="m.family"></td>
+                                        <td x-text="m.version"></td>
+                                        <td style="text-align:right;
+                                                   font-variant-numeric:tabular-nums"
+                                            x-text="formatBytes(m.sizeBytes)"></td>
+                                        <td class="muted"
+                                            style="font-family:var(--font-mono,monospace);font-size:10px"
+                                            x-text="m.hash ? m.hash.slice(0,12) + '…' : '(pending)'"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="warn-banner"
+                         x-show="!onnx.manifest?.models?.length && !onnx.scanning"
+                         style="margin-top:10px">
+                        No models detected. Set the path above to a folder
+                        containing the GraXpert ONNX models.
+                    </div>
+                    <p class="hint" style="margin-top:10px">
+                        Models © GraXpert Development Team, CC BY-NC-SA 4.0
+                        (non-commercial). The first use of an AI op will
+                        prompt you to acknowledge the licence. Polaris itself
+                        is MPL 2.0 and does not redistribute the model files.
+                    </p>
+                </div>
+
             </div>
 
         </main>
@@ -5887,6 +5982,13 @@
          stream over /ws/image-stream. Without it every raw frame falls
          through to the REST preview fallback and hammers a 404 loop. -->
     <script src="/js/lib/lz4.js"></script>
+    <!-- GX-1b: ONNX pipelines bootstrap (manifest + IndexedDB cache +
+         session helper). Tiny (~6 KB) — the heavy lifting happens
+         inside loadOrtWeb() which lazy-injects /js/lib/onnxruntime/ort.min.js
+         on first call. Loading the registry up-front means the editor
+         AI section + FILES tab can call OnnxRegistry.* synchronously
+         without awaiting an import. -->
+    <script src="/js/onnx-pipelines.js"></script>
     <script src="/js/lib/alpine.min.js" defer></script>
     <script src="/js/app.js"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime

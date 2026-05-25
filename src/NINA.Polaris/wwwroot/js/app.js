@@ -222,6 +222,11 @@ function ninaApp() {
             graxpertDeconStrength: 0.5,
             graxpertDeconPsfSize: 4.0,
             graxpertDenoiseStrength: 0.5,
+            // GX-1b: ONNX in-browser inference (GraXpert AI models)
+            onnxModelsPath: '',
+            onnxLicenseAcknowledged: false,
+            onnxDefaultDenoiseVersion: '2.0.0',
+            onnxPreferCli: false,
             // Main Telescope OTA optics (mirrored from active rig).
             // Bound to the Main Telescope card on the RIGS tab; edits
             // persist via saveOpticsDebounced -> saveCurrentSelectionsToRig.
@@ -792,6 +797,19 @@ function ninaApp() {
             currentJobId: null,
             currentJob: null,
             _pollTimer: null
+        },
+
+        // GX-1b: in-browser ONNX inference state (GraXpert AI models).
+        // manifest mirrors what GET /api/onnx/manifest returns; cacheSize
+        // is in bytes (browser IndexedDB store sum). Pipelines (GX-2/3/4)
+        // hang job state off this object as they land.
+        onnx: {
+            manifest: null,        // { modelsPath, models: [...] }
+            scanning: false,
+            clearingCache: false,
+            cacheSize: 0,
+            licenseAcknowledged: false,
+            backends: null,        // ['webgpu', 'wasm'] after first probe
         },
 
         // d3-celestial Sky Viewer (offline, BSD-3-Clause).
@@ -2431,6 +2449,13 @@ function ninaApp() {
                     this.settings.graxpertDeconStrength = data.graxpertDeconStrength ?? 0.5;
                     this.settings.graxpertDeconPsfSize = data.graxpertDeconPsfSize ?? 4.0;
                     this.settings.graxpertDenoiseStrength = data.graxpertDenoiseStrength ?? 0.5;
+                    this.settings.onnxModelsPath = data.onnxModelsPath || '';
+                    this.settings.onnxLicenseAcknowledged = !!data.onnxLicenseAcknowledged;
+                    this.settings.onnxDefaultDenoiseVersion = data.onnxDefaultDenoiseVersion || '2.0.0';
+                    this.settings.onnxPreferCli = !!data.onnxPreferCli;
+                    // Manifest is small + cheap; fetch on every settings
+                    // load so the AI panel reflects the current state.
+                    this.loadOnnxManifest();
                     // First time the app boots, honour the user's preferred sequencer flavour.
                     if (!this._sequencerTabBootHandled) {
                         this._sequencerTabBootHandled = true;
@@ -7122,7 +7147,11 @@ function ninaApp() {
                         graxpertBgeCorrection: this.settings.graxpertBgeCorrection,
                         graxpertDeconStrength: this.settings.graxpertDeconStrength,
                         graxpertDeconPsfSize: this.settings.graxpertDeconPsfSize,
-                        graxpertDenoiseStrength: this.settings.graxpertDenoiseStrength
+                        graxpertDenoiseStrength: this.settings.graxpertDenoiseStrength,
+                        onnxModelsPath: this.settings.onnxModelsPath,
+                        onnxLicenseAcknowledged: this.settings.onnxLicenseAcknowledged,
+                        onnxDefaultDenoiseVersion: this.settings.onnxDefaultDenoiseVersion,
+                        onnxPreferCli: this.settings.onnxPreferCli
                     })
                 });
             } catch (e) { }
@@ -8506,6 +8535,62 @@ function ninaApp() {
             } catch (e) {
                 this.toast('GraXpert detection failed: ' + (e.message || ''), 'error');
             }
+        },
+
+        // ─── GX-1b: ONNX manifest + cache control ───────────────────────
+        // Pulls the server's view of which models exist + lazily probes
+        // the IndexedDB cache size. Surfaced in the Settings AI section.
+
+        async loadOnnxManifest() {
+            if (typeof OnnxRegistry === 'undefined') return;
+            try {
+                this.onnx.manifest = await OnnxRegistry.fetchManifest(true);
+            } catch (e) {
+                console.warn('[Onnx] manifest fetch failed', e);
+                this.onnx.manifest = { models: [], error: String(e) };
+            }
+            // Cache size probe — non-fatal if IDB unavailable.
+            try { this.onnx.cacheSize = await OnnxRegistry.idbTotalSize(); }
+            catch { this.onnx.cacheSize = 0; }
+        },
+
+        async onnxRescan() {
+            if (this.onnx.scanning) return;
+            this.onnx.scanning = true;
+            try {
+                await this.apiPost('/api/onnx/rescan');
+                await this.loadOnnxManifest();
+            } catch (e) {
+                this.toast('ONNX rescan failed: ' + (e.message || ''), 'error');
+            } finally {
+                this.onnx.scanning = false;
+            }
+        },
+
+        async onnxClearCache() {
+            if (this.onnx.clearingCache) return;
+            if (!window.confirm('Drop all cached ONNX model bytes? Next use will re-download.'))
+                return;
+            this.onnx.clearingCache = true;
+            try {
+                if (typeof OnnxRegistry !== 'undefined') await OnnxRegistry.idbClear();
+                this.onnx.cacheSize = 0;
+                this.toast('ONNX cache cleared', 'ok');
+            } finally {
+                this.onnx.clearingCache = false;
+            }
+        },
+
+        // Reused helper for displaying bytes in the AI panel + per-model
+        // size column. Mirrors the auto-scale rules formatBytesPerSec
+        // uses for the network indicator but for static quantities (no
+        // per-second suffix).
+        formatBytes(bytes) {
+            if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+            if (bytes < 1024) return Math.round(bytes) + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+            return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
         },
 
         // Open the GraXpert batch modal for the operation requested
