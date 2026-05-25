@@ -841,9 +841,10 @@ function ninaApp() {
         // alternate "equatorial chart" view would just duplicate this one
         // with a different rotation axis and worse UX (drag pivoting
         // around the celestial pole feels wildly off-axis).
-        _celestialReady: false,
+        // SWE-6: _celestialReady, _fovLayerId, _skyTicker dropped along
+        // with d3-celestial. The stellarium-web-engine bridge has its own
+        // ready signal (_skyBridgeReady) and runs the sky clock internally.
         _fovLayerId: null,
-        _skyTicker: null,                // setInterval handle for datetime refresh
         skyClock: '',                    // displayed in the toolbar (HH:MM:SS UTC)
         locationLabel: '',               // "City, Country" if reverse-geocoded, else "5.18°S 37.36°W"
         _locationLastKey: '',            // memoise so we only reverse-geocode once per coord pair
@@ -2430,8 +2431,9 @@ function ninaApp() {
             // Push the new dimensions into the sky overlay so the
             // rectangle resizes the moment the user edits focal length
             // in the Main Telescope card or a new camera connects.
-            if (this.tab === 'sky' && this._celestialReady
-                && typeof this.updateSkyCameraFov === 'function') {
+            // SWE-6: the bridge is queue-safe before its 'ready' message
+            // lands, so no readiness gate needed here.
+            if (this.tab === 'sky' && typeof this.updateSkyCameraFov === 'function') {
                 this.updateSkyCameraFov();
             }
         },
@@ -2616,10 +2618,12 @@ function ninaApp() {
             }
         },
 
-        // ---- d3-celestial Sky Viewer (offline, BSD-3) ----
-        // Renders Hipparcos catalogue (mag ≤ 6), Stellarium constellation lines,
-        // Milky Way contours, and a Messier+NGC DSO overlay. Everything is
-        // bundled under /js/lib/celestial — zero network required.
+        // ---- Sky Viewer ----
+        // SWE-6: d3-celestial dropped. The SKY tab is now a
+        // stellarium-web-engine iframe (see wwwroot/sky/). The legacy
+        // /js/lib/celestial bundle has been deleted; everything below
+        // talks to the engine via postMessage through the bridge in
+        // wwwroot/sky/js/sky-bridge.js.
 
         initSkyViewer() {
             // SWE-3-bugfix: d3-celestial removed. The SKY tab now hosts
@@ -2884,243 +2888,6 @@ function ninaApp() {
             });
         },
 
-        // Tears down + rebuilds the celestial widget. Called when the user
-        // switches projection (live ↔ equatorial) or when the observer
-        // location changes via Settings.
-        //
-        // d3-celestial keeps a fair bit of state on its global Celestial
-        // object (projection, transform, current center, zoom level, the
-        // SVG/canvas refs it injected). Calling display() a second time
-        // on the same container after just `innerHTML = ''` tends to leave
-        // the new render in a broken state — the map ends up blank when
-        // switching between live ↔ equatorial because the cached transform
-        // doesn't get fully reset. Replacing the entire container div
-        // forces Celestial to do a clean re-init.
-        rebuildSky() {
-            this._stopSkyTicker();
-            const old = document.getElementById('celestial-map');
-            if (!old) return;
-            const parent = old.parentElement;
-            if (!parent) return;
-            const fresh = document.createElement('div');
-            fresh.id = 'celestial-map';
-            fresh.className = old.className;
-            parent.replaceChild(fresh, old);
-            this._celestialReady = false;
-            // Defer the build one frame so the new div is fully attached
-            // and laid out before Celestial measures it.
-            requestAnimationFrame(() => this._buildCelestial(fresh));
-        },
-
-        _buildCelestial(el) {
-            try {
-                const lat = this.settings.latitude  || 0;
-                const lng = this.settings.longitude || 0;
-
-                // Use the full container width so the circle spans
-                // edge-to-edge horizontally. CSS clips the over-tall SVG
-                // vertically (overflow:hidden + flex centring), showing
-                // only the middle band of the sphere.
-                const renderSize = Math.max(300, el.clientWidth);
-
-                // Compute the initial centre so that whatever point we want
-                // to be "in the middle of the visible viewport" is passed
-                // to Celestial at display() time. Calling rotate() AFTER
-                // display() is racy and silently fails near the celestial
-                // poles, so we set centre up-front and avoid the exact
-                // pole singularity by clamping to ±89.5°.
-                const initialCentre = this._computeInitialCentre(lat, lng);
-
-                Celestial.display({
-                    container: 'celestial-map',
-                    datapath: '/js/lib/celestial/data/',
-                    width: renderSize,
-                    // Stereographic for both modes; the projection is the same,
-                    // what changes is the *frame* (equatorial vs horizontal)
-                    // and the centre.
-                    // All-sky projection (Aitoff). d3-celestial flags
-                    // stereographic / orthographic / azimuthal* as
-                    // clip:true (hemisphere-only) — the horizon marker
-                    // only draws correctly in non-clipped, all-sky
-                    // projections. Aitoff is the standard astronomy
-                    // all-sky projection (oval, equal-area-ish, both
-                    // celestial hemispheres visible at once).
-                    projection: 'aitoff',
-                    // d3-celestial only ships an 'equatorial' transform
-                    // (and a useless 'supergalactic'); there is NO
-                    // 'horizontal' transform. Setting it silently fell
-                    // back to equatorial. We instead express the zenith
-                    // in equatorial coords [LST*15, lat] and put THAT at
-                    // the projection centre — then d3.geo.zoom's drag
-                    // naturally rotates around the zenith because it's
-                    // the centred point.
-                    transform: 'equatorial',
-                    // follow: 'center' leaves the projection centred on
-                    // whatever we pass via `center`. We pick the celestial
-                    // pole matching the observer's hemisphere by default
-                    // (NCP if lat ≥ 0, SCP if lat < 0); if a mount is
-                    // connected, we sync to its RA/Dec instead — see
-                    // _computeInitialCentre below.
-                    follow: 'center',
-                    center: initialCentre,
-                    // Observer position — used to draw the horizon line
-                    // and place sun/moon correctly above/below it.
-                    geopos: [lat, lng],
-                    location: true,
-                    zoomlevel: null,
-                    zoomextend: 10,
-                    interactive: true,
-                    // Let drag rotate the *orientation* (the third / roll
-                    // component of projection.rotate) instead of locking
-                    // it to 0. With orientationfixed:false, dragging the
-                    // sky around the centred point (the zenith for us)
-                    // pivots around that point — exactly the compass-
-                    // rotation feel we want, instead of the polar-axis
-                    // spin you get with orientationfixed:true.
-                    orientationfixed: false,
-                    form: false,
-                    controls: true,
-                    advanced: false,
-                    disableAnimations: true,
-                    background: { fill: '#0b1226', stroke: '#1f2a44', opacity: 1 },
-                    stars: { show: true, limit: 6, colors: true,
-                             propername: true, propernameType: 'name',
-                             propernameStyle: { fill: '#bcd', font: '11px sans-serif', align: 'left', baseline: 'top' },
-                             propernameLimit: 2.5,
-                             size: 7, exponent: -0.28, data: 'stars.6.json' },
-                    dsos: { show: true, limit: 6, names: true,
-                            namesType: 'name', nameLimit: 6,
-                            namesStyle: { fill: '#cca', font: '10px sans-serif', align: 'left', baseline: 'top' },
-                            data: 'dsos.bright.json' },
-                    constellations: { show: true,
-                                      names: true, namesType: 'iau',
-                                      nameStyle: { fill: '#cce', align: 'center', baseline: 'middle', font: '12px sans-serif', opacity: 0.7 },
-                                      lines: true,
-                                      lineStyle: { stroke: '#cccccc', width: 1.2, opacity: 0.45 } },
-                    mw: { show: true, style: { fill: '#ffffff', opacity: 0.12 } },
-                    lines: {
-                        graticule: { show: true, stroke: '#506080', width: 0.6, opacity: 0.5,
-                                     lon: { pos: ['center'], fill: '#aac', font: '10px sans-serif' },
-                                     lat: { pos: ['center'], fill: '#aac', font: '10px sans-serif' } },
-                        // Show the equatorial grid (RA/Dec lines) on top of the
-                        // horizontal projection — useful for an equatorial
-                        // mount user to relate the live sky to RA/Dec coords.
-                        equatorial: { show: true, stroke: '#aaffaa', width: 1, opacity: 0.35 },
-                        ecliptic:   { show: true, stroke: '#ffcc66', width: 1, opacity: 0.4 },
-                        horizon:    { show: true, stroke: '#cccccc', width: 5.0, opacity: 0.7 },
-                        galactic:   { show: false }
-                    },
-                    // Horizon marker — shown when location is set and the map
-                    // is an all-sky projection. Thick light-grey line with the
-                    // below-horizon area filled solid black at 0.7 opacity.
-                    horizon: { show: true, stroke: '#cccccc', width: 5.0, fill: '#000000', opacity: 0.7 },
-                    // Daylight overlay disabled — d3-celestial's built-in
-                    // daytime sky tint is a bright blue that washes out the
-                    // stars + constellation lines. For an astrophotography
-                    // planning view we always want a night-mode render even
-                    // if the sun is up, so the user can find their target now.
-                    daylight: { show: false }
-                });
-
-                // Push current UTC date so horizon, sun and moon positions
-                // are accurate for the live view.
-                try { Celestial.date(new Date()); } catch {}
-                // Re-apply the centre after display() — belt-and-braces
-                // against any internal reset during initial draw. Wrapped
-                // in a microtask so it runs after Celestial finishes its
-                // synchronous initialisation.
-                Promise.resolve().then(() => {
-                    try { Celestial.rotate({ center: initialCentre }); } catch {}
-                });
-                this._startSkyTicker(lat, lng);
-
-                this.setSkyFov();
-                this.updateSkyCameraFov();
-
-                // Click-to-pick. In equatorial mode the invert gives RA/Dec
-                // directly; in horizontal we still invert to whatever frame
-                // Celestial is currently rotated to (so the user can pick a
-                // star they see on screen and it ends up with the right
-                // celestial coords).
-                const svg = el.querySelector('svg');
-                if (svg) {
-                    svg.addEventListener('click', (e) => {
-                        const rect = svg.getBoundingClientRect();
-                        const coords = Celestial.mapProjection.invert([e.clientX - rect.left, e.clientY - rect.top]);
-                        if (!coords || isNaN(coords[0])) return;
-                        // invert returns [RA°, Dec°] (projection is equatorial).
-                        let raHours = coords[0] / 15;
-                        if (raHours < 0) raHours += 24;
-                        const decDeg = coords[1];
-                        this.skyTarget = {
-                            name: `RA ${raHours.toFixed(3)}h Dec ${decDeg.toFixed(2)}°`,
-                            ra: raHours, dec: decDeg, type: 'click', magnitude: ''
-                        };
-                    });
-                }
-
-                window.addEventListener('resize', () => {
-                    const size = Math.max(300, el.clientWidth);
-                    try { Celestial.resize({ width: size }); } catch {}
-                });
-
-                this._celestialReady = true;
-                this._updateSkyClock();
-                console.log('d3-celestial ready (live horizontal projection)');
-                // Register the FOV overlay layers eagerly — the lazy
-                // path via updateSkyCameraFov() can miss the very first
-                // redraw cycle if the user opens the SKY tab before any
-                // updateFov() / WS-handler call fires. Calling
-                // updateSkyCameraFov() here also force-paints both
-                // rectangles right away so the user sees them without
-                // needing to interact with anything.
-                try {
-                    this._ensureFovLayers();
-                    this.updateSkyCameraFov();
-                    console.log('[Polaris] FOV layers registered (mount + target)');
-                } catch (e) {
-                    console.warn('[Polaris] FOV layer init failed', e);
-                }
-            } catch (e) {
-                console.error('d3-celestial init failed', e);
-            }
-        },
-
-        // Local-sidereal-time-aware zenith centring. At the observer's location,
-        // the zenith's RA = LST and Dec = latitude.
-        _centreOnZenith(lat, lng, when) {
-            const lstHours = this._localSiderealTime(when, lng);
-            const raDeg = (lstHours * 15) % 360;
-            try { Celestial.rotate({ center: [raDeg, lat, 0] }); } catch {}
-        },
-
-        // Returns the [RA_deg, Dec_deg, orientation_deg] tuple to use as
-        // the projection centre on initial load:
-        //   - mount connected → sync to its RA/Dec
-        //   - otherwise → celestial pole matching the observer's
-        //     hemisphere (NCP if lat ≥ 0, SCP if lat < 0), with RA set
-        //     to the current Local Sidereal Time so the meridian of the
-        //     observer's zenith becomes the projection's vertical
-        //     centreline. That way the horizon line — perpendicular to
-        //     the zenith direction — comes out horizontal on screen
-        //     instead of tilted at whatever angle the sidereal time
-        //     happens to be at when the page loaded.
-        // Dec is clamped to ±89.5° because d3.geo's stereographic rotate
-        // hits a singularity at exactly ±90° and silently no-ops.
-        _computeInitialCentre(lat, lng) {
-            const mountRa = this.mount?.ra;
-            const mountDec = this.mount?.dec;
-            const mountConnected = this.mount?.connected && mountRa != null && mountDec != null;
-
-            if (mountConnected) {
-                return [mountRa * 15, Math.max(-89.5, Math.min(89.5, mountDec)), 0];
-            }
-            const poleDec = lat >= 0 ? 89.5 : -89.5;
-            const lstHours = this._localSiderealTime(new Date(), lng);
-            const raDeg = (lstHours * 15) % 360;
-            return [raDeg, poleDec, 0];
-        },
-
         // Convert equatorial (RA in hours, Dec in degrees) to horizontal
         // (azimuth measured east of north, altitude above horizon) for the
         // given observer location and UTC instant. Uses the standard
@@ -3181,40 +2948,6 @@ function ninaApp() {
             gmst = ((gmst % 360) + 360) % 360;
             const lst = (gmst + longitudeDeg + 360) % 360;
             return lst / 15;
-        },
-
-        _startSkyTicker(lat, lng) {
-            // Refresh the sky every 30 s — stars drift ~0.125° in that window
-            // which is barely visible at FOV ≥ 30°. Adjust if you want it
-            // smoother (5 s is plenty cheap, but burns more CPU).
-            //
-            // We deliberately do NOT re-centre on the zenith here — that would
-            // override whatever the user panned to. If a mount is connected
-            // and reporting coordinates, follow it; otherwise just advance the
-            // date layer so star/planet positions stay current.
-            this._stopSkyTicker();
-            this._skyTicker = setInterval(() => {
-                if (this.tab !== 'sky') return; // pause when hidden
-                const now = new Date();
-                try { Celestial.date(now); } catch {}
-                const mountRa = this.mount?.ra;
-                const mountDec = this.mount?.dec;
-                if (this.mount?.connected && mountRa != null && mountDec != null) {
-                    // In live (horizontal) mode the centre is [az, alt], so
-                    // convert from the mount's equatorial coords on the fly.
-                    // This also tracks the mount across the sky as time
-                    // advances (alt/az of a fixed RA/Dec drift with sidereal
-                    // time).
-                    const decClamped = Math.max(-89.5, Math.min(89.5, mountDec));
-                    try { Celestial.rotate({ center: [mountRa * 15, decClamped, 0] }); } catch {}
-                }
-                this._updateSkyClock();
-            }, 30_000);
-            this._updateSkyClock();
-        },
-
-        _stopSkyTicker() {
-            if (this._skyTicker) { clearInterval(this._skyTicker); this._skyTicker = null; }
         },
 
         // Format lat/lng in N/S E/W form (more readable than negative numbers).
@@ -5610,19 +5343,6 @@ function ninaApp() {
             }
         },
 
-        setSkyFov() {
-            if (!this._celestialReady) return;
-            // d3-celestial 'zoomlevel' isn't a public FOV setter; the cleanest
-            // way to set field is to reconfigure with a new 'center' that
-            // implies a zoom. We use Celestial.zoomBy with a heuristic
-            // converting degrees → zoom multiplier (max FOV ~180° → zoom 1).
-            const fov = Math.max(1, Math.min(180, this.aladinFov || 90));
-            try {
-                const targetZoom = Math.max(1, 180 / fov);
-                Celestial.zoomBy(targetZoom / Celestial.zoomBy());
-            } catch {}
-        },
-
         skyGoToMount() {
             // SWE-4: removed Celestial.rotate dependency. Now drives
             // the stellarium-web-engine iframe via _skyLookAt. The
@@ -5680,163 +5400,10 @@ function ninaApp() {
             };
         },
 
-        // Project an (RA-deg, Dec-deg) celestial coord to screen pixels
-        // via d3-celestial's internal projection. Returns null when the
-        // point is off the visible hemisphere (back of the sphere).
-        _projectCelestial(raDeg, decDeg) {
-            try {
-                const pt = Celestial.mapProjection([raDeg, decDeg]);
-                if (!pt || !isFinite(pt[0]) || !isFinite(pt[1])) return null;
-                return pt;
-            } catch { return null; }
-        },
-
-        _drawFovCenterMarker(className, raHours, decDeg, color) {
-            const pt = this._projectCelestial(raHours * 15, decDeg);
-            if (!pt) return;
-            const [cx, cy] = pt;
-            const og = this._fovOverlayGroup();
-            if (!og) return;
-            // Small crosshair + dot at the FOV center — always visible
-            // regardless of zoom, so the user can tell where the
-            // (possibly sub-pixel) FOV rectangle is anchored. Drawn
-            // inside the dedicated overlay group so it stays above
-            // every built-in map layer.
-            const g = og.append('g').attr('class', className);
-            g.append('circle').attr('cx', cx).attr('cy', cy).attr('r', 3)
-                .style('fill', color).style('stroke', '#fff')
-                .style('stroke-width', 0.5);
-            g.append('line').attr('x1', cx - 8).attr('y1', cy)
-                .attr('x2', cx + 8).attr('y2', cy)
-                .style('stroke', color).style('stroke-width', 1);
-            g.append('line').attr('x1', cx).attr('y1', cy - 8)
-                .attr('x2', cx).attr('y2', cy + 8)
-                .style('stroke', color).style('stroke-width', 1);
-        },
-
-        // Get-or-create a dedicated <g> at the END of the celestial
-        // container's children, so SVG painter's algorithm renders our
-        // overlays on top of every built-in layer (stars, dsos,
-        // constellations, etc.) — d3-celestial's user-layer redraws
-        // run during the full redraw cycle but some builtins repaint
-        // after, which left the FOV rectangles + markers buried under
-        // the constellation lines.
-        _fovOverlayGroup() {
-            const ctn = Celestial.container;
-            if (!ctn) return null;
-            let g = ctn.select('g.fov-overlay-group');
-            if (g.empty()) {
-                g = ctn.append('g').attr('class', 'fov-overlay-group');
-            }
-            // Move to the END of parent's children = top of SVG paint
-            // order. d3-celestial ships with d3 v3 which lacks
-            // .raise() (added in v4), so do it DOM-level by re-
-            // appending the node — same effect, no version dep.
-            const node = g.node();
-            if (node && node.parentNode) node.parentNode.appendChild(node);
-            return g;
-        },
-
-        _ensureFovLayers() {
-            if (this._fovLayersRegistered) return;
-            if (!this._celestialReady || typeof Celestial === 'undefined') return;
-            const self = this;
-            try {
-                // MOUNT-FOV layer — blue rectangle + cross+dot marker.
-                // Reads self._fovMountGeo + ._fovMountAnchor on each
-                // redraw; nulls hide it.
-                Celestial.add({
-                    type: 'line',
-                    callback: () => {
-                        const og = self._fovOverlayGroup();
-                        if (og) {
-                            og.selectAll('.fov-mount').remove();
-                            og.selectAll('.fov-mount-mark').remove();
-                        }
-                    },
-                    redraw: () => {
-                        const og = self._fovOverlayGroup();
-                        if (!og) return;
-                        og.selectAll('.fov-mount').remove();
-                        og.selectAll('.fov-mount-mark').remove();
-                        const g = self._fovMountGeo;
-                        if (!self._fovDiagLogged) {
-                            self._fovDiagLogged = true;
-                            console.log('[Polaris] FOV redraw fired — mountGeo:',
-                                !!g, 'aladinShowFov:', self.aladinShowFov,
-                                'fov:', self.fov);
-                        }
-                        if (!g) return;
-                        og.selectAll('.fov-mount')
-                            .data(g.features).enter().append('path')
-                            .attr('class', 'fov-mount')
-                            .attr('d', Celestial.map(g))
-                            .style('stroke', '#3b82f6').style('stroke-width', 2.5)
-                            .style('fill', 'rgba(59,130,246,0.12)');
-                        const a = self._fovMountAnchor;
-                        if (a) self._drawFovCenterMarker(
-                            'fov-mount-mark', a.ra, a.dec, '#3b82f6');
-                    }
-                });
-                // TARGET-FOV layer — red dashed rectangle + marker.
-                // ASIAIR-style: always anchored at the CURRENT MAP CENTER
-                // (not a picked DSO), so dragging the sky map slides the
-                // background under the fixed-on-screen target rectangle.
-                // The slewAndCenter()/slewTo() handlers read the same map
-                // center, so what the user frames is what gets slewed to.
-                // Re-derive on every redraw — d3-celestial fires redraw on
-                // every pan/zoom, so the target stays glued to the
-                // viewport centre with no polling needed.
-                Celestial.add({
-                    type: 'line',
-                    callback: () => {
-                        const og = self._fovOverlayGroup();
-                        if (og) {
-                            og.selectAll('.fov-target').remove();
-                            og.selectAll('.fov-target-mark').remove();
-                        }
-                    },
-                    redraw: () => {
-                        const og = self._fovOverlayGroup();
-                        if (!og) return;
-                        og.selectAll('.fov-target').remove();
-                        og.selectAll('.fov-target-mark').remove();
-                        if (!self.aladinShowFov) return;
-                        const c = self._skyMapCenter();
-                        if (!c) return;
-                        const g = self._buildFovRing(c.raHours, c.decDeg);
-                        og.selectAll('.fov-target')
-                            .data(g.features).enter().append('path')
-                            .attr('class', 'fov-target')
-                            .attr('d', Celestial.map(g))
-                            .style('stroke', '#ef4444').style('stroke-width', 2.5)
-                            .style('stroke-dasharray', '5 3')
-                            .style('fill', 'rgba(239,68,68,0.10)');
-                        self._drawFovCenterMarker(
-                            'fov-target-mark', c.raHours, c.decDeg, '#ef4444');
-                    }
-                });
-                this._fovLayersRegistered = true;
-            } catch (e) { console.warn('FOV layer register failed', e); }
-        },
-
-        // Read the current map-center RA/Dec from d3-celestial's projection.
-        // d3 projections store the centre as a negated rotation:
-        // projection.rotate() returns [lambda, phi, gamma] and the map
-        // centre is at [-lambda, -phi]. Returns null when celestial isn't
-        // ready yet.
-        _skyMapCenter() {
-            try {
-                if (!Celestial?.mapProjection?.rotate) return null;
-                const r = Celestial.mapProjection.rotate();
-                if (!r || r.length < 2) return null;
-                let raDeg = -r[0];
-                // Wrap RA into [0, 360) so downstream math + display stay sane.
-                raDeg = ((raDeg % 360) + 360) % 360;
-                const decDeg = Math.max(-90, Math.min(90, -r[1]));
-                return { raHours: raDeg / 15, decDeg };
-            } catch { return null; }
-        },
+        // SWE-6: _skyMapCenter() removed — d3-celestial's projection
+        // is gone. Sync reads of the live map centre are not possible
+        // through the bridge; callers use _skyGetCenter() async or
+        // fall back to skyTarget.
 
         updateSkyCameraFov() {
             // SWE-5: push the mount+target FOV rectangles to the
@@ -5907,7 +5474,9 @@ function ninaApp() {
                 'target=screen-centred',
                 'fov=', w.toFixed(2) + '°×' + h.toFixed(2) + '°');
 
-            this._skySendMessage({ type: 'set-fov-overlays', mount, target });
+            this._skySendMessage({ type: 'set-fov-overlays', mount, target,
+                mosaic: this.mosaicTiles && this.mosaicTiles.length
+                    ? { tiles: this.mosaicTiles } : null });
         },
 
         // Pixel readout: convert mouse event coords to source-image coords +
@@ -6408,12 +5977,16 @@ function ninaApp() {
         // map on it. The FOV overlay redraws automatically since it reads from
         // this.skyTarget on each updateSkyCameraFov() call.
         _goToSelectedTarget() {
-            if (!this._celestialReady || !this.skyTarget) return;
+            if (!this.skyTarget) return;
             const ra = this.skyTarget.ra ?? this.skyTarget.raHours;
             const dec = this.skyTarget.dec ?? this.skyTarget.decDeg;
-            if (ra == null || dec == null) return;
-            try { Celestial.rotate({ center: [ra * 15, dec, 0] }); } catch {}
-            this.updateSkyCameraFov();
+            if (!Number.isFinite(ra) || !Number.isFinite(dec)) return;
+            // SWE-6: aim the engine via the postMessage bridge
+            // instead of the old Celestial.rotate. FOV defaults to
+            // whatever the engine already has (no zoom change).
+            this._skyLookAt(ra, Math.max(-89.5, Math.min(89.5, dec)),
+                undefined, this.skyTarget.name || null);
+            this._pushSkyFovOverlays();
         },
 
         async loadMfSettings() {
@@ -10075,17 +9648,9 @@ function ninaApp() {
         },
 
         _currentSlewTarget() {
-            // Prefer the live map centre (what's framed in the red
-            // target FOV right now). Falls back to a picked skyTarget.
-            // _skyMapCenter() always returns null now (d3-celestial
-            // removed), so in practice we always fall through to
-            // skyTarget. Validate it's finite before returning — NaN
-            // coords serialise as JSON null and crash the server-side
-            // SlewAndCenterRequest parser (non-nullable double).
-            const c = this._skyMapCenter && this._skyMapCenter();
-            if (c && Number.isFinite(c.raHours) && Number.isFinite(c.decDeg)) {
-                return { ra: c.raHours, dec: c.decDeg };
-            }
+            // SWE-6: d3-celestial removed; the live map centre is
+            // now reachable only async via _skyGetCenter(). Sync
+            // callers fall back to the last picked skyTarget.
             const t = this.skyTarget;
             if (t && Number.isFinite(t.ra) && Number.isFinite(t.dec)) {
                 return { ra: t.ra, dec: t.dec };
@@ -11588,40 +11153,18 @@ function ninaApp() {
         },
 
         _mosaicDrawOverlay(plan) {
-            // Add a GeoJSON polyline-per-panel overlay to d3-celestial. Each
-            // panel becomes one LineString in equatorial coords. The overlay
-            // is keyed by .mosaic so subsequent re-draws replace it cleanly.
-            if (!this._celestialReady || !plan?.panels) return;
-            const halfW = plan.panelFovWidthDeg / 2;
-            const halfH = plan.panelFovHeightDeg / 2;
-            const features = plan.panels.map(p => {
-                const raDeg = p.raHours * 15;
-                const cosDec = Math.cos(p.decDeg * Math.PI / 180) || 1e-6;
-                const ring = [
-                    [raDeg - halfW/cosDec, p.decDeg - halfH],
-                    [raDeg + halfW/cosDec, p.decDeg - halfH],
-                    [raDeg + halfW/cosDec, p.decDeg + halfH],
-                    [raDeg - halfW/cosDec, p.decDeg + halfH],
-                    [raDeg - halfW/cosDec, p.decDeg - halfH]
-                ];
-                return { type: 'Feature', properties: { name: p.name },
-                         geometry: { type: 'LineString', coordinates: ring } };
-            });
-            try {
-                Celestial.add({
-                    type: 'line',
-                    redraw: () => {
-                        Celestial.container.selectAll('.mosaic').remove();
-                        Celestial.container.selectAll('.mosaic')
-                            .data(features).enter().append('path')
-                            .attr('class', 'mosaic')
-                            .attr('d', f => Celestial.map({ type: 'FeatureCollection', features: [f] }))
-                            .style('stroke', '#fbbf24').style('stroke-width', 1.5)
-                            .style('fill', 'none');
-                    }
-                });
-                Celestial.redraw();
-            } catch (e) { console.warn('Mosaic overlay failed', e); }
+            // SWE-6: push mosaic tiles to the stellarium-web bridge
+            // (yellow polygons) as part of the FOV overlay payload.
+            // _pushSkyFovOverlays reads this.mosaicTiles and forwards.
+            if (!plan?.panels) { this.mosaicTiles = null;
+                this._pushSkyFovOverlays(); return; }
+            this.mosaicTiles = plan.panels.map(p => ({
+                raDeg: p.raHours * 15, decDeg: p.decDeg,
+                widthDeg: plan.panelFovWidthDeg,
+                heightDeg: plan.panelFovHeightDeg,
+                rotationDeg: 0
+            }));
+            this._pushSkyFovOverlays();
         },
 
         mosaicTimeFormat(seconds) {

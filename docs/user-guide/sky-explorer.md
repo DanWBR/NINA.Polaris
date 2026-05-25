@@ -5,17 +5,22 @@ orchestration.
 
 ## Sky map
 
-d3-celestial-powered, fully offline (Hipparcos catalog through magnitude
-6, Stellarium constellation lines, IAU named-star database, DSO catalog,
-Milky Way contours). Two modes:
+[stellarium-web-engine](https://github.com/Stellarium/stellarium-web-engine)
+running as a sandboxed WebGL2 sub-app (`/sky/`) inside an iframe. Renders
+Gaia stars (down to mag 16), DSO surveys with image overlays, IAU
+constellation art + names in multiple cultures, atmosphere/horizon, sun
++ moon + planets + asteroids, and HiPS Milky Way tiles. Fully offline
+when the skydata bundle is present (bundled with publish by default;
+~300 MB on disk).
 
-- **Local sky (default)** — projection from your observer location at
-  current UTC. Horizon mask + 30-second ticker that re-centres on
-  zenith. Shows what's actually visible to you right now.
-- **Equatorial chart** — full-sphere RA/Dec grid. Use for planning
-  below-horizon targets.
+Drag to pan, mouse wheel / pinch to zoom. The view aims at whatever
+the host UI tells it via postMessage (mount RA/Dec, search hit,
+"Centre on selected target" buttons).
 
-Toggle modes via the **🌍/⭐** button in the toolbar.
+> **Browser requirement.** WebGL2 is mandatory. On a host with no
+> WebGL2 (e.g. running Polaris's local browser on a Raspberry Pi 2
+> framebuffer), the SKY tab shows a graceful fallback banner —
+> open Polaris from a desktop/laptop/tablet browser instead.
 
 ## Search
 

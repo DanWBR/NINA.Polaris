@@ -364,21 +364,27 @@ Embedded deep sky catalog with 200+ objects:
 
 ### Sky Map
 
-Embedded fully-offline sky viewer for visual target selection, powered
-by [d3-celestial](https://github.com/ofrohn/d3-celestial):
+Embedded sandboxed sky viewer for visual target selection, powered by
+[stellarium-web-engine](https://github.com/Stellarium/stellarium-web-engine)
+running as a WebGL2 iframe sub-app under `/sky/`:
 
-- Hipparcos catalog to magnitude 6, Stellarium constellation lines and
-  IAU names, DSO catalog overlay, Milky Way contours
-- Defaults to a **live local sky** view from the observer's lat/lng at
-  the current UTC time, with horizon mask and a 30 s ticker that
-  re-centres on the zenith
-- **Equatorial chart** mode for planning targets below the current
-  horizon
-- Camera-FOV overlay calculated from sensor + focal length (auto-applies
-  cos(Dec) compensation)
-- Click-to-pick targets, "Center on mount" button
+- Gaia stars to ~mag 16, DSO surveys with image overlays, IAU
+  constellation art + names in multiple cultures, atmosphere + horizon,
+  sun + moon + planets + bright asteroids, HiPS Milky Way tiles
+- Fully offline when the skydata bundle is present (~300 MB, bundled
+  with `dotnet publish` by default)
+- Camera-FOV overlay calculated from sensor + focal length
+  (cos(Dec)-corrected). Mount rectangle (blue, anchored on current
+  scope pointing) + target rectangle (red dashed, anchored at viewport
+  centre — ASIAIR-style drag-to-frame)
+- Click-to-pick targets, "Center on mount" + "Center selected" buttons
 - Stellarium Remote Control sync — pull the currently-selected object
   from Stellarium with one click
+
+> WebGL2 required. The SKY tab gracefully degrades to a banner on
+> hosts without WebGL2 (e.g. running the local browser on a Pi 2
+> framebuffer) — open Polaris from a modern desktop or tablet
+> browser instead.
 
 ### Weather Forecast
 
@@ -641,7 +647,7 @@ Responsive, dark-themed interface inspired by ASIAIR:
 - **Mount Control** — NSEW directional pad, tracking toggle, park/unpark, GoTo via Sky Explorer
 - **Focus** — Manual stepper + full Auto-Focus V-curve panel (start/abort, live progress bar, fitted parabola chart, best-position marker) + **live frame preview canvas** that renders each AF sample exposure with a HUD chip showing current position / HFR / star count
 - **Guider** — Two-tab layout: **Control** (existing JSON-RPC UI — connect, profile switcher, exposure, Dec-mode, equipment connect, guiding controls, live RA/Dec error chart, settle parameters, **Smart Calibrate** button with optional slew-to-equator, **algorithm preset pills** Default/Reactive/Smooth/Custom + Advanced disclosure for individual algorithm knobs, profile-sync indicator chip) and **PHD2 GUI** (Linux only — xpra HTML5 client iframe embedding PHD2's native window for Wizard / Brain / Guiding Assistant / dark library access — see [docs/phd2-gui-embedding.md](docs/phd2-gui-embedding.md)). Launch / Shutdown / Auto-start on boot persist as before
-- **Sky Explorer** — d3-celestial-powered fully-offline sky map (Hipparcos to mag 6, Stellarium constellation lines, IAU names, DSO catalog, Milky Way contours). Defaults to **live local sky** from the observer's lat/lng at the current UTC time, with horizon mask + a 30 s ticker that re-centres on the zenith; switch to **Equatorial chart** mode for planning below-horizon targets. Object search, filtered catalog browser, "Tonight's altitude" chart with twilight bands, Stellarium sync, Slew & Center, "Plan mosaic" (panel grid with cos(δ) correction), Add to Sequence
+- **Sky Explorer** — stellarium-web-engine WebGL2 iframe (sandboxed sub-app at `/sky/`) with Gaia stars to ~mag 16, DSO surveys with image overlays, IAU constellation art, atmosphere/horizon, sun + moon + planets + bright asteroids, and HiPS Milky Way tiles. Fully offline when the bundled skydata is present. Drag-to-frame ASIAIR-style target rectangle + blue mount rectangle (auto cos(δ) correction). Object search, filtered catalog browser, "Tonight's altitude" chart with twilight bands, Stellarium sync, Slew & Center, "Plan mosaic" (panel grid pushed to the engine as yellow tile overlays), Add to Sequence. WebGL2 required.
 - **Tonight** — Ranked list of best DSOs / Moon / planets / comets for the current observing window. Cards with NASA / Wikipedia thumbnails (offline-cached), live ephemeris, mini altitude chart, compass widget, FOV-fit badge, and a mount-gated "Go to" that triggers Slew & Center
 - **Weather** — Astronomy-specific 3-day forecast from 7Timer with per-3 h-slot observation score (cloud + seeing + transparency + humidity), tonight's best windows callout, per-slot weather emoji (lunar glyph at night) and per-day sun/moon ephemeris from SunCalc
 - **Sequence** — Target list editor with progress bars, collapsible Meridian Flip + Dithering panels, start/pause/resume/stop
@@ -874,7 +880,7 @@ nina-polaris/
 | Frontend framework | Alpine.js v3 | Reactive UI (~15KB, no build step) |
 | UI typeface | Inter (SIL OFL 1.1, self-hosted) | Variable woff2 for every weight + italic, ~740 KB total. No external CDN call — the UI looks the same online and offline |
 | Charts | Chart.js v4 | Guiding, focus, HFR, temperature, histogram, altitude |
-| Sky map | d3-celestial (BSD-3) | Fully-offline sky viewer with Hipparcos stars, constellations, DSO overlay, Milky Way contours |
+| Sky map | stellarium-web-engine (AGPLv3, sandboxed in `/sky/` iframe) | WebGL2 sky viewer with Gaia stars, DSO surveys, constellation art, atmosphere, HiPS Milky Way tiles |
 | Image viewer | OpenSeadragon | Full-resolution zoom/pan over last frame |
 | Image rendering | WebGL2 shaders | GPU debayer + MTF stretch (CPU fallback) |
 | Image encoding | SkiaSharp | Cross-platform JPEG / PNG encoding (incl. STUDIO previews + thumbnails) |

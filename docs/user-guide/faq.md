@@ -138,7 +138,9 @@ help bootstrap.
 
 **Q: I'm at a dark site with no internet — does Polaris work?**
 
-A: Yes. Sky catalog + d3-celestial map + DSO database are all offline.
+A: Yes. Sky catalog + stellarium-web-engine map + DSO database are all
+offline (the bundled HiPS skydata covers stars to ≥ mag 12, DSO
+surveys, constellations, and Milky Way tiles).
 Plate solving via ASTAP is offline. PHD2 + INDI are local. The only
 internet-dependent feature is the Tonight's Best image fetcher (pulls
 NASA/Wikipedia thumbs) — it just shows placeholders offline.

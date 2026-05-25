@@ -2217,11 +2217,10 @@ label select.input-sm {
     max-height: 38vh;
     overflow-y: auto;
 }
-/* d3-celestial ships its own #celestial-map { overflow:visible; height:auto;
-   display:inline-block; min-width:720px } which (ID selector) wins over a
-   plain .sky-viewer rule and lets the SVG inflate the layout. Override with
-   matching ID+class specificity AND !important on the properties that
-   directly fight celestial.css. */
+/* SWE-6: d3-celestial removed. The wrapper below hosts the
+   stellarium-web-engine iframe; no celestial.css cascade to fight
+   anymore so the !important overrides on #celestial-map.sky-viewer
+   below have been dropped along with the dead selectors. */
 /* SWE-5: wrapper around the iframe so the floating info card can
    absolute-position itself over the sky map without escaping the
    tab's content area. */
@@ -2404,43 +2403,19 @@ label select.input-sm {
     min-width: 110px;
 }
 
-.sky-viewer,
-#celestial-map.sky-viewer {
-    /* The old viewport-arithmetic height (calc(100vh - 380px)) was
-       carried over from the d3-celestial era and assumed a 150 px
-       sky-info-panel + 50 px margin below the map. That panel was
-       removed when we moved the slew buttons onto the map itself
-       (commit 90eadb5) — let the iframe inherit 100% from its
-       flex:1 parent (.sky-viewer-wrap) instead. !important
-       because both .sky-viewer and .sky-viewer-iframe land on the
-       same <iframe>, and the legacy rule won the cascade. */
-    height: 100% !important;
+.sky-viewer {
+    /* SWE-6: the iframe inherits 100% from its flex:1 parent
+       (.sky-viewer-wrap). No more celestial.css cascade fight, so the
+       !important overrides + extra svg/canvas centring rules that used
+       to live here are gone. */
+    height: 100%;
     min-height: 320px;
-    width: 100% !important;
-    min-width: 0 !important;
-    display: block !important;
+    width: 100%;
+    min-width: 0;
+    display: block;
     background: #000;
-    position: relative !important;
-    overflow: hidden !important;
-}
-/* d3-celestial renders into BOTH a <canvas> (the raster sky map — stars,
-   constellation lines, milky way) AND an <svg> overlay (graticule labels,
-   text, FOV box). Both are sized to width × width (circular projection)
-   and we need to centre BOTH with the same transform, otherwise the
-   canvas drifts down and the projection centre ends up below the
-   visible viewport (which is what celestial.css's default
-   `position:relative` does to the canvas). */
-.sky-viewer svg,
-.sky-viewer canvas,
-#celestial-map.sky-viewer > svg,
-#celestial-map.sky-viewer > canvas {
-    position: absolute !important;
-    left: 50% !important;
-    top: 50% !important;
-    transform: translate(-50%, -50%);
-    width: 100% !important;
-    height: auto !important;
-    display: block !important;
+    position: relative;
+    overflow: hidden;
 }
 
 .sky-survey-row {
