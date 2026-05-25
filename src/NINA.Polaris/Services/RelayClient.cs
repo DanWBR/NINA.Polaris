@@ -22,10 +22,13 @@ namespace NINA.Polaris.Services;
 public class RelayClient : IHostedService, IDisposable {
     private readonly IConfiguration _config;
     private readonly ILogger<RelayClient> _logger;
-    private readonly HttpClient _local = new() {
-        BaseAddress = new Uri("http://127.0.0.1:5000"),
-        Timeout = TimeSpan.FromSeconds(120)
-    };
+    // GX-10b: the local HTTP listener moved off 5000 (now HTTPS-on-5000)
+    // to 5080 by default. Read the configured port here so the tunnel
+    // doesn't try to forward to a dead port — falls back to 5080 if
+    // the setting is absent. The user-facing override is
+    // Server:Http:Port in appsettings.json.
+    private readonly HttpClient _local;
+    private readonly int _localHttpPort;
 
     private CancellationTokenSource? _cts;
     private Task? _runner;
@@ -40,6 +43,11 @@ public class RelayClient : IHostedService, IDisposable {
     public RelayClient(IConfiguration config, ILogger<RelayClient> logger) {
         _config = config;
         _logger = logger;
+        _localHttpPort = config.GetValue("Server:Http:Port", 5080);
+        _local = new HttpClient {
+            BaseAddress = new Uri($"http://127.0.0.1:{_localHttpPort}"),
+            Timeout = TimeSpan.FromSeconds(120),
+        };
     }
 
     public Task StartAsync(CancellationToken cancellationToken) {
@@ -228,8 +236,10 @@ public class RelayClient : IHostedService, IDisposable {
         uint sid, ReadOnlyMemory<byte> payload, CancellationToken ct) {
         var path = WsOpenFrame.Parse(payload);
         var localWs = new ClientWebSocket();
-        // Use a derived ws:// URI from the local HTTP base address
-        var localUri = new Uri($"ws://127.0.0.1:5000{path}");
+        // Use a derived ws:// URI from the local HTTP base address.
+        // GX-10b: HTTP port is now configurable (default 5080, loopback
+        // only) — same value the HttpClient above uses.
+        var localUri = new Uri($"ws://127.0.0.1:{_localHttpPort}{path}");
         try {
             await localWs.ConnectAsync(localUri, ct);
         } catch (Exception ex) {

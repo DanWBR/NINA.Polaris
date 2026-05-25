@@ -12,9 +12,23 @@ var builder = WebApplication.CreateBuilder(args);
 // rest of the app so the Settings UI fingerprint matches what Kestrel
 // is actually serving. Register the constructed singleton so endpoints
 // + the status feed can pick it up by injection.
+//
+// GX-10b: defaults changed so port 5000 is the HTTPS-on-LAN port (what
+// users actually want to type) and HTTP gets demoted to a loopback-only
+// service port for the Relay tunnel + curl-from-the-host scripts. Net
+// effect: any LAN device can ONLY reach Polaris via HTTPS, so WebGPU
+// + multi-thread WASM "just work" on the URL the user naturally tries.
+// Backwards-compat: legacy `Server:Http:Port` config still honoured;
+// users can override either side or disable HTTPS entirely.
 var httpsEnabled = builder.Configuration.GetValue("Server:Https:Enabled", true);
-var httpPort  = builder.Configuration.GetValue("Server:Http:Port",  5000);
-var httpsPort = builder.Configuration.GetValue("Server:Https:Port", 5001);
+var httpEnabled  = builder.Configuration.GetValue("Server:Http:Enabled",  true);
+var httpPort     = builder.Configuration.GetValue("Server:Http:Port",  5080);
+var httpsPort    = builder.Configuration.GetValue("Server:Https:Port", 5000);
+// Loopback-only HTTP keeps plaintext OFF the LAN. Power-users who
+// need HTTP exposed to the LAN (legacy integrations, no-TLS-stack
+// clients) flip Server:Http:Bind = "any".
+var httpBindAny  = builder.Configuration.GetValue("Server:Http:Bind", "loopback")
+                       .Equals("any", StringComparison.OrdinalIgnoreCase);
 var certService = new NINA.Polaris.Services.SelfSignedCertService(
     builder.Configuration,
     Microsoft.Extensions.Logging.Abstractions.NullLogger<NINA.Polaris.Services.SelfSignedCertService>.Instance);
@@ -22,7 +36,10 @@ builder.Services.AddSingleton(certService);
 
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.ListenAnyIP(httpPort);
+    if (httpEnabled) {
+        if (httpBindAny) options.ListenAnyIP(httpPort);
+        else             options.ListenLocalhost(httpPort);
+    }
     if (httpsEnabled) {
         var cert = certService.GetOrCreate();
         options.ListenAnyIP(httpsPort, listen => listen.UseHttps(cert));
@@ -392,13 +409,22 @@ app.Map("/ws/terminal", TerminalSocketHandler.Handle);
 // user can verify what Chrome shows matches what Polaris generated.
 var startupLogger = app.Services.GetRequiredService<ILoggerFactory>()
     .CreateLogger("Polaris.Startup");
-startupLogger.LogInformation("HTTP  listening on http://*:{Port}", httpPort);
 if (httpsEnabled) {
     startupLogger.LogInformation("HTTPS listening on https://*:{Port}  (cert fingerprint {Fp})",
         httpsPort, certService.Fingerprint);
-    startupLogger.LogInformation("HTTPS unlocks WebGPU + SharedArrayBuffer on LAN clients — "
-        + "use one of: {Names}",
+    startupLogger.LogInformation("HTTPS is the LAN entry point — use one of: {Names}",
         string.Join(", ", certService.SanEntries().Take(8)));
+}
+if (httpEnabled) {
+    var bind = httpBindAny ? "*" : "127.0.0.1 (loopback only)";
+    startupLogger.LogInformation("HTTP  listening on http://{Bind}:{Port} {Note}",
+        bind, httpPort,
+        httpBindAny
+            ? "(LAN-exposed — Server:Http:Bind=any)"
+            : "(loopback only — used by Relay tunnel + host-local scripts)");
+}
+if (!httpsEnabled && !httpEnabled) {
+    startupLogger.LogWarning("Both HTTP and HTTPS are disabled — Polaris will not accept any requests.");
 }
 
 app.Run();
