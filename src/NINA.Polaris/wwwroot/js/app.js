@@ -4814,6 +4814,39 @@ function ninaApp() {
             return (entry && entry.isDirectory) ? entry : null;
         },
 
+        // GX-12d: Compare button predicates. The before/after comparator
+        // can render any two files the preview endpoint understands
+        // (FITS / PNG / JPG / TIFF), so the only client-side gate is
+        // "exactly two files, no directories". File-type validity is
+        // checked by /api/files/preview itself — bad type just renders
+        // a 415 inside the comparator instead of crashing.
+        filesSelectionHasDir() {
+            const sel = this.files.selectedPaths;
+            if (sel.length === 0) return false;
+            return sel.some(p => {
+                const e = this.files.entries.find(x => x.fullPath === p);
+                return e && e.isDirectory;
+            });
+        },
+
+        filesCompareSelected() {
+            const sel = this.files.selectedPaths;
+            if (sel.length !== 2) return;
+            // Sort alphabetically so common pairings (master + its
+            // _bge/_denoise/_decon sibling) land BEFORE = master,
+            // AFTER = sibling — '.' (0x2e) sorts before '_' (0x5f),
+            // and "_denoise" sorts after the bare stem.
+            const ordered = [...sel].sort((a, b) =>
+                a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+            const labelFor = p => p.split(/[\\/]+/).pop();
+            const pair = {
+                src: ordered[0],
+                out: ordered[1],
+                label: labelFor(ordered[0]) + '  ↔  ' + labelFor(ordered[1]),
+            };
+            this.graxpertOpenCompare([pair], 0);
+        },
+
         // --- Clipboard + mutations ------------------------------------
 
         filesCopy() {
@@ -8424,11 +8457,36 @@ function ninaApp() {
             }
         },
 
-        // Heuristic: if the paths sit under a "lights" folder we
-        // warn the user that decon/denoise on individual lights is
-        // usually a mistake (they're best on integrated masters).
+        // Heuristic: warn when the selection appears to be individual
+        // light frames rather than a stacked master. Decon/Denoise on
+        // un-stacked lights is usually a mistake — the model bakes
+        // in noise that integration would have averaged out, AND
+        // strength normalization is computed per-frame so per-tile
+        // stretching looks inconsistent across the batch.
+        //
+        // Positive signals (path is probably a MASTER → no warning):
+        //   • basename starts with: result_, integration_, integrated_,
+        //     stack_, stacked_, master_, autosave (Siril autosave.fit),
+        //     livestack_, or contains _drizzle_ / _stack_ / _integrated_
+        //   • basename has a {totalseconds}s suffix (Siril stacker
+        //     names its outputs e.g. result_3960s.fit)
+        //   • already a processed sibling: ends with _bge / _denoise /
+        //     _decon (you'd be chaining ops on a master)
+        //   • path is under /integrated/ /processed/ /masters/ /stacks/
+        //     /results/ /siril/ /bge/ /denoise/ /decon/
+        //
+        // Only when NONE of those positives match AND the path is
+        // under /lights/ do we fire the warning. Lights-folder alone
+        // used to be enough but that false-positives every time a
+        // user keeps stacks under e.g. /Astro/M81/lights_processed/.
         graxpertPathsLookLikeLights() {
-            return this.graxpert.modalPaths.some(p => /[\\/]lights[\\/]/i.test(p));
+            const masterRx = /(^|[\\/])(?:result|integration|integrated|stack|stacked|master|autosave|livestack)[_-]|_drizzle_|_stack_|_integrated_|_\d+s\.(?:fits?|xisf|fts)$|_bge(?:_\d+)?\.|_denoise(?:_\d+)?\.|_decon(?:_\d+)?\./i;
+            const masterFolderRx = /[\\/](?:integrated|processed|masters?|stacks?|results?|siril|bge|denoise|decon)[\\/]/i;
+            return this.graxpert.modalPaths.some(p => {
+                if (masterFolderRx.test(p)) return false;
+                if (masterRx.test(p.split(/[\\/]/).pop() || '')) return false;
+                return /[\\/]lights?[\\/]/i.test(p);
+            });
         },
 
         graxpertSuffix(op) {
@@ -8807,8 +8865,18 @@ function ninaApp() {
             if (!pair) return '';
             const p = pair[side];
             if (!p) return '';
-            return '/api/files/preview?path=' + encodeURIComponent(p)
-                + '&maxDim=2400';
+            // GX-12c: AFTER renders with the BEFORE file's histogram
+            // params pinned via stretchFrom — otherwise each side
+            // auto-stretches independently and a slight noise-floor
+            // shift in the denoised output produces wildly different
+            // colour mapping (looks like a colour-balance change
+            // instead of a noise reduction).
+            let url = '/api/files/preview?path=' + encodeURIComponent(p)
+                    + '&maxDim=2400';
+            if (side === 'out' && pair.src) {
+                url += '&stretchFrom=' + encodeURIComponent(pair.src);
+            }
+            return url;
         },
 
         // Mouse / touch handlers for the drag handle. Position is

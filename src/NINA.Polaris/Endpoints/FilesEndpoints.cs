@@ -97,7 +97,8 @@ public static class FilesEndpoints {
         // TIFF gets decoded via Skia to PNG; text gets the first
         // ~32 KB as text/plain. Unknown formats → 415.
         g.MapGet("/preview", async (FileBrowserService svc, string path,
-                                    int? maxDim, CancellationToken ct) => {
+                                    int? maxDim, string? stretchFrom,
+                                    CancellationToken ct) => {
             try {
                 var full = svc.ResolveSafe(path, mustExist: true);
                 if (!File.Exists(full))
@@ -105,10 +106,26 @@ public static class FilesEndpoints {
                 var kind = FileBrowserService.ClassifyForPreview(full);
                 var max  = maxDim ?? 1600;
 
+                // GX-12c: optional reference path. When set, the FITS
+                // stretch params are computed from THAT file's
+                // histogram and applied to the requested file's pixels.
+                // Used by the before/after comparator so both sides
+                // share the same auto-stretch — otherwise a slightly
+                // denoised sibling re-stretches with a tighter MAD
+                // and the comparator shows two different colour
+                // mappings instead of two states of the same scene.
+                string? stretchRefFull = null;
+                if (!string.IsNullOrWhiteSpace(stretchFrom)) {
+                    try { stretchRefFull = svc.ResolveSafe(stretchFrom, mustExist: true); }
+                    catch { /* silently ignore — fall back to self-stretch */ }
+                }
+
                 switch (kind) {
                     case PreviewKind.Fits: {
                         var jpeg = await Task.Run(()
-                            => FitsThumbnailer.RenderJpegFromPath(full, maxDim: max, quality: 90), ct);
+                            => FitsThumbnailer.RenderJpegFromPath(full,
+                                    maxDim: max, quality: 90,
+                                    stretchFromPath: stretchRefFull), ct);
                         return Results.File(jpeg, "image/jpeg");
                     }
                     case PreviewKind.RasterPassthrough: {

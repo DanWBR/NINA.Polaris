@@ -4740,9 +4740,14 @@ label select.input-sm {
     pointer-events: none;
 }
 .graxpert-compare-out {
-    /* Reveal only the portion to the LEFT of the handle. Right edge
-       is clipped progressively as the user drags right (--split grows). */
-    clip-path: inset(0 calc(100% - var(--split)) 0 0);
+    /* GX-12f: AFTER (the processed image) sits on the RIGHT of the
+       handle — matches user convention ("before on left, after on
+       right") and the position of the .graxpert-compare-tag-out
+       label. Clip-path masks the LEFT portion of the OUT layer up
+       to --split, so SRC underneath shows through on the left half
+       and OUT is revealed on the right. At split=0 the whole image
+       is AFTER; at split=100% the whole image is BEFORE. */
+    clip-path: inset(0 0 0 var(--split));
 }
 .graxpert-compare-handle {
     /* GX-11c: the handle is a 40-px-wide invisible HIT TARGET
@@ -5379,6 +5384,10 @@ label select.input-sm {
     flex-direction: row;
     align-items: center;
     gap: 8px;
+    /* GX-12e: breathing room above the checkbox row in the GraXpert
+       modal. The "1 file(s) selected" line above and the "Run in
+       browser" line were stacked with no separation, looked cramped. */
+    margin-top: 10px;
 }
 .siril-modal-row label.checkbox-label input[type="checkbox"] {
     flex: 0 0 auto;
