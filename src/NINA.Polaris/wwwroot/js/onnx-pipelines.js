@@ -883,7 +883,11 @@
             await _yieldToBrowser();
 
             // Output canvas (padded). We'll trim back at the end.
-            const out = new Float32Array(padded.length);
+            // GX-12m: padded buffer is gone — use planeF.length (same
+            // size, padW × padH Float32). The previous build still
+            // referenced `padded` here, throwing ReferenceError at
+            // first call.
+            const out = new Float32Array(planeF.length);
 
             const ort = await loadOrtWeb();
             const inputName  = session.inputNames[0];
