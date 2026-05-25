@@ -1,0 +1,33 @@
+{
+  "name": "N.I.N.A. Polaris",
+  "short_name": "Polaris",
+  "description": "Web-based astrophotography control for INDI / ASCOM / Alpaca rigs — capture, plate-solve, autofocus, polar align, live stack, edit and post-process all from your phone or laptop browser.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a1633",
+  "theme_color": "#0a1633",
+  "lang": "en",
+  "categories": ["photo", "utilities", "science"],
+  "icons": [
+    {
+      "src": "/favicon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

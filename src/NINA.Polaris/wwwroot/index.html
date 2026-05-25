@@ -20,6 +20,16 @@
     <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png">
     <meta name="theme-color" content="#0a1633">
+    <!-- GX-12L: Web App Manifest — enables Android Chrome to treat
+         Polaris as an installable PWA with proper standalone display,
+         splash screen, and adaptive (maskable) icon. iOS already uses
+         apple-touch-icon above; manifest is mostly an Android +
+         desktop-Chrome install affordance. -->
+    <link rel="manifest" href="/manifest.webmanifest">
+    <!-- iOS shows this as the label under the home-screen icon (the
+         document <title> is too long for the iOS grid). -->
+    <meta name="apple-mobile-web-app-title" content="Polaris">
+    <meta name="application-name" content="Polaris">
     <!-- Inter font is self-hosted (css/fonts/InterVariable*.woff2)
          via @font-face in app.css. No external CDN call needed —
          keeps the UI typeface intact on observatory hosts that
