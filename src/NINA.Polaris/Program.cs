@@ -6,9 +6,48 @@ using Yarp.ReverseProxy.Forwarder;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// GX-10: HTTPS self-signed cert. Constructed eagerly here (not via DI)
+// because Kestrel's ConfigureKestrel callback needs the cert *before*
+// builder.Build() runs — and we want the SAME instance shared with the
+// rest of the app so the Settings UI fingerprint matches what Kestrel
+// is actually serving. Register the constructed singleton so endpoints
+// + the status feed can pick it up by injection.
+var httpsEnabled = builder.Configuration.GetValue("Server:Https:Enabled", true);
+var httpPort  = builder.Configuration.GetValue("Server:Http:Port",  5000);
+var httpsPort = builder.Configuration.GetValue("Server:Https:Port", 5001);
+var certService = new NINA.Polaris.Services.SelfSignedCertService(
+    builder.Configuration,
+    Microsoft.Extensions.Logging.Abstractions.NullLogger<NINA.Polaris.Services.SelfSignedCertService>.Instance);
+builder.Services.AddSingleton(certService);
+
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.ListenAnyIP(5000);
+    options.ListenAnyIP(httpPort);
+    if (httpsEnabled) {
+        var cert = certService.GetOrCreate();
+        options.ListenAnyIP(httpsPort, listen => listen.UseHttps(cert));
+    }
+    // GX-9: the /api/onnx/save endpoint round-trips raw uint16 pixel
+    // bytes for the post-inference image — RGB masters from a modern
+    // OSC sensor land around 150 MB (e.g. 6240×4160×3×2). The default
+    // 30 MB cap rejects anything bigger than ~2 MP RGB. Also affects
+    // /api/editor/upload (user-supplied PNG/TIFF), /api/files/upload
+    // (drag-drop into STUDIO library), and /api/onnx/save (the one
+    // we actually hit first). 1 GB hard ceiling — generous enough to
+    // cover a 16k×16k RGB master uncompressed without being unbounded.
+    options.Limits.MaxRequestBodySize = 1L * 1024 * 1024 * 1024;
+});
+
+// GX-9: ASP.NET's multipart form parser has its own ceiling
+// (FormOptions.MultipartBodyLengthLimit, default 128 MB) layered on
+// top of Kestrel's request body limit. Both have to grow together —
+// the parser hits its cap first and surfaces a less obvious error
+// ("Multipart body length limit exceeded") before Kestrel sees the
+// stream. Match the 1 GB Kestrel ceiling.
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
+{
+    o.MultipartBodyLengthLimit = 1L * 1024 * 1024 * 1024;
+    o.ValueLengthLimit = int.MaxValue;
 });
 
 // Services
@@ -345,5 +384,21 @@ app.Map("/ws/status", StatusStreamHandler.Handle);
 // handler itself returns 403 when disabled so a curious client can
 // still see why the endpoint exists.
 app.Map("/ws/terminal", TerminalSocketHandler.Handle);
+
+// GX-10: surface where to actually reach the server. Logs the HTTP
+// + HTTPS endpoints at startup so the user (and the docs/screenshots)
+// can copy the right URL into a remote browser without guessing.
+// The cert fingerprint goes to the log too so a security-paranoid
+// user can verify what Chrome shows matches what Polaris generated.
+var startupLogger = app.Services.GetRequiredService<ILoggerFactory>()
+    .CreateLogger("Polaris.Startup");
+startupLogger.LogInformation("HTTP  listening on http://*:{Port}", httpPort);
+if (httpsEnabled) {
+    startupLogger.LogInformation("HTTPS listening on https://*:{Port}  (cert fingerprint {Fp})",
+        httpsPort, certService.Fingerprint);
+    startupLogger.LogInformation("HTTPS unlocks WebGPU + SharedArrayBuffer on LAN clients — "
+        + "use one of: {Names}",
+        string.Join(", ", certService.SanEntries().Take(8)));
+}
 
 app.Run();

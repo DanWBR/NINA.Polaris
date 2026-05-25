@@ -53,11 +53,27 @@
                 // beats implicit (especially when served behind a
                 // sub-path / reverse proxy / Relay tunnel).
                 window.ort.env.wasm.wasmPaths = ORT_VENDOR_PATH;
-                // Single-threaded by default — multi-thread needs
-                // Cross-Origin-Isolation headers that Polaris doesn't
-                // set today. Single-thread + SIMD is still ~3-5× faster
-                // than scalar; thread support is a follow-up.
-                window.ort.env.wasm.numThreads = 1;
+                // GX-9 (perf): bump the WASM thread count when the
+                // browser actually has SharedArrayBuffer (requires
+                // cross-origin-isolation, which Polaris does NOT set
+                // by default — but if a future deploy enables COOP/COEP
+                // or runs inside an isolated context, threading is a
+                // free 4-8× speedup). Falls back to 1 when SAB is
+                // absent. This only matters when WebGPU isn't chosen
+                // (e.g. browser without GPU adapter); with WebGPU the
+                // GPU does the work and CPU thread count is irrelevant.
+                const hasSAB = typeof SharedArrayBuffer !== 'undefined';
+                if (hasSAB) {
+                    const n = Math.min(navigator.hardwareConcurrency || 4, 8);
+                    window.ort.env.wasm.numThreads = n;
+                    console.log('[OnnxRegistry] WASM threads:', n,
+                        '(SharedArrayBuffer available)');
+                } else {
+                    window.ort.env.wasm.numThreads = 1;
+                    console.warn('[OnnxRegistry] WASM single-threaded — '
+                        + 'SharedArrayBuffer unavailable (no COOP/COEP). '
+                        + 'Expect slow CPU inference; WebGPU still works.');
+                }
                 resolve(window.ort);
             };
             s.onerror = () => reject(new Error('Failed to load ' + s.src));
@@ -172,16 +188,98 @@
         return (m.models || []).find(x => x.family === family && x.version === version) || null;
     }
 
-    /** Pick the best execution provider available at runtime. */
+    /** Pick the best execution provider available at runtime. Memoised
+     *  after the first call so the (potentially-async) GPU probe runs
+     *  once per session, not per loadSession. The chosen backend is
+     *  also stashed on window.OnnxRegistry.__lastBackend so app.js /
+     *  the diagnostics panel can surface "Why is this slow?" to the
+     *  user without re-probing.
+     */
+    let _pickedBackends = null;
     async function pickBackends() {
-        // WebGPU is a feature detect; in unsupported browsers
-        // ort.env.webgpu is missing or navigator.gpu is undefined.
-        const webgpuOk = typeof navigator !== 'undefined'
-                        && 'gpu' in navigator
-                        && typeof navigator.gpu.requestAdapter === 'function';
-        return webgpuOk
-            ? ['webgpu', 'wasm']    // GPU first, fall back to CPU
-            : ['wasm'];             // CPU only
+        if (_pickedBackends) return _pickedBackends;
+        // navigator.gpu just means the API exists — Edge / Chrome
+        // ship the surface even on systems without a working adapter
+        // (no GPU, GPU driver too old, browser flag disabled, running
+        // inside an old discrete-GPU laptop with the iGPU active).
+        // Actually request an adapter to know whether the runtime
+        // will be ABLE to use it. If null → WASM only.
+        let chosen;
+        let adapterInfo = null;
+        let probeNotes = [];
+        const hasNavGpu = typeof navigator !== 'undefined' && navigator.gpu
+                          && typeof navigator.gpu.requestAdapter === 'function';
+        if (!hasNavGpu) {
+            probeNotes.push('navigator.gpu API absent — browser too old or WebGPU flag off');
+        } else {
+            // Try power preferences in order. Some Windows + NVIDIA
+            // combos return null for 'high-performance' but accept
+            // the default. iGPU-only laptops accept 'low-power'.
+            const attempts = [
+                { powerPreference: 'high-performance' },
+                { },                                     // browser default
+                { powerPreference: 'low-power' },
+            ];
+            for (const opts of attempts) {
+                try {
+                    const adapter = await navigator.gpu.requestAdapter(opts);
+                    if (adapter) {
+                        chosen = ['webgpu', 'wasm'];
+                        try {
+                            const info = (typeof adapter.requestAdapterInfo === 'function')
+                                ? await adapter.requestAdapterInfo()
+                                : null;
+                            adapterInfo = info ? {
+                                vendor: info.vendor, architecture: info.architecture,
+                                device: info.device, description: info.description,
+                                requestedPower: opts.powerPreference || '(default)',
+                            } : { requestedPower: opts.powerPreference || '(default)' };
+                        } catch { adapterInfo = { requestedPower: opts.powerPreference || '(default)' }; }
+                        break;
+                    } else {
+                        probeNotes.push('requestAdapter('
+                            + (opts.powerPreference || 'default') + ') returned null');
+                    }
+                } catch (e) {
+                    probeNotes.push('requestAdapter('
+                        + (opts.powerPreference || 'default') + ') threw: ' + e.message);
+                }
+            }
+        }
+        if (!chosen) {
+            chosen = ['wasm'];
+            // Surface the most likely culprits so the user has
+            // actionable next steps instead of a silent fallback.
+            const ctxNotes = [];
+            if (typeof window !== 'undefined') {
+                if (!window.isSecureContext) {
+                    ctxNotes.push('not in a secure context (need https:// or localhost; access via IP blocks WebGPU)');
+                }
+                if (location.hostname !== 'localhost'
+                    && location.hostname !== '127.0.0.1'
+                    && location.protocol !== 'https:') {
+                    ctxNotes.push('accessing via ' + location.hostname
+                        + ' — Chrome blocks WebGPU on non-localhost HTTP; use https or open from localhost');
+                }
+            }
+            console.warn('[OnnxRegistry] WebGPU probe details:\n  · '
+                + probeNotes.concat(ctxNotes).join('\n  · ')
+                + '\nFix: check chrome://gpu/ → "WebGPU" status. If "Hardware accelerated" '
+                + 'and you still see this, your Chrome may need an --enable-unsafe-webgpu '
+                + 'flag, OR access Polaris via http://localhost:5000 instead of an IP.');
+        }
+        _pickedBackends = chosen;
+        const ortReg = (window.OnnxRegistry || {});
+        ortReg.__lastBackend = chosen[0];
+        ortReg.__adapterInfo = adapterInfo;
+        if (chosen[0] === 'webgpu') {
+            console.log('[OnnxRegistry] Using WebGPU adapter:', adapterInfo || '(info unavailable)');
+        } else {
+            console.warn('[OnnxRegistry] No WebGPU adapter — falling back to WASM ' +
+                '(' + (window.ort?.env?.wasm?.numThreads || 1) + ' threads). ' +
+                'GraXpert CLI on the host with CUDA will be MUCH faster than this.');
+        }
+        return chosen;
     }
 
     /**
@@ -235,12 +333,23 @@
         }
 
         if (onProgress) onProgress('creating-session');
+        // GX-9 (UX): yield so the 'creating-session' progress event
+        // gets a render frame BEFORE ort.InferenceSession.create
+        // (which runs single-threaded WASM and blocks the main
+        // thread for 10-30s on big models — Chrome's "page
+        // unresponsive" dialog fires after ~15s of no yield). We
+        // can't slice the create itself; this just ensures the
+        // user sees "loading model" before the freeze starts.
+        await _yieldToBrowser();
         const ort = await loadOrtWeb();
         const ep = await pickBackends();
         const session = await ort.InferenceSession.create(bytes, {
             executionProviders: ep,
             graphOptimizationLevel: 'all',
         });
+        // Another yield so the next user-facing event ('tiles' progress)
+        // catches a paint before the synchronous setup that follows.
+        await _yieldToBrowser();
         _sessions.set(key, session);
         return session;
     }
@@ -423,28 +532,55 @@
             const family = 'bge';
             const version = '1.0.1';
             const TILE = 256;
+            // GX-9: derive the channel count. Old callers omit
+            // opts.channels and pass a Uint16Array length == w*h —
+            // mono path. New callers (RGB FITS) pass channels:3 and
+            // pixels length == w*h*3, plane-sequential (R...G...B,
+            // FITSReader's convention).
+            const channels = opts.channels === 3 ? 3 : 1;
+            const planeLen = width * height;
 
             const session = await loadSession(family, version, opts.onProgress);
 
-            // 1) Downsample to 256x256.
-            const small = bilinearResize(pixels, width, height, 1, TILE, TILE);
+            // 1) Downsample each input plane to 256x256 independently.
+            //    For mono there's a single plane; for RGB we resize R,
+            //    G, B separately because bilinearResize expects a
+            //    pixel-interleaved buffer when channels>1 and ours is
+            //    plane-sequential.
+            const smallPlanes = []; // array of 3 Uint16Array(TILE*TILE) (or 1 for mono → replicated below)
+            for (let c = 0; c < channels; c++) {
+                const planeView = pixels.subarray(c * planeLen, (c + 1) * planeLen);
+                smallPlanes.push(bilinearResize(planeView, width, height, 1, TILE, TILE));
+            }
 
             // 2-3) Build [1, 256, 256, 3] NHWC float32 tensor.
-            //      Mono → replicate to 3 channels. MAD normalize.
-            //      Operate on the source (16-bit display range) scaled
-            //      to [0,1] floats — matches what GraXpert does after
-            //      its astropy normalize step.
-            const planeF = new Float32Array(TILE * TILE);
-            for (let i = 0; i < small.length; i++) planeF[i] = small[i] / 65535;
-            const { median, mad } = medianMadSampled(planeF);
+            //      Per-channel MAD normalize: each channel gets its own
+            //      median + MAD because R, G, B in a typical OSC frame
+            //      have wildly different background levels (the green
+            //      sensitivity of the Bayer mosaic + sky-glow colour).
+            //      Using the green's median for the red channel would
+            //      crush the red background or blow it out.
+            const planesF = [];          // Float32 [0,1] per channel
+            const stats   = [];          // {median, mad} per channel
+            for (let c = 0; c < channels; c++) {
+                const pf = new Float32Array(TILE * TILE);
+                const src = smallPlanes[c];
+                for (let i = 0; i < src.length; i++) pf[i] = src[i] / 65535;
+                planesF.push(pf);
+                stats.push(medianMadSampled(pf));
+            }
 
             const tensorData = new Float32Array(TILE * TILE * 3);
             for (let i = 0; i < TILE * TILE; i++) {
-                const v = ((planeF[i] - median) / mad) * 0.04;
-                const clipped = Math.max(-1, Math.min(1, v));
-                tensorData[i * 3]     = clipped;
-                tensorData[i * 3 + 1] = clipped;
-                tensorData[i * 3 + 2] = clipped;
+                for (let c = 0; c < 3; c++) {
+                    // Mono input → replicate the single channel into
+                    // all 3 tensor slots (back-compat). RGB → use the
+                    // matching channel.
+                    const srcC = channels === 3 ? c : 0;
+                    const { median, mad } = stats[srcC];
+                    const v = ((planesF[srcC][i] - median) / mad) * 0.04;
+                    tensorData[i * 3 + c] = Math.max(-1, Math.min(1, v));
+                }
             }
 
             // 4) Inference.
@@ -459,54 +595,79 @@
             const outTensor = out[outputName];
             const outData = outTensor.data; // Float32Array len = 1*256*256*3
 
-            // 5) Average the three channels back to a mono background
-            //    plane in [0,1] space and denormalize.
-            const bgSmall = new Float32Array(TILE * TILE);
-            for (let i = 0; i < TILE * TILE; i++) {
-                const r = outData[i * 3];
-                const g = outData[i * 3 + 1];
-                const b = outData[i * 3 + 2];
-                const avg = (r + g + b) / 3.0;
-                bgSmall[i] = avg * mad / 0.04 + median;
+            // 5) Denormalize each output channel using its own median+MAD.
+            //    For mono input we just take channel 0 (which the model
+            //    saw replicated across all 3 inputs); for RGB we keep
+            //    all 3 to apply per-channel correction below.
+            const outChannels = channels;
+            const bgPlanesSmall = [];   // Float32Array per channel at 256x256
+            for (let c = 0; c < outChannels; c++) {
+                const bg = new Float32Array(TILE * TILE);
+                const { median, mad } = stats[c];
+                for (let i = 0; i < TILE * TILE; i++) {
+                    bg[i] = outData[i * 3 + c] * mad / 0.04 + median;
+                }
+                bgPlanesSmall.push(bg);
             }
 
-            // 6) Gaussian-ish smooth (3-pass box blur, radius 3).
-            const bgSmooth = boxBlurF(bgSmall, TILE, TILE, 3);
+            // 6+7) Gaussian-ish smooth, then resize back to source size.
+            const bgPlanesFull = bgPlanesSmall.map(bg => {
+                const smoothed = boxBlurF(bg, TILE, TILE, 3);
+                return bilinearResizeF(smoothed, TILE, TILE, width, height);
+            });
 
-            // 7) Resize back to source dimensions.
-            const bgFull = bilinearResizeF(bgSmooth, TILE, TILE, width, height);
-
-            // 8) Apply correction. Subtraction recentres around the
-            //    median so the corrected background sits where the
-            //    original median was (otherwise BGE subtracts toward
-            //    zero and the resulting image looks crushed).
-            //    Division mode: scale by bg/median so the output also
-            //    keeps its overall brightness reference.
+            // 8) Apply correction per channel + (optionally) bake the
+            //    modelled background plane into a sibling uint16
+            //    buffer. The background is stored in source brightness
+            //    space (after denormalize + smooth + resize), so the
+            //    user can stack it like any other FITS — useful for
+            //    diagnostics ("is the gradient mostly LP or amp glow?").
+            //    - Subtraction recentres around the channel median so
+            //      the corrected background sits where the source
+            //      median was (otherwise BGE pulls toward zero and the
+            //      image looks crushed).
+            //    - Division: scale by bg/median so the output also
+            //      keeps its brightness reference.
             const result = new Uint16Array(pixels.length);
-            if (correction === 'Division') {
-                for (let i = 0; i < pixels.length; i++) {
-                    const v = pixels[i] / 65535;
-                    const bg = Math.max(1e-6, bgFull[i]);
-                    const corrected = v / bg * median;
-                    result[i] = Math.max(0, Math.min(65535,
-                        Math.round(corrected * 65535)));
-                }
-            } else {
-                // Subtraction (default)
-                for (let i = 0; i < pixels.length; i++) {
-                    const v = pixels[i] / 65535;
-                    const bg = bgFull[i];
-                    const corrected = v - bg + median;
-                    result[i] = Math.max(0, Math.min(65535,
-                        Math.round(corrected * 65535)));
+            const saveBg = !!opts.saveBackground;
+            const bgU16 = saveBg ? new Uint16Array(pixels.length) : null;
+            for (let c = 0; c < outChannels; c++) {
+                const bgFull = bgPlanesFull[c];
+                const { median } = stats[c];
+                const srcOff = c * planeLen;
+                if (correction === 'Division') {
+                    for (let i = 0; i < planeLen; i++) {
+                        const v = pixels[srcOff + i] / 65535;
+                        const bg = Math.max(1e-6, bgFull[i]);
+                        const corrected = v / bg * median;
+                        result[srcOff + i] = Math.max(0, Math.min(65535,
+                            Math.round(corrected * 65535)));
+                        if (bgU16) {
+                            bgU16[srcOff + i] = Math.max(0, Math.min(65535,
+                                Math.round(bg * 65535)));
+                        }
+                    }
+                } else {
+                    for (let i = 0; i < planeLen; i++) {
+                        const v = pixels[srcOff + i] / 65535;
+                        const bg = bgFull[i];
+                        const corrected = v - bg + median;
+                        result[srcOff + i] = Math.max(0, Math.min(65535,
+                            Math.round(corrected * 65535)));
+                        if (bgU16) {
+                            bgU16[srcOff + i] = Math.max(0, Math.min(65535,
+                                Math.round(bg * 65535)));
+                        }
+                    }
                 }
             }
 
             return {
                 pixels: result,
+                background: bgU16,           // null when opts.saveBackground is false
                 width, height,
-                channels: 1,
-                stats: { median, mad, inferenceMs },
+                channels: outChannels,
+                stats: { perChannel: stats, inferenceMs },
             };
         }
     }
@@ -546,8 +707,100 @@
     // denoised result back against the original to taste.
     // ───────────────────────────────────────────────────────────────
 
+    // GX-9 (UX): cede o thread principal pro browser desenhar 1 frame.
+    // Necessário antes/depois de blocos sync grandes (allocação +
+    // normalize de buffers de dezenas de MB) e antes de carregar o
+    // InferenceSession — sem isso o Chrome dispara "Page Unresponsive".
+    // setTimeout(0) é mais barato que requestAnimationFrame e suficiente
+    // pra liberar uma única tick do event loop.
+    function _yieldToBrowser() {
+        return new Promise(r => setTimeout(r, 0));
+    }
+
+    // GX-9: humanise the internal phase tags the pipelines emit so
+    // the UI shows "loading model" instead of "creating-session"
+    // (which sounded like a hung connect). Unknown phases pass
+    // through untouched.
+    function _prettyPhase(phase) {
+        switch (phase) {
+            case 'cache-hit':       return 'model ready (cached)';
+            case 'downloading':     return 'downloading model';
+            case 'creating-session':return 'loading model into runtime';
+            case 'preparing':       return 'preparing tiles';
+            case 'tiles':           return 'processing tiles';
+            default:                return phase;
+        }
+    }
+
+    // GX-9: per-channel dispatcher used by Denoise + Decon. Both
+    // pipelines were designed mono-first (one model call per tile
+    // grid). For RGB inputs we run the entire pipeline once per
+    // colour plane and stitch the results plane-sequentially —
+    // wasteful vs a native-RGB pipeline (3× the model calls) but
+    // correct, and the math doesn't need rewriting. BgePipeline
+    // handles RGB natively because its model is single-pass.
+    async function runPerChannel(pipelineFn, pixels, width, height, opts) {
+        const channels = opts && opts.channels === 3 ? 3 : 1;
+        if (channels === 1) {
+            // Strip the channels hint before passing through — the
+            // mono pipeline doesn't read it and we want to keep its
+            // call-path identical.
+            const passOpts = Object.assign({}, opts);
+            delete passOpts.channels;
+            return pipelineFn(pixels, width, height, passOpts);
+        }
+        const planeLen = width * height;
+        const combined = new Uint16Array(planeLen * 3);
+        let aggInferenceMs = 0;
+        let lastStats = null;
+        for (let c = 0; c < 3; c++) {
+            const plane = pixels.subarray(c * planeLen, (c + 1) * planeLen);
+            // Wrap progress so 0..1 within a channel maps to
+            // (c/3)..((c+1)/3) overall.
+            const planeOpts = Object.assign({}, opts);
+            delete planeOpts.channels;
+            if (opts && opts.onProgress) {
+                const channelLabel = ['R', 'G', 'B'][c];
+                planeOpts.onProgress = (phase, frac) => {
+                    // GX-9: preserve a null/undefined frac (e.g. the
+                    // 'creating-session' phase has no sub-progress —
+                    // the model is loading and we have nothing to
+                    // report mid-way). Default-to-zero was lying to
+                    // the user ("R creating-session 0%" stuck during
+                    // a 30s session init). When we DO have a frac,
+                    // map it into overall (channel_idx + frac) / 3.
+                    const overall = (frac == null) ? null
+                        : Math.min(1, (c + frac) / 3);
+                    opts.onProgress(
+                        channelLabel + '/3 ' + _prettyPhase(phase),
+                        overall);
+                };
+            }
+            const planeResult = await pipelineFn(plane, width, height, planeOpts);
+            combined.set(planeResult.pixels, c * planeLen);
+            if (planeResult.stats && planeResult.stats.inferenceMs) {
+                aggInferenceMs += planeResult.stats.inferenceMs;
+            }
+            lastStats = planeResult.stats;
+        }
+        return {
+            pixels: combined,
+            width, height,
+            channels: 3,
+            stats: Object.assign({}, lastStats || {}, {
+                inferenceMs: aggInferenceMs,
+                perChannelRuns: 3,
+            }),
+        };
+    }
+
     class DenoisePipeline {
         async run(pixels, width, height, opts = {}) {
+            return runPerChannel(
+                (p, w, h, o) => this._runMono(p, w, h, o),
+                pixels, width, height, opts);
+        }
+        async _runMono(pixels, width, height, opts = {}) {
             const family = 'denoise';
             const version = opts.version || '2.0.0';
             const strength = Math.max(0, Math.min(1,
@@ -559,6 +812,14 @@
 
             const session = await loadSession(family, version, opts.onProgress);
 
+            // GX-9 (UX): for a typical drizzle-2x master the padded
+            // plane is 25-50M ushorts. The sync padEdge + planeF
+            // normalize together hold the main thread for ~1-2s.
+            // Yield around them so the browser repaints the "loading
+            // model" → "preparing" transition without freezing.
+            if (opts.onProgress) opts.onProgress('preparing', null);
+            await _yieldToBrowser();
+
             // Tile grid + padded source. itw/ith are the inner-tile
             // counts; the padded buffer is sized so the last tile's
             // inner region just covers the source edge (then we trim
@@ -569,11 +830,13 @@
             const padH = ith * STRIDE + 2 * MARGIN;
             const padded = padEdge(pixels, width, height,
                 (padW - width) / 2 | 0, (padH - height) / 2 | 0);
+            await _yieldToBrowser();
 
             // Global median + MAD on the padded plane (downsampled).
             const planeF = new Float32Array(padded.length);
             for (let i = 0; i < padded.length; i++) planeF[i] = padded[i] / 65535;
             const { median, mad } = medianMadSampled(planeF);
+            await _yieldToBrowser();
 
             // Output canvas (padded). We'll trim back at the end.
             const out = new Float32Array(padded.length);
@@ -584,6 +847,11 @@
             const totalTiles = itw * ith;
             let processed = 0;
             const t0 = performance.now();
+            // GX-9 (diag): the very first tile timing reveals the
+            // backend's real cost — if a 256×256 inference takes
+            // hundreds of ms on a discrete GPU something is wrong
+            // (CPU fallback, or per-tile bridge overhead dominating).
+            let firstTileMs = null;
 
             for (let ty = 0; ty < ith; ty++) {
                 for (let tx = 0; tx < itw; tx++) {
@@ -607,7 +875,16 @@
                     }
                     const inputTensor = new ort.Tensor('float32',
                         tensorData, [1, TILE, TILE, 3]);
+                    const tileT0 = performance.now();
                     const result = await session.run({ [inputName]: inputTensor });
+                    if (firstTileMs == null) {
+                        firstTileMs = performance.now() - tileT0;
+                        console.log('[Denoise] first tile inference: '
+                            + firstTileMs.toFixed(1) + ' ms · backend='
+                            + (window.OnnxRegistry?.__lastBackend || '?')
+                            + ' · totalTiles=' + totalTiles
+                            + ' · ETA=' + (firstTileMs * totalTiles / 1000).toFixed(1) + 's');
+                    }
                     const outData = result[outputName].data;
 
                     // Extract inner [MARGIN:MARGIN+STRIDE] from each
@@ -673,6 +950,11 @@
 
     class DeconPipeline {
         async run(pixels, width, height, opts = {}) {
+            return runPerChannel(
+                (p, w, h, o) => this._runMono(p, w, h, o),
+                pixels, width, height, opts);
+        }
+        async _runMono(pixels, width, height, opts = {}) {
             const target = opts.target || 'stars';   // 'stars' | 'objects'
             const family = target === 'objects' ? 'decon-objects' : 'decon-stars';
             const version = opts.version
@@ -689,14 +971,22 @@
 
             const session = await loadSession(family, version, opts.onProgress);
 
+            // GX-9 (UX): yield before the multi-MB padding + normalize
+            // burst so the browser repaints between model-load and
+            // tile-loop phases (same rationale as DenoisePipeline).
+            if (opts.onProgress) opts.onProgress('preparing', null);
+            await _yieldToBrowser();
+
             const itw = Math.ceil(width  / STRIDE);
             const ith = Math.ceil(height / STRIDE);
             const padW = itw * STRIDE + 2 * MARGIN;
             const padH = ith * STRIDE + 2 * MARGIN;
             const padded = padEdge(pixels, width, height,
                 (padW - width) / 2 | 0, (padH - height) / 2 | 0);
+            await _yieldToBrowser();
             const planeF = new Float32Array(padded.length);
             for (let i = 0; i < padded.length; i++) planeF[i] = padded[i] / 65535;
+            await _yieldToBrowser();
 
             const out = new Float32Array(padded.length);
             const ort = await loadOrtWeb();

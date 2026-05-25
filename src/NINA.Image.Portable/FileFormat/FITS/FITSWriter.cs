@@ -54,14 +54,30 @@ public static class FITSWriter {
         var pixels = imageData.Data;
         var meta = imageData.MetaData;
 
+        // RGB cubes get NAXIS=3 / NAXIS3=3; mono stays at NAXIS=2.
+        // Anything other than 1 or 3 channels is clamped to 1 — we
+        // don't support exotic multi-plane FITS writes today, and
+        // silently dropping is worse than honouring the convention
+        // most downstream tools (PixInsight, Siril, astropy) expect.
+        int channels = imageData.Properties.Channels == 3 ? 3 : 1;
+        long expectedPixelCount = (long)w * h * channels;
+        if (pixels.LongLength < expectedPixelCount) {
+            throw new InvalidOperationException(
+                $"FITSWriter: pixel buffer length {pixels.LongLength} < " +
+                $"expected {expectedPixelCount} for {w}×{h}×{channels}");
+        }
+
         var cards = new List<string>();
 
         // ---- Standard headers (must be first, in this order) ----
         Add(cards, "SIMPLE", "T", "FITS standard");
         Add(cards, "BITPIX", "16", "16-bit signed pixels");
-        Add(cards, "NAXIS", "2");
+        Add(cards, "NAXIS", channels == 3 ? "3" : "2");
         Add(cards, "NAXIS1", w.ToString(CultureInfo.InvariantCulture));
         Add(cards, "NAXIS2", h.ToString(CultureInfo.InvariantCulture));
+        if (channels == 3) {
+            Add(cards, "NAXIS3", "3", "RGB planes");
+        }
         Add(cards, "BZERO", "32768", "Offset for unsigned 16-bit");
         Add(cards, "BSCALE", "1");
         Add(cards, "EXTEND", "T");

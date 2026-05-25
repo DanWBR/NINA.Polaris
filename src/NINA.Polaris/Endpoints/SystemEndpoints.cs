@@ -44,6 +44,49 @@ public static class SystemEndpoints {
             });
         });
 
+        // GX-10: surface the HTTPS listener + cert metadata so the
+        // Settings UI can render a "use this URL for WebGPU" banner +
+        // a fingerprint the user can verify against Chrome's
+        // cert-details dialog. Doesn't include anything sensitive
+        // (the cert is self-signed; the PFX stays on the server).
+        group.MapGet("/https-info",
+            (IConfiguration cfg,
+             SelfSignedCertService certSvc,
+             HttpRequest req) => {
+            var httpsEnabled = cfg.GetValue("Server:Https:Enabled", true);
+            var httpPort  = cfg.GetValue("Server:Http:Port",  5000);
+            var httpsPort = cfg.GetValue("Server:Https:Port", 5001);
+            // Suggest concrete URLs the client can click on by mixing
+            // the SAN-list names with the configured ports. We surface
+            // the host the request came in on first (most relevant),
+            // then a couple of LAN-friendly aliases.
+            var sans = certSvc.SanEntries();
+            string Decorate(string host, bool secure) {
+                // IPv6 addresses need brackets in URL form. ":" present
+                // and not at end → IPv6 literal.
+                if (host.Contains(":") && !host.EndsWith(":")) host = "[" + host + "]";
+                var port = secure ? httpsPort : httpPort;
+                var defaultPort = secure ? 443 : 80;
+                return (secure ? "https://" : "http://") + host
+                    + (port == defaultPort ? "" : ":" + port);
+            }
+            return Results.Ok(new {
+                httpsEnabled,
+                httpPort,
+                httpsPort,
+                fingerprint = httpsEnabled ? certSvc.Fingerprint : null,
+                // Names baked into the cert. Client picks the one
+                // that matches what they typed into the address bar.
+                hostnames = sans,
+                requestHost = req.Host.Host,
+                // Convenience: ready-to-click URLs for the top few hosts.
+                exampleHttpUrls  = sans.Take(6).Select(s => Decorate(s, false)).ToArray(),
+                exampleHttpsUrls = httpsEnabled
+                    ? sans.Take(6).Select(s => Decorate(s, true)).ToArray()
+                    : Array.Empty<string>()
+            });
+        });
+
         // Profiles
         group.MapGet("/profiles", (ProfileService profiles) => {
             var list = profiles.ListProfiles();

@@ -834,6 +834,13 @@ function ninaApp() {
         onnxLicenseModalOpen: false,
         _onnxLicenseResolver: null,
 
+        // GX-10: HTTPS endpoint info — populated from
+        // /api/system/https-info on startup. null until first fetch
+        // completes so x-show guards in the template hide the banner.
+        // Shape: { httpsEnabled, httpsPort, fingerprint,
+        //          hostnames: [...], exampleHttpsUrls: [...] }
+        httpsInfo: null,
+
         // d3-celestial Sky Viewer (offline, BSD-3-Clause).
         // Always renders the live sky from the observer's location at the
         // current UTC time, in horizontal projection — same convention as
@@ -2480,6 +2487,12 @@ function ninaApp() {
                     // Manifest is small + cheap; fetch on every settings
                     // load so the AI panel reflects the current state.
                     this.loadOnnxManifest();
+                    // GX-10: HTTPS info also lives on a low-traffic
+                    // endpoint and only changes at server restart, so
+                    // piggyback on the settings load instead of
+                    // polling. Surfaces URLs + cert fingerprint to
+                    // the banner in the AI inference section.
+                    this.loadHttpsInfo();
                     // First time the app boots, honour the user's preferred sequencer flavour.
                     if (!this._sequencerTabBootHandled) {
                         this._sequencerTabBootHandled = true;
@@ -4078,6 +4091,9 @@ function ninaApp() {
                 const result = await pipeline.run(
                     raw.pixels, raw.width, raw.height,
                     Object.assign({}, runOpts, {
+                        // GX-9: forward channel count so RGB FITS
+                        // process per-channel.
+                        channels: raw.channels,
                         onProgress: (phase, frac) => {
                             this.editorAi.phase = op + ' — ' + phase
                               + (frac != null ? ' ' + Math.round(frac * 100) + '%' : '');
@@ -8228,6 +8244,22 @@ function ninaApp() {
             }
         },
 
+        // ─── GX-10: HTTPS info loader ───────────────────────────────
+        // Reads the server's HTTPS configuration (port, cert
+        // fingerprint, SAN-list hostnames + ready-to-click URLs).
+        // Fetched on startup and after a settings save — surface
+        // lives in the AI inference banner so the user sees the
+        // upgrade path when WebGPU isn't available.
+
+        async loadHttpsInfo() {
+            try {
+                this.httpsInfo = await this.apiGet('/api/system/https-info');
+            } catch (e) {
+                console.warn('[Polaris] HTTPS info fetch failed:', e);
+                this.httpsInfo = null;
+            }
+        },
+
         // ─── GX-1b: ONNX manifest + cache control ───────────────────────
         // Pulls the server's view of which models exist + lazily probes
         // the IndexedDB cache size. Surfaced in the Settings AI section.
@@ -8477,7 +8509,15 @@ function ninaApp() {
                 switch (op) {
                     case 'background-extraction':
                         pipeline = new OnnxRegistry.BgePipeline();
-                        runOpts = { correction: this.graxpert.modalCorrection };
+                        runOpts = {
+                            correction: this.graxpert.modalCorrection,
+                            // GX-9: forward the "save background" toggle so
+                            // BgePipeline returns the modelled background
+                            // plane; we save it as a second sibling FITS
+                            // ({stem}_bge_bg.fits) below. Matches the CLI
+                            // path's -bg behaviour.
+                            saveBackground: !!this.graxpert.modalSaveBackground,
+                        };
                         break;
                     case 'denoising':
                         pipeline = new OnnxRegistry.DenoisePipeline();
@@ -8519,9 +8559,23 @@ function ninaApp() {
                     const result = await pipeline.run(
                         src.pixels, src.width, src.height,
                         Object.assign({}, runOpts, {
+                            // GX-9: forward the channel count so RGB
+                            // FITS process per-channel instead of
+                            // collapsing to the first plane.
+                            channels: src.channels,
                             onProgress: (phase, frac) => {
                                 this.graxpert.browserPhase = stem + ' — ' + phase
                                   + (frac != null ? ' ' + Math.round(frac * 100) + '%' : '');
+                                // GX-9 (UX): also drive the overall
+                                // progress bar from within-pipeline
+                                // ticks instead of only jumping per
+                                // completed file. For multi-file
+                                // batches the bar advances through
+                                // (idx + within) / total.
+                                if (frac != null) {
+                                    this.graxpert.browserProgress =
+                                        (idx + frac) / paths.length;
+                                }
                             }
                         }));
 
@@ -8530,6 +8584,19 @@ function ninaApp() {
                         path, suffix, result.pixels, result.width,
                         result.height, result.channels);
                     if (outPath) written.push(outPath);
+
+                    // GX-9: if BGE returned the modelled background plane
+                    // (saveBackground: true), save it as a second sibling
+                    // {stem}_bge_bg.fits next to the corrected output.
+                    // CLI's -bg flag does the same.
+                    if (result.background) {
+                        this.graxpert.browserPhase = stem + ' — saving background model';
+                        const bgPath = await this._onnxSaveResult(
+                            path, suffix + '_bg',
+                            result.background, result.width,
+                            result.height, result.channels);
+                        if (bgPath) written.push(bgPath);
+                    }
 
                     this.graxpert.browserDone++;
                     this.graxpert.browserProgress = (idx + 1) / paths.length;

@@ -3192,6 +3192,35 @@ label select.input-sm {
 }
 .onnx-models-table tr:last-child td { border-bottom: none; }
 
+/* GX-10: HTTPS endpoints banner — list of clickable URLs the user
+   can try from the client device to unlock WebGPU + multi-thread
+   WASM. Styled like the per-rig FOV picker pills so it doesn't look
+   like a primary action (it's a one-time-per-device step). */
+.https-info-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0 4px;
+}
+.https-link {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border: 1px solid var(--border, #2a3142);
+    border-radius: 999px;
+    background: rgba(34, 197, 94, 0.08);
+    color: var(--accent-success, #4ade80);
+    font-family: ui-monospace, "JetBrains Mono", "Cascadia Code", monospace;
+    font-size: 12px;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 120ms ease, border-color 120ms ease;
+}
+.https-link:hover {
+    background: rgba(34, 197, 94, 0.16);
+    border-color: var(--accent-success, #4ade80);
+}
+
 /* Connection lost banner */
 .connection-banner {
     position: fixed;
@@ -5148,6 +5177,20 @@ label select.input-sm {
     gap: 4px;
     flex: 1;
     min-width: 180px;
+}
+/* GX-9 (UX): checkbox labels in the modal need a row layout — the
+   default column-stack (designed for "title above input" form rows)
+   floated the tick mark above its descriptor instead of next to it.
+   Constrain to the .checkbox-label class so non-checkbox labels keep
+   their stacked layout. */
+.siril-modal-row label.checkbox-label {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+.siril-modal-row label.checkbox-label input[type="checkbox"] {
+    flex: 0 0 auto;
+    margin: 0;
 }
 .siril-modal-counts {
     display: flex;

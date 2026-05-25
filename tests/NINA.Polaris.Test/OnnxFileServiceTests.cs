@@ -99,6 +99,60 @@ public class OnnxFileServiceTests {
     }
 
     [Test]
+    public async Task LoadRawAsync_RgbFits_ReturnsThreeChannels() {
+        // GX-9: a 3-channel FITS should round-trip as channels=3 with
+        // pixels in plane-sequential order (R, then G, then B).
+        var path = WriteFakeRgbFits(width: 4, height: 4,
+            fill: (i, c) => (ushort)((c + 1) * 1000 + i));
+        var svc = new OnnxFileService(NullLogger<OnnxFileService>.Instance);
+        var raw = await svc.LoadRawAsync(path);
+
+        Assert.That(raw, Is.Not.Null);
+        Assert.That(raw!.Channels, Is.EqualTo(3));
+        Assert.That(raw.Width, Is.EqualTo(4));
+        Assert.That(raw.Height, Is.EqualTo(4));
+        Assert.That(raw.PixelsLE16.Length, Is.EqualTo(4 * 4 * 3 * 2));
+
+        // R plane first pixel: c=0, i=0 → 1000 → LE 0xE8, 0x03
+        Assert.That(raw.PixelsLE16[0], Is.EqualTo(0xE8));
+        Assert.That(raw.PixelsLE16[1], Is.EqualTo(0x03));
+        // G plane first pixel: offset = 4*4*2 = 32; c=1, i=0 → 2000 → LE 0xD0, 0x07
+        Assert.That(raw.PixelsLE16[32], Is.EqualTo(0xD0));
+        Assert.That(raw.PixelsLE16[33], Is.EqualTo(0x07));
+        // B plane first pixel: offset = 64; c=2, i=0 → 3000 → LE 0xB8, 0x0B
+        Assert.That(raw.PixelsLE16[64], Is.EqualTo(0xB8));
+        Assert.That(raw.PixelsLE16[65], Is.EqualTo(0x0B));
+    }
+
+    [Test]
+    public async Task SaveSiblingAsync_ThreeChannel_WritesRgbFits() {
+        var src = WriteFakeFits(4, 4, _ => (ushort)0);
+        var svc = new OnnxFileService(NullLogger<OnnxFileService>.Instance);
+        var bytes = new byte[4 * 4 * 3 * 2];
+        // distinct value per channel so the reader confirms ordering
+        for (int c = 0; c < 3; c++) {
+            for (int i = 0; i < 16; i++) {
+                int off = (c * 16 + i) * 2;
+                ushort v = (ushort)((c + 1) * 100 + i);
+                bytes[off]     = (byte)(v & 0xFF);
+                bytes[off + 1] = (byte)(v >> 8);
+            }
+        }
+        var outPath = await svc.SaveSiblingAsync(src, "_bge", bytes, 4, 4, 3);
+        Assert.That(outPath, Is.Not.Null);
+        BaseImageData reRead;
+        using (var fs = File.OpenRead(outPath!)) reRead = FITSReader.Read(fs);
+        Assert.That(reRead.Properties.Channels, Is.EqualTo(3));
+        Assert.That(reRead.Properties.Width,  Is.EqualTo(4));
+        Assert.That(reRead.Properties.Height, Is.EqualTo(4));
+        Assert.That(reRead.Data.Length, Is.EqualTo(4 * 4 * 3));
+        // Spot-check per-channel ordering survives writer→reader round-trip.
+        Assert.That(reRead.Data[0],  Is.EqualTo((ushort)100));  // R plane[0]
+        Assert.That(reRead.Data[16], Is.EqualTo((ushort)200));  // G plane[0]
+        Assert.That(reRead.Data[32], Is.EqualTo((ushort)300));  // B plane[0]
+    }
+
+    [Test]
     public async Task SaveSiblingAsync_RoundTripsPixelsThroughFitsReader() {
         // End-to-end: write a sibling, then re-read it via FITSReader
         // and assert the pixel data we shipped matches what we get
@@ -142,6 +196,27 @@ public class OnnxFileServiceTests {
         };
         var img = new BaseImageData(data, props);
         var path = Path.Combine(_tempDir, "src_" + Guid.NewGuid().ToString("N") + ".fits");
+        FITSWriter.Write(img, path);
+        return path;
+    }
+
+    /// <summary>Write a synthetic 3-channel RGB FITS. fill(i, c) returns
+    /// the pixel for plane index c (0=R, 1=G, 2=B) at flat position i.
+    /// Data is plane-sequential: [R0..R_n, G0..G_n, B0..B_n].</summary>
+    private string WriteFakeRgbFits(int width, int height, Func<int, int, ushort> fill) {
+        var plane = width * height;
+        var data = new ushort[plane * 3];
+        for (int c = 0; c < 3; c++) {
+            for (int i = 0; i < plane; i++) data[c * plane + i] = fill(i, c);
+        }
+        var props = new ImageProperties {
+            Width = width, Height = height,
+            BitDepth = 16, IsBayered = false,
+            BayerPattern = NINA.Core.Enum.BayerPatternEnum.None,
+            Channels = 3,
+        };
+        var img = new BaseImageData(data, props);
+        var path = Path.Combine(_tempDir, "src_rgb_" + Guid.NewGuid().ToString("N") + ".fits");
         FITSWriter.Write(img, path);
         return path;
     }

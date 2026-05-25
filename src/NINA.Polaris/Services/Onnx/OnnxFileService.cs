@@ -50,17 +50,18 @@ public class OnnxFileService {
             }
             int w = img.Properties.Width;
             int h = img.Properties.Height;
-            // FITS is mono today — Bayer-pattern RGB is debayered
-            // elsewhere; here we treat the raw plane as 1 channel and
-            // let the browser pipeline replicate to 3 channels for the
-            // model (BGE / Denoise expect NHWC channels=3, even on
-            // mono inputs — same pattern GraXpert's Python does).
-            int channels = 1;
+            // GX-9: RGB FITS (NAXIS=3 / NAXIS3=3) loads with all
+            // three planes plane-sequentially (R...G...B). Mono
+            // FITS stays at 1 channel and the browser pipeline
+            // replicates to 3 for the model. Anything other than
+            // 1 or 3 collapses to mono — same path FITSReader
+            // already takes.
+            int channels = img.Properties.Channels == 3 ? 3 : 1;
 
             // ushort[] -> byte[] little-endian. Browser reads via
             // DataView + Uint16Array.from() on the LE-friendly typed
             // view, no per-byte JS loop needed.
-            var bytes = new byte[w * h * channels * 2];
+            var bytes = new byte[(long)w * h * channels * 2];
             Buffer.BlockCopy(img.Data, 0, bytes, 0, bytes.Length);
 
             return new RawPixels(
@@ -93,16 +94,14 @@ public class OnnxFileService {
         string sourcePath, string suffix,
         byte[] pixelsLE16, int width, int height, int channels) {
 
-        if (channels != 1) {
-            // GX-3/4 may emit RGB outputs — when that ships we extend
-            // FITSWriter to plane-stack or add NAXIS=3 paths. Today
-            // BGE applied to a mono FITS still yields a mono result.
-            _logger.LogWarning("OnnxFile save: channels={Ch} not supported yet (v1 mono-only)", channels);
+        if (channels != 1 && channels != 3) {
+            _logger.LogWarning("OnnxFile save: channels={Ch} unsupported (only 1 or 3)", channels);
             return null;
         }
-        if (pixelsLE16.Length != width * height * 2) {
-            _logger.LogWarning("OnnxFile save: pixel length mismatch (got {Got}, need {Want})",
-                pixelsLE16.Length, width * height * 2);
+        long needBytes = (long)width * height * channels * 2;
+        if (pixelsLE16.LongLength != needBytes) {
+            _logger.LogWarning("OnnxFile save: pixel length mismatch (got {Got}, need {Want} for {W}x{H}x{C})",
+                pixelsLE16.LongLength, needBytes, width, height, channels);
             return null;
         }
 
@@ -123,14 +122,17 @@ public class OnnxFileService {
             // MetaData. The browser doesn't see the original FITS
             // headers; preserving them precisely would require a
             // header copy step which is a follow-up.
-            var data = new ushort[width * height];
+            // GX-9: for RGB, pixels arrive plane-sequential (R...G...B)
+            // matching what FITSReader produces and what FITSWriter now
+            // expects — no transpose needed here.
+            var data = new ushort[(long)width * height * channels];
             Buffer.BlockCopy(pixelsLE16, 0, data, 0, pixelsLE16.Length);
 
             var props = new ImageProperties {
                 Width = width, Height = height,
                 BitDepth = 16, IsBayered = false,
                 BayerPattern = NINA.Core.Enum.BayerPatternEnum.None,
-                Channels = 1,
+                Channels = channels,
             };
             var image = new BaseImageData(data, props);
             FITSWriter.Write(image, outPath);

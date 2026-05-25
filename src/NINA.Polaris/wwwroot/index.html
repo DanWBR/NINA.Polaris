@@ -5314,6 +5314,42 @@
                      GX-2..GX-4. This panel is the operations console:
                      points at the models, shows what's detected, lets
                      the user drop the IndexedDB cache. -->
+                <!-- GX-10: HTTPS endpoints — Chrome gates WebGPU +
+                     SharedArrayBuffer behind a "secure context", so a
+                     LAN client reaching http://polaris.local:5000 can't
+                     use the in-browser AI pipelines. We surface the
+                     self-signed HTTPS URLs here as one-click anchors
+                     so the user has a clear path to the GPU-friendly
+                     origin. Hidden when HTTPS isn't enabled. -->
+                <div class="settings-section" x-show="httpsInfo && httpsInfo.httpsEnabled">
+                    <h3>🔒 HTTPS endpoints (for WebGPU + multi-thread WASM)</h3>
+                    <p class="hint" style="margin-top:0">
+                        Plain HTTP is the default LAN entry point. To unlock
+                        <strong>WebGPU</strong> (client-side AI inference) and
+                        <strong>SharedArrayBuffer</strong> (multi-thread WASM
+                        fallback) Chrome requires a "secure context" —
+                        <code>localhost</code>, or any <code>https://</code>.
+                        Polaris generates a self-signed cert covering every
+                        hostname / LAN IP it can resolve. Click an HTTPS URL
+                        below from the client device; Chrome will warn that
+                        the cert is untrusted; click <em>Advanced → Proceed</em>
+                        once per device. After that, WebGPU lights up.
+                    </p>
+                    <div class="https-info-grid"
+                         x-show="httpsInfo && httpsInfo.exampleHttpsUrls?.length">
+                        <template x-for="url in httpsInfo.exampleHttpsUrls" :key="url">
+                            <a class="https-link" :href="url" target="_blank"
+                               rel="noopener" x-text="url"></a>
+                        </template>
+                    </div>
+                    <p class="hint" x-show="httpsInfo && httpsInfo.fingerprint">
+                        Certificate SHA-1 fingerprint (verify against the one
+                        Chrome shows in <em>cert details</em> if you want to
+                        be sure):
+                        <code style="user-select:all" x-text="httpsInfo.fingerprint"></code>
+                    </p>
+                </div>
+
                 <div class="settings-section">
                     <h3>AI inference (ONNX)</h3>
                     <p class="hint" style="margin-top:0">
@@ -5321,6 +5357,13 @@
                         Server hosts the model files, your browser fetches them
                         once and runs inference locally — works on any device
                         with WebGPU or WASM SIMD (laptops, phones, tablets).
+                    </p>
+                    <p class="hint" x-show="!window.isSecureContext && httpsInfo?.httpsEnabled"
+                       style="color:var(--accent-warn,#f59e0b)">
+                        ⚠ You're on plain HTTP — WebGPU is disabled. Reopen
+                        Polaris via the HTTPS link above for GPU-accelerated
+                        in-browser inference, or tick "Prefer CLI subprocess"
+                        below to run on the server's GraXpert install.
                     </p>
                     <label>Models path
                         <input type="text" class="input-md"
@@ -5797,6 +5840,23 @@
                     server. First use of each model downloads its ONNX bytes
                     from the Polaris host.
                 </p>
+                <!-- GX-10: when the client is on plain HTTP and HTTPS
+                     is available, surface the upgrade. Without WebGPU
+                     a heavy Denoise can take 30+ minutes on CPU; one
+                     click to the HTTPS URL turns it into seconds. -->
+                <p class="hint"
+                   x-show="graxpert.modalRunInBrowser
+                           && !window.isSecureContext
+                           && httpsInfo?.httpsEnabled
+                           && httpsInfo?.exampleHttpsUrls?.length"
+                   style="margin-top:8px; color:var(--accent-warn,#f59e0b)">
+                    ⚠ Plain HTTP — Chrome blocks WebGPU here.
+                    <a :href="httpsInfo.exampleHttpsUrls[0]"
+                       x-text="'Open ' + httpsInfo.exampleHttpsUrls[0] + ' instead'"
+                       style="color:inherit; text-decoration: underline"></a>
+                    for GPU-accelerated inference (one-time
+                    cert-trust click in Chrome).
+                </p>
             </div>
             <!-- Browser-mode progress (separate from the CLI progress
                  block lower down — that one polls the server job, this
@@ -6131,7 +6191,10 @@
          on first call. Loading the registry up-front means the editor
          AI section + FILES tab can call OnnxRegistry.* synchronously
          without awaiting an import. -->
-    <script src="/js/onnx-pipelines.js"></script>
+    <!-- v=GX9f: WebGPU probe now tries 3 powerPreference values + logs
+         every failure reason (secure context, IP-not-localhost, etc).
+         Helps debug why a host with a real GPU still falls back. -->
+    <script src="/js/onnx-pipelines.js?v=GX9f"></script>
     <script src="/js/lib/alpine.min.js" defer></script>
     <script src="/js/app.js"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime

@@ -53,6 +53,12 @@ Each tab in the sidebar has its own page. Read the ones you need:
   onnxruntime-web. Server hosts the `.onnx` files; any device with
   WebGPU or WASM SIMD does the heavy lifting locally.
 - **[FILES](files.md)** — server-side file explorer.
+- **[HTTPS setup](https-setup.md)** — self-signed cert on port 5001,
+  required for WebGPU + multi-thread WASM on LAN client devices
+  (any device other than the host itself). One-time per-device cert
+  trust click in the browser; after that, in-browser GraXpert AI
+  pipelines use the client's GPU instead of falling back to slow
+  CPU-only inference.
 - **[Relay (remote access)](relay.md)** — TLS-tunneled access from
   outside your LAN.
 - **[Remote terminal](remote-terminal.md)** — embedded SSH terminal
