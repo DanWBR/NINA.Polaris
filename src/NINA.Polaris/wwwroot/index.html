@@ -6191,10 +6191,10 @@
          on first call. Loading the registry up-front means the editor
          AI section + FILES tab can call OnnxRegistry.* synchronously
          without awaiting an import. -->
-    <!-- v=GX9f: WebGPU probe now tries 3 powerPreference values + logs
-         every failure reason (secure context, IP-not-localhost, etc).
-         Helps debug why a host with a real GPU still falls back. -->
-    <script src="/js/onnx-pipelines.js?v=GX9f"></script>
+    <!-- v=GX10a: switched to ort.webgpu.min.js so the WebGPU EP is
+         actually registered with ORT (the WASM-only ort.min.js was
+         silently dropping the requested webgpu provider). -->
+    <script src="/js/onnx-pipelines.js?v=GX10a"></script>
     <script src="/js/lib/alpine.min.js" defer></script>
     <script src="/js/app.js"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime

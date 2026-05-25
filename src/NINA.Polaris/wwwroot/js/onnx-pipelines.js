@@ -40,7 +40,18 @@
         _ortLoadPromise = new Promise((resolve, reject) => {
             if (window.ort) { resolve(window.ort); return; }
             const s = document.createElement('script');
-            s.src = ORT_VENDOR_PATH + 'ort.min.js';
+            // GX-10/11: ort.min.js is the WASM-only build — when we
+            // pass 'webgpu' in executionProviders, ORT logs
+            // "removing requested execution provider 'webgpu' from
+            // session options because it is not available: backend
+            // not found" and silently falls through to WASM. The
+            // ort.webgpu.min.js bundle has both WASM + WebGPU EPs
+            // registered up-front, so the same executionProviders
+            // request actually engages the GPU on capable hosts.
+            // Side note: this build is ~333 KB (vs ~230 KB for
+            // wasm-only) and only loads on first AI-op invocation, so
+            // the extra cost is negligible.
+            s.src = ORT_VENDOR_PATH + 'ort.webgpu.min.js';
             s.onload = () => {
                 if (!window.ort) {
                     reject(new Error('ort.min.js loaded but window.ort is undefined'));
