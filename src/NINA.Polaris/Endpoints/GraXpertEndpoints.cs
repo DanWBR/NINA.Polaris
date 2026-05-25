@@ -50,7 +50,8 @@ public static class GraXpertEndpoints {
                 SaveBackground: req.SaveBackground ?? false,
                 DeconStrength: req.DeconStrength ?? 0.5,
                 DeconPsfSize: req.DeconPsfSize ?? 4.0,
-                DenoiseStrength: req.DenoiseStrength ?? 0.5);
+                DenoiseStrength: req.DenoiseStrength ?? 0.5,
+                DeconTarget: req.DeconTarget ?? "stars");
             var job = gx.StartBatch(new GraXpertBatchRequest(
                 req.Paths, opts, req.Concurrency ?? 1));
             return Results.Accepted(value: new { jobId = job.JobId });
@@ -103,6 +104,10 @@ public static class GraXpertEndpoints {
         // Decon
         double? DeconStrength,
         double? DeconPsfSize,
+        // GX-12i: "stars" → deconv-stellar, "objects" → deconv-obj.
+        // Drives both the GraXpert CLI subcommand and the output suffix
+        // (_decon_stars vs _decon_objects) so the two runs don't collide.
+        string? DeconTarget,
         // Denoise
         double? DenoiseStrength);
 }

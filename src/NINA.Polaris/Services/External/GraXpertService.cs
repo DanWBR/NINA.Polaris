@@ -89,7 +89,9 @@ public class GraXpertService {
             return new GraXpertResult("", null, opts.Operation, 0,
                 "Denoising requires GraXpert v3.0+");
 
-        var outputPath = DefaultOutputPath(inputPath, opts.Operation);
+        // GX-12i: use the variant-aware overload so decon stars/objects
+        // land in separate sibling files instead of clobbering each other.
+        var outputPath = DefaultOutputPath(inputPath, opts);
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
 
         var args = BuildArgs(inputPath, outputPath, opts);
@@ -231,7 +233,14 @@ public class GraXpertService {
                 if (opts.SaveBackground) sb.Append(" -bg");
                 break;
             case GraXpertOperation.Deconvolution:
-                sb.Append("deconvolution");
+                // GX-12i: GraXpert CLI splits decon into deconv-stellar /
+                // deconv-obj. The previous "-cmd deconvolution" was an
+                // invalid choice (only background-extraction / denoising
+                // / deconv-obj / deconv-stellar are accepted) and would
+                // be rejected by GraXpert before any work happened.
+                sb.Append(string.Equals(opts.DeconTarget, "objects",
+                    StringComparison.OrdinalIgnoreCase)
+                    ? "deconv-obj" : "deconv-stellar");
                 sb.Append($" -output \"{StripExt(outputPath)}\"");
                 sb.Append(FormattableString.Invariant($" -strength {opts.DeconStrength:0.##}"));
                 sb.Append(FormattableString.Invariant($" -psfsize {opts.DeconPsfSize:0.##}"));
@@ -261,6 +270,20 @@ public class GraXpertService {
     };
 
     /// <summary>
+    /// GX-12i: variant-aware suffix. For decon, the target picks
+    /// "_decon_stars" or "_decon_objects" so the two model outputs
+    /// don't collide on disk. Other ops are unchanged.
+    /// </summary>
+    public static string OutputSuffix(GraXpertOptions opts) {
+        if (opts.Operation == GraXpertOperation.Deconvolution) {
+            return string.Equals(opts.DeconTarget, "objects",
+                StringComparison.OrdinalIgnoreCase)
+                ? "_decon_objects" : "_decon_stars";
+        }
+        return OutputSuffix(opts.Operation);
+    }
+
+    /// <summary>
     /// Default output path: same dir as input + suffix. The endpoints
     /// override this when the batch wants a dedicated dir (e.g.
     /// {rig}/bge/{target}/).
@@ -272,6 +295,15 @@ public class GraXpertService {
         // FITS is GraXpert's canonical output even when input was XISF/TIFF.
         if (string.IsNullOrEmpty(ext) || !IsImageExt(ext)) ext = ".fits";
         return Path.Combine(dir, stem + OutputSuffix(op) + ext);
+    }
+
+    /// <summary>GX-12i: variant-aware overload — picks the suffix from full opts.</summary>
+    public static string DefaultOutputPath(string inputPath, GraXpertOptions opts) {
+        var dir = Path.GetDirectoryName(inputPath) ?? "";
+        var stem = Path.GetFileNameWithoutExtension(inputPath);
+        var ext = Path.GetExtension(inputPath);
+        if (string.IsNullOrEmpty(ext) || !IsImageExt(ext)) ext = ".fits";
+        return Path.Combine(dir, stem + OutputSuffix(opts) + ext);
     }
 
     private static bool IsImageExt(string ext) =>
@@ -381,6 +413,10 @@ public sealed record GraXpertOptions(
     double DeconStrength = 0.5,
     double DeconPsfSize = 4.0,
     double DenoiseStrength = 0.5,
+    // GX-12i: "stars" → -cmd deconv-stellar, "objects" → -cmd deconv-obj.
+    // GraXpert CLI splits decon into two distinct subcommands; the
+    // previous "-cmd deconvolution" was rejected by GraXpert at runtime.
+    string DeconTarget = "stars",
     string? AiVersion = null);
 
 public sealed record GraXpertResult(string OutputPath, string? BackgroundPath,

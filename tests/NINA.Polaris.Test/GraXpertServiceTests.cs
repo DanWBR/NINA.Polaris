@@ -48,6 +48,23 @@ public class GraXpertServiceTests {
             Is.EqualTo("_denoise"));
     }
 
+    // GX-12i: variant-aware overload — decon stars/objects pick
+    // distinct suffixes so the two model outputs don't collide on
+    // disk when the user runs both on the same source.
+    [Test]
+    public void OutputSuffix_Decon_VariantAware() {
+        Assert.That(GraXpertService.OutputSuffix(new GraXpertOptions(
+            Operation: GraXpertOperation.Deconvolution, DeconTarget: "stars")),
+            Is.EqualTo("_decon_stars"));
+        Assert.That(GraXpertService.OutputSuffix(new GraXpertOptions(
+            Operation: GraXpertOperation.Deconvolution, DeconTarget: "objects")),
+            Is.EqualTo("_decon_objects"));
+        // BGE / denoise variants ignore DeconTarget.
+        Assert.That(GraXpertService.OutputSuffix(new GraXpertOptions(
+            Operation: GraXpertOperation.BackgroundExtraction, DeconTarget: "objects")),
+            Is.EqualTo("_bge"));
+    }
+
     [Test]
     public void DefaultOutputPath_AppendsSuffixToStem() {
         // Sibling next to input, suffix on the stem, original extension
@@ -96,16 +113,34 @@ public class GraXpertServiceTests {
     }
 
     [Test]
-    public void BuildArgs_Decon_IncludesStrengthAndPsfSize() {
+    public void BuildArgs_Decon_Stars_UsesStellarSubcommand() {
+        // GX-12i: GraXpert CLI choices are background-extraction /
+        // denoising / deconv-obj / deconv-stellar. "deconvolution"
+        // was an invalid choice and would be rejected.
         var args = _gx.BuildArgs("/in/master.fits", "/out/master_decon.fits",
             new GraXpertOptions(
                 Operation: GraXpertOperation.Deconvolution,
+                DeconTarget: "stars",
                 DeconStrength: 0.35,
                 DeconPsfSize: 3.5));
 
-        Assert.That(args, Does.Contain("deconvolution"));
+        Assert.That(args, Does.Contain("deconv-stellar"));
+        Assert.That(args, Does.Not.Contain("deconv-obj"));
         Assert.That(args, Does.Contain("-strength 0.35"));
         Assert.That(args, Does.Contain("-psfsize 3.5"));
+    }
+
+    [Test]
+    public void BuildArgs_Decon_Objects_UsesObjSubcommand() {
+        var args = _gx.BuildArgs("/in/master.fits", "/out/master_decon.fits",
+            new GraXpertOptions(
+                Operation: GraXpertOperation.Deconvolution,
+                DeconTarget: "objects",
+                DeconStrength: 0.5,
+                DeconPsfSize: 4.0));
+
+        Assert.That(args, Does.Contain("deconv-obj"));
+        Assert.That(args, Does.Not.Contain("deconv-stellar"));
     }
 
     [Test]

@@ -4093,12 +4093,10 @@ function ninaApp() {
             try {
                 let pipeline;
                 let runOpts = {};
-                let suffix = '_ai';
                 switch (op) {
                     case 'background-extraction':
                         pipeline = new OnnxRegistry.BgePipeline();
                         runOpts = { correction: this.settings.graxpertBgeCorrection };
-                        suffix = '_bge';
                         break;
                     case 'denoising':
                         pipeline = new OnnxRegistry.DenoisePipeline();
@@ -4106,7 +4104,6 @@ function ninaApp() {
                             strength: this.settings.graxpertDenoiseStrength,
                             version: this.settings.onnxDefaultDenoiseVersion || '2.0.0',
                         };
-                        suffix = '_denoise';
                         break;
                     case 'deconvolution':
                         pipeline = new OnnxRegistry.DeconPipeline();
@@ -4117,11 +4114,13 @@ function ninaApp() {
                             // user pick Stars-only vs Object-only here too.
                             target: this.graxpert?.modalDeconTarget || 'stars',
                         };
-                        suffix = '_decon';
                         break;
                     default:
                         throw new Error('Unknown AI op: ' + op);
                 }
+                // GX-12i: suffix includes the decon variant so output
+                // filenames don't collide between stars/objects runs.
+                const suffix = this.graxpertSuffix(op, runOpts);
 
                 this.editorAi.phase = 'fetching pixels';
                 const raw = await this._onnxFetchSourcePixels(src);
@@ -8499,7 +8498,11 @@ function ninaApp() {
         // used to be enough but that false-positives every time a
         // user keeps stacks under e.g. /Astro/M81/lights_processed/.
         graxpertPathsLookLikeLights() {
-            const masterRx = /(^|[\\/])(?:result|integration|integrated|stack|stacked|master|autosave|livestack)[_-]|_drizzle_|_stack_|_integrated_|_\d+s\.(?:fits?|xisf|fts)$|_bge(?:_\d+)?\.|_denoise(?:_\d+)?\.|_decon(?:_\d+)?\./i;
+            // GX-12i: _decon now ships with a variant suffix
+            // (_decon_stars, _decon_objects). Match either the old
+            // bare _decon, the new _decon_<variant>, or with a numeric
+            // collision-avoidance suffix tacked on by the saver.
+            const masterRx = /(^|[\\/])(?:result|integration|integrated|stack|stacked|master|autosave|livestack)[_-]|_drizzle_|_stack_|_integrated_|_\d+s\.(?:fits?|xisf|fts)$|_bge(?:_\d+)?\.|_denoise(?:_\d+)?\.|_decon(?:_(?:stars|objects))?(?:_\d+)?\./i;
             const masterFolderRx = /[\\/](?:integrated|processed|masters?|stacks?|results?|siril|bge|denoise|decon)[\\/]/i;
             return this.graxpert.modalPaths.some(p => {
                 if (masterFolderRx.test(p)) return false;
@@ -8508,9 +8511,17 @@ function ninaApp() {
             });
         },
 
-        graxpertSuffix(op) {
+        graxpertSuffix(op, runOpts) {
+            // GX-12i: decon now has two flavours (stars-only vs object-
+            // only) picked via the modal Method dropdown. Surface the
+            // variant in the filename so a directory with both runs on
+            // the same source doesn't collide and the user can see at a
+            // glance which model produced each output.
+            if (op === 'deconvolution') {
+                const t = (runOpts && runOpts.target) || 'stars';
+                return t === 'objects' ? '_decon_objects' : '_decon_stars';
+            }
             return op === 'background-extraction' ? '_bge'
-                 : op === 'deconvolution'        ? '_decon'
                  : op === 'denoising'            ? '_denoise'
                  : '_gx';
         },
@@ -8550,6 +8561,10 @@ function ninaApp() {
                         saveBackground: this.graxpert.modalSaveBackground,
                         deconStrength: this.graxpert.modalDeconStrength,
                         deconPsfSize: this.graxpert.modalDeconPsfSize,
+                        // GX-12i: stars vs objects picks the GraXpert
+                        // CLI subcommand (deconv-stellar / deconv-obj)
+                        // and the output suffix (_decon_stars / _decon_objects).
+                        deconTarget: this.graxpert.modalDeconTarget || 'stars',
                         denoiseStrength: this.graxpert.modalDenoiseStrength
                     })
                 });
@@ -8642,7 +8657,7 @@ function ninaApp() {
                     default:
                         throw new Error('Unknown operation: ' + op);
                 }
-                const suffix = this.graxpertSuffix(op);
+                const suffix = this.graxpertSuffix(op, runOpts);
                 const written = [];
                 for (let idx = 0; idx < paths.length; idx++) {
                     const path = paths[idx];
