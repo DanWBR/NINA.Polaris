@@ -43,6 +43,14 @@ public static class SystemEndpoints {
             var asmVer = asm.GetName().Version?.ToString() ?? "0.0.0.0";
             var infoVer = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
                 ?.InformationalVersion ?? asmVer;
+            // PA-7b: belt-and-suspenders — the csproj sets
+            // IncludeSourceRevisionInInformationalVersion=false, but
+            // some SDK versions / source-link configurations still
+            // append "+{git-sha}". Strip anything past '+' so the UI
+            // badge stays compact (the build hash is recoverable from
+            // git log when needed).
+            var plus = infoVer.IndexOf('+');
+            if (plus > 0) infoVer = infoVer.Substring(0, plus);
             return Results.Ok(new {
                 version = infoVer,
                 versionParts = asmVer,

@@ -40,6 +40,14 @@
     <!-- InformationalVersion is the human-readable string; can carry
          pre-release suffixes if we want them. Keep equal for now. -->
     <InformationalVersion>$(VersionPrefix)</InformationalVersion>
+    <!-- The .NET SDK auto-appends "+{git-commit-sha}" to
+         InformationalVersion whenever the source tree is a git repo
+         (via the GenerateAssemblyInfo target's source-link integration).
+         Result before: "0.1.146.30202+3673a157f91a70530fff1d2fdea6d54f23394d45"
+         which is 53 chars and breaks the brand badge layout. We want
+         a short clean version for the UI; the git SHA is recoverable
+         from the deployed build path or git log when needed. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
