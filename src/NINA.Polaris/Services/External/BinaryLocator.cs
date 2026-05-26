@@ -4,7 +4,7 @@ namespace NINA.Polaris.Services.External;
 /// Shared helper for finding an external binary on disk. Until now each
 /// integration (ASTAP, PHD2, etc.) duplicated its own GetDefaultPath +
 /// EnumerateCandidatePaths pair. Siril and GraXpert make a third and
-/// fourth copy unreasonable — this helper concentrates the lookup
+/// fourth copy unreasonable, this helper concentrates the lookup
 /// strategy so adding a fifth tool only requires listing the candidate
 /// paths.
 ///
@@ -12,7 +12,7 @@ namespace NINA.Polaris.Services.External;
 ///   1. Explicit configured path (profile setting / CLI flag override)
 ///   2. OS-specific list of well-known install dirs (Program Files,
 ///      /usr/bin, /Applications, etc.)
-///   3. PATH environment variable (Linux/macOS — Windows uses PATHEXT
+///   3. PATH environment variable (Linux/macOS, Windows uses PATHEXT
 ///      so we explicitly suffix .exe in the candidate list instead)
 ///
 /// First hit wins. Returns null when nothing exists so callers can

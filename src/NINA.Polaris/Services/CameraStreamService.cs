@@ -6,18 +6,18 @@ namespace NINA.Polaris.Services;
 /// Continuous video feed from the active camera. Auto-picks between two
 /// modes per camera capability:
 ///
-/// - <b>Native</b> — when the camera implements CCD_VIDEO_STREAM (INDI
+/// - <b>Native</b>, when the camera implements CCD_VIDEO_STREAM (INDI
 ///   astronomy cams typically do). We just flip the driver switch and
 ///   subscribe to its continuous BLOB stream. Frame cadence is the
 ///   driver's choice (10-30 fps typical), no per-frame round-trip.
 ///
-/// - <b>Loop</b> — universal fallback. Tight server-side capture loop
+/// - <b>Loop</b>, universal fallback. Tight server-side capture loop
 ///   on the calling thread: while (running) { capture → relay }.
 ///   Works for every ICamera but is bounded by exposure + transfer time
 ///   (~1-5 fps for typical settings, faster on planetary cams with
 ///   sub-100 ms exposures).
 ///
-/// Streamed frames are <i>ephemeral</i> — they go straight to
+/// Streamed frames are <i>ephemeral</i>, they go straight to
 /// ImageRelayService (which broadcasts via /ws/image-stream) but bypass
 /// FITS write, star detection, and stats. The PREVIEW canvas renders
 /// them in real time; nothing else in the app sees them.
@@ -77,7 +77,7 @@ public class CameraStreamService : IDisposable {
     /// </summary>
     public void Start(StreamConfig cfg) {
         lock (_lock) {
-            if (IsRunning) throw new InvalidOperationException("Stream already running — stop first");
+            if (IsRunning) throw new InvalidOperationException("Stream already running, stop first");
             var cam = _equip.Camera ?? throw new InvalidOperationException("No camera connected");
 
             ExposureSeconds = cfg.ExposureSeconds <= 0 ? 0.1 : cfg.ExposureSeconds;
@@ -130,7 +130,7 @@ public class CameraStreamService : IDisposable {
     private void StartNative(ICamera cam, CancellationToken ct) {
         Mode = "native";
         _nativeSubscription = cam.SubscribeVideoFrames(OnStreamFrame);
-        // Fire-and-forget the driver toggle — driver-side cancellation
+        // Fire-and-forget the driver toggle, driver-side cancellation
         // happens through StopVideoStreamAsync in StopAsync.
         _ = Task.Run(async () => {
             try {
@@ -148,18 +148,18 @@ public class CameraStreamService : IDisposable {
 
             // Some drivers (notably indi_asi_ccd) accept the
             // CCD_VIDEO_STREAM toggle, then fire BLOBs that aren't
-            // actually parseable FITS — IndiCamera.OnBlobReceived
+            // actually parseable FITS, IndiCamera.OnBlobReceived
             // guards those out as "empty" so OnStreamFrame never gets
             // called. Symptom: stream "starts" but FrameCount stays
             // at 0 and the canvas stays black. Give native 2 seconds
             // to produce at least one usable frame; if not, drop
             // CCD_VIDEO_STREAM and switch to loop mode (per-exposure
-            // CaptureAsync — which the ASI driver DOES service correctly).
+            // CaptureAsync, which the ASI driver DOES service correctly).
             try { await Task.Delay(TimeSpan.FromSeconds(2), ct); }
             catch (OperationCanceledException) { return; }
             if (FrameCount == 0 && !ct.IsCancellationRequested) {
                 _logger.LogWarning(
-                    "Native CCD_VIDEO_STREAM produced no usable frames in 2s — falling back to loop mode");
+                    "Native CCD_VIDEO_STREAM produced no usable frames in 2s, falling back to loop mode");
                 LastError = "Driver did not deliver parseable video stream BLOBs; using loop fallback.";
                 try { await cam.StopVideoStreamAsync(CancellationToken.None); }
                 catch (Exception ex) {
@@ -189,7 +189,7 @@ public class CameraStreamService : IDisposable {
                 OnStreamFrame(image);
             } catch (OperationCanceledException) { break; }
             catch (Exception ex) {
-                _logger.LogDebug(ex, "Stream loop frame failed — backing off 200ms");
+                _logger.LogDebug(ex, "Stream loop frame failed, backing off 200ms");
                 LastError = ex.Message;
                 try { await Task.Delay(200, ct); } catch { break; }
             }
@@ -200,7 +200,7 @@ public class CameraStreamService : IDisposable {
         Interlocked.Increment(ref _frameCount);
         _lastFrameAt = DateTime.UtcNow;
         try {
-            // Fire-and-forget relay — ImageRelayService handles its own
+            // Fire-and-forget relay, ImageRelayService handles its own
             // queue + back-pressure (adaptive bandwidth + per-client
             // streak detection already in place).
             _ = _relay.RelayImageAsync(frame);
@@ -219,7 +219,7 @@ public class CameraStreamService : IDisposable {
     /// Subscribe to every stream frame. Dispose the returned handle to
     /// unsubscribe. Multiple subscribers coexist; the underlying camera
     /// stream lifecycle (start/stop) is NOT affected by subscription
-    /// presence — callers must still trigger Start / StopAsync.
+    /// presence, callers must still trigger Start / StopAsync.
     /// </summary>
     public IDisposable SubscribeFrames(Action<IImageData> handler) {
         var id = Interlocked.Increment(ref _nextSubId);

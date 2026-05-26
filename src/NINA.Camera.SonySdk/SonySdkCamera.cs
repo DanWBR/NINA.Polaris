@@ -60,5 +60,5 @@ public class SonySdkCamera : ICamera {
 
     private static NotImplementedException MakeException()
         => new("Sony Camera Remote SDK integration is a skeleton in this " +
-               "build. Implementation pending — see docs/dslr-windows-sony.md.");
+               "build. Implementation pending, see docs/dslr-windows-sony.md.");
 }

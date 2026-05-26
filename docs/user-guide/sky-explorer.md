@@ -19,7 +19,7 @@ the host UI tells it via postMessage (mount RA/Dec, search hit,
 
 > **Browser requirement.** WebGL2 is mandatory. On a host with no
 > WebGL2 (e.g. running Polaris's local browser on a Raspberry Pi 2
-> framebuffer), the SKY tab shows a graceful fallback banner —
+> framebuffer), the SKY tab shows a graceful fallback banner,
 > open Polaris from a desktop/laptop/tablet browser instead.
 
 ## Search
@@ -44,7 +44,7 @@ Click a result → it overlays on the map, centred + highlighted.
 - **Object type** multi-select
 - **Magnitude range** slider
 - **Size range** slider
-- **Min altitude tonight** — only show targets above N° during the
+- **Min altitude tonight**, only show targets above N° during the
   upcoming dark window
 
 ## Tonight's altitude chart
@@ -97,22 +97,22 @@ While the mount is slewing AND nothing is capturing, an inset card
 appears in the lower-right showing a live camera feed. Lets you watch
 the field sweep past during goto.
 
-Driven by `SlewPreviewService` — auto-on by default, polite to other
+Driven by `SlewPreviewService`, auto-on by default, polite to other
 camera consumers (silently yields when sequence / AF / preview / video
 recording grabs the camera).
 
 ## Common pitfalls
 
-**Search returns nothing** — catalog isn't loaded. Refresh the page.
+**Search returns nothing**, catalog isn't loaded. Refresh the page.
 
-**Slew & Center fails repeatedly** — see
+**Slew & Center fails repeatedly**, see
 [Troubleshooting → Plate solve fails](troubleshooting.md#plate-solve-fails).
 
-**Mosaic panels overlap wrong** — your rig's focal length / sensor
+**Mosaic panels overlap wrong**, your rig's focal length / sensor
 size is wrong. Re-pick the OTA from the catalog in the RIGS tab.
 
 ## See also
 
-- [Tonight's Best](tonight.md) — ranked best DSOs / Moon / planets
+- [Tonight's Best](tonight.md), ranked best DSOs / Moon / planets
   for the current observing window
 - [Glossary → Plate solve / FOV](GLOSSARY.md#a)

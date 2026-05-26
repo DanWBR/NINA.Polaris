@@ -20,7 +20,7 @@ public class LiveStackingServiceTests {
     }
 
     private static BaseImageData MakeFrame(int w = 64, int h = 64) {
-        // 64x64 dim frame — small enough to not stress StarDetector with
+        // 64x64 dim frame, small enough to not stress StarDetector with
         // many candidates, big enough to exercise the per-frame loop.
         var props = new ImageProperties { Width = w, Height = h, BitDepth = 16 };
         return new BaseImageData(new ushort[w * h], props);
@@ -62,12 +62,12 @@ public class LiveStackingServiceTests {
         // MetricsOnly increments the frame count + sets width/height
         // (so the trigger orchestrator + status payload look populated)
         // but never allocates the accumulator. GetStackedResult is the
-        // cleanest probe — returns empty when the buffer is null.
+        // cleanest probe, returns empty when the buffer is null.
         Assert.That(svc.FrameCount, Is.EqualTo(1));
         Assert.That(svc.Width, Is.EqualTo(64));
         Assert.That(svc.Height, Is.EqualTo(64));
         Assert.That(svc.GetStackedResult(), Is.Empty,
-            "Stack buffer must stay null in MetricsOnly — client owns the accumulator.");
+            "Stack buffer must stay null in MetricsOnly, client owns the accumulator.");
     }
 
     [Test]
@@ -82,7 +82,7 @@ public class LiveStackingServiceTests {
 
         // LastFrameStarCount is only written by AddFrameAsync. If
         // MetricsOnly skipped it (regression), this would stay at the
-        // -1 sentinel we don't have — instead it'd be 0 from default.
+        // -1 sentinel we don't have, instead it'd be 0 from default.
         // Confirm via the frame-count delta + the fact that no
         // exception fired.
         Assert.That(svc.FrameCount, Is.EqualTo(1));
@@ -97,7 +97,7 @@ public class LiveStackingServiceTests {
         Assert.That(svc.GetStackedResult(), Is.Not.Empty);
 
         // Switch mid-session. The accumulator stays from previous Full
-        // frames (Reset clears it, mode change alone does not — by
+        // frames (Reset clears it, mode change alone does not, by
         // design, so a transient WASM-client disconnect doesn't lose
         // the in-progress stack).
         svc.Mode = StackMode.MetricsOnly;

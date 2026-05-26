@@ -16,14 +16,14 @@ namespace NINA.Polaris.Services.Editor;
 /// JPEG encode, never re-decodes the source.
 ///
 /// Why 8-bit working buffer (not full ushort): the user is already in
-/// "viewing" space — the FITS has been auto-stretched into a displayable
+/// "viewing" space, the FITS has been auto-stretched into a displayable
 /// tone range before they entered the editor. Lightroom's sliders feel the
 /// way they do because they operate on display-referenced pixels, not
 /// scene-referred radiance. This also makes the WASM version (ED-6)
-/// drop-in identical — same EditPipeline, same byte[] in/out.
+/// drop-in identical, same EditPipeline, same byte[] in/out.
 ///
 /// Sessions auto-evict after 30 min idle. A background reaper task runs
-/// every 5 min — keeps the cache from holding gigabytes of decoded masters
+/// every 5 min, keeps the cache from holding gigabytes of decoded masters
 /// across an overnight session.
 /// </summary>
 public class ImageEditService : IDisposable {
@@ -68,7 +68,7 @@ public class ImageEditService : IDisposable {
         => Task.Run<int[]?>(() => HistogramSync(sessionId, edits), ct);
 
     /// <summary>
-    /// Full-resolution export — applies edits + crop/resize, encodes to
+    /// Full-resolution export, applies edits + crop/resize, encodes to
     /// the requested format and writes the file. Returns the absolute path
     /// of the written file (or null on failure).
     /// </summary>
@@ -98,7 +98,7 @@ public class ImageEditService : IDisposable {
     public (byte[] data, int w, int h, int channels)? GetWorkingBuffer(string sessionId) {
         if (!_sessions.TryGetValue(sessionId, out var s)) return null;
         s.Touch();
-        // Return a defensive copy — clients of the API shouldn't see the
+        // Return a defensive copy, clients of the API shouldn't see the
         // session's live buffer (mutating it would silently corrupt
         // subsequent server-side previews).
         var copy = (byte[])s.Working.Clone();
@@ -144,7 +144,7 @@ public class ImageEditService : IDisposable {
                     width = skBmp.Width;
                     height = skBmp.Height;
                     // Force RGB (drop alpha). Skia gives us BGRA8888 by
-                    // default — convert to plain RGB interleaved for the
+                    // default, convert to plain RGB interleaved for the
                     // pipeline.
                     var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Opaque);
                     using var rgba = new SKBitmap(info);
@@ -223,7 +223,7 @@ public class ImageEditService : IDisposable {
         int w = s.Width, h = s.Height;
 
         // Apply the edit pipeline first (on either full-res or already
-        // cropped buffer if a crop is active in edits — but for preview
+        // cropped buffer if a crop is active in edits, but for preview
         // we want speed, so downscale BEFORE the pipeline if no crop).
         if (edits.Crop == null && maxDim > 0 && (w > maxDim || h > maxDim)) {
             double scale = (double)maxDim / Math.Max(w, h);

@@ -5,7 +5,7 @@ namespace NINA.Polaris.Services;
 /// stacking. Each trigger threshold = 0 means "disabled" (so the
 /// settings record stays a simple flat shape that round-trips cleanly
 /// through JSON / EquipmentEndpoints PUT). Multiple triggers per axis
-/// (refocus / recenter) are OR'd — first one to cross fires.
+/// (refocus / recenter) are OR'd, first one to cross fires.
 ///
 /// Hosted on <see cref="EquipmentProfile.LiveStackTriggers"/>;
 /// <see cref="LiveStackTriggersService"/> reads it at startup + on rig
@@ -54,7 +54,7 @@ public class LiveStackTriggers {
 
     /// <summary>Recenter when a per-frame plate-solve detects drift
     /// ≥ this many arcsec from the reference RA/Dec. 0 = disabled.
-    /// Warning: this means a plate-solve per frame — heavy on RPi 4.
+    /// Warning: this means a plate-solve per frame, heavy on RPi 4.
     /// Default off; user opts in.</summary>
     public double RecenterDriftArcsec { get; set; }
 

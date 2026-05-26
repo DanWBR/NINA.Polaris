@@ -36,7 +36,7 @@ public class OnnxModelRegistryTests {
     public void TearDown() {
         if (Directory.Exists(_tempRoot)) {
             try { Directory.Delete(_tempRoot, recursive: true); }
-            catch { /* ignore — Windows sometimes holds locks briefly */ }
+            catch { /* ignore, Windows sometimes holds locks briefly */ }
         }
     }
 
@@ -80,7 +80,7 @@ public class OnnxModelRegistryTests {
     [Test]
     public async Task Rescan_UnknownFamilyDir_Ignored() {
         // A foreign ONNX file in a non-matching layout should be skipped
-        // silently — the GraXpert layout match is intentional, drops a
+        // silently, the GraXpert layout match is intentional, drops a
         // .onnx the user happens to dump in the same root.
         SeedFakeAtPath(Path.Combine(_tempRoot, "my-custom", "model.onnx"));
         var reg = new OnnxModelRegistry(_profile, NullLogger<OnnxModelRegistry>.Instance);
@@ -90,7 +90,7 @@ public class OnnxModelRegistryTests {
 
     [Test]
     public async Task Rescan_NonVersionedDir_Ignored() {
-        // A `bge-ai-models/latest/model.onnx` should be skipped — the
+        // A `bge-ai-models/latest/model.onnx` should be skipped, the
         // parser is strict about semver-ish version dirs.
         SeedFakeAtPath(Path.Combine(_tempRoot, "bge-ai-models", "latest", "model.onnx"));
         var reg = new OnnxModelRegistry(_profile, NullLogger<OnnxModelRegistry>.Instance);
@@ -105,7 +105,7 @@ public class OnnxModelRegistryTests {
         await reg.RescanAsync();
         Assert.That(reg.All().Count, Is.EqualTo(1));
 
-        // Delete the file + rescan — entry should vanish.
+        // Delete the file + rescan, entry should vanish.
         var entry = reg.Find("bge", "1.0.1")!;
         File.Delete(entry.Path);
         await reg.RescanAsync();

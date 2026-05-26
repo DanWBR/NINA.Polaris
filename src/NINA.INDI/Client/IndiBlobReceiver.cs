@@ -44,7 +44,7 @@ public class IndiBlobReceiver : IDisposable {
         // Run cleanup every 60 seconds.
         _cleanupTimer = new Timer(_ => CleanupExpiredFiles(), null, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60));
 
-        Logger.Info($"IndiBlobReceiver started — output: {_outputDirectory}, TTL: {_ttl.TotalSeconds:F0}s");
+        Logger.Info($"IndiBlobReceiver started, output: {_outputDirectory}, TTL: {_ttl.TotalSeconds:F0}s");
     }
 
     /// <summary>

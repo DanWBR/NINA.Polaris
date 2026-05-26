@@ -157,7 +157,7 @@ public static class HttpRequestFrame {
 /// WebSocket open request (relay → client). Payload is just the path-and-query
 /// string the browser hit. The client opens a local WebSocket against
 /// http://127.0.0.1:5000&lt;path&gt; and reports back with WsOpenAck.
-/// Subprotocols are not negotiated through the tunnel — keep WS endpoints
+/// Subprotocols are not negotiated through the tunnel, keep WS endpoints
 /// simple (no Sec-WebSocket-Protocol).
 /// </summary>
 public static class WsOpenFrame {

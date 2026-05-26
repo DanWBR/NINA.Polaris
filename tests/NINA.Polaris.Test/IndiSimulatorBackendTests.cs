@@ -7,7 +7,7 @@ namespace NINA.Polaris.Test;
 /// <summary>
 /// Tests for the pure-function helpers in IndiSimulatorBackend. The
 /// IO-heavy paths (DetectInstallAsync via real `which`, LaunchAsync
-/// spawning indiserver) are smoke-tested manually — they hit real
+/// spawning indiserver) are smoke-tested manually, they hit real
 /// processes and only pass on a Linux/macOS dev box with indi-bin
 /// installed. The arg-builder + version parser cover the parts most
 /// likely to break under refactoring.
@@ -26,7 +26,7 @@ public class IndiSimulatorBackendTests {
         Assert.That(IndiSimulatorBackend.ParseVersion(raw!), Is.EqualTo(expected));
     }
 
-    // --- BuildArgs (SIM-8: FIFO mode — drivers no longer in argv) ---
+    // --- BuildArgs (SIM-8: FIFO mode, drivers no longer in argv) ---
     [Test]
     public void BuildArgs_UsesFifoPath_NotDriverList() {
         // SIM-8 switched indiserver to runtime driver control via
@@ -62,7 +62,7 @@ public class IndiSimulatorBackendTests {
     [Test]
     public void BuildFifoCommand_UnknownDevice_ReturnsNull() {
         // Caller (AddDeviceAsync / RemoveDeviceAsync) checks for
-        // null and bails — better than sending indiserver a bogus
+        // null and bails, better than sending indiserver a bogus
         // command and surfacing a confusing error.
         Assert.That(IndiSimulatorBackend.BuildFifoCommand("made-up", true),
             Is.Null);
@@ -72,7 +72,7 @@ public class IndiSimulatorBackendTests {
     [Test]
     public void IsSupported_TracksRuntimePlatform() {
         var backend = new IndiSimulatorBackend(NullLogger<IndiSimulatorBackend>.Instance);
-        // No mocking — just confirm the property reflects reality.
+        // No mocking, just confirm the property reflects reality.
         // CI matrix that runs on Linux + Windows pins both branches.
         var expected = OperatingSystem.IsLinux() || OperatingSystem.IsMacOS();
         Assert.That(backend.IsSupported, Is.EqualTo(expected));
@@ -93,7 +93,7 @@ public class IndiSimulatorBackendTests {
     [Test]
     public async Task LaunchAsync_OnUnsupportedOs_ReturnsFalseSilently() {
         if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS()) {
-            Assert.Ignore("Linux/Mac path is integration-tested with a real indiserver — see manual verify.");
+            Assert.Ignore("Linux/Mac path is integration-tested with a real indiserver, see manual verify.");
         }
         var backend = new IndiSimulatorBackend(NullLogger<IndiSimulatorBackend>.Instance);
         var ok = await backend.LaunchAsync(new SimulatorLaunchRequest(["ccd"]));

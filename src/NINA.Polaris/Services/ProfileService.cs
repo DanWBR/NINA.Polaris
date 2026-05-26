@@ -14,7 +14,7 @@ namespace NINA.Polaris.Services;
 ///
 /// All mutations go through a save-lock <see cref="SemaphoreSlim"/>
 /// so concurrent endpoint writes don't tear the JSON file. Reads
-/// return the current snapshot directly — callers should not mutate
+/// return the current snapshot directly, callers should not mutate
 /// the returned record; the profile is replaced wholesale on save,
 /// not edited in place.
 /// </summary>
@@ -197,7 +197,7 @@ public class ProfileService {
             RequiredBackspacingMm = src.RequiredBackspacingMm,
             GuiderFocalLengthMm = src.GuiderFocalLengthMm,
             PHD2Host = src.PHD2Host, PHD2Port = src.PHD2Port,
-            // PHD2 deep-integration fields (cloned rig starts un-matched —
+            // PHD2 deep-integration fields (cloned rig starts un-matched,
             // it will run its own first-time profile lookup the first time
             // it activates).
             PHD2ProfileId = null,
@@ -206,7 +206,7 @@ public class ProfileService {
             PHD2AutoSyncOnRigSwitch = src.PHD2AutoSyncOnRigSwitch,
             PHD2CustomAlgoParams = new Dictionary<string, double>(src.PHD2CustomAlgoParams),
             FilterOffsets = new Dictionary<string, int>(src.FilterOffsets),
-            // Live-stack triggers — clone the whole shape so the new rig
+            // Live-stack triggers, clone the whole shape so the new rig
             // gets the same refocus/recenter policy as the source. Reset
             // counters live on the orchestrator, not the settings.
             LiveStackTriggers = new LiveStackTriggers {
@@ -257,7 +257,7 @@ public class ProfileService {
     /// Fired after a rig is successfully activated and persisted.
     /// PHD2ProfileSyncService subscribes here to push the matching PHD2
     /// profile + apply algo presets when AutoSyncOnRigSwitch is true.
-    /// Event handlers run on the calling thread — keep them fast (do
+    /// Event handlers run on the calling thread, keep them fast (do
     /// long work via Task.Run / fire-and-forget).
     /// </summary>
     public event Action<EquipmentProfile>? EquipmentProfileActivated;
@@ -309,7 +309,7 @@ public class UserProfile {
     public double Longitude { get; set; }
     public double Altitude { get; set; }
 
-    // Camera optics (fallback only — live sensor dims come from the camera)
+    // Camera optics (fallback only, live sensor dims come from the camera)
     public double SensorWidthMm { get; set; } = 23.5;
     public double SensorHeightMm { get; set; } = 15.7;
     public double FocalLengthMm { get; set; } = 478;
@@ -325,7 +325,7 @@ public class UserProfile {
     public string IndiHost { get; set; } = "localhost";
     public int IndiPort { get; set; } = 7624;
 
-    /// <summary>Master toggle for HardwareAutoConnectService — when on,
+    /// <summary>Master toggle for HardwareAutoConnectService, when on,
     /// app startup tries INDI, runs Alpaca discovery, and then
     /// re-connects every device saved on the active rig. Default off
     /// so a fresh install never silently dials hardware that isn't
@@ -363,8 +363,8 @@ public class UserProfile {
 
     // GX-1: ONNX in-browser inference for GraXpert AI ops. The server
     // hosts the .onnx model files (Onnx:ModelsPath points at any dir
-    // containing them; GraXpert's models/ layout — {family}-ai-models/
-    // {version}/model.onnx — is auto-detected) and serves bytes via
+    // containing them; GraXpert's models/ layout, {family}-ai-models/
+    // {version}/model.onnx, is auto-detected) and serves bytes via
     // /api/onnx/model/... The browser fetches once, caches in IndexedDB
     // by SHA-256 hash, runs inference locally via onnxruntime-web.
     // LicenseAcknowledged tracks the CC BY-NC-SA 4.0 consent the user
@@ -421,7 +421,7 @@ public class EquipmentProfile {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Name { get; set; } = "Default";
 
-    // Device selections — INDI device names as returned by getProperties.
+    // Device selections, INDI device names as returned by getProperties.
     // Camera is special: it accepts multiple backend kinds via
     // CameraDriver below. The Camera field carries the driver-specific
     // device id (INDI name, or vendor SDK serial number, etc.); for
@@ -466,7 +466,7 @@ public class EquipmentProfile {
 
     // Optics specific to this rig. FocalLengthMm is the *effective*
     // focal length used everywhere downstream (FOV calc, FITS
-    // FOCALLEN header, mosaic planner, etc.) — for OTAs with a
+    // FOCALLEN header, mosaic planner, etc.), for OTAs with a
     // reducer / Barlow attached this is the native focal length
     // multiplied by AccessoryFactor. The picker in the Manage Rigs
     // modal computes it; the user can also override manually.
@@ -496,7 +496,7 @@ public class EquipmentProfile {
     public double AccessoryFactor { get; set; } = 1.0;
     /// <summary>Back-focus (camera-side spacing) required by the
     /// current OTA + accessory combination, in millimetres.
-    /// Surfaced as a reminder in the rig editor — wrong backspacing
+    /// Surfaced as a reminder in the rig editor, wrong backspacing
     /// is the most common reason flatteners produce elongated
     /// stars in the corners. Null when the OTA / accessory doesn't
     /// publish a value.</summary>
@@ -533,14 +533,14 @@ public class EquipmentProfile {
     /// Cached PHD2 profile id matched by name to this rig. Set the first
     /// time PHD2ProfileSyncService finds a PHD2 profile whose name equals
     /// this rig's Name. Null = not yet matched or PHD2 profile missing.
-    /// Don't rely on the value across PHD2 reinstalls — call
+    /// Don't rely on the value across PHD2 reinstalls, call
     /// PHD2ProfileSyncService.SyncRigToProfileAsync to refresh.
     /// </summary>
     public int? PHD2ProfileId { get; set; }
 
     /// <summary>
     /// Guide-algorithm preset Polaris applies on rig activation. One of
-    /// "Default" / "Reactive" / "Smooth" / "Custom" — see PHD2AlgoPresets.
+    /// "Default" / "Reactive" / "Smooth" / "Custom", see PHD2AlgoPresets.
     /// "Custom" means use the per-rig PHD2CustomAlgoParams bag.
     /// </summary>
     public string PHD2AlgoPreset { get; set; } = "Default";
@@ -583,12 +583,12 @@ public class EquipmentProfile {
 
     /// <summary>CLST-7: where live-stacking math runs.
     /// <list type="bullet">
-    /// <item><b>auto</b> (default) — server flips to MetricsOnly
+    /// <item><b>auto</b> (default), server flips to MetricsOnly
     /// when a WASM-capable client connects, back to Full otherwise.</item>
-    /// <item><b>server</b> — force server-side accumulator regardless
+    /// <item><b>server</b>, force server-side accumulator regardless
     /// of clients. Use when you want a Pi to be the canonical source
     /// for multiple browsers, or when WASM is slow on the client.</item>
-    /// <item><b>client</b> — force MetricsOnly. Useful for testing the
+    /// <item><b>client</b>, force MetricsOnly. Useful for testing the
     /// WASM path, or to free Pi CPU even if no client is currently
     /// hooked up (the next one that connects will pick up the stack
     /// from frame 1 on its side).</item>

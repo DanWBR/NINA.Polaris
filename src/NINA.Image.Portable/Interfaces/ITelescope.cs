@@ -10,7 +10,7 @@ namespace NINA.Image.Interfaces;
 /// <para>
 /// Today the only implementation is <c>IndiTelescope</c> which talks to
 /// any mount the running INDI server exposes (covers most WiFi mounts
-/// already — Sky-Watcher SynScan via <c>indi_skywatcherAltAzMount</c>,
+/// already, Sky-Watcher SynScan via <c>indi_skywatcherAltAzMount</c>,
 /// Celestron via <c>indi_celestron_aux</c>, iOptron via
 /// <c>indi_ioptron_v3</c>, etc.). Direct WiFi / Bluetooth drivers
 /// (SynScan UDP, NexStar TCP, ...) plug in here without touching the
@@ -60,7 +60,7 @@ public interface ITelescope {
     /// at the mount's current tracking rate (typically sidereal).</summary>
     Task SlewAsync(double ra, double dec, CancellationToken ct = default);
 
-    /// <summary>Sync — tell the mount that its current physical pointing
+    /// <summary>Sync, tell the mount that its current physical pointing
     /// equals the given JNow coordinates. Used by the plate-solve
     /// Slew &amp; Center loop after a successful solve.</summary>
     Task SyncAsync(double ra, double dec, CancellationToken ct = default);
@@ -70,11 +70,11 @@ public interface ITelescope {
     Task SetTrackingAsync(bool enabled, CancellationToken ct = default);
 
     /// <summary>Cancel any in-progress slew. Tracking state is
-    /// backend-dependent — most mounts leave the tracking switch
+    /// backend-dependent, most mounts leave the tracking switch
     /// untouched on abort.</summary>
     Task AbortSlewAsync(CancellationToken ct = default);
 
-    // Manual jog — N/S/E/W. The button stays pressed until the
+    // Manual jog, N/S/E/W. The button stays pressed until the
     // corresponding "stop" overload is called (or StopMotion which
     // halts every axis at once). Most UIs use mouse-down + mouse-up
     // bindings on top of these.
@@ -94,7 +94,7 @@ public record MountCapabilities(
     bool SupportsPierSide,
     bool SupportsManualJog) {
     /// <summary>Typical equatorial GEM profile (INDI / ASCOM / direct
-    /// WiFi serial-protocol mounts) — everything available.</summary>
+    /// WiFi serial-protocol mounts), everything available.</summary>
     public static readonly MountCapabilities GermanEquatorial = new(
         SupportsPark: true, SupportsTrackingToggle: true,
         SupportsSync: true, SupportsPierSide: true, SupportsManualJog: true);

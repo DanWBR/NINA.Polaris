@@ -37,7 +37,7 @@ src/
   NINA.Core.Portable/        # shared math / enums / utilities (no UI / IO)
   NINA.Image.Portable/       # FITS reader/writer, XISF writer, star
                              # detection, image stretch, BaseImageData
-                             # — pure code, no host deps
+                             #, pure code, no host deps
   NINA.INDI/                 # INDI TCP/XML protocol + device wrappers
                              # (IndiCamera, IndiTelescope, ...)
   NINA.Camera.CanonEdsdk/    # Windows-only Canon EDSDK driver wrapper
@@ -46,7 +46,7 @@ src/
   NINA.Mount.SynScanWifi/    # direct-WiFi SynScan driver
   NINA.Relay.Protocol/       # shared types for relay (tenant, audit)
   NINA.Relay.Server/         # standalone VPS-deployed relay server
-  NINA.Polaris/             # the ASP.NET Core host — Services/,
+  NINA.Polaris/             # the ASP.NET Core host, Services/,
                              # Endpoints/, WebSocket/, wwwroot/
 tests/
   NINA.Polaris.Test/        # all the unit tests
@@ -57,7 +57,7 @@ docs/                        # user + dev docs
 
 ## How to add a new INDI device
 
-Concrete walkthrough — add a hypothetical "weather safety monitor":
+Concrete walkthrough, add a hypothetical "weather safety monitor":
 
 1. **Define the protocol surface** in `NINA.INDI/Devices/IndiSafety.cs`:
    ```csharp
@@ -163,7 +163,7 @@ Reference: `Services/PlateSolving/AstapSolver.cs` and `AstrometryNetLocalSolver.
   services. Short paragraph minimum, mention which other service
   consumes it.
 - **Logging**: `ILogger<T>` injected, structured (`LogInformation("X
-  finished {Frames} frames", count)`) — never string.Format / concat
+  finished {Frames} frames", count)`), never string.Format / concat
   the message.
 - **Async**: every IO surface is async. Sync wrappers are anti-pattern.
 - **JS**: no build pipeline. Alpine.js + vanilla. Keep methods small +
@@ -202,14 +202,14 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
   with build + tests green.
 - Feature branches `feat/short-name` → PR back to `master`.
 - Bug fix branches `fix/short-name`.
-- Squash + merge is the default — keeps the trunk tidy.
+- Squash + merge is the default, keeps the trunk tidy.
 
 ## Tests
 
 - All new services + non-trivial helpers get unit tests
 - Pure functions (e.g. `CalibrationStepCalculator`, `FrameQualityAnalyzer`)
   get golden-value tests
-- WebSocket / endpoint integration tests are not yet in place — only
+- WebSocket / endpoint integration tests are not yet in place, only
   manual smoke testing on the dev box. Contributions welcome.
 - `dotnet test tests/NINA.Polaris.Test/NINA.Polaris.Test.csproj` runs
   the full suite (~450 tests, ~5 seconds on RPi 5).
@@ -218,7 +218,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 
 MPL 2.0 (same as upstream NINA). Adding a new NuGet package: include
 the license in any new `docs/third-party-licenses.md` we maintain
-(currently a stub — first contribution opportunity).
+(currently a stub, first contribution opportunity).
 
 ## Hooks / settings
 
@@ -228,7 +228,7 @@ generate them from your transcript.
 
 ## See also
 
-- [README.md](README.md) — high-level feature list
-- [docs/user-guide/](docs/user-guide/) — end-user perspective
-- [ARCHITECTURE.md](ARCHITECTURE.md) — system overview + service
+- [README.md](README.md), high-level feature list
+- [docs/user-guide/](docs/user-guide/), end-user perspective
+- [ARCHITECTURE.md](ARCHITECTURE.md), system overview + service
   dependency diagram

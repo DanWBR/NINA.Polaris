@@ -7,7 +7,7 @@ namespace NINA.Polaris.Services.Editor;
 /// Reads + writes Lightroom-style sidecar JSON describing the edits
 /// applied to a source file. Sidecar lives next to the source as
 /// <c>{source}.edit.json</c>; reopening the editor for that source
-/// hydrates the sliders to the saved state — strictly non-destructive,
+/// hydrates the sliders to the saved state, strictly non-destructive,
 /// the original FITS/PNG/etc. is never touched.
 ///
 /// Atomic writes via the "write to temp + rename" pattern (Windows
@@ -73,7 +73,7 @@ public class EditSidecarStore {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var tmp = path + ".tmp";
             File.WriteAllText(tmp, JsonSerializer.Serialize(doc, JsonOpts));
-            // Move with overwrite — atomic on the same volume.
+            // Move with overwrite, atomic on the same volume.
             if (File.Exists(path)) File.Delete(path);
             File.Move(tmp, path);
             return path;

@@ -5,7 +5,7 @@ namespace NINA.Polaris.Services.Planetary;
 /// <summary>
 /// Reads a SER v3 file written by <see cref="SerFileWriter"/> or any other
 /// compliant tool (FireCapture, SharpCap export, INDI ccdciel-rec, etc.).
-/// Frames are random-access — open once, jump to any frame index by stride.
+/// Frames are random-access, open once, jump to any frame index by stride.
 /// </summary>
 public sealed class SerFileReader : IDisposable {
     private readonly FileStream _fs;
@@ -50,7 +50,7 @@ public sealed class SerFileReader : IDisposable {
         int planes = ColorMode is SerColorMode.Rgb or SerColorMode.Bgr ? 3 : 1;
         _bytesPerFrame = (long)Width * Height * planes * (BitDepth / 8);
 
-        // Optional timestamp trailer — present when the file size
+        // Optional timestamp trailer, present when the file size
         // exceeds header + frame data by FrameCount * 8 bytes.
         var trailerStart = _frameDataStart + _bytesPerFrame * FrameCount;
         _timestamps = new DateTime[FrameCount];
@@ -60,7 +60,7 @@ public sealed class SerFileReader : IDisposable {
                 _timestamps[i] = new DateTime(_br.ReadInt64(), DateTimeKind.Utc);
             }
         } else {
-            // No trailer — synthesize evenly-spaced timestamps from
+            // No trailer, synthesize evenly-spaced timestamps from
             // StartUtc just so callers always get something.
             for (int i = 0; i < FrameCount; i++) _timestamps[i] = StartUtc;
         }
@@ -88,7 +88,7 @@ public sealed class SerFileReader : IDisposable {
     }
 
     /// <summary>Reads a 16-bit mono frame as a ushort[]. Throws for any
-    /// other format — use ReadFrameBytes for 8-bit / RGB / Bayer.</summary>
+    /// other format, use ReadFrameBytes for 8-bit / RGB / Bayer.</summary>
     public ushort[] ReadFrameAsUshort(int index) {
         if (BitDepth != 16) throw new InvalidOperationException(
             $"ReadFrameAsUshort requires BitDepth=16, file has {BitDepth}");

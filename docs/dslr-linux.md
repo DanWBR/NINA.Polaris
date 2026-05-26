@@ -52,7 +52,7 @@ Web Manager UI.
 ## Connect the camera to Polaris
 
 1. Plug the camera into the host with a USB cable (use a USB 2.0
-   port or a powered hub — bus-powered USB 3.0 hubs are flaky with
+   port or a powered hub, bus-powered USB 3.0 hubs are flaky with
    some camera bodies).
 2. Power the camera on and set it to **M** (manual) shooting mode.
 3. In Polaris **Settings**, point the INDI host at the machine
@@ -79,7 +79,7 @@ Web Manager UI.
   Studio panel can demosaic later; set **JPEG** if you just want quick
   preview frames.
 - **Sensor temperature**: most DSLRs don't report a sensor temperature
-  to the OS — Polaris shows the field as blank for these cameras. The
+  to the OS, Polaris shows the field as blank for these cameras. The
   Camera card hides cooler controls accordingly.
 
 ## Troubleshooting
@@ -87,7 +87,7 @@ Web Manager UI.
 - **Camera not detected**: check `lsusb` for the body. If it doesn't
   appear, suspect the cable or the USB port. If it appears but
   `gphoto2 --auto-detect` doesn't list it, kill any process that's
-  claimed the device — `gvfsd-gphoto2` from GNOME / desktop file
+  claimed the device, `gvfsd-gphoto2` from GNOME / desktop file
   managers is the usual culprit (`pkill -f gvfsd-gphoto2`).
 - **"Could not claim USB device" errors in `indiserver` logs**:
   another process is holding the USB handle. Same fix as above.
@@ -98,8 +98,8 @@ Web Manager UI.
 ## On Windows
 
 `indi_gphoto_ccd` doesn't run on Windows. For DSLRs on Windows,
-Polaris uses native vendor SDKs instead — see the matching docs:
+Polaris uses native vendor SDKs instead, see the matching docs:
 
-- `docs/dslr-windows-canon.md` — Canon EOS via EDSDK
-- `docs/dslr-windows-nikon.md` — Nikon DSLR / Z via Nikon SDK
-- `docs/dslr-windows-sony.md`  — Sony α via Camera Remote SDK
+- `docs/dslr-windows-canon.md`, Canon EOS via EDSDK
+- `docs/dslr-windows-nikon.md`, Nikon DSLR / Z via Nikon SDK
+- `docs/dslr-windows-sony.md` , Sony α via Camera Remote SDK

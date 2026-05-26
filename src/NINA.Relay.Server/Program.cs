@@ -38,7 +38,7 @@ if (tlsMode == "letsencrypt") {
 
 if (tlsMode == "pfx" || tlsMode == "letsencrypt") {
     // Client-cert mode: "none" (default, browsers welcome), "request"
-    // (offer; verify if presented — recommended when some tenants enable mTLS),
+    // (offer; verify if presented, recommended when some tenants enable mTLS),
     // or "require" (mandate for every TLS handshake; breaks browser admin UI).
     var clientCertMode = (builder.Configuration["Tls:ClientCertificateMode"] ?? "request").ToLowerInvariant();
     builder.WebHost.ConfigureKestrel(k => {
@@ -99,7 +99,7 @@ app.Use(async (ctx, next) => {
     if (string.IsNullOrEmpty(adminPassword)) {
         ctx.Response.StatusCode = 503;
         ctx.Response.ContentType = "text/plain";
-        await ctx.Response.WriteAsync("Admin API disabled — set Admin:Password in appsettings.json to enable.\n");
+        await ctx.Response.WriteAsync("Admin API disabled, set Admin:Password in appsettings.json to enable.\n");
         return;
     }
     if (TryGetAdminPassword(ctx, out var provided) && provided == adminPassword) {
@@ -199,7 +199,7 @@ app.MapPost("/_admin/reload-tenants", (JsonTenantStore store) => {
     return Results.Ok(new { reloaded = true, count = store.All.Count });
 });
 
-// Forgive a tenant mid-month — resets only their byte counter to zero
+// Forgive a tenant mid-month, resets only their byte counter to zero
 app.MapPost("/_admin/usage/{token}/reset", (string token, TenantUsageStore usage) => {
     usage.Reset(token);
     return Results.Ok(new { token = token.Length > 8 ? token[..8] + "…" : token, reset = true });
@@ -218,7 +218,7 @@ app.Map("/_tunnel", async (HttpContext ctx, TunnelHandler handler) => {
     await handler.HandleAsync(ctx);
 });
 
-// Catchall proxy — everything else is forwarded to the matching tenant's tunnel
+// Catchall proxy, everything else is forwarded to the matching tenant's tunnel
 app.MapMethods("/{**catch}", new[] { "GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS" },
     async (HttpContext ctx, PublicProxy proxy) => {
         await proxy.HandleAsync(ctx);

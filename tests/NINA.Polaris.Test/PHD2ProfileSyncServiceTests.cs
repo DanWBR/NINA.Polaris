@@ -7,7 +7,7 @@ namespace NINA.Polaris.Test;
 
 /// <summary>
 /// Tests focus on the parts of PHD2ProfileSyncService that don't require
-/// a live PHD2 — early-out behavior when PHD2 is disconnected, defaults
+/// a live PHD2, early-out behavior when PHD2 is disconnected, defaults
 /// applied to the SyncStatus, and the event subscription lifecycle.
 /// Full end-to-end sync needs a real PHD2 (integration tests, separate).
 /// </summary>

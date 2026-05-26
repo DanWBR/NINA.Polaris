@@ -10,25 +10,25 @@ and at the welcome screen.
 
 Pick something easy your first time:
 
-- **Vega, Altair, Arcturus** — bright single stars. Great for focus +
+- **Vega, Altair, Arcturus**, bright single stars. Great for focus +
   guiding tests.
-- **M31, M42, Pleiades** — bright famous targets. Visible to the
+- **M31, M42, Pleiades**, bright famous targets. Visible to the
   naked eye, easy to verify pointing.
-- **Anything ≥30° altitude** — avoid the horizon.
+- **Anything ≥30° altitude**, avoid the horizon.
 
-You don't need to type RA/Dec — Polaris has a built-in catalog. We'll
+You don't need to type RA/Dec, Polaris has a built-in catalog. We'll
 search by name later.
 
-## Step 1 — Set your location
+## Step 1, Set your location
 
 Polaris uses your location for sky calculations (altitude, twilight,
-meridian flips). On first run you should see a location modal — fill
+meridian flips). On first run you should see a location modal, fill
 it in with one of:
 
-- **Address search** — types like "Brasília, Brazil" or your city +
+- **Address search**, types like "Brasília, Brazil" or your city +
   country, hits ↵, picks the matching result
-- **Browser geolocation** — clicks "Use my location" (HTTPS only)
-- **Manual lat/lng** — types decimal degrees
+- **Browser geolocation**, clicks "Use my location" (HTTPS only)
+- **Manual lat/lng**, types decimal degrees
 
 If you skipped the modal, go to **Settings** in the sidebar → Observatory
 location.
@@ -37,7 +37,7 @@ location.
 > flip + tonight's-best altitudes are all garbage. ⤴ See
 > [Glossary → LST](GLOSSARY.md#l) for the why.
 
-## Step 2 — Create a rig
+## Step 2, Create a rig
 
 Click **RIGS** in the sidebar.
 
@@ -54,7 +54,7 @@ meaningful or create a new one:
 > backyard SCT to travel APO. See [RIGS tab guide](rigs.md) for the
 > full feature surface.
 
-## Step 3 — Configure the Main Telescope card
+## Step 3, Configure the Main Telescope card
 
 Now you're back on the RIGS tab. The first card is **Main Telescope**.
 
@@ -62,14 +62,14 @@ Pick **Brand** from the dropdown (Askar / Celestron / Sky-Watcher /
 GSO / ...) → pick **Model**. Aperture + focal length + f-ratio + back-focus
 fill in automatically.
 
-If you have a reducer / flattener, pick **Accessory** too — the
+If you have a reducer / flattener, pick **Accessory** too, the
 effective focal length recalculates.
 
 > **What if your scope isn't in the catalog?** Leave Brand = "Manual
 > entry" and type focal length + aperture by hand. The catalog is just
-> a convenience — Polaris doesn't require it.
+> a convenience, Polaris doesn't require it.
 
-## Step 4 — Connect INDI (Linux) or Alpaca (Windows)
+## Step 4, Connect INDI (Linux) or Alpaca (Windows)
 
 The cards below Main Telescope (Camera, Mount, Focuser, Filter Wheel,
 etc.) show empty dropdowns until you connect to a driver host.
@@ -78,7 +78,7 @@ Top of the RIGS tab there's a **connection strip**. If `indiserver` is
 running on the same machine:
 
 1. Tab **INDI** (the default)
-2. Host `localhost`, Port `7624` — defaults are fine
+2. Host `localhost`, Port `7624`, defaults are fine
 3. Click **Connect INDI**
 
 You should see the connection strip turn green with "✓ INDI · localhost:7624
@@ -90,20 +90,20 @@ For Windows + Alpaca, switch the tab to **ASCOM/Alpaca** + click
 
 > **Troubleshooting**: see [Troubleshooting → "INDI not connecting"](troubleshooting.md#indi-not-connecting).
 
-## Step 5 — Pick devices in each card
+## Step 5, Pick devices in each card
 
 For each card you actually have hardware for:
 
 1. Pick the device from the dropdown ("ZWO CCD ASI2600MC Pro", etc.)
-2. Click **Connect** — the status dot goes green
+2. Click **Connect**, the status dot goes green
 3. (Camera) Set the cooler target temperature if you have one
-4. Cards you don't use stay "Select device" — Polaris ignores them
+4. Cards you don't use stay "Select device", Polaris ignores them
 
 Click **💾 Save selections** at the top to persist the picks in the
-active rig. You won't need to redo this next session — switching rigs
+active rig. You won't need to redo this next session, switching rigs
 restores everything.
 
-## Step 6 — (Optional) Hook PHD2
+## Step 6, (Optional) Hook PHD2
 
 If you have a guide scope + guide camera:
 
@@ -124,7 +124,7 @@ If you have a guide scope + guide camera:
 > Smart Calibrate computes the step size from pixel scale + guide rate
 > for you.
 
-## Step 7 — Slew to your target
+## Step 7, Slew to your target
 
 1. **SKY** tab in the sidebar
 2. Search bar at top → type "Vega" (or your target name) → ↵
@@ -143,7 +143,7 @@ If you have a guide scope + guide camera:
 > - The catalog hints (focal length, pixel scale) on the active rig
 >   are accurate
 
-## Step 8 — Quick focus check
+## Step 8, Quick focus check
 
 Before committing to a sequence:
 
@@ -157,7 +157,7 @@ Before committing to a sequence:
    sweep runs, parabola fit, focuser moves to the vertex. Watch the
    live frame preview canvas as it samples each position.
 
-## Step 9 — Run a test sequence
+## Step 9, Run a test sequence
 
 Now the actual capture:
 
@@ -172,33 +172,33 @@ Now the actual capture:
 5. Files land in `{ImageOutputDir}/{RigName}/lights/{Target}/{Filter}/{Date}/`
 
 Watch the LIVE tab to see the latest frame + running statistics. Toggle
-the **Stack ON** button to enable live integration — frames pile up
+the **Stack ON** button to enable live integration, frames pile up
 in a single growing image.
 
-## Step 10 — Stop + look at your work
+## Step 10, Stop + look at your work
 
 When the sequence completes (or you click ⏹ Stop):
 
 1. **STUDIO** tab in the sidebar → rescan → all your captures appear
    in the frame browser
 2. Click any frame → see the full-resolution viewer with stats
-3. Continue with master generation + calibration + stack — see
+3. Continue with master generation + calibration + stack, see
    [Studio guide](studio.md) for the post-processing flow
 
 ## What just happened
 
 In 30 minutes you covered the full Polaris workflow:
 
-- **Location → Rig → Equipment** (RIGS tab) — one-time setup, persistent
-- **PHD2 hook-up** (GUIDE tab) — once per equipment combo, then auto-
+- **Location → Rig → Equipment** (RIGS tab), one-time setup, persistent
+- **PHD2 hook-up** (GUIDE tab), once per equipment combo, then auto-
   resumes
-- **Slew & Center** (SKY tab) — every new target
-- **Auto-focus** (FOCUS tab) — once per session + auto-triggered during
+- **Slew & Center** (SKY tab), every new target
+- **Auto-focus** (FOCUS tab), once per session + auto-triggered during
   long stacks (see [LIVE auto re-focus](live-stacking.md))
-- **Sequence run** (AUTORUN tab) — the unattended capture engine
-- **Live preview + Studio** — visual feedback + offline processing
+- **Sequence run** (AUTORUN tab), the unattended capture engine
+- **Live preview + Studio**, visual feedback + offline processing
 
-From here, dig into each feature page as your needs grow — auto-focus
+From here, dig into each feature page as your needs grow, auto-focus
 during sequences, meridian flips, dithering, plate-solve recenter
 triggers, planetary lucky imaging, the embedded PHD2 GUI, the relay
 server for remote access.

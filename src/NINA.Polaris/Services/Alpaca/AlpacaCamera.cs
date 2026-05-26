@@ -73,7 +73,7 @@ public class AlpacaCamera {
     public Task<bool> GetImageReadyAsync(CancellationToken ct = default) =>
         BoolDefault(_client.GetAsync<bool>("imageready", ct));
 
-    /// <summary>Returns the raw ImageArray JSON (a 2-D int array — large!).</summary>
+    /// <summary>Returns the raw ImageArray JSON (a 2-D int array, large!).</summary>
     public Task<System.Text.Json.JsonElement?> GetImageArrayRawAsync(CancellationToken ct = default) =>
         _client.GetRawAsync("imagearray", ct);
 

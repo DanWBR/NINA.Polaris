@@ -10,7 +10,7 @@ namespace NINA.Polaris.Services.External;
 /// Driver for the GraXpert CLI. Three operations are unified under
 /// one service: background extraction (all versions), deconvolution
 /// (v3.0+), and denoising (v3.0+). Each frame is processed by a
-/// single subprocess call — GraXpert has no batch mode of its own,
+/// single subprocess call, GraXpert has no batch mode of its own,
 /// so batches are sequential (or with bounded concurrency on beefy
 /// hardware) at this layer.
 ///
@@ -80,7 +80,7 @@ public class GraXpertService {
             return new GraXpertResult("", null, opts.Operation, 0,
                 $"Input file not found: {inputPath}");
 
-        // Block decon/denoise on old GraXpert installs — friendlier
+        // Block decon/denoise on old GraXpert installs, friendlier
         // than letting the subprocess fail with an obscure error.
         if (opts.Operation == GraXpertOperation.Deconvolution && !SupportsDeconvolution)
             return new GraXpertResult("", null, opts.Operation, 0,
@@ -113,7 +113,7 @@ public class GraXpertService {
                 return new GraXpertResult("", null, opts.Operation, 0, "Failed to start GraXpert");
 
             // Read stdout/stderr to avoid pipe-buffer deadlocks on
-            // long runs. We don't parse anything — GraXpert doesn't
+            // long runs. We don't parse anything, GraXpert doesn't
             // emit structured progress.
             var stdoutTask = proc.StandardOutput.ReadToEndAsync(ct);
             var stderrTask = proc.StandardError.ReadToEndAsync(ct);
@@ -212,7 +212,7 @@ public class GraXpertService {
             }, outerCt));
         }
         try { await Task.WhenAll(tasks); }
-        catch (OperationCanceledException) { /* batch cancel — partial Results survive */ }
+        catch (OperationCanceledException) { /* batch cancel, partial Results survive */ }
         job.CompletedAt = DateTime.UtcNow;
     }
 
@@ -297,7 +297,7 @@ public class GraXpertService {
         return Path.Combine(dir, stem + OutputSuffix(op) + ext);
     }
 
-    /// <summary>GX-12i: variant-aware overload — picks the suffix from full opts.</summary>
+    /// <summary>GX-12i: variant-aware overload, picks the suffix from full opts.</summary>
     public static string DefaultOutputPath(string inputPath, GraXpertOptions opts) {
         var dir = Path.GetDirectoryName(inputPath) ?? "";
         var stem = Path.GetFileNameWithoutExtension(inputPath);

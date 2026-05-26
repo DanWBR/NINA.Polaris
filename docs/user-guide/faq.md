@@ -7,7 +7,7 @@ Quick-answer questions. For longer diagnostics, see
 
 **Q: Is Polaris a NINA replacement?**
 
-A: No — it's a community fork specifically for **headless** operation
+A: No, it's a community fork specifically for **headless** operation
 (Linux, RPi, Windows mini-PC without a display). The "real" NINA at
 nighttime-imaging.eu is a full Windows desktop app and remains the
 gold standard for that platform. Polaris is for remote-site / SBC
@@ -50,7 +50,7 @@ xpra rendering). Pi 3 is too slow for live stacking.
 
 **Q: Does Polaris work over WiFi to a remote rig?**
 
-A: Yes — INDI can run on the Pi while Polaris itself runs on a
+A: Yes, INDI can run on the Pi while Polaris itself runs on a
 different machine. Just set `Indi:Host` in `appsettings.json` to the
 remote Pi's IP. But this is fragile (USB drivers want to be physically
 co-located with the camera). The reference deploy is Polaris + INDI
@@ -58,7 +58,7 @@ on the same SBC at the telescope.
 
 ## Workflow
 
-**Q: AUTORUN vs ADV — which should I use?**
+**Q: AUTORUN vs ADV, which should I use?**
 
 A: AUTORUN for "shoot 100 frames of M81 in L tonight". ADV for "M81
 in LRGB, with auto-flip + dither every 3 + safety abort on cloud
@@ -66,7 +66,7 @@ cover". See [AUTORUN](autorun.md) vs [ADV](adv-sequencer.md).
 
 **Q: Can I edit sequences while they're running?**
 
-A: AUTORUN: limited — pause, edit, resume. ADV: same, with the caveat
+A: AUTORUN: limited, pause, edit, resume. ADV: same, with the caveat
 that some Container types lock their children during execution.
 
 **Q: Do I have to focus before every sequence?**
@@ -78,7 +78,7 @@ automatically based on temperature / HFR / time / frame count.
 **Q: What's the difference between LIVE auto-recenter and the ADV
 "Center After Drift" trigger?**
 
-A: LIVE's recenter is scoped to the live stack — uses the first-frame
+A: LIVE's recenter is scoped to the live stack, uses the first-frame
 plate-solve as reference, fires per-frame solves if drift threshold
 enabled. ADV's "Center After Drift" trigger fires within a sequence
 between exposures, uses the AUTORUN target's intended (RA, Dec) as
@@ -94,7 +94,7 @@ Plan for 50+ GB free for a full night.
 
 **Q: Can I store to a network share / NAS?**
 
-A: Yes — FILES tab → navigate to the mount point (e.g.
+A: Yes, FILES tab → navigate to the mount point (e.g.
 `/mnt/nas/astro/`) → Set as Studio root. INDI BLOB writes will be
 slightly slower over network than local SSD; live stacking is
 unaffected (in-memory accumulation).
@@ -102,7 +102,7 @@ unaffected (in-memory accumulation).
 **Q: Where are my profiles stored?**
 
 A: `{AppData}/Polaris/profile.json` (Windows: `%LocalAppData%`, Linux:
-`~/.config/Polaris/`). Back this up before major OS upgrades — losing
+`~/.config/Polaris/`). Back this up before major OS upgrades, losing
 it loses your rig configurations.
 
 ## Software
@@ -136,14 +136,14 @@ help bootstrap.
 
 ## Network
 
-**Q: I'm at a dark site with no internet — does Polaris work?**
+**Q: I'm at a dark site with no internet, does Polaris work?**
 
 A: Yes. Sky catalog + stellarium-web-engine map + DSO database are all
 offline (the bundled HiPS skydata covers stars to ≥ mag 12, DSO
 surveys, constellations, and Milky Way tiles).
 Plate solving via ASTAP is offline. PHD2 + INDI are local. The only
 internet-dependent feature is the Tonight's Best image fetcher (pulls
-NASA/Wikipedia thumbs) — it just shows placeholders offline.
+NASA/Wikipedia thumbs), it just shows placeholders offline.
 
 **Q: Can multiple browsers connect to the same Polaris?**
 
@@ -158,14 +158,14 @@ buddy what we're seeing".
 A: Exposure is too short or sky is too bright (twilight). Bump to 5s+
 and try at full astronomical darkness.
 
-**Q: HFR jumps by 30% after meridian flip — that's not normal, is it?**
+**Q: HFR jumps by 30% after meridian flip, that's not normal, is it?**
 
 A: It can be. Pier-side change rotates the field; star detection sees
 "new" stars and the median shifts temporarily. If it persists more
 than 3-5 frames, something else (collimation, dew, flexure) is wrong.
 
 **Q: Polaris's plate solve uses ASTAP but I have Astrometry.net set
-up — can I use that?**
+up, can I use that?**
 
 A: Settings → Plate solver → Primary solver dropdown → "Astrometry.net
 local". You'll need `solve-field` in PATH + the matching index files.
@@ -178,5 +178,5 @@ pixels; main cam motion depends on the focal ratio of guide vs main.
 
 ## See also
 
-- [Troubleshooting](troubleshooting.md) — longer diagnostic walkthroughs
-- [Glossary](GLOSSARY.md) — term definitions
+- [Troubleshooting](troubleshooting.md), longer diagnostic walkthroughs
+- [Glossary](GLOSSARY.md), term definitions

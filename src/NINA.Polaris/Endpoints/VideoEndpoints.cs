@@ -4,7 +4,7 @@ using NINA.Polaris.Services.Planetary;
 namespace NINA.Polaris.Endpoints;
 
 /// <summary>
-/// Planetary video workflow — record the live camera stream to a SER
+/// Planetary video workflow, record the live camera stream to a SER
 /// file (capture) and stack one into a single image (process).
 /// </summary>
 public static class VideoEndpoints {

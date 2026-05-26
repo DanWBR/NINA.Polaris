@@ -60,7 +60,7 @@ public class BackgroundExtractorTests {
         // The implementation subtracts the polynomial's *minimum*, not
         // its absolute value, so the dimmest area of the image keeps
         // its original brightness (≈ input min). Test with a tilt
-        // again — the corrected minimum should be near 500 (the input
+        // again, the corrected minimum should be near 500 (the input
         // min), not 0.
         int W = 128, H = 96;
         var data = new ushort[W * H];

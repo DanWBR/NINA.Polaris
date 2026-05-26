@@ -3,7 +3,7 @@ namespace NINA.Image.ImageAnalysis;
 /// <summary>
 /// Estimate a polynomial gradient across an image and subtract it.
 /// Used by STUDIO's "Remove gradient" action to flatten sky background
-/// before stretch — a tilted gradient that's invisible in the raw
+/// before stretch, a tilted gradient that's invisible in the raw
 /// linear data becomes very visible after MTF stretch, and a 2nd-order
 /// poly captures the usual light-pollution + flat-error gradient most
 /// astrophotos suffer from.
@@ -13,7 +13,7 @@ namespace NINA.Image.ImageAnalysis;
 ///      patches (default 8×6).
 ///   2. In each patch, take the median of the pixels not flagged as
 ///      stars or other bright features (using the StarDetector hot-pixel
-///      threshold as a sigma estimate — anything &gt; median + 3·σ is
+///      threshold as a sigma estimate, anything &gt; median + 3·σ is
 ///      excluded, so most stellar / nebular signal is rejected).
 ///   3. Fit a 2D polynomial (default degree 2) to the (x, y, median)
 ///      samples using normal-equation least squares.
@@ -23,7 +23,7 @@ namespace NINA.Image.ImageAnalysis;
 ///      signal below zero.
 ///
 /// Why polynomial and not a 2D spline / radial basis? A degree-2
-/// polynomial has 6 coefficients — robust to fit with ~48 samples,
+/// polynomial has 6 coefficients, robust to fit with ~48 samples,
 /// captures real-world tilt + corner vignetting that survives flat
 /// calibration. Splines need more samples and are overkill at this
 /// stage in the pipeline.
@@ -96,7 +96,7 @@ public static class BackgroundExtractor {
 
     /// <summary>Median of pixels in a rectangle, with bright-feature
     /// rejection (anything beyond median + 3·MAD on a first pass is
-    /// dropped — kills stellar + nebula tails).</summary>
+    /// dropped, kills stellar + nebula tails).</summary>
     private static double? MedianSample(ushort[] data, int width, int x0, int y0, int x1, int y1) {
         int n = (x1 - x0) * (y1 - y0);
         if (n < 16) return null;
@@ -189,7 +189,7 @@ public static class BackgroundExtractor {
                 for (int j = 0; j <= n; j++) (m[col, j], m[pivot, j]) = (m[pivot, j], m[col, j]);
             }
             if (Math.Abs(m[col, col]) < 1e-12) {
-                // Singular — return zeros so the caller treats it as no fit.
+                // Singular, return zeros so the caller treats it as no fit.
                 return new double[n];
             }
             // Eliminate other rows.

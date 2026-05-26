@@ -1,11 +1,11 @@
-# NINA.Camera.CanonEdsdk — Architecture
+# NINA.Camera.CanonEdsdk, Architecture
 
 Windows-only wrapper around the Canon **EDSDK** (EOS Digital SDK).
 Provides an `ICamera` implementation for any EOS DSLR / mirrorless
 that Canon supports in EDSDK 13.x / 14.x.
 
 Sister projects `NINA.Camera.NikonSdk` and `NINA.Camera.SonySdk`
-follow the same shape — read this once and the others read identically.
+follow the same shape, read this once and the others read identically.
 
 ## Layout
 
@@ -30,7 +30,7 @@ runtime.
 
 Keeping the wrapper in its own project means:
 
-- The native dependency is **soft** — `NINA.Polaris` references this
+- The native dependency is **soft**, `NINA.Polaris` references this
   project, but the constructor of `CanonEdsdkCamera` is the first
   thing that actually touches a `DllImport`. If the DLLs aren't
   present, the user just doesn't see Canon in the driver dropdown.
@@ -52,7 +52,7 @@ Keeping the wrapper in its own project means:
   state events
 - Transfer: `EdsCreateMemoryStream`, `EdsDownload`, `EdsDownloadComplete`
 
-`EdsdkConstants.cs` holds the magic numbers — property IDs (ISO,
+`EdsdkConstants.cs` holds the magic numbers, property IDs (ISO,
 shutter speed, ...), command IDs, save-to flags, error codes.
 
 ## `CanonEdsdkCamera` (the ICamera impl)
@@ -76,7 +76,7 @@ Implements `NINA.Image.Portable.Interfaces.ICamera`:
   8. Build a `BaseImageData` with `RawFileBytes = cr2Bytes` so
      `ImageWriterService` writes the `.cr2` to disk verbatim
 - `SetIsoAsync`, `SetTemperatureAsync` (no-op), `SetCoolerAsync` (no-op)
-- `Capabilities` — DSLRs don't have cooler or binning, so
+- `Capabilities`, DSLRs don't have cooler or binning, so
   `SupportsCooler = false`, `SupportsBinning = false`,
   `SupportsIso = true`, `SupportsBulb = true`
 
@@ -94,14 +94,14 @@ Implements `NINA.Image.Portable.Interfaces.ICamera`:
    via `EquipmentManager.Camera` (the `ICamera?` typed property the
    rest of the app talks to).
 4. From there, every capture path (manual snap, sequence, live stack)
-   works identically to an INDI camera — the polymorphism is
+   works identically to an INDI camera, the polymorphism is
    transparent above `ICamera`.
 
 ## Sister projects
 
-- **`NINA.Camera.NikonSdk`** — Nikon Imaging SDK (Z-series mirrorless)
+- **`NINA.Camera.NikonSdk`**, Nikon Imaging SDK (Z-series mirrorless)
   + optional Nikon MAID SDK (classic DSLRs). Same pattern.
-- **`NINA.Camera.SonySdk`** — Sony Camera Remote SDK 2.x. Notable
+- **`NINA.Camera.SonySdk`**, Sony Camera Remote SDK 2.x. Notable
   difference: Sony ships Linux binaries too, so this project's
   target framework is `net10.0` (not `-windows`) and works on Linux
   hosts that have the Sony SDK installed.
@@ -112,6 +112,6 @@ the vendor RAW file verbatim to disk.
 ## See also
 
 - [Root ARCHITECTURE.md](../../ARCHITECTURE.md)
-- `src/NINA.Image.Portable/Interfaces/ICamera.cs` — the contract
+- `src/NINA.Image.Portable/Interfaces/ICamera.cs`, the contract
 - [docs/dslr-windows-canon.md](../../docs/dslr-windows-canon.md) (if
-  present) — end-user install procedure for the EDSDK DLLs
+  present), end-user install procedure for the EDSDK DLLs

@@ -8,7 +8,7 @@ namespace NINA.Polaris.Services;
 /// is enabled, dials INDI, runs an Alpaca local-network discovery, and
 /// then re-binds + connects every device the active rig has a saved
 /// selection for. Each step pushes a <see cref="NotificationService"/>
-/// entry so the browser surfaces a toast — the user lands on the page
+/// entry so the browser surfaces a toast, the user lands on the page
 /// with hardware already connected and a feed of "what just happened
 /// before you got here."
 ///
@@ -16,7 +16,7 @@ namespace NINA.Polaris.Services;
 /// host startup so we don't fight other hosted services for CPU /
 /// network on cold boot, then run the whole sequence in fire-and-forget
 /// Task.Run so we never block IHostedService.StartAsync. Single attempt
-/// per boot — if INDI isn't up yet, the user does it manually from the
+/// per boot, if INDI isn't up yet, the user does it manually from the
 /// Rigs tab. Replicating the PHD2 retry loop here would race with the
 /// user clicking Connect.
 /// </summary>
@@ -79,10 +79,10 @@ public class HardwareAutoConnectService : IHostedService {
             // -------- INDI --------
             bool indiOk = await TryConnectIndiAsync(ct);
 
-            // -------- Alpaca (independent — runs even if INDI fails) --------
+            // -------- Alpaca (independent, runs even if INDI fails) --------
             await TryDiscoverAlpacaAsync(ct);
 
-            // -------- PHD2 (independent — runs even if INDI/Alpaca fail) --
+            // -------- PHD2 (independent, runs even if INDI/Alpaca fail) --
             // PHD2 lives in its own process (often on the same host as
             // Polaris) and is reachable over a local TCP socket. Dial it
             // the same way we dial INDI: short timeout, single attempt,
@@ -94,7 +94,7 @@ public class HardwareAutoConnectService : IHostedService {
             // -------- Active rig equipment --------
             // Equipment selections in the rig might point at INDI device
             // names; without INDI they can't be bound. Skip silently when
-            // INDI is down. (Alpaca-only rigs would need their own path —
+            // INDI is down. (Alpaca-only rigs would need their own path,
             // not in scope yet; today every Select* binds via _indiClient.)
             if (indiOk) {
                 await TryConnectActiveRigAsync(ct);
@@ -119,7 +119,7 @@ public class HardwareAutoConnectService : IHostedService {
             await _indiClient.ConnectAsync(timeoutCts.Token);
             // Devices populate asynchronously as getProperties responses
             // come in. Give the server up to 2s to enumerate before we
-            // try to bind rig devices — without this the device list is
+            // try to bind rig devices, without this the device list is
             // empty and every Select* lookup misses.
             for (int i = 0; i < 20 && _indiClient.Devices.Count == 0; i++) {
                 await Task.Delay(100, ct);
@@ -129,7 +129,7 @@ public class HardwareAutoConnectService : IHostedService {
             return true;
         } catch (Exception ex) {
             _logger.LogInformation(ex, "Auto-connect to INDI {Host}:{Port} failed", _indiClient.Host, _indiClient.Port);
-            _notify.Push("warn", $"INDI unavailable at {_indiClient.Host}:{_indiClient.Port} — connect manually from Rigs.");
+            _notify.Push("warn", $"INDI unavailable at {_indiClient.Host}:{_indiClient.Port}, connect manually from Rigs.");
             return false;
         }
     }
@@ -152,7 +152,7 @@ public class HardwareAutoConnectService : IHostedService {
             _notify.Push("ok", $"PHD2 connected ({host}:{port})");
         } catch (Exception ex) {
             _logger.LogInformation(ex, "Auto-connect to PHD2 {Host}:{Port} failed", host, port);
-            _notify.Push("warn", $"PHD2 unavailable at {host}:{port} — connect manually from Guide.");
+            _notify.Push("warn", $"PHD2 unavailable at {host}:{port}, connect manually from Guide.");
         }
     }
 
@@ -176,7 +176,7 @@ public class HardwareAutoConnectService : IHostedService {
     private async Task TryConnectActiveRigAsync(CancellationToken ct) {
         var rig = _profiles.ActiveEquipmentProfile;
         if (rig == null) {
-            _notify.Push("info", "No active rig — skipping equipment auto-connect.");
+            _notify.Push("info", "No active rig, skipping equipment auto-connect.");
             return;
         }
 
@@ -204,7 +204,7 @@ public class HardwareAutoConnectService : IHostedService {
             // For INDI-backed devices, validate the saved name still
             // exists on the live server before attempting connect. For
             // non-INDI camera/mount drivers (e.g. canon-edsdk), trust
-            // the binder — the available[] set is INDI-only.
+            // the binder, the available[] set is INDI-only.
             bool isIndi = label switch {
                 "Camera" => (rig.CameraDriver ?? "indi") == "indi",
                 "Mount"  => (rig.TelescopeDriver ?? "indi") == "indi",
@@ -228,7 +228,7 @@ public class HardwareAutoConnectService : IHostedService {
         }
 
         if (connected == 0 && missing == 0 && failed == 0) {
-            _notify.Push("info", "Active rig has no saved device selections — pick devices in Rigs.");
+            _notify.Push("info", "Active rig has no saved device selections, pick devices in Rigs.");
         } else {
             _notify.Push("ok",
                 $"Rig '{rig.Name}': {connected} connected, {missing} missing, {failed} failed.");

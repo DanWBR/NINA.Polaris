@@ -59,7 +59,7 @@ public class FrameQualityAnalyzerTests {
                 blurred[y * w + x] = (ushort)(sum / 9);
             }
 
-        // 32-wide ROI centred on the frame — entirely inside the
+        // 32-wide ROI centred on the frame, entirely inside the
         // interior so the box-blur's reach is fully sampled and the
         // sharp/blurred contrast on the edge dominates.
         var sharpScore = FrameQualityAnalyzer.LaplacianVariance(sharp, w, h, roiSize: 32);

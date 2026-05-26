@@ -6,7 +6,7 @@ namespace NINA.Polaris.Test;
 /// <summary>
 /// Pins the Tv / ISO mapping tables used by the Canon EDSDK driver.
 /// These are the only parts of <c>CanonEdsdkCamera</c> testable
-/// without an attached body — they translate user-supplied seconds /
+/// without an attached body, they translate user-supplied seconds /
 /// ISO values into the camera-property enum codes Canon expects.
 /// </summary>
 [TestFixture]
@@ -36,7 +36,7 @@ public class CanonEdsdkConstantsTests {
     [Test]
     public void TvCodeFor_PicksClosest_OnInBetweenValues() {
         // 7s sits between 6s (0x23) and 8s (0x20). 8s is closer
-        // (delta 1 vs 1) — ties resolve to the first-scanned, but
+        // (delta 1 vs 1), ties resolve to the first-scanned, but
         // 7s itself is 1 s from 8 s and 1 s from 6 s. The first-pass
         // best is 30s; later iterations beat it. End state: 8s.
         var code = EdsdkConstants.TvCodeFor(7.0);

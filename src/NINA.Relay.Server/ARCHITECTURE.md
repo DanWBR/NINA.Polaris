@@ -1,9 +1,9 @@
-# NINA.Relay.Server — Architecture
+# NINA.Relay.Server, Architecture
 
 Standalone ASP.NET Core service deployed to a **public VPS**. Lets
 Polaris instances (running on private LANs at telescope locations) be
 accessed from anywhere on the internet through a TLS-tunneled
-reverse-proxy — without exposing the Pi directly.
+reverse-proxy, without exposing the Pi directly.
 
 This is a **completely separate process** from `NINA.Polaris`. They
 share types via `NINA.Relay.Protocol`, and the Pi-side client lives
@@ -73,7 +73,7 @@ Each Polaris Pi connects here once + keeps the WS open. On HELLO:
    in an in-memory dictionary
 5. Pumps frames in both directions until the WS closes
 
-mTLS optional — if `UseMtls = true` in the tenant config, the Pi
+mTLS optional, if `UseMtls = true` in the tenant config, the Pi
 also presents a client cert in addition to the bearer token.
 
 ### `PublicProxy`
@@ -96,19 +96,19 @@ path but with `WsOpenFrame` → `WsMessageFrame` bidirectional pumping.
 ## Security features
 
 - **TLS** via [LettuceEncrypt](https://github.com/natemcmaster/LettuceEncrypt)
-  — auto Let's Encrypt cert on first request, auto-renewed
+ , auto Let's Encrypt cert on first request, auto-renewed
 - **Per-tenant tokens** (32-char) with optional expiration date
-- **Per-tenant monthly byte quotas** — throttled when exceeded
-- **Per-tenant rate limits** — token bucket per second
-- **Per-tenant audit log** — every request: timestamp, IP, endpoint,
+- **Per-tenant monthly byte quotas**, throttled when exceeded
+- **Per-tenant rate limits**, token bucket per second
+- **Per-tenant audit log**, every request: timestamp, IP, endpoint,
   byte size, response code
-- **mTLS** — optional client-cert auth on the tunnel WS in addition
+- **mTLS**, optional client-cert auth on the tunnel WS in addition
   to the bearer token
 - **Admin token** for the `/admin` web UI (separate from tenant tokens)
 
 ## Persistence
 
-`tenants.json` — JSON file on disk. Backed up easily, edited by hand
+`tenants.json`, JSON file on disk. Backed up easily, edited by hand
 in emergencies. `TenantRegistry` loads on startup + writes on every
 mutation through the `/admin` UI.
 
@@ -135,7 +135,7 @@ the end-to-end procedure.
 ## See also
 
 - [NINA.Relay.Protocol/ARCHITECTURE.md](../NINA.Relay.Protocol/ARCHITECTURE.md)
-  — wire types
-- `src/NINA.Polaris/Services/RelayClient.cs` — the Pi-side client
+ , wire types
+- `src/NINA.Polaris/Services/RelayClient.cs`, the Pi-side client
 - [docs/user-guide/relay.md](../../docs/user-guide/relay.md)
 - [Root ARCHITECTURE.md](../../ARCHITECTURE.md)

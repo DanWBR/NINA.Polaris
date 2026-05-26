@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 namespace NINA.Polaris.Services;
 
 /// <summary>
-/// The "simple" sequencer engine — flat list of <see cref="SequenceItem"/>s
+/// The "simple" sequencer engine, flat list of <see cref="SequenceItem"/>s
 /// (target, filter, exposure, count) executed in order. This is what
 /// the AUTORUN tab drives. The tree-based <c>AdvancedSequencer</c>
 /// lives under <c>Services/Sequencer/</c> and serves the ADV tab.
@@ -19,7 +19,7 @@ namespace NINA.Polaris.Services;
 /// Pause/Resume uses a <see cref="SemaphoreSlim"/> gate; Abort cancels
 /// the run-task's <see cref="CancellationTokenSource"/>. State
 /// transitions are protected only by the single-task nature of the
-/// run — at most one capture is in flight at any time.
+/// run, at most one capture is in flight at any time.
 /// </summary>
 public class SequenceEngine {
     private readonly EquipmentManager _equip;
@@ -184,7 +184,7 @@ public class SequenceEngine {
                 var item = Items[i];
 
                 // BIAS frames are zero-second exposures by definition. If the
-                // UI somehow sent a non-zero exposure, clamp it — saves the
+                // UI somehow sent a non-zero exposure, clamp it, saves the
                 // user from wasting time on an obvious mistake.
                 var imageType = (item.ImageType ?? "LIGHT").Trim().ToUpperInvariant();
                 if (imageType == "BIAS") item.Exposure = 0;
@@ -229,13 +229,13 @@ public class SequenceEngine {
                     await _pauseGate.WaitAsync(ct);
                     _pauseGate.Release();
 
-                    // Meridian flip check — meaningful only for LIGHT frames
+                    // Meridian flip check, meaningful only for LIGHT frames
                     // pointed at a real target.
                     if (!isCalibration
                         && item.Ra.HasValue && item.Dec.HasValue
                         && _meridianFlip.Settings.Enabled
                         && _meridianFlip.ShouldFlipNow(item.Ra.Value)) {
-                        _logger.LogInformation("Meridian flip due for target {Name} — executing", item.Name);
+                        _logger.LogInformation("Meridian flip due for target {Name}, executing", item.Name);
                         await _meridianFlip.ExecuteFlipAsync(item.Ra.Value, item.Dec.Value, ct);
                     }
 
@@ -273,7 +273,7 @@ public class SequenceEngine {
                         // next exposure doesn't wait on the ~10s BGE pass.
                         // Only LIGHT frames + only when the user opted in
                         // + only when GraXpert is actually installed. Decon
-                        // and Denoise never auto-run — they hurt SNR on
+                        // and Denoise never auto-run, they hurt SNR on
                         // individual lights and are best on integrated
                         // masters; offered manually in STUDIO instead.
                         if (EndActions.AutoGraXpert
@@ -333,7 +333,7 @@ public class SequenceEngine {
 
                     // Dither between frames (only after a successful capture, only
                     // if this isn't the very last frame of the very last item, and
-                    // only for LIGHT — dithering darks/flats would corrupt the
+                    // only for LIGHT, dithering darks/flats would corrupt the
                     // calibration master and hammer the mount needlessly).
                     if (frameOk && !isCalibration) {
                         _framesSinceDither++;
@@ -357,7 +357,7 @@ public class SequenceEngine {
 
         } catch (OperationCanceledException) {
             _logger.LogInformation("Sequence cancelled");
-            // Stop is a user action — only run housekeeping if the user opted in.
+            // Stop is a user action, only run housekeeping if the user opted in.
             if (EndActions.RunOnStop) {
                 await RunEndActionsAsync(triggeredByStop: true);
             }
@@ -383,7 +383,7 @@ public class SequenceEngine {
         _logger.LogInformation("Running end-of-sequence actions (triggeredByStop={Stop})", triggeredByStop);
         using var ct = new CancellationTokenSource(TimeSpan.FromMinutes(5));
 
-        // Park supersedes stop-tracking — parking implies tracking off, and most
+        // Park supersedes stop-tracking, parking implies tracking off, and most
         // mounts refuse the explicit tracking-off command after they're parked.
         if (ea.ParkMount && _equip.Telescope != null) {
             try {
@@ -434,7 +434,7 @@ public class SequenceEngine {
     /// <summary>
     /// Issue a dither command via PHD2 if all preconditions are met and we've
     /// hit the configured frame cadence. Waits for SettleDone before returning.
-    /// Silently skips when conditions aren't met — never aborts the sequence.
+    /// Silently skips when conditions aren't met, never aborts the sequence.
     /// </summary>
     private async Task MaybeDitherAsync(CancellationToken ct) {
         if (!Dither.Enabled) return;
@@ -486,11 +486,11 @@ public class SequenceEngine {
                         result.Status, result.Error);
                 }
             } catch (OperationCanceledException) when (!ct.IsCancellationRequested) {
-                _logger.LogWarning("Dither settle timed out after {Sec}s — continuing sequence anyway",
+                _logger.LogWarning("Dither settle timed out after {Sec}s, continuing sequence anyway",
                     Dither.SettleTimeout);
             }
         } catch (Exception ex) {
-            _logger.LogWarning(ex, "Dither command failed — continuing sequence without dither");
+            _logger.LogWarning(ex, "Dither command failed, continuing sequence without dither");
         } finally {
             _phd2.Settled -= OnSettled;
             _framesSinceDither = 0;
@@ -523,7 +523,7 @@ public class SequenceItem {
 /// <summary>
 /// Per-run actions executed once the sequence finishes (or is stopped,
 /// if <see cref="RunOnStop"/> is true). All actions are best-effort:
-/// a failure on one does not skip the rest — we log and move on.
+/// a failure on one does not skip the rest, we log and move on.
 /// </summary>
 public class SequenceEndActions {
     public bool ParkMount { get; set; }
@@ -534,12 +534,12 @@ public class SequenceEndActions {
     public bool RunOnStop { get; set; }
 
     /// <summary>
-    /// Per-frame hook (not strictly an end-action — lives here so it
+    /// Per-frame hook (not strictly an end-action, lives here so it
     /// shares the Autorun panel UI). When true and GraXpert is
     /// installed, every saved LIGHT frame is shipped to GraXpert for
     /// background-extraction in a fire-and-forget Task. Calibration
     /// frames are skipped. The next exposure does not wait on the
-    /// ~10 s BGE pass — explicit performance > purity trade-off.
+    /// ~10 s BGE pass, explicit performance > purity trade-off.
     /// </summary>
     public bool AutoGraXpert { get; set; }
 }

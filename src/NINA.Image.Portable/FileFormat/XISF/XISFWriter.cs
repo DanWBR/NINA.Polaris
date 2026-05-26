@@ -15,7 +15,7 @@ namespace NINA.Image.FileFormat.XISF;
 ///
 /// File layout (per the XISF 1.0 spec):
 ///   Bytes 0-7    : "XISF0100" signature
-///   Bytes 8-11   : little-endian uint32 — XML header length in bytes
+///   Bytes 8-11   : little-endian uint32, XML header length in bytes
 ///   Bytes 12-15  : reserved (four 0x00)
 ///   Bytes 16..N  : UTF-8 XML header (padded with spaces to a multiple of
 ///                  4096 so attached binary blocks land aligned)
@@ -26,7 +26,7 @@ namespace NINA.Image.FileFormat.XISF;
 /// from ImageMetaData is mapped to FITSKeyword child elements so any
 /// downstream tool that already understands the FITS spelling keeps working.
 ///
-/// Public API mirrors FITSWriter for symmetry — see ImageWriterService.
+/// Public API mirrors FITSWriter for symmetry, see ImageWriterService.
 /// </summary>
 public static class XISFWriter {
     private const int HeaderBlockSize = 4096;
@@ -150,7 +150,7 @@ public static class XISFWriter {
             xw.WriteAttributeString("location", $"attachment:{pixelOffset}:{compressedSize}");
             if (compressionAttr != null) xw.WriteAttributeString("compression", compressionAttr);
 
-            // Native XISF properties — observation timestamp
+            // Native XISF properties, observation timestamp
             var utc = meta.CreationTime.ToUniversalTime();
             WriteProperty(xw, "Observation:Time:Start", "TimePoint",
                 utc.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture));
@@ -194,7 +194,7 @@ public static class XISFWriter {
             if (!string.IsNullOrEmpty(meta.FilterWheel.Filter))
                 WriteProperty(xw, "Instrument:Filter:Name", "String", meta.FilterWheel.Filter);
 
-            // FITSKeyword child elements — mirror FITSWriter for max compatibility
+            // FITSKeyword child elements, mirror FITSWriter for max compatibility
             WriteFitsKeyword(xw, "IMAGETYP", imageType.ToUpperInvariant(), "Type of exposure");
             if (meta.Exposure.ExposureTime > 0) {
                 WriteFitsKeyword(xw, "EXPOSURE", Fmt(meta.Exposure.ExposureTime), "Exposure (s)");

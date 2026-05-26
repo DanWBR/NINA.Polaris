@@ -11,7 +11,7 @@ namespace NINA.Polaris.Test;
 /// <summary>
 /// Pins the HostMetricsService snapshot shape + the public Sample()
 /// method's behaviour around process CPU computation. The full
-/// BackgroundService loop is not exercised here — it needs a live
+/// BackgroundService loop is not exercised here, it needs a live
 /// IResourceMonitor implementation which only resolves via the real
 /// DI graph. Tests use a hand-rolled stub that returns canned
 /// utilisation numbers.
@@ -43,7 +43,7 @@ public class HostMetricsServiceTests {
     [Test]
     public void Snapshot_Defaults_AreZero() {
         // Before the first sample, Latest holds the zero record.
-        // The UI handles that as "no data yet" — important the
+        // The UI handles that as "no data yet", important the
         // service doesn't expose null or throw.
         var stub = new StubResourceMonitor();
         var svc = new HostMetricsService(stub, NullLogger<HostMetricsService>.Instance);

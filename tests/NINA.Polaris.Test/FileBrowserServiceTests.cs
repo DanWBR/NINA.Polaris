@@ -15,7 +15,7 @@ namespace NINA.Polaris.Test;
 /// Tests run inside an isolated temp directory so they don't depend
 /// on or pollute the host machine. The blocklist coverage uses raw
 /// strings that match real system paths (we don't actually try to
-/// touch /etc/shadow — we just confirm the validator refuses).
+/// touch /etc/shadow, we just confirm the validator refuses).
 /// </summary>
 [TestFixture]
 public class FileBrowserServiceTests {
@@ -40,7 +40,7 @@ public class FileBrowserServiceTests {
     [Test]
     public void ListRoots_ReturnsAtLeastOneEntry() {
         // Whatever the host platform, the user always has *some* place
-        // to start browsing — if not, the FILES tab would be DOA.
+        // to start browsing, if not, the FILES tab would be DOA.
         var roots = _svc.ListRoots();
         Assert.That(roots, Is.Not.Empty);
     }
@@ -64,7 +64,7 @@ public class FileBrowserServiceTests {
         File.WriteAllText(hidden, "x");
         // On Windows the dot-prefix doesn't make the file hidden, so
         // force the attribute. On Linux the dot-prefix is enough but
-        // we don't actually consult that — we read FileAttributes.
+        // we don't actually consult that, we read FileAttributes.
         if (OperatingSystem.IsWindows()) File.SetAttributes(hidden, FileAttributes.Hidden);
 
         var visible = _svc.List(_tmp, showHidden: false);
@@ -124,7 +124,7 @@ public class FileBrowserServiceTests {
     [Test]
     public void ResolveSafe_DotDotEscape_NormalisedThenChecked() {
         // ../../../etc/shadow from a deep cwd would resolve to a real
-        // sensitive path. Path.GetFullPath collapses the .. — then the
+        // sensitive path. Path.GetFullPath collapses the .., then the
         // blocklist catches it. Confirm both halves work together.
         if (OperatingSystem.IsWindows()) return;  // Linux-only path
         Assert.That(

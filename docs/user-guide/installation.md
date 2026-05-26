@@ -4,7 +4,7 @@ Polaris ships as a single .NET 10 executable that needs an `indiserver`
 running on the same machine (or reachable on the LAN). Three deploy
 paths are supported:
 
-## Raspberry Pi 4/5 (linux-arm64) — recommended
+## Raspberry Pi 4/5 (linux-arm64), recommended
 
 The reference platform. Pi 4 is fine for most workloads; Pi 5 is faster
 for live stacking + planetary processing.
@@ -17,8 +17,8 @@ sudo apt install indi-bin indi-full        # INDI server + all drivers
 sudo apt install dotnet-runtime-10.0       # .NET 10 runtime (or SDK if building from source)
 sudo apt install astap                     # plate solver (recommended)
 # Optional but useful:
-sudo apt install phd2                      # autoguider — Polaris controls it
-sudo apt install siril graxpert            # post-processing tools — Polaris invokes their CLIs
+sudo apt install phd2                      # autoguider, Polaris controls it
+sudo apt install siril graxpert            # post-processing tools, Polaris invokes their CLIs
 ```
 
 For the embedded PHD2 GUI feature, see
@@ -45,7 +45,7 @@ docker run -d --name polaris \
   ghcr.io/danwbr/nina-polaris:latest
 ```
 
-The `--network host` is critical — INDI's BLOB-streaming over loopback
+The `--network host` is critical, INDI's BLOB-streaming over loopback
 is much faster than a bridge.
 
 **C. Build from source**:
@@ -76,7 +76,7 @@ LAN:
 http://<pi-ip>:5000
 ```
 
-mDNS is wired automatically — if your network supports it (any modern
+mDNS is wired automatically, if your network supports it (any modern
 router), `http://nina.local:5000` works too.
 
 ## Linux x64 (mini-PC, NUC, NAS)
@@ -92,7 +92,7 @@ Polaris runs on Windows but with a few caveats:
 - **INDI is Linux-first**. On Windows, use the `indi_*` drivers via
   WSL2 (Polaris connects to `localhost:7624` regardless of where
   `indiserver` runs) OR use ASCOM via Alpaca instead (see below).
-- **xpra-embedded PHD2 GUI is not supported on Windows** — you'll
+- **xpra-embedded PHD2 GUI is not supported on Windows**, you'll
   interact with PHD2's native window directly.
 
 ### ASCOM via Alpaca
@@ -132,7 +132,7 @@ DSLRs have separate per-vendor docs:
 Polaris saves captured FITS/XISF to a per-rig folder under
 `ImageOutputDir`. The default is `%USERPROFILE%/Pictures/Polaris` on
 Windows and `$HOME/Pictures/Polaris` on Linux. Change it via the FILES
-tab — navigate to the folder you want and click "Set as Studio root".
+tab, navigate to the folder you want and click "Set as Studio root".
 
 The folder structure is:
 ```

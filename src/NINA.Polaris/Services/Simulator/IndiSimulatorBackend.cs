@@ -9,7 +9,7 @@ namespace NINA.Polaris.Services.Simulator;
 /// <c>indi_simulator_*</c> drivers selected in
 /// <see cref="SimulatorLaunchRequest.Devices"/>.
 ///
-/// Pattern mirrors <c>PHD2ProcessManager</c> — single Process held
+/// Pattern mirrors <c>PHD2ProcessManager</c>, single Process held
 /// in a field, TCP probe for liveness, graceful shutdown via
 /// SIGTERM (Process.Close on POSIX) then force-kill on timeout.
 /// Detection is a one-shot <c>which</c> + <c>--version</c> parse.
@@ -64,7 +64,7 @@ public class IndiSimulatorBackend : ISimulatorBackend, IDisposable {
                 "indiserver not found in PATH. Install with: sudo apt install indi-bin (or brew install indi-bin on macOS).");
         }
 
-        // 2. version string — best-effort parse
+        // 2. version string, best-effort parse
         var version = await ReadVersionAsync(indiserverPath, ct);
 
         // 3. which simulator drivers exist on this host
@@ -132,7 +132,7 @@ public class IndiSimulatorBackend : ISimulatorBackend, IDisposable {
             _logger.LogInformation("Spawned indiserver (PID {Pid}) with: {Args}", _process.Id, args);
 
             // Wait for indiserver to bind the listening socket before
-            // we try to write to the FIFO — otherwise the start
+            // we try to write to the FIFO, otherwise the start
             // commands queue but the device might fail before the
             // first client (Polaris itself) is allowed to connect.
             for (int i = 0; i < 20; i++) {
@@ -218,7 +218,7 @@ public class IndiSimulatorBackend : ISimulatorBackend, IDisposable {
         try {
             if (!p.HasExited) {
                 // CloseMainWindow == SIGTERM on POSIX for processes
-                // without a window. Graceful — indiserver passes the
+                // without a window. Graceful, indiserver passes the
                 // signal to its driver children too.
                 p.CloseMainWindow();
                 if (!p.WaitForExit(3000)) {
@@ -235,7 +235,7 @@ public class IndiSimulatorBackend : ISimulatorBackend, IDisposable {
             lock (_devicesLock) _runningDevices.Clear();
             CleanupFifo();
         }
-        // Avoid CS1998 — keep the async signature for symmetry with
+        // Avoid CS1998, keep the async signature for symmetry with
         // other backends that need real awaits.
         await Task.CompletedTask;
     }
@@ -255,7 +255,7 @@ public class IndiSimulatorBackend : ISimulatorBackend, IDisposable {
 
     // --- helpers ---
 
-    /// <summary>POSIX `which` equivalent — find a binary in PATH.
+    /// <summary>POSIX `which` equivalent, find a binary in PATH.
     /// Returns null when not found. Uses the actual <c>which</c>
     /// command rather than scanning PATH ourselves because it
     /// handles distro quirks (per-shell PATH, alternatives system).</summary>
@@ -312,7 +312,7 @@ public class IndiSimulatorBackend : ISimulatorBackend, IDisposable {
     /// out of a chatty <c>--version</c> dump. Public for tests.</summary>
     internal static string? ParseVersion(string raw) {
         if (string.IsNullOrWhiteSpace(raw)) return null;
-        // Negative lookbehind/lookahead on digit instead of \b — \b
+        // Negative lookbehind/lookahead on digit instead of \b, \b
         // doesn't trigger between a letter and a digit (e.g. "v2.1.4"
         // where v and 2 are both word chars), which would make the
         // regex miss the leading "2" and capture just "1.4".
@@ -321,7 +321,7 @@ public class IndiSimulatorBackend : ISimulatorBackend, IDisposable {
     }
 
     /// <summary>Compose the indiserver argv slice for a given
-    /// request. Pure function — public so tests can pin the wire
+    /// request. Pure function, public so tests can pin the wire
     /// format without spawning a real subprocess. SIM-8 switched
     /// indiserver to FIFO mode (drivers added at runtime via
     /// <c>start</c> commands instead of positional argv), so the
@@ -352,9 +352,9 @@ public class IndiSimulatorBackend : ISimulatorBackend, IDisposable {
     internal static async Task<bool> TryCreateFifoAsync(string path, CancellationToken ct = default) {
         try {
             // Remove a stale FIFO from a previous run that crashed
-            // without cleanup — `mkfifo` errors if the path exists.
+            // without cleanup, `mkfifo` errors if the path exists.
             if (File.Exists(path)) File.Delete(path);
-        } catch { /* ignore — mkfifo will surface the real error */ }
+        } catch { /* ignore, mkfifo will surface the real error */ }
         try {
             var psi = new ProcessStartInfo("mkfifo", path) {
                 RedirectStandardOutput = true,
@@ -376,7 +376,7 @@ public class IndiSimulatorBackend : ISimulatorBackend, IDisposable {
     /// "start indi_simulator_X\n" never approaches that limit, so
     /// the write completes without blocking on indiserver's read.
     /// We don't open the FIFO with a persistent FileStream because
-    /// closing it would signal EOF to indiserver — we want to be
+    /// closing it would signal EOF to indiserver, we want to be
     /// able to write again later. Each write is a fresh open/close.</summary>
     private async Task<bool> WriteFifoCommandAsync(string command, CancellationToken ct = default) {
         if (string.IsNullOrEmpty(_fifoPath)) return false;

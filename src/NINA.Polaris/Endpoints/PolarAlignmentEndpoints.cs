@@ -45,7 +45,7 @@ public static class PolarAlignmentEndpoints {
                     options = job.Options
                 });
             } catch (InvalidOperationException ex) {
-                // Second-Start guard — UI should disable the button while
+                // Second-Start guard, UI should disable the button while
                 // a job is running, but a race + a 409 is the right
                 // server-side answer.
                 return Results.Conflict(new { error = ex.Message });
@@ -103,7 +103,7 @@ public static class PolarAlignmentEndpoints {
         });
 
         // PA-6: best starting targets for TPPA "right now". Read-only,
-        // pure compute against the catalog + altitude helper — cheap
+        // pure compute against the catalog + altitude helper, cheap
         // (~5ms for 200 catalog entries). Optional `limit` lets the UI
         // ask for more or fewer chips.
         group.MapGet("/best-targets",

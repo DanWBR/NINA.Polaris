@@ -6,7 +6,7 @@ namespace NINA.Polaris.Test;
 /// <summary>
 /// Sanity tests for the skeleton DSLR drivers (Nikon MAID + Sony
 /// Camera Remote SDK). They exist primarily to pin the contract
-/// shape the upcoming real bindings have to honour — ICamera
+/// shape the upcoming real bindings have to honour, ICamera
 /// implementation present, DSLR capabilities, ISO option lists
 /// non-empty, registry probes return false until the actual SDK
 /// integration lands.

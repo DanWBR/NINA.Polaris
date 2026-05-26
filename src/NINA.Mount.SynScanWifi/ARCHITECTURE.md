@@ -1,9 +1,9 @@
-# NINA.Mount.SynScanWifi — Architecture
+# NINA.Mount.SynScanWifi, Architecture
 
 Direct-WiFi driver for **Sky-Watcher SynScan** mounts (AZ-GTi, EQ-GTi,
 HEQ5 Pro / EQ6-R with the WiFi adapter, AllView, GTi mini-pier, ...).
 
-Skips the INDI / ASCOM driver layer entirely — talks to the mount's
+Skips the INDI / ASCOM driver layer entirely, talks to the mount's
 own UDP server on port 11880 using the SynScan App protocol.
 
 This is the fallback path for users who don't want to run an INDI

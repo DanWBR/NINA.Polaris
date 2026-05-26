@@ -20,7 +20,7 @@ namespace NINA.Camera.CanonEdsdk.Native;
 /// <para>
 /// .NET 10's <see cref="LibraryImportAttribute"/> source generator
 /// produces the marshalling code at compile time rather than via
-/// runtime reflection — faster on startup, AOT-friendly, and the
+/// runtime reflection, faster on startup, AOT-friendly, and the
 /// preferred replacement for <see cref="DllImportAttribute"/>.
 /// </para>
 /// </summary>
@@ -61,7 +61,7 @@ public static partial class EdsdkNative {
     public static partial uint EdsCloseSession(IntPtr inCameraRef);
 
     // ---- Properties ------------------------------------------------
-    // Variant that ships a uint payload (the common case — Tv, ISO,
+    // Variant that ships a uint payload (the common case, Tv, ISO,
     // SaveTo, and most camera-state values are uint32-sized).
     [LibraryImport(DLL)]
     public static partial uint EdsSetPropertyData(IntPtr inRef, uint inPropertyID,
@@ -75,7 +75,7 @@ public static partial class EdsdkNative {
     public static partial uint EdsGetPropertySize(IntPtr inRef, uint inPropertyID,
         uint inParam, out uint outDataType, out int outSize);
 
-    // SaveTo capacity workaround — required before EdsCameraCommand_TakePicture
+    // SaveTo capacity workaround, required before EdsCameraCommand_TakePicture
     // with SaveTo=Host, otherwise the camera believes its destination is
     // full and refuses to shoot.
     [LibraryImport(DLL)]
@@ -86,7 +86,7 @@ public static partial class EdsdkNative {
     public static partial uint EdsSendCommand(IntPtr inCameraRef, uint inCommand, int inParam);
 
     // ---- Event handlers --------------------------------------------
-    // Camera events emit on a thread the SDK manages — marshal back to
+    // Camera events emit on a thread the SDK manages, marshal back to
     // the managed driver via the handlers we register here.
     public delegate uint EdsObjectEventHandler(uint inEvent, IntPtr inRef, IntPtr inContext);
     public delegate uint EdsPropertyEventHandler(uint inEvent, uint inPropertyID, uint inParam, IntPtr inContext);

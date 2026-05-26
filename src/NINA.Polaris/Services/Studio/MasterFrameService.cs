@@ -123,7 +123,7 @@ public class MasterFrameService {
                         _                        => IntegrationMath.Mean(scratch)
                     };
                 }
-                // Atomic progress bump — the UI polls at ~1 Hz so we
+                // Atomic progress bump, the UI polls at ~1 Hz so we
                 // don't need to throttle here; the contention cost on a
                 // 32-MP image is negligible compared to the per-pixel
                 // integration work.
@@ -188,7 +188,7 @@ public class MasterFrameService {
                 type, outPath, N, method);
 
             // Drop the master into the library cache so it shows up in
-            // the browser immediately. Best-effort — if the index walk
+            // the browser immediately. Best-effort, if the index walk
             // is busy the next user-triggered rescan will pick it up.
             _ = Task.Run(() => _library.RescanAsync());
 

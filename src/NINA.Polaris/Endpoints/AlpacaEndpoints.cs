@@ -209,7 +209,7 @@ public static class AlpacaEndpoints {
 
         // ---- CoverCalibrator (flat panel) ----
         // Alpaca's modern flat-panel interface is "covercalibrator". Older ASCOM
-        // drivers may expose a separate "Switch" device — those don't surface here.
+        // drivers may expose a separate "Switch" device, those don't surface here.
         group.MapGet("/covercalibrator/info", async (string host, int port, int? device) => {
             var c = new AlpacaCoverCalibrator(host, port, device ?? 0);
             try {

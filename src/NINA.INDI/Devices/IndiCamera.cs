@@ -10,7 +10,7 @@ namespace NINA.INDI.Devices;
 public class IndiCamera : ICamera {
     private readonly IndiClient _client;
     private TaskCompletionSource<IImageData>? _exposureTcs;
-    // Native CCD_VIDEO_STREAM subscribers — added by CameraStreamService
+    // Native CCD_VIDEO_STREAM subscribers, added by CameraStreamService
     // when a native stream is active. Frames arrive via OnBlobReceived
     // and fan out to every subscriber. Concurrent for safety against
     // late-arriving BLOBs after Stop.
@@ -18,7 +18,7 @@ public class IndiCamera : ICamera {
     private int _nextSubscriberId;
     private volatile bool _isStreaming;
     // Counter of stream BLOBs that parsed as empty (FITSReader returned
-    // Width=0 / Height=0 — typically a driver that doesn't actually
+    // Width=0 / Height=0, typically a driver that doesn't actually
     // emit FITS under CCD_VIDEO_STREAM). CameraStreamService reads this
     // to decide whether native streaming is producing usable frames or
     // whether it should bail out to loop mode.
@@ -31,7 +31,7 @@ public class IndiCamera : ICamera {
     /// CONNECTION switch is in the CONNECT state. The legacy
     /// implementation just delegated to <c>_client.IsConnected</c> (the
     /// global server link), so the property reported true even after
-    /// the user disconnected the device through the UI — causing the
+    /// the user disconnected the device through the UI, causing the
     /// frontend toggle to flip itself back on within the next status
     /// tick. Reading the actual CONNECTION switch fixes that.
     /// </summary>
@@ -63,18 +63,18 @@ public class IndiCamera : ICamera {
     public double PixelSizeY => _client.GetNumber(DeviceName, "CCD_INFO", "CCD_PIXEL_SIZE_Y");
     public int BitDepth => (int)_client.GetNumber(DeviceName, "CCD_INFO", "CCD_BITSPERPIXEL");
 
-    // INDI cameras don't surface gain in a standardised property — the
+    // INDI cameras don't surface gain in a standardised property, the
     // CCD_CONTROLS group varies by driver (gain / Gain / GAIN). Plumb a
     // best-effort read here and return 0 when nothing matches.
     public int Gain => (int)_client.GetNumber(DeviceName, "CCD_CONTROLS", "Gain");
 
-    // ISO is not part of the INDI CCD spec — astronomy cameras report
+    // ISO is not part of the INDI CCD spec, astronomy cameras report
     // analogue gain instead. Empty list signals the UI to hide the ISO
     // dropdown for INDI cameras.
     public IReadOnlyList<int> IsoOptions => Array.Empty<int>();
     public int SelectedIso => 0;
 
-    /// <summary>Per-instance capabilities — SupportsVideoStream gets
+    /// <summary>Per-instance capabilities, SupportsVideoStream gets
     /// recomputed lazily from whether the driver advertises
     /// <c>CCD_VIDEO_STREAM</c> (most ZWO/QHY/gphoto drivers do).
     /// SupportsWhiteBalance flips on when CCD_CONTROLS exposes
@@ -112,7 +112,7 @@ public class IndiCamera : ICamera {
     /// (notably indi_simulator_ccd) never publish CCD_CONTROLS at all,
     /// and sending it triggers a "Property CCD_CONTROLS is not defined"
     /// dispatch error in indiserver's log. Also handles driver-specific
-    /// casing — Gain (most), gain (a few), GAIN (rare).</summary>
+    /// casing, Gain (most), gain (a few), GAIN (rare).</summary>
     private async Task TrySetGainAsync(int gain, CancellationToken ct) {
         var ctrl = _client.GetProperty(DeviceName, "CCD_CONTROLS") as IndiNumberProperty;
         if (ctrl == null) return;   // driver doesn't expose CCD_CONTROLS (e.g. CCD Simulator)
@@ -124,7 +124,7 @@ public class IndiCamera : ICamera {
         try {
             await _client.SetNumberAsync(DeviceName, "CCD_CONTROLS",
                 new Dictionary<string, double> { [key] = gain }, ct);
-        } catch { /* driver rejected the value (out of range?) — non-fatal */ }
+        } catch { /* driver rejected the value (out of range?), non-fatal */ }
     }
 
     /// <summary>Writes WB_R and WB_B into CCD_CONTROLS. Silent skip if
@@ -163,7 +163,7 @@ public class IndiCamera : ICamera {
                 $"INDI device {DeviceName} does not expose CCD_VIDEO_STREAM. Use loop mode instead.");
 
         // Honour optional per-stream overrides where the driver exposes
-        // the matching properties. Silently skip when absent — different
+        // the matching properties. Silently skip when absent, different
         // drivers expose different subset of streaming knobs.
         if (opts?.ExposureSeconds is double exp && exp > 0) {
             try {
@@ -218,14 +218,14 @@ public class IndiCamera : ICamera {
         // CCD_TEMPERATURE is read-only on uncooled cameras (ZWO ASI715MC,
         // most planetary CMOS). On those drivers writing it raises a
         // "Cannot set read-only property" dispatch error. Probe the
-        // property — if it exists at all on a cooled camera, it's
+        // property, if it exists at all on a cooled camera, it's
         // writable; if missing we don't have a cooler to talk to.
         var prop = _client.GetProperty(DeviceName, "CCD_TEMPERATURE") as IndiNumberProperty;
         if (prop == null) return;
         try {
             await _client.SetNumberAsync(DeviceName, "CCD_TEMPERATURE",
                 new Dictionary<string, double> { ["CCD_TEMPERATURE_VALUE"] = temperature }, ct);
-        } catch { /* read-only or out-of-range on this driver — silent */ }
+        } catch { /* read-only or out-of-range on this driver, silent */ }
     }
 
     public async Task SetCoolerAsync(bool on, CancellationToken ct = default) {
@@ -237,7 +237,7 @@ public class IndiCamera : ICamera {
         try {
             await _client.SetSwitchAsync(DeviceName, "CCD_COOLER",
                 new Dictionary<string, bool> { ["COOLER_ON"] = on, ["COOLER_OFF"] = !on }, ct);
-        } catch { /* driver rejected the switch — silent */ }
+        } catch { /* driver rejected the switch, silent */ }
     }
 
     /// <summary>INDI astronomy cameras don't expose ISO. No-op.</summary>
@@ -295,7 +295,7 @@ public class IndiCamera : ICamera {
 
                 // Some INDI drivers (notably indi_asi_ccd under
                 // CCD_VIDEO_STREAM mode) emit BLOBs that aren't a
-                // proper FITS file — just a raw uint16 buffer. The
+                // proper FITS file, just a raw uint16 buffer. The
                 // reader doesn't throw on those; it returns a
                 // BaseImageData with Width=0 / Height=0 / no pixels.
                 // Dispatching that downstream means CameraStreamService
@@ -342,7 +342,7 @@ public class IndiCamera : ICamera {
                 }
             } catch (Exception ex) {
                 if (!_isStreaming) _exposureTcs?.TrySetException(ex);
-                // While streaming, a bad frame is just a dropped frame —
+                // While streaming, a bad frame is just a dropped frame,
                 // don't poison the whole stream.
             }
         }

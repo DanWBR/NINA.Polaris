@@ -6,7 +6,7 @@ namespace NINA.Polaris.Test;
 /// <summary>
 /// Pins the contract of the AutoStretch overloads the STUDIO viewer's
 /// stretch sliders depend on. ApplyManual is the hot path on every
-/// slider drag — these guard the LUT math against regressions that
+/// slider drag, these guard the LUT math against regressions that
 /// would silently break preview rendering.
 /// </summary>
 [TestFixture]

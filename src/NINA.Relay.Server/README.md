@@ -28,16 +28,16 @@ Implemented:
 - [x] Per-request timeout (default 60 s)
 - [x] **JSON tenant store** (`tenants.json`) with hot-reload on file change
 - [x] **Per-tenant rate limiting** (token-bucket: requests/sec + bytes/sec, with burst)
-- [x] **Monthly byte quotas** with persistent counter (`tenant-state.json`) — auto-reset on 1st UTC, HTTP 402 when exhausted
-- [x] **Expiring tokens** (per-tenant `expiresAt`) — auth refused after expiry
+- [x] **Monthly byte quotas** with persistent counter (`tenant-state.json`), auto-reset on 1st UTC, HTTP 402 when exhausted
+- [x] **Expiring tokens** (per-tenant `expiresAt`), auth refused after expiry
 - [x] **Built-in TLS** (Let's Encrypt via LettuceEncrypt, or manual `.pfx`) so the relay can terminate HTTPS directly without a reverse proxy
-- [x] **Web admin UI** at `/admin/` — add/edit/delete tenants, view live tunnels + monthly usage, generate tokens, reset counters, **browse the audit log with per-tenant filter**. Gated by `Admin:Password` (HTTP Basic)
-- [x] **Per-request audit log** — JSON-lines file (`audit.log`) of every proxied request: timestamp, tenant, method, path, status, bytes in/out, duration, source IP, outcome reason. Auto-rotates at `Audit:MaxFileBytes` (default 50 MB). In-memory ring buffer (default 5000) surfaced via `/_admin/audit?tenant=&limit=`
-- [x] **mTLS for tunnel auth** — per-tenant `clientCertThumbprint` pins the X.509 cert the tunnel client must present on the TLS handshake. Bearer token alone is still the default; mTLS is opt-in per tenant. Toggle Kestrel's `ClientCertificateMode` via `Tls:ClientCertificateMode` (`none` / `request` / `require`)
+- [x] **Web admin UI** at `/admin/`, add/edit/delete tenants, view live tunnels + monthly usage, generate tokens, reset counters, **browse the audit log with per-tenant filter**. Gated by `Admin:Password` (HTTP Basic)
+- [x] **Per-request audit log**, JSON-lines file (`audit.log`) of every proxied request: timestamp, tenant, method, path, status, bytes in/out, duration, source IP, outcome reason. Auto-rotates at `Audit:MaxFileBytes` (default 50 MB). In-memory ring buffer (default 5000) surfaced via `/_admin/audit?tenant=&limit=`
+- [x] **mTLS for tunnel auth**, per-tenant `clientCertThumbprint` pins the X.509 cert the tunnel client must present on the TLS handshake. Bearer token alone is still the default; mTLS is opt-in per tenant. Toggle Kestrel's `ClientCertificateMode` via `Tls:ClientCertificateMode` (`none` / `request` / `require`)
 - [x] `/_health`, `/_tunnels`, `/_admin/tenants` (CRUD), `/_admin/generate-token`, `/_admin/usage/{token}/reset`, `/_admin/audit`, `/_admin/reload-tenants`
 
 Not yet:
-- (nothing planned — open a discussion if you want a new feature)
+- (nothing planned, open a discussion if you want a new feature)
 
 ## Configuration
 
@@ -121,7 +121,7 @@ You'll usually edit this through the Web UI rather than by hand.
 
 ### Web Admin UI
 
-A self-contained single-page admin lives at `/admin/` — open it in a
+A self-contained single-page admin lives at `/admin/`, open it in a
 browser and the basic-auth prompt asks for the password you set in
 `Admin:Password`.
 
@@ -129,13 +129,13 @@ What it does:
 - Lists every configured tenant: token (truncated), hostname,
   enabled / expired / active status, rate config, monthly quota with
   a usage bar (green → yellow → red), expiry date, free-form note
-- **+ New tenant** — modal with all fields + a one-click random-token
+- **+ New tenant**, modal with all fields + a one-click random-token
   generator (32 random bytes hex-encoded server-side)
-- **Edit** — change any field (token immutable on existing tenants),
+- **Edit**, change any field (token immutable on existing tenants),
   saves atomically by rewriting `tenants.json`
-- **Delete** — removes the tenant (active tunnel survives until next reload)
-- **Reset usage** — zeroes the current month's byte counter for that tenant
-- **Reload from disk** — picks up out-of-band edits to `tenants.json`
+- **Delete**, removes the tenant (active tunnel survives until next reload)
+- **Reset usage**, zeroes the current month's byte counter for that tenant
+- **Reload from disk**, picks up out-of-band edits to `tenants.json`
 - Second table shows **live tunnels** with byte counters refreshed every
   5 s
 
@@ -212,7 +212,7 @@ openssl pkcs12 -in relay-client.pfx -nokeys -nodes | \
   openssl x509 -fingerprint -sha1 -noout
 ```
 
-Tenants **without** `clientCertThumbprint` are unaffected — bearer token
+Tenants **without** `clientCertThumbprint` are unaffected, bearer token
 alone still works for them. Set `Tls:ClientCertificateMode=require` if
 you want every TLS handshake to demand a cert (which will break the
 browser admin UI).
@@ -233,7 +233,7 @@ Non-2xx outcomes carry an `Outcome` reason: `no_tenant`, `tunnel_down`,
 `send_failed`, `timeout`, `tunnel_error`.
 
 The log file rotates at `Audit:MaxFileBytes` (default 50 MB) to
-`audit.log.1` — previous rotation is overwritten. The admin UI shows
+`audit.log.1`, previous rotation is overwritten. The admin UI shows
 the last ~100 records refreshed every 5 s with a tenant filter.
 
 Generate tokens with any source of entropy:

@@ -1,8 +1,8 @@
-# Sony α-series on Windows + Linux (Skeleton — Open Work)
+# Sony α-series on Windows + Linux (Skeleton, Open Work)
 
 > **Status:** the Sony driver in this build is a skeleton. The
 > Camera card recognises the driver, lists it as *(not installed)*,
-> and shows this page as the install banner — but the actual
+> and shows this page as the install banner, but the actual
 > capture path is a stub. Contributions welcome.
 
 ## Why Sony is the most attractive vendor driver to finish
@@ -11,14 +11,14 @@ Unlike Canon EDSDK and the Nikon stack (Windows-only), Sony's
 **Camera Remote SDK** (SCRSDK) v2.x ships native binaries for
 both **Windows** and **Linux**, including ARM64. That makes it
 the only vendor SDK we can ship to Raspberry Pi users running
-Polaris headless — Canon and Nikon DSLR users on Linux need to
+Polaris headless, Canon and Nikon DSLR users on Linux need to
 go through the INDI gphoto path instead.
 
 ## What's already in place
 
 - `src/NINA.Camera.SonySdk/` project skeleton with the right
   cross-project references. **No `<SupportedOSPlatform>` attribute**
-  (intentionally) so the assembly compiles on Linux too — the
+  (intentionally) so the assembly compiles on Linux too, the
   actual runtime SDK probe handles the per-host decision.
 - `SonySdkCamera : ICamera` with the right shape: ISO options
   (50..102400), `Capabilities.Dslr`, `Gain` aliased to ISO so the
@@ -33,18 +33,18 @@ go through the INDI gphoto path instead.
 
 ## What's needed to make it real
 
-Sony's tethering stack splits in two — which one fits depends
+Sony's tethering stack splits in two, which one fits depends
 on the cameras you want to support:
 
-### Option A — Camera Remote API v1.90 (Wi-Fi REST, older bodies)
+### Option A, Camera Remote API v1.90 (Wi-Fi REST, older bodies)
 
 Cameras released ~2013-2017 expose a **JSON-RPC over HTTP**
 interface over Wi-Fi (Sony "Smart Remote Control" mode). No
 native binaries, no Zadig USB-driver dance, no platform
-restrictions — works the same on Windows, Linux, Raspberry Pi
+restrictions, works the same on Windows, Linux, Raspberry Pi
 and even tablets. Easiest path to a working Sony driver.
 
-Bodies covered (this list is not exhaustive — any body with
+Bodies covered (this list is not exhaustive, any body with
 the "Smart Remote Control" PlayMemories app works):
 
 - α6000 / α6300 / α6500
@@ -57,17 +57,17 @@ the "Smart Remote Control" PlayMemories app works):
 **Recommended reference:** the MS-PL-licensed
 [nantcom/SonyCameraSDK](https://github.com/nantcom/SonyCameraSDK)
 project is a portable C# client for this exact API. Adapt its
-HTTP-call patterns into `SonySdkCamera` — discovery via SSDP on
+HTTP-call patterns into `SonySdkCamera`, discovery via SSDP on
 port 1900, then JSON-RPC POSTs against
 `http://{cam-ip}:8080/sony/camera`. Methods we care about:
 `startRecMode` / `actTakePicture` / `getEvent` / `setIsoSpeedRate`
 / `setShutterSpeed` / `setExposureMode`.
 
-This path doesn't need any redistribution-restricted DLLs — the
+This path doesn't need any redistribution-restricted DLLs, the
 camera has the API built in. The Polaris-side wrapper can live
 entirely under our MPL 2.0 licence.
 
-### Option B — Camera Remote SDK v2.x (USB tether, modern bodies)
+### Option B, Camera Remote SDK v2.x (USB tether, modern bodies)
 
 Cameras released 2018-onward dropped the Wi-Fi REST API in
 favour of Sony's **Camera Remote SDK** (SCRSDK), a C-style
@@ -98,7 +98,7 @@ Path:
 5. Wire `SonySdkCamera.ConnectAsync` / `CaptureAsync` against
    the SDK's connect + shutter + transfer flow.
 
-SCRSDK DLLs are not redistributable — same arrangement as Canon
+SCRSDK DLLs are not redistributable, same arrangement as Canon
 and Nikon (users register, accept the EULA, drop the libraries
 into `plugins/sony-sdk/`).
 
@@ -138,7 +138,7 @@ like Canon ones do as CR2.
 
 ## Tips for tethered Sony sessions
 
-- USB-PD power: Sony α bodies accept USB Power Delivery — a
+- USB-PD power: Sony α bodies accept USB Power Delivery, a
   PD-capable battery pack or wall adapter (≥ 9V output) powers
   the body during long sessions. The internal NP-FZ100 stays
   charged at the same time.
@@ -146,7 +146,7 @@ like Canon ones do as CR2.
   Remote**, not Mass Storage or MTP. Without this the SDK won't
   see the camera.
 - Tethering apps that fight Polaris: close Sony Imaging Edge
-  Desktop / Remote before connecting — same single-session-
+  Desktop / Remote before connecting, same single-session-
   at-a-time constraint as Canon and Nikon.
 - Body firmware: newer α bodies often need firmware updates to
   match newer SCRSDK versions. The SCRSDK release notes list the
@@ -158,4 +158,4 @@ Sony Camera Remote SDK binaries are not redistributable. Same
 arrangement as Canon and Nikon: users register, accept the EULA,
 download the SDK, drop the libraries into `plugins/sony-sdk/`.
 The Polaris-side wrappers in this repo are MPL 2.0 and ship the
-P/Invoke surface only — no Sony code.
+P/Invoke surface only, no Sony code.

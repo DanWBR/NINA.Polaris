@@ -9,7 +9,7 @@ namespace NINA.Polaris.Services.Simulator;
 /// .exe that exposes camera, telescope, focuser, filter wheel,
 /// dome, etc. as Alpaca HTTP devices on a local port. Polaris's
 /// existing AlpacaClient + AlpacaDiscovery already know how to
-/// consume those — this backend only owns the launch/shutdown +
+/// consume those, this backend only owns the launch/shutdown +
 /// install-detection lifecycle on top of the Omni Sim binary.
 ///
 /// Important differences from <see cref="IndiSimulatorBackend"/>:
@@ -23,7 +23,7 @@ namespace NINA.Polaris.Services.Simulator;
 ///   Omni Sim install dir manually) and the standard install
 ///   locations under Program Files.
 /// - Health probe hits the Alpaca management API
-///   <c>/management/v1/configureddevices</c> — if it answers,
+///   <c>/management/v1/configureddevices</c>, if it answers,
 ///   the Omni Sim is up and Polaris's regular Alpaca code path will
 ///   discover its devices automatically.
 /// </summary>
@@ -60,7 +60,7 @@ public class AscomSimulatorBackend : ISimulatorBackend, IDisposable {
             ["dome"]              = SimulatorDeviceTags.Dome,
             ["observingconditions"] = SimulatorDeviceTags.Weather,
             // Omni Sim doesn't have a separate "guide camera" device
-            // — the regular Camera works in guide-cam role for PHD2.
+            //, the regular Camera works in guide-cam role for PHD2.
         };
 
     public AscomSimulatorBackend(ILogger<AscomSimulatorBackend> logger) {
@@ -93,7 +93,7 @@ public class AscomSimulatorBackend : ISimulatorBackend, IDisposable {
             Version: version,
             Path: path,
             // If Omni Sim isn't running yet we can't know which device
-            // categories are enabled — list the supported tags so the
+            // categories are enabled, list the supported tags so the
             // UI can render checkboxes anyway. Once launched + probed,
             // we narrow this to what /configureddevices reports.
             AvailableDevices: devices.Count > 0
@@ -106,7 +106,7 @@ public class AscomSimulatorBackend : ISimulatorBackend, IDisposable {
         if (!IsSupported) return false;
         _lastPort = req.Port > 0 ? req.Port : 32323;
 
-        // Already responding? Adopt it — the user might have started
+        // Already responding? Adopt it, the user might have started
         // the Omni Sim from the start menu before opening Polaris,
         // or a previous Polaris instance left it running.
         if (await IsRunningAsync(ct)) {
@@ -116,7 +116,7 @@ public class AscomSimulatorBackend : ISimulatorBackend, IDisposable {
 
         var path = ResolveBinaryPath();
         if (path == null) {
-            _logger.LogWarning("Cannot launch — Alpaca Omni Simulator not installed.");
+            _logger.LogWarning("Cannot launch, Alpaca Omni Simulator not installed.");
             return false;
         }
 
@@ -138,7 +138,7 @@ public class AscomSimulatorBackend : ISimulatorBackend, IDisposable {
 
             // Wait for the management endpoint to answer. First start
             // takes longer than indiserver because it's a full GUI app
-            // — up to 5s.
+            //, up to 5s.
             for (int i = 0; i < 50; i++) {
                 if (await IsRunningAsync(ct)) return true;
                 await Task.Delay(100, ct);
@@ -156,7 +156,7 @@ public class AscomSimulatorBackend : ISimulatorBackend, IDisposable {
         if (p == null) return;
         try {
             if (!p.HasExited) {
-                // Omni Sim is a GUI app — CloseMainWindow sends the
+                // Omni Sim is a GUI app, CloseMainWindow sends the
                 // proper "click the X" message which lets it persist
                 // settings before exiting. Force-kill after a short
                 // timeout if it hangs.
@@ -218,7 +218,7 @@ public class AscomSimulatorBackend : ISimulatorBackend, IDisposable {
     }
 
     /// <summary>Read the Omni Sim binary's FileVersionInfo to get
-    /// the install version — quicker than spawning + parsing
+    /// the install version, quicker than spawning + parsing
     /// stdout, and doesn't need the binary to be running.</summary>
     internal static Task<string?> ReadVersionAsync(string path, CancellationToken ct = default) {
         try {
@@ -247,7 +247,7 @@ public class AscomSimulatorBackend : ISimulatorBackend, IDisposable {
     }
 
     /// <summary>Parse the JSON body of <c>/management/v1/configureddevices</c>
-    /// — public for tests. Shape:
+    ///, public for tests. Shape:
     /// <code>
     /// { "Value": [
     ///   { "DeviceType": "Camera", "DeviceNumber": 0, ... },
@@ -268,7 +268,7 @@ public class AscomSimulatorBackend : ISimulatorBackend, IDisposable {
                     result.Add(tag);
                 }
             }
-        } catch { /* malformed JSON — return empty */ }
+        } catch { /* malformed JSON, return empty */ }
         return result.OrderBy(x => x).ToList();
     }
 

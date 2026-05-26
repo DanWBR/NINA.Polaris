@@ -5,14 +5,14 @@ using System.Text.RegularExpressions;
 namespace NINA.Polaris.Services.PlateSolving;
 
 /// <summary>
-/// PlateSolve3 (PlaneWave Instruments) — fast at long focal lengths and small
+/// PlateSolve3 (PlaneWave Instruments), fast at long focal lengths and small
 /// FOVs, tolerates elongated/distorted stars, works with very few stars (&lt;10).
 ///
 /// CLI form (PlateSolve3.80):
 ///   PlateSolve3.exe imagefile RA_rad Dec_rad arcsec_per_pixel_x arcsec_per_pixel_y \
 ///                   max_minutes detection_threshold dataset_path
 ///
-/// Hints (RA / Dec in *radians*, plus pixel scale) are required — PlateSolve3
+/// Hints (RA / Dec in *radians*, plus pixel scale) are required, PlateSolve3
 /// does not do blind solves, so SupportsBlindSolve is false. Result is written
 /// to stdout in a Match Found block; we parse the line:
 ///   "RA: 12h 34m 56.78s  Dec: 12d 34' 56.7\""
@@ -86,7 +86,7 @@ public class PlateSolve3Solver : IPlateSolver {
         }
     }
 
-    /// <summary>Public for unit testing — parses PlateSolve3 stdout into a result.</summary>
+    /// <summary>Public for unit testing, parses PlateSolve3 stdout into a result.</summary>
     public PlateSolveResult ParseStdout(string stdout, string fitsPath) {
         if (!stdout.Contains("Match Found", StringComparison.OrdinalIgnoreCase) &&
             !stdout.Contains("Solution found", StringComparison.OrdinalIgnoreCase)) {

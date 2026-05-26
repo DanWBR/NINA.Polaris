@@ -19,7 +19,7 @@ namespace NINA.Image.ImageAnalysis;
 /// downstream STUDIO pipeline (calibration, integration) operates on
 /// luminance for star detection anyway. Higher-quality debayer is a
 /// follow-up if anyone cares about colour fidelity in the on-server
-/// preview — most users export to PixInsight for that.
+/// preview, most users export to PixInsight for that.
 /// </summary>
 public static class BayerDebayer {
 
@@ -56,7 +56,7 @@ public static class BayerDebayer {
                         g[idx] = AvgN4(cfa, x, y, width, height);   // greens at N/E/S/W
                         b[idx] = AvgDiag4(cfa, x, y, width, height); // blues at diagonals
                         break;
-                    case 1:  // G location — interpolate R + B from
+                    case 1:  // G location, interpolate R + B from
                              // horizontal/vertical neighbours depending
                              // on which row we're on.
                         g[idx] = raw;

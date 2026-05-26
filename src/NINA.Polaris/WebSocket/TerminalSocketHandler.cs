@@ -15,8 +15,8 @@ namespace NINA.Polaris.WebSocket;
 /// xterm renders them in real time.
 ///
 /// Authentication is intentionally per-connection: the browser sends a
-/// single JSON control frame on connect — { type:"auth", host, port,
-/// user, password } — and credentials live only in memory for the
+/// single JSON control frame on connect, { type:"auth", host, port,
+/// user, password }, and credentials live only in memory for the
 /// lifetime of the socket. Polaris never persists them to disk and
 /// won't auto-reconnect; close the WebSocket and the credentials are
 /// gone.
@@ -78,7 +78,7 @@ public static class TerminalSocketHandler {
 
             // ----- SSH CONNECT -----
             // SSH.NET ConnectionInfo can take password OR private-key
-            // auth methods. We support password-only in v1 — a key
+            // auth methods. We support password-only in v1, a key
             // upload would be a much bigger UI lift.
             var port = auth.Port > 0 ? auth.Port : 22;
             var connectionInfo = new Renci.SshNet.ConnectionInfo(
@@ -208,7 +208,7 @@ public static class TerminalSocketHandler {
 
                 // JSON control frames stay one-shot: { type: "resize", cols, rows }
                 // or { type: "input", data: "..." }. Anything else is treated
-                // as raw input bytes (the common case — xterm just sends UTF-8
+                // as raw input bytes (the common case, xterm just sends UTF-8
                 // bytes per keystroke without wrapping).
                 if (text.Length > 0 && text[0] == '{') {
                     TerminalControl? ctl = null;

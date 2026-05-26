@@ -13,7 +13,7 @@ namespace NINA.Polaris.Services.Onnx;
 ///      each do their own normalization) and runs inference locally.
 ///
 ///   2) <see cref="SaveSiblingAsync"/> takes the post-inference uint16
-///      pixels back and writes a sibling FITS next to the source —
+///      pixels back and writes a sibling FITS next to the source,
 ///      <c>{stem}{suffix}.fits</c>, where suffix is "_bge" / "_denoise"
 ///      / "_decon" depending on the operation. Output dimensions must
 ///      match the source (pipelines preserve size).
@@ -54,7 +54,7 @@ public class OnnxFileService {
             // three planes plane-sequentially (R...G...B). Mono
             // FITS stays at 1 channel and the browser pipeline
             // replicates to 3 for the model. Anything other than
-            // 1 or 3 collapses to mono — same path FITSReader
+            // 1 or 3 collapses to mono, same path FITSReader
             // already takes.
             int channels = img.Properties.Channels == 3 ? 3 : 1;
 
@@ -107,7 +107,7 @@ public class OnnxFileService {
 
         try {
             // Resolve the output path. We don't overwrite an existing
-            // file — append _2, _3, ... so a curious user can re-run
+            // file, append _2, _3, ... so a curious user can re-run
             // BGE on the same source without losing the previous
             // result.
             var dir = Path.GetDirectoryName(sourcePath);
@@ -124,7 +124,7 @@ public class OnnxFileService {
             // header copy step which is a follow-up.
             // GX-9: for RGB, pixels arrive plane-sequential (R...G...B)
             // matching what FITSReader produces and what FITSWriter now
-            // expects — no transpose needed here.
+            // expects, no transpose needed here.
             var data = new ushort[(long)width * height * channels];
             Buffer.BlockCopy(pixelsLE16, 0, data, 0, pixelsLE16.Length);
 

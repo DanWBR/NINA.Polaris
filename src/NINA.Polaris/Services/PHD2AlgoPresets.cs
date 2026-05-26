@@ -13,7 +13,7 @@ namespace NINA.Polaris.Services;
 ///   focal lengths or windy/poor seeing where chasing seeing is the enemy.
 ///
 /// Param surface depends on which algorithm the user has selected in
-/// PHD2 Brain (Hysteresis vs PPEC vs Lowpass etc.) — we apply by name and
+/// PHD2 Brain (Hysteresis vs PPEC vs Lowpass etc.), we apply by name and
 /// silently skip any param the current algorithm doesn't expose. That
 /// keeps presets safe even when the user has overridden algorithms.
 /// </summary>
@@ -29,7 +29,7 @@ public static class PHD2AlgoPresets {
     public const string CustomPresetName = "Custom";
 
     /// <summary>
-    /// Built-in presets, indexed by name. Custom is not in this list —
+    /// Built-in presets, indexed by name. Custom is not in this list,
     /// callers handle it explicitly by reading rig.PHD2CustomAlgoParams.
     /// </summary>
     public static readonly IReadOnlyDictionary<string, Preset> Builtin =

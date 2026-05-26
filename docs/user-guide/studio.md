@@ -29,13 +29,13 @@ copied in via FILES.
 
 OpenSeadragon pan/zoom + side panels:
 
-- **Stretch sliders** — Black point / Mid-tone / White point. Live
+- **Stretch sliders**, Black point / Mid-tone / White point. Live
   re-render via debounced server-side stretch.
-- **Auto Stretch** — MTF-based defaults
-- **Histogram** — 256-bin overlay
-- **Stats** — Mean / Median / MAD / StdDev / Star count / HFR
-- **Star annotations** — circle overlay toggle
-- **Export** — JPG / PNG / TIFF 16-bit; lands in
+- **Auto Stretch**, MTF-based defaults
+- **Histogram**, 256-bin overlay
+- **Stats**, Mean / Median / MAD / StdDev / Star count / HFR
+- **Star annotations**, circle overlay toggle
+- **Export**, JPG / PNG / TIFF 16-bit; lands in
   `{ImageOutputDir}/{Rig}/processed/{Target}/`
 
 ## Master generation
@@ -43,7 +43,7 @@ OpenSeadragon pan/zoom + side panels:
 Select N frames (Shift-click range, Ctrl-click toggle) → **Create
 master** button:
 
-- **Type auto-detection** from FITS `IMAGETYP` header — Bias / Dark /
+- **Type auto-detection** from FITS `IMAGETYP` header, Bias / Dark /
   Flat
 - **Integration method**: Median (robust) / Mean / Sigma-clipped mean
   (3σ, 2 iterations default)
@@ -58,7 +58,7 @@ library.
 Select calibrated frames + **Calibrate** button:
 
 - Picks the matching **master dark** + **master flat** + **master bias**
-  by (Exposure, Gain, Filter) — auto-match with override dropdowns
+  by (Exposure, Gain, Filter), auto-match with override dropdowns
 - Pixel math: `(light − dark − bias) / (flat − flatDark) × mean(flat
   − flatDark)`
 - Output: `calibrated/{Target}/{Filter}/cal_{originalName}.fits`
@@ -68,14 +68,14 @@ Select calibrated frames + **Calibrate** button:
 
 Select calibrated lights → **Integrate** button:
 
-- **Alignment** — StarDetector + StarMatcher (same engine as live
+- **Alignment**, StarDetector + StarMatcher (same engine as live
   stack) computes per-frame affine transforms relative to the best-HFR
   reference frame
-- **Integration method** — Average / Median / Sigma-clipped average /
+- **Integration method**, Average / Median / Sigma-clipped average /
   Winsorized
-- **Normalization** — None / Scale to mean / Multiplicative
-- **Outlier rejection** — Cosmetic correction + sigma rejection
-- **Weighting** — Optional per-frame HFR weight
+- **Normalization**, None / Scale to mean / Multiplicative
+- **Outlier rejection**, Cosmetic correction + sigma rejection
+- **Weighting**, Optional per-frame HFR weight
 
 Output: `integrated/{Target}/{Filter}/master_{Target}_{Filter}_{N}x{Exp}s.fits`
 with `NCOMBINE`, `EXPTOTAL`, `INTMETH`, `REJECT` headers.
@@ -94,9 +94,9 @@ background extraction. Output sibling file `_bge.fits`.
 Within the viewer, optional pipeline steps (drag-drop reorder via
 Sortable.js):
 
-- **Noise reduction** — Gaussian blur (configurable radius)
-- **Sharpening** — Unsharp mask (amount + radius)
-- **Saturation** — RGB → HSV → multiply S → back
+- **Noise reduction**, Gaussian blur (configurable radius)
+- **Sharpening**, Unsharp mask (amount + radius)
+- **Saturation**, RGB → HSV → multiply S → back
 
 Apply → re-render preview. **Save processed** exports the final result.
 
@@ -104,12 +104,12 @@ Apply → re-render preview. **Save processed** exports the final result.
 
 When detected on the host, STUDIO can hand off to:
 
-- **Siril** — "Stack with Siril" toolbar button. Modal lets you pick a
+- **Siril**, "Stack with Siril" toolbar button. Modal lets you pick a
   bundled script (OSC_Preprocessing, Mono_Preprocessing, Extract
   HaOIII, ...) or one from your `~/.siril/scripts` folder. Optional
   "inject GraXpert BGE between calibration and stack" toggle for the
   combined pipeline.
-- **GraXpert** — dropdown menu "Process with GraXpert":
+- **GraXpert**, dropdown menu "Process with GraXpert":
   - 🌅 Remove gradient (BGE)
   - ✨ Deconvolution (v3.0+)
   - 🔇 Denoise (v3.0+)
@@ -123,14 +123,14 @@ or override paths.
 
 ## Common pitfalls
 
-**Rescan misses new files** — frame writer is still flushing. Wait a
+**Rescan misses new files**, frame writer is still flushing. Wait a
 few seconds + retry.
 
-**Calibration leaves residual hot pixels** — master dark exposure /
+**Calibration leaves residual hot pixels**, master dark exposure /
 gain doesn't match the lights. Bump the auto-match tolerance or pick
 the master manually.
 
-**Integration takes forever** — try smaller batches (50 frames) on
+**Integration takes forever**, try smaller batches (50 frames) on
 RPi 4. SBC's memory ceiling caps the working set; very large stacks
 may swap.
 

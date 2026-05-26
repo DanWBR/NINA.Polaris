@@ -192,7 +192,7 @@ public static class SkyEndpoints {
         // Resolve a celestial object name to a thumbnail image URL (NASA
         // Image Library, falling back to Wikipedia). Caches per-name on
         // disk for 30 days. Returns { available: false } when neither
-        // provider has anything — never 500s.
+        // provider has anything, never 500s.
         group.MapGet("/image", async (string name, CelestialImageService svc, CancellationToken ct) => {
             if (string.IsNullOrWhiteSpace(name)) {
                 return Results.BadRequest(new { error = "name is required" });
@@ -220,7 +220,7 @@ public static class SkyEndpoints {
 
         // Walk the local DSO catalogue + Moon + planets + curated comets
         // and warm the on-disk image cache for each. After this runs,
-        // the Tonight tab works fully offline. Sequential lookups —
+        // the Tonight tab works fully offline. Sequential lookups,
         // takes a couple of minutes on first run, then is instant.
         group.MapPost("/image/prefetch", async (
             CelestialImageService imgs,

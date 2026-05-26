@@ -11,7 +11,7 @@ namespace NINA.Mount.SynScanWifi;
 /// Wire format: each datagram is a single LX200 ASCII command (e.g.
 /// <c>:GR#</c>) sent to the mount on <c>UDP/11880</c>. The mount
 /// replies with one datagram per command for the read commands;
-/// motion commands (start/stop jog, abort) are fire-and-forget — no
+/// motion commands (start/stop jog, abort) are fire-and-forget, no
 /// reply expected.
 /// </para>
 ///
@@ -79,7 +79,7 @@ public sealed class SynScanUdpClient : IDisposable {
     /// <summary>Send a command and read back the reply. Returns the
     /// ASCII payload (terminating <c>#</c> kept so the codec can
     /// distinguish empty replies from missing ones). Throws on
-    /// timeout — caller decides whether that's fatal.</summary>
+    /// timeout, caller decides whether that's fatal.</summary>
     public async Task<string> SendQueryAsync(string command, CancellationToken ct = default) {
         await _gate.WaitAsync(ct);
         try {

@@ -35,7 +35,7 @@ public class WaitUntilAltitudeInstruction : SequenceInstruction {
     public double DecDeg { get; set; }
     /// <summary>Minimum altitude in degrees the target must clear.</summary>
     public double MinAltitudeDeg { get; set; } = 20;
-    /// <summary>Hard cap so we don't block forever — default 6 hours.</summary>
+    /// <summary>Hard cap so we don't block forever, default 6 hours.</summary>
     public int TimeoutSeconds { get; set; } = 6 * 3600;
 
     public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
@@ -125,7 +125,7 @@ internal static class SolarMath {
         return alt;
     }
 
-    /// <summary>Very-low-precision lunar altitude — adequate for "is the Moon up tonight" branching.</summary>
+    /// <summary>Very-low-precision lunar altitude, adequate for "is the Moon up tonight" branching.</summary>
     public static double MoonAltitudeDeg(DateTime utc, double latDeg, double lonDeg) {
         var jd = utc.ToOADate() + 2415018.5;
         var d = jd - 2451545.0;

@@ -7,7 +7,7 @@ namespace NINA.Polaris.Test;
 /// Pins the calibration math and master-matching rules CalibrationService
 /// uses. The private helpers (NormalizeFlat, FindNearestDark,
 /// FindMatchingFlat, FindMatchingBias) are exercised via reflection
-/// rather than spinning up FrameLibraryService — the math + matching
+/// rather than spinning up FrameLibraryService, the math + matching
 /// rules are what's worth pinning; the I/O wiring around them is
 /// covered by the end-to-end manual verification.
 /// </summary>

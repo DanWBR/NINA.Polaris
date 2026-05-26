@@ -10,8 +10,8 @@ namespace NINA.Camera.CanonEdsdk;
 /// and by <see cref="CanonEdsdkCamera"/> to resolve a device id back
 /// to its native camera handle at connect time.
 ///
-/// The native list is volatile — a USB unplug invalidates every
-/// handle it contains — so we always re-enumerate and never cache
+/// The native list is volatile, a USB unplug invalidates every
+/// handle it contains, so we always re-enumerate and never cache
 /// the camera refs themselves across calls.
 /// </summary>
 [SupportedOSPlatform("windows")]
@@ -21,7 +21,7 @@ public static class CanonEdsdkDiscovery {
 
     /// <summary>Returns the connected Canon cameras, or an empty list
     /// when none are present. Throws when the SDK itself can't be
-    /// initialised (DLL missing or version mismatch) — the caller
+    /// initialised (DLL missing or version mismatch), the caller
     /// should fall back to a "no DSL R cameras detected" message.</summary>
     public static IReadOnlyList<CanonCameraEntry> Enumerate() {
         CanonEdsdkRegistry.EnsureInitialized();

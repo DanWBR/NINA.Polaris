@@ -55,7 +55,7 @@ public static class FITSWriter {
         var meta = imageData.MetaData;
 
         // RGB cubes get NAXIS=3 / NAXIS3=3; mono stays at NAXIS=2.
-        // Anything other than 1 or 3 channels is clamped to 1 — we
+        // Anything other than 1 or 3 channels is clamped to 1, we
         // don't support exotic multi-plane FITS writes today, and
         // silently dropping is worse than honouring the convention
         // most downstream tools (PixInsight, Siril, astropy) expect.
@@ -211,7 +211,7 @@ public static class FITSWriter {
         var headerBytes = Encoding.ASCII.GetBytes(string.Concat(cards));
         destination.Write(headerBytes);
 
-        // Pixel data — Int16 big-endian with BZERO=32768
+        // Pixel data, Int16 big-endian with BZERO=32768
         var buf = new byte[2];
         foreach (var px in pixels) {
             short signed = (short)(px - 32768);

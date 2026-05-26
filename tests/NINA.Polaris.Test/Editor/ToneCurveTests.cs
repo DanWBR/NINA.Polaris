@@ -21,7 +21,7 @@ public class ToneCurveTests {
 
     [Test]
     public void Build_TwoEndpoints_LinearMapping() {
-        // Just the endpoints — should produce identity-equivalent LUT.
+        // Just the endpoints, should produce identity-equivalent LUT.
         var lut = ToneCurve.Build(new[] { (0.0, 0.0), (255.0, 255.0) });
         for (int i = 0; i < 256; i++) {
             Assert.That(lut[i], Is.EqualTo((byte)i).Within(1),
@@ -62,7 +62,7 @@ public class ToneCurveTests {
     [Test]
     public void Build_Monotonic_AnchorsAreMonotonic_StaysReasonable() {
         // Strict monotonic input shouldn't produce wild non-monotonic
-        // overshoots in the LUT — natural cubic CAN ring, but slightly.
+        // overshoots in the LUT, natural cubic CAN ring, but slightly.
         var lut = ToneCurve.Build(new[] {
             (0.0, 0.0), (32.0, 20.0), (96.0, 80.0), (160.0, 180.0), (255.0, 255.0)
         });

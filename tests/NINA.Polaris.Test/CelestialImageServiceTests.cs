@@ -5,7 +5,7 @@ namespace NINA.Polaris.Test;
 
 /// <summary>
 /// Pure-function tests for the slug normaliser used by the on-disk cache.
-/// We don't exercise the HTTP path here — that would mean mocking
+/// We don't exercise the HTTP path here, that would mean mocking
 /// HttpMessageHandler for a thin shim, which is more ceremony than signal.
 /// What does need coverage is the slug logic: it has to be consistent
 /// across casings and special characters, otherwise two requests for the

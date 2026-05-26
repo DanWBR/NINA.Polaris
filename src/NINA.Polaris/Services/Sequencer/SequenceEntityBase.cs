@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace NINA.Polaris.Services.Sequencer;
 
 /// <summary>
-/// Convenience base class — most entities only override <c>Type</c>,
+/// Convenience base class, most entities only override <c>Type</c>,
 /// <c>ExecuteAsync</c>, and optionally <c>Validate</c>.
 /// </summary>
 public abstract class SequenceEntityBase : ISequenceEntity {
@@ -107,7 +107,7 @@ public abstract class SequenceContainer : SequenceEntityBase {
     }
 }
 
-/// <summary>Atomic action — does one thing and returns.</summary>
+/// <summary>Atomic action, does one thing and returns.</summary>
 public abstract class SequenceInstruction : SequenceEntityBase {
     // Marker base class. Subclasses live in Sequencer/Instructions/*.
 }
@@ -118,7 +118,7 @@ public abstract class SequenceCondition : SequenceEntityBase {
     public abstract Task<bool> StillTrueAsync(SequenceContext ctx, CancellationToken ct);
 
     /// <summary>
-    /// Conditions don't execute as standalone steps — the container consults
+    /// Conditions don't execute as standalone steps, the container consults
     /// them. Implement no-op here so subclasses don't have to.
     /// </summary>
     public override Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) => Task.CompletedTask;

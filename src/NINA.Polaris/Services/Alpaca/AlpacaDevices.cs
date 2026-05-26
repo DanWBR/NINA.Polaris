@@ -2,7 +2,7 @@ namespace NINA.Polaris.Services.Alpaca;
 
 /// <summary>
 /// Minimal wrappers around the Alpaca/ASCOM device interfaces beyond Camera
-/// and Telescope. Surface is intentionally small — covers identity, the
+/// and Telescope. Surface is intentionally small, covers identity, the
 /// connect/disconnect lifecycle, and the read-only state most users care
 /// about. Add to from the existing endpoints as needs grow; the URL/payload
 /// shape matches the Camera/Telescope wrappers.

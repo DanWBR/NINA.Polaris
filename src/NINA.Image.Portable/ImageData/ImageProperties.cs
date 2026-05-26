@@ -13,7 +13,7 @@ public record ImageProperties {
     /// Number of colour planes in the pixel buffer. 1 = grayscale (the
     /// default, matches every existing call site that didn't set this
     /// explicitly); 3 = RGB stored plane-sequentially (R plane first,
-    /// then G, then B). RGB FITS files (NAXIS=3 with NAXIS3=3 — the
+    /// then G, then B). RGB FITS files (NAXIS=3 with NAXIS3=3, the
     /// PixInsight/Siril export convention) populate this so the
     /// thumbnailer can render in colour instead of dropping to the
     /// red channel.

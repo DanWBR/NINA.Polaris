@@ -48,7 +48,7 @@ public class AutoFocusServiceTests {
 
         var fit = AutoFocusService.FitParabola(pts);
 
-        // Vertex is what matters for focus — the V-shape isn't a true parabola,
+        // Vertex is what matters for focus, the V-shape isn't a true parabola,
         // so the predicted MinY can sit slightly above the lowest sample.
         Assert.That(fit.MinX, Is.EqualTo(5000).Within(5));
         Assert.That(fit.MinY, Is.LessThan(3.0));
@@ -96,7 +96,7 @@ public class AutoFocusServiceTests {
 
     [Test]
     public void FitParabola_CollinearPoints_FallsBackToMinSample() {
-        // All on a straight line — singular matrix or near-zero 'a'
+        // All on a straight line, singular matrix or near-zero 'a'
         var pts = Pts((100, 5.0), (200, 4.0), (300, 3.0), (400, 2.0));
 
         var fit = AutoFocusService.FitParabola(pts);

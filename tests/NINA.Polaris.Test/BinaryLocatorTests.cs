@@ -35,7 +35,7 @@ public class BinaryLocatorTests {
 
     [Test]
     public void Find_ConfiguredPath_TakesPrecedence() {
-        // Configured > everything else — even when a candidate path
+        // Configured > everything else, even when a candidate path
         // also exists. Critical: the user's explicit override must
         // never be silently ignored in favour of an auto-detected
         // binary at a different location.
@@ -134,7 +134,7 @@ public class BinaryLocatorTests {
     [Test]
     public void Enumerate_NoConfigured_OmitsConfiguredEntry() {
         // The "Configured" entry shouldn't appear when no override was
-        // supplied — keeps the diagnostic clean for users who never
+        // supplied, keeps the diagnostic clean for users who never
         // touched the setting.
         var candidates = new[] { _binA };
         var list = BinaryLocator.Enumerate(null, candidates, candidates, candidates, null);

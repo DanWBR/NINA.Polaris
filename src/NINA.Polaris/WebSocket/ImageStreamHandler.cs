@@ -79,7 +79,7 @@ public static class ImageStreamHandler {
                 return;
             }
 
-            // Discriminated messages — capability handshake + per-
+            // Discriminated messages, capability handshake + per-
             // frame metrics from the client-side WASM stacker. CLST-5.
             if (root.TryGetProperty("type", out var typeProp)) {
                 var type = typeProp.GetString();
@@ -94,7 +94,7 @@ public static class ImageStreamHandler {
                         break;
 
                     case "client-stack-progress":
-                        // Logged at debug for now — the trigger
+                        // Logged at debug for now, the trigger
                         // orchestrator still uses the server-side
                         // StarDetector's metrics (which run in
                         // MetricsOnly mode too) so we don't need to

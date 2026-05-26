@@ -7,7 +7,7 @@ public static class MosaicEndpoints {
     public static void MapMosaicEndpoints(this WebApplication app) {
         var g = app.MapGroup("/api/mosaic");
 
-        // Plan only — returns panel coords + time estimate; the UI overlays this on Aladin
+        // Plan only, returns panel coords + time estimate; the UI overlays this on Aladin
         g.MapPost("/plan", (MosaicRequest req, MosaicPlannerService planner) => {
             try {
                 var plan = planner.Plan(req);

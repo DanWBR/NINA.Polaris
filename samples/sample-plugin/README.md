@@ -5,7 +5,7 @@ new sequencer instruction to the Advanced Sequencer.
 
 ## What it does
 
-The sample registers one new instruction — `Beep` — that writes a row
+The sample registers one new instruction, `Beep`, that writes a row
 into the log when executed. It's deliberately useless on its own; the
 point is to show the plumbing.
 
@@ -25,7 +25,7 @@ load from any location.)
 
 Two files:
 
-- `SamplePlugin.csproj` — references `NINA.Polaris.dll` (the host you
+- `SamplePlugin.csproj`, references `NINA.Polaris.dll` (the host you
   built from the main solution) and targets `net10.0`.
 - `BeepPlugin.cs`:
   - `BeepInstruction` is a `SequenceInstruction` with a stable `Type`
@@ -43,11 +43,11 @@ isolated `AssemblyLoadContext`, finds types implementing
 
 Once that returns, the new entity is:
 
-- Resolvable by the polymorphic JSON converter — sequences saved to
+- Resolvable by the polymorphic JSON converter, sequences saved to
   disk that reference `"$type": "SamplePlugin.Beep"` will round-trip
   correctly.
 - Visible in the Advanced Sequencer palette under the category you
-  registered it with (`Plugins / Sample` in this example) — drag it
+  registered it with (`Plugins / Sample` in this example), drag it
   into any container, set the `Message` field, and run.
 - Listed at `GET /api/plugins` along with the discriminators it owns.
 

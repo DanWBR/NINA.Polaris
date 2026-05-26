@@ -82,11 +82,11 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 <body x-data="admin()" x-init="init()">
 
 <header>
-  <h1>NINA Relay — Admin</h1>
+  <h1>NINA Relay, Admin</h1>
   <div class="health" x-show="health">
     <span><span class="dot" :class="health?.status === 'ok' ? 'ok' : 'error'"></span>
       <strong x-text="health?.activeTunnels ?? 0"></strong> active tunnel(s)</span>
-    <span>Uptime: <strong x-text="health?.uptime ?? '—'"></strong></span>
+    <span>Uptime: <strong x-text="health?.uptime ?? ', '"></strong></span>
   </div>
 </header>
 
@@ -122,9 +122,9 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
           <template x-if="t.enabled && !t.expired"><span><span class="dot ok"></span>active</span></template>
         </td>
         <td>
-          <span x-text="t.requestsPerSecond ? t.requestsPerSecond + ' rps' : '—'"></span>
+          <span x-text="t.requestsPerSecond ? t.requestsPerSecond + ' rps' : ', '"></span>
           /
-          <span x-text="t.bytesPerSecond ? fmtRate(t.bytesPerSecond) : '—'"></span>
+          <span x-text="t.bytesPerSecond ? fmtRate(t.bytesPerSecond) : ', '"></span>
         </td>
         <td>
           <template x-if="t.monthlyBytes > 0">
@@ -198,7 +198,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   </label>
   <button class="btn btn-sm" @click="loadAudit()">↻ Refresh</button>
   <span class="muted" style="margin-left:auto;font-size:12px">
-    <span x-show="!audit.enabled">disabled — set Audit:Enabled=true</span>
+    <span x-show="!audit.enabled">disabled, set Audit:Enabled=true</span>
     <span x-show="audit.enabled" x-text="'logging to ' + audit.path"></span>
   </span>
 </div>
@@ -228,7 +228,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
         </td>
         <td x-text="fmtBytes(r.bytesIn) + ' / ' + fmtBytes(r.bytesOut)"></td>
         <td x-text="r.durationMs"></td>
-        <td class="muted" x-text="r.remoteIp || '—'"></td>
+        <td class="muted" x-text="r.remoteIp || ', '"></td>
         <td><span class="muted" x-text="r.outcome || ''"></span></td>
       </tr>
     </template>
@@ -361,7 +361,7 @@ function admin() {
         opts.body = JSON.stringify(body);
       }
       const r = await fetch(url, opts);
-      if (r.status === 401) throw new Error('Unauthorized — refresh and enter the admin password');
+      if (r.status === 401) throw new Error('Unauthorized, refresh and enter the admin password');
       if (!r.ok) {
         const text = await r.text().catch(() => '');
         throw new Error(`${r.status}: ${text || r.statusText}`);

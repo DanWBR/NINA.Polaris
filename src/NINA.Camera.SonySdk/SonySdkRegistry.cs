@@ -6,13 +6,13 @@ namespace NINA.Camera.SonySdk;
 ///
 /// <para>
 /// Status: <b>skeleton driver</b>. The Sony stack has two
-/// complementary paths covering different camera generations —
+/// complementary paths covering different camera generations,
 /// see <c>docs/dslr-windows-sony.md</c> for the full discussion:
 /// </para>
 ///
 /// <list type="bullet">
 /// <item><description>
-/// <b>Wi-Fi REST</b> (Camera Remote API v1.90) — covers older
+/// <b>Wi-Fi REST</b> (Camera Remote API v1.90), covers older
 /// bodies (α7 / α7R / α7S originals, α6000-series, NEX, QX
 /// lens cameras). Pure HTTP / JSON, no native binaries, no
 /// EULA, fully cross-platform. Reference implementation:
@@ -20,7 +20,7 @@ namespace NINA.Camera.SonySdk;
 /// (MS-PL). Easiest path to a working driver.
 /// </description></item>
 /// <item><description>
-/// <b>USB SCRSDK v2.x</b> — covers current bodies (α7 III+, α1,
+/// <b>USB SCRSDK v2.x</b>, covers current bodies (α7 III+, α1,
 /// α9 II, FX3, α6700). C-style native API, ships binaries for
 /// Windows + Linux (including arm64) so this driver shows up on
 /// Raspberry Pi too. Get the SDK from
@@ -29,7 +29,7 @@ namespace NINA.Camera.SonySdk;
 /// </list>
 ///
 /// <para>
-/// Both can co-exist in this project — the camera implementation
+/// Both can co-exist in this project, the camera implementation
 /// can detect by IP / USB enumeration which path applies. Once
 /// either lands, flip <see cref="IsAvailable"/> to return true
 /// when the binding succeeds.
@@ -37,7 +37,7 @@ namespace NINA.Camera.SonySdk;
 /// </summary>
 public static class SonySdkRegistry {
 
-    /// <summary>Currently returns false unconditionally — the
+    /// <summary>Currently returns false unconditionally, the
     /// integration is a skeleton. The UI surfaces this as "(not
     /// installed)" with a link to <c>docs/dslr-windows-sony.md</c>.</summary>
     public static bool IsAvailable => false;

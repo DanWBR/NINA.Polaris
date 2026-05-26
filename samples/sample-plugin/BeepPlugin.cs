@@ -23,7 +23,7 @@ public class BeepInstruction : SequenceInstruction {
 public class BeepPlugin : INinaPolarisPlugin {
     public string Name        => "Sample Plugin";
     public string Version     => "1.0.0";
-    public string Description => "Demo plugin — contributes a 'Beep' instruction that just logs a message";
+    public string Description => "Demo plugin, contributes a 'Beep' instruction that just logs a message";
     public string Author      => "N.I.N.A. Polaris team";
 
     public void Register(IPluginRegistry registry) {

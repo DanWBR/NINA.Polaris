@@ -19,7 +19,7 @@ namespace NINA.Polaris.Services;
 /// (the minimum window <see cref="IResourceMonitor.GetUtilization"/>
 /// needs for a meaningful CPU%); the status WebSocket broadcasts the
 /// most recent snapshot at its own 1 Hz cadence (so a snapshot may
-/// reach the client twice — harmless, the UI just renders the same
+/// reach the client twice, harmless, the UI just renders the same
 /// value).
 ///
 /// Two CPU numbers are exposed:
@@ -42,7 +42,7 @@ public class HostMetricsService : BackgroundService {
     /// <summary>Most recent successful sample. Initialised to zeros.</summary>
     public HostMetricsSnapshot Latest { get; private set; } = new();
 
-    /// <summary>Host hardware identification — detected once at
+    /// <summary>Host hardware identification, detected once at
     /// startup, broadcast verbatim in every snapshot so the UI can
     /// label the activity bar.</summary>
     public HostDeviceInfo Device { get; } = HostInfo.Current;
@@ -60,7 +60,7 @@ public class HostMetricsService : BackgroundService {
         var lastSampleTime = DateTime.UtcNow;
         var coreCount = Math.Max(1, Environment.ProcessorCount);
 
-        // First sample skipped — TotalProcessorTime delta needs a
+        // First sample skipped, TotalProcessorTime delta needs a
         // reference window, so we wait one interval before the first
         // valid emit.
         await Task.Delay(SampleInterval, stoppingToken);
@@ -89,7 +89,7 @@ public class HostMetricsService : BackgroundService {
     }
 
     /// <summary>
-    /// Public for unit tests — pulls one snapshot off the monitor
+    /// Public for unit tests, pulls one snapshot off the monitor
     /// and the current process. Updates the in/out cpu trackers in
     /// place so the caller can call repeatedly.
     /// </summary>
@@ -99,7 +99,7 @@ public class HostMetricsService : BackgroundService {
                                        int coreCount) {
         var util = _monitor.GetUtilization(SampleInterval);
 
-        // GC info gives us the OS-allocated memory ceiling — close
+        // GC info gives us the OS-allocated memory ceiling, close
         // enough to "system total" for the UI's purposes, and the
         // only cheap cross-platform path that doesn't require a
         // platform-specific /proc or WMI call.
@@ -148,7 +148,7 @@ public sealed record HostMetricsSnapshot {
     public long ProcessMemoryMB { get; init; }
     public DateTime SampledAt { get; init; }
 
-    /// <summary>Host hardware identification — same instance is shared
+    /// <summary>Host hardware identification, same instance is shared
     /// across every snapshot (detection is one-shot at startup). Null
     /// before the first <see cref="HostMetricsService.ExecuteAsync"/>
     /// tick runs.</summary>

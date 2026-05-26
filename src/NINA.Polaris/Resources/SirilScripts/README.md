@@ -10,7 +10,7 @@ imaging rigs.
 | `OSC_Preprocessing.ssf` | Full pipeline: bias + dark + flat + lights → registered, stacked, debayered FITS |
 | `OSC_Preprocessing_WithoutDark.ssf` | Same minus darks (use when temp-matched darks aren't available) |
 | `OSC_Preprocessing_WithoutFlat.ssf` | Same minus flats (rely on GraXpert / DBE downstream for vignette) |
-| `OSC_Preprocessing_WithoutDBF.ssf` | Lights only — debayer + register + stack |
+| `OSC_Preprocessing_WithoutDBF.ssf` | Lights only, debayer + register + stack |
 | `Mono_Preprocessing.ssf` | Mono LRGB / narrowband full pipeline (no debayer) |
 | `Mono_Preprocessing_WithoutDark.ssf` | Mono, no darks |
 | `Mono_Preprocessing_WithoutFlat.ssf` | Mono, no flats |
@@ -31,7 +31,7 @@ so power users can override Polaris's stock behaviour.
 
 ## Editing
 
-Don't edit these files in place — Polaris re-extracts them on
+Don't edit these files in place, Polaris re-extracts them on
 upgrade. Instead copy one into your Siril user-scripts directory
 and tweak it there. The user copy will take precedence
 automatically.

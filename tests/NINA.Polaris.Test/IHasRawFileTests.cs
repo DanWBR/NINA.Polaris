@@ -15,7 +15,7 @@ public class IHasRawFileTests {
     [Test]
     public void BaseImageData_ImplementsIHasRawFile_AndDefaultsAreNull() {
         // Every BaseImageData satisfies the optional companion
-        // interface — backends that have no raw simply leave the
+        // interface, backends that have no raw simply leave the
         // properties null and the writer falls through to FITS.
         var props = new ImageProperties { Width = 1, Height = 1, BitDepth = 16 };
         var img = new BaseImageData(new ushort[1], props);

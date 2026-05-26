@@ -207,7 +207,7 @@ public class PHD2Client : IDisposable {
                     DecDirection = TryGetString(msg, "DECDirection")
                 };
                 AddStep(step);
-                // A GuideStep arriving means PHD2 is actively guiding —
+                // A GuideStep arriving means PHD2 is actively guiding,
                 // PHD2 doesn't reliably emit an AppState event after
                 // every transition, so derive it from the step stream.
                 // Without this, the UI showed "Stopped" + 0 samples
@@ -260,7 +260,7 @@ public class PHD2Client : IDisposable {
                 break;
 
             // PHD2 doesn't always re-emit an AppState event after these
-            // transitions (verified empirically — see
+            // transitions (verified empirically, see
             // https://github.com/OpenPHDGuiding/phd2/wiki/EventMonitoring
             // for the canonical state mapping). Drive AppState directly
             // off the transition event so the UI stays in sync.
@@ -433,7 +433,7 @@ public class PHD2Client : IDisposable {
 
     /// <summary>
     /// Switch PHD2 to a different profile. PHD2 requires equipment to be
-    /// *disconnected* first — this method does that for you (idempotent: if
+    /// *disconnected* first, this method does that for you (idempotent: if
     /// already disconnected, the SetConnected(false) call is a no-op).
     /// </summary>
     public async Task SetProfileAsync(int profileId, CancellationToken ct = default) {
@@ -473,25 +473,25 @@ public class PHD2Client : IDisposable {
         return r.HasValue && r.Value.ValueKind == JsonValueKind.String ? r.Value.GetString() ?? "" : "";
     }
 
-    /// <summary>"Auto" / "North" / "South" / "Off" — see PHD2 docs.</summary>
+    /// <summary>"Auto" / "North" / "South" / "Off", see PHD2 docs.</summary>
     public Task SetDecGuideModeAsync(string mode, CancellationToken ct = default) =>
         CallAsync("set_dec_guide_mode", new object[] { mode }, ct: ct);
 
     // ----- Algorithm parameter introspection + tuning -----
     // PHD2 exposes per-axis algorithm parameters (RA / Dec / Mount). The
     // parameter set depends on which algorithm is currently selected for
-    // that axis in the PHD2 Brain. We don't try to guess — callers use
+    // that axis in the PHD2 Brain. We don't try to guess, callers use
     // GetAlgoParamNamesAsync to discover the live param surface, then
     // GetAlgoParamAsync / SetAlgoParamAsync to read/write individual knobs.
     //
     // PHD2 returns a JSON-RPC error if the param doesn't exist for the
-    // current algorithm — we surface that as null/empty rather than
+    // current algorithm, we surface that as null/empty rather than
     // throwing, so callers can apply presets safely even when the user
     // has a non-standard algorithm selected.
 
     /// <summary>
     /// Lists the algorithm parameter names PHD2 currently exposes for the
-    /// given axis. Axis is typically "ra", "dec", or "Mount" — see PHD2 docs.
+    /// given axis. Axis is typically "ra", "dec", or "Mount", see PHD2 docs.
     /// Returns empty list if axis is invalid or PHD2 returns an error.
     /// </summary>
     public async Task<List<string>> GetAlgoParamNamesAsync(string axis, CancellationToken ct = default) {
@@ -525,7 +525,7 @@ public class PHD2Client : IDisposable {
     /// <summary>
     /// Sets a single algorithm parameter. Returns true on success.
     /// Returns false (with a debug log) if the parameter doesn't exist
-    /// for the current algorithm — callers applying multi-param presets
+    /// for the current algorithm, callers applying multi-param presets
     /// should treat per-param failures as non-fatal.
     /// </summary>
     public async Task<bool> SetAlgoParamAsync(string axis, string name, double value, CancellationToken ct = default) {

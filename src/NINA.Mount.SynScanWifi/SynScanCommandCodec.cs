@@ -10,8 +10,8 @@ namespace NINA.Mount.SynScanWifi;
 ///
 /// LX200 conventions:
 /// <list type="bullet">
-/// <item><c>RA</c> as <c>HH:MM:SS</c> — hours 0..23, no sign.</item>
-/// <item><c>Dec</c> as <c>sDD*MM:SS</c> — leading <c>+</c> or <c>-</c>,
+/// <item><c>RA</c> as <c>HH:MM:SS</c>, hours 0..23, no sign.</item>
+/// <item><c>Dec</c> as <c>sDD*MM:SS</c>, leading <c>+</c> or <c>-</c>,
 /// degrees 0..90, the literal <c>*</c> between degrees and minutes.
 /// (Some firmware versions accept <c>°</c> too; <c>*</c> is the
 /// canonical character used in the published spec.)</item>
@@ -21,7 +21,7 @@ public static class SynScanCommandCodec {
 
     /// <summary>Format an RA value (hours, 0..24) as <c>HH:MM:SS</c>
     /// for the <c>:Sr</c> command. Seconds are rounded to the nearest
-    /// integer — sub-second precision isn't useful at typical SynScan
+    /// integer, sub-second precision isn't useful at typical SynScan
     /// pointing accuracy (~30 arcsec).</summary>
     public static string FormatRA(double raHours) {
         raHours = ((raHours % 24) + 24) % 24;   // wrap into [0, 24)
@@ -36,7 +36,7 @@ public static class SynScanCommandCodec {
 
     /// <summary>Format a Dec value (degrees, -90..+90) as
     /// <c>sDD*MM:SS</c> for the <c>:Sd</c> command. Sign is always
-    /// emitted (LX200 spec requires it). Clamps to [-90, +90] —
+    /// emitted (LX200 spec requires it). Clamps to [-90, +90],
     /// callers should already be passing astronomy-valid values.</summary>
     public static string FormatDec(double decDeg) {
         decDeg = Math.Clamp(decDeg, -90, 90);
@@ -51,7 +51,7 @@ public static class SynScanCommandCodec {
         return $"{sign}{d:D2}*{m:D2}:{s:D2}";
     }
 
-    /// <summary>Parse the response of <c>:GR#</c> — <c>HH:MM:SS#</c> —
+    /// <summary>Parse the response of <c>:GR#</c>, <c>HH:MM:SS#</c>,
     /// into RA hours. Trailing <c>#</c> and surrounding whitespace are
     /// tolerated. Returns null on malformed input so the caller can
     /// distinguish a transport failure from a parse failure.</summary>
@@ -66,7 +66,7 @@ public static class SynScanCommandCodec {
         return h + m / 60.0 + sec / 3600.0;
     }
 
-    /// <summary>Parse the response of <c>:GD#</c> — <c>sDD*MM:SS#</c> —
+    /// <summary>Parse the response of <c>:GD#</c>, <c>sDD*MM:SS#</c>,
     /// into Dec degrees. Tolerates both <c>*</c> and <c>°</c>
     /// (some firmware variants emit one or the other) as the
     /// degree-minute separator.</summary>

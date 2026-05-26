@@ -3,7 +3,7 @@ using System.Globalization;
 namespace NINA.Polaris.Services.Alpaca;
 
 /// <summary>
-/// Convenience wrapper for the Alpaca/ASCOM Telescope v3 interface — covers
+/// Convenience wrapper for the Alpaca/ASCOM Telescope v3 interface, covers
 /// the actions the rest of the app actually uses (connection, current
 /// pointing, tracking, slew, park).
 /// </summary>

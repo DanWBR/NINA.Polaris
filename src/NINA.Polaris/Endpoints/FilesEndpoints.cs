@@ -110,14 +110,14 @@ public static class FilesEndpoints {
                 // stretch params are computed from THAT file's
                 // histogram and applied to the requested file's pixels.
                 // Used by the before/after comparator so both sides
-                // share the same auto-stretch — otherwise a slightly
+                // share the same auto-stretch, otherwise a slightly
                 // denoised sibling re-stretches with a tighter MAD
                 // and the comparator shows two different colour
                 // mappings instead of two states of the same scene.
                 string? stretchRefFull = null;
                 if (!string.IsNullOrWhiteSpace(stretchFrom)) {
                     try { stretchRefFull = svc.ResolveSafe(stretchFrom, mustExist: true); }
-                    catch { /* silently ignore — fall back to self-stretch */ }
+                    catch { /* silently ignore, fall back to self-stretch */ }
                 }
 
                 switch (kind) {
@@ -156,7 +156,7 @@ public static class FilesEndpoints {
 
         // Parsed FITS header cards as JSON, grouped into sensible
         // sections for the viewer side panel. Reads headers only
-        // (skips the pixel block — 64 MB of memory and ~100 ms saved
+        // (skips the pixel block, 64 MB of memory and ~100 ms saved
         // per file) so opening the panel is essentially free even on
         // a Pi over a slow USB SSD.
         g.MapGet("/fits-headers", (FileBrowserService svc, string path) => {

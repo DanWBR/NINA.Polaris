@@ -171,7 +171,7 @@ public static class GuiderEndpoints {
         group.MapGet("/profiles", async (PHD2Client phd2) => {
             if (!phd2.IsConnected) {
                 // Match the connected-but-empty shape so the UI doesn't
-                // have to special-case "not connected" — empty list +
+                // have to special-case "not connected", empty list +
                 // null current is the right thing to show.
                 return Results.Ok(new {
                     current = (PHD2Profile?)null,
@@ -186,7 +186,7 @@ public static class GuiderEndpoints {
             } catch (Exception ex) {
                 // PHD2 can transiently reject get_profile{,s} when busy
                 // (mid-calibration, equipment in flux). Don't turn that
-                // into a 500 — the frontend polls this on every WS
+                // into a 500, the frontend polls this on every WS
                 // false→true transition + on user actions, and a 500
                 // surfaces as a scary "Failed to load PHD2 profiles"
                 // toast even though the connection is fine. Return
@@ -272,8 +272,8 @@ public static class GuiderEndpoints {
             weStartedIt = pm.WeStartedIt
         }));
 
-        // Detected install info — the UI uses this on startup to either show
-        // "PHD2 detected at <path>" or "PHD2 not installed — download here".
+        // Detected install info, the UI uses this on startup to either show
+        // "PHD2 detected at <path>" or "PHD2 not installed, download here".
         group.MapGet("/install-info", (PHD2ProcessManager pm, IConfiguration config) => {
             var configured = config.GetValue<string?>("PHD2:ExecutablePath");
             var resolved = pm.ExecutablePath;
@@ -335,7 +335,7 @@ public static class GuiderEndpoints {
             return Results.Ok(result);
         });
 
-        // Read-only — what's the last sync status? UI shows the indicator
+        // Read-only, what's the last sync status? UI shows the indicator
         // chip (ok/error/missing-profile) based on this.
         group.MapGet("/profile/sync/status", (PHD2ProfileSyncService sync) =>
             Results.Ok(sync.CurrentStatus));
@@ -343,7 +343,7 @@ public static class GuiderEndpoints {
         // ----- PH2X-4: Smart calibration orchestrator -----
 
         // Kick a fresh PHD2 calibration. Body is SmartCalibrateOptions
-        // (all fields optional with sensible defaults — see record).
+        // (all fields optional with sensible defaults, see record).
         group.MapPost("/calibrate/smart", (SmartCalibrateOptions? opts,
                                           PHD2CalibrationOrchestrator orch) => {
             var job = orch.StartJob(opts ?? new SmartCalibrateOptions());
@@ -379,7 +379,7 @@ public static class GuiderEndpoints {
         // ----- PH2X-5: Algorithm presets + live param tuning -----
 
         // Built-in presets table (Default / Reactive / Smooth). UI populates
-        // the preset pill from this. "Custom" is implicit — a rig with a
+        // the preset pill from this. "Custom" is implicit, a rig with a
         // populated PHD2CustomAlgoParams bag.
         group.MapGet("/algo-presets", () => Results.Ok(new {
             names = PHD2AlgoPresets.BuiltinNames,
@@ -449,7 +449,7 @@ public static class GuiderEndpoints {
                 return Results.BadRequest(new { error = "axis + name required" });
             var ok = await phd2.SetAlgoParamAsync(req.Axis, req.Name, req.Value);
             if (!ok) return Results.BadRequest(new {
-                error = $"PHD2 rejected {req.Axis}/{req.Name} — algorithm may not expose it" });
+                error = $"PHD2 rejected {req.Axis}/{req.Name}, algorithm may not expose it" });
             var rig = profiles.ActiveEquipmentProfile;
             profiles.UpdateEquipmentProfile(rig.Id, r => {
                 r.PHD2CustomAlgoParams[$"{req.Axis}:{req.Name}"] = req.Value;
@@ -471,7 +471,7 @@ public static class GuiderEndpoints {
             bindPort = gui.BindPort,
             lastHealthCheckAt = gui.LastHealthCheckAt,
             lastError = gui.LastError,
-            // Hint URL the UI iframes — points to the Polaris reverse-proxy
+            // Hint URL the UI iframes, points to the Polaris reverse-proxy
             // so it stays same-origin (sessionStorage works there).
             embedUrl = "/phd2-gui/"
         }));

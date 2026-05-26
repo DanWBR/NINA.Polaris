@@ -81,7 +81,7 @@ public class PHD2CalibrationOrchestrator {
                     // cam). User can fix the PHD2 profile to get a real value.
                     double assumedPxUm = 4.0;
                     pxScale = assumedPxUm * 206.265 / rig.GuiderFocalLengthMm;
-                    job.Warnings.Add($"PHD2 pixel scale unknown — assuming {pxScale:F2}\"/px from rig focal length");
+                    job.Warnings.Add($"PHD2 pixel scale unknown, assuming {pxScale:F2}\"/px from rig focal length");
                 } else {
                     Fail(job, "PHD2 pixel scale unavailable and rig guider focal length not set");
                     return;
@@ -94,7 +94,7 @@ public class PHD2CalibrationOrchestrator {
             const double defaultGuideRateArcsecPerSec = 7.5;  // 0.5x sidereal
             double guideRate = defaultGuideRateArcsecPerSec;
             // INDI exposes guide rate for some mounts but our IndiTelescope
-            // abstraction doesn't surface it yet — fall back to the PHD2
+            // abstraction doesn't surface it yet, fall back to the PHD2
             // wizard default. Future: read from _equip.Telescope if exposed.
 
             int stepMs;
@@ -111,7 +111,7 @@ public class PHD2CalibrationOrchestrator {
             if (job.Options.SlewToEquator) {
                 SetPhase(job, CalibrationPhase.Slewing);
                 if (_equip.Telescope == null) {
-                    job.Warnings.Add("SlewToEquator requested but no main telescope connected — skipping");
+                    job.Warnings.Add("SlewToEquator requested but no main telescope connected, skipping");
                 } else {
                     // RA = current LST (meridian); Dec = 0 (equator).
                     // For now we use the option's TargetRaHours if set, else
@@ -125,7 +125,7 @@ public class PHD2CalibrationOrchestrator {
                     if (slewJob.Task != null) {
                         try { await slewJob.Task.WaitAsync(TimeSpan.FromSeconds(180), ct); }
                         catch (TimeoutException) {
-                            job.Warnings.Add("Slew timed out at 180s — proceeding anyway");
+                            job.Warnings.Add("Slew timed out at 180s, proceeding anyway");
                         }
                     }
                 }
@@ -140,7 +140,7 @@ public class PHD2CalibrationOrchestrator {
                 await _phd2.SetAlgoParamAsync("Mount", "calibration_step", stepMs, ct)
                 || await _phd2.SetAlgoParamAsync("ra", "calibration_step", stepMs, ct);
             if (!stepApplied) {
-                job.Warnings.Add($"Could not apply calibration_step={stepMs}ms via set_algo_param — using PHD2's existing value");
+                job.Warnings.Add($"Could not apply calibration_step={stepMs}ms via set_algo_param, using PHD2's existing value");
             }
 
             // 6. Clear + find + guide ----------------------------------------
@@ -151,7 +151,7 @@ public class PHD2CalibrationOrchestrator {
             await Task.Delay(TimeSpan.FromSeconds(3), ct);  // settle loop
             try { await _phd2.AutoSelectStarAsync(); }
             catch (Exception ex) { _logger.LogDebug(ex, "find_star failed (continuing)"); }
-            // Start guide with recalibrate=true — that forces fresh calibration.
+            // Start guide with recalibrate=true, that forces fresh calibration.
             await _phd2.StartGuidingAsync(
                 settlePixels: 1.5, settleTime: 10, settleTimeout: 60, recalibrate: true);
 
@@ -190,7 +190,7 @@ public class PHD2CalibrationOrchestrator {
             SetPhase(job, CalibrationPhase.Validating);
             var cal = _phd2.Calibration;
             if (cal == null || !cal.Calibrated) {
-                Fail(job, "PHD2 reports not calibrated after Guiding state — unexpected");
+                Fail(job, "PHD2 reports not calibrated after Guiding state, unexpected");
                 return;
             }
             job.Calibration = cal;
@@ -199,10 +199,10 @@ public class PHD2CalibrationOrchestrator {
             double angleDelta = Math.Abs(((cal.XAngle - cal.YAngle) * 180.0 / Math.PI + 360) % 180 - 90);
             if (angleDelta > 20) {
                 job.Warnings.Add(
-                    $"Calibration axes not orthogonal (Δ={angleDelta:F1}°) — guiding may be unreliable");
+                    $"Calibration axes not orthogonal (Δ={angleDelta:F1}°), guiding may be unreliable");
             }
             if (Math.Abs(cal.XRate) < 1e-5) {
-                Fail(job, $"Calibration rate near zero (XRate={cal.XRate:E2}) — mount didn't move during calibration");
+                Fail(job, $"Calibration rate near zero (XRate={cal.XRate:E2}), mount didn't move during calibration");
                 return;
             }
 
@@ -235,7 +235,7 @@ public class PHD2CalibrationOrchestrator {
 
     private static double LocalSiderealHours() {
         // Crude approximation: GMST at UTC midnight = J2000 epoch offset.
-        // For the slew helper this only needs to be within ~15min — PHD2
+        // For the slew helper this only needs to be within ~15min, PHD2
         // calibrates on whatever star is in view after the slew.
         var now = DateTime.UtcNow;
         var jd = now.ToOADate() + 2415018.5;
@@ -250,7 +250,7 @@ public class PHD2CalibrationOrchestrator {
 /// <summary>
 /// Pure helper for calibration step computation. PHD2's recommended
 /// formula: <c>step_ms = round(distance_px * pixel_scale_arcsec / guide_rate_arcsec_per_sec * 1000)</c>.
-/// Capped to [250, 3000] ms — PHD2's own sane window.
+/// Capped to [250, 3000] ms, PHD2's own sane window.
 /// </summary>
 public static class CalibrationStepCalculator {
     public const int MinStepMs = 250;

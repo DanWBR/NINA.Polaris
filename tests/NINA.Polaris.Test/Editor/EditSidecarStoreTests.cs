@@ -7,7 +7,7 @@ namespace NINA.Polaris.Test.Editor;
 
 /// <summary>
 /// Pins EditSidecarStore round-trip behaviour. The store is the entire
-/// non-destructive contract — if we silently drop edits or write
+/// non-destructive contract, if we silently drop edits or write
 /// malformed JSON the user loses work on reopening, so these tests are
 /// worth keeping tight.
 /// </summary>
@@ -100,7 +100,7 @@ public class EditSidecarStoreTests {
         var store = new EditSidecarStore(NullLogger<EditSidecarStore>.Instance);
         // First save: vibrance 0.3
         store.Save(sourcePath, new EditParams(Color: new ColorParams(Vibrance: 0.3)));
-        // Second save: vibrance 0.7 — should replace, not append.
+        // Second save: vibrance 0.7, should replace, not append.
         store.Save(sourcePath, new EditParams(Color: new ColorParams(Vibrance: 0.7)));
 
         var loaded = store.Load(sourcePath);

@@ -72,5 +72,5 @@ public class NikonSdkCamera : ICamera {
 
     private static NotImplementedException MakeException()
         => new("Nikon SDK integration is a skeleton in this build. " +
-               "Implementation pending — see docs/dslr-windows-nikon.md.");
+               "Implementation pending, see docs/dslr-windows-nikon.md.");
 }

@@ -1,13 +1,13 @@
-// onnx-pipelines.js — client-side AI inference for GraXpert ops.
+// onnx-pipelines.js, client-side AI inference for GraXpert ops.
 //
 // Loaded lazily by app.js when the user first invokes a GraXpert
 // operation (BGE / Denoise / Decon). Owns three concerns:
 //
-//   1) ORT Web bootstrap — set wasmPaths to our vendored bundle,
+//   1) ORT Web bootstrap, set wasmPaths to our vendored bundle,
 //      pick the best execution provider (webgpu > wasm-simd-threaded),
 //      keep one global session per (family, version).
 //
-//   2) Model fetch + IndexedDB cache — GET /api/onnx/model/{f}/{v},
+//   2) Model fetch + IndexedDB cache, GET /api/onnx/model/{f}/{v},
 //      verify ETag matches manifest hash, store the bytes in an
 //      IndexedDB object store so reload doesn't re-download.
 //
@@ -15,7 +15,7 @@
 //      that translate (pixels, w, h, channels, params) into model
 //      input tensors, run inference, and translate output back to a
 //      pixel buffer. Implemented in GX-2..GX-4; the framework here
-//      is GX-1b — it gives those pipelines a session-cache helper
+//      is GX-1b, it gives those pipelines a session-cache helper
 //      to call.
 //
 // Lives as a classic <script> so app.js can reference `OnnxRegistry`
@@ -40,7 +40,7 @@
         _ortLoadPromise = new Promise((resolve, reject) => {
             if (window.ort) { resolve(window.ort); return; }
             const s = document.createElement('script');
-            // GX-10/11: ort.min.js is the WASM-only build — when we
+            // GX-10/11: ort.min.js is the WASM-only build, when we
             // pass 'webgpu' in executionProviders, ORT logs
             // "removing requested execution provider 'webgpu' from
             // session options because it is not available: backend
@@ -60,14 +60,14 @@
                 // Point at the WASM bundle dir so the runtime knows
                 // where to fetch ort-wasm-simd-threaded.wasm + .jsep
                 // variant. Without this it assumes the same dir as
-                // the entry script — which is true for us but explicit
+                // the entry script, which is true for us but explicit
                 // beats implicit (especially when served behind a
                 // sub-path / reverse proxy / Relay tunnel).
                 window.ort.env.wasm.wasmPaths = ORT_VENDOR_PATH;
                 // GX-9 (perf): bump the WASM thread count when the
                 // browser actually has SharedArrayBuffer (requires
                 // cross-origin-isolation, which Polaris does NOT set
-                // by default — but if a future deploy enables COOP/COEP
+                // by default, but if a future deploy enables COOP/COEP
                 // or runs inside an isolated context, threading is a
                 // free 4-8× speedup). Falls back to 1 when SAB is
                 // absent. This only matters when WebGPU isn't chosen
@@ -81,7 +81,7 @@
                         '(SharedArrayBuffer available)');
                 } else {
                     window.ort.env.wasm.numThreads = 1;
-                    console.warn('[OnnxRegistry] WASM single-threaded — '
+                    console.warn('[OnnxRegistry] WASM single-threaded, '
                         + 'SharedArrayBuffer unavailable (no COOP/COEP). '
                         + 'Expect slow CPU inference; WebGPU still works.');
                 }
@@ -98,7 +98,7 @@
     // we store the raw ArrayBuffer under that key. Hash mismatch
     // between manifest + stored entry → drop and re-download. Caching
     // by hash (not by family/version) means model upgrades don't
-    // leave stale bytes behind — the new hash simply misses cache.
+    // leave stale bytes behind, the new hash simply misses cache.
 
     function openDb() {
         return new Promise((resolve, reject) => {
@@ -144,7 +144,7 @@
         });
     }
 
-    /** Sum of cached blob bytes — for the Settings panel "cache size" line. */
+    /** Sum of cached blob bytes, for the Settings panel "cache size" line. */
     async function idbTotalSize() {
         const db = await openDb();
         return new Promise((resolve) => {
@@ -177,7 +177,7 @@
     }
 
     // ─── Manifest + session cache ───────────────────────────────────
-    // One ort.InferenceSession per (family, version) — sessions are
+    // One ort.InferenceSession per (family, version), sessions are
     // hundreds of MB resident; recreating per-op would be wasteful.
     // Sessions live for the page session and get released when the
     // user navigates away (browser tears down the worker).
@@ -195,7 +195,7 @@
 
     // GX-12o: pick the "best" version for a family on the current
     // platform. On iOS, prefer a -fp16 sibling of the requested
-    // version if the manifest has it — half the weights → fits the
+    // version if the manifest has it, half the weights → fits the
     // iOS WebGPU cap → ~10× faster than WASM. Falls back to the
     // requested version on desktop OR when the FP16 sibling isn't
     // registered. Pure preference layer; the requested version is
@@ -255,13 +255,13 @@
     }
 
     // GX-12n4: pickBackends now takes the model's on-disk size so the
-    // iOS gate can be conditional — small models keep WebGPU (fast),
+    // iOS gate can be conditional, small models keep WebGPU (fast),
     // large ones force WASM (safe). Cache is per-(iOS_threshold)
     // bucket so we don't re-probe the GPU adapter on every call.
     async function pickBackends(modelSizeBytes) {
         const iOS = _isIOSForOnnx();
         if (iOS) {
-            // On iOS the decision varies per-model — no global memo.
+            // On iOS the decision varies per-model, no global memo.
             const sizeOk = !modelSizeBytes
                 || modelSizeBytes <= IOS_WEBGPU_MAX_MODEL_BYTES;
             if (!sizeOk) {
@@ -272,7 +272,7 @@
                         + ' MB exceeds the ' + (IOS_WEBGPU_MAX_MODEL_BYTES / (1024 * 1024))
                         + ' MB WebGPU cap on iPhone Safari',
                 };
-                console.log('[OnnxRegistry] iOS + large model — forcing WASM '
+                console.log('[OnnxRegistry] iOS + large model, forcing WASM '
                     + '(' + (modelSizeBytes / (1024 * 1024)).toFixed(0) + ' MB > '
                     + (IOS_WEBGPU_MAX_MODEL_BYTES / (1024 * 1024)) + ' MB iOS WebGPU cap).');
                 return ['wasm'];
@@ -284,7 +284,7 @@
             // Non-iOS: stable per-page, memoise the probe.
             return _pickedBackends;
         }
-        // navigator.gpu just means the API exists — Edge / Chrome
+        // navigator.gpu just means the API exists, Edge / Chrome
         // ship the surface even on systems without a working adapter
         // (no GPU, GPU driver too old, browser flag disabled, running
         // inside an old discrete-GPU laptop with the iGPU active).
@@ -296,7 +296,7 @@
         const hasNavGpu = typeof navigator !== 'undefined' && navigator.gpu
                           && typeof navigator.gpu.requestAdapter === 'function';
         if (!hasNavGpu) {
-            probeNotes.push('navigator.gpu API absent — browser too old or WebGPU flag off');
+            probeNotes.push('navigator.gpu API absent, browser too old or WebGPU flag off');
         } else {
             // Try power preferences in order. Some Windows + NVIDIA
             // combos return null for 'high-performance' but accept
@@ -345,7 +345,7 @@
                     && location.hostname !== '127.0.0.1'
                     && location.protocol !== 'https:') {
                     ctxNotes.push('accessing via ' + location.hostname
-                        + ' — Chrome blocks WebGPU on non-localhost HTTP; use https or open from localhost');
+                        + ', Chrome blocks WebGPU on non-localhost HTTP; use https or open from localhost');
                 }
             }
             console.warn('[OnnxRegistry] WebGPU probe details:\n  · '
@@ -361,7 +361,7 @@
         if (chosen[0] === 'webgpu') {
             console.log('[OnnxRegistry] Using WebGPU adapter:', adapterInfo || '(info unavailable)');
         } else {
-            console.warn('[OnnxRegistry] No WebGPU adapter — falling back to WASM ' +
+            console.warn('[OnnxRegistry] No WebGPU adapter, falling back to WASM ' +
                 '(' + (window.ort?.env?.wasm?.numThreads || 1) + ' threads). ' +
                 'GraXpert CLI on the host with CUDA will be MUCH faster than this.');
         }
@@ -422,15 +422,15 @@
         // GX-9 (UX): yield so the 'creating-session' progress event
         // gets a render frame BEFORE ort.InferenceSession.create
         // (which runs single-threaded WASM and blocks the main
-        // thread for 10-30s on big models — Chrome's "page
+        // thread for 10-30s on big models, Chrome's "page
         // unresponsive" dialog fires after ~15s of no yield). We
         // can't slice the create itself; this just ensures the
         // user sees "loading model" before the freeze starts.
         await _yieldToBrowser();
         const ort = await loadOrtWeb();
         // GX-12n4: pass the model size so iOS can choose WebGPU for
-        // small models (FP16 / BGE / Decon — fast) and WASM for big
-        // ones (FP32 Denoise — would OOM the tab on WebGPU).
+        // small models (FP16 / BGE / Decon, fast) and WASM for big
+        // ones (FP32 Denoise, would OOM the tab on WebGPU).
         const ep = await pickBackends(entry.sizeBytes);
         let session;
         try {
@@ -441,7 +441,7 @@
         } catch (e) {
             // GX-12n2: turn ORT's cryptic "no backend found" / "failed
             // to load model" into something actionable. The most common
-            // cause on iOS is loading an -int8 model — ORT Web's
+            // cause on iOS is loading an -int8 model, ORT Web's
             // bundled WASM EP doesn't include the QLinear* operators
             // needed for INT8 quantized graphs, and the create() call
             // bails out only after allocating intermediate buffers,
@@ -517,7 +517,7 @@
         return dst;
     }
 
-    /** Float32 bilinear resize — same as above but float in / float out.
+    /** Float32 bilinear resize, same as above but float in / float out.
      *  Used to resample the predicted background plane (already float
      *  after denormalize) back to the source dimensions without an
      *  intermediate uint16 round-trip. */
@@ -550,7 +550,7 @@
     }
 
     /** Sample-based median + MAD on a normalised Float32 plane.
-     *  We don't need full-image statistics for a stable BGE normalize —
+     *  We don't need full-image statistics for a stable BGE normalize,
      *  3-4k random samples gives sub-1% accuracy on the median, which
      *  is well within the slack the model + post-Gaussian smooth eats.
      *  Returns { median, mad }. */
@@ -571,7 +571,7 @@
     // GX-12m2: same math as medianMadSampled but reads from a raw
     // Uint16 buffer + normalizes inline (× 1/65535). Lets the Denoise
     // pipeline skip allocating a full Float32 copy of the plane just
-    // to compute median + MAD — saves ~26 MB / channel on iOS.
+    // to compute median + MAD, saves ~26 MB / channel on iOS.
     function medianMadSampledFromUint16(pixels) {
         const N = Math.min(pixels.length, 4000);
         const samples = new Float32Array(N);
@@ -635,7 +635,7 @@
     }
 
     // ───────────────────────────────────────────────────────────────
-    // GX-2: Background extraction (BGE) — single forward pass.
+    // GX-2: Background extraction (BGE), single forward pass.
     // ───────────────────────────────────────────────────────────────
     //
     // Math mirrors GraXpert's background_extraction.py:
@@ -650,7 +650,7 @@
     //   7) bilinear resize back to source W×H
     //   8) apply correction: subtract / divide
     //
-    // Sample-point user overrides + RBF interpolation deferred — v1
+    // Sample-point user overrides + RBF interpolation deferred, v1
     // behaves like CLI auto-BGE (no manual points). Future GX-* phase
     // can add a sample-pick UI on the working canvas.
     //
@@ -668,7 +668,7 @@
             const version = await preferQuantizedOnIOS('bge', '1.0.1');
             const TILE = 256;
             // GX-9: derive the channel count. Old callers omit
-            // opts.channels and pass a Uint16Array length == w*h —
+            // opts.channels and pass a Uint16Array length == w*h,
             // mono path. New callers (RGB FITS) pass channels:3 and
             // pixels length == w*h*3, plane-sequential (R...G...B,
             // FITSReader's convention).
@@ -755,7 +755,7 @@
             //    modelled background plane into a sibling uint16
             //    buffer. The background is stored in source brightness
             //    space (after denormalize + smooth + resize), so the
-            //    user can stack it like any other FITS — useful for
+            //    user can stack it like any other FITS, useful for
             //    diagnostics ("is the gradient mostly LP or amp glow?").
             //    - Subtraction recentres around the channel median so
             //      the corrected background sits where the source
@@ -830,12 +830,12 @@
         return dst;
     }
 
-    // GX-12m: iOS-friendly variant — pad + normalize-to-0..1 in a
+    // GX-12m: iOS-friendly variant, pad + normalize-to-0..1 in a
     // single Float32 pass, skipping the intermediate Uint16 buffer
     // entirely. The Denoise pipeline used to call padEdge() then
     // immediately copy-divide into a Float32Array, holding BOTH
     // buffers (Uint16 padded + Float32 normalized) in memory at the
-    // same time — a transient 13 MB-per-channel peak that pushed
+    // same time, a transient 13 MB-per-channel peak that pushed
     // iPhone Safari over its OOM kill threshold on RGB masters. By
     // folding both steps here, peak usage drops to just the Float32
     // result, and we never have to allocate the Uint16 staging buffer.
@@ -858,7 +858,7 @@
     }
 
     // ───────────────────────────────────────────────────────────────
-    // GX-3: Denoise pipeline (v2 / v3). Tile-based — stride 128,
+    // GX-3: Denoise pipeline (v2 / v3). Tile-based, stride 128,
     // window 256, 64-pixel context margin per tile edge. Output of
     // each tile keeps only the inner 128x128 stride region (the
     // outer 64-px margin existed only to let the model see context
@@ -872,7 +872,7 @@
     // GX-9 (UX): cede o thread principal pro browser desenhar 1 frame.
     // Necessário antes/depois de blocos sync grandes (allocação +
     // normalize de buffers de dezenas de MB) e antes de carregar o
-    // InferenceSession — sem isso o Chrome dispara "Page Unresponsive".
+    // InferenceSession, sem isso o Chrome dispara "Page Unresponsive".
     // setTimeout(0) é mais barato que requestAnimationFrame e suficiente
     // pra liberar uma única tick do event loop.
     function _yieldToBrowser() {
@@ -897,14 +897,14 @@
     // GX-9: per-channel dispatcher used by Denoise + Decon. Both
     // pipelines were designed mono-first (one model call per tile
     // grid). For RGB inputs we run the entire pipeline once per
-    // colour plane and stitch the results plane-sequentially —
+    // colour plane and stitch the results plane-sequentially,
     // wasteful vs a native-RGB pipeline (3× the model calls) but
     // correct, and the math doesn't need rewriting. BgePipeline
     // handles RGB natively because its model is single-pass.
     async function runPerChannel(pipelineFn, pixels, width, height, opts) {
         const channels = opts && opts.channels === 3 ? 3 : 1;
         if (channels === 1) {
-            // Strip the channels hint before passing through — the
+            // Strip the channels hint before passing through, the
             // mono pipeline doesn't read it and we want to keep its
             // call-path identical.
             const passOpts = Object.assign({}, opts);
@@ -925,7 +925,7 @@
                 const channelLabel = ['R', 'G', 'B'][c];
                 planeOpts.onProgress = (phase, frac) => {
                     // GX-9: preserve a null/undefined frac (e.g. the
-                    // 'creating-session' phase has no sub-progress —
+                    // 'creating-session' phase has no sub-progress,
                     // the model is loading and we have nothing to
                     // report mid-way). Default-to-zero was lying to
                     // the user ("R creating-session 0%" stuck during
@@ -990,7 +990,7 @@
             await _yieldToBrowser();
 
             // Tile grid. `padW`/`padH`/`offsetX`/`offsetY` stay as
-            // logical coordinates — they describe WHERE in a virtual
+            // logical coordinates, they describe WHERE in a virtual
             // padded plane each tile lives, but we never materialise
             // that plane. `offsetX` / `offsetY` are how many phantom
             // padding pixels precede the real frame on the left/top
@@ -1032,9 +1032,9 @@
             // GX-12b: blend-mask threshold (bright pixels keep original,
             // sub-threshold background gets denoised).
             const thresholdNorm = CLIP / 0.04 * mad + median;
-            // Output buffer — only the trimmed final dimensions, no padding.
+            // Output buffer, only the trimmed final dimensions, no padding.
             const dst = new Uint16Array(width * height);
-            // Tile tensor reused across iterations? No — ort.Tensor takes
+            // Tile tensor reused across iterations? No, ort.Tensor takes
             // ownership of the backing Float32Array, so each tile needs
             // a fresh allocation. The reuse trick fights with ORT Web.
             const tensorData = new Float32Array(TILE * TILE * 3);
@@ -1063,7 +1063,7 @@
                             tensorData[base + 2] = n;
                         }
                     }
-                    // Wrap in tensor (no copy — view onto tensorData).
+                    // Wrap in tensor (no copy, view onto tensorData).
                     const inputTensor = new ort.Tensor('float32',
                         tensorData, [1, TILE, TILE, 3]);
                     const tileT0 = performance.now();
@@ -1149,7 +1149,7 @@
             const requestedVersion = opts.version
                 || (target === 'objects' ? '1.0.1' : '1.0.0');
             // GX-12o: on iOS, auto-prefer the -fp16 sibling if the
-            // user (or operator) generated one — Decon FP32 is ~267 MB
+            // user (or operator) generated one, Decon FP32 is ~267 MB
             // which lands on WASM (slow), FP16 is ~133 MB and stays
             // on WebGPU (fast). Decon has no per-run version dropdown
             // in the UI today, so this auto-bump is how iOS gets the

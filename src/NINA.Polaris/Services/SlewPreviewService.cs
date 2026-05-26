@@ -62,7 +62,7 @@ public class SlewPreviewService : BackgroundService {
             try { await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken); }
             catch (TaskCanceledException) { break; }
         }
-        // Service shutdown — leave any stream alone if user started it.
+        // Service shutdown, leave any stream alone if user started it.
         if (IsPreviewActive && _streamWasStartedByUs) {
             try { await _stream.StopAsync(); } catch { }
         }
@@ -87,7 +87,7 @@ public class SlewPreviewService : BackgroundService {
 
         // Capture-idle aggregator: every surface that touches the
         // camera must be quiet. If we missed one and slew preview
-        // collides with an active capture, the surface owner wins —
+        // collides with an active capture, the surface owner wins,
         // we just don't try to start while it's busy.
         var captureIdle =
             (_sequence?.GetStatus().State?.Equals("running", StringComparison.OrdinalIgnoreCase) != true) &&
@@ -95,13 +95,13 @@ public class SlewPreviewService : BackgroundService {
             _flip.State.ToString().Equals("Idle", StringComparison.OrdinalIgnoreCase) &&
             _flatWizard.State.ToString().Equals("Idle", StringComparison.OrdinalIgnoreCase) &&
             !_recording.IsRecording &&
-            // Stream may already be on — only consider idle when nobody
+            // Stream may already be on, only consider idle when nobody
             // else started it (we own _streamWasStartedByUs).
             (!_stream.IsRunning || _streamWasStartedByUs);
         LastDecision_CaptureIdle = captureIdle;
 
         if (slewing && captureIdle && !IsPreviewActive) {
-            // Start preview — short exposure, default gain. Use loop
+            // Start preview, short exposure, default gain. Use loop
             // fallback by default (consistent fps even on cameras
             // without native streaming).
             try {

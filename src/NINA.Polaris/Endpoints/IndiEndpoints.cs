@@ -19,7 +19,7 @@ public static class IndiEndpoints {
                                             || ex.SocketErrorCode == SocketError.HostNotFound
                                             || ex.SocketErrorCode == SocketError.HostUnreachable
                                             || ex.SocketErrorCode == SocketError.NetworkUnreachable) {
-                // 502 Bad Gateway — the most common case: indiserver isn't running
+                // 502 Bad Gateway, the most common case: indiserver isn't running
                 // at the configured host:port. Translate to a user-facing message
                 // instead of leaking the raw localised OS error as a 500.
                 return Results.Json(new {

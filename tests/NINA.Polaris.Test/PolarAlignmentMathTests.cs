@@ -50,7 +50,7 @@ public class PolarAlignmentMathTests {
 
     [Test]
     public void ComputeError_PerfectMountSouthernHemisphere_ResidualUnderTenArcsec() {
-        // Brazil — Mossoró-ish.
+        // Brazil, Mossoró-ish.
         const double lat = -5.18;
         const double lon = -37.36;
 
@@ -131,10 +131,10 @@ public class PolarAlignmentMathTests {
     [Test]
     public void ComputeError_DegenerateColinearPoints_DoesNotThrow() {
         // 3 plate-solved points all at the same position (mount didn't
-        // actually move — e.g. slew failed silently). Cross product
+        // actually move, e.g. slew failed silently). Cross product
         // degenerates to zero vector; Normalize returns it as-is and
         // the dot-product disambiguation falls through. Result is
-        // garbage but the function MUST NOT throw — RunAsync's
+        // garbage but the function MUST NOT throw, RunAsync's
         // error-handling owns the "we got nonsense" decision.
         var p = new PolarPoint(0, 6.0, 60.0, 0.0, T0);
         var pts = new[] {
@@ -149,7 +149,7 @@ public class PolarAlignmentMathTests {
     }
 
     // -----------------------------------------------------------------
-    // Synthesizer — generates the 3 plate-solved points that a real
+    // Synthesizer, generates the 3 plate-solved points that a real
     // run on a (mountAzOffset, mountAltOffset)-misaligned mount would
     // produce, starting from (startRa, startDec) and slewing in
     // mount-RA by slewStepDeg between samples.

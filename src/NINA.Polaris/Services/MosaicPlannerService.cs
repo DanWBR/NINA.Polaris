@@ -10,7 +10,7 @@ namespace NINA.Polaris.Services;
 /// (for the UI to overlay on Aladin) or as a complete Advanced Sequencer
 /// <see cref="SequenceDocument"/> the user can run end-to-end.
 ///
-/// The math is intentionally simple — the per-panel FOV is treated as a
+/// The math is intentionally simple, the per-panel FOV is treated as a
 /// flat rectangle in equatorial coordinates with a cos(δ) correction on
 /// RA. Good enough at typical FoVs (under a few degrees); for very wide
 /// surveys near the poles a proper TAN projection is appropriate, which
@@ -44,7 +44,7 @@ public class MosaicPlannerService {
         var panels = new List<MosaicPanel>(req.Cols * req.Rows);
         // Build the grid centred on the requested coords. Rows go from top
         // (highest dec) to bottom; cols go either left→right or right→left
-        // depending on the row index when serpentine is enabled — minimises
+        // depending on the row index when serpentine is enabled, minimises
         // slew distance across the whole session.
         for (int r = 0; r < req.Rows; r++) {
             // Row offset in declination (positive = north, top row is north-most)
@@ -101,7 +101,7 @@ public class MosaicPlannerService {
         double exposureSeconds, int exposureCount,
         string? filterName = null, int? gain = null, int binning = 1) {
 
-        var root = new SequentialContainer { Name = $"Mosaic — {plan.Centre.Name}" };
+        var root = new SequentialContainer { Name = $"Mosaic, {plan.Centre.Name}" };
         foreach (var panel in plan.Panels) {
             var dso = new DeepSkyObjectContainer {
                 Name = panel.Name,
@@ -126,7 +126,7 @@ public class MosaicPlannerService {
         }
 
         return new SequenceDocument {
-            Name = $"Mosaic — {plan.Centre.Name} ({plan.Cols}×{plan.Rows})",
+            Name = $"Mosaic, {plan.Centre.Name} ({plan.Cols}×{plan.Rows})",
             Description = $"Auto-generated mosaic: {plan.Panels.Count} panels, " +
                           $"{plan.OverlapPercent}% overlap, " +
                           (plan.Serpentine ? "serpentine" : "row-major") + " order",
@@ -144,7 +144,7 @@ public class MosaicRequest {
     public int Cols { get; set; } = 2;
     public int Rows { get; set; } = 2;
 
-    /// <summary>Per-panel FOV — typically computed from the rig's sensor + focal length.</summary>
+    /// <summary>Per-panel FOV, typically computed from the rig's sensor + focal length.</summary>
     public double PanelFovWidthDeg { get; set; } = 1.0;
     public double PanelFovHeightDeg { get; set; } = 1.0;
 

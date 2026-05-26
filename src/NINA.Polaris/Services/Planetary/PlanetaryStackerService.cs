@@ -60,7 +60,7 @@ public class PlanetaryStackerService {
             if (reader.ColorMode is not (SerColorMode.Mono or SerColorMode.BayerRGGB
                 or SerColorMode.BayerGRBG or SerColorMode.BayerGBRG or SerColorMode.BayerBGGR)) {
                 // RGB / BGR planet videos exist but the per-channel stacking
-                // path isn't built yet — fail clearly instead of producing
+                // path isn't built yet, fail clearly instead of producing
                 // garbage.
                 Fail(job, $"Color mode {reader.ColorMode} not yet supported (mono / Bayer only)");
                 return;
@@ -111,7 +111,7 @@ public class PlanetaryStackerService {
             // Reference centroid = first frame's. Compute integer offsets
             // for each kept frame so we can do nearest-neighbour shift
             // during stack. Sub-pixel refinement would require resampling
-            // (bilinear / lanczos) — deferred to follow-up.
+            // (bilinear / lanczos), deferred to follow-up.
             var refC = centroids[0];
 
             // Phase 5: Stack ---------------------------------------------------

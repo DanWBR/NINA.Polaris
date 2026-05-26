@@ -13,7 +13,7 @@ namespace NINA.Image.ImageAnalysis;
 /// points and we'd have to clamp anyway.
 ///
 /// A degenerate case worth calling out: identity curve (just (0,0) and
-/// (255,255)) produces a strictly linear LUT — no rounding noise added.
+/// (255,255)) produces a strictly linear LUT, no rounding noise added.
 /// </summary>
 public static class ToneCurve {
 
@@ -37,7 +37,7 @@ public static class ToneCurve {
             .OrderBy(p => p.x)
             .ToList();
 
-        // Ensure x values strictly increasing — collapse duplicates by
+        // Ensure x values strictly increasing, collapse duplicates by
         // keeping the *last* one (matches Lightroom's "drag to same X
         // overrides" feel).
         for (int i = 1; i < pts.Count; i++) {
@@ -91,7 +91,7 @@ public static class ToneCurve {
 
     /// <summary>
     /// Identity LUT (no change). Convenience for "this slider is at
-    /// default" — pipeline can skip the apply step entirely.
+    /// default", pipeline can skip the apply step entirely.
     /// </summary>
     public static byte[] Identity() {
         var lut = new byte[256];

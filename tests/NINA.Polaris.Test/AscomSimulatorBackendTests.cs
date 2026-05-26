@@ -8,7 +8,7 @@ namespace NINA.Polaris.Test;
 /// Tests for the pure-function helpers in AscomSimulatorBackend. The
 /// IO-heavy paths (DetectInstallAsync via filesystem + PATH lookup,
 /// LaunchAsync spawning AlpacaOmniSimulator.exe, IsRunningAsync hitting
-/// the management API) are smoke-tested manually — they only pass on
+/// the management API) are smoke-tested manually, they only pass on
 /// a Windows host with the Omni Sim installed. The Alpaca management
 /// JSON parser is the part most likely to break under refactoring.
 /// </summary>
@@ -21,7 +21,7 @@ public class AscomSimulatorBackendTests {
     public void ParseConfiguredDevices_OmniSimRealResponse_ExtractsTags() {
         // Shape captured from a real Alpaca Omni Simulator install
         // (slightly trimmed). The DeviceType strings are exactly what
-        // Omni Sim sends — our map handles the case-insensitive
+        // Omni Sim sends, our map handles the case-insensitive
         // mapping to our canonical lowercase tags.
         var json = """
         {
@@ -82,7 +82,7 @@ public class AscomSimulatorBackendTests {
     [Test]
     public void ParseConfiguredDevices_DedupsRepeatedTypes() {
         // Two Cameras (DeviceNumber 0 and 1) should yield one "ccd"
-        // tag, not two — we report per-category, not per-instance.
+        // tag, not two, we report per-category, not per-instance.
         var json = """
         {"Value":[
           {"DeviceType":"Camera","DeviceNumber":0},
@@ -115,7 +115,7 @@ public class AscomSimulatorBackendTests {
     [Test]
     public async Task LaunchAsync_OnUnsupportedOs_ReturnsFalse() {
         if (OperatingSystem.IsWindows()) {
-            Assert.Ignore("Windows integration path is manual-verify only — needs the actual Omni Sim binary.");
+            Assert.Ignore("Windows integration path is manual-verify only, needs the actual Omni Sim binary.");
         }
         var backend = new AscomSimulatorBackend(NullLogger<AscomSimulatorBackend>.Instance);
         var ok = await backend.LaunchAsync(new SimulatorLaunchRequest(["ccd"], 32323));
@@ -126,7 +126,7 @@ public class AscomSimulatorBackendTests {
 
     [Test]
     public async Task AddDeviceAsync_OnWindows_ReturnsTrueAsNoop() {
-        // Omni Sim exposes everything at once — runtime add/remove
+        // Omni Sim exposes everything at once, runtime add/remove
         // doesn't translate. Backend returns true (idempotent
         // success) so SimulatorService doesn't surface a misleading
         // failure when the UI thinks it added something. The UI

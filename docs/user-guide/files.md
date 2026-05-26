@@ -11,23 +11,23 @@ Pi or move things around. With it you do everything from the browser.
 
 ## Layout
 
-- **Drive picker** (left) — Windows: lettered drives; Linux: `/`,
+- **Drive picker** (left), Windows: lettered drives; Linux: `/`,
   `/home`, `/mnt`, `/media`, `~`
-- **Path crumbs** (top center) — clickable per-segment navigation
+- **Path crumbs** (top center), clickable per-segment navigation
 - **Toolbar**: New folder, Upload, Download, Cut, Copy, Paste, Rename,
   Delete, ⭐ Set as Studio root
 - **Listing**: checkbox-select rows with name / size / modified /
   type columns; double-click folder = enter; double-click file =
   preview
-- **Selection bar** (bottom) — "2 files · 124 MB" + current Studio
+- **Selection bar** (bottom), "2 files · 124 MB" + current Studio
   root indicator
 
 ## Preview
 
-- **FITS / XISF / TIFF / PNG / JPG** — opens in OpenSeadragon viewer
+- **FITS / XISF / TIFF / PNG / JPG**, opens in OpenSeadragon viewer
   (same component as STUDIO single-frame view), with auto-stretch for
   FITS
-- **TXT / LOG / JSON / MD** — modal showing the first 32 KB of text
+- **TXT / LOG / JSON / MD**, modal showing the first 32 KB of text
 
 ## Multi-download as ZIP
 
@@ -44,7 +44,7 @@ Standard semantics:
 - Delete = `confirm()` prompt + server log line (always logged for
   destructive ops)
 - Rename = inline edit on the row
-- Cross-volume move: silent toast "moved across volumes — copied then
+- Cross-volume move: silent toast "moved across volumes, copied then
   deleted source"
 
 ## Set as Studio root
@@ -67,17 +67,17 @@ server (which has tokens + TLS + per-tenant rate limits). See
 
 ## Common pitfalls
 
-**Permission denied on `/etc/...`** — blocklist. By design.
+**Permission denied on `/etc/...`**, blocklist. By design.
 
-**Downloads of huge ZIPs time out** — your reverse proxy (if any)
+**Downloads of huge ZIPs time out**, your reverse proxy (if any)
 needs a long read timeout. Direct LAN access via port 5000 has no
 issue.
 
-**Studio rescan doesn't see new files** — make sure you set the
+**Studio rescan doesn't see new files**, make sure you set the
 Studio root deep enough (above `lights/`, not inside one specific
 target).
 
 ## See also
 
-- [Relay](relay.md) — remote access with auth
-- [STUDIO](studio.md) — the consumer of `ImageOutputDir`
+- [Relay](relay.md), remote access with auth
+- [STUDIO](studio.md), the consumer of `ImageOutputDir`

@@ -76,7 +76,7 @@ public class AdvancedSequenceEngine {
     }
 
     private async Task RunAsync(CancellationToken ct) {
-        // Build a fresh context from DI — pulls in whatever services are alive
+        // Build a fresh context from DI, pulls in whatever services are alive
         // right now (so a profile switch mid-run takes effect on the next run).
         SequenceContext ctx;
         try {

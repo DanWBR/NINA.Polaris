@@ -52,7 +52,7 @@ public class FITSReaderFloatTests {
     [Test]
     public void Read_Float32_NonNormalisedRange_StillRemapsCorrectly() {
         // ADU-range floats (think: integer-to-float export). Should
-        // remap the same way — the auto-scale doesn't care what the
+        // remap the same way, the auto-scale doesn't care what the
         // source range was, only that there's a finite [min, max].
         var fits = BuildFloatFits(2, 2, new float[] { 100f, 1000f, 5000f, 65535f });
 
@@ -95,7 +95,7 @@ public class FITSReaderFloatTests {
     public void Read_Float32_RgbCube_PopulatesAllThreeChannels() {
         // NAXIS=3, NAXIS3=3, 2×2 image. Plane order is R, G, B.
         // Auto-rescale runs across the whole buffer so a single global
-        // [min, max] preserves channel balance — verify that here by
+        // [min, max] preserves channel balance, verify that here by
         // checking the relative ordering of the brightest sample in
         // each plane survives.
         var fits = BuildFloatRgbFits(2, 2, new float[] {
@@ -103,7 +103,7 @@ public class FITSReaderFloatTests {
             0.1f, 0.2f, 0.3f, 0.4f,
             // G plane (mid)
             0.4f, 0.5f, 0.6f, 0.7f,
-            // B plane (bright — pins the max)
+            // B plane (bright, pins the max)
             0.7f, 0.8f, 0.9f, 1.0f
         });
 

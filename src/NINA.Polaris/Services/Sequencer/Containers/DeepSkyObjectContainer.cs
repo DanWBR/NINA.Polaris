@@ -5,14 +5,14 @@ namespace NINA.Polaris.Services.Sequencer.Containers;
 /// plate-solve-centers on the target before running the children, so the
 /// children can take exposures, do filter changes, etc. without re-pointing.
 ///
-/// Target rotation (PA) is record-keeping only today — when a rotator is
+/// Target rotation (PA) is record-keeping only today, when a rotator is
 /// added in a later release the container will rotate to <see cref="Rotation"/>
 /// after centering.
 /// </summary>
 public class DeepSkyObjectContainer : SequenceContainer {
     public override string Type => "DeepSkyObject";
 
-    /// <summary>Target display name (free text — "M31", "NGC 7000 west panel").</summary>
+    /// <summary>Target display name (free text, "M31", "NGC 7000 west panel").</summary>
     public string Target { get; set; } = "";
 
     /// <summary>J2000 right ascension in decimal hours.</summary>
@@ -60,7 +60,7 @@ public class DeepSkyObjectContainer : SequenceContainer {
             }
         }
 
-        // From here on it's a sequential container — reuse that logic by
+        // From here on it's a sequential container, reuse that logic by
         // running children inline (we can't easily delegate to the base
         // because it's abstract; copy the loop).
         do {

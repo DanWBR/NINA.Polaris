@@ -8,7 +8,7 @@ namespace NINA.Image.FileFormat.TIFF;
 /// dynamic range" output that PixInsight, Siril and Photoshop can
 /// re-process without our stretch baked in. SkiaSharp doesn't ship a
 /// TIFF encoder, and pulling a full ImageSharp dependency just for
-/// this is overkill — the spec'd subset we need is tiny.
+/// this is overkill, the spec'd subset we need is tiny.
 ///
 /// Format: little-endian "II" baseline TIFF with these IFD tags:
 ///   ImageWidth (256), ImageLength (257), BitsPerSample (258),
@@ -81,7 +81,7 @@ public static class TiffWriter {
         bw.Write(0u);  // next IFD offset = 0 (no more)
 
         // -- Trailing rationals for XResolution / YResolution --------
-        // 72/1 each — totally arbitrary, just present so apps like
+        // 72/1 each, totally arbitrary, just present so apps like
         // Photoshop don't complain.
         bw.Write(72u); bw.Write(1u);
         bw.Write(72u); bw.Write(1u);
@@ -94,7 +94,7 @@ public static class TiffWriter {
     /// Write a single 12-byte IFD entry. For SHORT (type=3) the value
     /// fits in the 4-byte value/offset field; the TIFF spec says shorter
     /// values are right-padded with zeros. For LONG (type=4) and RATIONAL
-    /// (type=5 — uses offset-to-rational) we just write the value as-is.
+    /// (type=5, uses offset-to-rational) we just write the value as-is.
     /// </summary>
     private static void WriteEntry(BinaryWriter bw, ushort tag, ushort type, uint count, uint value) {
         bw.Write(tag);

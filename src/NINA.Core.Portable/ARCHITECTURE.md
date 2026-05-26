@@ -1,11 +1,11 @@
-# NINA.Core.Portable — Architecture
+# NINA.Core.Portable, Architecture
 
 Smallest project in the solution. Holds **shared primitives** every
 other library and the host depend on: enums, simple value types,
 INotifyPropertyChanged base, the mediator interface, a few utility
 helpers.
 
-Pure code, no IO, no third-party deps. Lowest layer — everything
+Pure code, no IO, no third-party deps. Lowest layer, everything
 above (Image, INDI, Headless) depends on this; this depends on
 nothing in the solution.
 
@@ -49,7 +49,7 @@ projects, it belongs here.
 
 - **Pure value types**: enums, simple records, immutable structs.
   No services. No DI.
-- **No `System.Drawing`**, **no `System.IO.File`** — keep it truly
+- **No `System.Drawing`**, **no `System.IO.File`**, keep it truly
   portable.
 - **`BaseINPC`**: legacy helper from upstream NINA. New code in
   Headless prefers immutable record snapshots over INPC for state,

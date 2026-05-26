@@ -8,14 +8,14 @@ namespace NINA.Polaris.Services;
 /// Computes apparent RA/Dec and estimated magnitude for a small curated
 /// list of periodic comets via Keplerian propagation of their osculating
 /// orbital elements. Source elements are JPL Small-Body Database values
-/// snapshotted into wwwroot/data/comets.json — accurate to a few arcmin
+/// snapshotted into wwwroot/data/comets.json, accurate to a few arcmin
 /// over a few months around perihelion, plenty for "is this comet worth
 /// looking at tonight" planning.
 ///
 /// Limitations (acceptable for the planning use case):
 ///   - Two-body Keplerian only; ignores Jupiter perturbations
 ///   - Comet magnitude is estimated via the standard cometary law
-///     m = H + 5·log10(Δ) + n·2.5·log10(r) — n varies wildly between
+///     m = H + 5·log10(Δ) + n·2.5·log10(r), n varies wildly between
 ///     apparitions, so estimates can be off by ±2 magnitudes
 ///   - Hyperbolic / parabolic orbits (e ≥ 1) intentionally not handled;
 ///     all the comets in our curated file are periodic
@@ -27,7 +27,7 @@ public class CometEphemerisService {
     private const double DegToRad = Math.PI / 180.0;
     private const double RadToDeg = 180.0 / Math.PI;
     // Mean obliquity of the ecliptic at J2000 (deg). Good enough for the
-    // planning use case — full precession costs more code than it saves
+    // planning use case, full precession costs more code than it saves
     // for a 1-arcmin-target ephemeris.
     private const double ObliquityDeg = 23.4392911;
     // Gauss's constant (rad/day); μ_sun in heliocentric AU/day units is k².
@@ -67,7 +67,7 @@ public class CometEphemerisService {
     /// </summary>
     public CometPosition Compute(CometElements c, DateTime utc) {
         // 1) Resolve perihelion epoch to Julian Date (TT ≈ UTC for our
-        //    precision needs — ~70 s offset is negligible at this level).
+        //    precision needs, ~70 s offset is negligible at this level).
         var tperi = DateTime.SpecifyKind(DateTime.Parse(c.Tperi), DateTimeKind.Utc);
         var jdNow   = ToJulianDate(utc);
         var jdPeri  = ToJulianDate(tperi);

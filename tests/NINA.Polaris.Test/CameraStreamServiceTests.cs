@@ -9,7 +9,7 @@ namespace NINA.Polaris.Test;
 
 /// <summary>
 /// Tests focus on the parts of CameraStreamService that don't require
-/// a live INDI / camera connection — config plumbing, default state,
+/// a live INDI / camera connection, config plumbing, default state,
 /// graceful behaviour when no camera is connected. Full loop-driven
 /// frame relay needs an actual ICamera (covered by integration tests
 /// against a mock or simulator).
@@ -65,7 +65,7 @@ public class CameraStreamServiceTests {
 }
 
 /// <summary>
-/// Validates the ICamera defaults the interface ships with — vendor SDK
+/// Validates the ICamera defaults the interface ships with, vendor SDK
 /// cameras (Canon EDSDK / Nikon / Sony) and Alpaca cameras inherit these
 /// without writing native-streaming code.
 /// </summary>
@@ -102,7 +102,7 @@ public class ICameraDefaultsTests {
     }
 
     // Note: default interface members in C# are only accessible via
-    // the interface type, not the concrete one — these tests cast to
+    // the interface type, not the concrete one, these tests cast to
     // ICamera explicitly to exercise the defaults.
 
     [Test]
@@ -115,7 +115,7 @@ public class ICameraDefaultsTests {
     public async Task DefaultStopVideoStreamAsync_DoesNotThrow() {
         ICamera cam = new StubCamera();
         await cam.StopVideoStreamAsync();
-        // No state change to assert — just confirms the default Task.CompletedTask
+        // No state change to assert, just confirms the default Task.CompletedTask
         Assert.Pass();
     }
 
@@ -137,12 +137,12 @@ public class ICameraDefaultsTests {
     [Test]
     public void CameraCapabilities_AstroPreset_SupportsVideoStreamIsFalseByDefault() {
         Assert.That(CameraCapabilities.Astro.SupportsVideoStream, Is.False,
-            "Astro preset doesn't presume video stream support — IndiCamera flips it per-instance via CCD_VIDEO_STREAM probe");
+            "Astro preset doesn't presume video stream support, IndiCamera flips it per-instance via CCD_VIDEO_STREAM probe");
     }
 
     [Test]
     public void CameraCapabilities_DslrPreset_SupportsVideoStreamIsFalse() {
         Assert.That(CameraCapabilities.Dslr.SupportsVideoStream, Is.False,
-            "Vendor SDK DSLRs don't expose CCD_VIDEO_STREAM — capability defaults off");
+            "Vendor SDK DSLRs don't expose CCD_VIDEO_STREAM, capability defaults off");
     }
 }

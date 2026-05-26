@@ -95,7 +95,7 @@ public class PlateSolveOptions {
     public double SearchRadiusDeg { get; set; } = 30;
     public double FovDeg { get; set; }
     public int Downsample { get; set; } = 2;
-    /// <summary>Approximate pixel scale in arcsec/pixel — required by PlateSolve3, optional hint for others.</summary>
+    /// <summary>Approximate pixel scale in arcsec/pixel, required by PlateSolve3, optional hint for others.</summary>
     public double ScaleArcsecPerPixel { get; set; }
 }
 

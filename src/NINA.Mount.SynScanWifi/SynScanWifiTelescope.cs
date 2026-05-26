@@ -29,7 +29,7 @@ namespace NINA.Mount.SynScanWifi;
 /// properties (RA / Dec / tracking / slewing) are populated by a
 /// background poll loop that ticks every 1 s while connected.
 /// Capture-side code reading <see cref="RightAscension"/> etc. gets
-/// the most recent poll value, not a live read on every access —
+/// the most recent poll value, not a live read on every access,
 /// which is the right behaviour for the existing status broadcaster
 /// (also 1 Hz).
 /// </para>
@@ -42,7 +42,7 @@ public sealed class SynScanWifiTelescope : ITelescope, IDisposable {
     private Task? _pollTask;
     private bool _isConnected;
 
-    // Cached state — populated by the poll loop, read by the
+    // Cached state, populated by the poll loop, read by the
     // ITelescope properties. Volatile reads are fine for these
     // scalar field types under .NET's memory model.
     private double _ra;
@@ -56,7 +56,7 @@ public sealed class SynScanWifiTelescope : ITelescope, IDisposable {
 
     public double RightAscension => _ra;
     public double Declination    => _dec;
-    public double Altitude       => double.NaN;   // Driver intentionally omits Alt/Az —
+    public double Altitude       => double.NaN;   // Driver intentionally omits Alt/Az,
     public double Azimuth        => double.NaN;   // StatusBroadcaster recomputes from RA/Dec + observer.
     public bool   IsTracking     => _isTracking;
     public bool   IsParked       => _isParked;
@@ -138,7 +138,7 @@ public sealed class SynScanWifiTelescope : ITelescope, IDisposable {
             } catch {
                 // Single-poll failures are normal on a Wi-Fi link
                 // (packet loss, brief mount busy state). Don't log
-                // here — it'd spam the journal. The next tick retries.
+                // here, it'd spam the journal. The next tick retries.
             }
             try {
                 await Task.Delay(TimeSpan.FromSeconds(1), ct);
@@ -149,7 +149,7 @@ public sealed class SynScanWifiTelescope : ITelescope, IDisposable {
     private async Task PollOnceAsync(CancellationToken ct) {
         if (_client == null) return;
 
-        // RA + Dec. Two round-trips per second — ~5 ms each on a
+        // RA + Dec. Two round-trips per second, ~5 ms each on a
         // local Wi-Fi link, well under the 1 s budget.
         var raResp  = await _client.SendQueryAsync(":GR#", ct);
         var decResp = await _client.SendQueryAsync(":GD#", ct);
@@ -168,7 +168,7 @@ public sealed class SynScanWifiTelescope : ITelescope, IDisposable {
                 System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var rate)
                 && rate > 0.01;
-        } catch { /* some firmware doesn't support :GT — leave previous value */ }
+        } catch { /* some firmware doesn't support :GT, leave previous value */ }
     }
 
     // ---- Slew / sync / park / track --------------------------------
@@ -192,7 +192,7 @@ public sealed class SynScanWifiTelescope : ITelescope, IDisposable {
 
     public async Task SyncAsync(double ra, double dec, CancellationToken ct = default) {
         EnsureConnected();
-        // Sync follows the same pre-condition as slew — set target
+        // Sync follows the same pre-condition as slew, set target
         // first, then :CM# (Calibrate Match).
         await _client!.SendQueryAsync($":Sr{SynScanCommandCodec.FormatRA(ra)}#", ct);
         await _client!.SendQueryAsync($":Sd{SynScanCommandCodec.FormatDec(dec)}#", ct);
@@ -219,7 +219,7 @@ public sealed class SynScanWifiTelescope : ITelescope, IDisposable {
 
     public async Task SetTrackingAsync(bool enabled, CancellationToken ct = default) {
         EnsureConnected();
-        // ":T+" / ":T-" — start / stop the tracking motor at the
+        // ":T+" / ":T-", start / stop the tracking motor at the
         // currently-selected rate (default sidereal).
         await _client!.SendOneWayAsync(enabled ? ":T+#" : ":T-#", ct);
         _isTracking = enabled;

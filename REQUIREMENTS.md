@@ -1,4 +1,4 @@
-# N.I.N.A. Polaris — Requirements
+# N.I.N.A. Polaris, Requirements
 
 Complete inventory of every piece of software N.I.N.A. Polaris depends on or
 talks to, split by **required** (the app won't boot or won't have the
@@ -12,7 +12,7 @@ guide](docs/user-guide/installation.md) with copy-paste setup commands.
 
 ---
 
-## TL;DR — bare-minimum to boot
+## TL;DR, bare-minimum to boot
 
 | | Windows | Linux (RPi / x64) |
 | --- | --- | --- |
@@ -21,7 +21,7 @@ guide](docs/user-guide/installation.md) with copy-paste setup commands.
 | Network | TCP 5000 open on the LAN side | TCP 5000 open on the LAN side |
 
 That's it for the home page. Every other feature has its own dependency
-which is described below — Polaris detects what's installed at runtime and
+which is described below, Polaris detects what's installed at runtime and
 hides UI for what isn't available.
 
 ---
@@ -36,14 +36,14 @@ binary.
 | --- | --- | --- | --- |
 | **.NET 10 SDK** | [installer](https://dotnet.microsoft.com/download/dotnet/10.0) | `sudo apt install dotnet-sdk-10.0` (or [Microsoft repo](https://learn.microsoft.com/dotnet/core/install/linux)) | Required. Build + test target `net10.0`. |
 | **Git** | [installer](https://git-scm.com/) | `sudo apt install git` | Required. Clone + git submodules (stellarium-web-engine). |
-| **Git LFS** | comes with Git for Windows | `sudo apt install git-lfs && git lfs install` | Optional — only if you'll touch the docs PDF / large binary assets. |
+| **Git LFS** | comes with Git for Windows | `sudo apt install git-lfs && git lfs install` | Optional, only if you'll touch the docs PDF / large binary assets. |
 | **Bash / sh** | Git Bash (bundled) or WSL | native | Required for some helper scripts (`deploy/*.sh`). On pure Windows you can run the PowerShell equivalents under `deploy/*.ps1`. |
-| **Docker** | [Docker Desktop](https://www.docker.com/products/docker-desktop) | `sudo apt install docker.io docker-compose-plugin` | Optional — needed by `scripts/build-stellarium-web.sh` (Emscripten via container) and `deploy/docker-build.sh` (multi-arch Polaris image). |
+| **Docker** | [Docker Desktop](https://www.docker.com/products/docker-desktop) | `sudo apt install docker.io docker-compose-plugin` | Optional, needed by `scripts/build-stellarium-web.sh` (Emscripten via container) and `deploy/docker-build.sh` (multi-arch Polaris image). |
 | **Emscripten** (only if rebuilding stellarium-web) | via Docker | via Docker | Optional. Submodule's pinned `.js/.wasm` is committed, so you don't need Emscripten unless you bump the engine. |
 
 ---
 
-## Runtime — required
+## Runtime, required
 
 ### .NET 10 Runtime
 
@@ -55,7 +55,7 @@ binary.
 - **TCP 5000** inbound on the LAN interface (Polaris HTTP listener).
 - **UDP 5353** inbound for mDNS / Bonjour so `polaris-app.local` resolves. Both ports are blocked by Windows Defender Firewall and `ufw` by default.
 
-#### Windows firewall — allow Polaris
+#### Windows firewall, allow Polaris
 
 Run in **Admin PowerShell**:
 
@@ -69,7 +69,7 @@ New-NetFirewallRule -DisplayName "mDNS (Polaris)" `
     -Action Allow -Profile Private,Domain
 ```
 
-#### Linux firewall — allow Polaris
+#### Linux firewall, allow Polaris
 
 ```bash
 sudo ufw allow 5000/tcp
@@ -90,7 +90,7 @@ Or, if `ufw` isn't installed, plain `iptables -A INPUT -p tcp --dport 5000 -j AC
 
 ---
 
-## Equipment drivers — required per device family
+## Equipment drivers, required per device family
 
 Polaris talks to telescopes / cameras / focusers / filter wheels / etc. through
 two driver buses. **At least one** is required to control hardware; both can
@@ -100,7 +100,7 @@ coexist.
 
 | Platform | Install |
 | --- | --- |
-| **Linux (Pi / desktop)** | `sudo apt install indi-full` — meta-package with the daemon + 100+ drivers (ZWO, Canon, EQMod, Celestron, FlatPanel, weather stations, ...) |
+| **Linux (Pi / desktop)** | `sudo apt install indi-full`, meta-package with the daemon + 100+ drivers (ZWO, Canon, EQMod, Celestron, FlatPanel, weather stations, ...) |
 | **Windows** | INDI runs natively but most users prefer the Alpaca path on Windows. If you really want INDI: [windi](https://github.com/indilib/indi/wiki/Windows) build, OR run [indiserver inside WSL2](https://www.indilib.org/get-indi/download.html) and expose the port. |
 
 ### Option B: ASCOM / Alpaca
@@ -115,9 +115,9 @@ device driver choice (`indi` / `alpaca` / vendor SDK).
 
 ### Option C: Vendor SDKs (DSLR / Mirrorless on Windows only)
 
-- **Canon EDSDK** — register at [developer.canon-asia.com](https://developer.canon-asia.com/), download EDSDK 13.x+, drop DLLs in `plugins/canon-edsdk/`. Detected at startup; appears in RIGS → Camera → Driver dropdown.
-- **Nikon SDK** — [developer.nikonimaging.com](https://developer.nikonimaging.com/), drop in `plugins/nikon-sdk/`.
-- **Sony Camera Remote SDK** — [developer.sony.com/imaging-products](https://developer.sony.com/imaging-products/), drop in `plugins/sony-sdk/`.
+- **Canon EDSDK**, register at [developer.canon-asia.com](https://developer.canon-asia.com/), download EDSDK 13.x+, drop DLLs in `plugins/canon-edsdk/`. Detected at startup; appears in RIGS → Camera → Driver dropdown.
+- **Nikon SDK**, [developer.nikonimaging.com](https://developer.nikonimaging.com/), drop in `plugins/nikon-sdk/`.
+- **Sony Camera Remote SDK**, [developer.sony.com/imaging-products](https://developer.sony.com/imaging-products/), drop in `plugins/sony-sdk/`.
 
 DSLRs / mirrorless on **Linux** use `indi_gphoto_ccd` from `indi-full` (see Option A). No vendor SDKs needed on Linux.
 
@@ -125,7 +125,7 @@ See `docs/dslr-windows-canon.md`, `docs/dslr-windows-nikon.md`, `docs/dslr-windo
 
 ---
 
-## Plate solving — required for "Slew & Center", optional for "Slew Only"
+## Plate solving, required for "Slew & Center", optional for "Slew Only"
 
 Polaris ships a multi-solver dispatcher with automatic fallback. **At least
 one** of the four solvers below must be installed for the Slew & Center
@@ -145,19 +145,19 @@ blind fallback`. Configure paths / API keys in `appsettings.json` under
 
 ---
 
-## Optional — autoguiding
+## Optional, autoguiding
 
 ### PHD2 (full integration with embedded GUI)
 
 - **Windows**: download [PHD2](https://openphdguiding.org/) installer (free, GPLv3). Polaris auto-detects, can launch / shutdown it, swap profiles, run Smart Calibrate, and broadcast guide stats in real time.
 - **Linux (Pi)**: `sudo apt install phd2`.
-- **Linux embedded GUI** (Polaris's GUIDE tab → "PHD2 GUI" panel): requires `xpra` 6.0+ — `sudo apt install xpra xserver-xorg-video-dummy`. **Not supported on 32-bit Raspberry Pi (Pi 2/3 with 32-bit OS)**; gated automatically. See [docs/phd2-gui-embedding.md](docs/phd2-gui-embedding.md) for the Xorg-dummy tweak.
+- **Linux embedded GUI** (Polaris's GUIDE tab → "PHD2 GUI" panel): requires `xpra` 6.0+, `sudo apt install xpra xserver-xorg-video-dummy`. **Not supported on 32-bit Raspberry Pi (Pi 2/3 with 32-bit OS)**; gated automatically. See [docs/phd2-gui-embedding.md](docs/phd2-gui-embedding.md) for the Xorg-dummy tweak.
 
 PHD2 connection (TCP 4400) is auto-attempted on Polaris startup along with INDI / Alpaca discovery.
 
 ---
 
-## Optional — post-processing tools
+## Optional, post-processing tools
 
 | Tool | Windows | Linux | Why |
 | --- | --- | --- | --- |
@@ -168,18 +168,18 @@ Polaris detects both via the `Services/External/BinaryLocator` at startup and gr
 
 ---
 
-## Optional — simulators (testing without hardware)
+## Optional, simulators (testing without hardware)
 
 | Platform | Install |
 | --- | --- |
-| **Linux / macOS** | `sudo apt install indi-bin` (renders real stars from the GSC catalog at the simulated mount position — perfect for testing the whole pipeline). |
-| **Windows** | [Alpaca Omni Simulator](https://github.com/ASCOMInitiative/ASCOMRemote/releases) — single .exe that exposes the ASCOM Camera/Telescope/Focuser/FilterWheel simulators over Alpaca. |
+| **Linux / macOS** | `sudo apt install indi-bin` (renders real stars from the GSC catalog at the simulated mount position, perfect for testing the whole pipeline). |
+| **Windows** | [Alpaca Omni Simulator](https://github.com/ASCOMInitiative/ASCOMRemote/releases), single .exe that exposes the ASCOM Camera/Telescope/Focuser/FilterWheel simulators over Alpaca. |
 
 Settings → "Equipment simulator" detects the install + lets you spawn the stack with a single click. See [docs/user-guide/simulator-mode.md](docs/user-guide/simulator-mode.md).
 
 ---
 
-## Optional — Remote terminal in Settings
+## Optional, Remote terminal in Settings
 
 Browser-based SSH (xterm.js + SSH.NET) lets you restart services from the
 Polaris tab when the host is headless.
@@ -194,25 +194,25 @@ Credentials are entered per-connection and never persisted. See [docs/user-guide
 
 ---
 
-## Optional — Stellarium remote control sync
+## Optional, Stellarium remote control sync
 
 - Stellarium desktop ([free, GPLv2](https://stellarium.org/)), any platform. Enable Plugins → "Remote Control" → bind to `127.0.0.1:8090`.
 - Polaris's SKY tab can pull the currently-selected object from Stellarium as a target.
 
 ---
 
-## Optional — Docker deployment
+## Optional, Docker deployment
 
 | | Tool |
 | --- | --- |
 | **Both** | Docker 20.10+ + Compose v2. `docker compose up -d --build` for a single-host run; `deploy/docker-build.sh latest` for multi-arch images (amd64 + arm64) for push. |
 | | The Dockerfile is multi-stage (SDK → runtime). Volumes mount `/config` (profiles) and `/images` (FITS output). |
 
-The container hits the same TCP 5000 / UDP 5353 ports — port-forward both in compose or with `--network host` on Linux.
+The container hits the same TCP 5000 / UDP 5353 ports, port-forward both in compose or with `--network host` on Linux.
 
 ---
 
-## Optional — Relay server (remote internet access)
+## Optional, Relay server (remote internet access)
 
 For accessing your Pi-based observatory rig from anywhere over the
 internet without exposing it directly.
@@ -226,12 +226,12 @@ rate limiting, monthly byte quotas, and a web admin UI. See
 [src/NINA.Relay.Server/README.md](src/NINA.Relay.Server/README.md) and
 [docs/user-guide/relay.md](docs/user-guide/relay.md).
 
-Polaris (the rig side) needs nothing extra — just point it at the relay
+Polaris (the rig side) needs nothing extra, just point it at the relay
 endpoint in Settings.
 
 ---
 
-## Optional — DSLR / Mirrorless live preview (Windows)
+## Optional, DSLR / Mirrorless live preview (Windows)
 
 Already covered under "Equipment drivers → Option C". Listed here as a
 reminder that DSLR support on Windows needs vendor DLLs that the user
@@ -239,13 +239,13 @@ downloads after registering with the vendor (EULA prevents redistribution).
 
 ---
 
-## Optional — Astrometric calculations
+## Optional, Astrometric calculations
 
 - **Pre-installed** with Polaris via NuGet (`CosineKitty.AstronomyEngine`, MIT, ~150 KB). No external install. Used for Tonight's Best ephemerides + altitude charts.
 
 ---
 
-## Optional — Internet-dependent features
+## Optional, Internet-dependent features
 
 These features need an internet connection (one-time or recurring). All
 others work fully offline.

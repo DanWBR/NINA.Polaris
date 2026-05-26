@@ -29,7 +29,7 @@ public class BayerDebayerTests {
         cfa[0] = 60000;
         var ch = BayerDebayer.Bilinear(cfa, 4, 4, BayerPatternEnum.RGGB);
         Assert.That(ch.R[0], Is.EqualTo(60000));
-        // G at the corner has no N/S/E/W neighbour with green — only
+        // G at the corner has no N/S/E/W neighbour with green, only
         // (0,1) and (1,0) which are green sites. They're zero in this
         // synthetic frame, so green at (0,0) is 0.
         Assert.That(ch.G[0], Is.EqualTo(0));
@@ -61,7 +61,7 @@ public class BayerDebayerTests {
         // of constants is the constant), modulo edge effects.
         var cfa = Build4x4(1000);
         var ch = BayerDebayer.Bilinear(cfa, 4, 4, BayerPatternEnum.RGGB);
-        // Check a centre pixel (1,1) — it has full neighbour coverage.
+        // Check a centre pixel (1,1), it has full neighbour coverage.
         int idx = 1 * 4 + 1;
         Assert.That(ch.R[idx], Is.EqualTo(1000));
         Assert.That(ch.G[idx], Is.EqualTo(1000));

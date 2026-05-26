@@ -5,7 +5,7 @@ using NINA.Relay.Protocol;
 namespace NINA.Relay.Server;
 
 /// <summary>
-/// Per-tenant tunnel state. A tenant is one N.I.N.A. Polaris instance —
+/// Per-tenant tunnel state. A tenant is one N.I.N.A. Polaris instance,
 /// identified by the bearer token it used to authenticate. The relay server
 /// holds the active tunnel WebSocket here and tracks all the in-flight
 /// proxied requests waiting for responses to come back from the client.
@@ -164,7 +164,7 @@ public class TenantRegistry {
     }
 
     public bool TryRegister(TenantTunnel tunnel) {
-        // Replace any existing tunnel for this token (last writer wins — handy
+        // Replace any existing tunnel for this token (last writer wins, handy
         // for restart-after-crash; the orphan WS will fail on next send).
         if (_activeByToken.TryGetValue(tunnel.Token, out var existing)) {
             existing.FailAllPending("Tunnel replaced by new connection");

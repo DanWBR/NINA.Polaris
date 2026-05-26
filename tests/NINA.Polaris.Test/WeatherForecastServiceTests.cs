@@ -5,13 +5,13 @@ namespace NINA.Polaris.Test;
 
 /// <summary>
 /// Pure-function tests for the observation-score formula. Exercises the
-/// edges that matter for an astrophotographer planning a night — clear
+/// edges that matter for an astrophotographer planning a night, clear
 /// sky with great seeing should score near 100, anything with active
 /// precipitation should hard-zero, and clear-but-dewy conditions should
 /// drop heavily because dew on optics kills a session even under stars.
 ///
 /// The HTTP / cache path of WeatherForecastService is intentionally not
-/// covered here — it's a thin wrapper around HttpClient and an in-memory
+/// covered here, it's a thin wrapper around HttpClient and an in-memory
 /// dictionary; mocking HttpMessageHandler just to verify "didn't call
 /// twice" is more ceremony than signal. We exercise the scoring math,
 /// which is where the actual judgement lives.

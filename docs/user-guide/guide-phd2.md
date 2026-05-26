@@ -1,16 +1,16 @@
 # GUIDE tab (PHD2)
 
-PHD2 is a first-class managed device in Polaris — we control 100% of
+PHD2 is a first-class managed device in Polaris, we control 100% of
 the runtime via JSON-RPC, and Linux users can interact with PHD2's
 native GUI (Wizard, Brain dialog, Guiding Assistant) embedded inside
 the Polaris tab via xpra.
 
 The GUIDE tab has two sub-tabs:
 
-- **Control** — JSON-RPC UI: profile switcher, exposure, dec mode,
+- **Control**, JSON-RPC UI: profile switcher, exposure, dec mode,
   equipment connect, guiding controls, RMS chart, Smart Calibrate,
   algorithm presets. Works on every OS.
-- **PHD2 GUI** — embedded xpra HTML5 client iframe (Linux only). See
+- **PHD2 GUI**, embedded xpra HTML5 client iframe (Linux only). See
   [docs/phd2-gui-embedding.md](../phd2-gui-embedding.md) for the
   Xorg-dummy setup.
 
@@ -25,7 +25,7 @@ The GUIDE tab has two sub-tabs:
 - **Manually launch**: click **▶ Launch PHD2** when the executable is
   auto-detected. Polaris spawns PHD2 + waits for its event server on
   TCP/4400 (loopback only).
-- **Auto-start on boot**: checkbox below — persists in the profile, so
+- **Auto-start on boot**: checkbox below, persists in the profile, so
   every Polaris startup launches PHD2 ~2s after server start. Backed
   by `PHD2AutoStartService`.
 
@@ -44,21 +44,21 @@ to it. Live status appears in the status bar header (PHD2 = ON / OFF).
 ### Exposure + dec mode
 
 - **Exposure dropdown** is populated from PHD2's `get_exposure_durations`
-- **Dec mode**: Auto / North / South / Off — passed to `set_dec_guide_mode`
+- **Dec mode**: Auto / North / South / Off, passed to `set_dec_guide_mode`
 
 ### Guiding controls
 
 Standard PHD2 commands:
 
-- **▶ Guide** — start guiding with settle params (settle pixels, time,
+- **▶ Guide**, start guiding with settle params (settle pixels, time,
   timeout)
-- **▶ Loop** — exposure cycling without guiding (find star, focus)
-- **⏸ Pause / ▶ Resume** — keeps the loop running but suspends pulse
+- **▶ Loop**, exposure cycling without guiding (find star, focus)
+- **⏸ Pause / ▶ Resume**, keeps the loop running but suspends pulse
   output
-- **⏹ Stop** — stop everything
-- **Dither** — manually trigger a dither
-- **★ Auto-select star** — `find_star`
-- **Clear calibration** + **Clear history** — maintenance
+- **⏹ Stop**, stop everything
+- **Dither**, manually trigger a dither
+- **★ Auto-select star**, `find_star`
+- **Clear calibration** + **Clear history**, maintenance
 
 ### Live RA/Dec chart
 
@@ -68,10 +68,10 @@ update each second.
 
 ### Settle parameters
 
-- **Settle pixels** (default 1.5) — guiding is "settled" when peak
+- **Settle pixels** (default 1.5), guiding is "settled" when peak
   error stays below this for `Settle time` seconds
 - **Settle time** (default 10s)
-- **Settle timeout** (default 40s) — give-up threshold
+- **Settle timeout** (default 40s), give-up threshold
 
 Applied to all Guide / Dither commands.
 
@@ -83,12 +83,12 @@ you:
 
 1. Click **🎯 Smart Calibrate**
 2. Modal opens with options:
-   - **Slew to equator** (optional) — Polaris commands the main mount
+   - **Slew to equator** (optional), Polaris commands the main mount
      to LST + Dec 0° before calibrating (best calibration accuracy is
      near the celestial equator)
-   - **Step size override** — leave blank to auto-compute from pixel
+   - **Step size override**, leave blank to auto-compute from pixel
      scale + guide rate; manual override available
-   - **Timeout** — default 240s
+   - **Timeout**, default 240s
 3. Polaris runs a 9-phase pipeline:
    `Preflight → PixelScale → ComputeStep → Slewing → ApplyStep → Calibrating → Validating → Ok/Fail`
 4. Live progress chips in the status bar; result appears in the toast
@@ -104,12 +104,12 @@ read from the mount (or 7.5"/s = 0.5× sidereal default); step ms =
 
 Three curated bundles applied via `set_algo_param`:
 
-- **Default** — PHD2's stock values. Balanced.
-- **Reactive** — higher aggressiveness, lower hysteresis. Good for short
+- **Default**, PHD2's stock values. Balanced.
+- **Reactive**, higher aggressiveness, lower hysteresis. Good for short
   focal lengths, good seeing, fast mounts. Risk: overshoot.
-- **Smooth** — gentler corrections, higher hysteresis + min-move. For
+- **Smooth**, gentler corrections, higher hysteresis + min-move. For
   long focal lengths or windy/poor seeing.
-- **Custom** — sentinel; auto-set when you edit any knob in the
+- **Custom**, sentinel; auto-set when you edit any knob in the
   Advanced disclosure. Persists the override bag on the rig.
 
 Click a preset pill to apply + persist. The Advanced `<details>`
@@ -122,11 +122,11 @@ touch as a Custom preset.
 Top-right of the tabstrip. Reflects the live status of
 `PHD2ProfileSyncService`:
 
-- **✓ Profile synced** — rig name matches a PHD2 profile + it's the active one
-- **⚠ Profile missing** — no PHD2 profile with this rig's name. Open
+- **✓ Profile synced**, rig name matches a PHD2 profile + it's the active one
+- **⚠ Profile missing**, no PHD2 profile with this rig's name. Open
   the PHD2 GUI tab + create one via Wizard, then click ⟳ to retry.
-- **⚠ Sync error** — PHD2 returned an error during the switch
-- **↻ Syncing…** — currently flipping profile + applying preset
+- **⚠ Sync error**, PHD2 returned an error during the switch
+- **↻ Syncing…**, currently flipping profile + applying preset
 
 By default (`PHD2AutoSyncOnRigSwitch = true`), switching rigs in
 Polaris triggers an automatic PHD2 profile switch + preset apply.
@@ -144,20 +144,20 @@ Polaris UI. Lets you do everything PHD2's GUI offers without VNC/SSH:
 
 States:
 
-1. **Platform unsupported** — banner explains the limitation. Two
+1. **Platform unsupported**, banner explains the limitation. Two
    variants:
-   - **Non-Linux host** (Windows / macOS) — open PHD2's native window
+   - **Non-Linux host** (Windows / macOS), open PHD2's native window
      on that machine directly.
-   - **32-bit ARM** (Raspberry Pi 2 / 3 with 32-bit Raspberry Pi OS) —
+   - **32-bit ARM** (Raspberry Pi 2 / 3 with 32-bit Raspberry Pi OS),
      xpra installs from apt but its session-start crashes; the dummy
      Xorg driver is unreliable on ARMv7. Upgrade to 64-bit Pi OS on
      a Pi 4 / 5, or run PHD2 on a separate machine and point Polaris
      at it.
-2. **Linux without xpra** — install instructions with `sudo apt
+2. **Linux without xpra**, install instructions with `sudo apt
    install xpra xserver-xorg-video-dummy`
-3. **Linux + xpra installed but session not running** — "▶ Start PHD2
+3. **Linux + xpra installed but session not running**, "▶ Start PHD2
    GUI session" button (~5-10s spin-up)
-4. **Session running** — iframe + small toolbar (Restart, Stop,
+4. **Session running**, iframe + small toolbar (Restart, Stop,
    fullscreen)
 
 Auto-start at Polaris boot is opt-in via `Phd2Gui:AutoStart` in
@@ -166,20 +166,20 @@ Auto-start at Polaris boot is opt-in via `Phd2Gui:AutoStart` in
 ## Common pitfalls
 
 **Smart Calibrate fails with "PHD2 reports not calibrated after
-Guiding state — unexpected"** — usually a guide star couldn't be
+Guiding state, unexpected"**, usually a guide star couldn't be
 locked. Lengthen `find_star` exposure or pick a denser field manually.
 
-**Profile switch hangs at "switching"** — PHD2 is busy disconnecting
+**Profile switch hangs at "switching"**, PHD2 is busy disconnecting
 equipment. Wait 30s; it will resolve. If stuck longer, click ⟳ Refresh
 in the Control tab connection panel.
 
-**xpra iframe shows "session not running" right after Start** — first
+**xpra iframe shows "session not running" right after Start**, first
 launch takes 5-10s for Xorg-dummy to come up. Wait, then refresh.
 If it persists, check `/etc/xpra/conf.d/55_server_x11.conf` for the
 Xorg-dummy switchover.
 
 ## See also
 
-- [docs/phd2-gui-embedding.md](../phd2-gui-embedding.md) — full xpra
+- [docs/phd2-gui-embedding.md](../phd2-gui-embedding.md), full xpra
   install procedure for Linux hosts
 - [Glossary → PHD2 / Calibration / Dither](GLOSSARY.md#p)

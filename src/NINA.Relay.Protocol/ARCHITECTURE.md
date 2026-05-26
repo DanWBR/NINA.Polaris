@@ -1,4 +1,4 @@
-# NINA.Relay.Protocol — Architecture
+# NINA.Relay.Protocol, Architecture
 
 Tiny shared library holding the **wire types** that flow between the
 Polaris instance (running on the Pi / mini-PC at the telescope) and
@@ -29,7 +29,7 @@ src/NINA.Relay.Protocol/
 - **Heartbeat**: `PingFrame` / `PongFrame` for keepalive
 
 All records are immutable, serialized over the WS tunnel as MessagePack
-(compact + fast — important for the image-stream path).
+(compact + fast, important for the image-stream path).
 
 ## Why a separate project
 
@@ -46,6 +46,6 @@ of silently corrupting bytes.
 ## See also
 
 - [NINA.Relay.Server/ARCHITECTURE.md](../NINA.Relay.Server/ARCHITECTURE.md)
-- [docs/user-guide/relay.md](../../docs/user-guide/relay.md) — end-user
+- [docs/user-guide/relay.md](../../docs/user-guide/relay.md), end-user
   perspective
 - [Root ARCHITECTURE.md](../../ARCHITECTURE.md)

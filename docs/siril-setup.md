@@ -28,7 +28,7 @@ in 1.0).
 
 Download the installer from <https://siril.org/download/>. The
 standard install drops `siril-cli.exe` at
-`C:\Program Files\Siril\bin\siril-cli.exe` — Polaris auto-detects
+`C:\Program Files\Siril\bin\siril-cli.exe`, Polaris auto-detects
 that path.
 
 ### macOS
@@ -48,7 +48,7 @@ bundle automatically.
    binary path.
 3. If it shows **✗ Not detected**, click **Re-detect**. Still
    nothing? Paste the absolute path to `siril-cli` (`.exe` on
-   Windows) into the **Path override** field — Polaris uses that
+   Windows) into the **Path override** field, Polaris uses that
    over auto-detection.
 
 ## Scripts
@@ -66,17 +66,17 @@ preprocessing matrix:
 | Mono | bias + flat (no darks) | `Mono_Preprocessing_WithoutDark.ssf` |
 | Mono | bias + dark (no flats) | `Mono_Preprocessing_WithoutFlat.ssf` |
 | Mono | lights only | `Mono_Preprocessing_WithoutDBF.ssf` |
-| OSC dual-narrowband | — | `OSC_Extract_HaOIII.ssf` |
+| OSC dual-narrowband |, | `OSC_Extract_HaOIII.ssf` |
 
 These get extracted from the Polaris assembly to
 `%LOCALAPPDATA%/NINA.Polaris/siril/scripts-bundled/` (Windows) or
 `~/.local/share/NINA.Polaris/siril/scripts-bundled/` (Linux/macOS)
-on first use. They're idempotent — Polaris re-extracts on upgrade.
+on first use. They're idempotent, Polaris re-extracts on upgrade.
 
 Your personal scripts in the standard Siril location
 (`%APPDATA%/siril/scripts` on Windows, `~/.siril/scripts` on
 Linux/macOS) also appear in the STUDIO dropdown, marked
-`(your script)`. If a name collides, **your copy wins** — useful
+`(your script)`. If a name collides, **your copy wins**, useful
 for tweaking the bundled recipes.
 
 You can also point Polaris at an **extra** scripts dir under
@@ -102,22 +102,22 @@ under heavy light pollution. See [graxpert-setup.md](graxpert-setup.md).
 
 ## Troubleshooting
 
-- **"siril-cli exited with code 1"** — open the work directory
+- **"siril-cli exited with code 1"**, open the work directory
   shown in the error toast (Polaris keeps it on failure for
   debug). The Siril log in that folder usually identifies the
   issue (missing master, mismatched filter, etc).
-- **No `result*.fit` appeared** — your script likely doesn't end
+- **No `result*.fit` appeared**, your script likely doesn't end
   with a `save result` line. Polaris bundled scripts all do; if
   you wrote your own, add `load result_*` + `save result` at the
   end.
-- **Permission denied on the work dir** — the user that runs the
+- **Permission denied on the work dir**, the user that runs the
   Polaris service needs write access to
   `{ImageOutputDir}/.polaris-tmp/`. On Linux, ownership of the
   parent dir is the usual culprit.
 
 ## License
 
-Siril is GPLv3. Polaris invokes it via the CLI only — no Siril
+Siril is GPLv3. Polaris invokes it via the CLI only, no Siril
 code is linked or redistributed. The bundled scripts are MPL-2.0
 (same as Polaris) and were authored from scratch following the
 [Siril command reference](https://siril.readthedocs.io).

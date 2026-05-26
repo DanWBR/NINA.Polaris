@@ -1,4 +1,4 @@
-/* Vendored Inter — variable font covers weights 100..900 and italic
+/* Vendored Inter, variable font covers weights 100..900 and italic
    in two woff2 files (~340 KB each). Self-hosted so the UI keeps
    its typeface in offline / observatory setups where the Google
    Fonts CDN isn't reachable. License at css/fonts/LICENSE. */
@@ -24,7 +24,7 @@
     margin: 0;
     padding: 0;
     /* Inheriting font-family on every element makes sure form
-       controls (buttons, inputs, selects) get Inter too — those
+       controls (buttons, inputs, selects) get Inter too, those
        elements normally default to the OS UI font even when body
        has font-family set. */
     font-family: inherit;
@@ -76,9 +76,9 @@ html, body {
    to the actual viewport instead of being scaled out of place.
 
    Two breakpoints:
-   - tablets / large phones in portrait (≤960 px): 0.85 — pulls in
+   - tablets / large phones in portrait (≤960 px): 0.85, pulls in
      about 15% so the cards fit two-up instead of stretching.
-   - phones (≤640 px): 0.75 — comfortable density for thumb reach.
+   - phones (≤640 px): 0.75, comfortable density for thumb reach.
    Numbers are conservative so tap targets stay finger-sized. */
 @media (max-width: 960px) {
     body { zoom: 0.85; }
@@ -88,10 +88,10 @@ html, body {
 }
 
 /* Always-show-all exposure preset popover (replaces the browser
-   native <datalist> dropdown — see <script> in index.html above
+   native <datalist> dropdown, see <script> in index.html above
    the body for the controller). Glassy panel anchored under the
    focused exposure input; one button per preset, no filtering. */
-/* Remote terminal section in Settings — form row + xterm mount. */
+/* Remote terminal section in Settings, form row + xterm mount. */
 .term-form {
     display: flex;
     flex-wrap: wrap;
@@ -164,7 +164,7 @@ html, body {
     width: 100%;
 }
 
-/* ZWO L/M/H gain preset chips — sit inline next to a gain input on
+/* ZWO L/M/H gain preset chips, sit inline next to a gain input on
    Camera, PREVIEW, AUTORUN-row, POLAR, VIDEO. Three small pills:
    L (low gain), M (medium), H (HCG threshold for the sensor). Click
    writes the corresponding preset value to the bound gain field. */
@@ -229,7 +229,7 @@ html, body {
 }
 
 /* ====================================================================
-   Universal scrollbar treatment — match the sidebar's thin glass look
+   Universal scrollbar treatment, match the sidebar's thin glass look
    across every scrollable element in the app (modals, file lists,
    activity bar overflow, equipment card bodies, sequence trees, etc).
    Single source of truth: change here, every scrollbar follows.
@@ -238,7 +238,7 @@ html, body {
    - WebKit / Blink uses the pseudo-elements. Pseudo rules only fire
      on elements that actually overflow, so applying via `*` has no
      runtime cost on non-scrolling elements.
-   - Up/down buttons hidden — the icon column was the prototype and
+   - Up/down buttons hidden, the icon column was the prototype and
      they look out of place in our dark UI.
    - height:4px lets horizontal scrollbars (chip rows) share the
      same slim look as vertical ones.
@@ -277,7 +277,7 @@ html, body {
     justify-content: space-between;
     height: var(--statusbar-height);
     /* Tighter left padding so the brand badge sits closer to the
-       left edge of the viewport — user asked to "mover um pouco
+       left edge of the viewport, user asked to "mover um pouco
        à esquerda". Right side keeps the original gutter. */
     padding: 0 12px 0 2px;
     background: var(--bg-secondary);
@@ -303,7 +303,7 @@ html, body {
     color: var(--text-muted);
 }
 
-/* New brand block — star icon + gradient wordmark + pill + version. */
+/* New brand block, star icon + gradient wordmark + pill + version. */
 .brand {
     display: inline-flex;
     align-items: center;
@@ -324,7 +324,7 @@ html, body {
     filter: drop-shadow(0 0 4px rgba(33, 150, 243, 0.5));
     flex-shrink: 0;
 }
-/* Polaris mountain badge — bitmap version of the wordmark icon.
+/* Polaris mountain badge, bitmap version of the wordmark icon.
    Sized to roughly match the SVG twinkle's optical weight in the
    status bar. drop-shadow gives the same glow treatment so the
    header has a consistent feel whether the bitmap or the SVG
@@ -348,7 +348,7 @@ html, body {
     color: transparent;
 }
 .brand-tag {
-    /* Match the N.I.N.A. wordmark — same gradient AND the same
+    /* Match the N.I.N.A. wordmark, same gradient AND the same
        optical weight so the two halves read as equal partners in
        one continuous mark, not name+subtitle. */
     font-weight: 800;
@@ -399,14 +399,14 @@ html, body {
     color: var(--danger);
 }
 
-/* Amber — running but not fully connected (e.g. PHD2 process up but
+/* Amber, running but not fully connected (e.g. PHD2 process up but
    no camera/mount equipment hooked up yet). */
 .status-indicator.warn {
     background: rgba(255, 152, 0, 0.18);
     color: #ffb74d;
 }
 
-/* Grey — feature is disabled / not running. Less alarming than red:
+/* Grey, feature is disabled / not running. Less alarming than red:
    "INDI OFF" or "no Alpaca servers found" isn't necessarily a bug,
    the user may simply not be using that discovery method. */
 .status-indicator.off {
@@ -471,7 +471,7 @@ html, body {
     background: rgba(255, 255, 255, 0.3);
 }
 /* Hide the up / down scroll arrows that some browsers/OS combos
-   inject by default — they take vertical space and look out of place
+   inject by default, they take vertical space and look out of place
    in an icon column. */
 .sidebar::-webkit-scrollbar-button {
     display: none;
@@ -528,7 +528,7 @@ html, body {
     height: 100%;
 }
 
-/* GUIDE tab — give the content sensible horizontal breathing room.
+/* GUIDE tab, give the content sensible horizontal breathing room.
    Without this every row (info-row, settle inputs, control buttons,
    smart-calibrate block) hugged the left edge of the viewport on wide
    monitors. We don't pad .tab-panel globally because some tabs
@@ -550,7 +550,7 @@ html, body {
     padding-right: 18px;
 }
 
-/* POLAR tab — same horizontal gutters as GUIDE so the TPPA
+/* POLAR tab, same horizontal gutters as GUIDE so the TPPA
    parameter row, action buttons, progress bar, result block and
    solved-points table don't hug the viewport edge. .panel-header
    already carries its own padding, so skip it here. */
@@ -586,7 +586,7 @@ html, body {
     height: 100%;
     display: block;
     /* Preserve the source frame's aspect ratio inside whatever
-       container it lands in — without this the bitmap was being
+       container it lands in, without this the bitmap was being
        stretched to fill (e.g. a 4:3 sensor came out 16:9 in the
        PREVIEW tab). Canvas honours object-fit because the canvas
        element is treated as a replaced element in HTML5. The
@@ -735,7 +735,7 @@ html, body {
    arrows (e.g. "1000" or "0.0001"). Bump them a bit beyond the
    default .input-sm so the value never gets cropped. Selector
    matches both pre-disarm (list=...) and post-disarm
-   (data-exposure-presets=1) forms — see the popover script in
+   (data-exposure-presets=1) forms, see the popover script in
    index.html. */
 input[list="exposure-presets"],
 input[data-exposure-presets] {
@@ -766,7 +766,7 @@ select.input-sm {
 }
 
 /* Any select.input-sm wrapped in a <label> stretches to fill the
-   label's width — the input-sm 90px default is for bare standalone
+   label's width, the input-sm 90px default is for bare standalone
    selects, but inside form-row labels the parent's flex/grow rules
    already do the right thing, so the select should follow. Without
    this rule, dropdown placeholders like "Pick a recorded SER" or
@@ -1006,7 +1006,7 @@ label select.input-sm {
        collide with the connect-row's bottom border immediately above. */
     padding-top: 12px;
     /* Cap so values don't stretch to the right edge of the viewport
-       on wide monitors — info-row uses justify-content: space-between,
+       on wide monitors, info-row uses justify-content: space-between,
        so the strong value would otherwise float ~1500px from its label
        and become hard to scan. 480px gives a comfortable two-column
        read. */
@@ -1153,7 +1153,7 @@ label select.input-sm {
     color: #fff;
 }
 
-/* Live-camera floating panel — clone of .mount-float-panel so the
+/* Live-camera floating panel, clone of .mount-float-panel so the
    two windows read as a matched draggable set. Slightly wider to
    accommodate the live preview canvas without squishing 4:3 frames. */
 .cam-float-panel {
@@ -1226,7 +1226,7 @@ label select.input-sm {
 }
 
 /* ===========================================================
-   FILES tab — server-side file explorer
+   FILES tab, server-side file explorer
    ----------------------------------------------------------- */
 
 .files-panel {
@@ -1658,7 +1658,7 @@ label select.input-sm {
     padding-top: 2px;
 }
 .rig-picker-backfocus {
-    color: #ffd0a0;   /* amber — back-focus mistakes are common */
+    color: #ffd0a0;   /* amber, back-focus mistakes are common */
 }
 
 .rig-row-actions {
@@ -1710,7 +1710,7 @@ label select.input-sm {
     border-radius: 4px;
     font-size: 13px;
     /* iOS Safari shows a native rounded-rectangle for input[type=search]
-       by default that clashes with our dark theme — strip the chrome. */
+       by default that clashes with our dark theme, strip the chrome. */
     -webkit-appearance: none;
     appearance: none;
 }
@@ -1910,7 +1910,7 @@ label select.input-sm {
 
 [x-cloak] { display: none !important; }
 
-/* Chart.js containers — fixed height, canvas fills it */
+/* Chart.js containers, fixed height, canvas fills it */
 .chart-container {
     position: relative;
     width: 100%;
@@ -2034,7 +2034,7 @@ label select.input-sm {
     text-align: center;
     pointer-events: none;
 }
-/* Compact HUD chip in the corner — shows current AF sweep position +
+/* Compact HUD chip in the corner, shows current AF sweep position +
    HFR + star count so the user reads progress without leaving the
    preview frame. */
 .af-preview-badge {
@@ -2437,7 +2437,7 @@ label select.input-sm {
     gap: 3px;
 }
 /* Let select/number inputs in the sky toolbar size to their natural
-   content — no fixed widths. Just strip the browser's number-input
+   content, no fixed widths. Just strip the browser's number-input
    spinner arrows (they look noisy at small sizes). */
 .sky-survey-row select.input-sm,
 .sky-survey-row input[type="number"].input-sm {
@@ -2563,7 +2563,7 @@ label select.input-sm {
     /* Baseline font-size for every text node inside a settings section.
        Without this, the top sections that opt-in to `style="font-size: 11px/12px"`
        inline look noticeably smaller than the bottom sections that inherit
-       the body's 14px default — and once the UI zoom slider is applied, the
+       the body's 14px default, and once the UI zoom slider is applied, the
        size delta persists (zoom scales both proportionally, so the gap stays
        visible). Pinning 12px here unifies the baseline so a single zoom value
        scales everything to the same effective rendered size. */
@@ -2571,7 +2571,7 @@ label select.input-sm {
 }
 
 /* Inputs, selects, textareas inside settings inherit the same baseline so
-   their value text matches the labels around them — otherwise Chrome falls
+   their value text matches the labels around them, otherwise Chrome falls
    back to its own ~13.33px form-control default and the value pops out
    visually larger than the surrounding chrome. */
 .settings-section input,
@@ -2599,7 +2599,7 @@ label select.input-sm {
     margin-bottom: 8px;
 }
 
-/* Paragraphs and helper lines in settings — same as labels.
+/* Paragraphs and helper lines in settings, same as labels.
    Without this rule a default <p> picks up the user-agent's larger
    body-derived size. */
 .settings-section p,
@@ -2704,7 +2704,7 @@ label select.input-sm {
 
 /* ----------------------------- Home / dashboard ------------------------------- */
 /* Background image lives on .home-panel so it stretches behind the
-   hero, the status strip, the get-started grid, and the footer — one
+   hero, the status strip, the get-started grid, and the footer, one
    continuous nebula instead of the previous "image card on a flat
    panel" split. The image is fixed-position so the panel can scroll
    without scrolling the artwork (acts like a parallax backdrop). */
@@ -2730,12 +2730,12 @@ label select.input-sm {
         radial-gradient(ellipse at 30% 40%, #1a2440 0%, #050810 70%);
 }
 /* Hero only needs the gentler overlay that pulled the eye into the
-   title — no second copy of the nebula. The flex sizing stays the
+   title, no second copy of the nebula. The flex sizing stays the
    same so the layout doesn't shift. */
 .home-hero {
     position: relative;
     /* Trimmed top/bottom padding (was 60 px each) and dropped the
-       320 px floor — the hero text + clock row only need ~180 px
+       320 px floor, the hero text + clock row only need ~180 px
        of vertical room. Old values wasted ~80 px above the title
        and another ~80 px between the clock row and the status
        cards below. Horizontal 40 px stays for the gutter. */
@@ -2749,7 +2749,7 @@ label select.input-sm {
 }
 .home-hero-text { max-width: 720px; }
 .home-eyebrow {
-    /* Same brand wordmark as the header — no pill chrome. Children
+    /* Same brand wordmark as the header, no pill chrome. Children
        (.brand-name, .brand-tag, .brand-version) inherit their look
        from the header rules. The hero version is sized up a touch
        relative to the header. */
@@ -2763,7 +2763,7 @@ label select.input-sm {
     letter-spacing: 3px;
 }
 .home-eyebrow .brand-tag {
-    /* Hero scale — match N.I.N.A. so POLARIS reads as the same word
+    /* Hero scale, match N.I.N.A. so POLARIS reads as the same word
        not a sub-name. */
     font-size: 22px;
     letter-spacing: 3px;
@@ -2787,7 +2787,7 @@ label select.input-sm {
 }
 .home-clock {
     margin-top: 18px;
-    /* Inter via the global body stack — tabular-nums + slashed-zero
+    /* Inter via the global body stack, tabular-nums + slashed-zero
        keep the seconds digits in fixed columns (no jitter when the
        clock ticks) and disambiguate the zero from O, without
        dropping into a monospace face. */
@@ -2822,7 +2822,7 @@ label select.input-sm {
     margin: 0 10px;
     opacity: 0.4;
 }
-/* Location uses the body font (not mono) — "São Paulo, Brazil" reads much
+/* Location uses the body font (not mono), "São Paulo, Brazil" reads much
    better in a humanist face than in tabular monospace. */
 .home-clock-loc {
     font-family: inherit;
@@ -2946,7 +2946,7 @@ label select.input-sm {
     border-top: 1px solid var(--border, #334155);
     /* On narrow viewports (≤640 px ≈ phones) the GitHub + Donate
        footer eats vertical real-estate that's better spent on the
-       hero CTAs. Hide entirely on mobile — both links are still
+       hero CTAs. Hide entirely on mobile, both links are still
        reachable from the README / About modal. */
 }
 @media (max-width: 960px) {
@@ -3013,7 +3013,7 @@ label select.input-sm {
 
 /* Donate uses the same neutral dark fill as the GitHub badge so the
    pair reads as a matched set. Only the heart icon picks up the pink
-   accent — quietly conveys "this one's a financial ask" without
+   accent, quietly conveys "this one's a financial ask" without
    pulling the eye away from the rest of the page. */
 .home-badge-donate {
     background: rgba(36, 41, 47, 0.85);
@@ -3192,7 +3192,7 @@ label select.input-sm {
 }
 .onnx-models-table tr:last-child td { border-bottom: none; }
 
-/* GX-10: HTTPS endpoints banner — list of clickable URLs the user
+/* GX-10: HTTPS endpoints banner, list of clickable URLs the user
    can try from the client device to unlock WebGPU + multi-thread
    WASM. Styled like the per-rig FOV picker pills so it doesn't look
    like a primary action (it's a one-time-per-device step). */
@@ -3221,7 +3221,7 @@ label select.input-sm {
     border-color: var(--accent-success, #4ade80);
 }
 /* GX-11b: collapsed cert-info <details> shown when the user is
-   already on a secure origin. Minimal — just enough to confirm
+   already on a secure origin. Minimal, just enough to confirm
    the secure-context check passed without taking real estate. */
 .https-info-collapsed {
     padding: 8px 12px;
@@ -3240,7 +3240,7 @@ label select.input-sm {
 }
 /* SIM-9: same compact details treatment as .https-info-collapsed
    but in neutral muted instead of green (this isn't a "good news"
-   thing — it's an opt-in feature whose absence is the default). */
+   thing, it's an opt-in feature whose absence is the default). */
 .sim-collapsed.settings-section {
     padding: 8px 12px;
     background: rgba(255, 255, 255, 0.025);
@@ -3437,7 +3437,7 @@ label select.input-sm {
     color: #ef9a9a;
 }
 
-/* Estimate strip at the foot of the Autorun panel — same role as the
+/* Estimate strip at the foot of the Autorun panel, same role as the
    bottom strip on ASIAIR's shooting schedule. */
 .seq-estimate {
     display: flex;
@@ -3799,7 +3799,7 @@ label select.input-sm {
        to the bottom edge (sky-info-panel + control-row) and the last
        action button row was sliding behind the activity bar. Need
        enough headroom for: activity bar (36px) + button height (~32px)
-       + a few px of breathing room — bumped from 48 to 72. */
+       + a few px of breathing room, bumped from 48 to 72. */
     padding-bottom: 72px !important;
 }
 
@@ -3906,7 +3906,7 @@ label select.input-sm {
 }
 
 .equip-connect-prompt {
-    /* Sits at the top of the panel — do NOT stretch to fill vertical
+    /* Sits at the top of the panel, do NOT stretch to fill vertical
        space, otherwise the connect form ends up centered in the middle
        of the page while equipment cards render below it. */
     flex: 0 0 auto;
@@ -3936,7 +3936,7 @@ label select.input-sm {
     /* Every RIGS card gets a 400 px floor so a Camera with cooler
        chart + cooler controls + sensor metadata + connect toggle has
        enough headroom without scrolling, and empty cards stay
-       visually consistent. No max-height — taller devices grow as
+       visually consistent. No max-height, taller devices grow as
        needed. */
     min-height: 400px;
     display: flex;
@@ -4008,7 +4008,7 @@ label select.input-sm {
        max-height. The dropdown + Connect/Disconnect stay readable;
        the detail block scrolls beneath them. */
     overflow-y: auto;
-    /* Slim, subtle scrollbar — matches the dark theme. */
+    /* Slim, subtle scrollbar, matches the dark theme. */
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
 }
@@ -4092,7 +4092,7 @@ label select.input-sm {
     cursor: not-allowed;
 }
 
-/* Camera driver picker — shows above the device dropdown when more
+/* Camera driver picker, shows above the device dropdown when more
    than one camera backend is available on this host (e.g. INDI plus
    Canon EDSDK on Windows). */
 .equip-driver-row {
@@ -4356,7 +4356,7 @@ label select.input-sm {
     opacity: 0.7;
 }
 /* Per-slot weather glyph. Emoji sit awkwardly small in this dense grid
-   — bump them up a notch so they're scannable. */
+  , bump them up a notch so they're scannable. */
 .weather-slot-icon {
     font-size: 16px;
     line-height: 1.1;
@@ -4527,7 +4527,7 @@ label select.input-sm {
     /* Snappy on zoom button clicks without slowing down a wheel drag. */
     transition: transform 0.12s ease-out;
 }
-/* Killed transition during pan (zoom unchanged, only translate moves) —
+/* Killed transition during pan (zoom unchanged, only translate moves),
    the .editor-preview-stage's transition above would smear the drag.
    We toggle by writing inline style from JS during pan; here we just
    guard against rendering glitches with the default. */
@@ -4597,7 +4597,7 @@ label select.input-sm {
 }
 .editor-slider-row input[type="range"] { width: 100%; }
 
-/* ED-6 compute-mode pill — colour-codes which side is doing the math
+/* ED-6 compute-mode pill, colour-codes which side is doing the math
    so the user knows at a glance whether slider drags will hit the
    network. Disabled state (when WASM not ready) is communicated by
    the standard :disabled styling. */
@@ -4621,7 +4621,7 @@ label select.input-sm {
 }
 .editor-ai-buttons .btn { width: 100%; text-align: left; }
 
-/* Editor export modal — backdrop covers the viewport, frame floats
+/* Editor export modal, backdrop covers the viewport, frame floats
    centred. Mirrors the .siril-modal pattern (same z-index + dim) so
    it stacks correctly with toasts (which sit at z-index ~2000). */
 .editor-export-backdrop {
@@ -4736,12 +4736,12 @@ label select.input-sm {
     height: 100%;
     object-fit: contain;
     /* Pixel-art rendering is wrong for star-field stretched JPEGs.
-       The default bilinear interpolation is what we want — leave it. */
+       The default bilinear interpolation is what we want, leave it. */
     pointer-events: none;
 }
 .graxpert-compare-out {
     /* GX-12f: AFTER (the processed image) sits on the RIGHT of the
-       handle — matches user convention ("before on left, after on
+       handle, matches user convention ("before on left, after on
        right") and the position of the .graxpert-compare-tag-out
        label. Clip-path masks the LEFT portion of the OUT layer up
        to --split, so SRC underneath shows through on the left half
@@ -4870,7 +4870,7 @@ label select.input-sm {
     color: white;
 }
 /* .cert-modal-content holds the per-OS tab body. Typography rules
-   come from .cert-modal-frame above — only the pre block needs
+   come from .cert-modal-frame above, only the pre block needs
    its own dark-background treatment for the Linux certutil snippet. */
 .cert-modal-content pre {
     background: rgba(0, 0, 0, 0.35);
@@ -4916,7 +4916,7 @@ label select.input-sm {
        none so the whole 40-px column reliably receives mousedown.
        Previously the handle was only the 2-px bar, which meant
        clicking the obvious-looking grip missed by ~17 px and
-       fell through to the wrap (which had no listener) — drag
+       fell through to the wrap (which had no listener), drag
        was effectively broken on every screen. */
     position: absolute;
     top: 0;
@@ -5180,7 +5180,7 @@ label select.input-sm {
     .tonight-actions { grid-area: actions; justify-content: flex-end; }
 }
 
-/* Observatory location helpers — address search + Use my location */
+/* Observatory location helpers, address search + Use my location */
 .obs-location-tools {
     display: flex;
     flex-direction: column;
@@ -5223,7 +5223,7 @@ label select.input-sm {
     background: rgba(33, 150, 243, 0.12);
 }
 
-/* ─── STUDIO tab — frame browser (ST-1) ─────────────────────────────── */
+/* ─── STUDIO tab, frame browser (ST-1) ─────────────────────────────── */
 .studio-panel {
     padding: 16px;
     overflow-y: auto;
@@ -5460,7 +5460,7 @@ label select.input-sm {
 }
 
 /* ===========================================================
-   External tools (Siril + GraXpert) — Settings section + Siril
+   External tools (Siril + GraXpert), Settings section + Siril
    run modal. Each "row" is a card per tool with status pill +
    detail body.
    ----------------------------------------------------------- */
@@ -5535,7 +5535,7 @@ label select.input-sm {
     flex: 1;
     min-width: 180px;
 }
-/* GX-9 (UX): checkbox labels in the modal need a row layout — the
+/* GX-9 (UX): checkbox labels in the modal need a row layout, the
    default column-stack (designed for "title above input" form rows)
    floated the tick mark above its descriptor instead of next to it.
    Constrain to the .checkbox-label class so non-checkbox labels keep
@@ -5593,7 +5593,7 @@ label select.input-sm {
 }
 
 /* ===========================================================
-   Activity bar — fixed bottom strip showing active operations
+   Activity bar, fixed bottom strip showing active operations
    on the left and host CPU/RAM on the right.
    ----------------------------------------------------------- */
 
@@ -5627,7 +5627,7 @@ label select.input-sm {
     overflow-y: hidden;
     flex: 0 1 auto;
     min-width: 0;
-    /* Hide the scrollbar — most users have <5 chips at once. */
+    /* Hide the scrollbar, most users have <5 chips at once. */
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
@@ -5740,7 +5740,7 @@ label select.input-sm {
 .host-amber { color: #fcd34d; }
 .host-red   { color: #fca5a5; font-weight: 600; }
 
-/* Hardware identification chip — sits leftmost in the host group
+/* Hardware identification chip, sits leftmost in the host group
    so the eye lands on "this is Polaris on a Pi 5" before the live
    numbers. Slightly muted compared to CPU/RAM since it's static. */
 .activity-host-device {
@@ -5760,7 +5760,7 @@ label select.input-sm {
     font-size: 12px;
     line-height: 1;
 }
-/* CPU info chip — same visual weight as the device chip + same
+/* CPU info chip, same visual weight as the device chip + same
    right-border separator. Caps width so a verbose CPU name doesn't
    push the live metrics off-screen on narrow viewports. */
 .activity-host-cpu-info {
@@ -5784,7 +5784,7 @@ label select.input-sm {
 .home-panel { padding-bottom: 40px !important; }
 
 /* ===========================================================
-   RIGS tab — connection strip + role-based grid + accessories
+   RIGS tab, connection strip + role-based grid + accessories
    ----------------------------------------------------------- */
 
 /* Compact connection strip shown at the top of the RIGS tab
@@ -5865,16 +5865,16 @@ label select.input-sm {
 }
 /* Selects inside metadata-card rows need to fill the label width
    (otherwise inherit input-sm's 60-90px fixed width and clip
-   "— Manual entry —" / "— Pick a model —" labels). Numeric inputs
+   ", Manual entry," / ", Pick a model," labels). Numeric inputs
    inside the same row keep their explicit inline width attr. */
 .equip-meta-row label select.input-sm {
     width: 100%;
     min-width: 160px;
 }
-/* Only stretch labels that *wrap a select* — labels around numeric
+/* Only stretch labels that *wrap a select*, labels around numeric
    inputs keep their intrinsic narrow width (set via inline style on
    the input). Uses :has() (Chromium 105+, Safari 15.4+, Firefox 121+
-   — fine for this app's target browsers). */
+  , fine for this app's target browsers). */
 .equip-meta-row > label:has(select.input-sm) {
     flex: 1 1 180px;
     min-width: 0;
@@ -5969,7 +5969,7 @@ label select.input-sm {
 .profile-sync-indicator.sync-err  { background: rgba(239,68,68,0.18); color: #fca5a5; }
 .profile-sync-indicator.sync-busy { background: rgba(99,102,241,0.18); color: #a5b4fc; }
 
-/* Smart Calibrate + algo preset block — sits below the existing guiding
+/* Smart Calibrate + algo preset block, sits below the existing guiding
    controls in the Control tab. Spans full width for the row layout. */
 .phd2-smart-block {
     background: rgba(255,255,255,0.03);
@@ -5986,7 +5986,7 @@ label select.input-sm {
 
 .phd2-algo-advanced summary::marker { color: var(--text-muted); }
 
-/* PHD2 GUI tab — iframe wrapper + the 4 conditional states. */
+/* PHD2 GUI tab, iframe wrapper + the 4 conditional states. */
 .phd2-gui-tab {
     display: flex;
     flex-direction: column;
@@ -6045,7 +6045,7 @@ label select.input-sm {
 }
 
 /* ==========================================================================
-   VIDEO tab — planetary capture (SER) + lucky-imaging stack
+   VIDEO tab, planetary capture (SER) + lucky-imaging stack
    ========================================================================== */
 
 .video-tab-panel {
@@ -6101,7 +6101,7 @@ label select.input-sm {
     flex: 1;
     min-height: 200px;
 }
-/* Controls row docked at the bottom of the pane — never grows or
+/* Controls row docked at the bottom of the pane, never grows or
    shrinks, always reserves its intrinsic height. */
 .video-pane .quick-controls {
     flex: 0 0 auto;

@@ -21,7 +21,7 @@ namespace NINA.Polaris.Services;
 ///   - Moon always present, base 50 + illumination bonus
 ///   - + (peakAlt / 90) * 20: rewards transit altitude
 ///   - Filter: only keep things with peak altitude ≥ 30° during the
-///     night window (10° for the Moon — it's always interesting),
+///     night window (10° for the Moon, it's always interesting),
 ///     and dimmer than mag 10 cuts.
 ///
 /// The "FitsCameraFov" flag is computed when a camera is connected and
@@ -103,7 +103,7 @@ public class TonightsBestService {
         var observer = new Observer(lat, lng, _profile.Active.Altitude);
         var time = new AstroTime(nowUtc);
 
-        // Moon — always include if above horizon at peak.
+        // Moon, always include if above horizon at peak.
         AddSolarSystem("Moon", Body.Moon, "Moon", observer, time, nightStart, nightEnd, lat, lng, fov, items,
             minPeakAlt: 10, baseBoost: 50);
 
@@ -204,7 +204,7 @@ public class TonightsBestService {
             // closest-to-now position for the "current" RA/Dec.
             var nowUtc = DateTime.UtcNow;
             var nowPos = _comets!.Compute(c, nowUtc);
-            // Don't gate on magnitude — every curated periodic comet is
+            // Don't gate on magnitude, every curated periodic comet is
             // worth knowing about, and the score formula naturally pushes
             // dim ones (mag 15+) to the bottom of the list. Users who
             // care about brightness can read the magnitude on the card.
@@ -222,7 +222,7 @@ public class TonightsBestService {
                 nowPos.RaHours, nowPos.DecDeg, nowUtc, lat, lng);
 
             // Comets get a small boost on score so an actually-bright apparition
-            // outranks a mediocre DSO with the same magnitude — they're event-
+            // outranks a mediocre DSO with the same magnitude, they're event-
             // worthy targets the user probably wants to plan around.
             var score = (int)Math.Round(
                 (8 - Math.Clamp(nowPos.EstimatedMagnitude, -5, 13)) * 7

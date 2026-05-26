@@ -36,7 +36,7 @@ public class LiveStackTriggersServiceTests {
         // At Dec 60° the naive small-angle approximation Δα·cos(δ) says
         // 15°·0.5 = 7.5° = 27000". But the production code uses the
         // haversine formula (proper great-circle distance), so the actual
-        // separation is slightly shorter — the path cuts across the
+        // separation is slightly shorter, the path cuts across the
         // sphere rather than walking along the small circle. Haversine
         // gives ≈26943" here, off by about 57" from the cos-δ estimate.
         // Pin the haversine value so a future "optimization" back to the
@@ -72,7 +72,7 @@ public class LiveStackTriggersServiceTests {
         var st = svc.CurrentStatus;
         Assert.That(st.LastRefocusAt, Is.Null);
         Assert.That(st.LastRecenterAt, Is.Null);
-        // Null instead of 0 — the "no refocus yet" sentinel was
+        // Null instead of 0, the "no refocus yet" sentinel was
         // changed to nullable when the NaN/Infinity JSON-serialization
         // bug was fixed (0 / NaN now both map to null).
         Assert.That(st.LastRefocusFrame, Is.Null);

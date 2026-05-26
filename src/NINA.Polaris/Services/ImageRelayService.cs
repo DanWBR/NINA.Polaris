@@ -11,9 +11,9 @@ namespace NINA.Polaris.Services;
 /// independently, so a slow browser doesn't stall the rest. Two
 /// transport modes per client:
 /// <list type="bullet">
-/// <item><b>JPEG</b> (default) — server-side stretch + encode, ~50-200 KB
+/// <item><b>JPEG</b> (default), server-side stretch + encode, ~50-200 KB
 /// per frame, works on any browser.</item>
-/// <item><b>Raw</b> — uint16 pixels + LZ4-compressed bayer pattern,
+/// <item><b>Raw</b>, uint16 pixels + LZ4-compressed bayer pattern,
 /// client-side WebGL2 stretch + debayer, ~5-15 MB per frame, requires
 /// a modern browser.</item>
 /// </list>
@@ -46,7 +46,7 @@ public class ImageRelayService : IDisposable {
     /// (only for clients we previously downgraded).</summary>
     public TimeSpan AdaptiveUpgradeLatency { get; set; } = TimeSpan.FromMilliseconds(600);
     public int AdaptiveUpgradeStreak { get; set; } = 5;
-    /// <summary>Master switch — set false to pin clients to whatever mode they requested.</summary>
+    /// <summary>Master switch, set false to pin clients to whatever mode they requested.</summary>
     public bool AdaptiveEnabled { get; set; } = true;
 
     public ImageRelayService(ILogger<ImageRelayService> logger) {
@@ -173,7 +173,7 @@ public class ImageRelayService : IDisposable {
 
     public byte[]? GetLatestJpeg(int quality = 85) {
         var img = _latestImage;
-        // Skip the encode when no real frame is buffered yet — the
+        // Skip the encode when no real frame is buffered yet, the
         // initial state has a 0x0 ImageBuffer (placeholder), and
         // JpegHelper rightly refuses it. Surfacing null lets the
         // endpoint return 404 instead of crashing the request.
@@ -207,7 +207,7 @@ public class ImageRelayService : IDisposable {
         public int SkippedFrames { get; set; }
         public StreamMode Mode { get; set; } = StreamMode.Jpeg; // Default to JPEG (works everywhere)
 
-        /// <summary>The mode the client originally asked for — never overwritten by adaptive logic.</summary>
+        /// <summary>The mode the client originally asked for, never overwritten by adaptive logic.</summary>
         public StreamMode RequestedMode { get; set; } = StreamMode.Jpeg;
         /// <summary>True when adaptive logic forced us off the requested mode.</summary>
         public bool AdaptiveDowngraded { get; set; }
@@ -307,7 +307,7 @@ public class ImageRelayService : IDisposable {
                     AdaptiveUpgradeStreak);
             }
         } else {
-            // Latency in the middle band — reset both streaks
+            // Latency in the middle band, reset both streaks
             if (entry.Mode == StreamMode.Raw) entry.SlowFrameStreak = 0;
             if (entry.Mode == StreamMode.Jpeg) entry.FastFrameStreak = 0;
         }

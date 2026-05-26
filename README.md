@@ -2,11 +2,11 @@
 
 **Cross-platform headless astronomy controller for Raspberry Pi, ARM64 SBCs, and Windows mini PCs.**
 
-> ⚠️ **N.I.N.A. Polaris is a community-driven fork of [N.I.N.A.](https://nighttime-imaging.eu/)** It is **not** affiliated with or supported by the official N.I.N.A. development team. Please **don't** ask them for support with this fork — open issues here instead.
+> ⚠️ **N.I.N.A. Polaris is a community-driven fork of [N.I.N.A.](https://nighttime-imaging.eu/)** It is **not** affiliated with or supported by the official N.I.N.A. development team. Please **don't** ask them for support with this fork, open issues here instead.
 
 N.I.N.A. Polaris is a lightweight, browser-controlled astrophotography system built on ASP.NET Core. It brings the power of [N.I.N.A.](https://nighttime-imaging.eu/) (Nighttime Imaging 'N' Astronomy) to single-board computers and small-form-factor PCs, with a responsive Web UI accessible from any device on the network.
 
-The Raspberry Pi (or Windows mini PC) acts as a data broker — controlling hardware, saving FITS files, and streaming images — while your laptop, tablet, or phone handles all the heavy rendering in the browser.
+The Raspberry Pi (or Windows mini PC) acts as a data broker, controlling hardware, saving FITS files, and streaming images, while your laptop, tablet, or phone handles all the heavy rendering in the browser.
 
 ```
 Browser (laptop / tablet / phone)        Raspberry Pi / Mini PC
@@ -27,7 +27,7 @@ Browser (laptop / tablet / phone)        Raspberry Pi / Mini PC
   - [Real-Time Image Streaming](#real-time-image-streaming)
   - [Live Stacking (EAA)](#live-stacking-eaa)
   - [Plate Solving & Centering](#plate-solving--centering)
-  - [Guiding (PHD2) — full management](#guiding-phd2--full-management)
+  - [Guiding (PHD2), full management](#guiding-phd2--full-management)
   - [Auto-Focus (V-Curve)](#auto-focus-v-curve)
   - [Meridian Flip Automation](#meridian-flip-automation)
   - [Advanced Sequencer (tree-based)](#advanced-sequencer-tree-based)
@@ -74,15 +74,15 @@ Browser (laptop / tablet / phone)        Raspberry Pi / Mini PC
 
 Full INDI protocol client with support for 400+ Linux drivers:
 
-- **Camera** — Capture, exposure control, gain, binning, ROI, cooler temperature
-- **Telescope/Mount** — Slew, GoTo, park/unpark, tracking (sidereal/lunar/solar), NSEW manual control
-- **Focuser** — Absolute/relative move, step control, temperature readout
-- **Filter Wheel** — Position selection by slot number or filter name
-- **Guider** — Pulse guiding in 4 directions, guide camera exposure
-- **Dome** — Azimuth slew, shutter open/close, park/unpark, slave mode
-- **Rotator** — Angle positioning, reverse toggle
-- **Weather** — Temperature, humidity, dew point, wind, pressure, cloud cover, SQM, rain, safety status
-- **Flat Panel** — Light on/off, brightness control, dust cap open/close
+- **Camera**, Capture, exposure control, gain, binning, ROI, cooler temperature
+- **Telescope/Mount**, Slew, GoTo, park/unpark, tracking (sidereal/lunar/solar), NSEW manual control
+- **Focuser**, Absolute/relative move, step control, temperature readout
+- **Filter Wheel**, Position selection by slot number or filter name
+- **Guider**, Pulse guiding in 4 directions, guide camera exposure
+- **Dome**, Azimuth slew, shutter open/close, park/unpark, slave mode
+- **Rotator**, Angle positioning, reverse toggle
+- **Weather**, Temperature, humidity, dew point, wind, pressure, cloud cover, SQM, rain, safety status
+- **Flat Panel**, Light on/off, brightness control, dust cap open/close
 
 ### DSLR / Mirrorless cameras
 
@@ -90,26 +90,26 @@ Beyond the dedicated astronomy cameras INDI exposes, Polaris speaks
 to consumer DSLR / mirrorless bodies through a shared `ICamera`
 abstraction with driver-specific backends:
 
-- **Linux** — use the existing INDI `indi_gphoto_ccd` driver (wraps
+- **Linux**, use the existing INDI `indi_gphoto_ccd` driver (wraps
   libgphoto2, supports hundreds of Canon / Nikon / Sony / Fuji
   bodies). Zero extra Polaris code; pick `driver=indi` in the
   Equipment card and the gphoto-exposed camera shows up alongside
   the astro CCDs. Setup walkthrough in
   [`docs/dslr-linux.md`](docs/dslr-linux.md).
-- **Canon (Windows)** — native Canon EDSDK integration with full
+- **Canon (Windows)**, native Canon EDSDK integration with full
   capture path: RAW + JPEG dual delivery, ISO + shutter + bulb
   control, automatic SaveTo=Host. CR2 files land verbatim under
   `{rig}/lights/.../`; the embedded JPEG drives the live preview.
   Install instructions + EULA caveats in
   [`docs/dslr-windows-canon.md`](docs/dslr-windows-canon.md).
-- **Nikon (Windows)** — skeleton driver wired into the Equipment UI
+- **Nikon (Windows)**, skeleton driver wired into the Equipment UI
   and ICamera dispatch. Implementation path documented (vendor the
   MIT-licensed [MekNikon](https://github.com/meklarian/MekNikon)
   MAID bindings, or build against the Nikon Imaging SDK for Z
   series) in [`docs/dslr-windows-nikon.md`](docs/dslr-windows-nikon.md).
-- **Sony (Windows + Linux)** — skeleton driver covering two
+- **Sony (Windows + Linux)**, skeleton driver covering two
   complementary paths: the legacy Wi-Fi Camera Remote API v1.90
-  (HTTP/JSON, cross-platform, easiest to implement — reference:
+  (HTTP/JSON, cross-platform, easiest to implement, reference:
   [nantcom/SonyCameraSDK](https://github.com/nantcom/SonyCameraSDK))
   for older α / NEX bodies, and the modern USB Camera Remote SDK
   v2.x for α7 III onward. Full landscape in
@@ -120,7 +120,7 @@ host, shows install banners (with direct doc links) for any that
 aren't installed, surfaces an **ISO** dropdown instead of the Gain
 field for DSLR-class cameras, and hides cooler / binning controls
 that don't apply. Captured RAW files (CR2 / NEF / ARW) are saved
-verbatim alongside the camera-native pipeline — the embedded JPEG
+verbatim alongside the camera-native pipeline, the embedded JPEG
 becomes the on-screen preview while the RAW waits for the Studio
 panel (or PixInsight / Siril if you'd rather process there).
 
@@ -128,9 +128,9 @@ panel (or PixInsight / Siril if you'd rather process there).
 
 Dual-mode WebSocket image streaming with automatic format negotiation:
 
-- **JPEG mode** (default) — Server-side auto-stretch and JPEG encoding, works on all browsers (~300KB per frame)
-- **Raw mode** — LZ4-compressed 16-bit pixel data with client-side WebGL debayer and MTF stretch (~3-10MB per frame)
-- Backpressure handling — slow clients skip frames instead of falling behind
+- **JPEG mode** (default), Server-side auto-stretch and JPEG encoding, works on all browsers (~300KB per frame)
+- **Raw mode**, LZ4-compressed 16-bit pixel data with client-side WebGL debayer and MTF stretch (~3-10MB per frame)
+- Backpressure handling, slow clients skip frames instead of falling behind
 - Dead client eviction after consecutive send failures
 - REST endpoint for latest preview image (`/api/image/latest/preview`)
 
@@ -144,14 +144,14 @@ Real-time stacking for electronically assisted astronomy:
 - Running average accumulation buffer
 - Start/stop/reset controls with frame counter
 - Per-frame median HFR + star count piggy-backed on the alignment pass
-  (no extra detection cost) — surfaced in WebSocket status so the LIVE
+  (no extra detection cost), surfaced in WebSocket status so the LIVE
   tab can show drift over time
 
 **Auto re-focus + auto re-center triggers** (LSTR): two independent
 trigger axes that fire automatically during long EAA / comet-hunting
 sessions without leaving the LIVE tab.
 
-Re-focus triggers (any combination — first to cross fires):
+Re-focus triggers (any combination, first to cross fires):
   - Every N integrated frames
   - Every N minutes since last refocus
   - Sensor temperature drift ≥ ±X°C
@@ -160,12 +160,12 @@ Re-focus triggers (any combination — first to cross fires):
 Re-center triggers (same OR-combine pattern):
   - Every N integrated frames
   - Every N minutes
-  - Plate-solve drift ≥ X arcsec (per-frame solve — heavy on RPi 4,
+  - Plate-solve drift ≥ X arcsec (per-frame solve, heavy on RPi 4,
     default off)
 
 Reference RA/Dec for re-center comes from a one-shot plate solve on
 the first integrated frame (true astrometric position, not the mount's
-report). Trigger handlers run sequentially inside `AddFrameAsync` —
+report). Trigger handlers run sequentially inside `AddFrameAsync`,
 the upstream capture pipeline naturally pauses during AF / re-center
 since whoever's pushing frames is awaiting that call. Reentry guard
 prevents concurrent AF + re-center on overlapping triggers.
@@ -180,16 +180,16 @@ setup keeps its own thermal + drift policy. UI is a collapsible
 Strategy-based plate-solving dispatcher with four interchangeable backends and
 a primary + blind-fallback pipeline:
 
-- **ASTAP** — fast offline solver, hint-driven, the default primary
-- **PlateSolve3** — PlaneWave's CLI, excellent at long focal lengths and small FOVs (≤10 stars), requires hints
-- **Astrometry.net online** — REST API at nova.astrometry.net, truly blind, slow but robust (API key required)
-- **Astrometry.net local** — `solve-field` wrapper with ±20% pixel-scale window, blind-capable
+- **ASTAP**, fast offline solver, hint-driven, the default primary
+- **PlateSolve3**, PlaneWave's CLI, excellent at long focal lengths and small FOVs (≤10 stars), requires hints
+- **Astrometry.net online**, REST API at nova.astrometry.net, truly blind, slow but robust (API key required)
+- **Astrometry.net local**, `solve-field` wrapper with ±20% pixel-scale window, blind-capable
 - Configurable per-installation: `PlateSolve:PrimarySolver`, `PlateSolve:BlindSolver`, `PlateSolve:UseBlindFallback`
-- **Slew & Center** — Automated loop: slew to target → capture → solve → compute error → sync → re-slew (converges in 2-3 iterations, ~30-60s total)
+- **Slew & Center**, Automated loop: slew to target → capture → solve → compute error → sync → re-slew (converges in 2-3 iterations, ~30-60s total)
 - Configurable tolerance (default: 30 arcsec), async job tracking with real-time status polling
 - Result carries `SolverUsed` so the UI knows which backend produced it
 
-### Guiding (PHD2) — full management
+### Guiding (PHD2), full management
 
 PHD2 is a first-class managed device, not just a black box we send commands to.
 
@@ -201,21 +201,21 @@ PHD2 is a first-class managed device, not just a black box we send commands to.
 - Alert + settle status surfaced in the UI as toasts and banners
 - Shows which guide camera + mount PHD2 is actually using (via `get_current_equipment`)
 
-**Management — control PHD2 itself from the Web UI:**
-- **Profile switcher** — list every PHD2 profile, switch with one click (auto-disconnects equipment first as PHD2 requires)
-- **Equipment connect/disconnect** — tell PHD2 to wire up its own gear
-- **Exposure** — dropdown populated from `get_exposure_durations` (e.g. "1.0s" / "100ms")
-- **Dec guide mode** — Auto / North / South / Off
-- **Auto-detect install location** — walks the well-known PHD2 install paths per OS (Windows: Program Files / Program Files (x86) / `%LocalAppData%\Programs`; macOS: `/Applications/PHD2.app`; Linux: `/usr/bin`, `/usr/local/bin`, `/opt/phd2/bin`, `/snap/bin`, plus a `$PATH` walk). When not detected the Guider tab surfaces an inline "Download PHD2" banner with a direct link
-- **Launch / Shutdown PHD2 process** — when an executable is detected (or `PHD2:ExecutablePath` is set), N.I.N.A. Polaris can spawn PHD2 on the same host (loopback only) and gracefully shut it down via the `shutdown` RPC (falls back to process kill only if we own the process)
-- **Auto-start on boot** — a single checkbox in the Guider tab makes the headless app launch PHD2 and connect the JSON-RPC client ~2s after every startup. Persisted per profile; survives restarts. Backed by a hosted service that retries the connect 5× in case PHD2's event server is slow to come up
+**Management, control PHD2 itself from the Web UI:**
+- **Profile switcher**, list every PHD2 profile, switch with one click (auto-disconnects equipment first as PHD2 requires)
+- **Equipment connect/disconnect**, tell PHD2 to wire up its own gear
+- **Exposure**, dropdown populated from `get_exposure_durations` (e.g. "1.0s" / "100ms")
+- **Dec guide mode**, Auto / North / South / Off
+- **Auto-detect install location**, walks the well-known PHD2 install paths per OS (Windows: Program Files / Program Files (x86) / `%LocalAppData%\Programs`; macOS: `/Applications/PHD2.app`; Linux: `/usr/bin`, `/usr/local/bin`, `/opt/phd2/bin`, `/snap/bin`, plus a `$PATH` walk). When not detected the Guider tab surfaces an inline "Download PHD2" banner with a direct link
+- **Launch / Shutdown PHD2 process**, when an executable is detected (or `PHD2:ExecutablePath` is set), N.I.N.A. Polaris can spawn PHD2 on the same host (loopback only) and gracefully shut it down via the `shutdown` RPC (falls back to process kill only if we own the process)
+- **Auto-start on boot**, a single checkbox in the Guider tab makes the headless app launch PHD2 and connect the JSON-RPC client ~2s after every startup. Persisted per profile; survives restarts. Backed by a hosted service that retries the connect 5× in case PHD2's event server is slow to come up
 - Commands: start guiding / stop / loop / pause / resume / dither (with settle pixels + time + timeout) / auto-select star / clear calibration / clear history
 
 **Deep integration (PH2X):**
-- **Rig ↔ PHD2 profile sync (1:1)** — each Polaris rig maps to a PHD2 profile of the same name. Switching rigs automatically switches the PHD2 profile via RPC + applies the rig's algorithm preset + any per-rig algorithm overrides. When a profile is missing, the GUI surfaces a banner pointing to the embedded PHD2 GUI tab where the user can run the Wizard.
-- **Smart Calibrate** — one button: Polaris reads pixel scale, computes a sane calibration step from `(distance_px × pixel_scale) / guide_rate`, optionally slews the main mount to the celestial equator, clears calibration, finds a star, triggers `guide(recalibrate=true)`, monitors the calibration to completion via the AppState event stream, validates orthogonality + non-zero rate, and surfaces results. State machine + progress streamed live via `/ws/status` → `guider.calibrateJob`.
-- **Algorithm tuning presets** — `Default` / `Reactive` / `Smooth` curated bundles for Hysteresis (RA) + Resist-Switch (DEC) algorithms; applied via `set_algo_param` with silent skip for params the current algorithm doesn't expose. Advanced disclosure shows every live knob (`get_algo_param_names` + per-name `get_algo_param`); editing any knob flips the preset to `Custom` and persists the bag on the rig.
-- **Embedded PHD2 GUI** (Linux only) — the GUIDE tab has a tabstrip: **Control** (JSON-RPC UI) | **PHD2 GUI** (xpra HTML5 client embedded via reverse-proxy). Lets you run PHD2's native Profile Wizard, Brain dialog, Guiding Assistant, dark library, etc. remotely without VNC/SSH. See [docs/phd2-gui-embedding.md](docs/phd2-gui-embedding.md) for install instructions. On Windows/macOS the Control tab still works fully; the GUI tab shows a clear OS-not-supported banner.
+- **Rig ↔ PHD2 profile sync (1:1)**, each Polaris rig maps to a PHD2 profile of the same name. Switching rigs automatically switches the PHD2 profile via RPC + applies the rig's algorithm preset + any per-rig algorithm overrides. When a profile is missing, the GUI surfaces a banner pointing to the embedded PHD2 GUI tab where the user can run the Wizard.
+- **Smart Calibrate**, one button: Polaris reads pixel scale, computes a sane calibration step from `(distance_px × pixel_scale) / guide_rate`, optionally slews the main mount to the celestial equator, clears calibration, finds a star, triggers `guide(recalibrate=true)`, monitors the calibration to completion via the AppState event stream, validates orthogonality + non-zero rate, and surfaces results. State machine + progress streamed live via `/ws/status` → `guider.calibrateJob`.
+- **Algorithm tuning presets**, `Default` / `Reactive` / `Smooth` curated bundles for Hysteresis (RA) + Resist-Switch (DEC) algorithms; applied via `set_algo_param` with silent skip for params the current algorithm doesn't expose. Advanced disclosure shows every live knob (`get_algo_param_names` + per-name `get_algo_param`); editing any knob flips the preset to `Custom` and persists the bag on the rig.
+- **Embedded PHD2 GUI** (Linux only), the GUIDE tab has a tabstrip: **Control** (JSON-RPC UI) | **PHD2 GUI** (xpra HTML5 client embedded via reverse-proxy). Lets you run PHD2's native Profile Wizard, Brain dialog, Guiding Assistant, dark library, etc. remotely without VNC/SSH. See [docs/phd2-gui-embedding.md](docs/phd2-gui-embedding.md) for install instructions. On Windows/macOS the Control tab still works fully; the GUI tab shows a clear OS-not-supported banner.
 
 ### Auto-Focus (V-Curve)
 
@@ -225,7 +225,7 @@ Automated focus point determination via symmetric sweep:
 - Least-squares parabola fit through valid samples; moves to the vertex
 - Configurable step size, point count, exposure, minimum stars, backlash compensation, post-focus confirmation frame
 - Live V-curve chart (Chart.js scatter) with fitted parabola and best-position marker
-- **Live frame preview** — every AF sweep exposure pipes through the same `/ws/image-stream` channel as LIVE, rendered into a dedicated canvas on the Focus tab with a HUD chip showing `pos {N} · HFR {x.xx} · ★ {stars}` per sample. Lets you watch the focuser converge in real time without switching tabs.
+- **Live frame preview**, every AF sweep exposure pipes through the same `/ws/image-stream` channel as LIVE, rendered into a dedicated canvas on the Focus tab with a HUD chip showing `pos {N} · HFR {x.xx} · ★ {stars}` per sample. Lets you watch the focuser converge in real time without switching tabs.
 - Restores starting position automatically on cancel or failure
 
 ### Meridian Flip Automation
@@ -242,7 +242,7 @@ Hands-off pier-side change during a sequence:
 
 A full conditional-execution engine alongside (not replacing) the legacy
 Simple Sequencer. Toggle the default tab via **Settings → Sequencer →
-"Use Advanced Sequencer by default"** — both stay available either way.
+"Use Advanced Sequencer by default"**, both stay available either way.
 
 **Tree model:**
 - **Containers** group children: `Sequential` (run in order), `Parallel`
@@ -299,7 +299,7 @@ Simple Sequencer. Toggle the default tab via **Settings → Sequencer →
   by field type)
 - Sortable.js drag-handle on the type badge to reorder siblings
 - Save / Download JSON / Upload JSON / Validate / Start / Stop in the toolbar
-- Live status mirroring — during a run the tree colours update every 2s
+- Live status mirroring, during a run the tree colours update every 2s
   showing what's Running / Completed / Failed / Skipped, plus the
   Safety-trigger abort reason if one fires
 
@@ -309,7 +309,7 @@ Build a multi-panel mosaic centred on any selected sky target. The
 **🧩 Plan mosaic** button in the Sky tab opens a modal where you set
 cols × rows + overlap %, with the per-panel FOV auto-filled from the
 active rig (sensor + focal length). A live yellow grid overlay appears
-on the sky map showing where each panel will land — adjust until it
+on the sky map showing where each panel will land, adjust until it
 covers your target.
 
 - cos(δ) correction on RA, so the grid sits true at any declination
@@ -331,13 +331,13 @@ into the polymorphic JSON converter + palette. From the user's point
 of view the plugin's entities appear in the Advanced Sequencer
 palette under whatever category the plugin chose.
 
-- Isolated load context per plugin — failures don't take the host down
+- Isolated load context per plugin, failures don't take the host down
 - Plugin assemblies reference the host's existing types (`ISequenceEntity`,
-  `SequenceContext`, `ILogger`) directly — no SDK package to publish
+  `SequenceContext`, `ILogger`) directly, no SDK package to publish
 - Contract surface in `Services/Plugins/`:
-  - `INinaPolarisPlugin` — `Name`/`Version`/`Description`/`Author` +
+  - `INinaPolarisPlugin`, `Name`/`Version`/`Description`/`Author` +
     `Register(IPluginRegistry)`
-  - `IPluginRegistry` — `RegisterSequencerEntity<T>(category)`
+  - `IPluginRegistry`, `RegisterSequencerEntity<T>(category)`
 - `GET /api/plugins` lists what loaded + the entity discriminators each
   plugin contributed
 - Sample plugin in [`samples/sample-plugin/`](samples/sample-plugin/README.md)
@@ -350,7 +350,7 @@ Random pixel-offset between frames to defeat fixed-pattern noise:
 - Calls PHD2 `dither` RPC after every N successfully captured frames
 - Waits for SettleDone event before next exposure
 - Configurable dither pixels, every-N-frames, RA-only toggle, settle parameters
-- Silent skip with debug log when PHD2 isn't connected or guiding — sequence never aborts
+- Silent skip with debug log when PHD2 isn't connected or guiding, sequence never aborts
 
 ### Sky Catalog & Sky Atlas
 
@@ -358,8 +358,8 @@ Embedded deep sky catalog with 200+ objects:
 
 - All 110 Messier objects + popular Caldwell + notable NGC/IC targets
 - Fuzzy search by designation, common name, or alias ("M31", "Andromeda", "NGC 224")
-- **Filtered browser** — type / magnitude range / declination range, sorted brightest first
-- **Altitude chart** — target altitude across tonight's window (sunset → sunrise) with civil / nautical / astronomical twilight transitions
+- **Filtered browser**, type / magnitude range / declination range, sorted brightest first
+- **Altitude chart**, target altitude across tonight's window (sunset → sunrise) with civil / nautical / astronomical twilight transitions
 - Object metadata: coordinates (J2000), magnitude, type, common names
 
 ### Sky Map
@@ -376,14 +376,14 @@ running as a WebGL2 iframe sub-app under `/sky/`:
 - Camera-FOV overlay calculated from sensor + focal length
   (cos(Dec)-corrected). Mount rectangle (blue, anchored on current
   scope pointing) + target rectangle (red dashed, anchored at viewport
-  centre — ASIAIR-style drag-to-frame)
+  centre, ASIAIR-style drag-to-frame)
 - Click-to-pick targets, "Center on mount" + "Center selected" buttons
-- Stellarium Remote Control sync — pull the currently-selected object
+- Stellarium Remote Control sync, pull the currently-selected object
   from Stellarium with one click
 
 > WebGL2 required. The SKY tab gracefully degrades to a banner on
 > hosts without WebGL2 (e.g. running the local browser on a Pi 2
-> framebuffer) — open Polaris from a modern desktop or tablet
+> framebuffer), open Polaris from a modern desktop or tablet
 > browser instead.
 
 ### Weather Forecast
@@ -391,12 +391,12 @@ running as a WebGL2 iframe sub-app under `/sky/`:
 Astronomy-specific cloud / seeing / transparency forecast for tonight and
 the next two nights:
 
-- **Source** — [7Timer ASTRO API](https://www.7timer.info/) (free, no API
+- **Source**, [7Timer ASTRO API](https://www.7timer.info/) (free, no API
   key, 3-day window in 3-hour slots).
 - **Per-slot observation score (0-100)** combining cloud cover, seeing,
   transparency and humidity, zero on precipitation. Colour-coded chip per
   slot (green ≥ 70 / amber 40-69 / red &lt; 40).
-- **Tonight's best windows** callout — top three continuous runs of
+- **Tonight's best windows** callout, top three continuous runs of
   high-score slots between sunset and sunrise, ranked by total duration ×
   average score.
 - **Per-day moon phase + illumination** alongside sunrise / sunset /
@@ -421,11 +421,11 @@ location:
   fallback, cached on disk), name and common name, RA / Dec, magnitude,
   angular size, current and peak altitude, a 12 h altitude chart, and a
   compass arrow on the current azimuth.
-- **Fits FOV badge** — when a camera is connected, each candidate is
+- **Fits FOV badge**, when a camera is connected, each candidate is
   measured against the active rig's field of view (focal length + sensor)
   and flagged ✓ Fits / ⊘ Larger, with a chip filter to show only what
   fits.
-- **Go to** — when a mount is connected, one click jumps to the Sky tab,
+- **Go to**, when a mount is connected, one click jumps to the Sky tab,
   centres the map on the target and kicks off Slew &amp; Center (slew +
   plate-solve + re-centre).
 - **Image prefetch** in Settings pulls thumbnails for the full catalog +
@@ -435,7 +435,7 @@ location:
 ### Studio (post-processing)
 
 Browse, calibrate, stack, debayer, clean and export the FITS files
-captured during the session — all from the same browser UI.
+captured during the session, all from the same browser UI.
 
 Files are auto-organised under `{ImageOutputDir}/{rig}/...`:
 
@@ -451,11 +451,11 @@ Files are auto-organised under `{ImageOutputDir}/{rig}/...`:
 {rig}/processed/{target}/*.{fits,tif,png,jpg}
 ```
 
-Session date follows the astronomical noon-to-noon convention — a
+Session date follows the astronomical noon-to-noon convention, a
 capture at 02:30 local time still belongs to the previous evening.
 
 **Frame browser**:
-- SQLite-backed metadata index — header-only FITS scan keeps a
+- SQLite-backed metadata index, header-only FITS scan keeps a
   2000-frame session re-walkable in under a second.
 - Filter by type / filter / target / date range; thumbnail grid with
   auto-stretched 256 px JPEGs generated on demand and cached on disk.
@@ -474,7 +474,7 @@ capture at 02:30 local time still belongs to the previous evening.
 **Master calibration frames** (bias / dark / flat / dark-flat):
 - Select ≥ 2 raw calibration frames → "Create master from selection" →
   choose integration method (Mean / Median / **Sigma-clipped mean**
-  default — 3σ low and high, 2 iterations).
+  default, 3σ low and high, 2 iterations).
 - Background job with progress bar; output carries `NSUBS`, `INTMETH`,
   `IMAGETYP=MASTER{TYPE}` headers.
 - Cross-frame dimension validation guards against mixed inputs.
@@ -484,7 +484,7 @@ capture at 02:30 local time still belongs to the previous evening.
   `(light − dark) / normalised_flat` and writes the result with a
   `CALSTAT` header (B / D / F letters per SBIG convention) plus
   `MDARK` / `MFLAT` / `MBIAS` filenames for traceability.
-- **Auto-match per light** — for each light, picks the master with the
+- **Auto-match per light**, for each light, picks the master with the
   same gain and closest exposure (darks), same gain and filter (flats),
   or same gain (bias). Manual override per dropdown is available.
 - Bias is only applied when no dark is provided (darks already contain
@@ -503,15 +503,15 @@ capture at 02:30 local time still belongs to the previous evening.
   headers and `IMAGETYP=MASTERLIGHT`.
 
 **Per-frame operations** (in the viewer):
-- **🎨 Debayer** — bilinear demosaic of RGGB / GRBG / GBRG / BGGR; the
+- **🎨 Debayer**, bilinear demosaic of RGGB / GRBG / GBRG / BGGR; the
   output is a Rec.601 luminance plane with `DEBAYER` / `BAYERIN` headers.
-- **◐ Remove gradient** — sample-grid (8 × 6 default) median with
+- **◐ Remove gradient**, sample-grid (8 × 6 default) median with
   MAD-based stellar rejection, 2D polynomial (degree 2) least-squares
   fit, subtracted relative to the fitted minimum so global brightness
   survives. `BGSUB` / `BGSAMPX` / `BGSAMPY` / `BGDEG` headers.
-- **⌇ Noise reduce** — separable Gaussian blur. `NRMETHOD` / `NRRADIUS`
+- **⌇ Noise reduce**, separable Gaussian blur. `NRMETHOD` / `NRRADIUS`
   headers.
-- **✦ Sharpen** — unsharp mask with optional threshold guard for the
+- **✦ Sharpen**, unsharp mask with optional threshold guard for the
   noise floor. `SHARPEN` / `SHARPAMT` / `SHARPRAD` / `SHARPTHR` headers.
 
 Each operation writes a new FITS under `{rig}/processed/{target}/` and
@@ -524,7 +524,7 @@ host machine: **Siril** for preprocessing + stacking, and
 **GraXpert** for AI-based background extraction, deconvolution,
 and denoising.
 
-Detection happens automatically on startup — the Settings tab's
+Detection happens automatically on startup, the Settings tab's
 **External tools** section shows the detected version and binary
 path (or "Not detected" with install hints).
 
@@ -540,24 +540,24 @@ you wrote works the same way. See
 
 **GraXpert** ([graxpert.com](https://www.graxpert.com)) offers
 three operations:
-- **🌅 BGE (background extraction)** — removes gradients.
-- **✨ Deconvolution** (v3.0+) — sharpens a stacked master.
-- **🔇 Denoise** (v3.0+) — AI noise reduction on the master.
+- **🌅 BGE (background extraction)**, removes gradients.
+- **✨ Deconvolution** (v3.0+), sharpens a stacked master.
+- **🔇 Denoise** (v3.0+), AI noise reduction on the master.
 
 You can run GraXpert in three ways:
-1. **Manual batch** — multi-select frames in **FILES**, click the
+1. **Manual batch**, multi-select frames in **FILES**, click the
    op button, tune the sliders, hit Start.
-2. **Auto during capture** — tick "Auto-extract gradient with
+2. **Auto during capture**, tick "Auto-extract gradient with
    GraXpert (per frame)" in the **AUTORUN** End Events panel.
    Every saved light fires a fire-and-forget BGE in the
    background. Designed for heavy-light-pollution sites where
    each frame has its own gradient.
-3. **Combined with Siril** — in the STUDIO Siril modal, tick
+3. **Combined with Siril**, in the STUDIO Siril modal, tick
    "Inject GraXpert BGE per-frame before stacking" to chain the
    two: GraXpert cleans each light first, then Siril stacks the
    `_bge` outputs. Slower but produces a much cleaner master.
 
-Decon + Denoise are manual-only on integrated masters — running
+Decon + Denoise are manual-only on integrated masters, running
 them per-frame degrades SNR. See
 [docs/graxpert-setup.md](docs/graxpert-setup.md).
 
@@ -573,34 +573,34 @@ still get a working stacking workflow.
 ### File explorer
 
 The **Files** tab is a full server-side file explorer. Browse the
-device that runs Polaris — including USB sticks and external SSDs —
+device that runs Polaris, including USB sticks and external SSDs,
 without dropping into an SSH session.
 
-- **Roots** — Windows drive letters (`C:`, `D:`, …) or Unix mount
+- **Roots**, Windows drive letters (`C:`, `D:`, …) or Unix mount
   points (`/`, `/home`, `/mnt`, `/media`, `~`). Free-space and volume
   label shown per root.
-- **Navigation** — clickable breadcrumbs, parent shortcut, "show
+- **Navigation**, clickable breadcrumbs, parent shortcut, "show
   hidden" toggle, persistent cwd across reloads.
-- **Selection** — plain click selects one, ctrl/cmd-click toggles,
+- **Selection**, plain click selects one, ctrl/cmd-click toggles,
   shift-click selects a range. The header checkbox selects all.
-- **Operations** — new folder, rename, cut, copy, paste, delete.
+- **Operations**, new folder, rename, cut, copy, paste, delete.
   Cut + paste across volumes falls back to copy-then-delete
   automatically.
-- **Preview** — FITS / XISF render via the same auto-stretch as
+- **Preview**, FITS / XISF render via the same auto-stretch as
   Studio (JPEG). PNG / JPG / GIF / BMP / WebP pass through. TIFF
   decoded via SkiaSharp. `.txt` / `.log` / `.json` / `.md` / `.xml` /
   `.csv` open in an inline text viewer (first ~32 KB).
-- **Download** — single file is a direct browser download with the
+- **Download**, single file is a direct browser download with the
   correct filename; multi-select streams a ZIP archive built on the
   fly, so dragging 50 × 60 MB FITS onto your laptop doesn't OOM the
   Raspberry Pi.
-- **Studio root** — select a folder and click **⭐ Set as Studio
+- **Studio root**, select a folder and click **⭐ Set as Studio
   root**. Studio rescans this tree on its next visit. The Settings
   tab no longer carries the directory input; it just shows the
   current value and links here.
 
 **Safety**: every destructive operation prompts with `window.confirm`
-and the server requires `confirmed=true` on the `/delete` endpoint —
+and the server requires `confirmed=true` on the `/delete` endpoint,
 nothing gets wiped by an accidental double-click. A path blocklist
 refuses access to `C:\Windows`, `/proc`, `/sys`, `/dev`, `/etc/shadow`,
 `/etc/ssh`, and per-segment matches for `.ssh`, `.aws`, `.gnupg`, and
@@ -609,7 +609,7 @@ level with `EventId="FileOp"`.
 
 > **The Polaris server has no authentication on the LAN.** The Files
 > tab exposes the filesystem to anyone who can reach the server
-> address. Polaris assumes a trusted local network — do **not**
+> address. Polaris assumes a trusted local network, do **not**
 > expose port 5000 directly to the internet. For remote access use
 > the Relay (which has per-tenant tokens and quotas).
 
@@ -622,8 +622,8 @@ Target list execution with automated imaging:
 - Pause/resume with SemaphoreSlim gate
 - Real-time progress tracking via WebSocket (1Hz status broadcast)
 - **Persisted output** in two formats, selectable per profile:
-  - **FITS** — extended headers (camera / telescope / focuser / rotator / filter / weather / observer / target — 30+ keywords per the N.I.N.A. manual spec)
-  - **XISF** (PixInsight native) — UInt16 monochrome with optional LZ4 compression (~3-10× smaller than FITS); native `<Property>` elements alongside `<FITSKeyword>` mirrors so any downstream tool works
+  - **FITS**, extended headers (camera / telescope / focuser / rotator / filter / weather / observer / target, 30+ keywords per the N.I.N.A. manual spec)
+  - **XISF** (PixInsight native), UInt16 monochrome with optional LZ4 compression (~3-10× smaller than FITS); native `<Property>` elements alongside `<FITSKeyword>` mirrors so any downstream tool works
 - Configurable filename pattern (`{target}_{filter}_{exposure}s_{date}_{seq}` etc.)
 - Optional dithering between frames + automatic meridian flip
 - Focal length / focal ratio come from the **active equipment rig** (see below), not a global setting
@@ -640,31 +640,31 @@ Automated flat-field acquisition:
 
 Responsive, dark-themed interface inspired by ASIAIR:
 
-- **Home** — Cold-start landing with a Horsehead/Flame nebula hero. 4 colour-coded status cards (Equipment / Guider / Sequence / Server) react in real time to the rest of the app, plus 6 quick-action tiles that jump straight into the relevant tab (Connect / Plan / Launch PHD2 / Build sequence / Auto-focus / Live view). Live UTC clock in the hero
-- **Live View** — Real-time camera preview with WebGL2 GPU rendering (debayer + MTF stretch on GPU), star annotations overlay, crosshair + 3x3 grid, hover pixel readout (raw ADU or RGB), manual stretch sliders, image-history thumbnail strip, HFR + star-count history chart, detailed statistics panel + histogram, full-resolution zoom viewer (OpenSeadragon)
-- **Preview** — Dedicated snap-shot tab (between Focus and Autorun) with exp/gain/bin/filter controls, single-shot + opt-in loop mode, "💾 Save to disk" toggle that routes captures to `{rig}/snaps/{filter}_{date}/` (separate from sequence lights so test snaps don't contaminate the science folder). Filter dropdown only appears when a filter wheel is connected; pre-capture filter swap happens automatically when chosen
-- **RIGS** (was "Equipment") — Reorganised by **role**: connection strip pinned to the top (compact when INDI/Alpaca is connected, expanded with the connect form when not), then a responsive role-based grid — Main Telescope (OTA optics + curated **catalogue picker** that auto-fills aperture / focal length / f-ratio / required back-focus), Camera (with auto-detected sensor + temperature + cooler power chart + **driver dropdown** for INDI / Canon EDSDK / Nikon / Sony / Alpaca with install-banner links when a vendor SDK isn't reachable), Mount, Focuser, Filter Wheel, Guidescope (metadata), Guide Camera (read-only — PHD2 owns it). Optional accessories (Rotator, Flat Panel, Dome, Weather) collapsed in a `<details>` block below, auto-expanded when at least one is configured. Rig selector + "💾 Save selections" in the header. "Manage rigs…" modal handles rename / activate / duplicate / delete + per-rig filter offsets (the device pickers + optics live on the cards now, no longer duplicated in the modal)
-- **Mount Control** — NSEW directional pad, tracking toggle, park/unpark, GoTo via Sky Explorer
-- **Focus** — Manual stepper + full Auto-Focus V-curve panel (start/abort, live progress bar, fitted parabola chart, best-position marker) + **live frame preview canvas** that renders each AF sample exposure with a HUD chip showing current position / HFR / star count
-- **Guider** — Two-tab layout: **Control** (existing JSON-RPC UI — connect, profile switcher, exposure, Dec-mode, equipment connect, guiding controls, live RA/Dec error chart, settle parameters, **Smart Calibrate** button with optional slew-to-equator, **algorithm preset pills** Default/Reactive/Smooth/Custom + Advanced disclosure for individual algorithm knobs, profile-sync indicator chip) and **PHD2 GUI** (Linux only — xpra HTML5 client iframe embedding PHD2's native window for Wizard / Brain / Guiding Assistant / dark library access — see [docs/phd2-gui-embedding.md](docs/phd2-gui-embedding.md)). Launch / Shutdown / Auto-start on boot persist as before
-- **Sky Explorer** — stellarium-web-engine WebGL2 iframe (sandboxed sub-app at `/sky/`) with Gaia stars to ~mag 16, DSO surveys with image overlays, IAU constellation art, atmosphere/horizon, sun + moon + planets + bright asteroids, and HiPS Milky Way tiles. Fully offline when the bundled skydata is present. Drag-to-frame ASIAIR-style target rectangle + blue mount rectangle (auto cos(δ) correction). Object search, filtered catalog browser, "Tonight's altitude" chart with twilight bands, Stellarium sync, Slew & Center, "Plan mosaic" (panel grid pushed to the engine as yellow tile overlays), Add to Sequence. WebGL2 required.
-- **Tonight** — Ranked list of best DSOs / Moon / planets / comets for the current observing window. Cards with NASA / Wikipedia thumbnails (offline-cached), live ephemeris, mini altitude chart, compass widget, FOV-fit badge, and a mount-gated "Go to" that triggers Slew & Center
-- **Weather** — Astronomy-specific 3-day forecast from 7Timer with per-3 h-slot observation score (cloud + seeing + transparency + humidity), tonight's best windows callout, per-slot weather emoji (lunar glyph at night) and per-day sun/moon ephemeris from SunCalc
-- **Sequence** — Target list editor with progress bars, collapsible Meridian Flip + Dithering panels, start/pause/resume/stop
-- **Adv** — Advanced Sequencer tri-pane tree editor (palette / tree / properties) with drag-reorder, live status colouring during runs, load/save/import/export JSON, template management
-- **Studio** — Post-processing tab: SQLite-indexed FITS browser, single-frame viewer with manual stretch + multi-format export, master integration, light calibration with auto-match, batch alignment + stack, debayer + background extraction + noise reduction + sharpening
-- **Settings** — INDI connection, observatory location (with **address geocoder** + **"Use my location"** GPS button, accessible any time after first-run), image output (format: FITS or XISF), profile management. Sensor dimensions are auto-read from the connected camera; focal length lives per-rig (Equipment → Manage rigs)
-- **First-run** — Location-setup modal with **address geocoder** (OpenStreetMap/Nominatim), browser geolocation, or manual lat/lon entry
+- **Home**, Cold-start landing with a Horsehead/Flame nebula hero. 4 colour-coded status cards (Equipment / Guider / Sequence / Server) react in real time to the rest of the app, plus 6 quick-action tiles that jump straight into the relevant tab (Connect / Plan / Launch PHD2 / Build sequence / Auto-focus / Live view). Live UTC clock in the hero
+- **Live View**, Real-time camera preview with WebGL2 GPU rendering (debayer + MTF stretch on GPU), star annotations overlay, crosshair + 3x3 grid, hover pixel readout (raw ADU or RGB), manual stretch sliders, image-history thumbnail strip, HFR + star-count history chart, detailed statistics panel + histogram, full-resolution zoom viewer (OpenSeadragon)
+- **Preview**, Dedicated snap-shot tab (between Focus and Autorun) with exp/gain/bin/filter controls, single-shot + opt-in loop mode, "💾 Save to disk" toggle that routes captures to `{rig}/snaps/{filter}_{date}/` (separate from sequence lights so test snaps don't contaminate the science folder). Filter dropdown only appears when a filter wheel is connected; pre-capture filter swap happens automatically when chosen
+- **RIGS** (was "Equipment"), Reorganised by **role**: connection strip pinned to the top (compact when INDI/Alpaca is connected, expanded with the connect form when not), then a responsive role-based grid, Main Telescope (OTA optics + curated **catalogue picker** that auto-fills aperture / focal length / f-ratio / required back-focus), Camera (with auto-detected sensor + temperature + cooler power chart + **driver dropdown** for INDI / Canon EDSDK / Nikon / Sony / Alpaca with install-banner links when a vendor SDK isn't reachable), Mount, Focuser, Filter Wheel, Guidescope (metadata), Guide Camera (read-only, PHD2 owns it). Optional accessories (Rotator, Flat Panel, Dome, Weather) collapsed in a `<details>` block below, auto-expanded when at least one is configured. Rig selector + "💾 Save selections" in the header. "Manage rigs…" modal handles rename / activate / duplicate / delete + per-rig filter offsets (the device pickers + optics live on the cards now, no longer duplicated in the modal)
+- **Mount Control**, NSEW directional pad, tracking toggle, park/unpark, GoTo via Sky Explorer
+- **Focus**, Manual stepper + full Auto-Focus V-curve panel (start/abort, live progress bar, fitted parabola chart, best-position marker) + **live frame preview canvas** that renders each AF sample exposure with a HUD chip showing current position / HFR / star count
+- **Guider**, Two-tab layout: **Control** (existing JSON-RPC UI, connect, profile switcher, exposure, Dec-mode, equipment connect, guiding controls, live RA/Dec error chart, settle parameters, **Smart Calibrate** button with optional slew-to-equator, **algorithm preset pills** Default/Reactive/Smooth/Custom + Advanced disclosure for individual algorithm knobs, profile-sync indicator chip) and **PHD2 GUI** (Linux only, xpra HTML5 client iframe embedding PHD2's native window for Wizard / Brain / Guiding Assistant / dark library access, see [docs/phd2-gui-embedding.md](docs/phd2-gui-embedding.md)). Launch / Shutdown / Auto-start on boot persist as before
+- **Sky Explorer**, stellarium-web-engine WebGL2 iframe (sandboxed sub-app at `/sky/`) with Gaia stars to ~mag 16, DSO surveys with image overlays, IAU constellation art, atmosphere/horizon, sun + moon + planets + bright asteroids, and HiPS Milky Way tiles. Fully offline when the bundled skydata is present. Drag-to-frame ASIAIR-style target rectangle + blue mount rectangle (auto cos(δ) correction). Object search, filtered catalog browser, "Tonight's altitude" chart with twilight bands, Stellarium sync, Slew & Center, "Plan mosaic" (panel grid pushed to the engine as yellow tile overlays), Add to Sequence. WebGL2 required.
+- **Tonight**, Ranked list of best DSOs / Moon / planets / comets for the current observing window. Cards with NASA / Wikipedia thumbnails (offline-cached), live ephemeris, mini altitude chart, compass widget, FOV-fit badge, and a mount-gated "Go to" that triggers Slew & Center
+- **Weather**, Astronomy-specific 3-day forecast from 7Timer with per-3 h-slot observation score (cloud + seeing + transparency + humidity), tonight's best windows callout, per-slot weather emoji (lunar glyph at night) and per-day sun/moon ephemeris from SunCalc
+- **Sequence**, Target list editor with progress bars, collapsible Meridian Flip + Dithering panels, start/pause/resume/stop
+- **Adv**, Advanced Sequencer tri-pane tree editor (palette / tree / properties) with drag-reorder, live status colouring during runs, load/save/import/export JSON, template management
+- **Studio**, Post-processing tab: SQLite-indexed FITS browser, single-frame viewer with manual stretch + multi-format export, master integration, light calibration with auto-match, batch alignment + stack, debayer + background extraction + noise reduction + sharpening
+- **Settings**, INDI connection, observatory location (with **address geocoder** + **"Use my location"** GPS button, accessible any time after first-run), image output (format: FITS or XISF), profile management. Sensor dimensions are auto-read from the connected camera; focal length lives per-rig (Equipment → Manage rigs)
+- **First-run**, Location-setup modal with **address geocoder** (OpenStreetMap/Nominatim), browser geolocation, or manual lat/lon entry
 
-**Activity Bar** — App-wide footer (36 px, glass treatment) showing live operation chips (sequence progress, AF run, meridian flip, slew, exposure, filter change, PHD2 calibrating/settling, live stack, Siril/GraXpert jobs) on the left + host CPU% + RAM (green < 60% / amber 60-85% / red > 85%) on the right. Always visible across every tab; collapses chip-row to nothing when idle.
+**Activity Bar**, App-wide footer (36 px, glass treatment) showing live operation chips (sequence progress, AF run, meridian flip, slew, exposure, filter change, PHD2 calibrating/settling, live stack, Siril/GraXpert jobs) on the left + host CPU% + RAM (green < 60% / amber 60-85% / red > 85%) on the right. Always visible across every tab; collapses chip-row to nothing when idle.
 
-**Night Mode** — Red-on-black theme that preserves dark adaptation (critical for field use).
+**Night Mode**, Red-on-black theme that preserves dark adaptation (critical for field use).
 
-**Mobile Responsive** — Full functionality on phones and tablets with bottom tab navigation.
+**Mobile Responsive**, Full functionality on phones and tablets with bottom tab navigation.
 
 ### Equipment Rigs (multi-rig support)
 
-One physical N.I.N.A. Polaris host frequently serves multiple physical setups —
+One physical N.I.N.A. Polaris host frequently serves multiple physical setups,
 "backyard SCT", "travel APO", "remote site mono camera + AO". Each user
 profile carries a list of named **rigs**; switch in one click and every device
 selector + per-rig default (cooler temperature, focuser step size, focal
@@ -678,7 +678,7 @@ Per-rig stored data:
 - **Guide scope focal length + aperture** (record-keeping + PHD2 pixel-scale sanity check)
 - **Telescope brand + model + accessory** (auto-resolved from `wwwroot/data/telescopes.json` + `optical-accessories.json` via the Main Telescope card's catalogue picker)
 - PHD2 endpoint (host + port)
-- **PHD2 deep-integration fields**: `PHD2ProfileId` cache after first name-match, `PHD2AlgoPreset` (Default / Reactive / Smooth / Custom), `PHD2CalibrationStepMsOverride`, `PHD2AutoSyncOnRigSwitch` (default true — triggers `PHD2ProfileSyncService` to swap PHD2 profile + apply preset on every rig activation), `PHD2CustomAlgoParams` (free-form `axis:name → value` bag)
+- **PHD2 deep-integration fields**: `PHD2ProfileId` cache after first name-match, `PHD2AlgoPreset` (Default / Reactive / Smooth / Custom), `PHD2CalibrationStepMsOverride`, `PHD2AutoSyncOnRigSwitch` (default true, triggers `PHD2ProfileSyncService` to swap PHD2 profile + apply preset on every rig activation), `PHD2CustomAlgoParams` (free-form `axis:name → value` bag)
 - Per-filter focuser offsets (consumed by `MoveToFilterOffsetInstruction`)
 
 CRUD via `/api/equipment/rigs/*`. UI: dropdown in the RIGS tab header
@@ -686,7 +686,7 @@ plus a slim **Manage rigs…** modal for rename / activate / duplicate / delete
 + filter offsets (the device pickers + optics live directly on the RIGS-tab
 cards, no longer duplicated in the modal).
 
-Existing profiles auto-migrate on first load — the pre-existing
+Existing profiles auto-migrate on first load, the pre-existing
 `LastCamera` / `LastTelescope` / etc. fields become the rig named "Default".
 
 ### Telescope + Accessory Catalogue
@@ -704,18 +704,18 @@ required camera-side back-focus.
   + SV503 + SV550 + SV535 + SV545 + SV555), Takahashi (FSQ + TOA
   + Epsilon), Tele Vue, Vixen, William Optics (RedCat + ZenithStar
   + GT + FLT).
-- **~25 optical accessories** — Celestron 0.7× EdgeHD + f/6.3 SCT
+- **~25 optical accessories**, Celestron 0.7× EdgeHD + f/6.3 SCT
   reducers, Starizona Hyperstar 8/11, Skywatcher 0.85× Esprit,
   Askar / Sharpstar / SVBony / Takahashi dedicated reducers, WO
   Flat 6A III flatteners, Tele Vue Powermate 2/2.5/4/5×, generic
   1.6/2/3× Barlows. `compatibleScopes` filters the dropdown to
   entries that fit the picked OTA; empty list means generic.
 - **Effective focal length** = native × accessory factor (rounded).
-  Back-focus reminder surfaces in amber — wrong backspacing is the
+  Back-focus reminder surfaces in amber, wrong backspacing is the
   most common cause of elongated stars in the corners of a flatener
   shot.
 - The picker auto-fills, then writes the resolved values into the
-  rig — the catalogue can change later without breaking saved rigs.
+  rig, the catalogue can change later without breaking saved rigs.
   Off-catalogue scopes still work via the manual focal length /
   aperture inputs.
 - Catalogues live in `wwwroot/data/telescopes.json` +
@@ -750,39 +750,39 @@ companion **NINA.Relay.Server** project that acts as a reverse tunnel.
 - Auto-reconnect on the client side with exponential backoff (2s → 60s)
 - Subdomain routing (`alice.relay.example.com`) OR path-prefix (`/t/alice/...`)
 - Multi-tenant: each headless host has its own bearer token
-- **WebSocket-over-tunnel forwarding** — image stream + status broadcasts +
+- **WebSocket-over-tunnel forwarding**, image stream + status broadcasts +
   any other browser-side WS endpoint now work end-to-end through the relay
   (browser ↔ relay ↔ tunnel client ↔ local Kestrel WS, bidirectional pump)
-- **JSON tenant store** (`tenants.json`) — hot-reloaded on file change; no
+- **JSON tenant store** (`tenants.json`), hot-reloaded on file change; no
   server restart needed when adding or revoking tokens (legacy
   `appsettings.json` `Tenants:` section still works for trivial setups)
-- **Per-tenant rate limiting** — token-bucket on both HTTP requests/sec and
+- **Per-tenant rate limiting**, token-bucket on both HTTP requests/sec and
   bytes/sec (request + response counted together), with configurable burst.
   Exceeding either bucket returns HTTP 429 with a `Retry-After` header
   naming which bucket tripped
-- **Monthly byte quotas** + **expiring tokens** — per-tenant `monthlyBytes`
+- **Monthly byte quotas** + **expiring tokens**, per-tenant `monthlyBytes`
   cap (counter persists across restarts in `tenant-state.json`, auto-resets
   on the 1st UTC, HTTP 402 when exhausted) and `expiresAt` timestamp
-  (auth refused after expiry — useful for trials)
-- **Built-in TLS** — `Tls:Mode=letsencrypt` (LettuceEncrypt fetches +
+  (auth refused after expiry, useful for trials)
+- **Built-in TLS**, `Tls:Mode=letsencrypt` (LettuceEncrypt fetches +
   renews certs from Let's Encrypt automatically) or `Tls:Mode=pfx` (load a
   static `.pfx`). No reverse proxy required
-- **Web admin UI** at `/admin/` — gated by `Admin:Password` (HTTP Basic);
+- **Web admin UI** at `/admin/`, gated by `Admin:Password` (HTTP Basic);
   add/edit/delete tenants, view live tunnels + monthly usage bars,
   generate cryptographically-random tokens, reset usage counters,
   browse the audit log with per-tenant filter
-- **Per-request audit log** (JSON-lines `audit.log`) — timestamp, tenant,
+- **Per-request audit log** (JSON-lines `audit.log`), timestamp, tenant,
   method, path, status, bytes in/out, duration, source IP, outcome
   reason. Auto-rotates at 50 MB. In-memory ring buffer surfaced via
   `/_admin/audit?tenant=&limit=` and the admin UI
-- **mTLS for tunnel auth** — per-tenant `clientCertThumbprint` pins the
+- **mTLS for tunnel auth**, per-tenant `clientCertThumbprint` pins the
   X.509 cert the tunnel client must present. Bearer token alone is the
   default; mTLS is opt-in per tenant. N.I.N.A. Polaris client points at a
   `.pfx` via `Relay:ClientCertPath` (+ optional password)
 - Admin endpoints: `/_health`, `/_tunnels` (with per-tunnel byte counters),
   `/_admin/tenants` (full CRUD), `/_admin/generate-token`,
   `/_admin/usage/{token}/reset`, `/_admin/audit`, `/_admin/reload-tenants`
-- Two deployment models — self-host on a $5 VPS, or use a hosted instance
+- Two deployment models, self-host on a $5 VPS, or use a hosted instance
 - See [`src/NINA.Relay.Server/README.md`](src/NINA.Relay.Server/README.md) for
   deployment instructions, Caddy reverse-proxy example, full `tenants.json`
   schema, and protocol details
@@ -796,12 +796,12 @@ Built for unreliable field WiFi:
 - Server reachability detection with automatic recovery
 - Toast notifications for connection state changes
 - 15-second request timeout with abort controller
-- **Adaptive bandwidth** — server measures actual WebSocket send latency and auto-downgrades raw clients to JPEG when bandwidth degrades, upgrades back when it recovers
+- **Adaptive bandwidth**, server measures actual WebSocket send latency and auto-downgrades raw clients to JPEG when bandwidth degrades, upgrades back when it recovers
 
 ### Discovery & Cross-Platform Drivers
 
-- **mDNS announcer** — host reachable at `polaris-app.local:5000` from any device on the LAN (no IP needed). Override the instance name via `Mdns:InstanceName` in `appsettings.json` if you need a different label (e.g. multiple Polaris instances on the same network).
-- **Alpaca (ASCOM HTTP) support** — UDP discovery on port 32227 plus base Camera / Telescope wrappers, so you can drive Windows-only ASCOM drivers exposed over the network
+- **mDNS announcer**, host reachable at `polaris-app.local:5000` from any device on the LAN (no IP needed). Override the instance name via `Mdns:InstanceName` in `appsettings.json` if you need a different label (e.g. multiple Polaris instances on the same network).
+- **Alpaca (ASCOM HTTP) support**, UDP discovery on port 32227 plus base Camera / Telescope wrappers, so you can drive Windows-only ASCOM drivers exposed over the network
 
 ### Remote Terminal (SSH from the browser)
 
@@ -811,9 +811,9 @@ Polaris host itself), so you can restart `indiserver`, tail logs, or
 `sudo systemctl status` something on a headless Pi without plugging in a
 screen.
 
-- Off by default — set `Terminal:Enabled = true` in `appsettings.json` to
+- Off by default, set `Terminal:Enabled = true` in `appsettings.json` to
   expose the `/ws/terminal` endpoint
-- No auto-login — credentials are entered per session and never persisted
+- No auto-login, credentials are entered per session and never persisted
 - 10-minute idle timeout closes abandoned sessions server-side
 - Resizes with the panel; supports `vim`, `htop`, `tmux`, colours, scrollback
 
@@ -878,7 +878,7 @@ nina-polaris/
 | Real-time (images) | WebSocket (binary) | JPEG or LZ4-compressed raw frames, adaptive |
 | Real-time (status) | WebSocket (JSON) | Equipment + sequence + guider + AF + meridian flip at 1Hz |
 | Frontend framework | Alpine.js v3 | Reactive UI (~15KB, no build step) |
-| UI typeface | Inter (SIL OFL 1.1, self-hosted) | Variable woff2 for every weight + italic, ~740 KB total. No external CDN call — the UI looks the same online and offline |
+| UI typeface | Inter (SIL OFL 1.1, self-hosted) | Variable woff2 for every weight + italic, ~740 KB total. No external CDN call, the UI looks the same online and offline |
 | Charts | Chart.js v4 | Guiding, focus, HFR, temperature, histogram, altitude |
 | Sky map | stellarium-web-engine (AGPLv3, sandboxed in `/sky/` iframe) | WebGL2 sky viewer with Gaia stars, DSO surveys, constellation art, atmosphere, HiPS Milky Way tiles |
 | Image viewer | OpenSeadragon | Full-resolution zoom/pan over last frame |
@@ -894,7 +894,7 @@ nina-polaris/
 | Compression | K4os.Compression.LZ4 | Fast image compression (~2GB/s) |
 | Equipment drivers | INDI protocol (TCP/XML) + Alpaca (HTTP) | 400+ Linux drivers + ASCOM over network |
 | Plate solving | ASTAP / PlateSolve3 / Astrometry.net (online + local) | Strategy dispatcher with primary + blind fallback |
-| Guiding | PHD2 (TCP/JSON-RPC, port 4400) — fully managed | Profile switch, equipment connect, process launch/shutdown |
+| Guiding | PHD2 (TCP/JSON-RPC, port 4400), fully managed | Profile switch, equipment connect, process launch/shutdown |
 | Remote access | NINA.Relay.Server reverse tunnel | Public access without inbound port-forwarding |
 | Discovery | Makaretu.Dns.Multicast | mDNS announcer for `nina.local` |
 | Geocoding | Nominatim (OpenStreetMap, proxied) | Address → coordinates for location setup |
@@ -914,9 +914,9 @@ Minimum to build + run from source:
 - Optional plate-solving: [ASTAP](https://www.hnsky.org/astap.htm) +
   H17/H18 database
 
-For the complete tooling matrix — Windows + Linux ARM (Raspberry Pi) +
+For the complete tooling matrix, Windows + Linux ARM (Raspberry Pi) +
 Linux x64, required vs optional per feature, firewall rules, hardware
-sizing — see **[REQUIREMENTS.md](REQUIREMENTS.md)**.
+sizing, see **[REQUIREMENTS.md](REQUIREMENTS.md)**.
 
 ### Build & Run (Development)
 
@@ -1108,7 +1108,7 @@ Persistence:
 | GET | `/api/guider/process/status` | Is PHD2 running? did we launch it? path configured? |
 | POST | `/api/guider/process/launch` | Spawn PHD2 (loopback only, polls port 4400 for up to 30s) |
 | POST | `/api/guider/process/shutdown` | Graceful JSON-RPC shutdown, falls back to kill only if we own it |
-| GET | `/api/guider/install-info` | Detected install (`installed`, `resolvedPath`, `downloadUrl`, `os`, `searchedPaths`) — UI uses this to surface "Download PHD2" when missing |
+| GET | `/api/guider/install-info` | Detected install (`installed`, `resolvedPath`, `downloadUrl`, `os`, `searchedPaths`), UI uses this to surface "Download PHD2" when missing |
 | POST | `/api/guider/auto-start/{true\|false}` | Persist auto-start-on-boot preference in the user profile |
 | POST | `/api/guider/profile/sync` | Sync a rig (default: active rig) to its matching PHD2 profile + apply preset. Body: `{ rigId? }` |
 | GET | `/api/guider/profile/sync/status` | Last sync phase / error / profileMissing flag |
@@ -1182,7 +1182,7 @@ Persistence:
 | GET | `/api/sky/image?name=` | Resolve thumbnail URL for a celestial object (NASA Image Library → Wikipedia fallback, disk-cached 30 days) |
 | POST | `/api/sky/image/prefetch` | Walk the full DSO catalog + Moon + planets + comets and pull all thumbnails to disk for offline use |
 
-### STUDIO — Post-Processing
+### STUDIO, Post-Processing
 
 Frame browser, master integration, calibration, batch stacking, debayer,
 background extraction, noise reduction, sharpening, and multi-format
@@ -1239,11 +1239,11 @@ export.
 | GET | `/api/sequencer/document` | Current `SequenceDocument` + state + lastError + abortReason |
 | POST | `/api/sequencer/document` | Load a `SequenceDocument` (JSON object) |
 | GET | `/api/sequencer/document/json` | Raw JSON download for "save sequence to file" |
-| POST | `/api/sequencer/document/json` | Accept raw JSON body — "load sequence from file" |
+| POST | `/api/sequencer/document/json` | Accept raw JSON body, "load sequence from file" |
 | POST | `/api/sequencer/start` | Validate + run the tree in the background |
 | POST | `/api/sequencer/stop` | Cancel the run via the engine's CTS |
 | POST | `/api/sequencer/validate` | Walk Validate() across the tree, return errors |
-| GET | `/api/sequencer/types` | Palette listing — every known `(type, category, kind)` |
+| GET | `/api/sequencer/types` | Palette listing, every known `(type, category, kind)` |
 | GET | `/api/sequencer/templates` | List saved templates + their store dir |
 | GET | `/api/sequencer/templates/{name}` | Load a named template |
 | POST | `/api/sequencer/templates/{name}` | Save a `SequenceDocument` as a named template |
@@ -1350,7 +1350,7 @@ export.
 | `DOTNET_gcServer` | `0` | Use Workstation GC (saves RAM on RPi) |
 | `Indi__Host` | `localhost` | INDI server hostname |
 | `Indi__Port` | `7624` | INDI server port |
-| `PHD2__ExecutablePath` | (auto-detected) | Override the path to phd2.exe / phd2 binary. By default the app walks the standard install paths per OS — only set this for non-standard installs |
+| `PHD2__ExecutablePath` | (auto-detected) | Override the path to phd2.exe / phd2 binary. By default the app walks the standard install paths per OS, only set this for non-standard installs |
 | `PHD2__Host` / `PHD2__Port` | `localhost` / `4400` | PHD2 event server endpoint |
 | `PHD2__InstanceNumber` | `1` | PHD2 `-i N` instance number |
 | `PHD2__AutoStart` | `false` | Fallback for `PHD2AutoStart` profile flag. UI checkbox in Guider tab is the normal way to set this |
@@ -1385,12 +1385,12 @@ Relay **server** side (different process, same `Relay__*` prefix in `appsettings
 | `Audit__MaxFileBytes` | `52428800` | Rotate at this size (default 50 MB) |
 | `Audit__RingBufferSize` | `5000` | In-memory ring for `/_admin/audit` |
 | `Tls__Mode` | `off` | `off` / `pfx` / `letsencrypt` |
-| `Tls__ClientCertificateMode` | `request` | `none` / `request` / `require` — Kestrel client-cert behaviour (mTLS) |
+| `Tls__ClientCertificateMode` | `request` | `none` / `request` / `require`, Kestrel client-cert behaviour (mTLS) |
 | `Tls__HttpsPort` | `443` | HTTPS bind port when TLS is enabled |
 | `Tls__RedirectHttpToHttps` | `false` | 308-redirect plain HTTP to HTTPS |
-| `Tls__PfxPath` / `Tls__PfxPassword` | — | Static cert when `Tls:Mode=pfx` |
-| `Tls__LetsEncrypt__Domains` | — | string[] of domains for ACME issuance |
-| `Tls__LetsEncrypt__EmailAddress` | — | Contact email for Let's Encrypt |
+| `Tls__PfxPath` / `Tls__PfxPassword` |, | Static cert when `Tls:Mode=pfx` |
+| `Tls__LetsEncrypt__Domains` |, | string[] of domains for ACME issuance |
+| `Tls__LetsEncrypt__EmailAddress` |, | Contact email for Let's Encrypt |
 | `Tls__LetsEncrypt__UseStaging` | `false` | Use Let's Encrypt staging API while testing |
 
 ## Performance Targets
@@ -1410,7 +1410,7 @@ Relay **server** side (different process, same `Relay__*` prefix in `appsettings
 Polaris ships with a one-click button to spawn a fake telescope +
 camera + focuser + filter wheel. Open Settings → Equipment simulator
 → Launch. The simulated camera renders **real stars** from the GSC
-catalog at whatever RA/Dec the simulated mount is pointing at —
+catalog at whatever RA/Dec the simulated mount is pointing at,
 plate solve, auto-focus, live stacking all work end-to-end against
 it. Linux/macOS uses INDI simulators (`apt install indi-bin`);
 Windows uses Alpaca Omni Simulator. See
@@ -1420,7 +1420,7 @@ Windows uses Alpaca Omni Simulator. See
 
 Live stacking can run **in your browser** via a WebAssembly module
 that reuses the same `NINA.Image.Portable` algorithms the server
-runs. On Pi 2 / Pi 3 hosts this is the only way to keep up — the
+runs. On Pi 2 / Pi 3 hosts this is the only way to keep up, the
 Pi just orchestrates equipment + relays raw frames, the browser
 does StarDetector + alignment + accumulator. Auto-detected on WS
 handshake; per-rig override in the LIVE tab toolbar. See
@@ -1433,7 +1433,7 @@ chip in for hosting / a coffee / dark-sky travel:
 
 [**❤️ Donate via Stripe**](https://buy.stripe.com/9B68wPeoLcMSgOz2iJbMQ02)
 
-Donations are entirely optional — the project stays free and open-source
+Donations are entirely optional, the project stays free and open-source
 either way. Bug reports and PRs are just as welcome (see below).
 
 ## Contributing
@@ -1442,10 +1442,10 @@ Contributions are welcome! This project follows the same coding standards as the
 
 ### Project Structure for Contributors
 
-- **Endpoints** are in `src/NINA.Polaris/Endpoints/` — each is an extension method on `WebApplication`
-- **Services** are in `src/NINA.Polaris/Services/` — registered as singletons in `Program.cs`
+- **Endpoints** are in `src/NINA.Polaris/Endpoints/`, each is an extension method on `WebApplication`
+- **Services** are in `src/NINA.Polaris/Services/`, registered as singletons in `Program.cs`
 - **INDI devices** follow a consistent pattern in `src/NINA.INDI/Devices/`
-- **Frontend** is plain HTML/JS/CSS in `src/NINA.Polaris/wwwroot/` — no build step required
+- **Frontend** is plain HTML/JS/CSS in `src/NINA.Polaris/wwwroot/`, no build step required
 - **Tests** go in `tests/NINA.Polaris.Test/` using NUnit
 
 ## License

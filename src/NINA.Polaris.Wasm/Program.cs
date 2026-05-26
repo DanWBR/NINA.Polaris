@@ -1,5 +1,5 @@
 // Entry point. browser-wasm requires OutputType=Exe + a Main, but in
-// the browser the "main" never runs to completion — the WASM runtime
+// the browser the "main" never runs to completion, the WASM runtime
 // stays alive waiting for JS to call into the [JSExport] surface
 // defined in Interop.cs.
 //

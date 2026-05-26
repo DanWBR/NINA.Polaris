@@ -9,7 +9,7 @@ namespace NINA.Polaris.Services;
 ///
 ///   • Dec sign matches hemisphere. North: positive Dec; south: negative.
 ///     The math degenerates as you approach the pole itself (~90°) and
-///     loses constraint power below ~50° — sweet spot ~60-75° |Dec|.
+///     loses constraint power below ~50°, sweet spot ~60-75° |Dec|.
 ///
 ///   • Altitude ≥ 30° at the START + at all three TPPA points. Below
 ///     30° atmospheric refraction skews the plate-solve angles and
@@ -29,12 +29,12 @@ namespace NINA.Polaris.Services;
 ///   • Plate-solvable: skip very faint catalog entries (mag > 11)
 ///     because they correlate with sparse fields. We use the catalog
 ///     object's brightness only as a proxy for "I expect stars
-///     around it" — the solver itself doesn't care about the named
+///     around it", the solver itself doesn't care about the named
 ///     object.
 ///
 /// The output is a small ranked list (default top 5) the UI shows as
 /// chips. Clicking a chip skylinks to the existing slew+center flow.
-/// Pure suggestion — TPPA still runs from wherever the mount is when
+/// Pure suggestion, TPPA still runs from wherever the mount is when
 /// the user presses Start, so we don't need to enforce anything.
 /// </summary>
 public class PolarTppaTargetService {
@@ -80,7 +80,7 @@ public class PolarTppaTargetService {
             var (alt2, _) = AltitudeService.RaDecToAltAz(obj.Ra, obj.Dec, t2, lat, lng);
             if (alt2 < 30) continue;
 
-            // Hour angle (signed, [-12, +12]) — small magnitude = near meridian.
+            // Hour angle (signed, [-12, +12]), small magnitude = near meridian.
             var lst = MeridianFlipService.ComputeLstHours(now, lng);
             double ha = lst - obj.Ra;
             while (ha >  12) ha -= 24;

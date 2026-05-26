@@ -1,8 +1,8 @@
 <!--
-  PLAN.md — translated history of every plan that shaped N.I.N.A. Polaris.
+  PLAN.md, translated history of every plan that shaped N.I.N.A. Polaris.
 
   This is the chronological design record: each major feature was first
-  scoped here before any code landed. The most recent plan (CLST —
+  scoped here before any code landed. The most recent plan (CLST,
   client-side live stacking via WASM) is at the top; older plans follow
   in reverse-chronological order all the way back to the original
   gap-analysis that bootstrapped the project.
@@ -12,19 +12,19 @@
 
   Original written in Portuguese during planning sessions; translated to
   English for handoff. Code blocks, file paths, and identifiers preserved
-  verbatim — only the prose around them was translated.
+  verbatim, only the prose around them was translated.
 -->
 
 # Current plan: Client-side live stacking via WASM (CLST)
 
-> Previous plan (LSTR — auto re-focus / re-center triggers) preserved
+> Previous plan (LSTR, auto re-focus / re-center triggers) preserved
 > below starting at `# Previous plan: Live stacking triggers`. The entire
 > LSTR-1..6 stack is already in production; the current plan builds on
 > top of it.
 
 ## Context
 
-Polaris today does **all** image processing on the server — Pi 2/3/4
+Polaris today does **all** image processing on the server, Pi 2/3/4
 or mini-PC. The user's Pi 2 (`polaris`, ARMv7, 1GB RAM, 900 MHz)
 saturates all 4 cores running `LiveStackingService` (StarDetector +
 StarMatcher + AffineTransform + ImageResampler + accumulator) and still
@@ -34,7 +34,7 @@ sits at 95% CPU idle just rendering the canvas.
 **Architectural insight**: the server is irreplaceable **only** for
 device management (INDI/PHD2/cameras), persistence (FITS/XISF on
 SSD), and orchestration (sequence engine). Anything that's image
-math can run wherever there's spare CPU — and that's usually the
+math can run wherever there's spare CPU, and that's usually the
 client, not the Pi.
 
 **MVP**: migrate live stacking to the client via WASM. If it works
@@ -47,7 +47,7 @@ too.
   `NINA.Image.Portable` literally (StarDetector, StarMatcher,
   AffineTransform, ImageResampler) without rewriting in another
   language. Trade-off: ~5-8MB gzipped bundle, 2-3x slower than
-  Rust+SIMD — but zero porting + zero algorithm divergence
+  Rust+SIMD, but zero porting + zero algorithm divergence
   between client and server.
 - **Mode**: **auto-detect** in the WS handshake. The client reports
   its capability (`wasmReady`, version), the server decides.
@@ -68,12 +68,12 @@ too.
 │                  ↓ raw uint16 + LZ4 + 20-byte header         │
 │                  /ws/image-stream                            │
 │                                                              │
-│  LiveStackingService — METRICS-ONLY mode                     │
+│  LiveStackingService, METRICS-ONLY mode                     │
 │    runs only StarDetector for HFR/star count                 │
 │    skips StarMatcher/AffineTransform/Resampler/accumulator   │
 │    fires FrameIntegrated event (for triggers)                │
 │                                                              │
-│  LiveStackTriggersService — unchanged, consumes              │
+│  LiveStackTriggersService, unchanged, consumes              │
 │    server-side OR client-reported metrics                    │
 └──────────────────────────────────────────────────────────────┘
                           ↓ ↑
@@ -114,7 +114,7 @@ too.
 - Default stays `Full` (zero behavioral change until CLST-5)
 - Tests pinning both modes
 - WS payload adds `liveStack.computeMode`
-- **No client-side change in this phase** — infra only
+- **No client-side change in this phase**, infra only
 
 ### CLST-2: WASM project scaffolding
 - New `src/NINA.Polaris.Wasm/` net10.0 with `<WasmEnableSIMD>true</WasmEnableSIMD>`
@@ -156,7 +156,7 @@ too.
 - Switches back to `Full` when the last WASM client disconnects
   (guarantees fallback if a client closes mid-session)
 - `LiveStackTriggersService` consumes HFR/star count from the
-  **server-side detector** (which still runs in MetricsOnly) — no
+  **server-side detector** (which still runs in MetricsOnly), no
   dependency on the client
 
 ### CLST-6: Save current stack from client
@@ -169,7 +169,7 @@ too.
 
 ### CLST-7: UI status + override
 - Activity bar or LIVE tab: chip showing "🖥 Server" or
-  "🌐 Client (N fps)" — where stacking is happening + perf
+  "🌐 Client (N fps)", where stacking is happening + perf
 - Settings: per-rig dropdown "Live stack compute: Auto (default) /
   Force server / Force client"
 - Override persists in `EquipmentProfile.LiveStackComputeMode`
@@ -194,53 +194,53 @@ too.
 - `src/NINA.Polaris/wwwroot/js/livestack-client.js` (WASM glue +
   message dispatch)
 - `tests/NINA.Polaris.Wasm.Smoke/` (NUnit harness, AOT not required
-  for the smoke tests — they run on the desktop runtime)
+  for the smoke tests, they run on the desktop runtime)
 - `bench/livestack-bench.html` (offline browser harness)
 - `docs/user-guide/client-side-compute.md`
 
 ## Files to modify
 
-- `src/NINA.Polaris/Services/LiveStackingService.cs` — `StackMode`
+- `src/NINA.Polaris/Services/LiveStackingService.cs`, `StackMode`
   enum + branch in `AddFrameAsync`
-- `src/NINA.Polaris/Services/LiveStackTriggersService.cs` —
+- `src/NINA.Polaris/Services/LiveStackTriggersService.cs`,
   trigger eval keeps working with metrics-only mode (it's already
   data-driven)
-- `src/NINA.Polaris/Services/ProfileService.cs` — `LiveStackComputeMode`
+- `src/NINA.Polaris/Services/ProfileService.cs`, `LiveStackComputeMode`
   field on `EquipmentProfile` (Auto | Server | Client)
-- `src/NINA.Polaris/WebSocket/StatusStreamHandler.cs` — broadcast
+- `src/NINA.Polaris/WebSocket/StatusStreamHandler.cs`, broadcast
   `liveStack.computeMode` + count of wasm-capable clients
-- `src/NINA.Polaris/WebSocket/ImageStreamHandler.cs` — receive
+- `src/NINA.Polaris/WebSocket/ImageStreamHandler.cs`, receive
   `client-capability` + `client-stack-progress` text messages
-- `src/NINA.Polaris/Endpoints/LiveStackEndpoints.cs` —
+- `src/NINA.Polaris/Endpoints/LiveStackEndpoints.cs`,
   `POST /upload-result`
-- `src/NINA.Polaris/NINA.Polaris.csproj` — build target depends on
+- `src/NINA.Polaris/NINA.Polaris.csproj`, build target depends on
   `NINA.Polaris.Wasm`'s wasm output being present
-- `src/NINA.Polaris/wwwroot/index.html` — `<script>` tag for the WASM
+- `src/NINA.Polaris/wwwroot/index.html`, `<script>` tag for the WASM
   loader + UI chip + Settings dropdown
-- `src/NINA.Polaris/wwwroot/js/app.js` — capability probe, mode
+- `src/NINA.Polaris/wwwroot/js/app.js`, capability probe, mode
   dispatch in `handleImageFrame`
-- `src/NINA.Polaris/wwwroot/css/app.css` — mode chip
-- `docs/user-guide/live-stacking.md` — "Server vs client compute" section
-- `README.md` — note about offloading
+- `src/NINA.Polaris/wwwroot/css/app.css`, mode chip
+- `docs/user-guide/live-stacking.md`, "Server vs client compute" section
+- `README.md`, note about offloading
 
 ## Reuse of existing code
 
-- **`NINA.Image.Portable.ImageAnalysis.StarDetector`** — called
+- **`NINA.Image.Portable.ImageAnalysis.StarDetector`**, called
   literally by the WASM project (assembly reference). Same algorithm
   on client and server.
 - **`NINA.Image.Portable.ImageAnalysis.StarMatcher` /
-  `AffineTransform` / `ImageResampler`** — same
-- **`NINA.Image.Portable.ImageData.BaseImageData` / `ImageBuffer`** —
+  `AffineTransform` / `ImageResampler`**, same
+- **`NINA.Image.Portable.ImageData.BaseImageData` / `ImageBuffer`**,
   wraps the pixels client-side the same way the server does
-- **`/ws/image-stream` raw mode transport** — ALREADY exists with the
+- **`/ws/image-stream` raw mode transport**, ALREADY exists with the
   20-byte header + LZ4. Zero protocol change in the server→client
   direction.
-- **WebGL2 stretch + debayer (app.js lines 1042-1100)** — feeds off
+- **WebGL2 stretch + debayer (app.js lines 1042-1100)**, feeds off
   the stacked result regardless of who did the stacking
-- **`LiveStackTriggersService`** — trigger evaluation is already
+- **`LiveStackTriggersService`**, trigger evaluation is already
   data-driven via the `FrameIntegrated` event; it just needs the
   event to fire
-- **`FrameLibraryService.RescanAsync`** — called after upload to
+- **`FrameLibraryService.RescanAsync`**, called after upload to
   auto-index the saved FITS
 
 ## Verification
@@ -307,9 +307,9 @@ preview loop), aligns via `StarMatcher`, integrates into a running mean,
 and relays the result. It has no notion of time, of focus degradation,
 or of astrometric drift. Long live-stacking sessions (an hour+) suffer:
 
-- Focus drifts as the temperature falls — HFR rises, frames get worse
+- Focus drifts as the temperature falls, HFR rises, frames get worse
 - Mount drift accumulates (periodic error, atmospheric refraction,
-  imperfect model) — the field "walks" and the star matcher starts to
+  imperfect model), the field "walks" and the star matcher starts to
   fail / the target of interest leaves the center
 
 People doing long-stack astrophotography (EAA, comet hunting, planetary
@@ -339,7 +339,7 @@ user can combine.
 
 Three pieces:
 
-### 1. `LiveStackingService` — minimal extensions
+### 1. `LiveStackingService`, minimal extensions
 
 File: `src/NINA.Headless/Services/LiveStackingService.cs`
 
@@ -357,17 +357,17 @@ public record LiveStackFrameInfo(
 ```
 
 Compute `MedianHfr` by reusing the `StarDetector` that's already
-instantiated inside `AddFrameAsync` for alignment — just extend the
+instantiated inside `AddFrameAsync` for alignment, just extend the
 output. Cost: negligible (detection already runs).
 
 Fire the event at the end of `AddFrameAsync` after the accumulator
 update, with `Task.Run` to decouple (the subscriber can take a long
-time — a 60s AF — and must not block whoever calls `AddFrameAsync`).
+time, a 60s AF, and must not block whoever calls `AddFrameAsync`).
 
 **But wait**: the "trigger pauses captures" rule depends EXACTLY on
 blocking. Decision: fire **synchronously** inside `AddFrameAsync`
 (await handlers in sequence). Whoever calls `AddFrameAsync`
-(SequenceEngine, PREVIEW loop, CameraInstructions) already awaits —
+(SequenceEngine, PREVIEW loop, CameraInstructions) already awaits,
 so if the trigger handler takes 60s running AF, the next capture
 waits. That's exactly the desired behavior (don't capture while the
 focuser is moving).
@@ -383,7 +383,7 @@ public IDisposable SubscribeFrameIntegrated(LiveStackFrameHandler handler);
 // AddFrameAsync end: await sequencial dos handlers
 ```
 
-### 2. `LiveStackTriggersService` — orchestrator (new)
+### 2. `LiveStackTriggersService`, orchestrator (new)
 
 File: `src/NINA.Headless/Services/LiveStackTriggersService.cs`
 
@@ -502,7 +502,7 @@ private async Task SolveReferenceAsync(IImageData firstFrame) {
 ```
 
 If it fails, `_referenceSolved = false` and the UI shows a warning
-"Recenter disabled — first-frame plate solve failed".
+"Recenter disabled, first-frame plate solve failed".
 
 **Drift compute** (each frame, if drift trigger is enabled):
 
@@ -539,21 +539,21 @@ conditional set for `LiveStackTriggers ?? r.LiveStackTriggers`.
 
 `LiveStackTriggersService` reads from `_profiles.ActiveEquipmentProfile
 .LiveStackTriggers` in the constructor + subscribes to the
-`EquipmentProfileActivated` event (exists — PH2X-2) to reload when
+`EquipmentProfileActivated` event (exists, PH2X-2) to reload when
 the user switches rigs.
 
 ### 4. Endpoints
 
 `Endpoints/LiveStackEndpoints.cs`:
 
-- `GET /api/livestack/triggers/status` — current state + last actions
-- `PUT /api/livestack/triggers/settings` — body = `LiveStackTriggers`
-- `POST /api/livestack/triggers/refocus-now` — manual fire (ignores gates, validates only preconditions)
-- `POST /api/livestack/triggers/recenter-now` — manual fire
+- `GET /api/livestack/triggers/status`, current state + last actions
+- `PUT /api/livestack/triggers/settings`, body = `LiveStackTriggers`
+- `POST /api/livestack/triggers/refocus-now`, manual fire (ignores gates, validates only preconditions)
+- `POST /api/livestack/triggers/recenter-now`, manual fire
 
 ### 5. WebSocket payload
 
-`WebSocket/StatusStreamHandler.cs` — extend the `liveStack` block:
+`WebSocket/StatusStreamHandler.cs`, extend the `liveStack` block:
 
 ```jsonc
 {
@@ -571,7 +571,7 @@ the user switches rigs.
 }
 ```
 
-### 6. UI — expandable panel in the LIVE tab
+### 6. UI, expandable panel in the LIVE tab
 
 `wwwroot/index.html` inside the `tab === 'live'` panel, below the Stack button:
 
@@ -624,8 +624,8 @@ the user switches rigs.
 JS:
 - `liveStackTriggers` state (mirror of the persisted settings)
 - WS absorbs the `liveStackStatus.triggers` snapshot
-- `saveLiveStackTriggers()` — debounced PUT
-- `refocusNow()` / `recenterNow()` — POST to the endpoints
+- `saveLiveStackTriggers()`, debounced PUT
+- `refocusNow()` / `recenterNow()`, POST to the endpoints
 
 ## Phases (separate commits)
 
@@ -633,7 +633,7 @@ JS:
    HFR computation. Tests: HFR median calc, multi-subscriber fan-out.
 2. **LSTR-2**: `LiveStackTriggers` DTO + persist on `EquipmentProfile`.
    EquipmentEndpoints PUT accepts the field.
-3. **LSTR-3**: `LiveStackTriggersService` — subscriber + trigger gates +
+3. **LSTR-3**: `LiveStackTriggersService`, subscriber + trigger gates +
    reference solve + execute pipelines. Tests: gate logic (frame/time/
    temp/HFR thresholds), reentry guard, status snapshot.
 4. **LSTR-4**: `/api/livestack/triggers/*` endpoints + WS payload
@@ -648,35 +648,35 @@ JS:
 
 ## Files to modify
 
-- `src/NINA.Headless/Services/LiveStackingService.cs` — event + HFR
+- `src/NINA.Headless/Services/LiveStackingService.cs`, event + HFR
   + per-frame HFR via the already-instantiated `StarDetector`
-- `src/NINA.Headless/Services/ProfileService.cs` — `LiveStackTriggers`
+- `src/NINA.Headless/Services/ProfileService.cs`, `LiveStackTriggers`
   field on `EquipmentProfile` + safe migration (default = new())
-- `src/NINA.Headless/Endpoints/EquipmentEndpoints.cs` — PUT accepts the field
-- `src/NINA.Headless/Endpoints/LiveStackEndpoints.cs` — 4 new endpoints
-- `src/NINA.Headless/Program.cs` — register singleton + eager-resolve
-- `src/NINA.Headless/WebSocket/StatusStreamHandler.cs` — extend the
+- `src/NINA.Headless/Endpoints/EquipmentEndpoints.cs`, PUT accepts the field
+- `src/NINA.Headless/Endpoints/LiveStackEndpoints.cs`, 4 new endpoints
+- `src/NINA.Headless/Program.cs`, register singleton + eager-resolve
+- `src/NINA.Headless/WebSocket/StatusStreamHandler.cs`, extend the
   liveStack block with a `triggers` sub-object
-- `src/NINA.Headless/wwwroot/index.html` — `<details>` panel in the LIVE tab
-- `src/NINA.Headless/wwwroot/js/app.js` — state + methods
-- `src/NINA.Headless/wwwroot/css/app.css` — `.livestack-triggers` styling
-- `README.md` — "Live stacking triggers" section
+- `src/NINA.Headless/wwwroot/index.html`, `<details>` panel in the LIVE tab
+- `src/NINA.Headless/wwwroot/js/app.js`, state + methods
+- `src/NINA.Headless/wwwroot/css/app.css`, `.livestack-triggers` styling
+- `README.md`, "Live stacking triggers" section
 
 ## Reuse of existing code
 
-- `Services/LiveStackingService.cs` — frame entry point + StarDetector
+- `Services/LiveStackingService.cs`, frame entry point + StarDetector
   already instantiated (HFR comes for free)
-- `Services/AutoFocusService.cs` — `Start(AutoFocusRequest)` + `State`
+- `Services/AutoFocusService.cs`, `Start(AutoFocusRequest)` + `State`
   polling (PH2X-4 pattern)
-- `Services/SlewCenterService.cs` — `StartJob(ra, dec, tolerance)` +
+- `Services/SlewCenterService.cs`, `StartJob(ra, dec, tolerance)` +
   job polling
-- `Services/PlateSolveService.cs` — `SolveAsync(IImageData)` for
+- `Services/PlateSolveService.cs`, `SolveAsync(IImageData)` for
   reference + drift
-- `Services/EquipmentManager.cs` — `.Camera.Temperature` for the
+- `Services/EquipmentManager.cs`, `.Camera.Temperature` for the
   thermal trigger
-- `Services/ProfileService.cs` — `EquipmentProfileActivated` event
+- `Services/ProfileService.cs`, `EquipmentProfileActivated` event
   (PH2X-2) to reload triggers on rig switch
-- `WebSocket/StatusStreamHandler.cs` — guider/cameraStream sub-objects
+- `WebSocket/StatusStreamHandler.cs`, guider/cameraStream sub-objects
   pattern; same 1Hz cadence
 - Frontend `<details>` + chained POST pattern: existing dither /
   meridian flip / smart-calibrate UIs
@@ -717,43 +717,43 @@ JS:
 
 ## Compatibility notes
 
-- **Performance**: drift trigger does a plate solve per frame — ~3-10s
+- **Performance**: drift trigger does a plate solve per frame, ~3-10s
   on ASTAP on an RPi 4. Document; default OFF.
 - **Concurrency**: the frame handler is sync-await; it blocks the
   capture chain while a trigger executes. That's the desired behavior
   (don't capture while the focuser is moving or the mount is slewing).
 - **Reentry**: the `_isExecuting` guard prevents two AFs or AF+recenter
   simultaneously. Triggers accumulated during execution are dropped
-  (not queued — running two AFs back-to-back doesn't make sense).
+  (not queued, running two AFs back-to-back doesn't make sense).
 - **Reset semantics**: `LiveStackingService.Reset()` should also reset
-  the trigger state (last* timestamps, reference) — add
+  the trigger state (last* timestamps, reference), add
   `_triggers.Reset()` to Reset.
 - **Without live stack running**: triggers are dormant (no frame
   event to fire). Manual fire still works.
 
 ---
 
-# Previous plan: VIDEO tab — planetary capture + processing (lucky imaging) + slew preview
+# Previous plan: VIDEO tab, planetary capture + processing (lucky imaging) + slew preview
 
 > Previous plan (PHD2 integration with xpra) preserved below starting at `# Previous plan: Deep integration with PHD2`.
 
 ## Context
 
-The video stream layer we just implemented (`CameraStreamService`, native `CCD_VIDEO_STREAM` mode or fallback loop) delivers continuous frames in the browser. What's missing is the classic use case most planet shooters want: **record the stream to a file + process via lucky imaging** (RegiStax / AutoStakkert! pipeline). All of this only makes sense if the user can also see the sky in real time during slews, to confirm framing — that's the third ask: **camera preview on the SKY tab while the mount is slewing**, automatically, but only when no image capture is in progress (the camera can't be in two places at once).
+The video stream layer we just implemented (`CameraStreamService`, native `CCD_VIDEO_STREAM` mode or fallback loop) delivers continuous frames in the browser. What's missing is the classic use case most planet shooters want: **record the stream to a file + process via lucky imaging** (RegiStax / AutoStakkert! pipeline). All of this only makes sense if the user can also see the sky in real time during slews, to confirm framing, that's the third ask: **camera preview on the SKY tab while the mount is slewing**, automatically, but only when no image capture is in progress (the camera can't be in two places at once).
 
 Decisions confirmed with the user:
 - **Format**: SER only (planetary astrophotography standard, compatible with AutoStakkert/RegiStax/PIPP, 178-byte header + lossless raw frames)
 - **Quality metric**: Laplacian variance (classic sharpness, robust, fast, works on any planet)
 - **Slew preview**: default ON (auto-on when mount.slewing && no active capture; toggle to disable)
-- **Stack pipeline**: basic for this first iteration — rank by quality, top-X%, alignment via brightest-pixel centroid, mean stack. Sigma rejection + median + wavelets are follow-up work.
+- **Stack pipeline**: basic for this first iteration, rank by quality, top-X%, alignment via brightest-pixel centroid, mean stack. Sigma rejection + median + wavelets are follow-up work.
 
 ## Architecture
 
 Three blocks:
 
-### 1. Capture — record stream to SER
+### 1. Capture, record stream to SER
 
-`Services/Planetary/SerFileWriter.cs` — implements the [SER spec v3](http://www.grischa-hahn.homepage.t-online.de/astro/ser/) (fixed 178-byte header + raw frames + optional timestamp trailer).
+`Services/Planetary/SerFileWriter.cs`, implements the [SER spec v3](http://www.grischa-hahn.homepage.t-online.de/astro/ser/) (fixed 178-byte header + raw frames + optional timestamp trailer).
 
 ```csharp
 public class SerFileWriter : IDisposable {
@@ -766,7 +766,7 @@ public class SerFileWriter : IDisposable {
 public enum SerColorMode { Mono = 0, BayerRGGB = 8, BayerGRBG = 9, BayerGBRG = 10, BayerBGGR = 11, Rgb = 100, Bgr = 101 }
 ```
 
-`Services/Planetary/VideoRecordingService.cs` — singleton, subscribes to `CameraStreamService` frames while recording is active:
+`Services/Planetary/VideoRecordingService.cs`, singleton, subscribes to `CameraStreamService` frames while recording is active:
 
 ```csharp
 public class VideoRecordingService {
@@ -788,18 +788,18 @@ public record RecordingConfig(
     SerColorMode? ColorMode = null);  // null = auto-detectar via camera Bayer pattern
 ```
 
-Subscribe path: calls `CameraStreamService.SubscribeFrames(handler)` (need to add that API to CameraStreamService — today it's only an internal fan-out). Each frame: serialize uint16 array → `SerFileWriter.WriteFrame`.
+Subscribe path: calls `CameraStreamService.SubscribeFrames(handler)` (need to add that API to CameraStreamService, today it's only an internal fan-out). Each frame: serialize uint16 array → `SerFileWriter.WriteFrame`.
 
-### 2. Processing — lucky imaging pipeline
+### 2. Processing, lucky imaging pipeline
 
-`Services/Planetary/SerFileReader.cs` — opens SER, exposes `int FrameCount`, `(byte[] data, DateTime t) ReadFrame(int index)`. Memory-mapped for performance on large files (1000+ frames at 1.5 MB each = ~1.5 GB typical).
+`Services/Planetary/SerFileReader.cs`, opens SER, exposes `int FrameCount`, `(byte[] data, DateTime t) ReadFrame(int index)`. Memory-mapped for performance on large files (1000+ frames at 1.5 MB each = ~1.5 GB typical).
 
-`Services/Planetary/FrameQualityAnalyzer.cs` — Laplacian metric:
+`Services/Planetary/FrameQualityAnalyzer.cs`, Laplacian metric:
 
 ```csharp
 public static class FrameQualityAnalyzer {
     /// <summary>Variância do Laplaciano (3x3 kernel) sobre a região central
-    /// do frame. Métrica clássica de sharpness — alto = nítido, baixo = borrado.</summary>
+    /// do frame. Métrica clássica de sharpness, alto = nítido, baixo = borrado.</summary>
     public static double LaplacianVariance(ushort[] pixels, int width, int height, int? roiSize = null);
 }
 ```
@@ -811,7 +811,7 @@ Kernel:
  0 -1  0
 ```
 
-`Services/Planetary/PlanetaryStackerService.cs` — job-based orchestrator (same pattern as PHD2CalibrationOrchestrator):
+`Services/Planetary/PlanetaryStackerService.cs`, job-based orchestrator (same pattern as PHD2CalibrationOrchestrator):
 
 ```csharp
 public class PlanetaryStackerService {
@@ -830,17 +830,17 @@ public record StackConfig(
 ```
 
 State machine (phases observable via `/ws/status` → `videoStack`):
-1. **Reading** — open SER + list frames
-2. **Analyzing** — Laplacian variance per frame (parallelized, `Parallel.ForEach`)
-3. **Ranking** — sort desc, take top KeepPercent%
-4. **Aligning** — for each selected frame: find centroid (brightest 5x5 region, with sub-pixel refinement via parabolic fit), compute shift relative to the first frame
-5. **Stacking** — mean per-pixel: `result[xy] = sum(frame[xy + shift]) / N`. Output bit depth 16-bit (summing 100 frames of 8-bit doesn't overflow 16-bit).
-6. **Writing** — FITS via the existing `FITSWriter`, PNG/TIF via SkiaSharp (already in the project)
+1. **Reading**, open SER + list frames
+2. **Analyzing**, Laplacian variance per frame (parallelized, `Parallel.ForEach`)
+3. **Ranking**, sort desc, take top KeepPercent%
+4. **Aligning**, for each selected frame: find centroid (brightest 5x5 region, with sub-pixel refinement via parabolic fit), compute shift relative to the first frame
+5. **Stacking**, mean per-pixel: `result[xy] = sum(frame[xy + shift]) / N`. Output bit depth 16-bit (summing 100 frames of 8-bit doesn't overflow 16-bit).
+6. **Writing**, FITS via the existing `FITSWriter`, PNG/TIF via SkiaSharp (already in the project)
 7. **Ok** / **Fail**
 
 ### 3. Slew preview on the SKY tab
 
-`Services/SlewPreviewService.cs` — `BackgroundService` that monitors state every 1s:
+`Services/SlewPreviewService.cs`, `BackgroundService` that monitors state every 1s:
 
 ```csharp
 public class SlewPreviewService : BackgroundService {
@@ -860,7 +860,7 @@ Loop:
 
 `CameraStreamService` needs to gain a `StartedBySlewPreview` flag in its state to distinguish "user clicked Stream" vs "Polaris auto-started via slew". When the auto-stop fires, it doesn't interfere if the user started it.
 
-UI on the SKY tab: **inset card** in the bottom-right of the map, showing a small version of the `liveCanvas` (same bitmap since `_mirrorLiveToPreviewCanvas` already fans out to any canvas that exists; just add `slewPreviewCanvas` to the list). Appears with a fade-in when preview activates, fade-out when it stops. Small label "📷 Slewing — live view".
+UI on the SKY tab: **inset card** in the bottom-right of the map, showing a small version of the `liveCanvas` (same bitmap since `_mirrorLiveToPreviewCanvas` already fans out to any canvas that exists; just add `slewPreviewCanvas` to the list). Appears with a fade-in when preview activates, fade-out when it stops. Small label "📷 Slewing, live view".
 
 ## Phases (separate commits)
 
@@ -894,33 +894,33 @@ UI on the SKY tab: **inset card** in the bottom-right of the map, showing a smal
 
 ## Files to modify
 
-- `src/NINA.Image.Portable/Interfaces/ICamera.cs` — add `SetSubframeAsync(int x, int y, int w, int h)` default no-op + `Capabilities.SupportsRoi` (already exists but not exposed via a setter method)
-- `src/NINA.INDI/Devices/IndiCamera.cs` — `SetSubframeAsync` implements via `CCD_FRAME` (X/Y/WIDTH/HEIGHT)
-- `src/NINA.Headless/Services/CameraStreamService.cs` — expose `SubscribeFrames(handler)` publicly; add a `StartedBySlewPreview` flag to state to distinguish auto vs manual
-- `src/NINA.Headless/Program.cs` — register `VideoRecordingService`, `PlanetaryStackerService`, `SlewPreviewService` (singleton + hosted service)
-- `src/NINA.Headless/WebSocket/StatusStreamHandler.cs` — extend payload with `videoRecording`, `videoStack`, `slewPreview` sub-objects
-- `src/NINA.Headless/wwwroot/index.html` — new VIDEO sidebar button + tab panel with Capture/Process tabview + slew preview inset on SKY tab
-- `src/NINA.Headless/wwwroot/js/app.js` — state `video`, `videoStack`, `slewPreview`, methods `videoStartRecord/stopRecord`, `videoLoadFile`, `videoStartStack`, etc.; absorption of the new sub-objects in the WS handler; multi-canvas mirror includes `slewPreviewCanvas`
-- `src/NINA.Headless/wwwroot/css/app.css` — `.video-tab`, `.video-stats`, `.video-quality-chart`, `.slew-preview-inset`
-- `README.md` — VIDEO section + planetary + slew preview
+- `src/NINA.Image.Portable/Interfaces/ICamera.cs`, add `SetSubframeAsync(int x, int y, int w, int h)` default no-op + `Capabilities.SupportsRoi` (already exists but not exposed via a setter method)
+- `src/NINA.INDI/Devices/IndiCamera.cs`, `SetSubframeAsync` implements via `CCD_FRAME` (X/Y/WIDTH/HEIGHT)
+- `src/NINA.Headless/Services/CameraStreamService.cs`, expose `SubscribeFrames(handler)` publicly; add a `StartedBySlewPreview` flag to state to distinguish auto vs manual
+- `src/NINA.Headless/Program.cs`, register `VideoRecordingService`, `PlanetaryStackerService`, `SlewPreviewService` (singleton + hosted service)
+- `src/NINA.Headless/WebSocket/StatusStreamHandler.cs`, extend payload with `videoRecording`, `videoStack`, `slewPreview` sub-objects
+- `src/NINA.Headless/wwwroot/index.html`, new VIDEO sidebar button + tab panel with Capture/Process tabview + slew preview inset on SKY tab
+- `src/NINA.Headless/wwwroot/js/app.js`, state `video`, `videoStack`, `slewPreview`, methods `videoStartRecord/stopRecord`, `videoLoadFile`, `videoStartStack`, etc.; absorption of the new sub-objects in the WS handler; multi-canvas mirror includes `slewPreviewCanvas`
+- `src/NINA.Headless/wwwroot/css/app.css`, `.video-tab`, `.video-stats`, `.video-quality-chart`, `.slew-preview-inset`
+- `README.md`, VIDEO section + planetary + slew preview
 
 ## Reuse of existing code
 
-- `src/NINA.Headless/Services/CameraStreamService.cs` (commit 334b26c) — base for recording, frames come from here
-- `src/NINA.Image.Portable/FileFormat/FITS/FITSWriter.cs` — output of the final stack
-- `src/NINA.Headless/Services/Studio/FitsThumbnailer.cs` (if it exists) or SkiaSharp directly — PNG/TIF output
-- `src/NINA.Headless/Services/FileBrowserService.cs` — Process tab uses it to pick an existing SER
-- `src/NINA.Headless/Services/ImageWriterService.cs` `BuildSubDir` — extend with a `PLANETARY` case → `{rig}/planetary/{target}/`
-- `src/NINA.Headless/Services/EquipmentManager.cs` `.Telescope.IsSlewing` (need to expose if not already) — SlewPreviewService monitors
-- `src/NINA.Headless/Services/SequenceEngine.cs` `.GetStatus().State` — capture-idle aggregator checks
-- `src/NINA.Headless/Services/AutoFocusService.cs` `.State` — same
-- Long-running job + WS broadcast pattern: `PHD2CalibrationOrchestrator` + `AutoFocusService` — copy to `PlanetaryStackerService`
-- BackgroundService loop + settings toggle pattern: `PHD2AutoStartService`, `MdnsService`, `Phd2GuiSessionService` — copy to `SlewPreviewService`
-- Frontend multi-canvas mirror in `app.js _mirrorLiveToPreviewCanvas` — add `slewPreviewCanvas` to the list
+- `src/NINA.Headless/Services/CameraStreamService.cs` (commit 334b26c), base for recording, frames come from here
+- `src/NINA.Image.Portable/FileFormat/FITS/FITSWriter.cs`, output of the final stack
+- `src/NINA.Headless/Services/Studio/FitsThumbnailer.cs` (if it exists) or SkiaSharp directly, PNG/TIF output
+- `src/NINA.Headless/Services/FileBrowserService.cs`, Process tab uses it to pick an existing SER
+- `src/NINA.Headless/Services/ImageWriterService.cs` `BuildSubDir`, extend with a `PLANETARY` case → `{rig}/planetary/{target}/`
+- `src/NINA.Headless/Services/EquipmentManager.cs` `.Telescope.IsSlewing` (need to expose if not already), SlewPreviewService monitors
+- `src/NINA.Headless/Services/SequenceEngine.cs` `.GetStatus().State`, capture-idle aggregator checks
+- `src/NINA.Headless/Services/AutoFocusService.cs` `.State`, same
+- Long-running job + WS broadcast pattern: `PHD2CalibrationOrchestrator` + `AutoFocusService`, copy to `PlanetaryStackerService`
+- BackgroundService loop + settings toggle pattern: `PHD2AutoStartService`, `MdnsService`, `Phd2GuiSessionService`, copy to `SlewPreviewService`
+- Frontend multi-canvas mirror in `app.js _mirrorLiveToPreviewCanvas`, add `slewPreviewCanvas` to the list
 
 ## End-to-end verification
 
-1. **Build + tests**: `dotnet build` + `dotnet test` — current 425 + ~25 new = ~450 green
+1. **Build + tests**: `dotnet build` + `dotnet test`, current 425 + ~25 new = ~450 green
 2. **Capture happy path**:
    - Planetary camera (ZWO ASI224) connected via INDI, supports CCD_VIDEO_STREAM
    - Open VIDEO tab → Capture sub-tab
@@ -963,7 +963,7 @@ UI on the SKY tab: **inset card** in the bottom-right of the map, showing a smal
 - **Storage**: 60s of video at 30 fps with 800×600×uint16 = 1.7 GB. README should warn.
 
 ---
-# Previous plan: Deep PHD2 integration — xpra embed + RPC orchestration
+# Previous plan: Deep PHD2 integration, xpra embed + RPC orchestration
 
 > History of earlier plans (including the first version of this plan with native storage-write) preserved below starting at `# Previous plan: RIGS tab`.
 
@@ -971,7 +971,7 @@ UI on the SKY tab: **inset card** in the bottom-right of the map, showing a smal
 
 The user runs Polaris on a mini-PC or Raspberry Pi in an observatory / remote setup **with no screen access** to the PHD2 computer. Today, Polaris already manages ~80% of PHD2 via JSON-RPC (25 wrapped methods, process launch/shutdown, install detection, 26 REST endpoints, rich UI on the GUIDE tab). The gap: PHD2's JSON-RPC **does not expose** profile creation, equipment picker, Brain dialog, Guiding Assistant, dark library, and several advanced setup screens.
 
-**Change of direction (vs. the first version of this plan):** the first version proposed reverse-engineering PHD2's native storage (registry on Windows, INI on Linux, plist on macOS) with backup/rollback. Additional research + a direct recommendation from [PHD2 issue #683](https://github.com/OpenPHDGuiding/phd2/issues/683#issuecomment-3707310067) led to a more robust approach: **host an xpra session running PHD2 with a detachable Xorg-dummy** and **embed the xpra HTML5 client (port 10000) in a tab inside the GUIDE panel**. PHD2's native GUI shows up inside the Polaris UI — including the profile Wizard, Brain, manual calibration, GA, dark library, everything. Zero code to "create a profile": it uses PHD2's own Wizard.
+**Change of direction (vs. the first version of this plan):** the first version proposed reverse-engineering PHD2's native storage (registry on Windows, INI on Linux, plist on macOS) with backup/rollback. Additional research + a direct recommendation from [PHD2 issue #683](https://github.com/OpenPHDGuiding/phd2/issues/683#issuecomment-3707310067) led to a more robust approach: **host an xpra session running PHD2 with a detachable Xorg-dummy** and **embed the xpra HTML5 client (port 10000) in a tab inside the GUIDE panel**. PHD2's native GUI shows up inside the Polaris UI, including the profile Wizard, Brain, manual calibration, GA, dark library, everything. Zero code to "create a profile": it uses PHD2's own Wizard.
 
 **Why xpra > storage-write:**
 - Zero schema reverse-engineering (resilient to PHD2 updates)
@@ -987,9 +987,9 @@ The user runs Polaris on a mini-PC or Raspberry Pi in an observatory / remote se
 
 **Decisions confirmed with the user:**
 - **Fully replace** the storage-write approach with xpra-embed.
-- **Windows**: document the limitation. xpra on Windows is fragile; users on a Windows mini-PC usually have screen access. Polaris on Windows offers only the JSON-RPC controls + smart calibrate + presets — no "PHD2 GUI" tab.
+- **Windows**: document the limitation. xpra on Windows is fragile; users on a Windows mini-PC usually have screen access. Polaris on Windows offers only the JSON-RPC controls + smart calibrate + presets, no "PHD2 GUI" tab.
 - **xpra lifecycle**: toggle in Settings ("Pre-start PHD2 GUI session"). Default OFF (lazy, start on demand). Power users turn it on for instant opening.
-- **Embedding**: **tabstrip on the existing GUIDE panel** — Tab 1 "Control" (current JSON-RPC UI + smart-calibrate + presets) | Tab 2 "PHD2 GUI" (iframe via same-origin reverse-proxy to avoid sessionStorage issues).
+- **Embedding**: **tabstrip on the existing GUIDE panel**, Tab 1 "Control" (current JSON-RPC UI + smart-calibrate + presets) | Tab 2 "PHD2 GUI" (iframe via same-origin reverse-proxy to avoid sessionStorage issues).
 - **rig↔profile sync**: 1:1 by name. Polaris only calls `set_profile` via RPC (does not create); if no profile with the rig's name exists, a banner points to Tab 2 with "Create profile 'X' in the PHD2 wizard".
 - **Calibration**: orchestrate a smart workflow (compute step from pixel scale, optionally slew to the celestial equator, trigger via RPC, monitor, validate orthogonality).
 - **Algorithm tuning**: simple presets (Default / Reactive / Smooth) + Advanced disclosure with individual knobs. Power users can also jump to PHD2's Brain on Tab 2.
@@ -1000,7 +1000,7 @@ Five layers, executable in independent phases:
 
 ### 1. New PHD2Client wrappers (`Services/PHD2Client.cs`)
 
-Add 4 methods on the existing client — same pattern as the 25 wrappers already present:
+Add 4 methods on the existing client, same pattern as the 25 wrappers already present:
 
 ```csharp
 public Task SetAlgoParamAsync(string axis, string name, double value, CancellationToken ct = default)
@@ -1010,16 +1010,16 @@ public Task<List<string>> GetAlgoParamNamesAsync(string axis, CancellationToken 
 public Task FlipCalibrationAsync(CancellationToken ct = default) => CallAsync("flip_calibration", ct: ct);
 ```
 
-Axis accepts `"ra"`, `"dec"`, `"Mount"` (scope depending on the method — PHD2 RPC docs). Handling: if PHD2 v2.6 doesn't have the requested param, catch the RPC error + return null/empty (don't throw).
+Axis accepts `"ra"`, `"dec"`, `"Mount"` (scope depending on the method, PHD2 RPC docs). Handling: if PHD2 v2.6 doesn't have the requested param, catch the RPC error + return null/empty (don't throw).
 
-### 2. ProfileService — new fields + event (`Services/ProfileService.cs`)
+### 2. ProfileService, new fields + event (`Services/ProfileService.cs`)
 
 Add to `EquipmentProfile`:
-- `int? PHD2ProfileId` — cache of the PHD2 id after first name match
-- `string PHD2AlgoPreset` — default `"Default"`; values `"Default" | "Reactive" | "Smooth" | "Custom"`
-- `int? PHD2CalibrationStepMsOverride` — null = auto-compute
-- `bool PHD2AutoSyncOnRigSwitch` — default `true`; controls whether rig-switch triggers a PHD2 profile switch
-- `Dictionary<string,double> PHD2CustomAlgoParams` — individual overrides (knobs edited via Advanced disclosure)
+- `int? PHD2ProfileId`, cache of the PHD2 id after first name match
+- `string PHD2AlgoPreset`, default `"Default"`; values `"Default" | "Reactive" | "Smooth" | "Custom"`
+- `int? PHD2CalibrationStepMsOverride`, null = auto-compute
+- `bool PHD2AutoSyncOnRigSwitch`, default `true`; controls whether rig-switch triggers a PHD2 profile switch
+- `Dictionary<string,double> PHD2CustomAlgoParams`, individual overrides (knobs edited via Advanced disclosure)
 
 Migration safe: defaults null/empty/false.
 
@@ -1093,11 +1093,11 @@ Static table of concrete presets:
 | **Reactive** | hysteresis=0.05, aggressiveness=0.90, minMove=0.10 | aggressiveness=0.80, minMove=0.10, fastSwitch=true | Short FL, good seeing, fast mount. May overshoot |
 | **Smooth** | hysteresis=0.25, aggressiveness=0.50, minMove=0.20 | aggressiveness=0.45, minMove=0.20, fastSwitch=false | Long FL or wind/poor seeing |
 
-Apply via `SetAlgoParamAsync("ra", "Hysteresis", 0.05)` etc. Silent skip (warning log) if `GetAlgoParamNamesAsync` doesn't list the param — the user picked a different algorithm in PHD2's Brain; respect it.
+Apply via `SetAlgoParamAsync("ra", "Hysteresis", 0.05)` etc. Silent skip (warning log) if `GetAlgoParamNamesAsync` doesn't list the param, the user picked a different algorithm in PHD2's Brain; respect it.
 
 Custom preset = persist a Dictionary in `rig.PHD2CustomAlgoParams`. Advanced UI reads `GetAlgoParamNamesAsync` + per-name `GetAlgoParamAsync` to show every available knob with editable inputs.
 
-### 6. Phd2GuiSessionService (`Services/Phd2GuiSessionService.cs`, NEW) — Linux only
+### 6. Phd2GuiSessionService (`Services/Phd2GuiSessionService.cs`, NEW), Linux only
 
 Singleton + hosted service. Manages the xpra session lifecycle:
 
@@ -1130,7 +1130,7 @@ xpra start :100 \
 
 Stop command: `xpra stop :100`.
 
-Health: poll TCP `127.0.0.1:14600` with a 500ms timeout. In `ExecuteAsync` (BackgroundService) — if config `Phd2Gui:AutoStart=true` AND XpraInstalled AND PHD2 installed, fire `StartSessionAsync` at startup (after the 3s stagger so PHD2AutoStartService runs first). Otherwise: idle, awaiting an explicit call via endpoint.
+Health: poll TCP `127.0.0.1:14600` with a 500ms timeout. In `ExecuteAsync` (BackgroundService), if config `Phd2Gui:AutoStart=true` AND XpraInstalled AND PHD2 installed, fire `StartSessionAsync` at startup (after the 3s stagger so PHD2AutoStartService runs first). Otherwise: idle, awaiting an explicit call via endpoint.
 
 ### 7. Reverse proxy `/phd2-gui/*` → `ws://127.0.0.1:14600/*`
 
@@ -1145,21 +1145,21 @@ Implementation: ~60 lines in `WebSocket/Phd2GuiProxyMiddleware.cs` (handle WebSo
 
 ### 8. New endpoints (`Endpoints/GuiderEndpoints.cs`)
 
-- `POST /api/guider/profile/sync` — body `{rigId?}`; forces sync (uses active rig if omitted)
-- `POST /api/guider/calibrate/smart` — body = `SmartCalibrateOptions`; returns `{jobId}`
-- `GET /api/guider/calibrate/smart/{jobId}` — poll status (also via /ws/status)
-- `POST /api/guider/calibrate/smart/{jobId}/abort` — abort
-- `GET /api/guider/algo-presets` — returns the preset table (name + description + values)
-- `POST /api/guider/algo-preset/{name}` — applies the preset live + persists in `rig.PHD2AlgoPreset`
-- `GET /api/guider/algo-params` — reads live: for each axis (`ra`, `dec`), `get_algo_param_names` + per-name `get_algo_param` value
-- `PUT /api/guider/algo-params` — body `{axis, name, value}`; applies via `set_algo_param` + persists in `rig.PHD2CustomAlgoParams`
-- `GET /api/guider/gui-session/status` — `{xpraInstalled, xpraVersion, sessionRunning, displayNumber, bindPort, autoStart, os, downloadHint}`
-- `POST /api/guider/gui-session/start` — invokes `StartSessionAsync`
-- `POST /api/guider/gui-session/stop` — invokes `StopSessionAsync`
-- `POST /api/guider/gui-session/restart` — sequential stop + start
-- `PUT /api/guider/gui-session/auto-start` — body `{enabled}` → persists in settings
+- `POST /api/guider/profile/sync`, body `{rigId?}`; forces sync (uses active rig if omitted)
+- `POST /api/guider/calibrate/smart`, body = `SmartCalibrateOptions`; returns `{jobId}`
+- `GET /api/guider/calibrate/smart/{jobId}`, poll status (also via /ws/status)
+- `POST /api/guider/calibrate/smart/{jobId}/abort`, abort
+- `GET /api/guider/algo-presets`, returns the preset table (name + description + values)
+- `POST /api/guider/algo-preset/{name}`, applies the preset live + persists in `rig.PHD2AlgoPreset`
+- `GET /api/guider/algo-params`, reads live: for each axis (`ra`, `dec`), `get_algo_param_names` + per-name `get_algo_param` value
+- `PUT /api/guider/algo-params`, body `{axis, name, value}`; applies via `set_algo_param` + persists in `rig.PHD2CustomAlgoParams`
+- `GET /api/guider/gui-session/status`, `{xpraInstalled, xpraVersion, sessionRunning, displayNumber, bindPort, autoStart, os, downloadHint}`
+- `POST /api/guider/gui-session/start`, invokes `StartSessionAsync`
+- `POST /api/guider/gui-session/stop`, invokes `StopSessionAsync`
+- `POST /api/guider/gui-session/restart`, sequential stop + start
+- `PUT /api/guider/gui-session/auto-start`, body `{enabled}` → persists in settings
 
-### 9. WebSocket status — extend the `guider` block
+### 9. WebSocket status, extend the `guider` block
 
 ```jsonc
 {
@@ -1174,24 +1174,24 @@ Implementation: ~60 lines in `WebSocket/Phd2GuiProxyMiddleware.cs` (handle WebSo
 }
 ```
 
-### 10. UI — tabstrip on the GUIDE panel + Settings toggle
+### 10. UI, tabstrip on the GUIDE panel + Settings toggle
 
 **GUIDE panel** (`index.html` `x-show="tab === 'guide'"`): wrap the existing content in a tabstrip with 2 tabs:
 
-- **Tab "Control"** (default) — ALL the current content: connection panel, profile dropdown, exposure slider, dec mode, equipment connect, guiding controls, status chart, process launch/shutdown, install warning. Adds:
+- **Tab "Control"** (default), ALL the current content: connection panel, profile dropdown, exposure slider, dec mode, equipment connect, guiding controls, status chart, process launch/shutdown, install warning. Adds:
   - **Smart Calibrate button** with options modal (slew checkbox, step override input)
   - **Algo preset pill** showing the active preset (clickable → dropdown with Default/Reactive/Smooth/Custom)
-  - **Advanced `<details>`** collapsed by default — opens a section with each knob from `get_algo_param_names` + a numeric input per knob, "Save as Custom" button
+  - **Advanced `<details>`** collapsed by default, opens a section with each knob from `get_algo_param_names` + a numeric input per knob, "Save as Custom" button
   - **Profile sync indicator** (green ✓ / yellow spinner / red ⚠ with error tooltip)
 
-- **Tab "PHD2 GUI"** (new) — conditional behavior:
+- **Tab "PHD2 GUI"** (new), conditional behavior:
   - If OS ≠ Linux: banner "Embedded PHD2 GUI requires Linux + xpra. On this OS, use PHD2's native window."
   - If Linux + xpra not detected: banner "Install xpra to enable: `sudo apt install xpra`" + doc link
   - If xpra detected + session not running: card "Start PHD2 GUI session" (big button, info "takes ~5-10s") + checkbox "Pre-start on Polaris boot"
   - If session running: iframe `src="/phd2-gui/"` + thin toolbar at the top (Stop session, Restart, fullscreen toggle, health indicator)
 
 **Settings tab**: new section "PHD2 Embedded GUI":
-- Checkbox "Pre-start PHD2 GUI session on Polaris boot" (default off) — written to `Phd2Gui:AutoStart`
+- Checkbox "Pre-start PHD2 GUI session on Polaris boot" (default off), written to `Phd2Gui:AutoStart`
 - Read-only display: detected xpra version, display number, port, last health check
 - "Manual restart session" button
 
@@ -1204,9 +1204,9 @@ Implementation: ~60 lines in `WebSocket/Phd2GuiProxyMiddleware.cs` (handle WebSo
 5. **PH2X-5**: Algo preset UI (pill + Advanced disclosure) + 4 algo-params endpoints.
 6. **PH2X-6**: `Phd2GuiSessionService` (BackgroundService + lifecycle) + 5 session-control endpoints. Linux detection + non-Linux fallback (501 + clear message).
 7. **PH2X-7**: Reverse proxy `/phd2-gui/*` via Yarp.ReverseProxy or custom middleware + registration in Program.cs.
-8. **PH2X-8**: UI tabstrip on the GUIDE panel — wrap existing content in the "Control" tab, add "PHD2 GUI" tab with iframe + conditional states (OS, install, session). Settings toggle.
+8. **PH2X-8**: UI tabstrip on the GUIDE panel, wrap existing content in the "Control" tab, add "PHD2 GUI" tab with iframe + conditional states (OS, install, session). Settings toggle.
 9. **PH2X-9**: WebSocket payload extensions (profileSync + calibrateJob + guiSession sub-blocks).
-10. **PH2X-10**: Tests — `PHD2ClientTests` (4 new wrappers), `PHD2ProfileSyncServiceTests`, `PHD2CalibrationOrchestratorTests`, `CalibrationStepCalculatorTests` (pure-function), `Phd2GuiSessionServiceTests` (mock process spawn).
+10. **PH2X-10**: Tests, `PHD2ClientTests` (4 new wrappers), `PHD2ProfileSyncServiceTests`, `PHD2CalibrationOrchestratorTests`, `CalibrationStepCalculatorTests` (pure-function), `Phd2GuiSessionServiceTests` (mock process spawn).
 11. **PH2X-11**: README section + `docs/phd2-gui-embedding.md` (step-by-step install procedure from the PHD2 maintainer's comment + Xorg-dummy troubleshooting + where to tweak `55_server_x11.conf`).
 
 ## Files to create
@@ -1225,38 +1225,38 @@ Implementation: ~60 lines in `WebSocket/Phd2GuiProxyMiddleware.cs` (handle WebSo
 
 ## Files to modify
 
-- `src/NINA.Headless/Services/PHD2Client.cs` — 4 new wrappers (`SetAlgoParamAsync`, `GetAlgoParamAsync`, `GetAlgoParamNamesAsync`, `FlipCalibrationAsync`) ~30 lines
-- `src/NINA.Headless/Services/ProfileService.cs` — 5 new fields on `EquipmentProfile` + `event Action<EquipmentProfile>? EquipmentProfileActivated` + raise in `ActivateEquipmentProfile`
-- `src/NINA.Headless/Endpoints/EquipmentEndpoints.cs` — PUT /rigs/{id} accepts the new fields
-- `src/NINA.Headless/Endpoints/GuiderEndpoints.cs` — 12 new endpoints
-- `src/NINA.Headless/WebSocket/StatusStreamHandler.cs` — extend the `guider` block with 3 sub-objects (`profileSync`, `calibrateJob`, `guiSession`)
-- `src/NINA.Headless/Program.cs` — register `PHD2ProfileSyncService`, `PHD2CalibrationOrchestrator`, `Phd2GuiSessionService` (singletons + hosted service for the last one); map reverse proxy `/phd2-gui/*`
-- `src/NINA.Headless/wwwroot/index.html` — tabstrip wrapper on the GUIDE panel; new "PHD2 GUI" tab; new Smart Calibrate button + modal; algo preset pill + Advanced disclosure; profile sync indicator; Settings section "PHD2 Embedded GUI"
-- `src/NINA.Headless/wwwroot/js/app.js` — state `phd2Sync`, `phd2Calibrate`, `phd2AlgoPresets`, `phd2AlgoParams`, `phd2GuiSession`; corresponding methods; tabstrip state `guideTab` ('control'|'gui')
-- `src/NINA.Headless/wwwroot/css/app.css` — `.guide-tabstrip`, `.guide-tab`, `.phd2-gui-iframe`, `.phd2-gui-banner`, `.algo-preset-pill`, `.smart-calibrate-modal`, `.profile-sync-indicator`
-- `src/NINA.Headless/NINA.Headless.csproj` — add `<PackageReference Include="Yarp.ReverseProxy" Version="2.*" />` (if going the YARP route)
-- `README.md` — "PHD2 deep integration" section linking `docs/phd2-gui-embedding.md`
-- `tests/NINA.Headless.Test/PHD2ClientTests.cs` — tests for the 4 new wrappers
+- `src/NINA.Headless/Services/PHD2Client.cs`, 4 new wrappers (`SetAlgoParamAsync`, `GetAlgoParamAsync`, `GetAlgoParamNamesAsync`, `FlipCalibrationAsync`) ~30 lines
+- `src/NINA.Headless/Services/ProfileService.cs`, 5 new fields on `EquipmentProfile` + `event Action<EquipmentProfile>? EquipmentProfileActivated` + raise in `ActivateEquipmentProfile`
+- `src/NINA.Headless/Endpoints/EquipmentEndpoints.cs`, PUT /rigs/{id} accepts the new fields
+- `src/NINA.Headless/Endpoints/GuiderEndpoints.cs`, 12 new endpoints
+- `src/NINA.Headless/WebSocket/StatusStreamHandler.cs`, extend the `guider` block with 3 sub-objects (`profileSync`, `calibrateJob`, `guiSession`)
+- `src/NINA.Headless/Program.cs`, register `PHD2ProfileSyncService`, `PHD2CalibrationOrchestrator`, `Phd2GuiSessionService` (singletons + hosted service for the last one); map reverse proxy `/phd2-gui/*`
+- `src/NINA.Headless/wwwroot/index.html`, tabstrip wrapper on the GUIDE panel; new "PHD2 GUI" tab; new Smart Calibrate button + modal; algo preset pill + Advanced disclosure; profile sync indicator; Settings section "PHD2 Embedded GUI"
+- `src/NINA.Headless/wwwroot/js/app.js`, state `phd2Sync`, `phd2Calibrate`, `phd2AlgoPresets`, `phd2AlgoParams`, `phd2GuiSession`; corresponding methods; tabstrip state `guideTab` ('control'|'gui')
+- `src/NINA.Headless/wwwroot/css/app.css`, `.guide-tabstrip`, `.guide-tab`, `.phd2-gui-iframe`, `.phd2-gui-banner`, `.algo-preset-pill`, `.smart-calibrate-modal`, `.profile-sync-indicator`
+- `src/NINA.Headless/NINA.Headless.csproj`, add `<PackageReference Include="Yarp.ReverseProxy" Version="2.*" />` (if going the YARP route)
+- `README.md`, "PHD2 deep integration" section linking `docs/phd2-gui-embedding.md`
+- `tests/NINA.Headless.Test/PHD2ClientTests.cs`, tests for the 4 new wrappers
 
 ## Reuse of existing code
 
-- `src/NINA.Headless/Services/PHD2ProcessManager.cs:41,114,57` (`IsRunningAsync`, `ShutdownAsync`, `LaunchAsync`) — coexists with `Phd2GuiSessionService`: ProcessManager remains the source of truth for the PHD2 process itself; GuiSessionService only manages the **xpra container** that hosts PHD2. In xpra mode, PHD2 is spawned as a child of xpra (`--start=phd2`), so `Phd2GuiSessionService` needs to signal ProcessManager "xpra mode active, I own the PHD2 PID".
-- `src/NINA.Headless/Services/PHD2Client.cs` — 25 methods already wrapped; full reuse; only adds 4
-- `src/NINA.Headless/Services/PHD2AutoStartService.cs` — coexists unchanged; auto-start is independent of the xpra session
-- `src/NINA.Headless/Services/ProfileService.cs:184,311-314` (PHD2Host/Port/AutoStart fields) — basis for the 5 new fields
-- `src/NINA.Headless/Services/SlewCenterService.cs` — `StartJob` used by the calibration orchestrator when `SlewToEquator=true`. Extract an `ISlewCenterService` interface for mockability in tests.
-- `src/NINA.Headless/Services/EquipmentManager.cs` — `.Telescope.GuideRateRightAscension` (if exposed) for the calibration step compute
-- `src/NINA.Headless/Endpoints/GuiderEndpoints.cs` — 26 existing routes kept; 12 new ones added
-- `src/NINA.Headless/WebSocket/StatusStreamHandler.cs:54-85` — existing guider block; just extended with 3 sub-objects
+- `src/NINA.Headless/Services/PHD2ProcessManager.cs:41,114,57` (`IsRunningAsync`, `ShutdownAsync`, `LaunchAsync`), coexists with `Phd2GuiSessionService`: ProcessManager remains the source of truth for the PHD2 process itself; GuiSessionService only manages the **xpra container** that hosts PHD2. In xpra mode, PHD2 is spawned as a child of xpra (`--start=phd2`), so `Phd2GuiSessionService` needs to signal ProcessManager "xpra mode active, I own the PHD2 PID".
+- `src/NINA.Headless/Services/PHD2Client.cs`, 25 methods already wrapped; full reuse; only adds 4
+- `src/NINA.Headless/Services/PHD2AutoStartService.cs`, coexists unchanged; auto-start is independent of the xpra session
+- `src/NINA.Headless/Services/ProfileService.cs:184,311-314` (PHD2Host/Port/AutoStart fields), basis for the 5 new fields
+- `src/NINA.Headless/Services/SlewCenterService.cs`, `StartJob` used by the calibration orchestrator when `SlewToEquator=true`. Extract an `ISlewCenterService` interface for mockability in tests.
+- `src/NINA.Headless/Services/EquipmentManager.cs`, `.Telescope.GuideRateRightAscension` (if exposed) for the calibration step compute
+- `src/NINA.Headless/Endpoints/GuiderEndpoints.cs`, 26 existing routes kept; 12 new ones added
+- `src/NINA.Headless/WebSocket/StatusStreamHandler.cs:54-85`, existing guider block; just extended with 3 sub-objects
 - `BackgroundService` pattern: copy from `PHD2AutoStartService.cs`, `MdnsService.cs` for `Phd2GuiSessionService`
-- Long-running job + WS broadcast pattern: `AutoFocusService` + `MeridianFlipService` — copy for `PHD2CalibrationOrchestrator`
-- Frontend tabstrip pattern: already exists in other smaller panels (e.g., Equipment source tabs INDI/Alpaca) — reuse HTML/CSS
+- Long-running job + WS broadcast pattern: `AutoFocusService` + `MeridianFlipService`, copy for `PHD2CalibrationOrchestrator`
+- Frontend tabstrip pattern: already exists in other smaller panels (e.g., Equipment source tabs INDI/Alpaca), reuse HTML/CSS
 
 ## End-to-end verification
 
 1. **Build + tests**:
    - `dotnet build src/NINA.Headless` clean
-   - `dotnet test tests/NINA.Headless.Test` — 387 current + ~20 new = ~407 green
+   - `dotnet test tests/NINA.Headless.Test`, 387 current + ~20 new = ~407 green
 2. **Smart calibration (any OS)**:
    - Mount connected + tracking + any target + guide camera connected in PHD2
    - Click Smart Calibrate on the Control tab → options modal → slew=on, step override=0
@@ -1294,18 +1294,18 @@ Implementation: ~60 lines in `WebSocket/Phd2GuiProxyMiddleware.cs` (handle WebSo
 
 ## Compatibility, license, and security notes
 
-- **PHD2 license**: GPLv3. Polaris does not embed PHD2 code — it speaks JSON-RPC and hosts it in an xpra session. No code mixing.
+- **PHD2 license**: GPLv3. Polaris does not embed PHD2 code, it speaks JSON-RPC and hosts it in an xpra session. No code mixing.
 - **xpra license**: GPLv2. Polaris invokes via subprocess; the user installs separately (not bundled). Documented.
 - **Cross-platform**:
   - **Linux**: Preferred path. Detailed install procedure in `docs/phd2-gui-embedding.md` (based on the PHD2 maintainer's comment): apt install + edit `/etc/xpra/conf.d/55_server_x11.conf` to use Xorg-dummy instead of Xvfb. RPi 4/5 tested.
   - **Windows**: "PHD2 GUI" tab disabled with an explanatory banner. JSON-RPC controls + smart calibrate + presets keep working. The user opens native PHD2 on Windows itself when they need the Wizard.
-  - **macOS**: same as Windows — disable the PHD2 GUI tab; RPC controls work.
+  - **macOS**: same as Windows, disable the PHD2 GUI tab; RPC controls work.
 - **Bandwidth**: xpra uses H.264/VP8 for large updates + JPEG for small ones. For a single PHD2 window (UI + camera view), 2-8 Mbps when the user has the tab open, 0 when closed. Configurable via `--refresh-rate=10` (10 Hz, default) or lower to save.
 - **RPi 4 resource cost**: PHD2 + Xorg-dummy + xpra ≈ 150-200 MB resident. CPU ~15-25% idle, 40-60% during camera updates. Document: "Setup tool, not recommended to leave open during live guiding."
 - **Security**:
   - Port 14600 bound to `127.0.0.1` only (never exposed directly to the network)
   - Access via `/phd2-gui/*` goes through the Polaris listener which has the Relay auth
-  - In the README, same "Polaris assumes a trusted LAN — use Relay with tokens for internet access" warning
+  - In the README, same "Polaris assumes a trusted LAN, use Relay with tokens for internet access" warning
 - **Failure modes**:
   - xpra crashes → `Phd2GuiSessionService` detects via health check (TCP probe fails), marks `SessionRunning=false`, UI shows "Session crashed, click Restart"
   - PHD2 crashes inside xpra → xpra keeps the session alive (empty); use `xpra exec :100 phd2` to restart without losing the session
@@ -1314,18 +1314,18 @@ Implementation: ~60 lines in `WebSocket/Phd2GuiProxyMiddleware.cs` (handle WebSo
 ---
 
 
-# Previous plan: RIGS tab — connection-on-top + role-based cards
+# Previous plan: RIGS tab, connection-on-top + role-based cards
 
 > The history (PREVIEW tab, Activity bar, Siril+GraXpert, FILES tab, DSLR/Mirrorless, original gap analysis, STUDIO, Weather, Tonight) is preserved below starting at `# Previous plan: PREVIEW tab`. This block at the top covers only the RIGS tab reorganization.
 
 ## Context
 
-Today the RIGS tab shows **only** the INDI/Alpaca connection panel when disconnected, and **only** the 8+ equipment cards when connected (`x-show="!indiConnected"` vs `x-show="indiConnected"`). Whoever lands on the tab without having connected sees only two buttons; whoever is connected loses the "what am I connected to" feedback. Worse: the tab doesn't give a clear mental picture of the **rig** — a mix of Camera card, Mount card, Focuser card, FilterWheel card, Rotator + Flat + Dome + Weather, all visually equivalent despite being at very different levels of importance for the capture workflow.
+Today the RIGS tab shows **only** the INDI/Alpaca connection panel when disconnected, and **only** the 8+ equipment cards when connected (`x-show="!indiConnected"` vs `x-show="indiConnected"`). Whoever lands on the tab without having connected sees only two buttons; whoever is connected loses the "what am I connected to" feedback. Worse: the tab doesn't give a clear mental picture of the **rig**, a mix of Camera card, Mount card, Focuser card, FilterWheel card, Rotator + Flat + Dome + Weather, all visually equivalent despite being at very different levels of importance for the capture workflow.
 
 The inspiration is ASIAIR: setup organized by **roles** (Main Telescope, Main Camera, Guide Scope, Guide Camera, AF Motor, Filter Wheel) with the connection always visible at the top.
 
 **Goal**: redesign the RIGS tab with:
-1. **Thin connection strip at the top** always visible — compact when connected, expanded (with INDI/Alpaca tabs) when disconnected
+1. **Thin connection strip at the top** always visible, compact when connected, expanded (with INDI/Alpaca tabs) when disconnected
 2. **Main grid of role cards**: Main Telescope (OTA optics), Main Camera, Guidescope (OTA optics), Guide Camera (PHD2 read-only), AutoFocus Motor, Filter Wheel, Mount (Go-To controller)
 3. **Collapsible "Accessories" section at the bottom** for optionals: Rotator, Flat Panel, Dome, Weather
 
@@ -1381,7 +1381,7 @@ Auto-fit grid (CSS Grid `repeat(auto-fit, minmax(280px, 1fr))`), reflowing to a 
 | 🛰 **Mount** (Go-To) | Current Mount card (INDI/WiFi driver picker + device dropdown + tracking/park controls + RA/Dec readout) | Hardware (already exists) |
 | 🎯 **AutoFocus Motor** | Current Focuser card (device dropdown + position/temp readout + step controls) | Hardware (already exists, just visually renamed to "AutoFocus Motor") |
 | 🎨 **Filter Wheel** | Current FilterWheel card | Hardware (already exists) |
-| 🔭 **Guidescope** | `EquipmentProfile.GuiderFocalLengthMm` + new `GuiderApertureMm` (default 50 mm) | Metadata (partial exists — only aperture missing) |
+| 🔭 **Guidescope** | `EquipmentProfile.GuiderFocalLengthMm` + new `GuiderApertureMm` (default 50 mm) | Metadata (partial exists, only aperture missing) |
 | 🌟 **Guide Camera** | Read-only via PHD2: `guider.pixelScale` + active camera name (already comes from PHD2 status) | PHD2-owned, no local action |
 | 🔄 Rotator / 💡 Flat / 🏠 Dome / 🌦 Weather | Current cards | Hardware (already exist, move to the Accessories section) |
 
@@ -1414,24 +1414,24 @@ Every card follows the same skeleton to provide uniformity:
 ```
 
 **Dot state**:
-- Green "connected" — device is active (camera connected, mount connected, etc.)
-- Yellow "selected" — choice was saved on the rig but isn't connected right now
-- Gray "n/a" — no selection (empty)
+- Green "connected", device is active (camera connected, mount connected, etc.)
+- Yellow "selected", choice was saved on the rig but isn't connected right now
+- Gray "n/a", no selection (empty)
 
 ### Guide Camera card (new, read-only)
 
 The only fully new card. Shows:
-- Camera name reported by PHD2 (`guider.cameraName` — needs to be added to the PHD2 status payload? `guider.connected`, `guider.appState` already exist, but maybe not the device name. Investigate and expose if missing.)
+- Camera name reported by PHD2 (`guider.cameraName`, needs to be added to the PHD2 status payload? `guider.connected`, `guider.appState` already exist, but maybe not the device name. Investigate and expose if missing.)
 - PHD2 pixel scale (`guider.pixelScale`)
-- Clear message "Managed by PHD2 — change via PHD2 Equipment Connect"
+- Clear message "Managed by PHD2, change via PHD2 Equipment Connect"
 - "Open PHD2 settings" button that opens the GUIDE tab
 
 ### Guidescope card
 
 Simple form:
-- Focal length (mm) — `GuiderFocalLengthMm`
-- Aperture (mm) — `GuiderApertureMm` (new profile field, default 50)
-- Brand + Model — optional (`GuideTelescopeBrand`, `GuideTelescopeModel`, new fields)
+- Focal length (mm), `GuiderFocalLengthMm`
+- Aperture (mm), `GuiderApertureMm` (new profile field, default 50)
+- Brand + Model, optional (`GuideTelescopeBrand`, `GuideTelescopeModel`, new fields)
 
 Guiding resolution (arcsec/px) = `206.265 * pixel_size_um / GuiderFocalLengthMm` shown as derived info when PHD2 reports pixel size.
 
@@ -1455,44 +1455,44 @@ Auto-expands when at least one accessory already has a saved selection on the ri
 ## Files to modify
 
 ### Profile / backend
-- `src/NINA.Headless/Services/ProfileService.cs` — add `GuiderApertureMm` (double, default 50), `GuideTelescopeBrand` (string?), `GuideTelescopeModel` (string?). Trivial migration — null/zero defaults.
-- `src/NINA.Headless/Endpoints/SystemEndpoints.cs` — PUT /profile accepts the 3 new fields
-- `src/NINA.Headless/Services/PHD2Client.cs` — check whether the `guider` payload already carries `cameraName`; if not, add via `get_camera_frame_size` or `get_app_state`
+- `src/NINA.Headless/Services/ProfileService.cs`, add `GuiderApertureMm` (double, default 50), `GuideTelescopeBrand` (string?), `GuideTelescopeModel` (string?). Trivial migration, null/zero defaults.
+- `src/NINA.Headless/Endpoints/SystemEndpoints.cs`, PUT /profile accepts the 3 new fields
+- `src/NINA.Headless/Services/PHD2Client.cs`, check whether the `guider` payload already carries `cameraName`; if not, add via `get_camera_frame_size` or `get_app_state`
 
 ### Frontend
-- `src/NINA.Headless/wwwroot/index.html` — rewrite the `tab === 'equip'` panel (lines 801–1454):
+- `src/NINA.Headless/wwwroot/index.html`, rewrite the `tab === 'equip'` panel (lines 801–1454):
   - Same header (Rig dropdown + Manage rigs + Save selections)
   - New connection strip always visible (compact / expanded)
   - New role card grid (reusing the content of the 8 current cards, just repositioned)
-  - New "Main Telescope" card (OTA optics — already had the fields, now becomes a card)
+  - New "Main Telescope" card (OTA optics, already had the fields, now becomes a card)
   - New "Guidescope" card (optics)
   - New "Guide Camera" card (PHD2 read-only)
   - Visually rename the Focuser card to "AutoFocus Motor"
   - `<details class="equip-accessories">` wrapping Rotator/Flat/Dome/Weather
-- `src/NINA.Headless/wwwroot/js/app.js` — state `settings.guiderApertureMm`, `settings.guideTelescopeBrand`, `settings.guideTelescopeModel`; load/save integrated with the profile; new helpers `accessoryCount()`, `anyAccessoryConfigured()`. Likely: extend `_applyRigToChoices` to hydrate the 3 new fields.
-- `src/NINA.Headless/wwwroot/css/app.css` — `.equip-connection-strip` (compact + expanded variants), `.equip-grid` (CSS Grid auto-fit responsive), `.equip-accessories` (collapsible details styling), small tweaks in `.equip-card` for more consistent height between hardware cards and metadata-only cards.
+- `src/NINA.Headless/wwwroot/js/app.js`, state `settings.guiderApertureMm`, `settings.guideTelescopeBrand`, `settings.guideTelescopeModel`; load/save integrated with the profile; new helpers `accessoryCount()`, `anyAccessoryConfigured()`. Likely: extend `_applyRigToChoices` to hydrate the 3 new fields.
+- `src/NINA.Headless/wwwroot/css/app.css`, `.equip-connection-strip` (compact + expanded variants), `.equip-grid` (CSS Grid auto-fit responsive), `.equip-accessories` (collapsible details styling), small tweaks in `.equip-card` for more consistent height between hardware cards and metadata-only cards.
 
 ### Tests
-- `tests/NINA.Headless.Test/ProfileServiceTests.cs` (create if it doesn't exist) — round-trip the 3 new fields via JSON.
+- `tests/NINA.Headless.Test/ProfileServiceTests.cs` (create if it doesn't exist), round-trip the 3 new fields via JSON.
 
 ## Reuse of existing code
 
-- **8 current hardware cards** (Camera, Mount, Focuser, FilterWheel, Rotator, Flat, Dome, Weather) — move them into the new grid / accessories section, **without** changing their internal content. Just wrapper + order.
-- **`.equip-card`** CSS class — base visual kept; only add an `.equip-card-metadata` variant for OTA / Guidescope (no Connect button, just fields)
-- **Existing Profile fields** — FocalLengthMm, ApertureMm, TelescopeBrand, TelescopeModel, AccessoryType, AccessoryModel, AccessoryFactor, RequiredBackspacingMm, GuiderFocalLengthMm — all already exist
-- **Telescope catalog picker** (already exists — populated these fields when the user picked an OTA from the list) — reuse inside the Main Telescope card
-- **`devices` array from INDI** — already exists, feeds all dropdowns
-- **PHD2 guider payload** (`guider.pixelScale`, `guider.appState`) — already comes via WS, just read it
+- **8 current hardware cards** (Camera, Mount, Focuser, FilterWheel, Rotator, Flat, Dome, Weather), move them into the new grid / accessories section, **without** changing their internal content. Just wrapper + order.
+- **`.equip-card`** CSS class, base visual kept; only add an `.equip-card-metadata` variant for OTA / Guidescope (no Connect button, just fields)
+- **Existing Profile fields**, FocalLengthMm, ApertureMm, TelescopeBrand, TelescopeModel, AccessoryType, AccessoryModel, AccessoryFactor, RequiredBackspacingMm, GuiderFocalLengthMm, all already exist
+- **Telescope catalog picker** (already exists, populated these fields when the user picked an OTA from the list), reuse inside the Main Telescope card
+- **`devices` array from INDI**, already exists, feeds all dropdowns
+- **PHD2 guider payload** (`guider.pixelScale`, `guider.appState`), already comes via WS, just read it
 
 ## End-to-end verification
 
 1. **Build + tests**: `dotnet build` clean; 385 current + ~2 new = ~387 green
-2. **Layout — no INDI**:
-   - Open the RIGS tab — expanded connection strip at the top with INDI/Alpaca tabs
+2. **Layout, no INDI**:
+   - Open the RIGS tab, expanded connection strip at the top with INDI/Alpaca tabs
    - Main Telescope + Guidescope cards render (they're metadata-only, don't depend on INDI)
-   - Main Camera, Mount, Focuser, Filter Wheel cards render **but with gray status dot** ("not connected") — selection fields empty
+   - Main Camera, Mount, Focuser, Filter Wheel cards render **but with gray status dot** ("not connected"), selection fields empty
    - Accessories collapsed by default
-3. **Layout — after connecting INDI**:
+3. **Layout, after connecting INDI**:
    - Connection strip becomes compact: "✓ INDI · localhost:7624 · 12 devices [Refresh] [Disconnect]"
    - Dropdowns on hardware cards populate with discovered devices
    - Pick a device on each → status dot turns yellow ("selected, not connected")
@@ -1519,18 +1519,18 @@ Auto-expands when at least one accessory already has a saved selection on the ri
 
 ## Notes
 
-- Reorganization is pure HTML/CSS/JS — the only C# change is adding 3 optional fields to the profile (no migration because defaults are null/zero)
+- Reorganization is pure HTML/CSS/JS, the only C# change is adding 3 optional fields to the profile (no migration because defaults are null/zero)
 - Mobile-first responsive grid via CSS auto-fit
 - No changes to the INDI client, discovery, or connect/disconnect endpoints
 - The Guide Camera card is the first "external-managed" card (PHD2 owns); sets a pattern in case we want to do the same for "Mount via NINA Desktop" in the future
 
 ---
 
-# Previous plan: PREVIEW tab — quick snap with optional save
+# Previous plan: PREVIEW tab, quick snap with optional save
 
 ## Context
 
-The LIVE tab currently mixes two purposes: (a) rendering frames coming in real time during a running Autorun, and (b) taking ad-hoc snaps via the Capture button. It works, but the UX is confusing — the user sees "Live" and thinks it's only for following the sequence; doesn't realize they can take test shots there. Worse: when they actually want a snap (test visual focus, framing, polar align, see whether the camera is framed before starting a sequence), they have to share mental space with the "live" content from the Autorun.
+The LIVE tab currently mixes two purposes: (a) rendering frames coming in real time during a running Autorun, and (b) taking ad-hoc snaps via the Capture button. It works, but the UX is confusing, the user sees "Live" and thinks it's only for following the sequence; doesn't realize they can take test shots there. Worse: when they actually want a snap (test visual focus, framing, polar align, see whether the camera is framed before starting a sequence), they have to share mental space with the "live" content from the Autorun.
 
 **Goal**: dedicated **PREVIEW** tab (between FOCUS and AUTORUN) with **snap-and-look** focused UX: exposure, bin, gain, filter (when filter wheel connected), "Take snap" button, opt-in "Loop" button, "Save to disk" toggle, canvas that renders the result + image stats (HFR, star count, mean). LIVE remains as "follow what's coming in from the Autorun".
 
@@ -1543,9 +1543,9 @@ The LIVE tab currently mixes two purposes: (a) rendering frames coming in real t
 
 ### Principle: reuse the entire existing capture pipeline
 
-The `POST /api/camera/capture` (in `CameraEndpoints.cs:9-45`) already does 95% of what PREVIEW needs: accepts `{ exposure, gain, binning, filter }`, calls `Camera.CaptureAsync`, routes to `ImageRelayService` which sends the JPEG via the WS `/ws/image-stream`. The only missing thing is the "save to disk" flag. And `_renderJpegFrame` / `_renderRawFrame` on the frontend already render to the LIVE canvas — just need them to also render to the PREVIEW canvas when both exist in the DOM.
+The `POST /api/camera/capture` (in `CameraEndpoints.cs:9-45`) already does 95% of what PREVIEW needs: accepts `{ exposure, gain, binning, filter }`, calls `Camera.CaptureAsync`, routes to `ImageRelayService` which sends the JPEG via the WS `/ws/image-stream`. The only missing thing is the "save to disk" flag. And `_renderJpegFrame` / `_renderRawFrame` on the frontend already render to the LIVE canvas, just need them to also render to the PREVIEW canvas when both exist in the DOM.
 
-### Backend — minimal extension of `/api/camera/capture`
+### Backend, minimal extension of `/api/camera/capture`
 
 Add two optional fields to the `CaptureRequest` body:
 
@@ -1555,8 +1555,8 @@ public record CaptureRequest(
     int? Gain,
     int? Binning,
     string? Filter,
-    bool? SaveToDisk,     // NEW — default false (preview-only)
-    string? TargetName);  // NEW — used only when SaveToDisk=true (folder name hint)
+    bool? SaveToDisk,     // NEW, default false (preview-only)
+    string? TargetName);  // NEW, used only when SaveToDisk=true (folder name hint)
 ```
 
 In the handler:
@@ -1577,13 +1577,13 @@ Switch the filter **before** capturing when `req.Filter` came populated and the 
 
 This keeps the noon-to-noon session-date convention the rest of the code already uses.
 
-### Frontend — new PREVIEW tab
+### Frontend, new PREVIEW tab
 
 **Sidebar**: new button between FOCUS and AUTORUN.
 
 **Tab panel** with vertical layout:
 - **Controls toolbar** at the top: Exp (s), Gain, Bin (1/2/4) fields, Filter (only visible if `filterWheel.connected && filterWheel.filters.length > 0`), "💾 Save to disk" toggle, "📸 Take snap" + "↻ Loop"/"⏹ Stop" + "⏹ Abort" buttons (last one only visible during exposure)
-- **Canvas + overlay** in the center (same structure as LIVE — `previewCanvas` + `previewOverlayCanvas`)
+- **Canvas + overlay** in the center (same structure as LIVE, `previewCanvas` + `previewOverlayCanvas`)
 - **Stats strip** at the bottom: Exp/Gain/Bin used, Star count, HFR, Mean ADU, timestamp
 
 **Renderer reuse**: the current `handleImageFrame` handler in `app.js` calls `_renderJpegFrame(blob)` or `_renderRawFrame(buf)`. These two methods today do `getElementById('liveCanvas')`. Generalize to iterate over a list `['liveCanvas', 'previewCanvas']`:
@@ -1597,7 +1597,7 @@ _canvasIdsForRender() {
 }
 ```
 
-Each call renders to every canvas found — negligible cost (same `drawImage` source bitmap, just blit). The canvas hidden by `x-show` still exists in the DOM and receives the buffer, so switching tabs shows the last image instantly.
+Each call renders to every canvas found, negligible cost (same `drawImage` source bitmap, just blit). The canvas hidden by `x-show` still exists in the DOM and receives the buffer, so switching tabs shows the last image instantly.
 
 **New state in app.js**:
 ```js
@@ -1665,28 +1665,28 @@ async previewAbort() {
 
 ## Files to modify
 
-- `src/NINA.Headless/Endpoints/CameraEndpoints.cs` — extend `CaptureRequest` with `SaveToDisk` + `TargetName`; conditionally call `_imageWriter.SaveImage(...)` after capture; inject `ImageWriterService` into the handler.
-- `src/NINA.Headless/Services/ImageWriterService.cs` — add a `"SNAP"` case in `BuildSubDir` routing to `snaps/{filter}_{date}/`.
-- `src/NINA.Headless/wwwroot/index.html` — new "Preview" button in the sidebar between Focus and Autorun; new `<div x-show="tab === 'preview'" class="tab-panel preview-panel">` with toolbar + canvas + stats.
-- `src/NINA.Headless/wwwroot/js/app.js` — state `preview: {...}`; methods `previewTakeSnap / previewToggleLoop / previewAbort`; generalize `_canvasIdsForRender()` + update `_renderJpegFrame` / `_renderRawFrame` to iterate the list (no change if the PREVIEW canvas doesn't exist, preserves current LIVE behavior); 1 new entry in `activityChips()` when `preview.busy`.
-- `src/NINA.Headless/wwwroot/css/app.css` — `.preview-panel` flex column, `.preview-toolbar` controls row, `.preview-canvas-wrap`, `.preview-stats` reusing the look-and-feel of `.preview-canvas` / `.preview-stats` already on LIVE.
-- `tests/NINA.Headless.Test/ImageWriterServiceTests.cs` (if it exists, otherwise create) — pin that `BuildSubDir("SNAP", ...)` produces `{rig}/snaps/{filter}_{date}`.
-- `README.md` — small "Preview tab" section in features.
+- `src/NINA.Headless/Endpoints/CameraEndpoints.cs`, extend `CaptureRequest` with `SaveToDisk` + `TargetName`; conditionally call `_imageWriter.SaveImage(...)` after capture; inject `ImageWriterService` into the handler.
+- `src/NINA.Headless/Services/ImageWriterService.cs`, add a `"SNAP"` case in `BuildSubDir` routing to `snaps/{filter}_{date}/`.
+- `src/NINA.Headless/wwwroot/index.html`, new "Preview" button in the sidebar between Focus and Autorun; new `<div x-show="tab === 'preview'" class="tab-panel preview-panel">` with toolbar + canvas + stats.
+- `src/NINA.Headless/wwwroot/js/app.js`, state `preview: {...}`; methods `previewTakeSnap / previewToggleLoop / previewAbort`; generalize `_canvasIdsForRender()` + update `_renderJpegFrame` / `_renderRawFrame` to iterate the list (no change if the PREVIEW canvas doesn't exist, preserves current LIVE behavior); 1 new entry in `activityChips()` when `preview.busy`.
+- `src/NINA.Headless/wwwroot/css/app.css`, `.preview-panel` flex column, `.preview-toolbar` controls row, `.preview-canvas-wrap`, `.preview-stats` reusing the look-and-feel of `.preview-canvas` / `.preview-stats` already on LIVE.
+- `tests/NINA.Headless.Test/ImageWriterServiceTests.cs` (if it exists, otherwise create), pin that `BuildSubDir("SNAP", ...)` produces `{rig}/snaps/{filter}_{date}`.
+- `README.md`, small "Preview tab" section in features.
 
 ## Files to create
-- (none — the feature is a pure extension of existing surfaces)
+- (none, the feature is a pure extension of existing surfaces)
 
 ## Reuse of existing code
 
-- `Endpoints/CameraEndpoints.cs:9-45` — `/api/camera/capture` handler, already does capture + relay; just adds 1 if/save
-- `Services/ImageWriterService.cs:250-275` `BuildSubDir` — switch that already routes by imageType; new "SNAP" case follows the exact pattern of the DARK/FLAT/BIAS cases
-- `Services/ImageRelayService.cs:44-143` `RelayImageAsync` — broadcast to WS, no change
-- `WebSocket/ImageStreamHandler.cs` — no change, same byte channel
-- `app.js _renderJpegFrame` / `_renderRawFrame` — just generalize to render to N canvases instead of 1
-- `app.js capture()` — don't touch; PREVIEW has a separate method (`previewTakeSnap`) so LIVE and PREVIEW state don't couple
-- `activityChips()` from the activity bar — 1 new entry, same structure as the other chips
-- `app.js apiPost` + `toast` — utility handlers as always
-- existing `IndiCamera.AbortExposureAsync` + `/api/camera/abort` endpoint — Abort button reuses
+- `Endpoints/CameraEndpoints.cs:9-45`, `/api/camera/capture` handler, already does capture + relay; just adds 1 if/save
+- `Services/ImageWriterService.cs:250-275` `BuildSubDir`, switch that already routes by imageType; new "SNAP" case follows the exact pattern of the DARK/FLAT/BIAS cases
+- `Services/ImageRelayService.cs:44-143` `RelayImageAsync`, broadcast to WS, no change
+- `WebSocket/ImageStreamHandler.cs`, no change, same byte channel
+- `app.js _renderJpegFrame` / `_renderRawFrame`, just generalize to render to N canvases instead of 1
+- `app.js capture()`, don't touch; PREVIEW has a separate method (`previewTakeSnap`) so LIVE and PREVIEW state don't couple
+- `activityChips()` from the activity bar, 1 new entry, same structure as the other chips
+- `app.js apiPost` + `toast`, utility handlers as always
+- existing `IndiCamera.AbortExposureAsync` + `/api/camera/abort` endpoint, Abort button reuses
 
 ## End-to-end verification
 
@@ -1700,23 +1700,23 @@ async previewAbort() {
 4. **Filter**: when the filter wheel is connected with R/G/B/L, dropdown appears; switch to "G" + Take snap → INDI switches the filter before the exposure (already the behavior of `SequenceEngine`)
 5. **Activity bar**: during a long exposure, "📸 Preview snap" chip appears with dynamic label
 6. **Cross-tab**: take a snap in PREVIEW → switch to LIVE → last image appears on the LIVE canvas (thanks to the multi-canvas render)
-7. **Mobile**: responsive layout — toolbar wraps to two lines on viewports < 700px, canvas keeps aspect ratio
+7. **Mobile**: responsive layout, toolbar wraps to two lines on viewports < 700px, canvas keeps aspect ratio
 
 ## Compatibility and security notes
 
 - No new NuGet dependencies or frontend libraries
 - Capture endpoint still without auth on the LAN (same model as the rest)
-- Loop mode has a `busy` flag guard — no infinite queue of snaps fired before the previous one finishes; chaining via `$nextTick` after `finally`
+- Loop mode has a `busy` flag guard, no infinite queue of snaps fired before the previous one finishes; chaining via `$nextTick` after `finally`
 - Save goes to a safe-by-design path (under the configured `ImageOutputDir`, sanitized by `SanitizeFolder`)
-- If the user switches tabs during an exposure with loop active, the loop keeps running in the background (the snap also reaches LIVE) — intentional behavior; to stop they need to come back to PREVIEW + click Stop, or Abort
-- `targetName: 'snap'` default can be edited by the user in an optional field in the form (future), to organize snaps by intent ("focus test", "framing M81", etc.) — scope deferred
+- If the user switches tabs during an exposure with loop active, the loop keeps running in the background (the snap also reaches LIVE), intentional behavior; to stop they need to come back to PREVIEW + click Stop, or Abort
+- `targetName: 'snap'` default can be edited by the user in an optional field in the form (future), to organize snaps by intent ("focus test", "framing M81", etc.), scope deferred
 
 ---
 # Previous plan: Activity bar (bottom) with operation chips + host metrics
 
 ## Context
 
-Polaris today scatters status indicators across every tab: the auto-focus progress bar lives in the Focus tab, sequence progress in the Autorun tab, PHD2 status in the header (but only "connected/offline"), Siril jobs only in the STUDIO modal, GraXpert the same. A user running an N-hour sequence has to **navigate** to each tab to find out "what's running right now?". There's also no health signal at all for the mini-PC / Raspberry Pi that hosts the server — if a combo of live-stacking + per-frame GraXpert + STUDIO stacking starts blowing up RAM, the user only finds out when they see the crash.
+Polaris today scatters status indicators across every tab: the auto-focus progress bar lives in the Focus tab, sequence progress in the Autorun tab, PHD2 status in the header (but only "connected/offline"), Siril jobs only in the STUDIO modal, GraXpert the same. A user running an N-hour sequence has to **navigate** to each tab to find out "what's running right now?". There's also no health signal at all for the mini-PC / Raspberry Pi that hosts the server, if a combo of live-stacking + per-frame GraXpert + STUDIO stacking starts blowing up RAM, the user only finds out when they see the crash.
 
 **Goal**: a fixed bar at the bottom of the page (app-wide, not per-tab) that shows at a glance:
 1. **Chips for transient active operations** (slew, expose, plate-solve, auto-focus, meridian flip, sequence running, Siril/GraXpert jobs, Studio jobs)
@@ -1725,13 +1725,13 @@ Polaris today scatters status indicators across every tab: the auto-focus progre
 **Decisions confirmed with the user**:
 - **Metrics**: whole host (not just the Polaris process). Adds `Microsoft.Extensions.Diagnostics.ResourceMonitoring` (official MS NuGet, cross-platform, ~100 KB).
 - **Visibility**: always visible as a fixed ~36 px strip at the bottom. CPU/RAM always present; the chip row appears when there's an active operation, stays empty when idle.
-- **Chip scope**: only transient operations (slew, expose, focus run, flip, sequence run, Siril/GraXpert jobs, Studio batches). Connected state "INDI/Alpaca/PHD2" is already in the header — no duplication.
+- **Chip scope**: only transient operations (slew, expose, focus run, flip, sequence run, Siril/GraXpert jobs, Studio batches). Connected state "INDI/Alpaca/PHD2" is already in the header, no duplication.
 
 ## Architecture
 
 ### Principle: no new broadcast for data that already exists
 
-`StatusStreamHandler` already sends almost everything the bar needs in a single message per second (confirmed during exploration: equipment, autoFocus, meridianFlip, guider, sequence, liveStack). The **chip-by-chip derivation is client-side** — the JS looks at the latest payload and builds chips locally. That avoids duplicating schema on the server.
+`StatusStreamHandler` already sends almost everything the bar needs in a single message per second (confirmed during exploration: equipment, autoFocus, meridianFlip, guider, sequence, liveStack). The **chip-by-chip derivation is client-side**, the JS looks at the latest payload and builds chips locally. That avoids duplicating schema on the server.
 
 What needs to be **added** to the WS payload:
 - `host` block: `{ cpuPercent, memoryPercent, memoryUsedMB, memoryTotalMB, processCpuPercent, processMemoryMB }`
@@ -1798,13 +1798,13 @@ public record HostMetricsSnapshot {
 }
 ```
 
-**Cadence**: 2s (not 1s) — `IResourceMonitor.GetUtilization(TimeSpan)` needs a minimum window to compute CPU%; 2s is the sweet spot for cost/precision. `StatusStreamHandler` pulls `Latest` on every broadcast (1s) — it might show the same number twice, no problem.
+**Cadence**: 2s (not 1s), `IResourceMonitor.GetUtilization(TimeSpan)` needs a minimum window to compute CPU%; 2s is the sweet spot for cost/precision. `StatusStreamHandler` pulls `Latest` on every broadcast (1s), it might show the same number twice, no problem.
 
 **Defensive**: `IResourceMonitor` throws in some edge cases (container with no cgroup mount, first call within < 5s). The `try/catch` keeps `Latest` at the last valid value rather than zeroing it out.
 
 ### Wiring in `StatusStreamHandler.cs`
 
-Extend the payload to include the new blocks. The current pattern already takes others via DI — just add 3 more parameters:
+Extend the payload to include the new blocks. The current pattern already takes others via DI, just add 3 more parameters:
 
 ```csharp
 public static async Task Handle(HttpContext ctx, ...,
@@ -1840,13 +1840,13 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<HostMetricsService
 
 ### NuGet package
 
-`Microsoft.Extensions.Diagnostics.ResourceMonitoring` 10.x — added to `NINA.Headless.csproj`. ~100 KB, 1 transitive dependency (`Microsoft.Extensions.Logging.Abstractions` is already in the project).
+`Microsoft.Extensions.Diagnostics.ResourceMonitoring` 10.x, added to `NINA.Headless.csproj`. ~100 KB, 1 transitive dependency (`Microsoft.Extensions.Logging.Abstractions` is already in the project).
 
 ## Frontend
 
 ### Layout: fixed app-wide bar at the bottom
 
-The bar is a single `<footer>` pinned below the content, outside any `tab-panel`. So it doesn't get hidden by scrolling panels, every tab-panel gets `padding-bottom: 36px` (the bar's height). The sticky `.home-footer` (already on the home page) rises by the same 36 px thanks to the padding — it lands above the activity bar.
+The bar is a single `<footer>` pinned below the content, outside any `tab-panel`. So it doesn't get hidden by scrolling panels, every tab-panel gets `padding-bottom: 36px` (the bar's height). The sticky `.home-footer` (already on the home page) rises by the same 36 px thanks to the padding, it lands above the activity bar.
 
 Markup (insert before `</body>` or at the end of `<main>`):
 
@@ -1855,7 +1855,7 @@ Markup (insert before `</body>` or at the end of `<main>`):
      status payload + new host block. -->
 <footer class="activity-bar"
         :class="{ 'has-activities': activityChips().length > 0 }">
-    <!-- Operations row (left) — only renders when something's running -->
+    <!-- Operations row (left), only renders when something's running -->
     <div class="activity-bar-ops">
         <template x-for="chip in activityChips()" :key="chip.id">
             <span class="activity-chip"
@@ -1907,7 +1907,7 @@ graXpertActiveJobs: [],
 //   if (msg.sirilJobs) this.sirilActiveJobs = msg.sirilJobs;
 //   if (msg.graXpertJobs) this.graXpertActiveJobs = msg.graXpertJobs;
 
-// Chip derivation — purely client-side from cached state.
+// Chip derivation, purely client-side from cached state.
 // Each chip is { id, icon, label, kind, progress? }.
 activityChips() {
     const out = [];
@@ -1958,7 +1958,7 @@ activityChips() {
         out.push({ id: 'fw', icon: '🎨', kind: 'info', label: 'Filter change' });
     }
 
-    // PHD2 transient (calibrating / settling / dithering — NOT steady guiding)
+    // PHD2 transient (calibrating / settling / dithering, NOT steady guiding)
     if (this.guider.calibrating) {
         out.push({ id: 'phd2-cal', icon: '🌟', kind: 'warn', label: 'PHD2 calibrating' });
     } else if (this.guider.settling) {
@@ -1971,7 +1971,7 @@ activityChips() {
                    label: `Live stack ${this.liveStackInfo?.frameCount || 0}f` });
     }
 
-    // Siril active jobs (one chip per job — usually only 1)
+    // Siril active jobs (one chip per job, usually only 1)
     for (const j of (this.sirilActiveJobs || [])) {
         out.push({ id: 'siril-' + j.jobId, icon: '⚡', kind: 'info',
                    label: `Siril: ${j.scriptName.replace(/\.ssf$/, '')} ${j.stage}`,
@@ -1991,7 +1991,7 @@ activityChips() {
     return out;
 },
 
-// CPU/RAM colour classes — green < 60%, amber 60-85%, red > 85%.
+// CPU/RAM colour classes, green < 60%, amber 60-85%, red > 85%.
 // Lets a glance at the bar surface trouble without reading the number.
 hostCpuClass() {
     const p = this.host.cpuPercent || 0;
@@ -2002,14 +2002,14 @@ hostMemClass() {
     return p > 85 ? 'host-red' : p > 60 ? 'host-amber' : 'host-green';
 },
 formatRam(usedMB, totalMB) {
-    if (!totalMB) return '— / —';
+    if (!totalMB) return ', /,';
     const usedGB = (usedMB / 1024).toFixed(1);
     const totalGB = (totalMB / 1024).toFixed(1);
     return `${usedGB} / ${totalGB} GB`;
 }
 ```
 
-### CSS — translucent glass matching the home cards
+### CSS, translucent glass matching the home cards
 
 ```css
 .activity-bar {
@@ -2097,48 +2097,48 @@ formatRam(usedMB, totalMB) {
 
 ## Files to modify
 
-- `src/NINA.Headless/NINA.Headless.csproj` — add `<PackageReference Include="Microsoft.Extensions.Diagnostics.ResourceMonitoring" Version="10.*" />`
-- `src/NINA.Headless/Program.cs` — `builder.Services.AddResourceMonitoring()` + register `HostMetricsService` as singleton + hosted service
-- `src/NINA.Headless/WebSocket/StatusStreamHandler.cs` — inject `HostMetricsService`, `SirilService`, `GraXpertService`; extend payload with `host`, `sirilJobs`, `graXpertJobs`
-- `src/NINA.Headless/wwwroot/index.html` — add `<footer class="activity-bar">` at the end of `<main>` (or at the end of `<body>`)
-- `src/NINA.Headless/wwwroot/js/app.js` — state `host`, `sirilActiveJobs`, `graXpertActiveJobs`; methods `activityChips()`, `hostCpuClass()`, `hostMemClass()`, `formatRam()`; hook in `handleStatusMessage` to absorb the new fields
-- `src/NINA.Headless/wwwroot/css/app.css` — `.activity-bar*` styles + global `padding-bottom: 36px` on panels
-- `README.md` — small "Activity bar" section below the existing features
+- `src/NINA.Headless/NINA.Headless.csproj`, add `<PackageReference Include="Microsoft.Extensions.Diagnostics.ResourceMonitoring" Version="10.*" />`
+- `src/NINA.Headless/Program.cs`, `builder.Services.AddResourceMonitoring()` + register `HostMetricsService` as singleton + hosted service
+- `src/NINA.Headless/WebSocket/StatusStreamHandler.cs`, inject `HostMetricsService`, `SirilService`, `GraXpertService`; extend payload with `host`, `sirilJobs`, `graXpertJobs`
+- `src/NINA.Headless/wwwroot/index.html`, add `<footer class="activity-bar">` at the end of `<main>` (or at the end of `<body>`)
+- `src/NINA.Headless/wwwroot/js/app.js`, state `host`, `sirilActiveJobs`, `graXpertActiveJobs`; methods `activityChips()`, `hostCpuClass()`, `hostMemClass()`, `formatRam()`; hook in `handleStatusMessage` to absorb the new fields
+- `src/NINA.Headless/wwwroot/css/app.css`, `.activity-bar*` styles + global `padding-bottom: 36px` on panels
+- `README.md`, small "Activity bar" section below the existing features
 
 ## Reuse of existing code
 
-- `Services/StatusStreamHandler.cs` — 1Hz WS broadcast pattern; just extend the payload
-- `Services/External/SirilService.cs:181` (`ActiveJobs` property) — already exists, just plumb it
-- `Services/External/GraXpertService.cs:175` (`ActiveJobs` property) — already exists, just plumb it
-- `Services/MdnsService.cs` / `Services/PHD2AutoStartService.cs` — `BackgroundService` pattern with a loop + `Task.Delay`, copy into `HostMetricsService`
-- `Endpoints/SystemEndpoints.cs:34-45` — already reports `WorkingSet64` + uptime; leave it as is, the new service becomes the authoritative source for the UI
-- CSS `.home-footer` glass recipe (rgba 0.78 + backdrop-filter blur 8px) — copy into `.activity-bar`
-- CSS `.status-indicator` pill — base for `.activity-chip` (same ~20px height, same radius)
-- CSS `.af-progress-bar` / `.af-progress-fill` — pattern for the mini-progress inside the chip
-- `app.js handleStatusMessage` (already dispatches into `mount`, `sequence`, etc.) — just add 3 ifs
+- `Services/StatusStreamHandler.cs`, 1Hz WS broadcast pattern; just extend the payload
+- `Services/External/SirilService.cs:181` (`ActiveJobs` property), already exists, just plumb it
+- `Services/External/GraXpertService.cs:175` (`ActiveJobs` property), already exists, just plumb it
+- `Services/MdnsService.cs` / `Services/PHD2AutoStartService.cs`, `BackgroundService` pattern with a loop + `Task.Delay`, copy into `HostMetricsService`
+- `Endpoints/SystemEndpoints.cs:34-45`, already reports `WorkingSet64` + uptime; leave it as is, the new service becomes the authoritative source for the UI
+- CSS `.home-footer` glass recipe (rgba 0.78 + backdrop-filter blur 8px), copy into `.activity-bar`
+- CSS `.status-indicator` pill, base for `.activity-chip` (same ~20px height, same radius)
+- CSS `.af-progress-bar` / `.af-progress-fill`, pattern for the mini-progress inside the chip
+- `app.js handleStatusMessage` (already dispatches into `mount`, `sequence`, etc.), just add 3 ifs
 
 ## End-to-end verification
 
 1. **Build + tests**:
-   - `dotnet build` in `src/NINA.Headless` — no errors
-   - `dotnet test` in `tests/NINA.Headless.Test` — 383 current + ~5 new = ~388 green
+   - `dotnet build` in `src/NINA.Headless`, no errors
+   - `dotnet test` in `tests/NINA.Headless.Test`, 383 current + ~5 new = ~388 green
 2. **Backend smoke**:
-   - `curl http://localhost:5000/api/system/status` — unchanged (existing payload preserved)
+   - `curl http://localhost:5000/api/system/status`, unchanged (existing payload preserved)
    - Connect to the WS `/ws/status` and see the `host` block + `sirilJobs[]` + `graXpertJobs[]` added to the payload, with `host.cpuPercent` updating between snapshots
 3. **UI idle state**:
-   - Open the browser, go to any tab — fixed bar visible at the bottom
+   - Open the browser, go to any tab, fixed bar visible at the bottom
    - Empty chip row (nothing running), CPU/RAM updating every ~2s
    - Correct colors: green < 60%, amber 60-85%, red > 85%
 4. **UI during a sequence**:
-   - Start an Autorun of 30 frames — chip "📑 Autorun 0/30" with a filling progress bar
-   - When an exposure runs — add chip "📷 Camera: exposing"
-   - Auto-focus fired by a trigger — chip "🔄 Auto-focus 3/9" with progress
-   - Meridian flip — chip "↔️ Meridian flip: slewing" → "centering" → "resuming" → disappears
+   - Start an Autorun of 30 frames, chip "📑 Autorun 0/30" with a filling progress bar
+   - When an exposure runs, add chip "📷 Camera: exposing"
+   - Auto-focus fired by a trigger, chip "🔄 Auto-focus 3/9" with progress
+   - Meridian flip, chip "↔️ Meridian flip: slewing" → "centering" → "resuming" → disappears
 5. **UI during GraXpert batch**:
-   - FILES → Run GraXpert → 10 frames — chip "🌅 GraXpert 3/10" updates in real-time
+   - FILES → Run GraXpert → 10 frames, chip "🌅 GraXpert 3/10" updates in real-time
    - Job completes → chip disappears
 6. **Stress**:
-   - Run sequence + auto-focus + live-stack + GraXpert batch simultaneously — chips sit side by side, horizontal-scroll overflow kicks in
+   - Run sequence + auto-focus + live-stack + GraXpert batch simultaneously, chips sit side by side, horizontal-scroll overflow kicks in
    - CPU% climbs to 70%+ → label turns amber; > 85% → red + bold
 7. **Cross-platform**:
    - Linux ARM64 (Pi 4): confirm `IResourceMonitor` returns valid values. If cgroups aren't mounted (rare), `Latest` keeps its old values without crashing.
@@ -2146,10 +2146,10 @@ formatRam(usedMB, totalMB) {
 
 ## Compatibility, license, and security notes
 
-- **Microsoft.Extensions.Diagnostics.ResourceMonitoring**: MIT, official Microsoft, supports Windows + Linux (cgroups v1/v2). macOS not supported — Polaris has no macOS build target so OK.
-- **Performance**: 2s sampling in `HostMetricsService` + 1s broadcast in `StatusStreamHandler` — negligible overhead even on a Pi 4 (<0.1% extra CPU measured by the research agent).
+- **Microsoft.Extensions.Diagnostics.ResourceMonitoring**: MIT, official Microsoft, supports Windows + Linux (cgroups v1/v2). macOS not supported, Polaris has no macOS build target so OK.
+- **Performance**: 2s sampling in `HostMetricsService` + 1s broadcast in `StatusStreamHandler`, negligible overhead even on a Pi 4 (<0.1% extra CPU measured by the research agent).
 - **Privacy**: metrics are local; they only leave over the WS to the user's browser (no external telemetry).
-- **Z-index**: the bar uses `z-index: 50`. The toast container (future), modals (z-index: 1000) and dropdown menus stay above. The header status bar (z-index: 100) also stays above — no conflict.
+- **Z-index**: the bar uses `z-index: 50`. The toast container (future), modals (z-index: 1000) and dropdown menus stay above. The header status bar (z-index: 100) also stays above, no conflict.
 - **`.home-footer`** stays sticky inside `.home-panel`; the global `padding-bottom: 36px` pushes the footer 36px above the bottom edge, so it lands on top of the activity bar (not underneath it).
 
 ---
@@ -2158,21 +2158,21 @@ formatRam(usedMB, totalMB) {
 
 ## Context
 
-Polaris has its own post-processing pipeline in C# (`MasterFrameService`, `CalibrationService`, `BatchStackingService`) but it competes with Siril — which is what the astrophotographer already uses, knows, and has custom scripts for. Worse: the user lives in a **heavily light-polluted** location and needs to remove gradients **per frame before stacking**, an operation the current C# pipeline doesn't do (only post-stack BGE via `FrameOperationsService.RemoveGradient`).
+Polaris has its own post-processing pipeline in C# (`MasterFrameService`, `CalibrationService`, `BatchStackingService`) but it competes with Siril, which is what the astrophotographer already uses, knows, and has custom scripts for. Worse: the user lives in a **heavily light-polluted** location and needs to remove gradients **per frame before stacking**, an operation the current C# pipeline doesn't do (only post-stack BGE via `FrameOperationsService.RemoveGradient`).
 
 **Goal**: integrate Siril and GraXpert as external processing engines, exposed through the UI, with Siril becoming the preferred path for preprocessing/stacking and GraXpert removing per-frame gradients. Both run on the same machine that hosts Polaris (the user will install them there).
 
 **Decisions confirmed with the user**:
 - **Siril**: becomes the preferred path by default. The current C# pipeline (`CalibrationService`, `BatchStackingService`) stays as automatic fallback when Siril isn't installed.
-- **GraXpert**: two modes. (a) **Auto during capture** — toggleable via Autorun End Events; each light that lands on disk goes to GraXpert in the background. (b) **Manual batch** — "Run GraXpert" button in STUDIO + FILES to select specific frames.
-- **Output layout**: separate folders per tool — `{rig}/siril/{target}/` and `{rig}/bge/{target}/`. Doesn't mix with `calibrated/` or `integrated/`.
+- **GraXpert**: two modes. (a) **Auto during capture**, toggleable via Autorun End Events; each light that lands on disk goes to GraXpert in the background. (b) **Manual batch**, "Run GraXpert" button in STUDIO + FILES to select specific frames.
+- **Output layout**: separate folders per tool, `{rig}/siril/{target}/` and `{rig}/bge/{target}/`. Doesn't mix with `calibrated/` or `integrated/`.
 - **Siril scripts**: curated bundle of the 4-5 most common ones + also reads the user's scripts (`%APPDATA%/siril/scripts` on Windows, `~/.siril/scripts` on Linux). Unified dropdown in the UI.
 
 ## Architecture
 
 ### Core decision: everything external via Process.Start
 
-Siril and GraXpert are native binaries. Polaris invokes them via `Process.Start` (established pattern — copy from `Services/PlateSolving/AstapSolver.cs` lines 23-157 for the short invocation + from `Services/PHD2ProcessManager.cs` lines 155-192 for cross-platform binary detection).
+Siril and GraXpert are native binaries. Polaris invokes them via `Process.Start` (established pattern, copy from `Services/PlateSolving/AstapSolver.cs` lines 23-157 for the short invocation + from `Services/PHD2ProcessManager.cs` lines 155-192 for cross-platform binary detection).
 
 **Common strategy** for both services:
 1. Locate the binary (explicit config > default OS paths > PATH fallback)
@@ -2185,7 +2185,7 @@ Siril and GraXpert are native binaries. Polaris invokes them via `Process.Start`
 
 ### Service 1: `Services/External/BinaryLocator.cs` (shared helper)
 
-Without it, Siril and GraXpert would each reinvent the "find where the exe is" wheel. No generic helper exists today — I'll create one:
+Without it, Siril and GraXpert would each reinvent the "find where the exe is" wheel. No generic helper exists today, I'll create one:
 
 ```csharp
 public static class BinaryLocator {
@@ -2201,7 +2201,7 @@ public static class BinaryLocator {
                                string[] macCandidates,
                                string pathName);
 
-    /// <summary>Diagnostic — list every place we looked + which exist.</summary>
+    /// <summary>Diagnostic, list every place we looked + which exist.</summary>
     public static IReadOnlyList<Candidate> Enumerate(...);
 }
 ```
@@ -2243,7 +2243,7 @@ public record SirilScriptInfo(string Name, string Path, string Source);
 
 1. Creates work dir `{ImageOutputDir}/{rig}/.polaris-tmp/siril-{jobId}/`
 2. Sub-folders per Siril convention: `lights/`, `darks/`, `flats/`, `biases/`
-3. **Symlinks** (Linux) or **hardlinks** (Windows NTFS via `File.CreateSymbolicLink` + `CreateHardLink`) to the user's frames — avoids copying GB of data. Fallback to copy if the filesystem doesn't support it.
+3. **Symlinks** (Linux) or **hardlinks** (Windows NTFS via `File.CreateSymbolicLink` + `CreateHardLink`) to the user's frames, avoids copying GB of data. Fallback to copy if the filesystem doesn't support it.
 4. Resolves `ScriptName`: if it's a plain name, looks in bundled first, then user scripts. If it's an absolute path, uses it directly.
 5. `Process.Start("siril-cli", $"-s {scriptPath} -d {workDir}")` with `RedirectStandardOutput=true`, `RedirectStandardError=true`, `CreateNoWindow=true`.
 6. Async stdout reader parses known Siril patterns (`"status: register"`, `"progress: 45%"`) → updates `SirilJob.Stage` + `PercentDone`. The regex pattern in `BatchStackingService` covers the general case.
@@ -2255,8 +2255,8 @@ public record SirilScriptInfo(string Name, string Path, string Source);
 **OSC (one-shot color / DSLR)**:
 - `OSC_Preprocessing.ssf` (full pipeline: bias + dark + flat)
 - `OSC_Preprocessing_WithoutDark.ssf` (no darks)
-- `OSC_Preprocessing_WithoutFlat.ssf` (no flats — useful when you got back from a trip without flats)
-- `OSC_Preprocessing_WithoutDBF.ssf` (no dark + bias + flat — raw stacking only)
+- `OSC_Preprocessing_WithoutFlat.ssf` (no flats, useful when you got back from a trip without flats)
+- `OSC_Preprocessing_WithoutDBF.ssf` (no dark + bias + flat, raw stacking only)
 
 **Mono (LRGB / narrowband filter-wheel)**:
 - `Mono_Preprocessing.ssf`
@@ -2265,17 +2265,17 @@ public record SirilScriptInfo(string Name, string Path, string Source);
 - `Mono_Preprocessing_WithoutDBF.ssf`
 
 **Extraction**:
-- `OSC_Extract_HaOIII.ssf` (dual-narrowband split — useful for DSLR with L-eXtreme/L-Ultimate filter)
+- `OSC_Extract_HaOIII.ssf` (dual-narrowband split, useful for DSLR with L-eXtreme/L-Ultimate filter)
 
 9 scripts total, copied from the official Siril repository with attribution. The "Without*" matrix covers the "forgot the flats" / "haven't shot good darks yet" / "I just want to stack what I have" scenarios without the user having to edit `.ssf` by hand.
 
-Additional scripts are up to the user (read from `~/.siril/scripts` or `%APPDATA%/siril/scripts` — where they probably already have DSA-HubbleMatic, RGB_Composition, BayerDrizzle, etc.).
+Additional scripts are up to the user (read from `~/.siril/scripts` or `%APPDATA%/siril/scripts`, where they probably already have DSA-HubbleMatic, RGB_Composition, BayerDrizzle, etc.).
 
 **`EnumerateScripts()`**: combines bundled + user-scripts dir (detected per OS). Each `SirilScriptInfo` carries the `Source` flag so the UI knows whether it's bundled or user.
 
 ### Service 3: `Services/External/GraXpertService.cs`
 
-Singleton. GraXpert **v3.0+** exposes three operations via CLI — `background-extraction`, `deconvolution`, and `denoising`. The API handles all three under the same service with an operation discriminator, instead of bloating the codebase with three parallel services that share 90% of the code.
+Singleton. GraXpert **v3.0+** exposes three operations via CLI, `background-extraction`, `deconvolution`, and `denoising`. The API handles all three under the same service with an operation discriminator, instead of bloating the codebase with three parallel services that share 90% of the code.
 
 API:
 
@@ -2328,9 +2328,9 @@ public record GraXpertBatchJob(string JobId, GraXpertOperation Operation,
                                 List<GraXpertResult> Results);
 ```
 
-**Version detection**: parse `graxpert --version`. If major >= 3, expose `SupportsDeconvolution = true` + `SupportsDenoising = true`. The UI gates the corresponding buttons on these flags — under GraXpert 2.x only BGE shows up.
+**Version detection**: parse `graxpert --version`. If major >= 3, expose `SupportsDeconvolution = true` + `SupportsDenoising = true`. The UI gates the corresponding buttons on these flags, under GraXpert 2.x only BGE shows up.
 
-**Output naming convention** — suffix changes per operation so they don't clobber each other:
+**Output naming convention**, suffix changes per operation so they don't clobber each other:
 - BGE: `{stem}_bge.fits` → folder `{rig}/bge/{target}/`
 - Decon: `{stem}_decon.fits` → folder `{rig}/decon/{target}/`
 - Denoise: `{stem}_denoise.fits` → folder `{rig}/denoise/{target}/`
@@ -2347,21 +2347,21 @@ Allows chaining (decon after denoise becomes `{stem}_denoise_decon.fits`) withou
 
 Universal args (every op accepts): `-ai_version {AiVersion}` if set.
 
-Rest of the flow identical to the original BGE — no real-time progress, decides success by exit code + `File.Exists(output) && length > 0`.
+Rest of the flow identical to the original BGE, no real-time progress, decides success by exit code + `File.Exists(output) && length > 0`.
 
-**`StartBatchAsync`**: runs `ProcessFrameAsync` sequentially (or with `Concurrency > 1` if the machine can handle it — decon/denoise AI models eat even more RAM than BGE, ~6-8 GB). Default `Concurrency=1`. Reports `Done/Total` plus `Operation` in the payload so the UI knows which job is which.
+**`StartBatchAsync`**: runs `ProcessFrameAsync` sequentially (or with `Concurrency > 1` if the machine can handle it, decon/denoise AI models eat even more RAM than BGE, ~6-8 GB). Default `Concurrency=1`. Reports `Done/Total` plus `Operation` in the payload so the UI knows which job is which.
 
 **Important decision: when to use each operation**:
-- **BGE**: per-frame (during capture) makes sense — each frame's gradient differs
-- **Decon + Denoise**: typically **post-stack** — applying them to every light degrades SNR (denoise too early) or amplifies noise (decon too early). The UI signals this: decon/denoise are available in STUDIO on the integrated master, NOT in Autorun End Events.
-- The auto-during-capture (`SequenceEndActions.AutoGraXpert`) only fires BGE. Decon/denoise never run automatically — always manual in STUDIO.
+- **BGE**: per-frame (during capture) makes sense, each frame's gradient differs
+- **Decon + Denoise**: typically **post-stack**, applying them to every light degrades SNR (denoise too early) or amplifies noise (decon too early). The UI signals this: decon/denoise are available in STUDIO on the integrated master, NOT in Autorun End Events.
+- The auto-during-capture (`SequenceEndActions.AutoGraXpert`) only fires BGE. Decon/denoise never run automatically, always manual in STUDIO.
 
 ### Integration with SequenceEngine (auto-GraXpert during capture)
 
 `Services/SequenceEngine.cs` lines 246-247 already has the splice point: right after `_imageWriter.SaveImage(...)`. Add:
 
 ```csharp
-// Post-capture hook — fire async, don't block next frame
+// Post-capture hook, fire async, don't block next frame
 if (_endActions?.AutoGraXpert == true && _graXpert.IsAvailable
     && imageType.Equals("LIGHT", StringComparison.OrdinalIgnoreCase)) {
     _ = Task.Run(() => _graXpert.ProcessFrameAsync(savedPath, null, ct));
@@ -2370,7 +2370,7 @@ if (_endActions?.AutoGraXpert == true && _graXpert.IsAvailable
 
 **Where the toggle lives**: `SequenceEndActions` (record in `SequenceEngine.cs`) gains a new `bool AutoGraXpert` field. Checkbox in the End Events panel of the Autorun tab (the infra for that panel already exists).
 
-**"Fire and forget" mode**: the next exposure doesn't wait for GraXpert to finish (which takes ~10s per frame). If the stack is kicked off before BGE finishes, it picks up the original frame. Explicit trade-off — performance > purity. If you want blocking mode, add a separate checkbox.
+**"Fire and forget" mode**: the next exposure doesn't wait for GraXpert to finish (which takes ~10s per frame). If the stack is kicked off before BGE finishes, it picks up the original frame. Explicit trade-off, performance > purity. If you want blocking mode, add a separate checkbox.
 
 ### Preferred pipeline: Siril replaces Studio C# by default
 
@@ -2403,9 +2403,9 @@ g.MapPost("/integrate", async (BatchStackingService batch, SirilService siril,
 | POST | `/api/graxpert/jobs/{jobId}/cancel` | Cancels the batch |
 
 **Settings endpoint** extends `/api/system/settings` with:
-- `sirilPath` (string, optional — override the auto-detect)
+- `sirilPath` (string, optional, override the auto-detect)
 - `graxpertPath` (string, optional)
-- `sirilScriptsDir` (string, optional — adds an extra folder to enumeration)
+- `sirilScriptsDir` (string, optional, adds an extra folder to enumeration)
 - `graxpertBgeSmoothing` (double, default 1.0)
 - `graxpertBgeCorrection` (string, default "Subtraction")
 - `graxpertDeconStrength` (double, default 0.5)
@@ -2416,13 +2416,13 @@ g.MapPost("/integrate", async (BatchStackingService batch, SirilService siril,
 
 **New panel in SETTINGS tab**: "External tools"
 - Siril row: status (✓ Detected v1.4.2 at `/usr/bin/siril-cli` | ✗ Not found), optional path input, "Re-detect" button, counter "5 bundled + 3 user scripts"
-- GraXpert row: status (✓ Detected v3.0.2 — BGE + Decon + Denoise | ✗ Not found). Collapsible sub-section with default sliders per operation (BGE smoothing, Decon strength + PSF size, Denoise strength)
+- GraXpert row: status (✓ Detected v3.0.2, BGE + Decon + Denoise | ✗ Not found). Collapsible sub-section with default sliders per operation (BGE smoothing, Decon strength + PSF size, Denoise strength)
 - "Download instructions" link for both
 
 **STUDIO tab**: three new toolbar buttons when GraXpert is available, grouped under a "Process with GraXpert" dropdown menu to avoid clutter:
-- 🌅 **Remove gradient (BGE)** — always available
-- ✨ **Deconvolution** — disabled if `graxpert.supportsDeconvolution === false` (version < 3.0)
-- 🔇 **Denoise** — disabled if `graxpert.supportsDenoising === false`
+- 🌅 **Remove gradient (BGE)**, always available
+- ✨ **Deconvolution**, disabled if `graxpert.supportsDeconvolution === false` (version < 3.0)
+- 🔇 **Denoise**, disabled if `graxpert.supportsDenoising === false`
 
 Each item opens the same generic GraXpert processing modal (different fields depending on the selected op). Decon and Denoise come with an explicit "Best applied to integrated masters, not individual lights" warning if the user tries to run them on lights.
 
@@ -2432,9 +2432,9 @@ Separate "Stack with Siril" button on the toolbar (visible if `siril.available`)
 - Toggle "Inject GraXpert BGE between calibration and stack" (if GraXpert is also available)
 - Start button → real-time progress
 
-**FILES tab**: "Run GraXpert" button on the toolbar when ≥1 FITS is selected opens the generic modal with an operation selector (BGE / Decon / Denoise — disabled per support). Output goes to `{file_dir}/{op}/` (sibling) or `{rig}/{bge|decon|denoise}/` if inside ImageOutputDir.
+**FILES tab**: "Run GraXpert" button on the toolbar when ≥1 FITS is selected opens the generic modal with an operation selector (BGE / Decon / Denoise, disabled per support). Output goes to `{file_dir}/{op}/` (sibling) or `{rig}/{bge|decon|denoise}/` if inside ImageOutputDir.
 
-**AUTORUN tab** (existing End Events panel): new checkbox "Auto-extract gradient with GraXpert" — only enabled if GraXpert is detected. **BGE only** — decon/denoise never run automatically during capture (they'd degrade per-frame SNR; always post-stack).
+**AUTORUN tab** (existing End Events panel): new checkbox "Auto-extract gradient with GraXpert", only enabled if GraXpert is detected. **BGE only**, decon/denoise never run automatically during capture (they'd degrade per-frame SNR; always post-stack).
 
 ### Status WebSocket
 
@@ -2453,50 +2453,50 @@ UI renders an icon in the header status bar (next to INDI/PHD2/ALPACA) when some
 - `src/NINA.Headless/Endpoints/GraXpertEndpoints.cs` (~100 lines)
 - `src/NINA.Headless/Resources/SirilScripts/` (5 .ssf files + LICENSE)
 - `tests/NINA.Headless.Test/BinaryLocatorTests.cs` (path resolution priority, OS-specific)
-- `tests/NINA.Headless.Test/SirilServiceTests.cs` (script enumeration, work-dir layout, arg-builder, stdout parser, output collection — mock binary)
+- `tests/NINA.Headless.Test/SirilServiceTests.cs` (script enumeration, work-dir layout, arg-builder, stdout parser, output collection, mock binary)
 - `tests/NINA.Headless.Test/GraXpertServiceTests.cs` (arg-builder, batch concurrency, error propagation)
 - `docs/siril-setup.md` (install + script location per OS)
 - `docs/graxpert-setup.md` (install + first-run model download)
 
 ## Files to modify
 
-- `src/NINA.Headless/Program.cs` — register `SirilService` + `GraXpertService` as singletons; map the new endpoints
-- `src/NINA.Headless/Services/ProfileService.cs` — `UserProfile`: `SirilPath`, `GraXpertPath`, `SirilScriptsDir`, `GraXpertSmoothing`, `GraXpertCorrection`
-- `src/NINA.Headless/Services/SequenceEngine.cs` — `SequenceEndActions.AutoGraXpert`; post-save hook that fires `_graXpert.ProcessFrameAsync` in fire-and-forget
-- `src/NINA.Headless/Endpoints/StudioEndpoints.cs` — `/integrate` gains Siril/C# dispatch; new `/integrate-with-siril` endpoint
-- `src/NINA.Headless/Endpoints/SequenceEndpoints.cs` — `/end-actions` PUT accepts `autoGraXpert`
-- `src/NINA.Headless/WebSocket/StatusStreamHandler.cs` — include `sirilJobs` + `graxpertJobs` in the payload
-- `src/NINA.Headless/wwwroot/index.html` — Settings panel "External tools" section; STUDIO "Stack with Siril" button + modal; FILES "Run GraXpert" button; Autorun End Events checkbox
-- `src/NINA.Headless/wwwroot/js/app.js` — state `siril: { available, scripts, jobs }`, `graxpert: { available, jobs }`; methods `loadSirilStatus`, `runSirilScript`, `runGraXpertBatch`, etc.
-- `src/NINA.Headless/wwwroot/css/app.css` — `.external-tool-row`, `.siril-modal`, `.graxpert-progress` styles
-- `README.md` — "External tools (Siril + GraXpert)" section linking to the 2 new docs
+- `src/NINA.Headless/Program.cs`, register `SirilService` + `GraXpertService` as singletons; map the new endpoints
+- `src/NINA.Headless/Services/ProfileService.cs`, `UserProfile`: `SirilPath`, `GraXpertPath`, `SirilScriptsDir`, `GraXpertSmoothing`, `GraXpertCorrection`
+- `src/NINA.Headless/Services/SequenceEngine.cs`, `SequenceEndActions.AutoGraXpert`; post-save hook that fires `_graXpert.ProcessFrameAsync` in fire-and-forget
+- `src/NINA.Headless/Endpoints/StudioEndpoints.cs`, `/integrate` gains Siril/C# dispatch; new `/integrate-with-siril` endpoint
+- `src/NINA.Headless/Endpoints/SequenceEndpoints.cs`, `/end-actions` PUT accepts `autoGraXpert`
+- `src/NINA.Headless/WebSocket/StatusStreamHandler.cs`, include `sirilJobs` + `graxpertJobs` in the payload
+- `src/NINA.Headless/wwwroot/index.html`, Settings panel "External tools" section; STUDIO "Stack with Siril" button + modal; FILES "Run GraXpert" button; Autorun End Events checkbox
+- `src/NINA.Headless/wwwroot/js/app.js`, state `siril: { available, scripts, jobs }`, `graxpert: { available, jobs }`; methods `loadSirilStatus`, `runSirilScript`, `runGraXpertBatch`, etc.
+- `src/NINA.Headless/wwwroot/css/app.css`, `.external-tool-row`, `.siril-modal`, `.graxpert-progress` styles
+- `README.md`, "External tools (Siril + GraXpert)" section linking to the 2 new docs
 
 ## Reuse of existing code
 
-- `src/NINA.Headless/Services/PlateSolving/AstapSolver.cs:23-157` — Process.Start with timeout pattern, arg building, output parsing. Copy.
-- `src/NINA.Headless/Services/PHD2ProcessManager.cs:155-192` — `EnumerateCandidatePaths()` pattern for cross-platform detection. Generalize into `BinaryLocator`.
-- `src/NINA.Headless/Services/Studio/BatchStackingService.cs:37-67` — `IntegrationProgress` keyed by jobId, mutable record updated in background. Apply the same pattern to Siril/GraXpert jobs.
-- `src/NINA.Headless/Services/AutoFocusService.cs:56-60,102` — progress reporting via mutable state accessed by the polling endpoint. Same pattern.
-- `src/NINA.Headless/Services/SequenceEngine.cs:246-247` — splice point for the auto-GraXpert hook
-- `src/NINA.Headless/Services/Studio/FrameLibraryService.cs:96` — after GraXpert/Siril produces output, call `RescanAsync()` to index into SQLite (automatic Studio refresh)
-- `src/NINA.Headless/Services/ImageWriterService.cs:250` — `BuildSubDir` pattern; extend to new types "SIRIL" and "BGE" mapping to the new folders
-- `src/NINA.Headless/Endpoints/StudioEndpoints.cs:12-17` — pattern for endpoint that returns 202 + jobId for long-running tasks
-- `src/NINA.Headless/WebSocket/StatusStreamHandler.cs` — broadcast pattern (already delivers other job updates)
+- `src/NINA.Headless/Services/PlateSolving/AstapSolver.cs:23-157`, Process.Start with timeout pattern, arg building, output parsing. Copy.
+- `src/NINA.Headless/Services/PHD2ProcessManager.cs:155-192`, `EnumerateCandidatePaths()` pattern for cross-platform detection. Generalize into `BinaryLocator`.
+- `src/NINA.Headless/Services/Studio/BatchStackingService.cs:37-67`, `IntegrationProgress` keyed by jobId, mutable record updated in background. Apply the same pattern to Siril/GraXpert jobs.
+- `src/NINA.Headless/Services/AutoFocusService.cs:56-60,102`, progress reporting via mutable state accessed by the polling endpoint. Same pattern.
+- `src/NINA.Headless/Services/SequenceEngine.cs:246-247`, splice point for the auto-GraXpert hook
+- `src/NINA.Headless/Services/Studio/FrameLibraryService.cs:96`, after GraXpert/Siril produces output, call `RescanAsync()` to index into SQLite (automatic Studio refresh)
+- `src/NINA.Headless/Services/ImageWriterService.cs:250`, `BuildSubDir` pattern; extend to new types "SIRIL" and "BGE" mapping to the new folders
+- `src/NINA.Headless/Endpoints/StudioEndpoints.cs:12-17`, pattern for endpoint that returns 202 + jobId for long-running tasks
+- `src/NINA.Headless/WebSocket/StatusStreamHandler.cs`, broadcast pattern (already delivers other job updates)
 
 ## Implementation phases
 
-1. **P1: BinaryLocator + SirilService skeleton** — detection, script enumeration, basic execution with 1 bundled script (OSC_Preprocessing). No GraXpert yet. Tests cover detection and script lookup.
-2. **P2: Siril UI integration** — Settings panel external tools row + STUDIO "Stack with Siril" button + modal + endpoint dispatch. Real-time progress over WS.
-3. **P3: Bundled scripts** — add the remaining 4 .ssf to `Resources/SirilScripts/`. Dropdown updates automatically.
-4. **P4: GraXpertService (BGE) + manual batch** — base service with BGE only, version detection, endpoint, "Run GraXpert" button on the FILES tab, selection + estimate modal, output in `{rig}/bge/`.
-5. **P5: GraXpert Deconvolution + Denoise (v3.0+)** — extend `GraXpertService` with the two new operations, sliders in Settings, three items in the STUDIO dropdown menu, output in `{rig}/decon/` + `{rig}/denoise/`. "Best for masters" warning when the user runs on lights.
-6. **P6: Auto-GraXpert BGE in Autorun** — `SequenceEndActions.AutoGraXpert` + checkbox + hook in SequenceEngine. Fire-and-forget during capture. BGE only.
-7. **P7: Studio Siril+GraXpert combo** — "Inject GraXpert BGE between calibration and stack" toggle in the Siril modal; chained pipeline.
-8. **P8: Docs + README** — `docs/siril-setup.md`, `docs/graxpert-setup.md` (including a section on the 3 operations + when to use each), README section.
+1. **P1: BinaryLocator + SirilService skeleton**, detection, script enumeration, basic execution with 1 bundled script (OSC_Preprocessing). No GraXpert yet. Tests cover detection and script lookup.
+2. **P2: Siril UI integration**, Settings panel external tools row + STUDIO "Stack with Siril" button + modal + endpoint dispatch. Real-time progress over WS.
+3. **P3: Bundled scripts**, add the remaining 4 .ssf to `Resources/SirilScripts/`. Dropdown updates automatically.
+4. **P4: GraXpertService (BGE) + manual batch**, base service with BGE only, version detection, endpoint, "Run GraXpert" button on the FILES tab, selection + estimate modal, output in `{rig}/bge/`.
+5. **P5: GraXpert Deconvolution + Denoise (v3.0+)**, extend `GraXpertService` with the two new operations, sliders in Settings, three items in the STUDIO dropdown menu, output in `{rig}/decon/` + `{rig}/denoise/`. "Best for masters" warning when the user runs on lights.
+6. **P6: Auto-GraXpert BGE in Autorun**, `SequenceEndActions.AutoGraXpert` + checkbox + hook in SequenceEngine. Fire-and-forget during capture. BGE only.
+7. **P7: Studio Siril+GraXpert combo**, "Inject GraXpert BGE between calibration and stack" toggle in the Siril modal; chained pipeline.
+8. **P8: Docs + README**, `docs/siril-setup.md`, `docs/graxpert-setup.md` (including a section on the 3 operations + when to use each), README section.
 
 ## End-to-end verification
 
-1. **Build + tests**: `dotnet build` + `dotnet test` — all existing tests (346) stay green + ~25 new = ~371 total
+1. **Build + tests**: `dotnet build` + `dotnet test`, all existing tests (346) stay green + ~25 new = ~371 total
 2. **Without Siril/GraXpert installed**:
    - Settings panel shows "Not detected" for both
    - STUDIO "Stack with Siril" button hidden
@@ -2507,7 +2507,7 @@ UI renders an icon in the header status bar (next to INDI/PHD2/ALPACA) when some
    - Scripts list shows the 5 bundled
    - Point `sirilScriptsDir` at `%APPDATA%/siril/scripts` → user scripts appear
    - STUDIO "Stack with Siril" → pick OSC_Preprocessing → select 20 M81/M82 lights + darks/flats → run → real-time progress → result in `{rig}/siril/M81/result_*.fit`
-   - Output opens in the FILES viewer (already exists — FITS RGB renderer covers it)
+   - Output opens in the FILES viewer (already exists, FITS RGB renderer covers it)
 4. **With GraXpert v2.x installed**:
    - Re-detect Settings → ✓ + version + "BGE only" (decon/denoise badges grayed)
    - FILES → select 1 FITS → "Run GraXpert" modal → only available op is BGE → 30s later the sibling `_bge.fits` appears
@@ -2533,8 +2533,8 @@ UI renders an icon in the header status bar (next to INDI/PHD2/ALPACA) when some
 
 ## Compatibility, license, and security notes
 
-- **Siril**: GPLv3. Polaris only invokes via CLI — no code linking. Bundled scripts are GPLv3 too (from the official repo); include LICENSE in `Resources/SirilScripts/`.
-- **GraXpert**: GPLv3. Same pattern (CLI-only). ML models embedded in the GraXpert distribution itself — Polaris doesn't touch them.
+- **Siril**: GPLv3. Polaris only invokes via CLI, no code linking. Bundled scripts are GPLv3 too (from the official repo); include LICENSE in `Resources/SirilScripts/`.
+- **GraXpert**: GPLv3. Same pattern (CLI-only). ML models embedded in the GraXpert distribution itself, Polaris doesn't touch them.
 - **Cross-platform**: both have Linux + Windows + macOS builds. Detection covers all three (Windows: Program Files + winget paths; Linux: /usr/bin, /opt, snap, flatpak; macOS: /Applications).
 - **Concurrency limits**: GraXpert AI uses a lot of RAM (~3-6GB per instance). Default `Concurrency=1`; user can bump it up on a beefier machine.
 - **Work dir cleanup**: successful jobs clean their work dir. Failed jobs preserve it for debug (with path logged). Optional housekeeping cron to clean work dirs > 7 days old.
@@ -2549,23 +2549,23 @@ UI renders an icon in the header status bar (next to INDI/PHD2/ALPACA) when some
 
 Polaris today has no way for the user to navigate the filesystem of the device running the server. That blocks three common workflows:
 
-1. **Picking the STUDIO root folder** — the only way today is to hand-type the path into a text field in Settings, with no idea whether the folder exists or what the surrounding structure looks like. A typical astrophotographer keeps output on an external SSD (`/mnt/astro` or `D:\Astrofotos`) and wants to point STUDIO there visually.
-2. **Downloading images from the server to the client** — after a session, the user wants to pull FITS/XISF/the final master to a laptop/phone for processing offline. Today they have to `scp` or mount SMB.
-3. **Doing housekeeping** — deleting old darks, moving masters to archive, checking how much space is left on the SSD. All done today via SSH/RDP.
+1. **Picking the STUDIO root folder**, the only way today is to hand-type the path into a text field in Settings, with no idea whether the folder exists or what the surrounding structure looks like. A typical astrophotographer keeps output on an external SSD (`/mnt/astro` or `D:\Astrofotos`) and wants to point STUDIO there visually.
+2. **Downloading images from the server to the client**, after a session, the user wants to pull FITS/XISF/the final master to a laptop/phone for processing offline. Today they have to `scp` or mount SMB.
+3. **Doing housekeeping**, deleting old darks, moving masters to archive, checking how much space is left on the SSD. All done today via SSH/RDP.
 
 **Goal**: a **FILES** tab with a full file explorer (inline preview, cut/copy/paste, multi-select, download), which also serves as the single place to point the STUDIO root folder.
 
 **Decisions confirmed with the user**:
 - **FS scope**: the whole disk (full filesystem). Main motivation: the user stores images on flash drives and external SSDs that wouldn't fit in a fixed sandbox. Mitigation: destructive actions (delete, paste-overwrite, cross-volume move) require **double confirmation**, and every destructive operation lands in the server log.
 - **Inline preview**: FITS/XISF (via `FrameLibraryService.GetThumbnailAsync` reused) + PNG/JPG/TIFF (SkiaSharp) + text preview for `.txt`/`.log`/`.json`/`.md` (first ~32KB).
-- **Multi-download**: a single ZIP streamed via `System.IO.Compression.ZipArchive`, written straight to the response stream — doesn't accumulate in memory, handles hundreds of FITS.
+- **Multi-download**: a single ZIP streamed via `System.IO.Compression.ZipArchive`, written straight to the response stream, doesn't accumulate in memory, handles hundreds of FITS.
 - **Settings**: the "Image output directory" field leaves the SETTINGS panel and becomes accessible only via the FILES tab (right-click a folder → "Set as Studio root", or a "Set as Studio root" button on the toolbar when a folder is selected).
 
 ## Architecture
 
 ### New backend: `Services/FileBrowserService.cs`
 
-Singleton with no persisted mutable state. All disk I/O goes through here (the endpoint can't call `File.*` directly — I want a single point for logging + double-confirmation + sanitization).
+Singleton with no persisted mutable state. All disk I/O goes through here (the endpoint can't call `File.*` directly, I want a single point for logging + double-confirmation + sanitization).
 
 ```csharp
 public class FileBrowserService {
@@ -2593,12 +2593,12 @@ public class FileBrowserService {
 }
 ```
 
-**Mime detection**: a small `ExtensionToMime` table inside the service — `.fits/.fit/.fts` → `image/fits`, `.xisf` → `image/x-xisf`, `.png/.jpg/.tiff/.txt/.log/.json/.md` → standard. For anything else it returns `application/octet-stream`.
+**Mime detection**: a small `ExtensionToMime` table inside the service, `.fits/.fit/.fts` → `image/fits`, `.xisf` → `image/x-xisf`, `.png/.jpg/.tiff/.txt/.log/.json/.md` → standard. For anything else it returns `application/octet-stream`.
 
 **Path safety**: even with the whole FS unlocked, it sanitizes:
-1. `Path.GetFullPath(userInput)` — normalize, expand, resolve `..`
+1. `Path.GetFullPath(userInput)`, normalize, expand, resolve `..`
 2. Block any path that `StartsWith` a blocklist prefix (`C:\Windows\System32`, `/proc`, `/sys`, `/dev`, `/etc/shadow`, `~/.ssh` by filename, etc.). Configurable in code, hardcoded for now.
-3. Destructive operations on a path that doesn't satisfy `RequireConfirm(path)` return 409 — the UI has to resend with `?confirmed=true`.
+3. Destructive operations on a path that doesn't satisfy `RequireConfirm(path)` return 409, the UI has to resend with `?confirmed=true`.
 
 **Cross-volume cut/paste**: `MoveAsync` attempts `File.Move`/`Directory.Move`; on cross-volume `IOException` it automatically falls back to `Copy` + `Delete` (preserves ctime when possible).
 
@@ -2614,7 +2614,7 @@ Same pattern as `StudioEndpoints.cs` (`MapGroup("/api/files")`).
 | GET | `/list?path=...&hidden=false` | Lists directory entries |
 | GET | `/stat?path=...` | Metadata for a single item |
 | GET | `/download?path=...` | Streams a file, `Content-Disposition: attachment; filename=...` |
-| GET | `/preview?path=...&maxDim=1600` | Renders JPEG/PNG/TXT preview. FITS/XISF goes through `FrameLibraryService` (factored out — see below). PNG/JPG served directly. TIFF decoded via SkiaSharp. Text returns `text/plain` truncated. |
+| GET | `/preview?path=...&maxDim=1600` | Renders JPEG/PNG/TXT preview. FITS/XISF goes through `FrameLibraryService` (factored out, see below). PNG/JPG served directly. TIFF decoded via SkiaSharp. Text returns `text/plain` truncated. |
 | GET | `/thumb?path=...` | 256px thumbnail, same logic as preview with cache at `{AppData}/files/thumbs/{md5(path)}.jpg` |
 | POST | `/download-zip` | Body: `{ paths: string[], rootForNames?: string }`. Response: streaming ZIP. |
 | POST | `/copy` | Body: `{ src, dst, overwrite }`. 409 if destination exists and `overwrite=false`. |
@@ -2622,11 +2622,11 @@ Same pattern as `StudioEndpoints.cs` (`MapGroup("/api/files")`).
 | POST | `/delete` | Body: `{ paths: string[], confirmed: bool }`. 409 if `!confirmed`. |
 | POST | `/mkdir` | Body: `{ parent, name }` |
 | POST | `/rename` | Body: `{ path, newName }` |
-| POST | `/studio-root` | Body: `{ path }` — shortcut that writes `profile.ImageOutputDir = path` and triggers a `FrameLibraryService` rescan. |
+| POST | `/studio-root` | Body: `{ path }`, shortcut that writes `profile.ImageOutputDir = path` and triggers a `FrameLibraryService` rescan. |
 
 ### Required refactor in STUDIO
 
-`FrameLibraryService.GetThumbnailAsync(int frameId)` today takes an **id** (DB lookup). For the FILES tab I need the same logic taking an **arbitrary path** (the image might not even be indexed yet — it's a master that came out of PixInsight in some random directory).
+`FrameLibraryService.GetThumbnailAsync(int frameId)` today takes an **id** (DB lookup). For the FILES tab I need the same logic taking an **arbitrary path** (the image might not even be indexed yet, it's a master that came out of PixInsight in some random directory).
 
 Extract a static method in `Services/Studio/FitsThumbnailer.cs`:
 ```csharp
@@ -2636,11 +2636,11 @@ public static class FitsThumbnailer {
 }
 ```
 
-`FrameLibraryService.GetThumbnailAsync` delegates to it. Zero behavior change — just extraction for reuse by the new `FilesEndpoints`.
+`FrameLibraryService.GetThumbnailAsync` delegates to it. Zero behavior change, just extraction for reuse by the new `FilesEndpoints`.
 
 ### Remove from Settings panel
 
-`src/NINA.Headless/wwwroot/index.html` ~line 2740: "Image Output Directory" field → delete the whole `<section>` (not just the input — the entire "Image Output" section leaves Settings). The help text stays: replace with a short banner "Set the root folder from the file explorer (FILES tab)" + a clickable link that switches `tab='files'`.
+`src/NINA.Headless/wwwroot/index.html` ~line 2740: "Image Output Directory" field → delete the whole `<section>` (not just the input, the entire "Image Output" section leaves Settings). The help text stays: replace with a short banner "Set the root folder from the file explorer (FILES tab)" + a clickable link that switches `tab='files'`.
 
 `app.js` line 1088: still **reads** `imageOutputDir` from the server (to show the current folder in other places), but the **save** goes only through POST `/api/files/studio-root`.
 
@@ -2673,7 +2673,7 @@ In `index.html` line ~129 (between STUDIO and Settings):
 ├─────────────────────────────────────────────────────────────────┤
 │ ☐ Name                Size      Modified              Type      │
 │ ☐ 📁 ..                                                          │
-│ ☐ 📁 darks            —         2026-05-15 23:00     Folder    │
+│ ☐ 📁 darks           ,         2026-05-15 23:00     Folder    │
 │ ☑ 🖼 M31_001.fits     62.4 MB   2026-05-21 22:14     FITS      │
 │ ☑ 🖼 M31_002.fits     62.4 MB   2026-05-21 22:18     FITS      │
 │ ☐ 📄 session.log      4.2 KB    2026-05-21 23:55     Log       │
@@ -2731,7 +2731,7 @@ filesClosePreview() { /* mode === 'fits' uses existing OpenSeadragon */ },
 Simple pattern reusing `window.confirm()` (already the app's default):
 - Delete: `confirm("Delete ${N} item(s)? This action is irreversible.")`
 - Paste overwrite: `confirm("${N} file(s) already exist at the destination. Overwrite?")`
-- Cross-volume move: silent notice only in the post-op toast ("moved across volumes — copied then deleted source").
+- Cross-volume move: silent notice only in the post-op toast ("moved across volumes, copied then deleted source").
 
 ## Files to create / modify
 
@@ -2740,11 +2740,11 @@ Simple pattern reusing `window.confirm()` (already the app's default):
 - `src/NINA.Headless/Services/Studio/FitsThumbnailer.cs` (~80 lines, extracted)
 - `src/NINA.Headless/Endpoints/FilesEndpoints.cs` (~250 lines)
 - `tests/NINA.Headless.Test/FileBrowserServiceTests.cs` (path safety, ZIP streaming, cross-volume move fallback, mime detection)
-- `tests/NINA.Headless.Test/FitsThumbnailerTests.cs` (small golden cases — makes sure the extraction didn't regress)
+- `tests/NINA.Headless.Test/FitsThumbnailerTests.cs` (small golden cases, makes sure the extraction didn't regress)
 
 ### Modify
-- `src/NINA.Headless/Services/Studio/FrameLibraryService.cs` — `GetThumbnailAsync` delegates to the new `FitsThumbnailer`
-- `src/NINA.Headless/Program.cs` (~line 92) — register `FileBrowserService` singleton + `app.MapFilesEndpoints()`
+- `src/NINA.Headless/Services/Studio/FrameLibraryService.cs`, `GetThumbnailAsync` delegates to the new `FitsThumbnailer`
+- `src/NINA.Headless/Program.cs` (~line 92), register `FileBrowserService` singleton + `app.MapFilesEndpoints()`
 - `src/NINA.Headless/wwwroot/index.html`:
   - Sidebar: new FILES button between STUDIO and Settings
   - Settings panel (~line 2740): remove "Image Output" section, replace with a short banner
@@ -2756,33 +2756,33 @@ Simple pattern reusing `window.confirm()` (already the app's default):
   - Remove the handler that saved `imageOutputDir` directly to `/api/system/settings`
 - `src/NINA.Headless/wwwroot/css/app.css`:
   - `.files-*` classes (toolbar, crumbs, table, selection-bar, clipboard-chip, text-preview modal)
-- `README.md` — new "File explorer" section + security note ("server listens on the LAN without auth — don't expose it to the internet without using the Relay with tokens")
+- `README.md`, new "File explorer" section + security note ("server listens on the LAN without auth, don't expose it to the internet without using the Relay with tokens")
 
 ### Reuse (already exist, should be referenced)
-- `Services/Studio/FrameLibraryService.cs:307` `GetThumbnailAsync` — FITS → JPEG decoder pattern (we'll extract, not copy)
-- `Endpoints/ImageEndpoints.cs:30` — `Results.File(stream, mime, fileDownloadName)` pattern
-- `Endpoints/StudioEndpoints.cs:43-46` — endpoint that serves thumb with cache pattern
-- `Services/ImageWriterService.cs:246,287` `SanitizeFileName` / `SanitizeFolder` — to validate names in `mkdir`/`rename` (doesn't cover path traversal, but helps with invalid chars)
-- `Services/ProfileService.cs:295` `ImageOutputDir` — single source of truth for the Studio root
-- `wwwroot/js/lib/openseadragon/openseadragon.min.js` + `app.js:openImageViewer()` (~line 3025) — viewer reused for image preview
+- `Services/Studio/FrameLibraryService.cs:307` `GetThumbnailAsync`, FITS → JPEG decoder pattern (we'll extract, not copy)
+- `Endpoints/ImageEndpoints.cs:30`, `Results.File(stream, mime, fileDownloadName)` pattern
+- `Endpoints/StudioEndpoints.cs:43-46`, endpoint that serves thumb with cache pattern
+- `Services/ImageWriterService.cs:246,287` `SanitizeFileName` / `SanitizeFolder`, to validate names in `mkdir`/`rename` (doesn't cover path traversal, but helps with invalid chars)
+- `Services/ProfileService.cs:295` `ImageOutputDir`, single source of truth for the Studio root
+- `wwwroot/js/lib/openseadragon/openseadragon.min.js` + `app.js:openImageViewer()` (~line 3025), viewer reused for image preview
 - `index.html` patterns: `location-setup-modal` (~line 2871) for the text-preview modal structure; sidebar buttons (lines 84-132) for the new button style
-- `app.js toast(msg, type)` — operation feedback
-- SkiaSharp (already in the project via STUDIO) — TIFF decoding
-- `System.IO.Compression.ZipArchive` (BCL, no new dependency) — streaming ZIP
+- `app.js toast(msg, type)`, operation feedback
+- SkiaSharp (already in the project via STUDIO), TIFF decoding
+- `System.IO.Compression.ZipArchive` (BCL, no new dependency), streaming ZIP
 
 ## Implementation order (separate commits)
 
-1. **FB-1: Backend foundation** — `FileBrowserService` + extracted `FitsThumbnailer` + tests. Build green, 314 → ~330 tests.
-2. **FB-2: Endpoints** — `FilesEndpoints` registered + smoke test via `curl` (list, stat, download). No UI yet.
-3. **FB-3: Basic UI** — sidebar button + tab panel with list/crumbs/cd + status bar. Read-only.
-4. **FB-4: Mutations** — cut/copy/paste/delete/mkdir/rename + confirmations. Toast feedback.
-5. **FB-5: Preview + download** — preview modal (OpenSeadragon reuse + text modal) + single download + multi ZIP.
-6. **FB-6: Studio root integration** — "Set as Studio root" action + remove field from Settings + banner with link.
-7. **FB-7: Polish + docs** — README + sort/filter/hidden toggle + drag-drop upload.
+1. **FB-1: Backend foundation**, `FileBrowserService` + extracted `FitsThumbnailer` + tests. Build green, 314 → ~330 tests.
+2. **FB-2: Endpoints**, `FilesEndpoints` registered + smoke test via `curl` (list, stat, download). No UI yet.
+3. **FB-3: Basic UI**, sidebar button + tab panel with list/crumbs/cd + status bar. Read-only.
+4. **FB-4: Mutations**, cut/copy/paste/delete/mkdir/rename + confirmations. Toast feedback.
+5. **FB-5: Preview + download**, preview modal (OpenSeadragon reuse + text modal) + single download + multi ZIP.
+6. **FB-6: Studio root integration**, "Set as Studio root" action + remove field from Settings + banner with link.
+7. **FB-7: Polish + docs**, README + sort/filter/hidden toggle + drag-drop upload.
 
 ## End-to-end verification
 
-1. **Build + tests**: `dotnet build` + `dotnet test` — 314 current + ~16 new = ~330 green
+1. **Build + tests**: `dotnet build` + `dotnet test`, 314 current + ~16 new = ~330 green
 2. **Path safety**:
    - `curl "http://localhost:5000/api/files/list?path=/etc/shadow"` → 403 (blocklist)
    - `curl "http://localhost:5000/api/files/list?path=../../etc"` (with arbitrary client cwd) → resolved via `Path.GetFullPath`; still passes through the blocklist
@@ -2815,7 +2815,7 @@ Simple pattern reusing `window.confirm()` (already the app's default):
   - Linux: roots = `/`, `/home`, `/mnt`, `/media`, `~`. Detected via existence-check at startup.
 - **Privacy**: no data leaves the server except via requests the client makes explicitly
 - **Security**:
-  - Add a prominent note to the README: "FILES tab exposes the server filesystem without authentication. Polaris assumes a trusted LAN. Don't expose the server directly to the internet — use the Relay (which has tokens)."
+  - Add a prominent note to the README: "FILES tab exposes the server filesystem without authentication. Polaris assumes a trusted LAN. Don't expose the server directly to the internet, use the Relay (which has tokens)."
   - Initial hardcoded blocklist: `C:\Windows`, `C:\Program Files`, `/proc`, `/sys`, `/dev`, `/boot`, `/etc/shadow`, `/etc/sudoers`, `~/.ssh`, `~/.aws`, `~/.config/gh`. More can be added in follow-up.
   - Double confirmation in the UI + `?confirmed=true` flag on the endpoint for destructive operations
   - Logging for every destructive op: path before/after, size, timestamp, source IP of the request
@@ -2829,13 +2829,13 @@ Simple pattern reusing `window.confirm()` (already the app's default):
 
 ## Context
 
-Polaris today only talks to dedicated astrophotography cameras via INDI (`IndiCamera`) — the `EquipmentManager.Camera` property is concretely typed as `IndiCamera?`. DSLRs and mirrorless cameras (Canon, Nikon, Sony) are a big slice of new users, especially those who haven't yet moved to dedicated cooled cameras.
+Polaris today only talks to dedicated astrophotography cameras via INDI (`IndiCamera`), the `EquipmentManager.Camera` property is concretely typed as `IndiCamera?`. DSLRs and mirrorless cameras (Canon, Nikon, Sony) are a big slice of new users, especially those who haven't yet moved to dedicated cooled cameras.
 
 **Goal**: add support for DSLR / Mirrorless cameras covering the three most common brands, keeping Polaris cross-platform.
 
 **Decisions confirmed with the user**:
-- **Linux**: use the existing `indi_gphoto_ccd` driver (libgphoto2 wrapper → INDI). Zero new code on the host — the current INDI client consumes the BLOB.
-- **Windows**: native per-vendor drivers — **Canon EDSDK**, **Nikon SDK**, **Sony Camera Remote SDK**. No libgphoto2 P/Invoke on Windows (libusb / Zadig vs WPD conflict, no maintained upstream Windows binary, all the .NET wrappers are abandoned).
+- **Linux**: use the existing `indi_gphoto_ccd` driver (libgphoto2 wrapper → INDI). Zero new code on the host, the current INDI client consumes the BLOB.
+- **Windows**: native per-vendor drivers, **Canon EDSDK**, **Nikon SDK**, **Sony Camera Remote SDK**. No libgphoto2 P/Invoke on Windows (libusb / Zadig vs WPD conflict, no maintained upstream Windows binary, all the .NET wrappers are abandoned).
 - **RAW**: save the CR2/NEF/ARW file as-is in `{rig}/lights/{target}/{filter}/{session}/`; use the embedded JPEG for the live preview / sequence stream. Real demosaicing is left for the Studio tab (future extension).
 
 ## Architecture
@@ -2903,22 +2903,22 @@ DSLRs deliver two assets per capture: the RAW file (CR2/NEF/ARW) and an embedded
 1. **Windows driver** captures → SDK writes the RAW to a buffer + extracts the embedded JPEG (all 3 SDKs expose this).
 2. **Driver builds `IImageData`** by decoding the JPEG via `SkiaSharp` (already in the project, used by `JpegHelper`) into a grayscale `ushort[]` (Rec.601 luminance via `BayerDebayer.ToLuminance`, or direct Gray8 → ushort `<< 8` conversion). Resolution = embedded JPEG resolution (~1620×1080 or ~1920×1280), not the sensor's full resolution.
 3. **`MetaData.Camera.SensorWidthMm/HeightMm`** filled in with the real sensor size (lookup table per model via SDK).
-4. **RAW file** attached via a new optional `IImageData.RawFileBytes` + `RawFileExtension` (or a separate interface `IHasRawFile` if we want to keep `IImageData` pure). `ImageWriterService` reads these fields and, when present, writes the `.cr2`/`.nef`/`.arw` instead of the `.fits` — same path structure as `BuildSubDir`.
+4. **RAW file** attached via a new optional `IImageData.RawFileBytes` + `RawFileExtension` (or a separate interface `IHasRawFile` if we want to keep `IImageData` pure). `ImageWriterService` reads these fields and, when present, writes the `.cr2`/`.nef`/`.arw` instead of the `.fits`, same path structure as `BuildSubDir`.
 5. **`IImageData`** flows through the normal pipeline → `ImageRelayService.RelayImageAsync` for the live preview, no FITS generated.
 
-### Windows driver — vendor SDKs
+### Windows driver, vendor SDKs
 
 For each SDK the strategy is the same:
 
 1. **Thin P/Invoke wrapper** in a new `src/NINA.Camera.{Vendor}/` project. Net10.0, `<SupportedOSPlatform>windows</SupportedOSPlatform>`.
 2. **Camera driver class** (`CanonEdsdkCamera : ICamera`) invoked by `EquipmentManager.SelectCamera(driver, deviceId)`.
-3. **Native DLLs don't go in the repo** — user downloads them from the manufacturer's site and drops them in `plugins/{vendor}/`. Each EULA requires this; our P/Invoke wrapper is MPL 2.0. Setup UI shows download link + instructions.
+3. **Native DLLs don't go in the repo**, user downloads them from the manufacturer's site and drops them in `plugins/{vendor}/`. Each EULA requires this; our P/Invoke wrapper is MPL 2.0. Setup UI shows download link + instructions.
 
-**Canon EDSDK** — version 13.x or 14.x. Main APIs: `EdsInitializeSDK` / `EdsGetCameraList` / `EdsOpenSession` / `EdsSetPropertyData(kEdsPropID_ISOSpeed)` / `EdsSendCommand(kEdsCameraCommand_TakePicture)` / `kEdsObjectEvent_DirItemRequestTransfer` callback for download. Marshalling pattern: copy the style of existing MIT open-source wrappers, not the lib itself.
+**Canon EDSDK**, version 13.x or 14.x. Main APIs: `EdsInitializeSDK` / `EdsGetCameraList` / `EdsOpenSession` / `EdsSetPropertyData(kEdsPropID_ISOSpeed)` / `EdsSendCommand(kEdsCameraCommand_TakePicture)` / `kEdsObjectEvent_DirItemRequestTransfer` callback for download. Marshalling pattern: copy the style of existing MIT open-source wrappers, not the lib itself.
 
-**Nikon SDK** — Nikon MAID SDK (classic DSLR) or Nikon Imaging SDK (Z series mirrorless). Cover Z first (cleaner API); MAID if there's demand. Requires registration at developer.nikonimaging.com.
+**Nikon SDK**, Nikon MAID SDK (classic DSLR) or Nikon Imaging SDK (Z series mirrorless). Cover Z first (cleaner API); MAID if there's demand. Requires registration at developer.nikonimaging.com.
 
-**Sony Camera Remote SDK** — version 2.x (Windows + native Linux). developer.sony.com/imaging-products. `Init` / `EnumCameraObjects` / `ConnectAsync` / `SetDeviceProperty(ISO)` / `SendCommand(S1Shooting)`. Recent, decent docs.
+**Sony Camera Remote SDK**, version 2.x (Windows + native Linux). developer.sony.com/imaging-products. `Init` / `EnumCameraObjects` / `ConnectAsync` / `SetDeviceProperty(ISO)` / `SendCommand(S1Shooting)`. Recent, decent docs.
 
 ### Live view / focus assist (future scope)
 
@@ -2926,7 +2926,7 @@ All 3 SDKs expose live view (~30 fps JPEG preview). Not in v1: V-curve focus nee
 
 ## Phases
 
-### F1 — Foundation: `ICamera` + driver discriminator
+### F1, Foundation: `ICamera` + driver discriminator
 
 Without this nothing connects. Doesn't touch any real driver, just refactors.
 
@@ -2942,7 +2942,7 @@ Without this nothing connects. Doesn't touch any real driver, just refactors.
 - UI: driver dropdown above the camera select in the Equipment tab.
 - Tests: the current 273 keep passing; new `ICameraContractTests` validates that `IndiCamera` and `AlpacaCamera` honor the contract (mock backends).
 
-### F2 — Linux DSLR doc-only path
+### F2, Linux DSLR doc-only path
 
 No C# code. Add to a doc at `docs/dslr-linux.md`:
 
@@ -2951,9 +2951,9 @@ No C# code. Add to a doc at `docs/dslr-linux.md`:
 3. Connect the USB camera. INDI sees it as `GPhoto CCD` or by model.
 4. In Polaris: driver=indi, pick the camera in the dropdown.
 
-Verify that the existing INDI client delivers the JPEG/RAW BLOB correctly — `indi_gphoto_ccd` by default sends the RAW as a BLOB. Possible tweak in `IndiCamera.OnBlobReceived` to distinguish FITS vs RAW (don't decode RAW as FITS — pass it raw through the write path via `RawFileBytes`).
+Verify that the existing INDI client delivers the JPEG/RAW BLOB correctly, `indi_gphoto_ccd` by default sends the RAW as a BLOB. Possible tweak in `IndiCamera.OnBlobReceived` to distinguish FITS vs RAW (don't decode RAW as FITS, pass it raw through the write path via `RawFileBytes`).
 
-### F3 — Canon EDSDK driver (Windows-only)
+### F3, Canon EDSDK driver (Windows-only)
 
 Most common on the market, biggest payoff, implement first.
 
@@ -2972,7 +2972,7 @@ src/NINA.Camera.CanonEdsdk/
 
 - **Discovery**: `CanonEdsdkDiscovery.EnumerateCameras()` returns `[{ id, model, serialNumber }]`. New endpoint `GET /api/equipment/cameras/canon-edsdk` delegates here.
 - **Capture**: `CaptureAsync(seconds, opts)`:
-  1. `EdsSetPropertyData(kEdsPropID_Tv, encode(seconds))` for shutter speed (DSLRs don't have arbitrary exposure — map to the nearest enum or use bulb if > 30s via `kEdsCameraCommand_BulbStart`/`BulbEnd`).
+  1. `EdsSetPropertyData(kEdsPropID_Tv, encode(seconds))` for shutter speed (DSLRs don't have arbitrary exposure, map to the nearest enum or use bulb if > 30s via `kEdsCameraCommand_BulbStart`/`BulbEnd`).
   2. `EdsSetPropertyData(kEdsPropID_ISOSpeed, mapIsoToEnum(opts.Iso))`.
   3. `EdsSetPropertyData(kEdsPropID_SaveTo, kEdsSaveTo_Host)` + `EdsSetCapacity` (SDK trick to force direct download without a card).
   4. `EdsSendCommand(kEdsCameraCommand_TakePicture)`.
@@ -2983,33 +2983,33 @@ src/NINA.Camera.CanonEdsdk/
 - **Live preview**: the resulting `IImageData` follows the normal path.
 - **Cooler/binning are no-op + debug log**, `Capabilities.SupportsCooler = false` etc. `Temperature` returns `double.NaN`.
 
-### F4 — Nikon SDK driver (Windows-only)
+### F4, Nikon SDK driver (Windows-only)
 
-Same template as F3, project `src/NINA.Camera.NikonSdk/`. Nikon Imaging SDK (Z series mirrorless) is cleaner than MAID — cover Z first, MAID later if there's demand.
+Same template as F3, project `src/NINA.Camera.NikonSdk/`. Nikon Imaging SDK (Z series mirrorless) is cleaner than MAID, cover Z first, MAID later if there's demand.
 
-### F5 — Sony SDK driver (Windows + Linux)
+### F5, Sony SDK driver (Windows + Linux)
 
 Sony has Linux binaries! Project `src/NINA.Camera.SonySdk/`, cross-RID. Same structure.
 
-### F6 — UI: per-vendor connect flow
+### F6, UI: per-vendor connect flow
 
 - Driver dropdown in the Equipment Camera card: INDI / Alpaca / Canon / Nikon / Sony (vendor items only where the SDK is detected).
 - When user picks a vendor driver: the camera dropdown becomes a "Detect cameras" button that calls `/api/equipment/cameras/{driver}` and populates with `{model} (#{serial})`.
 - If the SDK isn't installed, banner with download link + instructions on where to put the DLL.
 - Connect button calls `POST /api/camera/select/{deviceId}?driver=canon-edsdk` + `POST /api/camera/connect`.
-- Cooler / binning fields data-driven by `ICamera.Capabilities` — hidden when the driver is DSLR.
+- Cooler / binning fields data-driven by `ICamera.Capabilities`, hidden when the driver is DSLR.
 - ISO dropdown shows instead of Gain when `IsoOptions.Count > 0`.
 
-### F7 — Capture pipeline: raw on disk + live JPEG
+### F7, Capture pipeline: raw on disk + live JPEG
 
 - Extend `IImageData` (or separate interface `IHasRawFile`) with `byte[]? RawFileBytes` + `string? RawFileExtension`.
 - `ImageWriterService.SaveImage` when it sees `RawFileBytes != null`: writes the raw to the right folder **instead of** calling FITSWriter. Keeps the canonical path (`{rig}/lights/{target}/{filter}/{session}/IMG_{seq:0000}.cr2`).
-- Live preview path unchanged — `ImageRelayService.RelayImageAsync(imageData)` uses the decoded JPEG.
+- Live preview path unchanged, `ImageRelayService.RelayImageAsync(imageData)` uses the decoded JPEG.
 - Sequence engine + Live stack keep working (they operate on `IImageData.Data` which is the demosaiced JPEG ushort[]).
 
-### F8 (deferred) — Studio: RAW debayer + integration
+### F8 (deferred), Studio: RAW debayer + integration
 
-Extend `BayerDebayer` to accept CR2/NEF/ARW via LibRaw. Out of scope now — becomes a separate issue. For now the RAW sits on disk waiting for the user to process it in PixInsight/Siril.
+Extend `BayerDebayer` to accept CR2/NEF/ARW via LibRaw. Out of scope now, becomes a separate issue. For now the RAW sits on disk waiting for the user to process it in PixInsight/Siril.
 
 ## Critical files
 
@@ -3026,41 +3026,41 @@ Extend `BayerDebayer` to accept CR2/NEF/ARW via LibRaw. Out of scope now — bec
 - `tests/NINA.Headless.Test/ICameraContractTests.cs`
 
 **Modify**:
-- `src/NINA.INDI/Devices/IndiCamera.cs` — implement `ICamera`, distinguish FITS BLOB vs RAW
-- `src/NINA.Headless/Services/Alpaca/AlpacaCamera.cs` — implement `ICamera`
-- `src/NINA.Headless/Services/EquipmentManager.cs` — `Camera` changes to `ICamera?`, `SelectCamera(driver, deviceId)`
-- `src/NINA.Headless/Services/ProfileService.cs` — `EquipmentProfile.CameraDriver` + `CameraDeviceId` + migration
-- `src/NINA.Headless/Endpoints/CameraEndpoints.cs` — driver param on `select`
-- `src/NINA.Headless/Endpoints/EquipmentEndpoints.cs` — rig PUT accepts driver fields
-- `src/NINA.Headless/Services/ImageWriterService.cs` — RAW vs FITS branch via `RawFileBytes`
-- `src/NINA.Headless/wwwroot/index.html` — driver dropdown + dynamic field visibility
-- `src/NINA.Headless/wwwroot/js/app.js` — driver state + discovery flow
-- `src/NINA.Headless/Program.cs` — register vendor camera services (singletons per available driver)
-- `README.md` — "DSLR / Mirrorless support" section linking the 4 docs
+- `src/NINA.INDI/Devices/IndiCamera.cs`, implement `ICamera`, distinguish FITS BLOB vs RAW
+- `src/NINA.Headless/Services/Alpaca/AlpacaCamera.cs`, implement `ICamera`
+- `src/NINA.Headless/Services/EquipmentManager.cs`, `Camera` changes to `ICamera?`, `SelectCamera(driver, deviceId)`
+- `src/NINA.Headless/Services/ProfileService.cs`, `EquipmentProfile.CameraDriver` + `CameraDeviceId` + migration
+- `src/NINA.Headless/Endpoints/CameraEndpoints.cs`, driver param on `select`
+- `src/NINA.Headless/Endpoints/EquipmentEndpoints.cs`, rig PUT accepts driver fields
+- `src/NINA.Headless/Services/ImageWriterService.cs`, RAW vs FITS branch via `RawFileBytes`
+- `src/NINA.Headless/wwwroot/index.html`, driver dropdown + dynamic field visibility
+- `src/NINA.Headless/wwwroot/js/app.js`, driver state + discovery flow
+- `src/NINA.Headless/Program.cs`, register vendor camera services (singletons per available driver)
+- `README.md`, "DSLR / Mirrorless support" section linking the 4 docs
 
 **Reuse** (already exist):
-- `NINA.Image.Portable.ImageAnalysis.JpegHelper` — to encode JPEG → bytes for the stream
-- `NINA.Image.Portable.ImageAnalysis.BayerDebayer.ToLuminance` — to collapse RGB into a luminance ushort[] if we decide to demosaic
-- `IImageData` / `BaseImageData` / `ImageProperties` / `ImageMetaData` — minimal extension for RAW bytes
-- `ImageRelayService` — no changes
-- `EquipmentEndpoints` per-rig CRUD — just adds two fields to the PUT body
-- SkiaSharp (already vendored via `NINA.Image.Portable`) — JPEG decode in the driver path
+- `NINA.Image.Portable.ImageAnalysis.JpegHelper`, to encode JPEG → bytes for the stream
+- `NINA.Image.Portable.ImageAnalysis.BayerDebayer.ToLuminance`, to collapse RGB into a luminance ushort[] if we decide to demosaic
+- `IImageData` / `BaseImageData` / `ImageProperties` / `ImageMetaData`, minimal extension for RAW bytes
+- `ImageRelayService`, no changes
+- `EquipmentEndpoints` per-rig CRUD, just adds two fields to the PUT body
+- SkiaSharp (already vendored via `NINA.Image.Portable`), JPEG decode in the driver path
 
 ## Recommended order
 
-1. **F1** — without this nothing else works (~1 day)
-2. **F2** — doc only (~1h)
-3. **F7** — raw+jpeg pipeline needs to be ready before any Windows driver lands (~half day)
-4. **F3** Canon EDSDK — biggest payoff (~3-5 days)
-5. **F6** — UI becomes usable as soon as F3 has a concrete driver
-6. **F4** Nikon — in parallel with F5 if possible (~3 days)
-7. **F5** Sony — Sony SDK has native Linux, scope similar to F4 (~3 days)
-8. **F8** — only when someone asks (LibRaw integration)
+1. **F1**, without this nothing else works (~1 day)
+2. **F2**, doc only (~1h)
+3. **F7**, raw+jpeg pipeline needs to be ready before any Windows driver lands (~half day)
+4. **F3** Canon EDSDK, biggest payoff (~3-5 days)
+5. **F6**, UI becomes usable as soon as F3 has a concrete driver
+6. **F4** Nikon, in parallel with F5 if possible (~3 days)
+7. **F5** Sony, Sony SDK has native Linux, scope similar to F4 (~3 days)
+8. **F8**, only when someone asks (LibRaw integration)
 
 ## End-to-end verification
 
 **F1 (refactor)**:
-- `dotnet test` — all 273 existing tests keep passing
+- `dotnet test`, all 273 existing tests keep passing
 - `IndiCamera` still shows up in the Camera tab and captures normally
 - `AlpacaCamera` appears as an alternative driver in the dropdown
 
@@ -3085,7 +3085,7 @@ Extend `BayerDebayer` to accept CR2/NEF/ARW via LibRaw. Out of scope now — bec
 
 **F7 (raw persistence)**:
 - Capture with the Canon driver → `IMG_0001.cr2` on disk, content opens in `dcraw` / Photoshop
-- Studio rescan: the `.cr2` shows up in the frame library (type "RAW", not FITS) — optional, can be ignored by the browser in v1 if it can't parse it
+- Studio rescan: the `.cr2` shows up in the frame library (type "RAW", not FITS), optional, can be ignored by the browser in v1 if it can't parse it
 
 ## License / compatibility notes
 
@@ -3094,11 +3094,11 @@ Extend `BayerDebayer` to accept CR2/NEF/ARW via LibRaw. Out of scope now — bec
 - **Sony Camera Remote SDK**: free after signup, redistribution gated by the EULA. Same strategy.
 - Since the user provides the DLLs, this stays out of the Polaris build artifact (linux-arm64/linux-x64/win-x64 publish scripts don't copy vendor SDKs).
 - Backend remains MPL 2.0; the user accepts the vendor's EULA when downloading.
-- Linux: `indi-gphoto` is GPLv2 but runs in a separate process (indiserver) — no code mixing with Polaris.
+- Linux: `indi-gphoto` is GPLv2 but runs in a separate process (indiserver), no code mixing with Polaris.
 
 ---
 
-# Plan: NINA Headless — Complete and Prioritized Gap Analysis
+# Plan: NINA Headless, Complete and Prioritized Gap Analysis
 
 ## Context
 
@@ -3110,7 +3110,7 @@ NINA Headless (`C:\Users\danie\source\repos\DanWBR\nina-headless\`) already has 
 
 ---
 
-## PHASE A — Essentials for a Real Astrophoto Session
+## PHASE A, Essentials for a Real Astrophoto Session
 
 Without these features, a complete acquisition session doesn't work end-to-end. Highest priority.
 
@@ -3188,12 +3188,12 @@ INDI backends already exist (`IndiRotator`, `IndiFlatDevice`, `IndiDome`, `IndiW
 - **Scope**:
   - Cooler power % display (INDI property `CCD_COOLER_POWER` already exists)
   - Gradual warming function: temperature ramp-up (protect the sensor)
-  - Temperature chart over time (Chart.js) — useful for diagnostics
+  - Temperature chart over time (Chart.js), useful for diagnostics
 - **UI**: Add to the Camera card in the Equipment tab
 
 ---
 
-## PHASE B — Rich UI/UX
+## PHASE B, Rich UI/UX
 
 Visual features that make the experience complete. Don't block acquisition but greatly improve usage.
 
@@ -3236,7 +3236,7 @@ Visual features that make the experience complete. Don't block acquisition but g
   - Shader 3: Auto-stretch MTF (midtone transfer function)
   - Render to `<canvas>`
 - **Benefit**: Takes image processing off the RPi, frees CPU; enables real-time interactivity (instant stretch slider)
-- **Fallback**: If the browser doesn't have WebGL2, use JPEG mode (server processes) — already implemented
+- **Fallback**: If the browser doesn't have WebGL2, use JPEG mode (server processes), already implemented
 
 ### B5. Image Statistics Panel
 - **Location**: Imaging tab, side panel next to the image
@@ -3282,7 +3282,7 @@ Visual features that make the experience complete. Don't block acquisition but g
 
 ---
 
-## PHASE C — Advanced Sequencer (Biggest Single Gap)
+## PHASE C, Advanced Sequencer (Biggest Single Gap)
 
 NINA's Advanced Sequencer is probably the feature that most differentiates the product. It's a conceptual rewrite of our simple `SequenceEngine`.
 
@@ -3353,7 +3353,7 @@ List of essential instructions (from manual pp. 109-125):
 
 ---
 
-## PHASE D — Nice-to-Have / Polish
+## PHASE D, Nice-to-Have / Polish
 
 Features that add value but aren't essential.
 
@@ -3454,7 +3454,7 @@ Features that add value but aren't essential.
 - `src/NINA.Headless/Services/PHD2Client.cs` (A1)
 - `src/NINA.Headless/Services/AutoFocusService.cs` (A2)
 - `src/NINA.Headless/Services/MeridianFlipService.cs` (A3)
-- `src/NINA.Headless/Services/Sequencer/` (C — multiple files)
+- `src/NINA.Headless/Services/Sequencer/` (C, multiple files)
 - `src/NINA.Headless/Endpoints/GuiderEndpoints.cs` (A1)
 - `src/NINA.Headless/Endpoints/AutoFocusEndpoints.cs` (A2)
 - `src/NINA.Headless/Endpoints/RotatorEndpoints.cs` (A5)
@@ -3475,7 +3475,7 @@ Features that add value but aren't essential.
 
 ### Reuse (already exist, should be referenced)
 - `src/NINA.INDI/Devices/IndiRotator.cs`, `IndiFlatDevice.cs`, `IndiDome.cs`, `IndiWeather.cs` (A5)
-- `src/NINA.INDI/Devices/IndiTelescope.cs` (SideOfPier property already exists — use in A3)
+- `src/NINA.INDI/Devices/IndiTelescope.cs` (SideOfPier property already exists, use in A3)
 - `src/NINA.Image.Portable/Analysis/ImageStatistics.cs` (B5)
 - `src/NINA.Image.Portable/Analysis/StarDetection.cs` (B8)
 - `src/NINA.Headless/Services/SlewCenterService.cs` (reuse in A3 meridian flip workflow)
@@ -3484,18 +3484,18 @@ Features that add value but aren't essential.
 
 ## Recommended Execution Order
 
-1. **A5** (missing equipment panels) — quick wins, backends already exist, ~1 day
-2. **A1** (PHD2) — unblocks A4 and A3
-3. **A4** (Dithering) — depends on A1
-4. **A2** (Auto-Focus) — independent, can parallelize
-5. **A3** (Meridian Flip) — depends on A1 + A2 + existing Slew & Center
-6. **B1** (Chart.js) — enables A1/A2 charts
-7. **B6+B5** (Stretch + Statistics) — improves acquisition UX
-8. **B2** (Aladin Lite) — visually impactful
-9. **B4** (WebGL pipeline) — client performance
+1. **A5** (missing equipment panels), quick wins, backends already exist, ~1 day
+2. **A1** (PHD2), unblocks A4 and A3
+3. **A4** (Dithering), depends on A1
+4. **A2** (Auto-Focus), independent, can parallelize
+5. **A3** (Meridian Flip), depends on A1 + A2 + existing Slew & Center
+6. **B1** (Chart.js), enables A1/A2 charts
+7. **B6+B5** (Stretch + Statistics), improves acquisition UX
+8. **B2** (Aladin Lite), visually impactful
+9. **B4** (WebGL pipeline), client performance
 10. **B3, B7, B8, B9** (viewer + history + annotations + overlays)
-11. **C1-C7** (Advanced Sequencer) — large project, split into sub-phases
-12. **Phase D** — on demand
+11. **C1-C7** (Advanced Sequencer), large project, split into sub-phases
+12. **Phase D**, on demand
 
 ---
 
@@ -3534,7 +3534,7 @@ Features that add value but aren't essential.
 - Keep compatibility with Windows mini PC (project memory note)
 - Live Stacking already implemented (memory note)
 - Build targets: `linux-arm64` (RPi 4/5), `linux-x64` (Intel SBC), `win-x64` (Windows mini PC)
-- Backend must remain headless-functional (no display) — all new features must be 100% controllable via the Web UI
+- Backend must remain headless-functional (no display), all new features must be 100% controllable via the Web UI
 
 ---
 
@@ -3552,12 +3552,12 @@ Features that add value but aren't essential.
   - D11 Stellarium sync ✅ (50c07d1)
   - D4 Docker ✅ (30550e9)
   - D10 Sky Atlas filters + altitude ✅ (1e58b25)
-  - **D9 Multiple plate solvers ✅** (3244129) — refactored `PlateSolveService` into
+  - **D9 Multiple plate solvers ✅** (3244129), refactored `PlateSolveService` into
     a dispatcher with primary+blind fallback, created `IPlateSolver` interface,
     extracted `AstapSolver`, added `PlateSolve3Solver`,
     `AstrometryNetOnlineSolver`, `AstrometryNetLocalSolver`. 126 tests.
 
-### Wrapping up: D8 — XISF format support
+### Wrapping up: D8, XISF format support
 
 **Implementation complete** but commit/push pending (session entered plan mode):
 
@@ -3602,7 +3602,7 @@ Remaining steps:
 
 ### Pending after D8
 
-**Phase C — Advanced Sequencer** (huge, not started)
+**Phase C, Advanced Sequencer** (huge, not started)
 - C1-C7: tree-based container/instruction/condition/trigger model
 
 **Remaining Phase D**
@@ -3611,7 +3611,7 @@ Remaining steps:
 
 ---
 
-# Plan: WEATHER tab — Astronomical forecast for planning
+# Plan: WEATHER tab, Astronomical forecast for planning
 
 ## Context
 
@@ -3620,8 +3620,8 @@ The current UI shows *current* readings from a connected INDI weather station (i
 **Goal**: new **WEATHER** tab that shows astronomically relevant forecast (clouds, seeing, transparency) for today + the next 2 days, with a composite 0-100 score per 3h slot, automatic highlighting of the best observation windows at night, and overlay of sunrise/sunset, astronomical twilight, and moon phase.
 
 **Decisions confirmed with the user**:
-- **Provider**: 7Timer (only) — free, no API key, astronomy-specific, 3 days in 3h slots.
-- **Where to fetch**: server-side with 15min TTL cache — multiple clients share, browser without direct internet still works via LAN.
+- **Provider**: 7Timer (only), free, no API key, astronomy-specific, 3 days in 3h slots.
+- **Where to fetch**: server-side with 15min TTL cache, multiple clients share, browser without direct internet still works via LAN.
 
 ## Backend
 
@@ -3670,7 +3670,7 @@ Add to the existing class:
 
 ### Vendoring SunCalc (MIT)
 
-- Download `suncalc.min.js` (~10KB, MIT license — compatible with MPL 2.0)
+- Download `suncalc.min.js` (~10KB, MIT license, compatible with MPL 2.0)
 - Place in `src/NINA.Headless/wwwroot/js/lib/suncalc/`
 - Create adjacent `LICENSE` with MIT text + attribution
 - Include via `<script>` in `index.html`
@@ -3678,7 +3678,7 @@ Add to the existing class:
 
 ### Sidebar and tab panel in `src/NINA.Headless/wwwroot/index.html`
 
-**Sidebar** — add between "Sky" and "Seq" (planning workflow):
+**Sidebar**, add between "Sky" and "Seq" (planning workflow):
 ```html
 <button class="nav-btn" :class="{ active: tab === 'weather' }"
         @click="tab = 'weather'; loadWeatherForecast()" title="Weather">
@@ -3686,10 +3686,10 @@ Add to the existing class:
 </button>
 ```
 
-**Tab panel** — new `<div x-show="tab === 'weather'" class="tab-panel">` with:
+**Tab panel**, new `<div x-show="tab === 'weather'" class="tab-panel">` with:
 
-1. **Top strip** — "Refresh" button + last-updated timestamp + loading indicator
-2. **"Tonight's best windows"** callout — top 3 continuous windows (adjacent slots with score ≥ 70) between sunset and sunrise; each window shows duration + average score + condition summary
+1. **Top strip**, "Refresh" button + last-updated timestamp + loading indicator
+2. **"Tonight's best windows"** callout, top 3 continuous windows (adjacent slots with score ≥ 70) between sunset and sunrise; each window shows duration + average score + condition summary
 3. **3 day cards** (Today / Tomorrow / Day after) side-by-side on desktop, stacked on mobile:
    - Header: date + day of the week + sunset/sunrise + astronomical twilight start/end + moon phase icon + illumination %
    - Grid of 8 slots (3h each) with:
@@ -3743,23 +3743,23 @@ weatherBestWindows() {
 ### CSS in `src/NINA.Headless/wwwroot/css/app.css`
 
 New blocks in the style of existing cards (`home-status-card`, `home-quick-card`):
-- `.weather-day-card` — per-day card, padding 16px, gap 12px between header and grid
-- `.weather-slot-grid` — 8-column CSS grid
-- `.weather-slot` — cell with dynamic background via inline style, padding 8px, font-size 11px, border-radius 4px
+- `.weather-day-card`, per-day card, padding 16px, gap 12px between header and grid
+- `.weather-slot-grid`, 8-column CSS grid
+- `.weather-slot`, cell with dynamic background via inline style, padding 8px, font-size 11px, border-radius 4px
 - `.weather-slot--good` (green), `.weather-slot--meh` (amber), `.weather-slot--bad` (red)
-- `.weather-window-callout` — visual highlight for best windows (green + subtle glow)
-- `.weather-moon-icon` — inline SVG with clipping to show phase
+- `.weather-window-callout`, visual highlight for best windows (green + subtle glow)
+- `.weather-moon-icon`, inline SVG with clipping to show phase
 
 ## Tests
 
 New `tests/NINA.Headless.Test/WeatherForecastServiceTests.cs`:
 
-- `ScoreSlot_ClearSky_ReturnsHigh` — cloudcover=1, seeing=2, transparency=2, no precip → score > 85
-- `ScoreSlot_OvercastWithRain_ReturnsZero` — cloudcover=9, prec_type="rain" → score == 0
-- `ScoreSlot_HighHumidity_PenalisedHarshly` — clear but rh2m=98 → score × 0.3
-- `ScoreSlot_BoundaryClamp` — extremes don't blow past [0, 100]
-- `GetForecastAsync_CacheHit_SkipsHttp` — 2nd call within TTL doesn't fire a fetch (use HttpMessageHandler mock)
-- `GetForecastAsync_OnHttpError_ReturnsAvailableFalse` — handler that throws → DTO with `Available = false`, no bubbling exception
+- `ScoreSlot_ClearSky_ReturnsHigh`, cloudcover=1, seeing=2, transparency=2, no precip → score > 85
+- `ScoreSlot_OvercastWithRain_ReturnsZero`, cloudcover=9, prec_type="rain" → score == 0
+- `ScoreSlot_HighHumidity_PenalisedHarshly`, clear but rh2m=98 → score × 0.3
+- `ScoreSlot_BoundaryClamp`, extremes don't blow past [0, 100]
+- `GetForecastAsync_CacheHit_SkipsHttp`, 2nd call within TTL doesn't fire a fetch (use HttpMessageHandler mock)
+- `GetForecastAsync_OnHttpError_ReturnsAvailableFalse`, handler that throws → DTO with `Available = false`, no bubbling exception
 
 Currently: 135 tests. After Weather: 141.
 
@@ -3771,27 +3771,27 @@ Currently: 135 tests. After Weather: 141.
 - `tests/NINA.Headless.Test/WeatherForecastServiceTests.cs`
 
 ### Modify
-- `src/NINA.Headless/Endpoints/WeatherEndpoints.cs` — add `/forecast` route
-- `src/NINA.Headless/Program.cs` — register `WeatherForecastService`
-- `src/NINA.Headless/wwwroot/index.html` — sidebar button + suncalc script + tab panel
-- `src/NINA.Headless/wwwroot/js/app.js` — `weather` state, methods `loadWeatherForecast`, `weatherDays`, `weatherBestWindows`
-- `src/NINA.Headless/wwwroot/css/app.css` — `.weather-*` styles
-- `README.md` — document the Weather tab + 7Timer attribution
+- `src/NINA.Headless/Endpoints/WeatherEndpoints.cs`, add `/forecast` route
+- `src/NINA.Headless/Program.cs`, register `WeatherForecastService`
+- `src/NINA.Headless/wwwroot/index.html`, sidebar button + suncalc script + tab panel
+- `src/NINA.Headless/wwwroot/js/app.js`, `weather` state, methods `loadWeatherForecast`, `weatherDays`, `weatherBestWindows`
+- `src/NINA.Headless/wwwroot/css/app.css`, `.weather-*` styles
+- `README.md`, document the Weather tab + 7Timer attribution
 
 ## Reuse of existing code
 
-- `Services/GeocodingService.cs` — copy pattern static HttpClient + timeout + exception handling
-- `Services/StellariumClient.cs` — copy pattern of simple HTTP client for a public external API
-- `app.js _refreshLocationLabel()` (lines 1420-1457) — copy pattern fetch + memoise by key + silent fallback
-- `Endpoints/WeatherEndpoints.cs` — add a new route to the existing MapGroup (don't create a new file)
-- `js/lib/celestial/data/*.json` — don't use, data source is runtime
-- `this.settings.latitude` / `longitude` state — source of coords (already comes from profile loader)
+- `Services/GeocodingService.cs`, copy pattern static HttpClient + timeout + exception handling
+- `Services/StellariumClient.cs`, copy pattern of simple HTTP client for a public external API
+- `app.js _refreshLocationLabel()` (lines 1420-1457), copy pattern fetch + memoise by key + silent fallback
+- `Endpoints/WeatherEndpoints.cs`, add a new route to the existing MapGroup (don't create a new file)
+- `js/lib/celestial/data/*.json`, don't use, data source is runtime
+- `this.settings.latitude` / `longitude` state, source of coords (already comes from profile loader)
 - Existing tab pattern: clone the markup of a simple tab like "Settings" for the base panel structure
 
 ## End-to-end verification
 
-1. **Build**: `dotnet build` in `src/NINA.Headless` — no errors
-2. **Tests**: `dotnet test` in `tests/NINA.Headless.Test` — 141 tests pass (135 existing + 6 new)
+1. **Build**: `dotnet build` in `src/NINA.Headless`, no errors
+2. **Tests**: `dotnet test` in `tests/NINA.Headless.Test`, 141 tests pass (135 existing + 6 new)
 3. **Backend endpoint manual**:
    - `curl "http://localhost:5000/api/weather/forecast?lat=-5.18&lon=-37.36"` → JSON with `available: true`, slot list, computed scores
    - Call 2x within < 15 min → second response comes from cache (check log)
@@ -3815,7 +3815,7 @@ Currently: 135 tests. After Weather: 141.
 1. `WeatherForecastService.cs` + DTO + scoring logic
 2. Endpoint `/api/weather/forecast` + registration in Program.cs
 3. Unit tests (`ScoreSlot_*` + `GetForecastAsync_*`)
-4. `dotnet build && dotnet test` — backend green
+4. `dotnet build && dotnet test`, backend green
 5. Vendor SunCalc + LICENSE
 6. Sidebar button + tab panel skeleton in index.html
 7. State + `loadWeatherForecast()` in app.js
@@ -3823,24 +3823,24 @@ Currently: 135 tests. After Weather: 141.
 9. Render the 3 day cards + slot grid in index.html
 10. CSS `.weather-*` in app.css
 11. Per-slot tooltip, best windows callout, refresh button
-12. README — "Weather forecast" section with 7Timer + SunCalc attribution
+12. README, "Weather forecast" section with 7Timer + SunCalc attribution
 13. Commit + push
 
 ## Compatibility and license notes
 
 - **7Timer**: free, no restrictive terms of use, attribution recommended in the UI ("Forecast data: 7Timer.info")
-- **SunCalc**: MIT license — compatible with MPL 2.0
-- **Privacy**: lat/lng sent to 7Timer on the fetch — behavior identical to the existing Nominatim reverse-geocode, so doesn't change the privacy posture
+- **SunCalc**: MIT license, compatible with MPL 2.0
+- **Privacy**: lat/lng sent to 7Timer on the fetch, behavior identical to the existing Nominatim reverse-geocode, so doesn't change the privacy posture
 - **Offline**: Raspberry Pi setup without internet → empty cache + Available=false → UI shows a friendly message, doesn't break
 - **Mobile**: responsive layout (3 cards side-by-side at ≥1024px, stacked at < 768px)
 
 ---
 
-# Plan: TONIGHT'S BEST tab — Ranked list of the best to observe tonight
+# Plan: TONIGHT'S BEST tab, Ranked list of the best to observe tonight
 
 ## Context
 
-An astrophotographer opening the UI at night wants to know *what's worth shooting right now*. Today they have to open Sky Atlas, remember which DSOs are visible at their latitude/season, check altitude one by one. ASIAIR solves this with a "Tonight's Best" panel — a ranked list with thumbnail, RA/Dec/mag/size, altitude chart, and current-direction compass.
+An astrophotographer opening the UI at night wants to know *what's worth shooting right now*. Today they have to open Sky Atlas, remember which DSOs are visible at their latitude/season, check altitude one by one. ASIAIR solves this with a "Tonight's Best" panel, a ranked list with thumbnail, RA/Dec/mag/size, altitude chart, and current-direction compass.
 
 **Goal**: new **TONIGHT** tab that shows ~20 celestial objects best positioned for observation tonight, grouped by type (DSOs, Moon, Planets, Comets), each with a visual card including a NASA/Wikipedia image, current ephemeris, mini altitude-vs-night chart, and compass.
 
@@ -3852,7 +3852,7 @@ An astrophotographer opening the UI at night wants to know *what's worth shootin
 
 ### Phase TB-1: CelestialImageService (NASA + Wikipedia thumbnails)
 
-Foundational — used by every card.
+Foundational, used by every card.
 
 **New** `src/NINA.Headless/Services/CelestialImageService.cs`:
 - Pattern identical to `GeocodingService.cs`: static HttpClient, timeout, User-Agent.
@@ -3860,8 +3860,8 @@ Foundational — used by every card.
 - TTL: 30 days (images don't change).
 - `Task<CelestialImage> GetImageAsync(string name, CancellationToken ct)`:
   1. Check on-disk cache
-  2. Try **NASA Image Library**: `https://images-api.nasa.gov/search?q={name}&media_type=image` — pull `collection.items[0].links[0].href` (thumb) and `data[0].title/description`. Filter results by relevance (item whose `keywords` contains the name).
-  3. **Wikipedia REST** fallback: `https://en.wikipedia.org/api/rest_v1/page/summary/{name}` (and variants with underscore, prefix "NGC_") — pull `thumbnail.source`.
+  2. Try **NASA Image Library**: `https://images-api.nasa.gov/search?q={name}&media_type=image`, pull `collection.items[0].links[0].href` (thumb) and `data[0].title/description`. Filter results by relevance (item whose `keywords` contains the name).
+  3. **Wikipedia REST** fallback: `https://en.wikipedia.org/api/rest_v1/page/summary/{name}` (and variants with underscore, prefix "NGC_"), pull `thumbnail.source`.
   4. If nothing found → return `{ available: false }`. Cache it anyway with short TTL (1 day) so we don't hammer APIs on every refresh.
 
 **New endpoint** in `SkyEndpoints.cs`:
@@ -3892,7 +3892,7 @@ Foundational — used by every card.
 
 4. **Planets**: iterates `[Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune]`. For each uses `Astronomy.Equator(body, time, observer, true, true)` for RA/Dec, then `AltitudeService.ComputeTrack` for altitude. Included if peak alt > 10°. Magnitude comes from `Astronomy.Illumination(body, time)`.
 
-5. **Comets**: curated list of bright comets (kept in `wwwroot/data/comets.json`) with JPL Keplerian elements. Backend reads the file at startup, propagates position via `Astronomy.HelioState` + transform to equatorial. v1 starts with 5-10 hardcoded comets; can later grow to auto-fetch from MPC (`https://www.minorplanetcenter.net/iau/Ephemerides/Bright/2018/Soft00Bright.txt` — separate follow-up).
+5. **Comets**: curated list of bright comets (kept in `wwwroot/data/comets.json`) with JPL Keplerian elements. Backend reads the file at startup, propagates position via `Astronomy.HelioState` + transform to equatorial. v1 starts with 5-10 hardcoded comets; can later grow to auto-fetch from MPC (`https://www.minorplanetcenter.net/iau/Ephemerides/Bright/2018/Soft00Bright.txt`, separate follow-up).
 
 6. Sort everything by score, group by category (`Dso`, `Moon`, `Planet`, `Comet`), return top `limit`.
 
@@ -3923,7 +3923,7 @@ public record TonightCandidate(
 );
 ```
 
-The service computes camera FOV from the active rig profile (main focal length) + connected camera sensor dimensions (already exposed via `EquipmentManager.Camera.SensorWidthMm/SensorHeightMm`). Same formula already used by the FOV overlay in the Sky tab — extract into a small `FovCalculator` helper if not already present so both call sites share it. If any input missing → `FitsCameraFov = null`.
+The service computes camera FOV from the active rig profile (main focal length) + connected camera sensor dimensions (already exposed via `EquipmentManager.Camera.SensorWidthMm/SensorHeightMm`). Same formula already used by the FOV overlay in the Sky tab, extract into a small `FovCalculator` helper if not already present so both call sites share it. If any input missing → `FitsCameraFov = null`.
 
 **New endpoint** in `SkyEndpoints.cs`:
 - `GET /api/sky/tonights-best?lat={lat}&lon={lon}&limit={n}` → `IReadOnlyList<TonightCandidate>`
@@ -3937,7 +3937,7 @@ The service computes camera FOV from the active rig profile (main focal length) 
 
 ### Phase TB-3: UI new TONIGHT tab
 
-**Sidebar** in `index.html` — button between Sky and Weather:
+**Sidebar** in `index.html`, button between Sky and Weather:
 ```html
 <button class="nav-btn" :class="{ active: tab === 'tonight' }"
         @click="tab = 'tonight'; loadTonightsBest()" title="Tonight's Best">
@@ -3946,7 +3946,7 @@ The service computes camera FOV from the active rig profile (main focal length) 
 </button>
 ```
 
-**Tab panel** — list of cards. Each card a horizontal-row layout ASIAIR-style:
+**Tab panel**, list of cards. Each card a horizontal-row layout ASIAIR-style:
 
 ```
 ┌─────────┬──────────────────────┬─────────────────────────┬──────────┐
@@ -3970,15 +3970,15 @@ _renderTonightChart(canvas, item) { /* small altitude chart via Chart.js, reuse 
 ```
 
 **Each card**:
-- Thumbnail (img tag, lazy load via IntersectionObserver — don't bombard NASA with 20 fetches on load)
+- Thumbnail (img tag, lazy load via IntersectionObserver, don't bombard NASA with 20 fetches on load)
 - Info column: name (clickable link → sets it as skyTarget and opens the Sky tab centered), RA/Dec, magnitude/size/type
-- **"Fits FOV" badge** when `item.fitsCameraFov === true` (green, e.g. `✓ Fits 1.2°×0.8° FOV`). When `false`, shows an amber badge (e.g. `⊘ Larger than 1.2°×0.8° FOV`). When `null` (no camera/data) — no badge shown.
+- **"Fits FOV" badge** when `item.fitsCameraFov === true` (green, e.g. `✓ Fits 1.2°×0.8° FOV`). When `false`, shows an amber badge (e.g. `⊘ Larger than 1.2°×0.8° FOV`). When `null` (no camera/data), no badge shown.
 - Mini altitude chart (Chart.js, 12h window, no labels except X axis, red marker at current time)
 - SVG compass widget: circle + arrow pointing to `currentAzDeg`, label `{az}° {NSEW}`
 - **"Go to" button** (bottom-right corner), **only rendered when `mount.connected === true`**. Click:
   1. `this.skyTarget = { ra, dec, name: item.name }`
   2. `this.tab = 'sky'`
-  3. `$nextTick(() => this.slewAndCenter())` — invokes the existing slew + plate solve + re-center workflow
+  3. `$nextTick(() => this.slewAndCenter())`, invokes the existing slew + plate solve + re-center workflow
   4. Sky tab shows progress via `slewCenterStatus` (already implemented, no change)
 
 **Filters** (chips at the top of the tab):
@@ -3989,7 +3989,7 @@ _renderTonightChart(canvas, item) { /* small altitude chart via Chart.js, reuse 
 
 ### Phase TB-4 (optional, follow-up): Auto-refresh of comets
 
-Daily polling of the MPC bright-comets list, updates `wwwroot/data/comets.json` on disk. Hosted service in `Program.cs`. Can stay as a separate issue — v1 ships 5-10 hardcoded comets (Halley, Encke, Borrelly, NEOWISE when active, etc.).
+Daily polling of the MPC bright-comets list, updates `wwwroot/data/comets.json` on disk. Hosted service in `Program.cs`. Can stay as a separate issue, v1 ships 5-10 hardcoded comets (Halley, Encke, Borrelly, NEOWISE when active, etc.).
 
 ## Files to create / modify
 
@@ -4001,27 +4001,27 @@ Daily polling of the MPC bright-comets list, updates `wwwroot/data/comets.json` 
 - `tests/NINA.Headless.Test/TonightsBestServiceTests.cs`
 
 ### Modify
-- `src/NINA.Headless/NINA.Headless.csproj` — add `CosineKitty.AstronomyEngine` PackageReference
-- `src/NINA.Headless/Endpoints/SkyEndpoints.cs` — add `/image` and `/tonights-best` routes
-- `src/NINA.Headless/Program.cs` — register `CelestialImageService` and `TonightsBestService` (singletons)
-- `src/NINA.Headless/wwwroot/index.html` — sidebar button + tab panel
-- `src/NINA.Headless/wwwroot/js/app.js` — `tonight` state, methods `loadTonightsBest` / `_renderTonightChart` / `loadTonightThumb`
-- `src/NINA.Headless/wwwroot/css/app.css` — `.tonight-*` styles
-- `README.md` — document the Tonight tab + attributions (NASA Image Library, Wikipedia, AstronomyEngine)
+- `src/NINA.Headless/NINA.Headless.csproj`, add `CosineKitty.AstronomyEngine` PackageReference
+- `src/NINA.Headless/Endpoints/SkyEndpoints.cs`, add `/image` and `/tonights-best` routes
+- `src/NINA.Headless/Program.cs`, register `CelestialImageService` and `TonightsBestService` (singletons)
+- `src/NINA.Headless/wwwroot/index.html`, sidebar button + tab panel
+- `src/NINA.Headless/wwwroot/js/app.js`, `tonight` state, methods `loadTonightsBest` / `_renderTonightChart` / `loadTonightThumb`
+- `src/NINA.Headless/wwwroot/css/app.css`, `.tonight-*` styles
+- `README.md`, document the Tonight tab + attributions (NASA Image Library, Wikipedia, AstronomyEngine)
 
 ## Reuse of existing code
 
-- `Services/AltitudeService.cs` → `ComputeTrack(ra, dec, from, to, step)` and `ComputeNightWindow(lat, lng)` — used by TonightsBestService for every candidate
+- `Services/AltitudeService.cs` → `ComputeTrack(ra, dec, from, to, step)` and `ComputeNightWindow(lat, lng)`, used by TonightsBestService for every candidate
 - `Services/SkyCatalogService.cs` → `AllObjects()` enumerates the 200 catalog DSOs
-- `Services/SlewCenterService.cs` — slew + plate solve + center workflow reused by the card's "Go to" button
-- `Services/EquipmentManager.cs` → `Camera.SensorWidthMm/SensorHeightMm` + `ActiveRig.MainFocalLengthMm` — sources for the FOV calc (extract into a `FovCalculator` helper if not already shared with the Sky tab overlay)
-- `Services/GeocodingService.cs` — pattern static HttpClient + timeout + cache identical to Nominatim
-- `Services/WeatherForecastService.cs` — recent in-memory cache pattern with TTL, replicate for CelestialImageService (but with additional disk-backed cache)
-- `wwwroot/js/lib/suncalc/suncalc.js` — `getMoonPosition(date, lat, lng)` for the Moon (no need for AstronomyEngine for it)
-- `wwwroot/js/lib/chart.umd.min.js` — Chart.js already vendored, instantiated per card
-- HTML pattern `sky-result-item` (index.html lines 1268-1287) — visual base for the Tonight card
-- Frontend `slewAndCenter()` / `slewCenterStatus` — wiring for the "Go to" button and progress indicator in the Sky tab (already exist, no change)
-- Endpoint `/api/sky/altitude` — not called per card (TonightsBestService already computes peak; but if the UI wants drilldown it can reuse)
+- `Services/SlewCenterService.cs`, slew + plate solve + center workflow reused by the card's "Go to" button
+- `Services/EquipmentManager.cs` → `Camera.SensorWidthMm/SensorHeightMm` + `ActiveRig.MainFocalLengthMm`, sources for the FOV calc (extract into a `FovCalculator` helper if not already shared with the Sky tab overlay)
+- `Services/GeocodingService.cs`, pattern static HttpClient + timeout + cache identical to Nominatim
+- `Services/WeatherForecastService.cs`, recent in-memory cache pattern with TTL, replicate for CelestialImageService (but with additional disk-backed cache)
+- `wwwroot/js/lib/suncalc/suncalc.js`, `getMoonPosition(date, lat, lng)` for the Moon (no need for AstronomyEngine for it)
+- `wwwroot/js/lib/chart.umd.min.js`, Chart.js already vendored, instantiated per card
+- HTML pattern `sky-result-item` (index.html lines 1268-1287), visual base for the Tonight card
+- Frontend `slewAndCenter()` / `slewCenterStatus`, wiring for the "Go to" button and progress indicator in the Sky tab (already exist, no change)
+- Endpoint `/api/sky/altitude`, not called per card (TonightsBestService already computes peak; but if the UI wants drilldown it can reuse)
 
 ## End-to-end verification
 
@@ -4065,18 +4065,18 @@ Daily polling of the MPC bright-comets list, updates `wwwroot/data/comets.json` 
 
 - **NASA Image Library**: public domain, no heavy rate limit, no API key
 - **Wikipedia REST**: CC BY-SA, no API key, attribution via card link
-- **CosineKitty.AstronomyEngine**: MIT, ~150KB, no native deps — works on linux-arm64, linux-x64, win-x64
+- **CosineKitty.AstronomyEngine**: MIT, ~150KB, no native deps, works on linux-arm64, linux-x64, win-x64
 - **Comets**: orbital elements from JPL Small-Body Database are public domain
-- **Privacy**: lat/lng sent to the backend (which may forward to NASA/Wikipedia in URL queries) — behavior identical to the existing fetches
-- **Image cache**: stored in `{AppDataDir}/images/cache/` — user can clear manually; size monitoring optional in a follow-up
+- **Privacy**: lat/lng sent to the backend (which may forward to NASA/Wikipedia in URL queries), behavior identical to the existing fetches
+- **Image cache**: stored in `{AppDataDir}/images/cache/`, user can clear manually; size monitoring optional in a follow-up
 
 ---
 
-# Plan: STUDIO panel — Complete post-processing workflow
+# Plan: STUDIO panel, Complete post-processing workflow
 
 ## Context
 
-Today Polaris captures .fits/.xisf frames and saves to disk via `ImageWriterService`, but has nothing to work with them afterwards. The astrophotographer has to export to PixInsight / Siril / Photoshop to do calibration, stacking, stretch and final export. The **STUDIO** panel brings the post-processing workflow into Polaris — frame browser, master frame creation, calibration, batch integration, debayer, background extraction, stretch and export.
+Today Polaris captures .fits/.xisf frames and saves to disk via `ImageWriterService`, but has nothing to work with them afterwards. The astrophotographer has to export to PixInsight / Siril / Photoshop to do calibration, stacking, stretch and final export. The **STUDIO** panel brings the post-processing workflow into Polaris, frame browser, master frame creation, calibration, batch integration, debayer, background extraction, stretch and export.
 
 **Decisions confirmed with the user**:
 - **Scope**: complete workflow (all 7 planned sub-phases)
@@ -4085,16 +4085,16 @@ Today Polaris captures .fits/.xisf frames and saves to disk via `ImageWriterServ
 
 ## Current state (what we already have, from the audit)
 
-- **`NINA.Image.Portable/FileFormat/FITS/FITSReader.cs`** — decodes .fits (BITPIX 8/16/32/-32, BZERO/BSCALE, BAYERPAT) into an `ImageBuffer`
-- **`NINA.Image.Portable/ImageData/ImageBuffer.cs`** — `ushort[] pixels`, Width, Height, BitDepth, BayerPattern
-- **`NINA.Image.Portable/ImageData/BaseImageData.cs`** — rich wrapper with `ImageMetaData` (camera, telescope, observer, target, exposure, filter)
-- **`NINA.Image.Portable/ImageAnalysis/StarDetector.cs`** — `Detect(ushort[], w, h) → List<DetectedStar>` with X/Y/HFR/Peak/Flux
-- **`NINA.Image.Portable/ImageData/ImageStatistics.cs`** — Mean/Median/StDev/MAD/Min/Max + histogram
-- **`NINA.Image.Portable/ImageAnalysis/AutoStretch.cs`** — MTF stretch → byte[] (8-bit preview)
-- **`NINA.Headless/Services/LiveStackingService.cs`** — star-match + affine resample + running mean. Doesn't persist master to disk.
-- **`NINA.Headless/Services/ImageWriterService.cs`** — writes .fits/.xisf using `profile.ImageOutputDir` + `ImageNamePattern` with tokens `{target}/{filter}/{exposure}/{date}/{seq}`
-- **`NINA.Headless/Services/ImageRelayService.cs`** — in-memory buffer of the latest frame
-- **`NINA.Headless/Services/AutoFocusService.cs`** + **`WebSocket/StatusStreamHandler.cs`** — long-running job pattern with progress via WebSocket
+- **`NINA.Image.Portable/FileFormat/FITS/FITSReader.cs`**, decodes .fits (BITPIX 8/16/32/-32, BZERO/BSCALE, BAYERPAT) into an `ImageBuffer`
+- **`NINA.Image.Portable/ImageData/ImageBuffer.cs`**, `ushort[] pixels`, Width, Height, BitDepth, BayerPattern
+- **`NINA.Image.Portable/ImageData/BaseImageData.cs`**, rich wrapper with `ImageMetaData` (camera, telescope, observer, target, exposure, filter)
+- **`NINA.Image.Portable/ImageAnalysis/StarDetector.cs`**, `Detect(ushort[], w, h) → List<DetectedStar>` with X/Y/HFR/Peak/Flux
+- **`NINA.Image.Portable/ImageData/ImageStatistics.cs`**, Mean/Median/StDev/MAD/Min/Max + histogram
+- **`NINA.Image.Portable/ImageAnalysis/AutoStretch.cs`**, MTF stretch → byte[] (8-bit preview)
+- **`NINA.Headless/Services/LiveStackingService.cs`**, star-match + affine resample + running mean. Doesn't persist master to disk.
+- **`NINA.Headless/Services/ImageWriterService.cs`**, writes .fits/.xisf using `profile.ImageOutputDir` + `ImageNamePattern` with tokens `{target}/{filter}/{exposure}/{date}/{seq}`
+- **`NINA.Headless/Services/ImageRelayService.cs`**, in-memory buffer of the latest frame
+- **`NINA.Headless/Services/AutoFocusService.cs`** + **`WebSocket/StatusStreamHandler.cs`**, long-running job pattern with progress via WebSocket
 
 ## Gaps to fill
 
@@ -4134,20 +4134,20 @@ Metadata cache in SQLite or JSON at `{AppData}/NINA.Headless/studio/frames.db` t
 
 ### Phase ST-1: Frame Browser (foundational)
 
-**Backend** — `src/NINA.Headless/Services/FrameLibraryService.cs`:
-- `RescanAsync()` — recursively walks `ImageOutputDir`, opens each .fits header-only (without decoding pixels), extracts `IMAGETYP`, `FILTER`, `EXPOSURE`, `GAIN`, `OBJECT`, `DATE-OBS`, `XPIXSZ`/`YPIXSZ`, `NAXIS1/2`. Persists into `frames.db` (SQLite via `Microsoft.Data.Sqlite`).
+**Backend**, `src/NINA.Headless/Services/FrameLibraryService.cs`:
+- `RescanAsync()`, recursively walks `ImageOutputDir`, opens each .fits header-only (without decoding pixels), extracts `IMAGETYP`, `FILTER`, `EXPOSURE`, `GAIN`, `OBJECT`, `DATE-OBS`, `XPIXSZ`/`YPIXSZ`, `NAXIS1/2`. Persists into `frames.db` (SQLite via `Microsoft.Data.Sqlite`).
 - `Frame` record: `{ Id, Path, Type, Filter, ExposureSec, Gain, Target, DateObs, Width, Height, FileSizeBytes, IndexedAt }`.
-- `Query(QueryParams)` — filters: type, filter, target, dateRange, gain. Returns paginated.
-- `GetThumbnailAsync(int frameId, int maxDim=256)` — decodes FITS, applies `AutoStretch`, encodes JPEG with `System.Drawing` or `SixLabors.ImageSharp` (already has similar deps). Caches in `{AppData}/studio/thumbs/{frameId}.jpg`.
+- `Query(QueryParams)`, filters: type, filter, target, dateRange, gain. Returns paginated.
+- `GetThumbnailAsync(int frameId, int maxDim=256)`, decodes FITS, applies `AutoStretch`, encodes JPEG with `System.Drawing` or `SixLabors.ImageSharp` (already has similar deps). Caches in `{AppData}/studio/thumbs/{frameId}.jpg`.
 
-**Endpoints** — `src/NINA.Headless/Endpoints/StudioEndpoints.cs`:
-- `POST /api/studio/rescan` — forces reindex (async, with progress via WS)
-- `GET /api/studio/frames?type=&filter=&target=&dateFrom=&dateTo=&limit=&offset=` — paginated list
-- `GET /api/studio/frames/{id}` — details (all FITS keywords)
-- `GET /api/studio/frames/{id}/thumb` — 256px JPEG thumbnail
-- `GET /api/studio/stats` — aggregates (total frames, total exposure, by target, by filter)
+**Endpoints**, `src/NINA.Headless/Endpoints/StudioEndpoints.cs`:
+- `POST /api/studio/rescan`, forces reindex (async, with progress via WS)
+- `GET /api/studio/frames?type=&filter=&target=&dateFrom=&dateTo=&limit=&offset=`, paginated list
+- `GET /api/studio/frames/{id}`, details (all FITS keywords)
+- `GET /api/studio/frames/{id}/thumb`, 256px JPEG thumbnail
+- `GET /api/studio/stats`, aggregates (total frames, total exposure, by target, by filter)
 
-**Frontend** — new **STUDIO** tab in the sidebar (between ADV and SETTINGS, or after TONIGHT):
+**Frontend**, new **STUDIO** tab in the sidebar (between ADV and SETTINGS, or after TONIGHT):
 - Toolbar: rescan button, filters (type/filter/target/date), search box, view-mode toggle (grid/list)
 - Grid of 256px thumbnails with overlay: filename, exposure, filter, HFR (if available)
 - Click → selects (multi-select for following phases), double-click → viewer (ST-2)
@@ -4159,18 +4159,18 @@ Metadata cache in SQLite or JSON at `{AppData}/NINA.Headless/studio/frames.db` t
 
 ### Phase ST-2: Single-Frame Viewer + Stretch + Export
 
-**Backend** — `src/NINA.Headless/Services/FrameProcessingService.cs`:
-- `StretchedJpegAsync(frameId, blackPoint, midPoint, whitePoint)` — decodes → applies manual stretch (extend `AutoStretch` to accept explicit params) → JPEG.
-- `StretchedPngAsync(...)` — same, 16-bit-aware PNG via `ImageSharp`.
-- `StatsAsync(frameId)` — full `ImageStatistics` + StarDetector results.
-- `ExportTiffAsync(frameId, stretchedOr Linear)` — 16-bit TIFF via ImageSharp.
+**Backend**, `src/NINA.Headless/Services/FrameProcessingService.cs`:
+- `StretchedJpegAsync(frameId, blackPoint, midPoint, whitePoint)`, decodes → applies manual stretch (extend `AutoStretch` to accept explicit params) → JPEG.
+- `StretchedPngAsync(...)`, same, 16-bit-aware PNG via `ImageSharp`.
+- `StatsAsync(frameId)`, full `ImageStatistics` + StarDetector results.
+- `ExportTiffAsync(frameId, stretchedOr Linear)`, 16-bit TIFF via ImageSharp.
 
 **Endpoints** (in StudioEndpoints):
-- `GET /api/studio/frames/{id}/preview?black=&mid=&white=&format=jpeg` — live preview with adjustable stretch
-- `GET /api/studio/frames/{id}/stats` — full stats + stars
-- `POST /api/studio/frames/{id}/export?format=tif|png|jpg&...` — generates a file in `processed/`
+- `GET /api/studio/frames/{id}/preview?black=&mid=&white=&format=jpeg`, live preview with adjustable stretch
+- `GET /api/studio/frames/{id}/stats`, full stats + stars
+- `POST /api/studio/frames/{id}/export?format=tif|png|jpg&...`, generates a file in `processed/`
 
-**Frontend** — modal/inline viewer in the STUDIO tab:
+**Frontend**, modal/inline viewer in the STUDIO tab:
 - **OpenSeadragon** (already vendored in B3) with the rendered JPEG (re-fetch when sliders change, debounced 200ms)
 - Sliders: Black point, Mid-tone, White point + "Auto stretch" button (computes default MTF)
 - Histogram below the image (Chart.js bar, 256 bins)
@@ -4184,7 +4184,7 @@ Metadata cache in SQLite or JSON at `{AppData}/NINA.Headless/studio/frames.db` t
 
 ### Phase ST-3: Master Calibration Frames
 
-**Backend** — `src/NINA.Headless/Services/MasterFrameService.cs`:
+**Backend**, `src/NINA.Headless/Services/MasterFrameService.cs`:
 - `CreateMasterAsync(IEnumerable<int> frameIds, MasterType type, IntegrationMethod method, string outputPath, CancellationToken ct)`
 - `MasterType`: Bias, Dark, Flat
 - `IntegrationMethod`: Median, Mean, SigmaClippedMean(sigmaLow=3, sigmaHigh=3, iterations=2)
@@ -4194,12 +4194,12 @@ Metadata cache in SQLite or JSON at `{AppData}/NINA.Headless/studio/frames.db` t
 - Indexes the generated master in `FrameLibraryService` (special category)
 
 **Endpoints**:
-- `POST /api/studio/masters` — body: `{ frameIds, type, method }`. Returns `jobId`.
-- `GET /api/studio/masters/{jobId}/status` — pollable status (also via WS)
-- `GET /api/studio/masters` — list of existing masters (filters: type, gain, exposure, filter)
+- `POST /api/studio/masters`, body: `{ frameIds, type, method }`. Returns `jobId`.
+- `GET /api/studio/masters/{jobId}/status`, pollable status (also via WS)
+- `GET /api/studio/masters`, list of existing masters (filters: type, gain, exposure, filter)
 - `DELETE /api/studio/masters/{id}`
 
-**Frontend** — "Create master" button in the STUDIO toolbar (enables when ≥3 frames selected):
+**Frontend**, "Create master" button in the STUDIO toolbar (enables when ≥3 frames selected):
 - Modal: detects type automatically (header's IMAGETYP), allows override
 - Integration method selector with explanatory tooltips
 - Progress bar (each processed frame tick visible)
@@ -4212,18 +4212,18 @@ Metadata cache in SQLite or JSON at `{AppData}/NINA.Headless/studio/frames.db` t
 
 ### Phase ST-4: Light Frame Calibration
 
-**Backend** — `src/NINA.Headless/Services/CalibrationService.cs`:
+**Backend**, `src/NINA.Headless/Services/CalibrationService.cs`:
 - `CalibrateAsync(lightFrameIds, masterDarkId?, masterFlatId?, masterBiasId?, ct)`
 - Per frame: pixel = (light - dark - bias) / (flat - flatDark) * mean(flat - flatDark)
-- Automatic match: for each light, picks the master dark closest in (exposure, gain) — user can override
+- Automatic match: for each light, picks the master dark closest in (exposure, gain), user can override
 - Saves calibrated to `calibrated/{target}/{filter}/cal_{originalName}.fits` with header CALSTAT=BDF
 - Progress via WS
 
 **Endpoints**:
-- `POST /api/studio/calibrate` — body: `{ lightIds, autoMatch:bool, masterDarkId?, masterFlatId? }`. JobId.
+- `POST /api/studio/calibrate`, body: `{ lightIds, autoMatch:bool, masterDarkId?, masterFlatId? }`. JobId.
 - `GET /api/studio/calibrate/{jobId}/status`
 
-**Frontend** — "Calibrate" button in the STUDIO toolbar (enables with lights selected):
+**Frontend**, "Calibrate" button in the STUDIO toolbar (enables with lights selected):
 - Modal: shows which master dark/flat was auto-matched for each group (exposure/gain/filter), allows override per dropdown
 - Progress + log of each frame processed
 - Calibrated frames appear in the library with a "calibrated" badge
@@ -4234,7 +4234,7 @@ Metadata cache in SQLite or JSON at `{AppData}/NINA.Headless/studio/frames.db` t
 
 ### Phase ST-5: Batch Stack (offline integration)
 
-**Backend** — `src/NINA.Headless/Services/BatchStackingService.cs`:
+**Backend**, `src/NINA.Headless/Services/BatchStackingService.cs`:
 - Extends the logic of `LiveStackingService` to run in batch mode without dependency on the live stream
 - `StackAsync(calibratedFrameIds, options, ct)`:
   - StarDetector on each frame → ref frame = best HFR
@@ -4246,10 +4246,10 @@ Metadata cache in SQLite or JSON at `{AppData}/NINA.Headless/studio/frames.db` t
 - FITS header: NCOMBINE, EXPTOTAL, INTMETH, REJECT
 
 **Endpoints**:
-- `POST /api/studio/integrate` — JobId
+- `POST /api/studio/integrate`, JobId
 - `GET /api/studio/integrate/{jobId}/status` (WS too)
 
-**Frontend** — "Integrate" button (enables with calibrated lights selected):
+**Frontend**, "Integrate" button (enables with calibrated lights selected):
 - Options modal (collapsible advanced section): method, sigma low/high, normalization, weights by HFR
 - Progress: % done, frames aligned/rejected, current operation
 - Result: link to the master_light + thumbnail
@@ -4260,23 +4260,23 @@ Metadata cache in SQLite or JSON at `{AppData}/NINA.Headless/studio/frames.db` t
 
 ### Phase ST-6: Debayer + Background Extraction
 
-**Backend** — `src/NINA.Headless/Services/Demosaic/`:
-- `Bilinear.cs` — RGGB/GRBG/BGGR/GBRG → R,G,B planes (linear interpolation)
-- `Vng.cs` (optional, higher quality) — Variable Number of Gradients
+**Backend**, `src/NINA.Headless/Services/Demosaic/`:
+- `Bilinear.cs`, RGGB/GRBG/BGGR/GBRG → R,G,B planes (linear interpolation)
+- `Vng.cs` (optional, higher quality), Variable Number of Gradients
 - API: `ushort[] gray + BayerPattern → (ushort[] r, ushort[] g, ushort[] b)`
 - White balance: scale R and B to match the green channel mean (Gray World) or by the user
 
-**Background extraction** — `src/NINA.Headless/Services/BackgroundExtraction.cs`:
+**Background extraction**, `src/NINA.Headless/Services/BackgroundExtraction.cs`:
 - Sample grid: e.g. 8×6 boxes, in each picks median value (skips areas with stars via StarDetector mask)
 - Fits polynomial (default degree 2): gradient surface
 - Subtracts from every pixel
 - Saves as a new frame with header BGREMOVE=POLY2
 
 **Endpoints**:
-- `POST /api/studio/debayer` — input frameId + bayer pattern (auto) → 3 new frames (R, G, B) OR 1 RGB
-- `POST /api/studio/bgextract` — frameId + grid + degree → new frame
+- `POST /api/studio/debayer`, input frameId + bayer pattern (auto) → 3 new frames (R, G, B) OR 1 RGB
+- `POST /api/studio/bgextract`, frameId + grid + degree → new frame
 
-**Frontend** — additional actions in the viewer (ST-2):
+**Frontend**, additional actions in the viewer (ST-2):
 - "Debayer" button (visible if BayerPattern detected)
 - "Remove gradient" button with side-by-side preview
 
@@ -4286,19 +4286,19 @@ Metadata cache in SQLite or JSON at `{AppData}/NINA.Headless/studio/frames.db` t
 
 ### Phase ST-7: Post-Processing Toolbox + Final Export
 
-**Backend** — `src/NINA.Headless/Services/PostProcessing/`:
-- `ChannelCombine.cs` — LRGB: L * (R/(R+G+B)/3, G/...,B/...) with L weight; or simple RGB stack
-- `NoiseReduction.cs` — light gaussian blur (we already have `FastGaussianBlur` in the original upstream library but need to port — ~80 lines) + optional median filter
-- `Sharpening.cs` — unsharp mask: img + factor × (img − blurred)
-- `Saturation.cs` — RGB → HSV → multiply S → back
+**Backend**, `src/NINA.Headless/Services/PostProcessing/`:
+- `ChannelCombine.cs`, LRGB: L * (R/(R+G+B)/3, G/...,B/...) with L weight; or simple RGB stack
+- `NoiseReduction.cs`, light gaussian blur (we already have `FastGaussianBlur` in the original upstream library but need to port, ~80 lines) + optional median filter
+- `Sharpening.cs`, unsharp mask: img + factor × (img − blurred)
+- `Saturation.cs`, RGB → HSV → multiply S → back
 
 **Endpoints**:
-- `POST /api/studio/postprocess/channel-combine` — body: `{ luminanceId, redId, greenId, blueId }`
-- `POST /api/studio/postprocess/nr` — `{ frameId, radius }`
-- `POST /api/studio/postprocess/sharpen` — `{ frameId, amount, radius }`
-- `POST /api/studio/postprocess/saturation` — `{ frameId, factor }`
+- `POST /api/studio/postprocess/channel-combine`, body: `{ luminanceId, redId, greenId, blueId }`
+- `POST /api/studio/postprocess/nr`, `{ frameId, radius }`
+- `POST /api/studio/postprocess/sharpen`, `{ frameId, amount, radius }`
+- `POST /api/studio/postprocess/saturation`, `{ frameId, factor }`
 
-**Frontend** — "Pipeline" mode in the viewer:
+**Frontend**, "Pipeline" mode in the viewer:
 - List of applied steps (drag-drop to reorder via the already-vendored Sortable.js)
 - Each step: stretch / debayer / bg extract / NR / sharpen / saturation / export
 - Live preview after each step
@@ -4324,27 +4324,27 @@ Metadata cache in SQLite or JSON at `{AppData}/NINA.Headless/studio/frames.db` t
 - Corresponding tests in `tests/NINA.Headless.Test/`
 
 ### Modify
-- `src/NINA.Headless/Program.cs` — register 5+ new services + endpoints
-- `src/NINA.Headless/NINA.Headless.csproj` — add `Microsoft.Data.Sqlite` + `SixLabors.ImageSharp` (multi-format export)
-- `src/NINA.Image.Portable/ImageAnalysis/AutoStretch.cs` — accept explicit params (manual stretch)
-- `src/NINA.Headless/wwwroot/index.html` — STUDIO sidebar button + tab panel
-- `src/NINA.Headless/wwwroot/js/app.js` — `studio` state, methods for each phase
-- `src/NINA.Headless/wwwroot/css/app.css` — `.studio-*` styles
-- `README.md` — document the STUDIO pipeline
+- `src/NINA.Headless/Program.cs`, register 5+ new services + endpoints
+- `src/NINA.Headless/NINA.Headless.csproj`, add `Microsoft.Data.Sqlite` + `SixLabors.ImageSharp` (multi-format export)
+- `src/NINA.Image.Portable/ImageAnalysis/AutoStretch.cs`, accept explicit params (manual stretch)
+- `src/NINA.Headless/wwwroot/index.html`, STUDIO sidebar button + tab panel
+- `src/NINA.Headless/wwwroot/js/app.js`, `studio` state, methods for each phase
+- `src/NINA.Headless/wwwroot/css/app.css`, `.studio-*` styles
+- `README.md`, document the STUDIO pipeline
 
 ### Reuse (already exist)
-- `NINA.Image.Portable/FileFormat/FITS/FITSReader.cs` — decodes frames
-- `NINA.Image.Portable/ImageData/ImageBuffer.cs` — in-memory representation
-- `NINA.Image.Portable/ImageAnalysis/StarDetector.cs` — for alignment + statistics
-- `NINA.Image.Portable/ImageAnalysis/AutoStretch.cs` — for thumbnails + default preview
-- `NINA.Image.Portable/ImageData/ImageStatistics.cs` — for per-frame quality
-- `NINA.Image.Portable/FileFormat/FITS/FITSWriter.cs` — to save masters and calibrated
-- `NINA.Headless/Services/LiveStackingService.cs` — alignment logic will be shared
-- `NINA.Headless/Services/ImageWriterService.cs` — naming pattern reused
-- `NINA.Headless/Services/AutoFocusService.cs` — long-running job + WS progress pattern
-- `wwwroot/js/lib/openseadragon/openseadragon.min.js` (B3) — interactive viewer
-- `wwwroot/js/lib/chart.umd.min.js` — histogram
-- `wwwroot/js/lib/sortable.min.js` (C6) — pipeline reorder
+- `NINA.Image.Portable/FileFormat/FITS/FITSReader.cs`, decodes frames
+- `NINA.Image.Portable/ImageData/ImageBuffer.cs`, in-memory representation
+- `NINA.Image.Portable/ImageAnalysis/StarDetector.cs`, for alignment + statistics
+- `NINA.Image.Portable/ImageAnalysis/AutoStretch.cs`, for thumbnails + default preview
+- `NINA.Image.Portable/ImageData/ImageStatistics.cs`, for per-frame quality
+- `NINA.Image.Portable/FileFormat/FITS/FITSWriter.cs`, to save masters and calibrated
+- `NINA.Headless/Services/LiveStackingService.cs`, alignment logic will be shared
+- `NINA.Headless/Services/ImageWriterService.cs`, naming pattern reused
+- `NINA.Headless/Services/AutoFocusService.cs`, long-running job + WS progress pattern
+- `wwwroot/js/lib/openseadragon/openseadragon.min.js` (B3), interactive viewer
+- `wwwroot/js/lib/chart.umd.min.js`, histogram
+- `wwwroot/js/lib/sortable.min.js` (C6), pipeline reorder
 
 ## Verification per phase
 
@@ -4385,20 +4385,20 @@ Metadata cache in SQLite or JSON at `{AppData}/NINA.Headless/studio/frames.db` t
 
 ## Execution order
 
-1. **ST-1** (foundational browser) — without this nothing else works
-2. **ST-2** (viewer) — first user-visible impact
-3. **ST-3** (masters) — kicks off the calibration pipeline
-4. **ST-4** (calibration) — depends on ST-3
-5. **ST-5** (integration) — depends on ST-4
-6. **ST-6** (debayer + bg extract) — can run in parallel with ST-5
-7. **ST-7** (post-processing) — complete feature
+1. **ST-1** (foundational browser), without this nothing else works
+2. **ST-2** (viewer), first user-visible impact
+3. **ST-3** (masters), kicks off the calibration pipeline
+4. **ST-4** (calibration), depends on ST-3
+5. **ST-5** (integration), depends on ST-4
+6. **ST-6** (debayer + bg extract), can run in parallel with ST-5
+7. **ST-7** (post-processing), complete feature
 
 Each phase = 1 commit (or 2-3 sub-commits) with green tests before moving on.
 
 ## Compatibility and license notes
 
 - **Microsoft.Data.Sqlite**: MIT, ~1 MB, native linux-arm64 support
-- **SixLabors.ImageSharp**: Apache 2.0 (commercial requires paid license for prod use — but free for OSS like Polaris which is MPL 2.0). MIT alternative: `Magick.NET` or use `System.Drawing.Common` (linux requires libgdiplus, ARM64 issues).
+- **SixLabors.ImageSharp**: Apache 2.0 (commercial requires paid license for prod use, but free for OSS like Polaris which is MPL 2.0). MIT alternative: `Magick.NET` or use `System.Drawing.Common` (linux requires libgdiplus, ARM64 issues).
   - **Decision**: use ImageSharp for TIFF/PNG/JPEG. MPL+Apache license is OSS-compatible.
 - **Frame count scaling**: SQLite cache handles ≈10⁶ entries no problem. For typical sessions (hundreds to thousands of frames), zero issue.
 - **Memory ceiling**: batch integration of 100×64MB frames = 6.4 GB, doesn't fit in memory. Stream in chunks: read 100 frames in 32×32 or 64×64 pixel windows, process tile-by-tile. I/O trade-off.

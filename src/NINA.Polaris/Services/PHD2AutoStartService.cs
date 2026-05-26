@@ -1,7 +1,7 @@
 namespace NINA.Polaris.Services;
 
 /// <summary>
-/// Hosted service that — when <c>PHD2:AutoStart=true</c> — launches PHD2 and
+/// Hosted service that, when <c>PHD2:AutoStart=true</c>, launches PHD2 and
 /// connects the relay client to it as soon as the Headless app starts. Runs
 /// the launch in the background so it never blocks app startup.
 ///
@@ -54,7 +54,7 @@ public class PHD2AutoStartService : IHostedService {
 
             var alreadyRunning = await _pm.IsRunningAsync();
             if (alreadyRunning) {
-                _logger.LogInformation("PHD2 already running on {Host}:{Port} — connecting", _pm.DefaultHost, _pm.DefaultPort);
+                _logger.LogInformation("PHD2 already running on {Host}:{Port}, connecting", _pm.DefaultHost, _pm.DefaultPort);
             } else {
                 if (!_pm.ExecutableConfigured) {
                     _logger.LogWarning("PHD2:AutoStart=true but no PHD2 executable found. Looked for: {Paths}",
@@ -69,7 +69,7 @@ public class PHD2AutoStartService : IHostedService {
                 }
             }
 
-            // Connect the JSON-RPC client. Retry a handful of times — PHD2's
+            // Connect the JSON-RPC client. Retry a handful of times, PHD2's
             // event server sometimes accepts TCP before it's ready to RPC.
             for (var attempt = 1; attempt <= 5 && !ct.IsCancellationRequested; attempt++) {
                 try {

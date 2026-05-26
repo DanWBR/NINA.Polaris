@@ -11,7 +11,7 @@ namespace NINA.Polaris.Services.Plugins;
 /// add a reload endpoint), and invokes <see cref="INinaPolarisPlugin.Register"/>
 /// on every implementation found.
 ///
-/// Failures are logged and isolated — one broken plugin does not stop the
+/// Failures are logged and isolated, one broken plugin does not stop the
 /// host or block the others.
 /// </summary>
 public class PluginLoaderService : IHostedService {
@@ -76,7 +76,7 @@ public class PluginLoaderService : IHostedService {
                 }
             }
         } catch (BadImageFormatException) {
-            // Not a managed assembly — silently skip
+            // Not a managed assembly, silently skip
         } catch (Exception ex) {
             _logger.LogWarning(ex, "Could not load {Path}", path);
         }

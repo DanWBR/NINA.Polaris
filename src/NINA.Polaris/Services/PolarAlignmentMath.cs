@@ -16,7 +16,7 @@ namespace NINA.Polaris.Services;
 ///     rotation axis (not the celestial pole).
 ///   - Pick any 3 points along that small circle (mount tracking
 ///     ON for a few seconds, then we slew the mount in RA, then
-///     a second short tracking interval — equivalently three
+///     a second short tracking interval, equivalently three
 ///     RA-offset samples). The unit vectors to those three points
 ///     lie on the plane of the small circle. The plane's normal is
 ///     the mount's polar axis direction.
@@ -25,7 +25,7 @@ namespace NINA.Polaris.Services;
 ///     az) error vector.
 ///
 /// This implementation works in the topocentric Alt/Az frame so
-/// the error directly comes out as (azError, altError) in arcsec —
+/// the error directly comes out as (azError, altError) in arcsec,
 /// matching what the user needs to adjust on the mount knobs.
 /// </summary>
 public static class PolarAlignmentMath {
@@ -77,7 +77,7 @@ public static class PolarAlignmentMath {
         return (azErrDeg * 3600.0, altErrDeg * 3600.0);
     }
 
-    /// <summary>Total angular error magnitude in arcsec — what the UI
+    /// <summary>Total angular error magnitude in arcsec, what the UI
     /// arrow's length encodes.</summary>
     public static double TotalErrorArcsec(double azErrSec, double altErrSec) {
         return Math.Sqrt(azErrSec * azErrSec + altErrSec * altErrSec);
@@ -111,7 +111,7 @@ public static class PolarAlignmentMath {
         double altRad = Math.Asin(Math.Clamp(sinAlt, -1.0, 1.0));
 
         // Azimuth measured from north, increasing eastward (typical
-        // astronomy convention — N=0°, E=90°, S=180°, W=270°).
+        // astronomy convention, N=0°, E=90°, S=180°, W=270°).
         double sinAz = -Math.Cos(decRad) * Math.Sin(haRad);
         double cosAz = Math.Sin(decRad) * Math.Cos(latRad)
                      - Math.Cos(decRad) * Math.Sin(latRad) * Math.Cos(haRad);
@@ -153,10 +153,10 @@ public static class PolarAlignmentMath {
 
     /// <summary>Local Sidereal Time at the given UTC instant +
     /// observer longitude (east positive, degrees). Returned in
-    /// hours [0, 24). Meeus formula 12.4 — good to a few seconds
+    /// hours [0, 24). Meeus formula 12.4, good to a few seconds
     /// over decades, far better than TPPA needs.</summary>
     private static double LocalSiderealHours(DateTime utc, double longDeg) {
-        // Julian Date — DateTime.ToOADate() returns days since 1899-12-30 12:00 UT.
+        // Julian Date, DateTime.ToOADate() returns days since 1899-12-30 12:00 UT.
         double jd = utc.ToOADate() + 2415018.5;
         double t = (jd - 2451545.0) / 36525.0;
 

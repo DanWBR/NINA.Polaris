@@ -2,7 +2,7 @@
 
 Polaris ships with a one-click button to spawn a **fake telescope +
 camera + focuser + filter wheel** so you can drive the whole pipeline
-— sequencer, plate solve, live stacking, auto-focus — without
+, sequencer, plate solve, live stacking, auto-focus, without
 plugging a single cable. Great for:
 
 - Smoke-testing a fresh install on a new Pi / mini-PC
@@ -12,7 +12,7 @@ plugging a single cable. Great for:
   cloudy or before your first real session
 
 The simulated camera **renders real stars** from the GSC catalog
-based on the simulated mount's RA/Dec — slew to M31, see M31; bump
+based on the simulated mount's RA/Dec, slew to M31, see M31; bump
 the focuser, HFR climbs; trigger a dither, the field shifts. It's
 not a flat synthetic pattern, it's a believable mini-sky.
 
@@ -44,11 +44,11 @@ install command.
    list of available devices populates.
 
 3. **Pick devices** (default is Camera + Telescope + Focuser + Filter
-   Wheel — sensible for most testing). Guide / Dome / Weather are
-   optional checkboxes — toggle them on if you want to test PHD2
+   Wheel, sensible for most testing). Guide / Dome / Weather are
+   optional checkboxes, toggle them on if you want to test PHD2
    dithering, dome slaving, weather-safety triggers.
 
-4. **Set the INDI port** (default 7624 — leave alone unless something
+4. **Set the INDI port** (default 7624, leave alone unless something
    else on the host already uses it).
 
 5. **(Optional)** Tick **Auto-start when Polaris boots** if you want
@@ -69,7 +69,7 @@ install command.
 
 9. **SKY tab → search M31 → Go to** → the simulated mount slews; the
    next capture shows M31's stars. Plate solve actually works
-   against this — it's a real catalog projection, not noise.
+   against this, it's a real catalog projection, not noise.
 
 10. **Live stack → Stack ON** → frames accumulate normally, HFR is
     consistent because the simulated focuser is perfect by default.
@@ -100,16 +100,16 @@ install command.
 
 5. The rest of the workflow is identical to Linux.
 
-**Caveat — no live add/remove on Windows.** The Omni Simulator
+**Caveat, no live add/remove on Windows.** The Omni Simulator
 serves every device type simultaneously; there's no equivalent to
 the INDI FIFO that lets us toggle drivers on a running server. The
 device-list checkboxes in the Settings panel hide their "live toggle"
 behaviour on Windows and show a banner saying so. To actually change
 which devices are available, you Stop the simulator and restart it.
-In practice this is rarely a problem — Omni Sim runs all device
+In practice this is rarely a problem, Omni Sim runs all device
 types out of the box, and you pick which to *connect* in RIGS.
 
-**Adopting an already-running Omni Sim** — if you started the
+**Adopting an already-running Omni Sim**, if you started the
 Omni Simulator from the start menu before opening Polaris,
 Re-detect picks it up and Launch is a no-op success. Shutdown
 will close it cleanly.
@@ -120,7 +120,7 @@ will close it cleanly.
   Stop (or shut Polaris down without auto-restart), the simulator
   drivers go with it.
 - The simulator's stdout/stderr lands in the Polaris log at
-  `Debug` level — tail your `journalctl -u nina-polaris` (systemd)
+  `Debug` level, tail your `journalctl -u nina-polaris` (systemd)
   or the terminal where you launched Polaris to see driver output
   in real time.
 - If `indiserver` crashes mid-session, the chip flips to "Stopped"
@@ -136,10 +136,10 @@ will close it cleanly.
 - **Dithering via PHD2** works if you also tick the **Guide**
   checkbox (spawns `indi_simulator_guide` for the guide camera).
 - **DSLR-specific paths** (Canon EDSDK, Nikon SDK, Sony SDK) don't
-  appear — the simulator is INDI / Alpaca only. To test those code
+  appear, the simulator is INDI / Alpaca only. To test those code
   paths you need the real vendor SDK.
 - **Hardware-specific quirks** (USB disconnects, cooler runaway,
-  USB-power brownouts) aren't reproducible — the simulator is too
+  USB-power brownouts) aren't reproducible, the simulator is too
   clean. Real-hardware testing is still required for the failure
   modes Polaris tries to recover from.
 
@@ -152,30 +152,30 @@ panel.
 
 **Devices show up in RIGS but Connect fails**
 The simulator driver started but the device-specific connect
-sequence failed. Tail the Polaris log — `indi_simulator_*` prints
+sequence failed. Tail the Polaris log, `indi_simulator_*` prints
 a clear error per device. Common cause: simulating filter wheel
 with zero filter slots; just stop + relaunch.
 
 **Auto-start doesn't fire**
 The toggle lives in `UserProfile.SimulatorAutoStart` (persisted to
-`profile.json`). If you changed it via the API, restart Polaris —
+`profile.json`). If you changed it via the API, restart Polaris,
 the toggle is only read once at boot. UI-toggle changes ARE picked
 up immediately for the next manual launch, but the auto-start
 service only checks once per app start.
 
 **Windows: Omni Simulator detected but Connect from Polaris fails**
-Confirm the Omni Sim is actually serving — open
+Confirm the Omni Sim is actually serving, open
 `http://localhost:32323/management/v1/configureddevices` in a browser,
 you should see a JSON list. If it 404s, the Omni Sim isn't running
 or is on a different port.
 
 ## See also
 
-- [`docs/user-guide/rpi-debug-from-vs.md`](rpi-debug-from-vs.md) —
+- [`docs/user-guide/rpi-debug-from-vs.md`](rpi-debug-from-vs.md),
   remote debug Polaris on the Pi from Visual Studio (pairs nicely
   with simulator mode for "dev iteration without leaving the desk")
-- [`docs/user-guide/installation.md`](installation.md) — full Polaris
+- [`docs/user-guide/installation.md`](installation.md), full Polaris
   install
 - [INDI simulator documentation](https://www.indilib.org/devices/auxiliary/ccd-simulator.html)
-  — what knobs you can tweak in the simulated CCD (FWHM, jitter,
+ , what knobs you can tweak in the simulated CCD (FWHM, jitter,
   noise) via the INDI control panel

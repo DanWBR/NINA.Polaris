@@ -6,7 +6,7 @@ namespace NINA.Polaris.Services;
 /// Math (LST + hour angle + time-to-meridian) is static so it can be
 /// unit-tested without any equipment. The runtime flip workflow:
 ///   1. Pause guiding (PHD2) if running
-///   2. Re-slew to the current target — mount firmware flips when crossing
+///   2. Re-slew to the current target, mount firmware flips when crossing
 ///      the meridian threshold
 ///   3. Wait for IsSlewing to clear + settle delay
 ///   4. Plate solve + center via SlewCenterService
@@ -14,7 +14,7 @@ namespace NINA.Polaris.Services;
 ///   6. Resume guiding
 ///
 /// The service is driven by the SequenceEngine between frames. It only
-/// reads mount state — never holds it for long — so a manual flip can be
+/// reads mount state, never holds it for long, so a manual flip can be
 /// triggered at any time without conflicting with the sequence.
 /// </summary>
 public class MeridianFlipService {
@@ -96,8 +96,8 @@ public class MeridianFlipService {
         // Normalise HA to -12..+12
         while (ha > 12) ha -= 24;
         while (ha < -12) ha += 24;
-        if (ha <= 0) return -ha; // rising target — meridian crossing is in (0..12]
-        return 24 - ha;          // already past — wraps to next sidereal day
+        if (ha <= 0) return -ha; // rising target, meridian crossing is in (0..12]
+        return 24 - ha;          // already past, wraps to next sidereal day
     }
 
     /// <summary>
@@ -151,7 +151,7 @@ public class MeridianFlipService {
                 }
             }
 
-            // 2. Re-slew to target — mount firmware decides to flip based on its own
+            // 2. Re-slew to target, mount firmware decides to flip based on its own
             // meridian-limit configuration. Most ASCOM/INDI mounts auto-flip on any
             // slew that crosses the limit.
             State = MeridianFlipState.Slewing;
@@ -198,7 +198,7 @@ public class MeridianFlipService {
                         await Task.Delay(1000, _cts.Token);
                     }
                 } catch (Exception ex) {
-                    _logger.LogWarning(ex, "Post-flip auto-focus failed — continuing");
+                    _logger.LogWarning(ex, "Post-flip auto-focus failed, continuing");
                 }
             }
 
@@ -256,7 +256,7 @@ public class MeridianFlipService {
 
     private async Task WaitForSlewComplete(CancellationToken ct) {
         if (_equip.Telescope == null) return;
-        for (int i = 0; i < 600; i++) { // up to 10 min — flip can be slow
+        for (int i = 0; i < 600; i++) { // up to 10 min, flip can be slow
             ct.ThrowIfCancellationRequested();
             if (!_equip.Telescope.IsSlewing) {
                 await Task.Delay(500, ct); // brief settle

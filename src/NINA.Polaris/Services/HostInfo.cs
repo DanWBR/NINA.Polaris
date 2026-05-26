@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 namespace NINA.Polaris.Services;
 
 /// <summary>
-/// Read-once host identification — what kind of machine is Polaris
+/// Read-once host identification, what kind of machine is Polaris
 /// running on. Shown in the activity bar so the user (and remote
 /// support) can see at a glance "Raspberry Pi 5 / Linux arm64" vs
 /// "Intel NUC11 / Windows 11 x64".
@@ -63,14 +63,14 @@ public static class HostInfo {
     }
 
     /// <summary>Linux detection priority:
-    /// 1. <c>/proc/device-tree/model</c> — single source of truth on
+    /// 1. <c>/proc/device-tree/model</c>, single source of truth on
     ///    Raspberry Pi + most ARM SBCs (NVIDIA Jetson, Rock Pi, ...).
-    /// 2. <c>/sys/class/dmi/id/{sys_vendor,product_name}</c> — x86
+    /// 2. <c>/sys/class/dmi/id/{sys_vendor,product_name}</c>, x86
     ///    standard, populated on basically every modern PC/server/laptop.
-    /// 3. <c>/sys/class/dmi/id/{board_vendor,board_name}</c> —
+    /// 3. <c>/sys/class/dmi/id/{board_vendor,board_name}</c>,
     ///    motherboard fallback when product_name is an OEM placeholder
     ///    ("System Product Name", "All Series", "Default string", ...).
-    /// 4. <c>/proc/cpuinfo</c> "Model" line — older RPi fallback.
+    /// 4. <c>/proc/cpuinfo</c> "Model" line, older RPi fallback.
     /// 5. CPU model + "Custom build" as last resort.</summary>
     internal static (string Kind, string Model) DetectLinux() {
         // 1. device-tree (RPi, Jetson, Rock Pi, Odroid, ...)
@@ -91,7 +91,7 @@ public static class HostInfo {
             return (ClassifyLinuxModel(combined!), combined!);
         }
 
-        // 3. DMI board (motherboard) — fills in for DIY builds where
+        // 3. DMI board (motherboard), fills in for DIY builds where
         //    sys_vendor/product_name are OEM placeholders
         var boardVendor = ReadFirstLine("/sys/class/dmi/id/board_vendor");
         var boardName = ReadFirstLine("/sys/class/dmi/id/board_name");
@@ -100,7 +100,7 @@ public static class HostInfo {
             return (ClassifyLinuxModel(boardCombined!), boardCombined!);
         }
 
-        // 4. /proc/cpuinfo "Model" line — old RPi 1/2/3 firmware
+        // 4. /proc/cpuinfo "Model" line, old RPi 1/2/3 firmware
         try {
             foreach (var line in File.ReadLines("/proc/cpuinfo")) {
                 if (line.StartsWith("Model", StringComparison.OrdinalIgnoreCase)) {
@@ -136,12 +136,12 @@ public static class HostInfo {
     /// Win32_ComputerSystem.Model as a placeholder
     /// ("System Product Name", "All Series", "To Be Filled By O.E.M.",
     /// etc.):
-    /// 1. Win32_ComputerSystem.{Manufacturer,Model} — works for laptops
+    /// 1. Win32_ComputerSystem.{Manufacturer,Model}, works for laptops
     ///    + branded desktops + servers + every VM
-    /// 2. Win32_BaseBoard.{Manufacturer,Product} — motherboard. For
+    /// 2. Win32_BaseBoard.{Manufacturer,Product}, motherboard. For
     ///    a DIY PC this often reads "ASUS PRIME X670-P" / "MSI MAG B650"
     ///    which is what the user actually identifies the build by
-    /// 3. CPU model + "Custom build" — last resort so the chip is
+    /// 3. CPU model + "Custom build", last resort so the chip is
     ///    never just "ASUS System Product Name"
     /// </summary>
     internal static (string Kind, string Model) DetectWindows() {
@@ -171,7 +171,7 @@ public static class HostInfo {
 
     /// <summary>Map a verbose model string to a short device kind so
     /// the UI can pick an icon (raspberry / mini-pc / pc / server /
-    /// generic). String matching only — no syscalls.</summary>
+    /// generic). String matching only, no syscalls.</summary>
     internal static string ClassifyLinuxModel(string model) {
         var m = model.ToLowerInvariant();
         if (m.Contains("raspberry pi")) return "raspberry-pi";
@@ -242,7 +242,7 @@ public static class HostInfo {
         // following " ") and would otherwise leave a dangling period.
         s = Regex.Replace(s, @"\s+(Inc\.?|Corporation|Computer|Computers|LLC|Ltd\.?|Co\.?\s*Ltd\.?)(?=\s|$)", "", RegexOptions.IgnoreCase);
         s = Regex.Replace(s, @"\s{2,}", " ").Trim();
-        // Truncate at 56 chars (was 48) — CPU-fallback strings like
+        // Truncate at 56 chars (was 48), CPU-fallback strings like
         // "Custom build · Intel Core i7-12700K" need a bit more room.
         return s.Length > 56 ? s[..53] + "..." : s;
     }
@@ -260,7 +260,7 @@ public static class HostInfo {
 
     /// <summary>Strip the marketing-y noise out of a CPU brand string.
     /// Intel reports "Intel(R) Core(TM) i7-12700K CPU @ 3.60GHz",
-    /// AMD reports "AMD Ryzen 9 7950X 16-Core Processor" — neither
+    /// AMD reports "AMD Ryzen 9 7950X 16-Core Processor", neither
     /// adds value past the model number when shown in a status bar.</summary>
     internal static string? NormaliseCpuName(string? raw) {
         if (string.IsNullOrWhiteSpace(raw)) return null;
@@ -289,7 +289,7 @@ public static class HostInfo {
     /// <summary>Detect CPU max clock speed in MHz. Preferred source is
     /// the cpufreq sysfs (always accurate, accounts for turbo bins);
     /// falls back to /proc/cpuinfo's "cpu MHz" line which reports the
-    /// CURRENT scaled clock — close enough for display purposes when
+    /// CURRENT scaled clock, close enough for display purposes when
     /// cpufreq isn't exposed (containers, custom kernels). Returns
     /// null on systems where neither source works.</summary>
     internal static int? DetectLinuxCpuFrequencyMhz() {
@@ -390,7 +390,7 @@ public static class HostInfo {
 /// <param name="Architecture">x64 / arm64 / x86 / arm.</param>
 /// <param name="Cores">Logical processor count.</param>
 /// <param name="ShortLabel">Trimmed label suitable for the activity
-/// bar — manufacturer noise and silicon-revision suffixes removed,
+/// bar, manufacturer noise and silicon-revision suffixes removed,
 /// capped at 56 chars.</param>
 /// <param name="Cpu">Normalised CPU brand string ("Intel Core i7-12700K",
 /// "AMD Ryzen 9 7950X", "ARM Cortex-A76") with the vendor noise

@@ -1,4 +1,4 @@
-# NINA.Polaris — Architecture
+# NINA.Polaris, Architecture
 
 This is the ASP.NET Core host. It's where ~90% of the business logic
 lives. Everything else in the solution (NINA.INDI, NINA.Image.Portable,
@@ -15,7 +15,7 @@ For the big picture (cross-project diagram, request flows), see the
 src/NINA.Polaris/
   Program.cs                 # composition root + middleware pipeline
   appsettings.json           # config (INDI host/port, image dir, PHD2, Relay)
-  Endpoints/                 # REST surface — one file per resource group
+  Endpoints/                 # REST surface, one file per resource group
   WebSocket/                 # /ws/status + /ws/image-stream handlers
   Services/                  # all business logic; mostly DI singletons
     Alpaca/                  # ASCOM Alpaca HTTP client + device wrappers
@@ -40,7 +40,7 @@ src/NINA.Polaris/
 `Program.cs` is the single source of truth for **what runs at startup**.
 Roughly in this order:
 
-1. `WebApplication.CreateBuilder(args)` — standard ASP.NET Core bootstrap
+1. `WebApplication.CreateBuilder(args)`, standard ASP.NET Core bootstrap
 2. **Service registration**:
    - Foundation singletons (`ProfileService`, `EquipmentManager`,
      `SkyCatalogService`, ...)
@@ -100,7 +100,7 @@ Rules of thumb:
 - One file per logical resource. `CameraEndpoints` owns `/api/camera/*`,
   `TelescopeEndpoints` owns `/api/telescope/*`, etc.
 - The handler is a single expression or short method. **No business
-  logic in the endpoint file** — push it into the service.
+  logic in the endpoint file**, push it into the service.
 - DTOs are inline `record`s defined at the top of the file.
 - Errors that map to HTTP shape (404, 409, 400 with message) use
   `Results.NotFound(...)` / `Results.Conflict(...)` etc. Domain
@@ -147,13 +147,13 @@ public class FooService {
 
 Conventions:
 
-- **Status snapshots are records** — immutable, replaced wholesale on
+- **Status snapshots are records**, immutable, replaced wholesale on
   change. The UI never mutates them.
 - **`StatusChanged` event** fires once per update. `StatusStreamHandler`
-  doesn't subscribe per service — it polls `.CurrentStatus` of each
+  doesn't subscribe per service, it polls `.CurrentStatus` of each
   injected service every 1Hz and broadcasts the merged payload.
 - **Async everything**. Sync helpers are an anti-pattern in this project.
-- **`ILogger<T>` is structured** — `_logger.LogInformation("Captured
+- **`ILogger<T>` is structured**, `_logger.LogInformation("Captured
   {Count} frames in {Elapsed}ms", n, ms)`. Never `string.Format`.
 - **CancellationToken default(default)** on every IO method, so callers
   can opt out by passing nothing.
@@ -176,7 +176,7 @@ They share a pattern:
    `StatusStreamHandler`.
 5. `AbortJob(jobId)` flips a CTS that the running task observes.
 
-When you add a new long-running job, copy this shape — the UI already
+When you add a new long-running job, copy this shape, the UI already
 knows how to render phase + progress for any job that follows it.
 
 ## The WebSocket/ handlers
@@ -208,13 +208,13 @@ Two endpoints, two very different cadences:
 - Bridges an xterm.js terminal in the browser to a real SSH shell
   on the configured host via SSH.NET (`Renci.SshNet`)
 - One WebSocket = one SSH session. First WS frame is a JSON
-  `{type:"auth", host, port, user, password, cols, rows}` —
+  `{type:"auth", host, port, user, password, cols, rows}`,
   credentials live only in memory for the socket's lifetime,
   never persisted, no auto-reconnect
 - Bidirectional pump: client keystrokes → SSH stdin; SSH stdout
   → WebSocket text frames at ~50 ms polling. Resize via JSON
   `{type:"resize", cols, rows}` forwarded to the SSH PTY
-- Gated by `Terminal:Enabled = true` in `appsettings.json` —
+- Gated by `Terminal:Enabled = true` in `appsettings.json`,
   returns 403 otherwise so a deploy without opt-in has zero
   shell-exposure surface
 - 10-minute idle watchdog closes abandoned sessions server-side
@@ -230,25 +230,25 @@ halts mid-flight rather than completing the in-flight `SlewAsync`
 before stopping. The frontend's "panic Stop" affordance
 (top-centre overlay on the SKY map) calls a single
 `stopAnySlew()` helper that hits both `cancelSlewCenter()` AND
-`/api/telescope/abort` unconditionally — so a raw "Slew Only"
+`/api/telescope/abort` unconditionally, so a raw "Slew Only"
 (no job id) also stops via the second branch.
 
 ## Frontend (wwwroot/)
 
 No build pipeline. The HTML is the HTML, the JS is the JS.
 
-- `index.html` — the entire DOM tree. Tabs are `<div x-show="tab ===
+- `index.html`, the entire DOM tree. Tabs are `<div x-show="tab ===
   'foo'">` panels.
-- `js/app.js` — a single Alpine.js component object. State at the top,
+- `js/app.js`, a single Alpine.js component object. State at the top,
   methods underneath. Methods are grouped loosely by feature (rigs,
   sky, preview, autorun, ...).
-- `js/lib/` — vendored third-party libraries (Chart.js, Aladin Lite,
+- `js/lib/`, vendored third-party libraries (Chart.js, Aladin Lite,
   OpenSeadragon, suncalc, sortable.js, ...). Each has an adjacent
   `LICENSE` file with attribution.
-- `css/app.css` — single stylesheet, BEM-ish class naming
+- `css/app.css`, single stylesheet, BEM-ish class naming
   (`.equip-card`, `.equip-card-header`, ...). No SASS / Tailwind.
 
-The WebSocket payload is absorbed in `handleStatusMessage(msg)` — a
+The WebSocket payload is absorbed in `handleStatusMessage(msg)`, a
 giant switch that dispatches each top-level key (`equipment`,
 `guider`, `liveStack`, ...) to its slot in component state.
 
@@ -288,9 +288,9 @@ If you're adding a feature that needs per-rig config:
 
 ## See also
 
-- [Root ARCHITECTURE.md](../../ARCHITECTURE.md) — system overview,
+- [Root ARCHITECTURE.md](../../ARCHITECTURE.md), system overview,
   cross-project Mermaid, request flows
-- [CONTRIBUTING.md](../../CONTRIBUTING.md) — how-to patterns (new INDI
+- [CONTRIBUTING.md](../../CONTRIBUTING.md), how-to patterns (new INDI
   device, sidebar tab, sequencer item, plate solver)
 - Sibling per-project ARCHITECTURE.md files in `src/NINA.INDI/`,
   `src/NINA.Image.Portable/`, ...

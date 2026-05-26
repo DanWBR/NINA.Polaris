@@ -20,7 +20,7 @@ public static class LiveStackEndpoints {
         group.MapPost("/reset", (LiveStackingService stack, LiveStackTriggersService triggers) => {
             stack.Reset();
             // Trigger state (last-refocus snapshot, reference RA/Dec, etc.)
-            // is meaningless after a stack reset — clear it too so the
+            // is meaningless after a stack reset, clear it too so the
             // next first frame re-establishes the reference.
             triggers.ResetTriggerState();
             return Results.Ok(new { status = "reset" });
@@ -70,7 +70,7 @@ public static class LiveStackEndpoints {
         // up so we can write it as a FITS into the rig's integrated/
         // directory and surface it in STUDIO via FrameLibraryService.
         //
-        // Wire format (kept simple — no multipart, no JSON-encoded
+        // Wire format (kept simple, no multipart, no JSON-encoded
         // pixels):
         //   POST /api/livestack/upload-result
         //     ?width=W&height=H&bitDepth=16&target=NAME&frameCount=N
@@ -105,7 +105,7 @@ public static class LiveStackEndpoints {
                 });
             }
 
-            // Reinterpret as ushort[] — same on-wire format the server
+            // Reinterpret as ushort[], same on-wire format the server
             // uses in raw-mode broadcasts, just travelling the other
             // direction now.
             var pixels = new ushort[width * height];
@@ -121,7 +121,7 @@ public static class LiveStackEndpoints {
             });
 
             // imageType="MASTER" routes through ImageWriterService's
-            // BuildSubDir to integrated/{target}/{filter}/ — same place
+            // BuildSubDir to integrated/{target}/{filter}/, same place
             // STUDIO ST-5 batch stacks land. From there
             // FrameLibraryService picks it up on next rescan.
             var saved = writer.SaveImage(image, targetName: target,

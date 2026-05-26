@@ -21,7 +21,7 @@ namespace NINA.Polaris.Services.Studio;
 ///     and cached on disk at {AppData}/NINA.Polaris/studio/thumbs/.
 ///
 /// Why not just glob the dir every time? A session with 2000 frames
-/// has ~120 MB of FITS headers — parsing them all on every UI refresh
+/// has ~120 MB of FITS headers, parsing them all on every UI refresh
 /// stalls the browser. Cached metadata responds in &lt;50 ms.
 /// </summary>
 public class FrameLibraryService {
@@ -302,7 +302,7 @@ public class FrameLibraryService {
 
     /// <summary>
     /// Generate (or return cached) thumbnail JPEG for a frame, 256 px on
-    /// the long side. Auto-stretched grayscale — good enough for browse.
+    /// the long side. Auto-stretched grayscale, good enough for browse.
     /// </summary>
     public async Task<string?> GetThumbnailAsync(int frameId, CancellationToken ct = default) {
         var row = GetById(frameId);

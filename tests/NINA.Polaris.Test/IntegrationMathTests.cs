@@ -6,7 +6,7 @@ namespace NINA.Polaris.Test;
 /// <summary>
 /// Pins the per-pixel reduction methods used by STUDIO master-frame
 /// integration. These are the heart of how darks, biases and flats
-/// collapse N raw frames into a single calibration master — a silent
+/// collapse N raw frames into a single calibration master, a silent
 /// regression here corrupts every subsequent calibration run.
 /// </summary>
 [TestFixture]
@@ -82,7 +82,7 @@ public class IntegrationMathTests {
     public void SigmaClippedMean_HotPixelRejected() {
         // 29 clean + 1 hot. With a small N like 10, a single extreme
         // outlier inflates the population σ so much that ±3σ still
-        // covers it — basic sigma-clip is known-weak on tiny samples.
+        // covers it, basic sigma-clip is known-weak on tiny samples.
         // Real master-dark stacks are 20+ frames; the typical "hot
         // pixel reads 65535 in one sub" pattern is what we need to
         // reject reliably here.

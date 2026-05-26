@@ -5,7 +5,7 @@ namespace NINA.Camera.CanonEdsdk.Native;
 /// upstream C symbols (kEdsPropID_*, kEdsCameraCommand_*, etc.) so the
 /// official EDSDK documentation translates directly to this file.
 ///
-/// Source: EDSDK 13.x/14.x — <c>EDSDKTypes.h</c>.
+/// Source: EDSDK 13.x/14.x, <c>EDSDKTypes.h</c>.
 /// </summary>
 public static class EdsdkConstants {
 
@@ -53,11 +53,11 @@ public static class EdsdkConstants {
     public const uint kEdsSaveTo_Both   = 3;
 
     // ---- Tv (shutter speed) enum values ---------------------------
-    // Subset of the full table — covers Bulb, 1/8000..1/1 and the
+    // Subset of the full table, covers Bulb, 1/8000..1/1 and the
     // common long exposures up to 30s. EDSDK exposes ~80 entries; we
     // ship the ones an astrophotography workflow actually needs.
     public static readonly (uint Code, double Seconds, string Label)[] TvTable = new[] {
-        (0x0Cu, 0.0,      "Bulb"),         // Bulb mode — shutter open until BulbEnd
+        (0x0Cu, 0.0,      "Bulb"),         // Bulb mode, shutter open until BulbEnd
         (0x10u, 30.0,     "30\""),
         (0x13u, 25.0,     "25\""),
         (0x15u, 20.0,     "20\""),
@@ -117,7 +117,7 @@ public static class EdsdkConstants {
 
     /// <summary>Find the closest Tv enum entry to <paramref name="seconds"/>.
     /// Exposures longer than the longest non-Bulb entry (30s) fall back to
-    /// the Bulb code (0x0C) — the caller has to drive BulbStart/BulbEnd
+    /// the Bulb code (0x0C), the caller has to drive BulbStart/BulbEnd
     /// itself.</summary>
     public static uint TvCodeFor(double seconds) {
         if (seconds > 30.0) return 0x0Cu;  // Bulb
@@ -131,7 +131,7 @@ public static class EdsdkConstants {
     }
 
     // ---- ISO speed enum -------------------------------------------
-    // Same approach as Tv — only the values DSLRs typically expose for
+    // Same approach as Tv, only the values DSLRs typically expose for
     // astrophotography. The "Auto" entry (0x00) is intentionally omitted;
     // automatic ISO doesn't make sense for predictable stacking.
     public static readonly (uint Code, int Iso)[] IsoTable = new[] {

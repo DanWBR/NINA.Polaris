@@ -5,7 +5,7 @@ namespace NINA.Polaris.Test;
 
 /// <summary>
 /// Tests for the pure-string helpers in HostInfo. The IO-heavy
-/// DetectLinux/DetectWindows are not unit-tested directly — they hit
+/// DetectLinux/DetectWindows are not unit-tested directly, they hit
 /// real /proc and WMI which differ per host; the classifier +
 /// label-builder + placeholder-detector logic is what's worth
 /// pinning down.
@@ -41,7 +41,7 @@ public class HostInfoTests {
     [Test]
     public void BuildShortLabel_StripsManufacturerNoise() {
         // Dell + similar OEMs love trailing "Inc.", "Corporation",
-        // "Computer" — drops them to keep the bar readable.
+        // "Computer", drops them to keep the bar readable.
         Assert.That(HostInfo.BuildShortLabel("linux", "Dell Inc. PowerEdge R720", null, "x64"),
             Is.EqualTo("Dell PowerEdge R720"));
         Assert.That(HostInfo.BuildShortLabel("linux", "Hewlett-Packard Corporation EliteBook 840", null, "x64"),
@@ -67,7 +67,7 @@ public class HostInfoTests {
     [Test]
     public void BuildShortLabel_UnknownModelWithCpu_FallsBackToCpu() {
         // When the OEM left a placeholder we want at least the CPU
-        // to identify the box — better than "Host (x64)".
+        // to identify the box, better than "Host (x64)".
         Assert.That(HostInfo.BuildShortLabel("windows", "Unknown", "AMD Ryzen 9 7950X", "x64"),
             Is.EqualTo("AMD Ryzen 9 7950X"));
     }
@@ -194,7 +194,7 @@ public class HostInfoTests {
     [Test]
     public void Current_HasNonEmptyFields() {
         // Best-effort detection should always populate every field
-        // with at least a fallback — the UI binds to ShortLabel
+        // with at least a fallback, the UI binds to ShortLabel
         // and expects a string. Cpu is optional (null on systems
         // that don't expose /proc/cpuinfo or WMI).
         var info = HostInfo.Current;
@@ -205,7 +205,7 @@ public class HostInfoTests {
         Assert.That(info.Cores, Is.GreaterThan(0));
         Assert.That(info.ShortLabel, Is.Not.Null.And.Not.Empty);
         // Cpu may legitimately be null on hosts where the underlying
-        // syscall failed (locked-down container, exotic kernel) —
+        // syscall failed (locked-down container, exotic kernel),
         // don't assert non-null here.
     }
 }

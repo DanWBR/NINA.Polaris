@@ -42,7 +42,7 @@ public class AltitudeService {
     public NightWindow ComputeNightWindow(DateTime? nightUtc = null) {
         var lat = _profile.Active.Latitude;
         var lon = _profile.Active.Longitude;
-        // Pick the date that contains local noon — the night "belongs" to the
+        // Pick the date that contains local noon, the night "belongs" to the
         // day on whose evening it begins.
         var anchor = nightUtc ?? DateTime.UtcNow;
         var localNoon = new DateTime(anchor.Year, anchor.Month, anchor.Day, 12, 0, 0, DateTimeKind.Utc)

@@ -2,7 +2,7 @@
 
 NINA-style tree-based sequence engine for multi-target unattended runs
 with conditions + triggers + branches. For simple flat lists, use
-[AUTORUN](autorun.md) instead — ADV is for the cases where flat lists
+[AUTORUN](autorun.md) instead, ADV is for the cases where flat lists
 fall short.
 
 ## When to use ADV vs AUTORUN
@@ -30,7 +30,7 @@ Three node types make up the tree:
   Meridian Flip Trigger, Dither After N Exposures, ...)
 
 Triggers attach to containers and apply to every instruction underneath
-them — so an "Auto-focus on Temperature Change" attached to a Deep Sky
+them, so an "Auto-focus on Temperature Change" attached to a Deep Sky
 Object container will fire AF whenever the threshold crosses during any
 instruction inside that target.
 
@@ -78,43 +78,43 @@ Altitude, Wait For Moon Below Horizon, Wait For Sun Below Horizon
 
 ## Conditions
 
-- **Loop Until Time** — datetime cutoff
-- **Loop Until Altitude** — target altitude drops below threshold
-- **Loop For N Exposures** — frame counter
-- **Loop For Duration** — wall-clock timer
-- **Loop While Safe** — checks weather safety
+- **Loop Until Time**, datetime cutoff
+- **Loop Until Altitude**, target altitude drops below threshold
+- **Loop For N Exposures**, frame counter
+- **Loop For Duration**, wall-clock timer
+- **Loop While Safe**, checks weather safety
 
 ## Triggers
 
-- **Auto Focus on Temperature Change** — Δ°C threshold
-- **Auto Focus on HFR Increase** — % above baseline
-- **Auto Focus on Time Elapsed** — interval
-- **Auto Focus on Filter Change** — fires after every filter swap
-- **Meridian Flip Trigger** — flips the mount when target crosses
-- **Dither After N Exposures** — dither cadence
-- **Center After Drift** — plate solve + re-center periodically
-- **Safety Trigger** — abort to safe state on weather event
+- **Auto Focus on Temperature Change**, Δ°C threshold
+- **Auto Focus on HFR Increase**, % above baseline
+- **Auto Focus on Time Elapsed**, interval
+- **Auto Focus on Filter Change**, fires after every filter swap
+- **Meridian Flip Trigger**, flips the mount when target crosses
+- **Dither After N Exposures**, dither cadence
+- **Center After Drift**, plate solve + re-center periodically
+- **Safety Trigger**, abort to safe state on weather event
 
 ## Migration from AUTORUN
 
-Open an AUTORUN sequence + click "Convert to Advanced" — Polaris
+Open an AUTORUN sequence + click "Convert to Advanced", Polaris
 generates an equivalent tree with each row mapped to a DeepSkyObject
 container.
 
 ## Common pitfalls
 
-**Sequence appears to do nothing** — a condition's gate is always
+**Sequence appears to do nothing**, a condition's gate is always
 false. Inspect the tree for `Loop While Safe` with no weather device.
 
-**Triggers fire infinitely** — your trigger condition matches a state
+**Triggers fire infinitely**, your trigger condition matches a state
 that the action doesn't reset. Example: Auto-focus on HFR Increase
 without setting a baseline → fires every frame. Fix: combine with a
 "every N frames" trigger as a floor.
 
-**Lost the work** — JSON Save isn't automatic. Save manually before
+**Lost the work**, JSON Save isn't automatic. Save manually before
 running long sessions.
 
 ## See also
 
-- [AUTORUN](autorun.md) — simpler alternative
+- [AUTORUN](autorun.md), simpler alternative
 - [Glossary → various](GLOSSARY.md)

@@ -8,7 +8,7 @@ namespace NINA.Relay.Server;
 /// configured rate.
 ///
 /// A limit value of 0 disables that particular bucket (effectively unlimited).
-/// Thread-safe via a single lock per limiter — fine at the scale of one
+/// Thread-safe via a single lock per limiter, fine at the scale of one
 /// limiter per active tenant.
 /// </summary>
 public class TenantRateLimiter {
@@ -79,7 +79,7 @@ public class TenantRateLimiter {
 
     /// <summary>
     /// Charge bytes only (no request count). Used for response bodies after
-    /// the request has already been admitted — counted but never blocks the
+    /// the request has already been admitted, counted but never blocks the
     /// in-flight response.
     /// </summary>
     public void ChargeBytes(long bytes) {

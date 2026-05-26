@@ -23,7 +23,7 @@ public interface ISimulatorBackend {
 
     /// <summary>True when the current OS can in principle host this
     /// backend. Returns false on a Windows host for the INDI backend
-    /// and on a Linux host for the ASCOM backend — the orchestrator
+    /// and on a Linux host for the ASCOM backend, the orchestrator
     /// uses this to refuse to register a backend it can't drive.</summary>
     bool IsSupported { get; }
 
@@ -31,7 +31,7 @@ public interface ISimulatorBackend {
     /// reports the binaries aren't on the host yet.</summary>
     string DownloadInstructionsUrl { get; }
 
-    /// <summary>Probe the host for the simulator binaries. Cheap —
+    /// <summary>Probe the host for the simulator binaries. Cheap,
     /// shells out to <c>which</c> / reads a registry key. Cached by
     /// <c>SimulatorService.LastDetect</c>; only re-run on user click
     /// or service restart.</summary>
@@ -44,12 +44,12 @@ public interface ISimulatorBackend {
     /// (not thrown) so the WS payload + UI surface them cleanly.</summary>
     Task<bool> LaunchAsync(SimulatorLaunchRequest req, CancellationToken ct = default);
 
-    /// <summary>Graceful shutdown — SIGTERM (or equivalent) first
+    /// <summary>Graceful shutdown, SIGTERM (or equivalent) first
     /// with a short timeout, then force-kill. Idempotent: safe to
     /// call when nothing's running. Doesn't error.</summary>
     Task ShutdownAsync(CancellationToken ct = default);
 
-    /// <summary>Cheap TCP probe — does the simulator service answer
+    /// <summary>Cheap TCP probe, does the simulator service answer
     /// on its expected port? Used by the orchestrator's periodic
     /// health check to surface crashes ("was running, now isn't")
     /// without us polling subprocess exit codes.</summary>
@@ -122,7 +122,7 @@ public static class SimulatorDeviceTags {
         Ccd, Telescope, Focus, Wheel, Guide, Dome, Weather
     };
 
-    /// <summary>Default selection for a fresh install — covers
+    /// <summary>Default selection for a fresh install, covers
     /// every workflow that doesn't involve guide-cam dithering
     /// or dome slaving. Keeps RAM usage on a Pi 2 sane.</summary>
     public static readonly IReadOnlyList<string> Defaults = new[] {

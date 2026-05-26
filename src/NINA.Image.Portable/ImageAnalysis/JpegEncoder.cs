@@ -4,7 +4,7 @@ namespace NINA.Image.ImageAnalysis;
 
 public static class JpegHelper {
     public static byte[] EncodeGrayscale(byte[] grayscalePixels, int width, int height, int quality = 85) {
-        // Sanity bail-outs — the previous code would silently produce
+        // Sanity bail-outs, the previous code would silently produce
         // a 0×0 / pixel-less bitmap and then explode inside
         // canvas.DrawBitmap with "ArgumentNullException: image".
         if (grayscalePixels == null) {
@@ -22,7 +22,7 @@ public static class JpegHelper {
 
         // Copy pixels into a Gray8 SKBitmap. InstallPixels takes ownership
         // of an SKImageInfo + the pinned buffer so SkiaSharp doesn't have
-        // to free it — safer than the fixed-pointer + SetPixels pattern,
+        // to free it, safer than the fixed-pointer + SetPixels pattern,
         // which left the bitmap with a pixel pointer SkiaSharp might
         // dereference after our fixed{} block ended.
         var info = new SKImageInfo(width, height, SKColorType.Gray8, SKAlphaType.Opaque);
@@ -38,7 +38,7 @@ public static class JpegHelper {
             grayscalePixels, 0, pixelsPtr,
             (int)System.Math.Min(grayscalePixels.Length, width * height));
 
-        // Encode Gray8 directly — modern SkiaSharp's JPEG encoder
+        // Encode Gray8 directly, modern SkiaSharp's JPEG encoder
         // handles single-channel input; the old "Gray8 → RGBA →
         // encode" detour caused the null-image crash because the
         // intermediate DrawBitmap path required an SKImage that

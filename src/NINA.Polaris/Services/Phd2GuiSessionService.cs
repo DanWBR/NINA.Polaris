@@ -25,7 +25,7 @@ namespace NINA.Polaris.Services;
 ///   xpra start :100 --start=phd2 --html=on --bind-tcp=127.0.0.1:14600 \
 ///        --daemon=yes --systemd-run=no --no-pulseaudio
 /// </code>
-/// Bind on 127.0.0.1 only — Polaris reverse-proxies /phd2-gui/* to it,
+/// Bind on 127.0.0.1 only, Polaris reverse-proxies /phd2-gui/* to it,
 /// so the public surface (auth, TLS via Relay) stays unified.
 /// </summary>
 public class Phd2GuiSessionService : BackgroundService {
@@ -43,7 +43,7 @@ public class Phd2GuiSessionService : BackgroundService {
 
     /// <summary>True when the current CPU architecture has a working
     /// xpra + Xorg-dummy stack. ARMv7 32-bit (Raspberry Pi 2 / 3
-    /// with 32-bit Raspbian) is excluded — xpra installs from apt but
+    /// with 32-bit Raspbian) is excluded, xpra installs from apt but
     /// crashes at session start: the dummy Xorg driver is unreliable
     /// on 32-bit ARM and several Python/GTK deps don't behave. Pi 4+
     /// with the 64-bit Raspberry Pi OS is fine.
@@ -84,17 +84,17 @@ public class Phd2GuiSessionService : BackgroundService {
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
         if (!IsSupportedOs) {
-            _logger.LogInformation("Phd2GuiSessionService: OS {Os} not supported (Linux only) — service idle",
+            _logger.LogInformation("Phd2GuiSessionService: OS {Os} not supported (Linux only), service idle",
                 RuntimeInformation.OSDescription);
             LastError = UnsupportedReason;
             return;
         }
         if (!IsSupportedArch) {
-            // Don't even try to detect xpra on 32-bit ARM — install
+            // Don't even try to detect xpra on 32-bit ARM, install
             // succeeds via apt but session-start crashes; better to
             // surface the limitation cleanly upfront than to let the
             // user click Start and get a confusing process-died log.
-            _logger.LogInformation("Phd2GuiSessionService: architecture {Arch} not supported (xpra unstable on 32-bit ARM) — service idle",
+            _logger.LogInformation("Phd2GuiSessionService: architecture {Arch} not supported (xpra unstable on 32-bit ARM), service idle",
                 RuntimeInformation.OSArchitecture);
             LastError = UnsupportedReason;
             return;
@@ -102,7 +102,7 @@ public class Phd2GuiSessionService : BackgroundService {
 
         await DetectXpraAsync(stoppingToken);
         if (!XpraInstalled) {
-            _logger.LogInformation("Phd2GuiSessionService: xpra not found — install via 'sudo apt install xpra' to enable embedded PHD2 GUI");
+            _logger.LogInformation("Phd2GuiSessionService: xpra not found, install via 'sudo apt install xpra' to enable embedded PHD2 GUI");
         }
 
         // 3-second stagger so PHD2AutoStartService gets a head start (it may
@@ -113,12 +113,12 @@ public class Phd2GuiSessionService : BackgroundService {
 
         var autoStart = _config.GetValue("Phd2Gui:AutoStart", false);
         if (XpraInstalled && autoStart) {
-            _logger.LogInformation("Phd2GuiSessionService: AutoStart enabled — starting xpra session");
+            _logger.LogInformation("Phd2GuiSessionService: AutoStart enabled, starting xpra session");
             try { await StartSessionAsync(stoppingToken); }
             catch (Exception ex) { _logger.LogWarning(ex, "Auto-start of xpra session failed"); }
         }
 
-        // Periodic health check (every 15s) — refreshes SessionRunning
+        // Periodic health check (every 15s), refreshes SessionRunning
         // so the UI indicator stays accurate without polling.
         while (!stoppingToken.IsCancellationRequested) {
             try {
@@ -138,7 +138,7 @@ public class Phd2GuiSessionService : BackgroundService {
             XpraPath = which.stdout.Trim();
 
             var ver = await RunCommandAsync("xpra", "--version", ct);
-            // `xpra --version` prints "xpra v6.0" or "xpra version 6.0" — grab first token after "v"
+            // `xpra --version` prints "xpra v6.0" or "xpra version 6.0", grab first token after "v"
             var line = (ver.stdout + " " + ver.stderr).Trim();
             var idx = line.IndexOf('v');
             XpraVersion = idx >= 0 ? line[(idx + 1)..].Split(new[] { ' ', '\n', '\r' })[0] : "unknown";
@@ -174,7 +174,7 @@ public class Phd2GuiSessionService : BackgroundService {
             _logger.LogWarning("{Error}", LastError);
             return false;
         }
-        // xpra forks into the background — give it a moment then probe
+        // xpra forks into the background, give it a moment then probe
         for (int i = 0; i < 20; i++) {
             try { await Task.Delay(500, ct); } catch (TaskCanceledException) { return false; }
             if (await ProbeHealthAsync(ct)) {
@@ -207,7 +207,7 @@ public class Phd2GuiSessionService : BackgroundService {
         return await StartSessionAsync(ct);
     }
 
-    /// <summary>TCP probe — returns true if something is listening on 127.0.0.1:BindPort.</summary>
+    /// <summary>TCP probe, returns true if something is listening on 127.0.0.1:BindPort.</summary>
     private async Task<bool> ProbeHealthAsync(CancellationToken ct) {
         try {
             using var tcp = new TcpClient();

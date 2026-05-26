@@ -38,7 +38,7 @@ public class AutoFocusInstruction : SequenceInstruction {
 /// after every filter change without curating offsets for every filter.
 ///
 /// As a fallback, callers may set <see cref="OffsetSteps"/> directly to bypass
-/// the table — useful for ad-hoc tweaks that don't deserve a profile entry.
+/// the table, useful for ad-hoc tweaks that don't deserve a profile entry.
 /// </summary>
 public class MoveToFilterOffsetInstruction : SequenceInstruction {
     public override string Type => "MoveToFilterOffset";

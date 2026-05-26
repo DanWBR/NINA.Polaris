@@ -50,7 +50,7 @@ public static class SequenceJson {
 /// </summary>
 public class PolymorphicSubclassConverter<T> : JsonConverter<T> where T : ISequenceEntity {
     public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) {
-        // Read through the entity converter — it handles $type dispatch.
+        // Read through the entity converter, it handles $type dispatch.
         var entity = JsonSerializer.Deserialize<ISequenceEntity>(ref reader, options)
             ?? throw new JsonException("Null entity");
         if (entity is not T typed)
@@ -122,7 +122,7 @@ public class SequenceEntityJsonConverter : JsonConverter<ISequenceEntity> {
     };
 
     /// <summary>
-    /// Plugin-contributed entities — populated at startup by the plugin
+    /// Plugin-contributed entities, populated at startup by the plugin
     /// loader before the HTTP listener accepts requests. Read-only after
     /// startup so we don't need to lock on every Resolve call.
     /// </summary>
@@ -141,7 +141,7 @@ public class SequenceEntityJsonConverter : JsonConverter<ISequenceEntity> {
             ?? throw new InvalidOperationException($"Could not instantiate {entityType}");
         var type = sample.Type;
         if (string.IsNullOrWhiteSpace(type))
-            throw new InvalidOperationException($"{entityType}.Type is empty — plugins must return a stable discriminator");
+            throw new InvalidOperationException($"{entityType}.Type is empty, plugins must return a stable discriminator");
         if (Resolve(type) != null && Resolve(type) != entityType)
             throw new InvalidOperationException($"Sequencer entity discriminator '{type}' already registered by another type");
         _pluginTypes[type] = entityType;

@@ -22,7 +22,7 @@ public interface IPlateSolver {
     bool SupportsBlindSolve { get; }
 
     /// <summary>
-    /// Solve the given FITS file. Returns a successful or failed result —
+    /// Solve the given FITS file. Returns a successful or failed result,
     /// implementations should not throw for solver-level failures, only for
     /// programming errors. <paramref name="ct"/> may abort the underlying
     /// process and should always be respected.

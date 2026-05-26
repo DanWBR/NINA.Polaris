@@ -10,7 +10,7 @@ namespace NINA.Polaris.Services;
 /// Frame handler is awaited sequentially inside
 /// <see cref="LiveStackingService.AddFrameAsync"/>, so a slow trigger
 /// run (a 60-second AF sweep, a 30-second recenter) naturally pauses
-/// the upstream capture loop — no separate mutex needed. <see cref="_isExecuting"/>
+/// the upstream capture loop, no separate mutex needed. <see cref="_isExecuting"/>
 /// guards against a frame arriving mid-execution from triggering a
 /// second concurrent action.
 ///
@@ -30,7 +30,7 @@ public class LiveStackTriggersService : IDisposable {
     private readonly IDisposable _frameSub;
     private readonly object _stateLock = new();
 
-    // Trigger snapshot state — reset on LiveStack Reset() (we hook
+    // Trigger snapshot state, reset on LiveStack Reset() (we hook
     // FrameCount==1 to do it implicitly).
     private DateTime _lastRefocusAt = DateTime.MinValue;
     private int _lastRefocusFrame;
@@ -94,7 +94,7 @@ public class LiveStackTriggersService : IDisposable {
         _solver = solver;
         _logger = logger;
         _frameSub = _stack.SubscribeFrameIntegrated(OnFrameIntegratedAsync);
-        // Reset trigger state when the user switches rigs — they get a
+        // Reset trigger state when the user switches rigs, they get a
         // fresh slate per rig.
         _profiles.EquipmentProfileActivated += _ => ResetTriggerState();
     }
@@ -120,11 +120,11 @@ public class LiveStackTriggersService : IDisposable {
 
     private async Task OnFrameIntegratedAsync(LiveStackFrameInfo info) {
         // Reentry guard. If a previous trigger is still running, drop
-        // this frame's evaluation — no point queueing AFs back to back.
+        // this frame's evaluation, no point queueing AFs back to back.
         if (_isExecuting) return;
 
         // Frame 1 = bootstrap: kick the reference solve once (off the
-        // critical path — we don't want the first stack frame to block
+        // critical path, we don't want the first stack frame to block
         // for 5-10 seconds while ASTAP runs).
         if (info.FrameCount == 1) {
             ResetTriggerState();    // clear state from previous session
@@ -134,7 +134,7 @@ public class LiveStackTriggersService : IDisposable {
 
         var cfg = Settings;
 
-        // Refocus first — there's no point recenter'ing on a defocused
+        // Refocus first, there's no point recenter'ing on a defocused
         // frame, and AF takes longer than recenter so doing it now
         // amortises the pause better than splitting across two frames.
         if (cfg.RefocusEnabled && ShouldRefocus(info, cfg)) {
@@ -143,7 +143,7 @@ public class LiveStackTriggersService : IDisposable {
         }
 
         // Optional per-frame drift solve. Only run when the user has
-        // explicitly enabled it (it's expensive — full plate solve per
+        // explicitly enabled it (it's expensive, full plate solve per
         // frame). Result feeds into ShouldRecenter below.
         double? currentDrift = null;
         if (cfg.RecenterEnabled && cfg.RecenterDriftArcsec > 0 && _referenceSolved) {
@@ -164,7 +164,7 @@ public class LiveStackTriggersService : IDisposable {
         if (cfg.RefocusEveryMinutes > 0 && _lastRefocusAt != DateTime.MinValue
             && (info.At - _lastRefocusAt) >= TimeSpan.FromMinutes(cfg.RefocusEveryMinutes))
             return true;
-        // Time gate with no prior run — fire on first opportunity
+        // Time gate with no prior run, fire on first opportunity
         if (cfg.RefocusEveryMinutes > 0 && _lastRefocusAt == DateTime.MinValue
             && info.FrameCount > 1)
             return true;
@@ -175,7 +175,7 @@ public class LiveStackTriggersService : IDisposable {
             if (!double.IsNaN(t) && Math.Abs(t - _lastRefocusTempC) >= cfg.RefocusTempDeltaC)
                 return true;
         }
-        // HFR degradation gate — only meaningful once we have a baseline.
+        // HFR degradation gate, only meaningful once we have a baseline.
         if (cfg.RefocusHfrIncreasePercent > 0 && _lastRefocusHfr > 0
             && info.MedianHfr > 0
             && info.MedianHfr >= _lastRefocusHfr * (1 + cfg.RefocusHfrIncreasePercent / 100.0))
@@ -207,7 +207,7 @@ public class LiveStackTriggersService : IDisposable {
             _logger.LogInformation("Live-stack triggers: firing refocus at frame {N}", info.FrameCount);
             _autoFocus.Start(cfg.RefocusRequest);
             // Poll until idle. Cap at 5 minutes to avoid waiting forever
-            // on a hung AF (very unlikely — AutoFocusService has its own
+            // on a hung AF (very unlikely, AutoFocusService has its own
             // timeouts but defence in depth).
             var deadline = DateTime.UtcNow.AddMinutes(5);
             while (_autoFocus.State == AutoFocusState.Running && DateTime.UtcNow < deadline) {
@@ -236,7 +236,7 @@ public class LiveStackTriggersService : IDisposable {
 
     private async Task ExecuteRecenterAsync(LiveStackFrameInfo info, LiveStackTriggers cfg, double? observedDrift) {
         if (!_referenceSolved || _referenceRaHours == null || _referenceDecDeg == null) {
-            _lastError = "Recenter skipped — reference RA/Dec not solved";
+            _lastError = "Recenter skipped, reference RA/Dec not solved";
             return;
         }
         _isExecuting = true;
@@ -346,7 +346,7 @@ public class LiveStackTriggersService : IDisposable {
         return c * (180.0 / Math.PI) * 3600.0;
     }
 
-    /// <summary>Manual fire — bypasses all gates. Used by the UI
+    /// <summary>Manual fire, bypasses all gates. Used by the UI
     /// "▶ Now" button. Still respects the reentry guard.</summary>
     public async Task FireRefocusNowAsync() {
         if (_isExecuting) return;
@@ -371,7 +371,7 @@ public class LiveStackTriggersService : IDisposable {
     /// <summary>Map sentinel doubles (NaN, ±Infinity, optionally 0)
     /// to null so the JSON serializer doesn't throw. System.Text.Json
     /// rejects NaN/Infinity by default and there's no JsonNumberHandling
-    /// flag for "treat zero as not-set" — easier to normalise here
+    /// flag for "treat zero as not-set", easier to normalise here
     /// than to teach every consumer to ignore garbage values.</summary>
     private static double? SafeDouble(double v, bool zeroMeansUnset = false) {
         if (double.IsNaN(v) || double.IsInfinity(v)) return null;

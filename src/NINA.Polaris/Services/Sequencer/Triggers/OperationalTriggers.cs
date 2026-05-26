@@ -80,7 +80,7 @@ public class CenterAfterDriftTrigger : SequenceTrigger {
             if (status.State == SlewCenterState.Centered) return;
             if (status.State == SlewCenterState.Failed) {
                 ctx.Logger.LogWarning("CenterAfterDrift: re-center failed: {Err}", status.Error);
-                return; // soft fail — don't abort the sequence on a flaky solve
+                return; // soft fail, don't abort the sequence on a flaky solve
             }
             if (status.State == SlewCenterState.Cancelled) return;
             await Task.Delay(500, ct);

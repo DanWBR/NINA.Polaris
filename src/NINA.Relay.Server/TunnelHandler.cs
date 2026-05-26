@@ -72,7 +72,7 @@ public class TunnelHandler {
         }
 
         // Block at the door if the tenant has already burned through this
-        // month's byte quota — saves us holding an open tunnel that would
+        // month's byte quota, saves us holding an open tunnel that would
         // 402 on every proxied request.
         if (config != null && config.MonthlyBytes > 0) {
             var used = _usage.BytesThisMonth(token);

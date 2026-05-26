@@ -8,7 +8,7 @@ namespace NINA.Polaris.Services.Planetary;
 ///
 /// File path convention: {ImageOutputDir}/planetary/{TargetName}/{ISO-timestamp}.ser
 /// Auto-stops at MaxFrames or MaxDuration if either is configured.
-/// Drops frames silently if the writer falls behind (logged at debug —
+/// Drops frames silently if the writer falls behind (logged at debug,
 /// SER format can't tolerate gaps in the frame stream).
 /// </summary>
 public class VideoRecordingService : IDisposable {
@@ -46,12 +46,12 @@ public class VideoRecordingService : IDisposable {
     public void Start(RecordingConfig cfg) {
         lock (_lock) {
             if (IsRecording)
-                throw new InvalidOperationException("Recording already in progress — stop first");
+                throw new InvalidOperationException("Recording already in progress, stop first");
             var cam = _equip.Camera
                 ?? throw new InvalidOperationException("No camera connected");
             if (!_stream.IsRunning)
                 throw new InvalidOperationException(
-                    "Camera stream not running — start the stream first via /api/camera/stream/start");
+                    "Camera stream not running, start the stream first via /api/camera/stream/start");
 
             // Pick frame geometry from the camera's current state. SER's
             // header is locked at open time, so the user must not change
@@ -128,7 +128,7 @@ public class VideoRecordingService : IDisposable {
             // exotic we'd surface it as a writer ArgumentException.
             writer.WriteFrame(frame.Data, DateTime.UtcNow);
         } catch (Exception ex) {
-            _logger.LogDebug(ex, "Frame write failed — dropping");
+            _logger.LogDebug(ex, "Frame write failed, dropping");
             LastError = ex.Message;
             Interlocked.Increment(ref _droppedFrames);
         } finally { Monitor.Exit(_writeLock); }

@@ -6,7 +6,7 @@ namespace NINA.Image.Editor;
 /// to "Lightroom feel" ranges (mostly -1..1, exposure in stops) so sliders
 /// translate directly to user intuition and JSON sidecars stay human-readable.
 ///
-/// A `null` sub-record means "section at defaults, skip in the pipeline" —
+/// A `null` sub-record means "section at defaults, skip in the pipeline",
 /// the JSON serialiser keeps these out of the sidecar entirely (smaller
 /// files, easier diffs).
 ///
@@ -40,7 +40,7 @@ public sealed record WhiteBalanceParams(double TempK = 6500, double Tint = 0) {
 /// <summary>
 /// Tonal sliders. Exposure in stops (-5..+5, 0 = no change). The other
 /// six are "Lightroom feel": -1..+1, 0 = no change. The pipeline maps
-/// each one to a different transform — see EditPipeline.
+/// each one to a different transform, see EditPipeline.
 /// </summary>
 public sealed record LightParams(
     double Exposure = 0,
@@ -58,7 +58,7 @@ public sealed record LightParams(
 
 /// <summary>
 /// Vibrance protects already-saturated pixels (gentle on faces, harsh
-/// on neon — matches Lightroom). Saturation is a flat HSL scale.
+/// on neon, matches Lightroom). Saturation is a flat HSL scale.
 /// Hue rotates the whole wheel (-180..+180 degrees).
 /// </summary>
 public sealed record ColorParams(
@@ -75,7 +75,7 @@ public sealed record ColorParams(
 /// SharpenAmount 0..1 (≈ 0.5 = moderate, 1.0 = aggressive).
 /// SharpenRadius in pixels (typical 0.5..3).
 /// SharpenThreshold in ADU (0..255 for 8-bit, scaled internally).
-/// NoiseReduce 0..1 (luminance-only median, conservative by design — for
+/// NoiseReduce 0..1 (luminance-only median, conservative by design, for
 /// heavy NR the user should run GraXpert Denoise on the FITS first).
 /// </summary>
 public sealed record DetailParams(
@@ -92,7 +92,7 @@ public sealed record DetailParams(
 /// Texture: mid-frequency contrast boost (USM, ~3px radius).
 /// Clarity: low-frequency contrast (USM, ~20px radius, on luminance).
 /// Dehaze: global luminance contrast + saturation boost weighted by
-///         distance from white point — clears haze without blowing colour.
+///         distance from white point, clears haze without blowing colour.
 /// Vignette: -1..1 (negative = darken corners, positive = brighten).
 ///           Feather 0..1 (small = harsh edge, large = smooth gradient).
 /// </summary>

@@ -1,4 +1,4 @@
-# NINA.Camera.SonySdk — Architecture
+# NINA.Camera.SonySdk, Architecture
 
 `ICamera` wrapper for the **Sony Camera Remote SDK 2.x**.
 
@@ -10,7 +10,7 @@ native libraries are sourced, how it plugs into Polaris), read
 
 ```
 src/NINA.Camera.SonySdk/
-  NINA.Camera.SonySdk.csproj    # net10.0 — NOT -windows
+  NINA.Camera.SonySdk.csproj    # net10.0, NOT -windows
   SonySdkDiscovery.cs           # static EnumerateCameras()
   SonySdkCamera.cs              # ICamera impl
   SonySdkRegistry.cs            # DI helpers
@@ -32,5 +32,5 @@ src/NINA.Camera.SonySdk/
 ## See also
 
 - [NINA.Camera.CanonEdsdk/ARCHITECTURE.md](../NINA.Camera.CanonEdsdk/ARCHITECTURE.md)
-  — full pattern explanation
+ , full pattern explanation
 - [Root ARCHITECTURE.md](../../ARCHITECTURE.md)

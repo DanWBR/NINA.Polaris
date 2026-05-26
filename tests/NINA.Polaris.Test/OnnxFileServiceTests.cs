@@ -69,7 +69,7 @@ public class OnnxFileServiceTests {
         var src = WriteFakeFits(width: 4, height: 4, fill: _ => (ushort)42);
         var svc = new OnnxFileService(NullLogger<OnnxFileService>.Instance);
 
-        // Hand back the same bytes — for a real run these would be
+        // Hand back the same bytes, for a real run these would be
         // post-inference outputs; the writer doesn't care.
         var bytes = new byte[4 * 4 * 2];
         for (int i = 0; i < 16; i++) {

@@ -106,7 +106,7 @@ public class SerFileWriterReaderTests {
 
     [Test]
     public void Writer_CreatesDirectoryIfMissing() {
-        // Sub-path that doesn't exist yet — writer should mkdir -p.
+        // Sub-path that doesn't exist yet, writer should mkdir -p.
         var path = Path.Combine(_tempDir, "deep", "subdir", "video.ser");
         using (var writer = new SerFileWriter(path, 4, 4, 16)) {
             writer.WriteFrame(new ushort[16]);

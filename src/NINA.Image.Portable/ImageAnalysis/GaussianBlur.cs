@@ -8,7 +8,7 @@ namespace NINA.Image.ImageAnalysis;
 /// Separability: a 2D Gaussian decomposes into one horizontal and one
 /// vertical 1D pass, dropping the kernel-size cost from O(r²) per
 /// pixel to O(r). At r = 4 that's 9 multiplies/adds per pixel instead
-/// of 81 — meaningful even at 32 MP.
+/// of 81, meaningful even at 32 MP.
 ///
 /// Edge handling: replicate. Pixels off the canvas re-use the nearest
 /// in-bounds value. Avoids the dark border zero-padding would create

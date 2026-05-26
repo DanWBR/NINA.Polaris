@@ -56,7 +56,7 @@ public class FitsThumbnailerTests {
                 if (bmp.GetPixel(x, y).Red > 128) hasBright = true;
 
         Assert.That(hasBright, Is.True,
-            "Rendered JPEG is all dark — the double-dispose regression is back");
+            "Rendered JPEG is all dark, the double-dispose regression is back");
     }
 
     [Test]

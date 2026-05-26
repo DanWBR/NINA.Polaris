@@ -1,7 +1,7 @@
-# NINA.INDI — Architecture
+# NINA.INDI, Architecture
 
 INDI (Instrument Neutral Distributed Interface) protocol client +
-device wrappers. Standalone library — depends on nothing in the
+device wrappers. Standalone library, depends on nothing in the
 Polaris solution except `NINA.Image.Portable` (for `IImageData`
 returned from `IndiCamera.CaptureAsync`).
 
@@ -96,7 +96,7 @@ property dictionary, tailored for one device kind. They:
 - Raise C# events for state changes that consumers care about
   (`CoordinatesChanged`, `BlobReceived`, ...)
 
-`IndiCamera` is the most complex — it implements `NINA.Image.Portable.
+`IndiCamera` is the most complex, it implements `NINA.Image.Portable.
 Interfaces.ICamera`, deals with bayer detection, optionally starts/stops
 `CCD_VIDEO_STREAM` for the planetary VIDEO tab, and converts the
 incoming FITS BLOB into a `BaseImageData` via `FITSReader` from
@@ -106,9 +106,9 @@ incoming FITS BLOB into a `BaseImageData` via `FITSReader` from
 
 - It doesn't know about Polaris's profile model, equipment manager,
   or any UI. Pure protocol library.
-- It doesn't launch `indiserver` — that's an external prerequisite
+- It doesn't launch `indiserver`, that's an external prerequisite
   the user runs separately (or via `indiwebmanager`).
-- It doesn't speak Alpaca / ASCOM — those live in
+- It doesn't speak Alpaca / ASCOM, those live in
   `src/NINA.Polaris/Services/Alpaca/`.
 
 ## How NINA.Polaris uses it
@@ -135,6 +135,6 @@ equipment. If you need a new one (e.g. "safety monitor"):
 ## See also
 
 - [INDI library docs](https://www.indilib.org/develop/developer-manual/101-protocol.html)
-  — the protocol spec
-- [Root ARCHITECTURE.md](../../ARCHITECTURE.md) — how this plugs into
+ , the protocol spec
+- [Root ARCHITECTURE.md](../../ARCHITECTURE.md), how this plugs into
   the rest of Polaris

@@ -7,7 +7,7 @@ namespace NINA.Camera.NikonSdk;
 /// support. Same role as <c>CanonEdsdkRegistry</c> for Canon.
 ///
 /// <para>
-/// Status: <b>skeleton driver</b>. The Nikon stack splits in two —
+/// Status: <b>skeleton driver</b>. The Nikon stack splits in two,
 /// the older <b>MAID</b> SDK (covers DSLR bodies through the D6 era;
 /// driven by <c>.md3</c> module files) and the newer <b>Nikon
 /// Imaging SDK / Type 0006</b> (covers Z-series mirrorless). This
@@ -32,7 +32,7 @@ namespace NINA.Camera.NikonSdk;
 [SupportedOSPlatform("windows")]
 public static class NikonSdkRegistry {
 
-    /// <summary>Currently returns false unconditionally — the
+    /// <summary>Currently returns false unconditionally, the
     /// integration is a skeleton. The UI surfaces this as "(not
     /// installed)" with a link to <c>docs/dslr-windows-nikon.md</c>.</summary>
     public static bool IsAvailable => false;

@@ -157,7 +157,7 @@ public static class EditorEndpoints {
             // Expose the X- headers to fetch() reads from cross-origin
             // (the Polaris UI is same-origin so this is belt-and-braces,
             // but Relay tunnels do issue from polaris.run.app to the user's
-            // host — the response goes through the relay and the browser
+            // host, the response goes through the relay and the browser
             // needs CORS exposure to read custom headers).
             ctx.Response.Headers["Access-Control-Expose-Headers"] =
                 "X-Width, X-Height, X-Channels";

@@ -300,7 +300,7 @@ public class CanonEdsdkCamera : ICamera {
             pending.RawExtension = ext;
         }
 
-        // Done as soon as we have a JPEG (preview) — the RAW is
+        // Done as soon as we have a JPEG (preview), the RAW is
         // attached if it arrived first or arrives later in the same
         // sequence. Cameras configured for JPEG-only will never send
         // a CR2 and we proceed with just the preview.
@@ -321,7 +321,7 @@ public class CanonEdsdkCamera : ICamera {
 
     private static IImageData BuildImageData(CaptureContext pending) {
         // Decode the JPEG (or, in RAW-only mode, fall back to a tiny
-        // placeholder) to satisfy IImageData.Data — the rest of the
+        // placeholder) to satisfy IImageData.Data, the rest of the
         // Polaris pipeline (live stack, stats, relay) only sees the
         // luminance plane. The CR2 is what users actually want on
         // disk; the JPEG is just for the on-screen preview.

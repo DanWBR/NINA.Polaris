@@ -14,7 +14,7 @@ namespace NINA.Polaris.Services;
 ///   - "we started it" = we hold a reference to a still-alive Process
 ///
 /// If PHD2 was started by the user manually we will see it as running but
-/// will refuse to shut it down via process kill — only via the PHD2 JSON-RPC
+/// will refuse to shut it down via process kill, only via the PHD2 JSON-RPC
 /// 'shutdown' command, which PHD2 handles cleanly.
 /// </summary>
 public class PHD2ProcessManager : IDisposable {
@@ -66,7 +66,7 @@ public class PHD2ProcessManager : IDisposable {
         }
 
         if (DefaultHost != "localhost" && DefaultHost != "127.0.0.1") {
-            _logger.LogWarning("Refusing to launch — PHD2 host {Host} is not loopback", DefaultHost);
+            _logger.LogWarning("Refusing to launch, PHD2 host {Host} is not loopback", DefaultHost);
             return false;
         }
 
@@ -142,7 +142,7 @@ public class PHD2ProcessManager : IDisposable {
                 _logger.LogError(ex, "Failed to kill PHD2 process");
             }
         } else {
-            _logger.LogWarning("PHD2 still running and we don't own its process — manual intervention needed");
+            _logger.LogWarning("PHD2 still running and we don't own its process, manual intervention needed");
         }
         return !await IsRunningAsync();
     }
@@ -204,7 +204,7 @@ public class PHD2ProcessManager : IDisposable {
     }
 
     public void Dispose() {
-        // Don't kill the process on shutdown — the user may want to keep
+        // Don't kill the process on shutdown, the user may want to keep
         // guiding running across N.I.N.A. Polaris restarts.
         _process?.Dispose();
     }

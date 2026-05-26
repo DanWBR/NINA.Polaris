@@ -94,7 +94,7 @@ public class SimulatorAutoStartService : IHostedService, IDisposable {
             try { await _runner.WaitAsync(TimeSpan.FromSeconds(2), cancellationToken); }
             catch { /* ignore */ }
         }
-        // Don't auto-shutdown the simulator on app stop — user might
+        // Don't auto-shutdown the simulator on app stop, user might
         // be restarting Polaris while keeping their simulated rig
         // alive. SimulatorService.Dispose handles real cleanup.
     }

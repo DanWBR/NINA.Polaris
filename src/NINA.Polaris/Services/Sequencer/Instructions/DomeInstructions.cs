@@ -36,7 +36,7 @@ public class SlewDomeToAzimuthInstruction : SequenceInstruction {
 }
 
 /// <summary>
-/// Sync the dome aperture to the mount's current azimuth (one-shot — for
+/// Sync the dome aperture to the mount's current azimuth (one-shot, for
 /// continuous slaving, leave it to the dome's native slave mode if available).
 /// Computes az from the mount's current RA/Dec via a simple altaz transform.
 /// </summary>
@@ -57,7 +57,7 @@ public class SyncDomeToScopeInstruction : SequenceInstruction {
 internal static class AltAzMath {
     /// <summary>
     /// Compact RA/Dec → Alt/Az transform. Returns degrees. Accurate to ~0.1°
-    /// — fine for slaving a dome aperture; not a substitute for plate solving.
+    ///, fine for slaving a dome aperture; not a substitute for plate solving.
     /// </summary>
     public static (double azDeg, double altDeg) RaDecToAltAz(double raHours, double decDeg, double latDeg, double lonDeg, DateTime utc) {
         // Local sidereal time (Meeus 12.4 simplified)

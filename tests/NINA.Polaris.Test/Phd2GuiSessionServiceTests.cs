@@ -47,7 +47,7 @@ public class Phd2GuiSessionServiceTests {
     public async Task StartSessionAsync_OnUnsupportedOs_ReturnsFalseSetsLastError() {
         var svc = MakeService();
         if (svc.IsSupportedOs) {
-            Assert.Ignore("Linux host — this test only meaningful on Win/Mac");
+            Assert.Ignore("Linux host, this test only meaningful on Win/Mac");
         }
         var ok = await svc.StartSessionAsync();
         Assert.That(ok, Is.False);

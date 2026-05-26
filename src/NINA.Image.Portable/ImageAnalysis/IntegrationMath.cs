@@ -27,7 +27,7 @@ public static class IntegrationMath {
     /// <summary>
     /// Median via partial sort. For odd N returns the middle element;
     /// for even N returns the average of the two middle elements.
-    /// Allocates a scratch ushort[] per call — caller can pass a reused
+    /// Allocates a scratch ushort[] per call, caller can pass a reused
     /// buffer to avoid that in hot loops.
     /// </summary>
     public static ushort Median(ReadOnlySpan<ushort> values, Span<ushort> scratch = default) {

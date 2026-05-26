@@ -14,7 +14,7 @@ namespace NINA.Polaris.Test;
 ///   - job state machine + cancel flag plumbing
 ///
 /// Tests that actually launch siril-cli would require the binary on
-/// disk + a real FITS — out of scope for unit tests; covered by the
+/// disk + a real FITS, out of scope for unit tests; covered by the
 /// end-to-end verification section of the plan.
 /// </summary>
 [TestFixture]
@@ -59,7 +59,7 @@ public class SirilServiceTests {
     [Test]
     public void UserScriptDirs_IncludesPlatformDefault() {
         // The per-OS list must include the standard Siril scripts dir
-        // for that platform — without it, users who never customised
+        // for that platform, without it, users who never customised
         // the location would see "0 user scripts" wrongly.
         var dirs = _siril.UserScriptDirs().ToList();
         Assert.That(dirs, Is.Not.Empty);
@@ -89,7 +89,7 @@ public class SirilServiceTests {
         // When the bundled .ssf resources land in the assembly, the
         // enumeration must surface them with Source="bundled". The
         // tests don't assume the user has Siril installed but they
-        // DO assume Polaris ships its own scripts — this test would
+        // DO assume Polaris ships its own scripts, this test would
         // catch a regression where the csproj <EmbeddedResource> entry
         // gets removed and the bundled set silently empties.
         var scripts = _siril.EnumerateScripts();
@@ -122,7 +122,7 @@ public class SirilServiceTests {
     public void BundledScripts_ExtractedToDiskCorrectly() {
         // The extraction path should produce real .ssf files on disk,
         // not empty placeholders. Each script must have at least the
-        // `requires` line and end with `close` — otherwise Siril
+        // `requires` line and end with `close`, otherwise Siril
         // refuses them.
         var scripts = _siril.EnumerateScripts()
             .Where(s => s.Source == "bundled").ToList();
@@ -161,7 +161,7 @@ public class SirilServiceTests {
 
     [Test]
     public void ResolveScriptPath_AbsolutePath_ReturnsAsIsWhenExists() {
-        // Passing a full path bypasses the bundled/user lookup —
+        // Passing a full path bypasses the bundled/user lookup,
         // useful for advanced users with scripts outside any standard
         // location.
         var p = Path.Combine(_tmpAppData, "ad-hoc.ssf");
@@ -178,7 +178,7 @@ public class SirilServiceTests {
 
     [Test]
     public void ResolveScriptPath_EmptyOrWhitespace_ReturnsNull() {
-        // Defensive — UI might send "" when the user hasn't picked
+        // Defensive, UI might send "" when the user hasn't picked
         // anything yet. Resolve must not throw or return a default.
         Assert.That(_siril.ResolveScriptPath(""), Is.Null);
         Assert.That(_siril.ResolveScriptPath("   "), Is.Null);
@@ -190,7 +190,7 @@ public class SirilServiceTests {
     public void StartJob_WhenNotAvailable_Throws() {
         // Without Siril installed, the API must fail loudly instead
         // of silently producing a zombie job. The Settings UI uses
-        // IsAvailable to gate the button — but defence in depth.
+        // IsAvailable to gate the button, but defence in depth.
         if (_siril.IsAvailable) Assert.Ignore("Siril is installed on this host; cannot test the unavailable path");
         Assert.That(
             () => _siril.StartJob(new SirilJobRequest(

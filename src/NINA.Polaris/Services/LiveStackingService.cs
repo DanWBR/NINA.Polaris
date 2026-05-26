@@ -5,7 +5,7 @@ using NINA.Image.Interfaces;
 namespace NINA.Polaris.Services;
 
 /// <summary>Async handler invoked once per integrated frame. Handlers
-/// run sequentially inside the caller's await chain — a long-running
+/// run sequentially inside the caller's await chain, a long-running
 /// handler (e.g. an auto-focus run) naturally pauses the next capture
 /// because the caller is awaiting AddFrameAsync. This is the
 /// LiveStackTriggersService integration point (LSTR-1).</summary>
@@ -21,7 +21,7 @@ public record LiveStackFrameInfo(
 /// <summary>
 /// Where the per-frame stacking math runs.
 /// <list type="bullet">
-/// <item><b>Full</b> (default): the server runs the whole pipeline —
+/// <item><b>Full</b> (default): the server runs the whole pipeline,
 /// StarDetector + StarMatcher + AffineTransform + ImageResampler +
 /// running-mean accumulator. Server holds the accumulated stack and
 /// pushes it as the live preview. This is the historical behaviour
@@ -31,7 +31,7 @@ public record LiveStackFrameInfo(
 /// on frame 1 still happens), but skips matching/warping/accumulating.
 /// The raw frame is still relayed to clients via ImageRelayService;
 /// a client-side WASM module is expected to do the actual stacking
-/// and render its own preview. Used by the CLST offloading work —
+/// and render its own preview. Used by the CLST offloading work,
 /// see plan file.</item>
 /// </list>
 /// </summary>
@@ -130,7 +130,7 @@ public class LiveStackingService {
         var data = imageData.Data;
 
         var mode = Mode;
-        _logger.LogInformation("Live stack: processing frame {N} ({W}x{H}) — mode={Mode}",
+        _logger.LogInformation("Live stack: processing frame {N} ({W}x{H}), mode={Mode}",
             _frameCount + 1, props.Width, props.Height, mode);
 
         // StarDetector runs in BOTH modes:
@@ -200,7 +200,7 @@ public class LiveStackingService {
             // the accumulator. The raw frame is still relayed via
             // ImageRelayService elsewhere in the capture path (see
             // SequenceEngine / ImageRelayService.RelayImageAsync from
-            // the camera capture endpoint) — the WASM client picks it
+            // the camera capture endpoint), the WASM client picks it
             // up from the existing /ws/image-stream raw mode.
             lock (_lock) {
                 if (_frameCount == 0) {
@@ -213,7 +213,7 @@ public class LiveStackingService {
         }
 
         // Compute median HFR from the already-detected stars (no extra
-        // pixel pass). Falls back to 0 when no stars — handlers that
+        // pixel pass). Falls back to 0 when no stars, handlers that
         // care about HFR should treat 0 as "no data this frame".
         // Computed in BOTH modes so trigger orchestrator (auto-AF based
         // on HFR degradation) still works in MetricsOnly mode.
@@ -229,7 +229,7 @@ public class LiveStackingService {
             _frameCount, stars.Count, medianHfr, mode);
 
         // Snapshot handlers + await sequentially. Any handler that
-        // throws is logged + swallowed — one bad subscriber can't
+        // throws is logged + swallowed, one bad subscriber can't
         // poison the chain. Slow handlers (AF, recenter) pause the
         // upstream capture loop by extending this await.
         LiveStackFrameHandler[] handlers;

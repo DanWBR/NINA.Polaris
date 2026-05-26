@@ -6,21 +6,21 @@ pipeline.
 
 ## Capture sub-tab
 
-- **Live preview canvas** — fills available area
-- **Exposure** (s) — typically 5-50ms for planetary
-- **Gain** — depends on camera (planetary loves high gain)
-- **Bin** — 1×1 usually; 2×2 if you're undersampled
-- **Target name** — pasta name (Jupiter / Saturn / Moon / ...)
-- **Max duration** (s) — auto-stop after N seconds (0 = no cap)
-- **White balance R / B sliders** — only visible for OSC color cameras
+- **Live preview canvas**, fills available area
+- **Exposure** (s), typically 5-50ms for planetary
+- **Gain**, depends on camera (planetary loves high gain)
+- **Bin**, 1×1 usually; 2×2 if you're undersampled
+- **Target name**, pasta name (Jupiter / Saturn / Moon / ...)
+- **Max duration** (s), auto-stop after N seconds (0 = no cap)
+- **White balance R / B sliders**, only visible for OSC color cameras
   that expose INDI's `WB_R + WB_B` (ZWO/QHY). Mono cameras hide the
   row.
 
 ### Buttons
 
-- **🎥 Start Stream** — opens camera stream (native CCD_VIDEO_STREAM
+- **🎥 Start Stream**, opens camera stream (native CCD_VIDEO_STREAM
   if supported, else server-loop fallback). Label shows live fps.
-- **⏺ Record** — only enabled when streaming. Begins writing every
+- **⏺ Record**, only enabled when streaming. Begins writing every
   frame to a SER file at
   `{ImageOutputDir}/{Rig}/planetary/{target}/{ISO-timestamp}.ser`.
   Counter shows frames + bytes + dropped-frame warning if the writer
@@ -42,25 +42,25 @@ For the Moon at high mag:
 
 Lucky imaging stack pipeline. Drives the `PlanetaryStackerService`.
 
-1. **SER file** dropdown — populated from `{ImageOutputDir}/planetary/`
+1. **SER file** dropdown, populated from `{ImageOutputDir}/planetary/`
    recursively. ⟳ Refresh button.
-2. **Keep top X%** — quality cutoff (default 50%). Picks the sharpest
+2. **Keep top X%**, quality cutoff (default 50%). Picks the sharpest
    X% of frames for stacking. Smaller = sharper but noisier.
-3. **Output name** — base filename for the stacked result
-4. **▶ Stack** — kicks the job
+3. **Output name**, base filename for the stacked result
+4. **▶ Stack**, kicks the job
 
 ### 7-phase pipeline
 
 Status bar shows phase live:
 
-1. **Reading** — opens the SER, lists frames
-2. **Analyzing** — Laplacian variance per frame (parallelizable;
+1. **Reading**, opens the SER, lists frames
+2. **Analyzing**, Laplacian variance per frame (parallelizable;
    typical RPi 4: 1000 frames × 800×600 × 16-bit ≈ 30s)
-3. **Ranking** — sort by quality desc, take top KeepPercent
-4. **Aligning** — brightest-region centroid + parabolic sub-pixel
+3. **Ranking**, sort by quality desc, take top KeepPercent
+4. **Aligning**, brightest-region centroid + parabolic sub-pixel
    refinement per kept frame
-5. **Stacking** — mean stack with per-pixel count, output uint16
-6. **Writing** — FITS to `planetary/{target}/stacked/`
+5. **Stacking**, mean stack with per-pixel count, output uint16
+6. **Writing**, FITS to `planetary/{target}/stacked/`
 7. **Ok / Fail**
 
 **Abort** button cancels mid-job.
@@ -80,7 +80,7 @@ Brightest-pixel centroid + parabolic refinement on a 5×5 neighborhood.
 Works for bright targets (Moon, Jupiter, Mars, Saturn body).
 
 **Limitation**: Saturn rings or other extended sources don't have a
-single brightness peak — alignment shifts can drift. Workaround: stack
+single brightness peak, alignment shifts can drift. Workaround: stack
 with smaller batches per processing pass; future versions will add
 thresholded centroid + better alignment for extended objects.
 
@@ -93,20 +93,20 @@ wavelet sharpening + saturation in your favorite tool.
 
 ## Common pitfalls
 
-**fps caps at ~5 even though camera supports native stream** — check
+**fps caps at ~5 even though camera supports native stream**, check
 that `CCD_VIDEO_STREAM` is actually exposed by your driver. Some INDI
 drivers default to `OFF` and need to be enabled in indiserver
 parameters.
 
-**Dropped frames warning** — writer can't keep up with stream cadence.
+**Dropped frames warning**, writer can't keep up with stream cadence.
 Reduce ROI (smaller frames write faster), lower binning, or lower
 target fps via the driver's `STREAMING_DELAY` property.
 
-**Stack output is dark** — frames were mostly cropped to a small
+**Stack output is dark**, frames were mostly cropped to a small
 brightness region. Try wider ROI or increase Keep% to include more
 frames.
 
-**Storage explodes** — 60s @ 30fps × 800×600 × uint16 ≈ 1.7 GB.
+**Storage explodes**, 60s @ 30fps × 800×600 × uint16 ≈ 1.7 GB.
 Watch your disk; planetary captures fill SD cards fast.
 
 ## See also

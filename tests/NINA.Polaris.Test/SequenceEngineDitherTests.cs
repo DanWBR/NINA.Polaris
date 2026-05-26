@@ -86,7 +86,7 @@ public class SequenceEngineDitherTests {
     [Test]
     public void SequenceItem_DefaultImageType_IsLight() {
         // Catches the regression where an autorun item builds with no
-        // explicit type — must default to LIGHT, not empty or null,
+        // explicit type, must default to LIGHT, not empty or null,
         // because ImageWriterService.BuildSubDir routes by uppercase
         // string match.
         var item = new SequenceItem();

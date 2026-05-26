@@ -7,7 +7,7 @@ public static class StudioEndpoints {
         var g = app.MapGroup("/api/studio");
 
         // Force re-walk of the active profile's image output dir. Runs
-        // in the background — progress is exposed via /rescan/status and
+        // in the background, progress is exposed via /rescan/status and
         // (later) broadcast on the status WebSocket.
         g.MapPost("/rescan", (FrameLibraryService svc) => {
             _ = Task.Run(() => svc.RescanAsync());
@@ -45,7 +45,7 @@ public static class StudioEndpoints {
             return path == null ? Results.NotFound() : Results.File(path, "image/jpeg");
         });
 
-        // Aggregate stats — total light frames, total exposure (h),
+        // Aggregate stats, total light frames, total exposure (h),
         // distinct targets / filters. Used by the toolbar header.
         g.MapGet("/stats", (FrameLibraryService svc) => Results.Ok(svc.GetStats()));
 
@@ -54,7 +54,7 @@ public static class StudioEndpoints {
         // Stretched JPEG preview. Slider drags hit this many times per
         // second; FrameProcessingService keeps a small decoded-frame LRU
         // so the LUT pass is the only work per request. All stretch
-        // params are optional — omit them to get the auto-stretch view.
+        // params are optional, omit them to get the auto-stretch view.
         g.MapGet("/frames/{id:int}/preview", async (FrameProcessingService svc,
             int id, double? black, double? mid, double? white,
             int? max, int? quality, string? format, CancellationToken ct) => {
@@ -82,7 +82,7 @@ public static class StudioEndpoints {
         });
 
         // Full statistics + star list. `stars=false` skips StarDetector
-        // when the caller only wants histogram + numeric stats — useful
+        // when the caller only wants histogram + numeric stats, useful
         // for the toolbar that wants a count badge but not the overlay.
         g.MapGet("/frames/{id:int}/stats", (FrameProcessingService svc, int id, bool? stars) => {
             var s = svc.ComputeStats(id, includeStars: stars ?? true);

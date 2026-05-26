@@ -20,7 +20,7 @@ public static class FrameQualityAnalyzer {
     /// Variance of the 3×3 Laplacian over the central ROI of the frame.
     /// <paramref name="roiSize"/> = side length of a centred square ROI
     /// (e.g. 256 → 256×256 centred). null means use the whole frame.
-    /// Returns 0 for degenerate inputs (no variance) — never NaN.
+    /// Returns 0 for degenerate inputs (no variance), never NaN.
     /// </summary>
     public static double LaplacianVariance(ushort[] pixels, int width, int height, int? roiSize = null) {
         if (pixels == null || pixels.Length != width * height || width < 3 || height < 3) return 0;

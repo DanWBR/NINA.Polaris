@@ -8,7 +8,7 @@ namespace NINA.Polaris.Services;
 
 /// <summary>
 /// Generates + persists a self-signed TLS certificate so Polaris can
-/// serve HTTPS out of the box on a LAN — no cert authority needed.
+/// serve HTTPS out of the box on a LAN, no cert authority needed.
 ///
 /// Motivation (GX-10): Chrome and other modern browsers gate WebGPU,
 /// SharedArrayBuffer, and a handful of other powerful APIs behind a
@@ -31,13 +31,13 @@ namespace NINA.Polaris.Services;
 /// Persisted as PFX (empty password, file-system-permission-protected)
 /// at <c>{LocalApplicationData}/NINA.Polaris/cert/polaris.pfx</c> so
 /// the same cert survives restarts (otherwise the user would re-trust
-/// it every reboot — terrible UX).
+/// it every reboot, terrible UX).
 ///
 /// Auto-regenerates when:
 ///   • file is missing
 ///   • cert expires within 30 days
 ///   • the SAN entry set no longer matches the current host (the user
-///     moved the box to a new network with new IPs) — keyed by a hash
+///     moved the box to a new network with new IPs), keyed by a hash
 ///     of the SAN list stored next to the PFX
 /// </summary>
 public class SelfSignedCertService {
@@ -88,10 +88,10 @@ public class SelfSignedCertService {
                     }
                 } else {
                     _logger.LogInformation(
-                        "HTTPS cert SAN entries changed (host moved networks?) — regenerating.");
+                        "HTTPS cert SAN entries changed (host moved networks?), regenerating.");
                 }
             } catch (Exception ex) {
-                _logger.LogWarning(ex, "HTTPS cert reload failed — regenerating.");
+                _logger.LogWarning(ex, "HTTPS cert reload failed, regenerating.");
             }
         }
 
@@ -101,7 +101,7 @@ public class SelfSignedCertService {
             File.WriteAllText(_sanHashPath, sanHash);
         } catch (Exception ex) {
             // Cert was generated in memory and is usable for this run
-            // even if we can't persist — log + soldier on. Next boot
+            // even if we can't persist, log + soldier on. Next boot
             // will retry.
             _logger.LogWarning(ex, "HTTPS cert persisted-write failed; using in-memory copy this run.");
         }
@@ -115,7 +115,7 @@ public class SelfSignedCertService {
     /// <summary>The cert's SHA-1 thumbprint (uppercase hex, colon-separated).
     /// Kept for backwards compatibility but modern browsers (Chrome 90+,
     /// Firefox 100+, Safari 14+) only show SHA-256 in their cert-details
-    /// dialog — use <see cref="Fingerprint256"/> for those.</summary>
+    /// dialog, use <see cref="Fingerprint256"/> for those.</summary>
     public string Fingerprint {
         get {
             var c = GetOrCreate();
@@ -127,13 +127,13 @@ public class SelfSignedCertService {
     }
 
     /// <summary>The cert's SHA-256 thumbprint (lowercase hex,
-    /// no separators) — the only fingerprint format modern browsers
+    /// no separators), the only fingerprint format modern browsers
     /// show in their cert-details dialog. User compares this against
     /// Polaris Settings to verify the cert their browser sees is the
     /// one Polaris generated (not a man-in-the-middle's).
     ///
     /// Format matches what Chrome displays: 64 hex chars, lowercase,
-    /// no colons — copy-paste friendly. (Chrome's UI elides whitespace
+    /// no colons, copy-paste friendly. (Chrome's UI elides whitespace
     /// when you double-click to select.)</summary>
     public string Fingerprint256 {
         get {
@@ -159,7 +159,7 @@ public class SelfSignedCertService {
                 | X509KeyStorageFlags.MachineKeySet
                 | X509KeyStorageFlags.Exportable);
         } catch (Exception ex) {
-            _logger.LogWarning(ex, "Existing PFX unreadable — regenerating.");
+            _logger.LogWarning(ex, "Existing PFX unreadable, regenerating.");
             return null;
         }
     }
@@ -184,7 +184,7 @@ public class SelfSignedCertService {
                 new OidCollection { new Oid("1.3.6.1.5.5.7.3.1") /* TLS Server Auth */ },
                 critical: true));
 
-        // SAN — the part that decides which hostnames/IPs Chrome accepts.
+        // SAN, the part that decides which hostnames/IPs Chrome accepts.
         var sanBuilder = new SubjectAlternativeNameBuilder();
         foreach (var name in sanList) {
             if (IPAddress.TryParse(name, out var ip)) sanBuilder.AddIpAddress(ip);
@@ -220,7 +220,7 @@ public class SelfSignedCertService {
         var hostName = Dns.GetHostName();
         if (!string.IsNullOrWhiteSpace(hostName)) {
             names.Add(hostName);
-            // hostname.local — the form mDNS responders typically expose
+            // hostname.local, the form mDNS responders typically expose
             names.Add(hostName + ".local");
         }
         names.Add("polaris.local");
@@ -239,7 +239,7 @@ public class SelfSignedCertService {
                 foreach (var ua in props.UnicastAddresses) {
                     var addr = ua.Address;
                     if (IPAddress.IsLoopback(addr)) continue;
-                    // Skip link-local (169.254.x.x, fe80::/10) — those
+                    // Skip link-local (169.254.x.x, fe80::/10), those
                     // don't route across the LAN and rarely show up in
                     // a user's URL bar.
                     if (addr.IsIPv6LinkLocal) continue;

@@ -14,7 +14,7 @@ public static class SirilEndpoints {
         var g = app.MapGroup("/api/siril");
 
         // Lightweight status for the Settings panel detection row.
-        // Cheap — Version is cached after the first probe.
+        // Cheap, Version is cached after the first probe.
         g.MapGet("/status", (SirilService siril) => Results.Ok(new {
             available = siril.IsAvailable,
             binaryPath = siril.BinaryPath,
@@ -70,7 +70,7 @@ public static class SirilEndpoints {
                       : Results.NotFound(new { error = "Job not found or already finished" });
         });
 
-        // Re-probe — used by the Settings "Re-detect" button after
+        // Re-probe, used by the Settings "Re-detect" button after
         // the user installs Siril or fixes the configured path.
         g.MapPost("/redetect", (SirilService siril) => {
             siril.InvalidateVersionCache();

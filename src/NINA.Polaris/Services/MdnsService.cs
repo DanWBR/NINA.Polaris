@@ -32,7 +32,7 @@ public class MdnsService : IHostedService, IDisposable {
         try {
             var port = _config.GetValue("Mdns:Port", 5000);
             var hostname = Environment.MachineName;
-            // Default instance name = "polaris-app" — discoverable as
+            // Default instance name = "polaris-app", discoverable as
             // http://polaris-app.local:<port> on any LAN with mDNS /
             // Bonjour. The bare "polaris" was avoided because a lot
             // of users already have a Pi or other gadget claiming
@@ -45,7 +45,7 @@ public class MdnsService : IHostedService, IDisposable {
             _discovery = new ServiceDiscovery(_mdns);
 
             // Both ServiceProfile constructors (3-arg AND 4-arg) build
-            // HostName as `{instance}.{servicePrefix}.local` — so for
+            // HostName as `{instance}.{servicePrefix}.local`, so for
             // service "_nina._tcp" we got `polaris-app.nina.local` in
             // the wild, confirmed in the user's startup log. Override
             // HostName explicitly to the URL we WANT the browser to
@@ -89,7 +89,7 @@ public class MdnsService : IHostedService, IDisposable {
                 + "{HostName}:{Port} (machine: {Hostname}, {AddrCount} IPs)",
                 instanceName, profile.HostName, port, hostname, addresses.Count);
         } catch (Exception ex) {
-            _logger.LogWarning(ex, "mDNS announcer failed to start — continuing without LAN discovery");
+            _logger.LogWarning(ex, "mDNS announcer failed to start, continuing without LAN discovery");
             _mdns = null;
             _discovery = null;
         }

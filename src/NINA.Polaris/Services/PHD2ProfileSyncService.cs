@@ -58,7 +58,7 @@ public class PHD2ProfileSyncService : IDisposable {
 
         if (!_phd2.IsConnected) {
             UpdateStatus(rig, "phd2-disconnected", null, null,
-                "PHD2 not connected — skipping rig sync", false);
+                "PHD2 not connected, skipping rig sync", false);
             return new SyncResult(Ok: false, Error: "PHD2 not connected",
                 ProfileId: null, ProfileMissing: false, Warnings: warnings);
         }
@@ -83,7 +83,7 @@ public class PHD2ProfileSyncService : IDisposable {
 
         if (match == null) {
             UpdateStatus(rig, "missing-profile", null, null,
-                $"No PHD2 profile named '{rig.Name}' — create one in the PHD2 GUI tab",
+                $"No PHD2 profile named '{rig.Name}', create one in the PHD2 GUI tab",
                 ProfileMissing: true);
             return new SyncResult(
                 Ok: false,
@@ -130,11 +130,11 @@ public class PHD2ProfileSyncService : IDisposable {
     }
 
     private async Task ApplyAlgoPresetAsync(EquipmentProfile rig, List<string> warnings, CancellationToken ct) {
-        // Built-in preset OR custom bag — exactly one path.
+        // Built-in preset OR custom bag, exactly one path.
         if (string.Equals(rig.PHD2AlgoPreset, PHD2AlgoPresets.CustomPresetName, StringComparison.OrdinalIgnoreCase)
             && rig.PHD2CustomAlgoParams.Count > 0) {
             foreach (var kv in rig.PHD2CustomAlgoParams) {
-                // Keys are "axis:param" — split once.
+                // Keys are "axis:param", split once.
                 var sep = kv.Key.IndexOf(':');
                 if (sep <= 0) { warnings.Add($"Skipping malformed custom key '{kv.Key}'"); continue; }
                 var axis = kv.Key.Substring(0, sep);
@@ -147,7 +147,7 @@ public class PHD2ProfileSyncService : IDisposable {
 
         var preset = PHD2AlgoPresets.GetBuiltin(rig.PHD2AlgoPreset);
         if (preset == null) {
-            warnings.Add($"Unknown preset '{rig.PHD2AlgoPreset}' — leaving PHD2 algorithm params untouched");
+            warnings.Add($"Unknown preset '{rig.PHD2AlgoPreset}', leaving PHD2 algorithm params untouched");
             return;
         }
         foreach (var p in preset.Params) {

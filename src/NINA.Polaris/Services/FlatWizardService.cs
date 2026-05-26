@@ -108,7 +108,7 @@ public class FlatWizardService {
                     _logger.LogInformation("Flat wizard: switching to filter {F}", filterName);
                     try { await fw.SetFilterByNameAsync(filterName, ct); }
                     catch (Exception ex) {
-                        _logger.LogWarning(ex, "Filter switch failed for {F} — using current filter", filterName);
+                        _logger.LogWarning(ex, "Filter switch failed for {F}, using current filter", filterName);
                     }
                 }
 
@@ -199,7 +199,7 @@ public class FlatWizardService {
         }
     }
 
-    /// <summary>O(n) median via histogram — same trick as ImageStatistics.</summary>
+    /// <summary>O(n) median via histogram, same trick as ImageStatistics.</summary>
     private static double ComputeMedian(IImageData img) {
         var data = img.Data;
         if (data.Length == 0) return 0;

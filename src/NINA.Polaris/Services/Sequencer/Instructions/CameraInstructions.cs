@@ -27,7 +27,7 @@ public class TakeExposureInstruction : SequenceInstruction {
     /// <summary>Target name written to OBJECT keyword + image filename pattern.</summary>
     public string? TargetName { get; set; }
 
-    /// <summary>FITS IMAGETYP — LIGHT / DARK / FLAT / BIAS.</summary>
+    /// <summary>FITS IMAGETYP, LIGHT / DARK / FLAT / BIAS.</summary>
     public string ImageType { get; set; } = "LIGHT";
 
     public override IReadOnlyList<string> Validate() {
@@ -61,7 +61,7 @@ public class TakeExposureInstruction : SequenceInstruction {
 
             // Measure HFR + star count and stash in Scratch so the
             // AutoFocusOnHfrIncrease trigger has something to compare against.
-            // Failures are non-fatal — a bad frame shouldn't kill the run.
+            // Failures are non-fatal, a bad frame shouldn't kill the run.
             try {
                 var stars = new StarDetector().Detect(image.Data,
                     image.Properties.Width, image.Properties.Height);

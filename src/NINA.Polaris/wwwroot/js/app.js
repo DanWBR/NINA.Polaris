@@ -1,6 +1,6 @@
 // Chart instances live OUTSIDE the Alpine component so Alpine's reactive
 // Proxy doesn't wrap them. Chart.js mutates its own internal state during
-// every update() / configure() / layout pass — when those objects were
+// every update() / configure() / layout pass, when those objects were
 // proxied, each property read went through Alpine's get-trap, registered
 // the running effect as a dependency, and re-ran the effect on the next
 // internal mutation. Result: infinite recursion ("Maximum call stack size
@@ -12,7 +12,7 @@ const _polarisCharts = {
     guide: null, af: null, hfr: null, temp: null, hist: null, alt: null
 };
 
-// Astrophoto exposure ladder (seconds). Roughly geometric — covers
+// Astrophoto exposure ladder (seconds). Roughly geometric, covers
 // the typical span: planetary lucky-imaging frame times (~50µs upwards
 // on modern CMOS), narrowband sub-exposures (300-600s), and the
 // rare "leave it on for 1000s" case the user asked for as the upper
@@ -52,7 +52,7 @@ function ninaApp() {
         liveStackComputeMode: 'auto',
 
         // LSTR-5: live-stack auto-refocus + auto-recenter triggers.
-        // Mirror of EquipmentProfile.LiveStackTriggers — hydrated from
+        // Mirror of EquipmentProfile.LiveStackTriggers, hydrated from
         // /api/livestack/triggers/status on first load and on rig
         // switch, written back via debounced PUT on any field change.
         liveStackTriggers: {
@@ -116,14 +116,14 @@ function ninaApp() {
         // hit, Stellarium import) smoothly pans the sky engine to
         // the chosen object via _skyLookAt. When OFF, the same picks
         // still populate skyTarget + the skyInfo card, but the
-        // engine view stays exactly where the user left it — useful
+        // engine view stays exactly where the user left it, useful
         // for browsing without losing the current framing.
         // Persisted in localStorage so it survives reloads. Default
         // ON to match the previous behaviour.
         skyAutoCenterOnSelect: true,
 
         // User toggle: stream the DSS Color HiPS from CDS Strasbourg
-        // as a deep-sky background image. Default ON — the whole
+        // as a deep-sky background image. Default ON, the whole
         // point of having a real engine vs a vector renderer is
         // seeing the actual sky when you zoom into a target. Turn
         // off when offline (the engine logs HEALPix tile 404s
@@ -131,7 +131,7 @@ function ninaApp() {
         skyDssVisible: true,
 
         // Remote terminal (xterm.js + /ws/terminal SSH bridge).
-        // Credentials are never persisted — every Connect prompts
+        // Credentials are never persisted, every Connect prompts
         // again. Terminal:Enabled=false on the server returns 403
         // and the section still renders the form but Connect toasts
         // the error and stops. _term* fields hold the running xterm
@@ -147,7 +147,7 @@ function ninaApp() {
         // committed/applied value (what's currently on
         // body.style.zoom); uiZoomDraft is the slider position
         // while the user is dragging. They sync only when Apply
-        // (or Reset) is clicked — without that two-step, the
+        // (or Reset) is clicked, without that two-step, the
         // page reflowed under the slider's own cursor on every
         // input tick and aiming a value became impossible.
         // First-paint default comes from localStorage if set,
@@ -208,10 +208,10 @@ function ninaApp() {
             stellariumHost: 'localhost',
             stellariumPort: 8090,
             preferAdvancedSequencer: false,
-            // Boot-time auto-connect — INDI + Alpaca discovery +
+            // Boot-time auto-connect, INDI + Alpaca discovery +
             // active-rig device bind. Pushed by HardwareAutoConnectService.
             autoConnectOnStartup: false,
-            // External tools — see ExternalTools section in Settings.
+            // External tools, see ExternalTools section in Settings.
             // Empty = auto-detect (BinaryLocator on the server picks
             // the right path for the host OS).
             sirilPath: '',
@@ -321,7 +321,7 @@ function ninaApp() {
         cameraDiscovering: false,
         cameraIso: 800,
 
-        // Mount driver state — same shape as camera. Today the
+        // Mount driver state, same shape as camera. Today the
         // dropdown shows INDI + synscan-wifi (the rest of the
         // catalogue is "(not installed)"). mountDriver drives the
         // ?driver= query param on /api/telescope/select; the
@@ -330,7 +330,7 @@ function ninaApp() {
         mountDriver: 'indi',
         mountDrivers: [],
 
-        // PREVIEW tab — snap test shots. Defaults match what a
+        // PREVIEW tab, snap test shots. Defaults match what a
         // typical "is this thing focused / framed?" check would use:
         // 2s exposure, modest gain, 1x1 binning. Save-to-disk is
         // off by default because the whole point of PREVIEW is
@@ -363,7 +363,7 @@ function ninaApp() {
             lastError: null
         },
 
-        // VIDEO tab state — planetary capture (SER) + lucky-imaging stack.
+        // VIDEO tab state, planetary capture (SER) + lucky-imaging stack.
         // Driven by VideoRecordingService + PlanetaryStackerService on the
         // server; the WS status feed populates videoRecording / videoStack.
         videoTab: 'capture',       // 'capture' | 'process'
@@ -426,7 +426,7 @@ function ninaApp() {
         // are bytes/sec averaged over a sliding 3s window so brief
         // 0-byte gaps don't flicker the readout to zero. rxPulse/txPulse
         // are momentary booleans that drive a 120ms CSS keyframe each
-        // time bytes arrive — gives a LED-style "data flowing"
+        // time bytes arrive, gives a LED-style "data flowing"
         // confirmation that's easier to spot than the changing number.
         // rxTotal/txTotal cumulate session bytes for the hover tooltip.
         net: {
@@ -575,7 +575,7 @@ function ninaApp() {
         weather: { forecast: null, loading: false, error: '', lastFetched: null },
         _weatherLastKey: '',
 
-        // Studio (post-processing) — ST-1 frame browser + ST-2 viewer
+        // Studio (post-processing), ST-1 frame browser + ST-2 viewer
         studio: {
             frames: [],
             stats: null,
@@ -648,7 +648,7 @@ function ninaApp() {
         obsAddressResults: [],
         obsGpsLoading: false,
 
-        // Tonight's Best — ranked list from /api/sky/tonights-best, plus
+        // Tonight's Best, ranked list from /api/sky/tonights-best, plus
         // a per-name thumbnail cache filled on demand by _kickTonightThumbs.
         tonight: {
             items: [], envelope: null, loading: false, error: '',
@@ -660,7 +660,7 @@ function ninaApp() {
         // the EditParams record on the server; we always send it whole on
         // every preview call so the pipeline doesn't have to remember
         // anything between requests. previewUrl + originalUrl are Blob
-        // URLs we revoke when superseded — important on a long session
+        // URLs we revoke when superseded, important on a long session
         // (otherwise the browser leaks ~100 MB per few minutes of slider
         // drags). Debounce timer keeps preview requests at ~10/s max
         // regardless of how fast the slider fires "input" events.
@@ -793,7 +793,7 @@ function ninaApp() {
             modalSaveBackground: false,
             modalDeconStrength: 0.5,
             modalDeconPsfSize: 4.0,
-            // GX-12h: parity with GraXpert UI — pick the dedicated
+            // GX-12h: parity with GraXpert UI, pick the dedicated
             // decon-stars or decon-objects ONNX model. Browser path
             // forwards as opts.target; CLI path tags the family in
             // the API request.
@@ -804,7 +804,7 @@ function ninaApp() {
             // modal opens, but the user can override per-run from the
             // dropdown. Two versions ship: 2.0.0 (lighter, ~284 MB,
             // safer on iOS) and 3.0.2 (more aggressive, ~456 MB,
-            // ±1 clip — better quality on capable hardware).
+            // ±1 clip, better quality on capable hardware).
             modalDenoiseVersion: '2.0.0',
             currentJobId: null,
             currentJob: null,
@@ -812,7 +812,7 @@ function ninaApp() {
             // GX-2: browser-mode (ONNX) run state. Default toggle ON
             // when an operation has its model available in the
             // manifest (onnxAvailableForOp). When the user clicks Start,
-            // graxpertStartRun branches on this — true → browser
+            // graxpertStartRun branches on this, true → browser
             // pipeline, false → existing CLI subprocess.
             modalRunInBrowser: true,
             browserActive: false,
@@ -823,7 +823,7 @@ function ninaApp() {
         },
 
         // GX-5: editor "AI" section runtime state. Single in-flight
-        // button across the section — pipelines are heavy + don't
+        // button across the section, pipelines are heavy + don't
         // compose with each other anyway. phase is a user-facing
         // status string for the section's progress line.
         editorAi: { busy: false, phase: '' },
@@ -846,7 +846,7 @@ function ninaApp() {
         onnxLicenseModalOpen: false,
         _onnxLicenseResolver: null,
 
-        // GX-10: HTTPS endpoint info — populated from
+        // GX-10: HTTPS endpoint info, populated from
         // /api/system/https-info on startup. null until first fetch
         // completes so x-show guards in the template hide the banner.
         // Shape: { httpsEnabled, httpsPort, fingerprint,
@@ -888,9 +888,9 @@ function ninaApp() {
         // "step through multiple files" arrow control.
         //
         // GX-12g: `mode` distinguishes the GraXpert-op auto-open
-        // (`'gx'`, default — shows generic BEFORE / AFTER tags since
+        // (`'gx'`, default, shows generic BEFORE / AFTER tags since
         // the user just performed a known transformation) from the
-        // arbitrary FILES "↔ Compare" button (`'compare'` — shows
+        // arbitrary FILES "↔ Compare" button (`'compare'`, shows
         // the actual filenames in the corner tags so the user can
         // tell two unrelated files apart).
         graxpertCompare: {
@@ -900,7 +900,7 @@ function ninaApp() {
             split: 0.5,
             dragging: false,
             mode: 'gx',
-            // GX-12r: which GraXpert op produced these pairs — drives
+            // GX-12r: which GraXpert op produced these pairs, drives
             // the modal title ("GraXpert Denoise Comparison" vs
             // "GraXpert Decon Comparison" etc). Null when the user
             // opens the comparator via the FILES "Compare" button
@@ -910,7 +910,7 @@ function ninaApp() {
 
         // d3-celestial Sky Viewer (offline, BSD-3-Clause).
         // Always renders the live sky from the observer's location at the
-        // current UTC time, in horizontal projection — same convention as
+        // current UTC time, in horizontal projection, same convention as
         // ASIAIR. No mode toggle: we only support equatorial mounts, so an
         // alternate "equatorial chart" view would just duplicate this one
         // with a different rotation axis and worse UX (drag pivoting
@@ -922,7 +922,7 @@ function ninaApp() {
         skyClock: '',                    // displayed in the toolbar (HH:MM:SS UTC)
         locationLabel: '',               // "City, Country" if reverse-geocoded, else "5.18°S 37.36°W"
         _locationLastKey: '',            // memoise so we only reverse-geocode once per coord pair
-        aladinFov: 45,                  // initial FOV in degrees — 90 was
+        aladinFov: 45,                  // initial FOV in degrees, 90 was
                                         // too wide (full-sky Aitoff looks
                                         // distorted + camera FOV rectangle
                                         // shrinks below 1 pixel)
@@ -936,10 +936,10 @@ function ninaApp() {
         // to default on close so the next open from any other tab
         // still gets the latest frame.
         imageViewerUrl: '/api/image/latest/preview',
-        imageViewerTitle: 'Image Viewer — full resolution',
+        imageViewerTitle: 'Image Viewer, full resolution',
         // FITS header overlay panel inside the image viewer. Open
         // automatically when previewing a .fits/.fit/.fts file from
-        // the FILES tab — toggleable by the user via the toolbar
+        // the FILES tab, toggleable by the user via the toolbar
         // button. Visibility is sticky in localStorage so power users
         // who always want headers visible don't have to keep clicking.
         fitsHeaders: {
@@ -983,7 +983,7 @@ function ninaApp() {
         _tempLastSample: 0,
 
         // Chart.js instances (created lazily when canvas is visible)
-        // (Chart.js instances live at module scope in _polarisCharts —
+        // (Chart.js instances live at module scope in _polarisCharts,
         //  see comment at the top of this file for why they can't
         //  live on the reactive component.)
 
@@ -1101,10 +1101,10 @@ function ninaApp() {
             fetch('/api/system/status', { cache: 'no-store' })
                 .then(r => r.ok ? r.json() : null)
                 .then(s => { if (s && s.version) this.appVersion = s.version; })
-                .catch(() => { /* badge stays as '…' — non-fatal */ });
+                .catch(() => { /* badge stays as '…', non-fatal */ });
 
             // NET-1: kick the throughput meter immediately. WS opens
-            // moments later — by the time the first frames flow the
+            // moments later, by the time the first frames flow the
             // tick loop is running and the rolling window absorbs them.
             this._netStartMeter();
 
@@ -1112,7 +1112,7 @@ function ninaApp() {
             // sub-application iframe (/sky/index.html). The iframe
             // posts back { type: "ready" } once it's loaded; until
             // then any _skySendMessage call queues. The engine itself
-            // ships in SWE-2 — for now this just confirms the round-trip
+            // ships in SWE-2, for now this just confirms the round-trip
             // is alive in DevTools.
             this._initSkyBridge();
 
@@ -1154,7 +1154,7 @@ function ninaApp() {
                 if (v !== null) this.slewPreviewVisible = v !== '0';
             } catch { /* ignore */ }
 
-            // DSS background toggle — same pattern.
+            // DSS background toggle, same pattern.
             const dssSaved = localStorage.getItem('nina-sky-dss');
             if (dssSaved !== null) {
                 this.skyDssVisible = dssSaved !== '0';
@@ -1163,7 +1163,7 @@ function ninaApp() {
                 localStorage.setItem('nina-sky-dss', v ? '1' : '0');
             });
 
-            // ZWO gain presets — static lookup table. Tiny file (~1 KB)
+            // ZWO gain presets, static lookup table. Tiny file (~1 KB)
             // so fire-and-forget. If the fetch fails the L/M/H buttons
             // simply never appear (zwoPresetsForActiveCamera returns null).
             fetch('/data/zwo-gain-presets.json')
@@ -1183,7 +1183,7 @@ function ninaApp() {
 
             // Re-render the cached frame whenever the user switches
             // tabs. Fixes the classic "last snap painted on PREVIEW,
-            // user switches to VIDEO, sees black canvas" — the
+            // user switches to VIDEO, sees black canvas", the
             // previously-hidden videoCaptureCanvas was reported as
             // hidden(0x0) during the original fan-out, so it never
             // received the bitmap. $nextTick waits for x-show to
@@ -1340,7 +1340,7 @@ function ninaApp() {
         // ---- Exposure preset dropdown source --------------------------
         // Returns the global ladder filtered to >= camera's minimum
         // supported exposure when the connected camera reports one
-        // (equipCameraInfo.minExposure — plumbed through the camera
+        // (equipCameraInfo.minExposure, plumbed through the camera
         // DTO when the backend grows that field), otherwise 0.0001s
         // as a safe default that doesn't clip modern CMOS lower bounds.
         // Consumed by the single <datalist id="exposure-presets">; all
@@ -1353,11 +1353,11 @@ function ninaApp() {
             return EXPOSURE_PRESETS_ALL.filter(v => v >= min);
         },
 
-        // ZWO L/M/H gain presets — mirrors ASIAIR's three-button shortcut.
+        // ZWO L/M/H gain presets, mirrors ASIAIR's three-button shortcut.
         // Returns { L, M, H, hcg } for the active camera if its INDI/Alpaca
         // device name matches a known ZWO model key (substring match,
         // case-insensitive), null otherwise. The UI conditionally renders
-        // the L/M/H button strip on this — non-ZWO cameras get nothing.
+        // the L/M/H button strip on this, non-ZWO cameras get nothing.
         zwoPresetsForActiveCamera() {
             if (!this._zwoPresets) return null;
             const name = (this.selectedCamera
@@ -1401,7 +1401,7 @@ function ninaApp() {
             this.term.connecting = true;
             this.term.lastError = '';
 
-            // Build xterm instance fresh on every Connect — recycling
+            // Build xterm instance fresh on every Connect, recycling
             // across sessions leaks DOM state from the previous host.
             this._termInstance = new Terminal({
                 cursorBlink: true,
@@ -1580,7 +1580,7 @@ function ninaApp() {
             };
 
             ws.onmessage = (evt) => {
-                // NET-1: status frames are JSON text — length is a
+                // NET-1: status frames are JSON text, length is a
                 // reasonable byte-count approximation for ASCII payload.
                 if (typeof evt.data === 'string') this._netRx(evt.data.length);
                 try {
@@ -1689,7 +1689,7 @@ function ninaApp() {
         },
 
         // Render a received binary image frame to the live canvas.
-        // In JPEG mode, the frame is a raw JPEG blob — draw via Image element.
+        // In JPEG mode, the frame is a raw JPEG blob, draw via Image element.
         // In raw mode, the frame is: [4B headerLen][header][LZ4 compressed uint16 pixels].
         handleImageFrame(arrayBuffer) {
             this.liveActive = true;
@@ -1698,7 +1698,7 @@ function ninaApp() {
             const view = new Uint8Array(arrayBuffer);
             const isJpeg = view.length >= 2 && view[0] === 0xFF && view[1] === 0xD8;
 
-            // One-shot diagnostic — leaves a single line per session so
+            // One-shot diagnostic, leaves a single line per session so
             // we can confirm in DevTools whether snap captures actually
             // deliver a binary frame over /ws/image-stream. Quiet for
             // subsequent frames so the video feed doesn't spam.
@@ -1720,7 +1720,7 @@ function ninaApp() {
         // JPEG mode: create blob URL, draw to every receiving canvas.
         // Used to draw only to #liveCanvas + then mirror, but when the
         // user is on a tab where LIVE is display:none, liveCanvas's
-        // parent has 0 width and the canvas ended up sized 0x0 — the
+        // parent has 0 width and the canvas ended up sized 0x0, the
         // mirror bailed because src.width === 0 and the visible
         // previewCanvas / videoCaptureCanvas got nothing. Render
         // straight into each known canvas instead, sizing from its
@@ -1772,7 +1772,7 @@ function ninaApp() {
 
         // Copy whatever is currently on liveCanvas to every secondary
         // canvas that wants a copy of the latest frame (PREVIEW tab,
-        // FOCUS tab auto-focus preview). Cheap — single drawImage per
+        // FOCUS tab auto-focus preview). Cheap, single drawImage per
         // destination. Called at the end of every successful render
         // path so all tabs always show the most recent frame.
         _mirrorLiveToPreviewCanvas() {
@@ -1883,7 +1883,7 @@ function ninaApp() {
             // Bayer pattern encoding MUST match NINA.Core.Enum.BayerPatternEnum:
             //   0 = None (mono), 1 = RGGB, 2 = BGGR, 3 = GBRG, 4 = GRBG
             // (3 and 4 were previously swapped in this shader relative
-            // to the C# enum — the GBRG/GRBG case fell through to the
+            // to the C# enum, the GBRG/GRBG case fell through to the
             // wrong colour assignment.)
             const fs = `#version 300 es
                 precision highp float;
@@ -2001,17 +2001,17 @@ function ninaApp() {
 
             // Always render at SOURCE resolution into liveCanvas regardless
             // of whether the LIVE tab is currently visible. liveCanvas is
-            // our "GPU output" — we then drawImage() it onto whichever
+            // our "GPU output", we then drawImage() it onto whichever
             // visible canvas the user is looking at (PREVIEW / VIDEO /
             // FOCUS) via the fan-out helper. Scaling for display happens
             // there. Previous version bailed when LIVE was hidden, which
-            // forced everything onto the 2D fallback path — and the 2D
+            // forced everything onto the 2D fallback path, and the 2D
             // fallback has no debayer, so OSC colour cameras rendered as
             // grayscale (or a Bayer dot pattern) and the video tab stayed
             // black entirely whenever the WASM stacker rejected frames.
             //
             // Cap the GPU render size to avoid uploading absurd buffers
-            // when a 6000×4000 sensor lands — fan-out scaling handles
+            // when a 6000×4000 sensor lands, fan-out scaling handles
             // visual fidelity beyond ~2048 anyway.
             const MAX_GPU_DIM = 2048;
             const renderScale = Math.min(MAX_GPU_DIM / width, MAX_GPU_DIM / height, 1);
@@ -2046,14 +2046,14 @@ function ninaApp() {
             // daylight look on raw OSC data; users can tune via the
             // existing WB Red / WB Blue sliders in VIDEO (and soon
             // in PREVIEW). Server-side WB writes via /api/camera/
-            // white-balance still happen too — these multipliers
+            // white-balance still happen too, these multipliers
             // stack on top for client-side preview correction.
             gl.uniform1f(this._glLocs.wbR, this.previewWbR ?? 1.7);
             gl.uniform1f(this._glLocs.wbB, this.previewWbB ?? 1.5);
 
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-            // One-shot diagnostic — captures the GL canvas dims +
+            // One-shot diagnostic, captures the GL canvas dims +
             // any pending error after the first real frame so we
             // can confirm in DevTools that the GPU side actually
             // ran (vs the bitmap being lost between drawArrays and
@@ -2087,7 +2087,7 @@ function ninaApp() {
                 // Server's PUT merges only the fields present in the
                 // body, so we can patch just this one without round-
                 // tripping the whole rig object. (See EquipmentEndpoints
-                // — the null-check on update.LiveStackComputeMode
+                //, the null-check on update.LiveStackComputeMode
                 // keeps other fields untouched.)
                 await this.apiPost('/api/equipment/rigs/' + encodeURIComponent(rig.id), null, {
                     method: 'PUT',
@@ -2104,11 +2104,11 @@ function ninaApp() {
         // CLST-6: upload the WASM-accumulated stack to the server as a
         // FITS. Reads the latest cached raw frame for dimensions +
         // metadata; the actual pixels come from the WASM module's
-        // GetStackedResult (NOT the cached frame — those might be a
+        // GetStackedResult (NOT the cached frame, those might be a
         // single frame's worth, not the accumulator).
         async saveClientStack() {
             if (!this.wasmReady) {
-                this.toast('WASM not ready yet — wait for the live-stack module to load.', 'warn');
+                this.toast('WASM not ready yet, wait for the live-stack module to load.', 'warn');
                 return;
             }
             const interop = globalThis.NINA?.Polaris?.Wasm?.Interop;
@@ -2170,7 +2170,7 @@ function ninaApp() {
             const interop = globalThis.NINA.Polaris.Wasm.Interop;
             // JSExport marshaller doesn't grok Uint16Array directly;
             // pass through Int32Array (free aliasing, no per-element
-            // copy — JS just reinterprets the buffer view).
+            // copy, JS just reinterprets the buffer view).
             const asInt32 = new Int32Array(pixels.length);
             for (let i = 0; i < pixels.length; i++) asInt32[i] = pixels[i];
 
@@ -2179,7 +2179,7 @@ function ninaApp() {
             // Without this guard, a snap captured at a different
             // resolution than the previous video stream would land in
             // an AddFrame that silently rejects and a GetStackedResult
-            // that returns a zero-length or wrong-sized array — the
+            // that returns a zero-length or wrong-sized array, the
             // outer renderer then loops zero times and paints black.
             const expectedLen = width * height;
             if (this._wasmInitDims?.w !== width
@@ -2210,7 +2210,7 @@ function ninaApp() {
             }
 
             // If the stacker didn't actually integrate this frame
-            // (frameCount didn't tick — alignment failed, no stars
+            // (frameCount didn't tick, alignment failed, no stars
             // detected, frame rejected), the accumulator is still
             // empty / unchanged. Returning GetStackedResult here
             // would hand back a zero-filled buffer the right size,
@@ -2255,7 +2255,7 @@ function ninaApp() {
 
             // Bail on placeholder / heartbeat frames before they spam
             // the WebGL pipeline. We were seeing periodic 0x0 frames
-            // arrive over /ws/image-stream — likely a service-side
+            // arrive over /ws/image-stream, likely a service-side
             // empty broadcast (slew-preview kicking off, live-stack
             // accumulator reset, etc.). Renderer would faithfully
             // upload an empty texture, fan out a 0-sized bitmap,
@@ -2264,7 +2264,7 @@ function ninaApp() {
                 return;
             }
 
-            // LZ4 decompression requires lz4.min.js — fallback to REST JPEG if unavailable
+            // LZ4 decompression requires lz4.min.js, fallback to REST JPEG if unavailable
             if (typeof LZ4 === 'undefined') {
                 // No LZ4 library loaded: fetch latest preview via REST as fallback
                 this._fetchPreviewFallback();
@@ -2287,7 +2287,7 @@ function ninaApp() {
 
             // Some native video streams (ZWO ASI under indi_asi_ccd at
             // 8-bit FITS, for example) advertise BITPIX=16 in the
-            // stream header but only ever fill the low byte — every
+            // stream header but only ever fill the low byte, every
             // pixel reads <= 255 against a maxVal of 65535, the MTF
             // stretch collapses everything to ~0, and the canvas is
             // black. Probe a stride sample on the first few frames
@@ -2310,7 +2310,7 @@ function ninaApp() {
                 maxVal = fitted;
             }
 
-            // Periodic diagnostic — one line per ~30 frames so we can
+            // Periodic diagnostic, one line per ~30 frames so we can
             // confirm in DevTools what the WS pipeline is actually
             // delivering when something looks off. Cheap.
             this._rawFrameCounter = (this._rawFrameCounter || 0) + 1;
@@ -2327,10 +2327,10 @@ function ninaApp() {
             // displayable result. WASM accumulates → we display its
             // running mean. While the server stays in Full mode the
             // raw frames it relays are ALREADY the accumulated stack,
-            // so feeding them to WASM again would compound — only run
+            // so feeding them to WASM again would compound, only run
             // the WASM path when the server is opted into metrics-only.
             //
-            // Additionally gate on liveStackRunning — without it, a
+            // Additionally gate on liveStackRunning, without it, a
             // WASM-capable client would route EVERY frame through the
             // accumulator (snap previews, video stream frames, focus
             // captures) even when the user isn't live-stacking. That
@@ -2363,7 +2363,7 @@ function ninaApp() {
             // Build a native-resolution offscreen bitmap once, then fan
             // out to every visible canvas. Previously this drew only
             // into liveCanvas, which is display:none whenever the user
-            // is on PREVIEW / FOCUS / VIDEO — its container had 0
+            // is on PREVIEW / FOCUS / VIDEO, its container had 0
             // width, canvas got sized 0×0, image disappeared. By
             // rendering to an offscreen first and then drawImage()ing
             // into each target, whichever tab is open shows the frame.
@@ -2393,13 +2393,13 @@ function ninaApp() {
         // source bitmap (an HTMLCanvasElement or HTMLImageElement) into
         // every known display canvas, sizing each from its OWN visible
         // parent. Skips canvases whose parent is collapsed (display:
-        // none on a hidden tab) — the next tab switch will pick up the
+        // none on a hidden tab), the next tab switch will pick up the
         // bitmap via the existing mirror call.
         _fanOutFrameToCanvases(src, srcW, srcH) {
             const targets = ['liveCanvas', 'previewCanvas', 'focusCanvas',
                              'videoCaptureCanvas', 'slewPreviewCanvas'];
             const skipLive = (src && src.id === 'liveCanvas');   // src IS liveCanvas → don't blit-to-self
-            // Diagnostic accumulator — one log entry per fan-out the
+            // Diagnostic accumulator, one log entry per fan-out the
             // first time, then once per 60 fan-outs (so a video stream
             // doesn't spam but we still get periodic confirmation).
             const debugThisCall = !this._loggedFanout
@@ -2505,7 +2505,7 @@ function ninaApp() {
 
         updateClock() {
             this.currentTime = new Date().toLocaleTimeString('en-GB');
-            // Always keep the Home tab's UTC clock alive too — the Sky-tab
+            // Always keep the Home tab's UTC clock alive too, the Sky-tab
             // ticker only fires when that tab is open, but the Home hero
             // wants the time even on first paint.
             this._updateSkyClock();
@@ -2582,7 +2582,7 @@ function ninaApp() {
                     if (!this._sequencerTabBootHandled) {
                         this._sequencerTabBootHandled = true;
                         if (this.settings.preferAdvancedSequencer && this.tab === 'home') {
-                            // Don't ambush the user — only switch from the initial 'live' tab
+                            // Don't ambush the user, only switch from the initial 'live' tab
                             // and only if they explicitly opted in. Pre-fetch the doc so the
                             // Adv tab is responsive when they navigate there.
                             this.loadAdvSeq();
@@ -2649,7 +2649,7 @@ function ninaApp() {
                 return;
             }
             // iOS Safari + most modern browsers refuse Geolocation on
-            // non-HTTPS pages outside of localhost — Polaris over the
+            // non-HTTPS pages outside of localhost, Polaris over the
             // LAN at http://polaris-app.local hits exactly that wall.
             // Detect proactively so the user sees an actionable error
             // instead of the silent permission-denied callback that
@@ -2661,7 +2661,7 @@ function ninaApp() {
                 this.locSetup.error =
                     'Browser location needs HTTPS (or localhost). Type the coordinates ' +
                     'manually below, or search by address. Tip: opening Polaris on ' +
-                    'iOS/Android from a phone usually means HTTPS isn\'t set up — ' +
+                    'iOS/Android from a phone usually means HTTPS isn\'t set up, ' +
                     'one-tap address search above does the same job.';
                 return;
             }
@@ -2726,7 +2726,7 @@ function ninaApp() {
         initSkyViewer() {
             // SWE-3-bugfix: d3-celestial removed. The SKY tab now hosts
             // the stellarium-web-engine iframe (#skyFrame), which boots
-            // itself from /sky/index.html — no host-side initialisation
+            // itself from /sky/index.html, no host-side initialisation
             // needed here. Kept the method as a no-op so the sidebar
             // button + Home card click handlers (tab='sky';
             // initSkyViewer()) still call through without an undefined
@@ -2739,7 +2739,7 @@ function ninaApp() {
         // /sky/ sub-application iframe).
         //
         // The engine itself lands in SWE-2; this commit only wires the
-        // round-trip — message listener that absorbs the bridge's
+        // round-trip, message listener that absorbs the bridge's
         // "ready" + a helper to push commands the other way. d3-celestial
         // continues to do the actual rendering until SWE-4 swaps
         // visibility and SWE-6 deletes it.
@@ -2788,7 +2788,7 @@ function ninaApp() {
         // SWE: push the DSS background visibility to the bridge. Called
         // on the SKY toolbar checkbox change AND right after 'ready'
         // (so the persisted localStorage choice is honoured on reload
-        // — the bridge defaults to ON inside its own data-source
+        //, the bridge defaults to ON inside its own data-source
         // registration, but if the user had it off we need to push
         // that across).
         _skyToggleDss() {
@@ -2803,7 +2803,7 @@ function ninaApp() {
                 this._skySearchPending = this._skySearchPending || {};
                 this._skySearchPending[query] = resolve;
                 this._skySendMessage({ type: 'search', query });
-                // 5s timeout — engine returns sync once ready, but
+                // 5s timeout, engine returns sync once ready, but
                 // belt-and-suspenders if a queued search gets stuck.
                 setTimeout(() => {
                     if (this._skySearchPending && query in this._skySearchPending) {
@@ -2826,7 +2826,7 @@ function ninaApp() {
             });
         },
 
-        // Read back the current map centre. Async — engine replies via
+        // Read back the current map centre. Async, engine replies via
         // 'center' message. Returns Promise<{raDeg,decDeg,fovDeg}|null>.
         _skyGetCenter() {
             return new Promise(resolve => {
@@ -2850,7 +2850,7 @@ function ninaApp() {
             window.addEventListener('message', (ev) => {
                 const msg = ev.data;
                 if (!msg || typeof msg !== 'object' || !msg.type) return;
-                // Only accept messages that came from our own bridge — by
+                // Only accept messages that came from our own bridge, by
                 // convention every bridge message carries __from === 'sky-bridge'.
                 if (msg.__from !== 'sky-bridge') return;
 
@@ -2862,14 +2862,14 @@ function ninaApp() {
                         this._skyEngineMissing = !!msg.engineMissing;
                         console.log('[Polaris] Sky bridge ready v' + this._skyBridgeVersion
                             + ' webgl2=' + msg.webgl2 + ' engineLoaded=' + msg.engineLoaded
-                            + (msg.engineMissing ? ' (engine WASM not built — run scripts/build-stellarium-web.sh)' : ''));
+                            + (msg.engineMissing ? ' (engine WASM not built, run scripts/build-stellarium-web.sh)' : ''));
                         // Surface a one-time, non-blocking dev toast
                         // when the WASM build hasn't been committed
-                        // yet. Production users won't see this — by
+                        // yet. Production users won't see this, by
                         // SWE-3 the engine is bundled with publish.
                         if (msg.engineMissing && !this._skyEngineMissingToasted) {
                             this._skyEngineMissingToasted = true;
-                            this.toast('Sky engine not built yet — run scripts/build-stellarium-web.sh', 'warn', 6000);
+                            this.toast('Sky engine not built yet, run scripts/build-stellarium-web.sh', 'warn', 6000);
                         }
                         // Flush anything queued before the bridge was up.
                         const queued = this._skyPending || [];
@@ -2879,13 +2879,13 @@ function ninaApp() {
                         // engine is ready so the sky reflects the
                         // active site + current UTC immediately
                         // rather than the engine's default (Geneva,
-                        // 2009 — that's what the unconfigured engine
+                        // 2009, that's what the unconfigured engine
                         // starts at).
                         this._skyPushObserverAndTime();
                         // SWE: honour persisted DSS toggle. The bridge
                         // defaults to ON during data-source registration,
                         // so we only need to push a message if the user
-                        // turned it OFF previously — but pushing both
+                        // turned it OFF previously, but pushing both
                         // ways is harmless and keeps the bridge/UI in
                         // sync deterministically.
                         this._skyToggleDss();
@@ -2893,7 +2893,7 @@ function ninaApp() {
                         // mount is connected at ready time, centre the
                         // view on mount.ra/dec at FOV=15°. Then seed
                         // skyTarget from the engine's actual current
-                        // centre via _skyGetCenter() — this is robust
+                        // centre via _skyGetCenter(), this is robust
                         // to (a) mount.connected being false at ready
                         // because the first WS status push hasn't
                         // landed yet, (b) the change-hook not firing
@@ -2940,7 +2940,7 @@ function ninaApp() {
                         }
                         // SWE-5: ASIAIR-style "target rectangle always
                         // at map centre". The bridge fires {fromDrag:true}
-                        // on every observer.yaw/pitch change — that
+                        // on every observer.yaw/pitch change, that
                         // covers user drag AND programmatic look-at
                         // echoes, both of which should update the
                         // planning target to whatever's now centred.
@@ -2970,7 +2970,7 @@ function ninaApp() {
                                 raDeg: msg.raDeg, decDeg: msg.decDeg
                             });
                         } else {
-                            // Empty-sky click — close any open card and
+                            // Empty-sky click, close any open card and
                             // stash coords as skyTarget so a follow-up
                             // Slew & Center has somewhere to go.
                             this.skyInfo.visible = false;
@@ -3037,7 +3037,7 @@ function ninaApp() {
             return [raHours, dec * 180 / Math.PI];
         },
 
-        // Meeus low-precision LST (good to a few seconds — fine for orientation).
+        // Meeus low-precision LST (good to a few seconds, fine for orientation).
         _localSiderealTime(utc, longitudeDeg) {
             const jd = utc.getTime() / 86400000 + 2440587.5;
             const t = (jd - 2451545.0) / 36525;
@@ -3078,7 +3078,7 @@ function ninaApp() {
             this._locationLastKey = key;
             // Best-effort reverse geocode. Nominatim is free, no API key, but
             // requires a custom User-Agent (browser sets one automatically)
-            // and rate-limits to 1 req/sec — fine for one-off lookups on
+            // and rate-limits to 1 req/sec, fine for one-off lookups on
             // settings changes.
             try {
                 const url = `https://nominatim.openstreetmap.org/reverse?format=json&zoom=10&lat=${lat}&lon=${lng}`;
@@ -3097,7 +3097,7 @@ function ninaApp() {
                 }
                 // Otherwise leave the coords-only fallback in place.
             } catch (e) {
-                // Offline or blocked — silent fallback to coords.
+                // Offline or blocked, silent fallback to coords.
             }
         },
 
@@ -3116,12 +3116,12 @@ function ninaApp() {
             try {
                 const r = await this.apiGet(`/api/system/geocode?query=${encodeURIComponent(q)}&limit=5`);
                 // The geocode endpoint returns { query, count, results }, NOT a
-                // raw array — the older Array.isArray(r) check silently
+                // raw array, the older Array.isArray(r) check silently
                 // dropped every match. Search "New York" → "No matches"
                 // even though the server returned 5 hits.
                 this.obsAddressResults = Array.isArray(r?.results) ? r.results : [];
                 if (!this.obsAddressResults.length) {
-                    this.obsAddressError = 'No matches — try a more specific search (city, state, country).';
+                    this.obsAddressError = 'No matches, try a more specific search (city, state, country).';
                 }
             } catch (e) {
                 this.obsAddressError = 'Address lookup failed: ' + (e.message || 'unknown error');
@@ -3131,7 +3131,7 @@ function ninaApp() {
         },
 
         adoptObservatoryResult(r) {
-            // Coerce both fields through Number() before toFixed —
+            // Coerce both fields through Number() before toFixed,
             // System.Text.Json sometimes serialises doubles as numbers
             // but custom services have shipped them as strings in the
             // past, and string.toFixed throws.
@@ -3147,7 +3147,7 @@ function ninaApp() {
 
         // Use the browser's Geolocation API. Requires user permission
         // and a secure context (localhost is fine, plain-HTTP LAN
-        // hosts are NOT — modern browsers gate this on https://).
+        // hosts are NOT, modern browsers gate this on https://).
         useBrowserLocation() {
             if (!('geolocation' in navigator)) {
                 this.obsAddressError = 'Geolocation is not supported by this browser.';
@@ -3169,7 +3169,7 @@ function ninaApp() {
                 (err) => {
                     this.obsGpsLoading = false;
                     const map = {
-                        1: 'Permission denied — allow location in the browser address bar.',
+                        1: 'Permission denied, allow location in the browser address bar.',
                         2: 'Position unavailable. GPS / Wi-Fi positioning may be off.',
                         3: 'Timed out waiting for a location fix.'
                     };
@@ -3180,7 +3180,7 @@ function ninaApp() {
             );
         },
 
-        // ─── STUDIO (post-processing) — ST-1 frame browser ───────────────
+        // ─── STUDIO (post-processing), ST-1 frame browser ───────────────
 
         async loadStudio() {
             try {
@@ -3277,7 +3277,7 @@ function ninaApp() {
         },
 
         // Triggered by slider input. Coalesces rapid drags into one
-        // render request — 150 ms is short enough to feel live, long
+        // render request, 150 ms is short enough to feel live, long
         // enough to skip 80% of intermediate frames during a drag.
         studioStretchChanged() {
             clearTimeout(this._studioViewerDebounce);
@@ -3362,7 +3362,7 @@ function ninaApp() {
         // ─── ST-3: Master frame creation ─────────────────────────────────
 
         // Open the create-master modal. Auto-detect type from the
-        // majority IMAGETYP across the selection — usually the user
+        // majority IMAGETYP across the selection, usually the user
         // already filtered to one type, but the override is there in
         // case they didn't.
         studioOpenMasterDialog() {
@@ -3447,7 +3447,7 @@ function ninaApp() {
         async studioOpenCalibrateDialog() {
             // Pull the available masters from the library so the
             // override dropdowns aren't empty. One full /frames call
-            // is fine — the user typically has a handful of masters.
+            // is fine, the user typically has a handful of masters.
             this.studio.calibrate.darkId = null;
             this.studio.calibrate.flatId = null;
             this.studio.calibrate.biasId = null;
@@ -3477,7 +3477,7 @@ function ninaApp() {
         },
 
         async studioStartCalibrate() {
-            // Filter selectedIds down to LIGHTs only — calibrating a
+            // Filter selectedIds down to LIGHTs only, calibrating a
             // dark by accident produces noise frames in calibrated/.
             const lightIds = this.studio.frames
                 .filter(f => this.studio.selectedIds.includes(f.id) &&
@@ -3508,7 +3508,7 @@ function ninaApp() {
                             this.studio.calibrate.running = false;
                             const ok = s.succeeded || 0;
                             const fail = s.failed || 0;
-                            const msg = `Calibration done — ${ok} OK` + (fail > 0 ? `, ${fail} failed` : '');
+                            const msg = `Calibration done, ${ok} OK` + (fail > 0 ? `, ${fail} failed` : '');
                             this.toast?.(msg, fail > 0 ? 'warning' : 'ok');
                             this.loadStudio();
                         }
@@ -3587,7 +3587,7 @@ function ninaApp() {
                             this.studio.integrate.running = false;
                             if (s.stage === 'done') {
                                 this.toast?.(
-                                    `Stack done — ${s.combined} combined` +
+                                    `Stack done, ${s.combined} combined` +
                                     (s.dropped > 0 ? `, ${s.dropped} dropped` : '') +
                                     ` → ${s.outputPath}`,
                                     s.dropped > 0 ? 'warning' : 'ok'
@@ -3768,7 +3768,7 @@ function ninaApp() {
         // trumps everything; otherwise we map the cloudcover bucket to a
         // sun-and-clouds icon during the day, and to a moon variant at
         // night. Precipitation glyphs are intentionally not day/night-
-        // sensitive — rain looks like rain regardless of the sun's position.
+        // sensitive, rain looks like rain regardless of the sun's position.
         _weatherIconFor(cloud, prec, isNight = false) {
             const p = (prec || 'none').toLowerCase();
             if (p === 'snow')                       return '🌨️';
@@ -3778,7 +3778,7 @@ function ninaApp() {
             if (isNight) {
                 // Unicode doesn't ship "moon-behind-cloud" glyphs in a
                 // reliable cross-platform set, so we collapse the partial
-                // and mostly-cloudy night buckets into ☁️ — at night the
+                // and mostly-cloudy night buckets into ☁️, at night the
                 // actually-useful signal for astrophotography is "is the
                 // sky clear or not". Crescent moon stays for ≤ 50% cloud.
                 if (cloud <= 2) return '🌙';
@@ -3844,7 +3844,7 @@ function ninaApp() {
                 const localKey = utc.toLocaleDateString();
                 if (!buckets.has(localKey)) buckets.set(localKey, []);
                 const slotDate = utc;
-                // Day/night classification — use slot midpoint (slot start
+                // Day/night classification, use slot midpoint (slot start
                 // + 1.5h) so a slot that straddles sunset isn't mis-tagged.
                 // SunCalc gives us sunrise/sunset for the slot's local date.
                 let isNight = false;
@@ -3886,7 +3886,7 @@ function ninaApp() {
                 const headerDate = refDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
                 // Sun/moon ephemeris. SunCalc takes Date in local time but
-                // computes everything in UTC under the hood — we feed it
+                // computes everything in UTC under the hood, we feed it
                 // the date at local noon to avoid edge cases at midnight.
                 const noon = new Date(refDate); noon.setHours(12, 0, 0, 0);
                 let sun = {}, moon = {}, moonIllum = {};
@@ -3908,8 +3908,8 @@ function ninaApp() {
                     sunriseLabel:      sun.sunrise   ? this._fmtLocalTime(sun.sunrise)   : '',
                     duskAstro:         sun.nightEnd ? sun.night : null,
                     dawnAstro:         sun.nightEnd,
-                    duskAstroLabel:    sun.night     ? this._fmtLocalTime(sun.night)     : '—',
-                    dawnAstroLabel:    sun.nightEnd  ? this._fmtLocalTime(sun.nightEnd)  : '—',
+                    duskAstroLabel:    sun.night     ? this._fmtLocalTime(sun.night)     : ', ',
+                    dawnAstroLabel:    sun.nightEnd  ? this._fmtLocalTime(sun.nightEnd)  : ', ',
                     moonIcon:          this._moonIconForPhase(moonIllum.phase ?? 0),
                     moonIllumination:  Math.round((moonIllum.fraction ?? 0) * 100),
                 });
@@ -3986,7 +3986,7 @@ function ninaApp() {
 
         editorTabOpened() {
             // Restore prior compute-mode preference (default server).
-            // We only honour 'wasm' here if the bundle's actually ready —
+            // We only honour 'wasm' here if the bundle's actually ready,
             // saved-pref-says-wasm but bundle-not-loaded yet → stay on
             // server until the user explicitly flips it.
             try {
@@ -4065,17 +4065,17 @@ function ninaApp() {
                 this.editorState.edits = info.edits || this._editorDefaultEdits();
                 this.editorState.dirty = false;
                 // Reset zoom/pan + history so each new source starts
-                // fresh — undo doesn't reach into a prior session.
+                // fresh, undo doesn't reach into a prior session.
                 this.editorZoomReset();
                 this._editorResetHistory(this.editorState.edits);
-                // Mark WASM buffer stale — new source needs a fresh
+                // Mark WASM buffer stale, new source needs a fresh
                 // EditorLoad before the next ApplyEdit.
                 this.editorState.wasmLoaded = false;
                 if (this.editorState.computeMode === 'wasm') {
                     await this._editorLoadWasmBuffer();
                 }
                 // Render initial preview + an unedited reference for the
-                // "Hold to compare" button (always server-mode — gives a
+                // "Hold to compare" button (always server-mode, gives a
                 // pristine reference even when WASM is active).
                 await this._editorRenderOriginal();
                 this._editorSchedulePreview();
@@ -4118,7 +4118,7 @@ function ninaApp() {
             this.editorState.edits = this._editorDefaultEdits();
             this.editorState.dirty = true;
             this._editorSchedulePreview();
-            // Reset is itself an undoable step — push immediately
+            // Reset is itself an undoable step, push immediately
             // instead of waiting for the slider-idle timer.
             this._editorPushHistory();
         },
@@ -4141,7 +4141,7 @@ function ninaApp() {
                 this.toast('Editor has no source path', 'warn');
                 return;
             }
-            // License consent — same path the FILES tab uses.
+            // License consent, same path the FILES tab uses.
             const ok = await this._ensureOnnxLicenseAccepted();
             if (!ok) return;
 
@@ -4171,7 +4171,7 @@ function ninaApp() {
                         runOpts = {
                             strength: this.settings.graxpertDeconStrength,
                             psfPixels: this.settings.graxpertDeconPsfSize,
-                            // GX-12h: parity with GraXpert UI — let the
+                            // GX-12h: parity with GraXpert UI, let the
                             // user pick Stars-only vs Object-only here too.
                             target: this.graxpert?.modalDeconTarget || 'stars',
                         };
@@ -4195,7 +4195,7 @@ function ninaApp() {
                         // process per-channel.
                         channels: raw.channels,
                         onProgress: (phase, frac) => {
-                            this.editorAi.phase = op + ' — ' + phase
+                            this.editorAi.phase = op + ', ' + phase
                               + (frac != null ? ' ' + Math.round(frac * 100) + '%' : '');
                         }
                     }));
@@ -4207,7 +4207,7 @@ function ninaApp() {
                 if (!outPath) throw new Error('Save failed');
 
                 // Preserve the user's current edits across the source
-                // swap — re-apply them on the new session.
+                // swap, re-apply them on the new session.
                 const savedEdits = JSON.parse(JSON.stringify(
                     this.editorState.edits || {}));
 
@@ -4229,7 +4229,7 @@ function ninaApp() {
 
         editorClose() {
             if (this.editorState.session) {
-                // Fire-and-forget — server reaps on idle anyway, but
+                // Fire-and-forget, server reaps on idle anyway, but
                 // freeing now is cheaper.
                 fetch('/api/editor/release', {
                     method: 'POST',
@@ -4238,7 +4238,7 @@ function ninaApp() {
                 }).catch(() => { /* ignore */ });
             }
             this._editorTeardownBlobs();
-            // Drop the WASM working buffer too — saves 50-200MB heap.
+            // Drop the WASM working buffer too, saves 50-200MB heap.
             if (this.editorState.wasmLoaded && globalThis.NINA?.Polaris?.Wasm?.Interop) {
                 try { globalThis.NINA.Polaris.Wasm.Interop.EditorRelease(); }
                 catch { /* ignore */ }
@@ -4442,7 +4442,7 @@ function ninaApp() {
             const s = this.editorState;
             const next = Math.max(0.1, Math.min(16, s.zoom * factor));
             if (Math.abs(next - s.zoom) < 1e-4) return;
-            // Anchor-aware zoom — keep the point under the cursor fixed
+            // Anchor-aware zoom, keep the point under the cursor fixed
             // in screen space. If no anchor given (button click), zoom
             // around the centre (anchor offsets default to 0,0).
             if (anchorX != null && anchorY != null) {
@@ -4455,7 +4455,7 @@ function ninaApp() {
 
         editorOnWheel(ev) {
             // Wheel zooms with the cursor as anchor. We use deltaY sign
-            // (not magnitude — track-pads vary wildly) for predictable
+            // (not magnitude, track-pads vary wildly) for predictable
             // 1.1× steps.
             const wrap = ev.currentTarget;
             const rect = wrap.getBoundingClientRect();
@@ -4494,7 +4494,7 @@ function ninaApp() {
                 // Skip when user is typing in a real input/textarea.
                 const tag = (e.target?.tagName || '').toLowerCase();
                 if (tag === 'input' || tag === 'textarea' || e.target?.isContentEditable) {
-                    // Allow Ctrl+Z on sliders — they don't have a useful
+                    // Allow Ctrl+Z on sliders, they don't have a useful
                     // native undo anyway, and the user expects undo to
                     // walk the edit history regardless of focus.
                     if (tag === 'input' && e.target?.type !== 'range') return;
@@ -4511,7 +4511,7 @@ function ninaApp() {
             });
         },
 
-        // Debounced render — every input pings, but we coalesce to one
+        // Debounced render, every input pings, but we coalesce to one
         // request in flight + one queued. Prevents the server from
         // queueing 100 stale requests while the user is mid-drag.
         _editorSchedulePreview() {
@@ -4522,7 +4522,7 @@ function ninaApp() {
         async _editorRunPreview() {
             if (!this.editorState.session) return;
             if (this.editorState.rendering) {
-                // Already a request in flight — flag pending and bail.
+                // Already a request in flight, flag pending and bail.
                 this._editorPendingPreview = true;
                 return;
             }
@@ -4565,13 +4565,13 @@ function ninaApp() {
         },
 
         _editorRunPreviewWasm() {
-            // Synchronous JSExport call — pixels come back as a Uint8Array
+            // Synchronous JSExport call, pixels come back as a Uint8Array
             // we render to the editor canvas via ImageData. No JPEG encode,
             // no network roundtrip; latency is just the pipeline + canvas
             // blit.
             const interop = globalThis.NINA?.Polaris?.Wasm?.Interop;
             if (!interop) {
-                // Lost the bundle somehow — graceful fallback to server.
+                // Lost the bundle somehow, graceful fallback to server.
                 this.editorState.computeMode = 'server';
                 return this._editorRunPreviewServer();
             }
@@ -4689,7 +4689,7 @@ function ninaApp() {
         },
 
         _editorDefaultEdits() {
-            // Empty record-of-records — all sections null/missing means
+            // Empty record-of-records, all sections null/missing means
             // "defaults" on the server (EditParams.IsDefault per section).
             return {};
         },
@@ -4893,7 +4893,7 @@ function ninaApp() {
         // can render any two files the preview endpoint understands
         // (FITS / PNG / JPG / TIFF), so the only client-side gate is
         // "exactly two files, no directories". File-type validity is
-        // checked by /api/files/preview itself — bad type just renders
+        // checked by /api/files/preview itself, bad type just renders
         // a 415 inside the comparator instead of crashing.
         filesSelectionHasDir() {
             const sel = this.files.selectedPaths;
@@ -4909,7 +4909,7 @@ function ninaApp() {
             if (sel.length !== 2) return;
             // Sort alphabetically so common pairings (master + its
             // _bge/_denoise/_decon sibling) land BEFORE = master,
-            // AFTER = sibling — '.' (0x2e) sorts before '_' (0x5f),
+            // AFTER = sibling, '.' (0x2e) sorts before '_' (0x5f),
             // and "_denoise" sorts after the bare stem.
             const ordered = [...sel].sort((a, b) =>
                 a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
@@ -4921,7 +4921,7 @@ function ninaApp() {
             };
             // mode='compare' switches the corner tags from
             // BEFORE/AFTER (the GraXpert-op semantic) to the actual
-            // filenames — the user is comparing two arbitrary files,
+            // filenames, the user is comparing two arbitrary files,
             // not a known before/after pair.
             this.graxpertOpenCompare([pair], 0, 'compare');
         },
@@ -5002,7 +5002,7 @@ function ninaApp() {
             if (this.files.selectedPaths.length === 0) return;
             const n = this.files.selectedPaths.length;
             if (!window.confirm(
-                    `Delete ${n} item(s)? This is permanent — folders are removed recursively.`)) return;
+                    `Delete ${n} item(s)? This is permanent, folders are removed recursively.`)) return;
             try {
                 await this.apiPost('/api/files/delete', null, {
                     method: 'POST',
@@ -5154,7 +5154,7 @@ function ninaApp() {
         // Open the shared image-viewer modal with a custom URL + title.
         // Routes through openImageViewer() so the existing modal frame,
         // close handler, navigator config, and OSD destroy/leak guard
-        // all apply — no parallel pipeline.
+        // all apply, no parallel pipeline.
         _openImageViewerWithUrl(url, title) {
             this.imageViewerUrl = url;
             this.imageViewerTitle = title || 'Image Viewer';
@@ -5171,7 +5171,7 @@ function ninaApp() {
             const path = this.files.selectedPaths[0];
             this.tab = 'editor';
             // wait for the tab to mount (editorState bindings need to
-            // exist before editorLoad runs) — one tick is plenty.
+            // exist before editorLoad runs), one tick is plenty.
             await this.$nextTick();
             await this.editorLoad(path);
         },
@@ -5219,7 +5219,7 @@ function ninaApp() {
         },
 
         filesFormatBytes(n) {
-            if (n == null || n < 0) return '—';
+            if (n == null || n < 0) return ', ';
             if (n < 1024) return n + ' B';
             if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
             if (n < 1024 * 1024 * 1024) return (n / 1048576).toFixed(1) + ' MB';
@@ -5227,9 +5227,9 @@ function ninaApp() {
         },
 
         filesFormatDate(iso) {
-            if (!iso) return '—';
+            if (!iso) return ', ';
             const d = new Date(iso);
-            if (isNaN(d.getTime()) || d.getFullYear() < 1980) return '—';
+            if (isNaN(d.getTime()) || d.getFullYear() < 1980) return ', ';
             return d.getFullYear() + '-' +
                    String(d.getMonth() + 1).padStart(2, '0') + '-' +
                    String(d.getDate()).padStart(2, '0') + ' ' +
@@ -5254,7 +5254,7 @@ function ninaApp() {
             return this.tonight.items.some(i => i.fitsCameraFov !== null);
         },
 
-        // Used in `:key` / `:id` bindings — has to be DOM-safe (no slashes,
+        // Used in `:key` / `:id` bindings, has to be DOM-safe (no slashes,
         // colons, parens). Comet names like "22P/Kopff" would otherwise
         // produce invalid IDs.
         tonightSafeKey(item) {
@@ -5267,11 +5267,11 @@ function ninaApp() {
         },
 
         // Click the name → set as the current Sky target, jump to Sky tab,
-        // recentre the map ON THE PICKED OBJECT. Doesn't move the mount —
+        // recentre the map ON THE PICKED OBJECT. Doesn't move the mount,
         // that's the Go to btn.
         //
         // Bug fix: previously this called skyGoToMount() which prefers
-        // mount.ra/dec over skyTarget — so the map snapped to the mount
+        // mount.ra/dec over skyTarget, so the map snapped to the mount
         // position instead of the picked card. Now we drive the engine
         // straight via _skyLookAt with the card's coordinates.
         tonightPickTarget(item) {
@@ -5300,7 +5300,7 @@ function ninaApp() {
                 // they had on the Tonight card (name, mag, altitude chart,
                 // transit/set times). _populateSkyInfo takes an obj shaped
                 // like a stellarium-web search result, so synthesise one
-                // from the tonight item — types[] becomes [item.type] when
+                // from the tonight item, types[] becomes [item.type] when
                 // present, subtitle gets the common name if any.
                 this._populateSkyInfo({
                     name: item.name,
@@ -5313,11 +5313,11 @@ function ninaApp() {
             });
         },
 
-        // "Center" action — purely a map operation. Picks the card as
+        // "Center" action, purely a map operation. Picks the card as
         // the SKY target (opens the info card, centres the engine on
         // the coords, refreshes FOV overlays). Does NOT move the mount.
         // The button used to slew; the user explicitly asked that the
-        // mount stay put — slewing now lives on the SKY tab's
+        // mount stay put, slewing now lives on the SKY tab's
         // Slew / Slew & Center overlays after the map is positioned.
         async tonightGoTo(item) {
             this.tonightPickTarget(item);
@@ -5325,7 +5325,7 @@ function ninaApp() {
 
         // Helper: mark a card's thumb as failed-to-load. If we were
         // trying the local cached URL and a remote URL is also known,
-        // swap to the remote URL once before giving up — this covers
+        // swap to the remote URL once before giving up, this covers
         // the case where /api/sky/image/file/{slug} 404s due to a
         // stale in-memory cache on the backend but NASA / Wikipedia
         // still has the original. Reassigns the whole `thumbs` dict
@@ -5352,7 +5352,7 @@ function ninaApp() {
         // for a list of this size and is much kinder to NASA / Wikipedia.
         //
         // For each candidate we try a few name variants in order of
-        // search-friendliness — NASA Image Library is indexed by popular
+        // search-friendliness, NASA Image Library is indexed by popular
         // names ("Carina Nebula"), much less by raw catalogue codes
         // ("NGC 3372"). Common name first, then catalogue name as the
         // fallback. Backend caches each lookup independently.
@@ -5408,7 +5408,7 @@ function ninaApp() {
             if (this.tonight._prefetching) return;
             this.tonight._prefetching = true;
             try {
-                this.toast?.('Downloading object thumbnails — may take a couple of minutes…', 'info');
+                this.toast?.('Downloading object thumbnails, may take a couple of minutes…', 'info');
                 const r = await this.apiPost('/api/sky/image/prefetch', {});
                 this.toast?.(
                     `Prefetch done · ${r.foundCount}/${r.attemptedCount} images, ` +
@@ -5426,7 +5426,7 @@ function ninaApp() {
         },
 
         // Mini per-card altitude chart (~12 h window). Can't use
-        // _ensureChart() — it looks up canvases via $refs which only
+        // _ensureChart(), it looks up canvases via $refs which only
         // works for static templates, not the dynamic x-for loop here.
         // Instead resolve the canvas by id and keep instances in a
         // separate dict so refresh can destroy them.
@@ -5437,7 +5437,7 @@ function ninaApp() {
             if (!canvas) return;
             if (typeof Chart === 'undefined') return;
             // If a previous chart instance exists for this card (e.g. on
-            // refresh), tear it down before creating a new one — leaving
+            // refresh), tear it down before creating a new one, leaving
             // it leaks GPU contexts.
             this._tonightCharts ??= {};
             if (this._tonightCharts[safe]) {
@@ -5487,7 +5487,7 @@ function ninaApp() {
             this.skyClock = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
             // SWE-4: keep the engine's observer.utc in sync so the
             // moon, sun, planets render at the right phase/altitude.
-            // Throttle to once every 30 ticks (~30s) — the engine
+            // Throttle to once every 30 ticks (~30s), the engine
             // interpolates per-frame internally, so we don't need to
             // push the clock every second.
             this._skyTimePushTick = (this._skyTimePushTick || 0) + 1;
@@ -5499,14 +5499,14 @@ function ninaApp() {
         skyGoToMount() {
             // SWE-4: removed Celestial.rotate dependency. Now drives
             // the stellarium-web-engine iframe via _skyLookAt. The
-            // _celestialReady gate has been retired with d3 — instead
+            // _celestialReady gate has been retired with d3, instead
             // we trust _skySendMessage to queue the message if the
             // bridge hasn't announced ready yet.
             const ra  = this.mount?.ra  ?? (this.skyTarget?.ra)  ?? 0;
             const dec = this.mount?.dec ?? (this.skyTarget?.dec) ?? 0;
             const decClamped = Math.max(-89.5, Math.min(89.5, dec));
             // Tighter FOV so the camera's mount rectangle is actually
-            // visible — default 45° wide-field view dwarfs typical
+            // visible, default 45° wide-field view dwarfs typical
             // 1-3° camera FOVs. Zoom to ~4× the camera width so the
             // blue rectangle takes a comfortable fraction of the
             // viewport without losing context.
@@ -5521,16 +5521,16 @@ function ninaApp() {
         },
 
         // ASIAIR-style two-FOV overlay on the sky map:
-        //   • BLUE rectangle — where the mount is currently pointing
+        //   • BLUE rectangle, where the mount is currently pointing
         //     (always shown when a mount is connected). Lets the user
         //     see what's actually in frame right now without picking
         //     anything.
-        //   • RED rectangle — where the user is planning to go
+        //   • RED rectangle, where the user is planning to go
         //     (anchored on the picked sky target if any). Acts as the
         //     "preview my next slew" indicator.
         // Both share the same FOV dimensions (sensor + focal length
         // from the active rig). Drawn as custom d3-celestial layers
-        // — we register the layers ONCE and then mutate the cached
+        //, we register the layers ONCE and then mutate the cached
         // GeoJSON on subsequent calls, then nudge Celestial.redraw().
         // (The old code re-registered the layer every call, leaking
         // a new SVG layer per WS tick and never cleaning the old.)
@@ -5553,7 +5553,7 @@ function ninaApp() {
             };
         },
 
-        // SWE-6: _skyMapCenter() removed — d3-celestial's projection
+        // SWE-6: _skyMapCenter() removed, d3-celestial's projection
         // is gone. Sync reads of the live map centre are not possible
         // through the bridge; callers use _skyGetCenter() async or
         // fall back to skyTarget.
@@ -5728,7 +5728,7 @@ function ninaApp() {
         // Direction math: (azErr, altErr) are in arcsec in topocentric
         // alt/az. The CAMERA frame is rotated by the last solve's
         // rotationDeg relative to north-up. Rotating the error vector
-        // by -rotationDeg orients the arrow with the camera's view —
+        // by -rotationDeg orients the arrow with the camera's view,
         // up-on-screen corresponds to "up in altitude" only after this
         // de-rotation.
         _drawPolarErrorVector(ctx, w, h) {
@@ -5777,7 +5777,7 @@ function ninaApp() {
             ctx.lineTo(tipX, tipY);
             ctx.stroke();
 
-            // Arrowhead — small triangle at the tip.
+            // Arrowhead, small triangle at the tip.
             const ang = Math.atan2(dy, dx);
             const headLen = 14;
             const headHalf = 7;
@@ -5880,7 +5880,7 @@ function ninaApp() {
         },
 
         openHistoryItem(item) {
-            // No full image archive (yet) — best we can do is open OSD with the
+            // No full image archive (yet), best we can do is open OSD with the
             // current latest preview if the user clicked the most recent thumb,
             // otherwise show the cached thumbnail.
             if (item === this.imageHistory[0]) {
@@ -5970,7 +5970,7 @@ function ninaApp() {
             // Reset to live-camera defaults so the next "View full image"
             // from any other tab doesn't accidentally re-open a file.
             this.imageViewerUrl = '/api/image/latest/preview';
-            this.imageViewerTitle = 'Image Viewer — full resolution';
+            this.imageViewerTitle = 'Image Viewer, full resolution';
             // Drop the header cache so reopening a different FITS doesn't
             // briefly flash the previous file's headers.
             this.fitsHeaders.data = null;
@@ -6056,7 +6056,7 @@ function ninaApp() {
                 // Hint the user how to come back. OSD's full-page mode
                 // hides the modal header (where our exit button lives),
                 // so without this they have no visual cue.
-                if (!cur) this.toast('Full page — press Esc to exit', 'info');
+                if (!cur) this.toast('Full page, press Esc to exit', 'info');
             } catch (e) {}
         },
 
@@ -6215,14 +6215,14 @@ function ninaApp() {
         // The canvas lives inside x-show="guider.connected" which starts
         // as display:none, so Chart.js used to measure 0x0 at first
         // create and never re-fit. We defer instance creation until the
-        // canvas actually has a non-zero size — then a single Chart.js
+        // canvas actually has a non-zero size, then a single Chart.js
         // instance is reused and just gets its data swapped on each
         // ~1Hz WS tick.
         updateGuideChart() {
             const canvas = this.$refs.guideChart;
             if (!canvas || typeof Chart === 'undefined') return;
 
-            // Wait until the canvas has pixels — its parent may still be
+            // Wait until the canvas has pixels, its parent may still be
             // display:none on the first few WS ticks after page load.
             // We don't bail in subsequent ticks even if clientWidth dips
             // because that would freeze the chart on transient layouts.
@@ -6280,7 +6280,7 @@ function ninaApp() {
                         scales: {
                             x: { display: false, grid: { color: t.grid } },
                             // Symmetric y so positive + negative excursions
-                            // are both visible — auto-fit would otherwise
+                            // are both visible, auto-fit would otherwise
                             // anchor at 0 when all samples sit on one side.
                             y: {
                                 ticks: { color: t.tick, font: { size: 10 } },
@@ -6312,7 +6312,7 @@ function ninaApp() {
             // numbers. Default is safe + fast since we set
             // animation: false above.
             c.update();
-            // Visible heartbeat — increments even if line shape barely
+            // Visible heartbeat, increments even if line shape barely
             // changed, so the user can verify the chart is alive.
             this.guideChartTickCount = (this.guideChartTickCount || 0) + 1;
         },
@@ -6409,7 +6409,7 @@ function ninaApp() {
         // Temperature chart: sensor temp + cooler power vs time
         updateTempChart() {
             // Guard against Chart.js's "Cannot set properties of undefined
-            // (setting 'fullSize')" — fires when the canvas is in the DOM
+            // (setting 'fullSize')", fires when the canvas is in the DOM
             // but its parent has zero measured size (initial paint pass,
             // x-show transition). Wait until the canvas has real pixels.
             const canvas = this.$refs.tempChart;
@@ -6493,7 +6493,7 @@ function ninaApp() {
                 this.settings.focalLength = rig.focalLengthMm;
                 this.updateFov();
             }
-            // OTA optics — hydrate the Main Telescope card on the RIGS tab.
+            // OTA optics, hydrate the Main Telescope card on the RIGS tab.
             // Empty/zero values are fine (the card just shows blanks).
             this.settings.aperture = rig.apertureMm || 0;
             this.settings.telescopeBrand = rig.telescopeBrand || '';
@@ -6554,7 +6554,7 @@ function ninaApp() {
             await this.saveRig(rig);
         },
 
-        // Debounced PUT — covers focal length / cooler target / etc. inline edits
+        // Debounced PUT, covers focal length / cooler target / etc. inline edits
         _rigSaveTimers: {},
         saveRig(rig) {
             if (!rig?.id) return;
@@ -6663,7 +6663,7 @@ function ninaApp() {
                         && t.model === rig.telescopeModel);
             if (scope) {
                 rig.apertureMm = scope.apertureMm;
-                // Base scope back-focus — overridden below if the
+                // Base scope back-focus, overridden below if the
                 // accessory publishes its own value (most do).
                 rig.requiredBackspacingMm = scope.backspacingMm;
             } else {
@@ -6752,7 +6752,7 @@ function ninaApp() {
             } catch (e) { this.toast('Delete failed', 'error'); }
         },
 
-        // Settings-mirror version of _applyOpticsToRig — same lookup,
+        // Settings-mirror version of _applyOpticsToRig, same lookup,
         // writes to this.settings.* instead of a rig object. Used by
         // the catalog picker dropdowns in the Main Telescope card on
         // the RIGS tab (settings.* later flushes into the active rig
@@ -6810,7 +6810,7 @@ function ninaApp() {
 
         // Debounced save for inline OTA / Guidescope edits from the
         // RIGS-tab cards. Without the debounce, every keystroke
-        // would PUT the whole rig — 600 ms is long enough that the
+        // would PUT the whole rig, 600 ms is long enough that the
         // user finishes typing a number before we round-trip.
         saveOpticsDebounced() {
             if (this._opticsSaveTimer) clearTimeout(this._opticsSaveTimer);
@@ -6831,7 +6831,7 @@ function ninaApp() {
             return n;
         },
 
-        // True if at least one accessory is configured — the
+        // True if at least one accessory is configured, the
         // <details> auto-opens in this case so the user sees what
         // they previously set without having to click.
         anyAccessoryConfigured() {
@@ -6915,7 +6915,7 @@ function ninaApp() {
                         autoGraXpert: !!data.autoGraXpert
                     };
                 }
-            } catch (e) { /* not fatal — defaults stand */ }
+            } catch (e) { /* not fatal, defaults stand */ }
         },
 
         saveEndActions() {
@@ -6946,7 +6946,7 @@ function ninaApp() {
             return parts.join(' · ') + (ea.runOnStop ? ' · also on stop' : '');
         },
 
-        // Debounced PUT — fires 400ms after the last edit
+        // Debounced PUT, fires 400ms after the last edit
         saveDitherSettings() {
             if (this._ditherSaveTimer) clearTimeout(this._ditherSaveTimer);
             this._ditherSaveTimer = setTimeout(async () => {
@@ -7048,7 +7048,7 @@ function ninaApp() {
                 // connected-device names to the per-card dropdowns.
                 // We have to do this AFTER `devices` populates because
                 // a <select> can't pick a value whose matching <option>
-                // doesn't exist yet — the browser silently resets it
+                // doesn't exist yet, the browser silently resets it
                 // to the first option ("Select device"). The WS handler
                 // does an early write to equip*Choice, but that lands
                 // before this fetch returns. Re-apply here so the
@@ -7065,7 +7065,7 @@ function ninaApp() {
         //      devices list, clear it. This catches the very common case
         //      where the saved rig profile carries a stale device name
         //      ("ZWO ASI120MM" but tonight's indiserver only exposes
-        //      "CCD Simulator") — without clearing, the truthy stale
+        //      "CCD Simulator"), without clearing, the truthy stale
         //      value silently blocks step 2 from running.
         //   2. If the choice is now empty AND the live equipment payload
         //      reports a connected device whose name DOES match a current
@@ -7197,7 +7197,7 @@ function ninaApp() {
             }
             this.preview.busy = true;
             try {
-                // apiPost returns a Response object — we need .json()
+                // apiPost returns a Response object, we need .json()
                 // to get the actual { stats, saved, ... } payload.
                 // Use a per-request timeout proportional to exposure
                 // (default apiFetch timeout is 15s, which is too short
@@ -7215,7 +7215,7 @@ function ninaApp() {
                 const r = await resp.json();
                 this.preview.lastStats = r?.stats || null;
                 this.preview.lastSnapAt = Date.now();
-                // Snap fired successfully — surface a quick confirmation
+                // Snap fired successfully, surface a quick confirmation
                 // (the actual image lands on previewCanvas via the WS
                 // image-stream broadcast that the backend kicked off).
                 if (r?.saved) {
@@ -7227,7 +7227,7 @@ function ninaApp() {
                 }
             } catch (e) {
                 this.toast('Snap failed: ' + (e.message || ''), 'error');
-                // Break the loop on error — don't hammer the camera
+                // Break the loop on error, don't hammer the camera
                 // with a guaranteed-to-fail sequence of requests.
                 this.preview.looping = false;
             } finally {
@@ -7267,7 +7267,7 @@ function ninaApp() {
         // Toggle the server-side continuous stream. Backend auto-picks
         // native (CCD_VIDEO_STREAM, ~10-30 fps) when the camera supports
         // it, else falls back to a tight capture loop on the server.
-        // Frames pipe through the existing /ws/image-stream channel —
+        // Frames pipe through the existing /ws/image-stream channel,
         // the LIVE / PREVIEW / Focus canvases all render them.
         async toggleCameraStream() {
             if (this.cameraStream.running) {
@@ -7291,7 +7291,7 @@ function ninaApp() {
 
         // ----- VIDEO tab (planetary capture + lucky-imaging stack) -----
 
-        // Capture side — wraps the existing /api/camera/stream endpoints
+        // Capture side, wraps the existing /api/camera/stream endpoints
         // with the VIDEO tab's own exposure/gain/binning. Recording
         // subscribes to the stream on the server side (no client-side
         // frame routing).
@@ -7328,7 +7328,7 @@ function ninaApp() {
             } catch (e) { this.toast('Record failed: ' + (e.message || 'unknown'), 'error'); }
         },
 
-        // Camera capability probe — populates cameraCaps so WB / ROI /
+        // Camera capability probe, populates cameraCaps so WB / ROI /
         // ISO controls show/hide per-camera. Called on VIDEO tab open
         // and after a camera swap. Tolerates 400 responses (no camera
         // selected yet) by leaving the cached flags as-is.
@@ -7357,7 +7357,7 @@ function ninaApp() {
             this.videoSetWhiteBalance();
         },
 
-        // Process side — enumerates SER files under {ImageOutputDir}/planetary
+        // Process side, enumerates SER files under {ImageOutputDir}/planetary
         // via the FileBrowserService API and offers them in the dropdown.
         async loadVideoSerList() {
             try {
@@ -7461,7 +7461,7 @@ function ninaApp() {
                 const r = await this.apiGet('/api/livestack/triggers/status');
                 if (r?.settings) this.liveStackTriggers = Object.assign({},
                     this.liveStackTriggers, r.settings);
-            } catch (e) { /* first load before any save — ignore */ }
+            } catch (e) { /* first load before any save, ignore */ }
         },
         _liveStackTriggersSaveTimer: null,
         saveLiveStackTriggers() {
@@ -7492,7 +7492,7 @@ function ninaApp() {
         },
         // Format helpers used by the trigger status lines.
         formatRelativeTime(iso) {
-            if (!iso) return '—';
+            if (!iso) return ', ';
             const t = new Date(iso).getTime();
             const dt = (Date.now() - t) / 1000;
             if (dt < 60) return Math.floor(dt) + 's ago';
@@ -7500,7 +7500,7 @@ function ninaApp() {
             return Math.floor(dt / 3600) + 'h ago';
         },
         formatRaDecShort(raHours, decDeg) {
-            if (raHours == null || decDeg == null) return '—';
+            if (raHours == null || decDeg == null) return ', ';
             const h = Math.floor(raHours);
             const m = Math.floor((raHours - h) * 60);
             const decSign = decDeg >= 0 ? '+' : '-';
@@ -7585,7 +7585,7 @@ function ninaApp() {
                 if (typeof saved.y === 'number') this.mountPanel.y = saved.y;
                 if (typeof saved.visible === 'boolean') this.mountPanel.visible = saved.visible;
                 this._clampMountPanel();
-            } catch { /* corrupt storage — ignore */ }
+            } catch { /* corrupt storage, ignore */ }
         },
 
         persistMountPanel() {
@@ -7594,13 +7594,13 @@ function ninaApp() {
                     x: this.mountPanel.x, y: this.mountPanel.y,
                     visible: this.mountPanel.visible
                 }));
-            } catch { /* storage full / disabled — non-fatal */ }
+            } catch { /* storage full / disabled, non-fatal */ }
         },
 
         // Persist the user's show/hide preference for the camera
         // preview window. Called from the inset's × button and from
         // the floating 📷 Camera pill so the choice survives reloads
-        // — the auto-driven `slewPreview.active` keeps its own state.
+        //, the auto-driven `slewPreview.active` keeps its own state.
         persistSlewPreviewToggle() {
             try {
                 localStorage.setItem('slewPreviewVisible',
@@ -7621,7 +7621,7 @@ function ninaApp() {
         },
 
         mountPanelDragStart(ev) {
-            // Don't start a drag from the close button — that has its
+            // Don't start a drag from the close button, that has its
             // own click handler with .stop already.
             const isTouch = ev.type === 'touchstart';
             const point = isTouch ? ev.touches[0] : ev;
@@ -7672,7 +7672,7 @@ function ninaApp() {
                 if (typeof saved.x === 'number') this.cameraPanel.x = saved.x;
                 if (typeof saved.y === 'number') this.cameraPanel.y = saved.y;
                 this._clampCameraPanel();
-            } catch { /* corrupt — ignore */ }
+            } catch { /* corrupt, ignore */ }
         },
 
         persistCameraPanel() {
@@ -7791,7 +7791,7 @@ function ninaApp() {
 
         // PA-6: pull the "best targets for TPPA now" list from the
         // server. Cheap (~5ms server-side) so we just refetch each
-        // time — no client-side caching beyond the items[] buffer.
+        // time, no client-side caching beyond the items[] buffer.
         async loadPolarTargets() {
             this.polarTargets.loading = true;
             try {
@@ -7807,10 +7807,10 @@ function ninaApp() {
         },
 
         // PA-6: slew + plate-solve + sync on the chosen target. Reuses
-        // skyTarget + slewAndCenter — same flow Tonight's Best / Sky
+        // skyTarget + slewAndCenter, same flow Tonight's Best / Sky
         // tab use. We do NOT auto-start TPPA after slew: the user
         // confirms the field is good and clicks Start. Two reasons:
-        //   1. Plate-solve might fail (cloud, exposure off) — better
+        //   1. Plate-solve might fail (cloud, exposure off), better
         //      to fix that first than have TPPA also fail mid-flight.
         //   2. The Start button is right there; one click is fine.
         async polarGoToTarget(t) {
@@ -7829,7 +7829,7 @@ function ninaApp() {
             };
             try {
                 await this.slewAndCenter();
-                this.toast('Slewing to ' + t.name + ' — click Start TPPA when ready',
+                this.toast('Slewing to ' + t.name + ', click Start TPPA when ready',
                     'info');
             } catch (e) {
                 this.toast('Slew failed: ' + (e.message || ''), 'error');
@@ -7960,7 +7960,7 @@ function ninaApp() {
 
         /// Format arcsec error with sign + arcmin units (NINA convention).
         formatArcmin(arcsec) {
-            if (arcsec == null || isNaN(arcsec)) return '—';
+            if (arcsec == null || isNaN(arcsec)) return ', ';
             const arcmin = arcsec / 60.0;
             const sign = arcmin >= 0 ? '+' : '';
             return sign + arcmin.toFixed(2) + "'";
@@ -8002,7 +8002,7 @@ function ninaApp() {
         // Draw fitted parabola sampled at 30 x-values across the range
         buildAfFitPath() {
             const result = this.autoFocus;
-            // We don't get a/b/c on the status stream — derive from points if absent.
+            // We don't get a/b/c on the status stream, derive from points if absent.
             // For the live chart we just draw a smooth quadratic going through best
             // position (vertex) and the two extreme samples.
             if (!result || !result.bestPosition || (result.points || []).length < 3) return '';
@@ -8084,7 +8084,7 @@ function ninaApp() {
         },
 
         // Load the list of camera-driver kinds offered by this host
-        // and their availability flags. Cached for the session — call
+        // and their availability flags. Cached for the session, call
         // again only after the user installs a vendor SDK.
         async loadCameraDrivers() {
             try {
@@ -8135,7 +8135,7 @@ function ninaApp() {
             // The capture endpoint takes per-shot ISO via the request
             // body; this setter is for the manual control on the
             // Equipment tab. Not yet implemented on the backend as a
-            // standalone POST — exposed here as a stub so the dropdown
+            // standalone POST, exposed here as a stub so the dropdown
             // is interactive even before that endpoint exists.
             this.cameraIso = +iso;
         },
@@ -8172,7 +8172,7 @@ function ninaApp() {
         },
 
         // Load the mount-driver catalogue once per session. Same
-        // pattern as loadCameraDrivers — INDI is always available, the
+        // pattern as loadCameraDrivers, INDI is always available, the
         // WiFi/TCP drivers advertise their availability flag.
         async loadMountDrivers() {
             try {
@@ -8230,7 +8230,7 @@ function ninaApp() {
                 if (r.available) await this.sirilReloadScripts();
                 this.toast(r.available
                     ? 'Siril detected: v' + (r.version || '?')
-                    : 'Siril not found — check the path override', r.available ? 'ok' : 'warn');
+                    : 'Siril not found, check the path override', r.available ? 'ok' : 'warn');
             } catch (e) {
                 this.toast('Siril detection failed: ' + (e.message || ''), 'error');
             }
@@ -8258,7 +8258,7 @@ function ninaApp() {
             this.siril.modalDarks = [];
             this.siril.modalFlats = [];
             this.siril.modalBiases = [];
-            // BGE inject is opt-in per run, not sticky — every modal
+            // BGE inject is opt-in per run, not sticky, every modal
             // open starts unchecked so the user must consciously add
             // the ~10 s × N frames cost.
             this.siril.modalInjectBge = false;
@@ -8316,11 +8316,11 @@ function ninaApp() {
                         .filter(r => !r.error && r.outputPath)
                         .map(r => r.outputPath);
                     if (lightsForSiril.length === 0) {
-                        this.toast('GraXpert produced no usable outputs — aborting Siril phase', 'error');
+                        this.toast('GraXpert produced no usable outputs, aborting Siril phase', 'error');
                         this.siril.modalBgePhase = null;
                         return;
                     }
-                    this.toast('BGE complete (' + lightsForSiril.length + ' frames clean) — starting Siril', 'ok');
+                    this.toast('BGE complete (' + lightsForSiril.length + ' frames clean), starting Siril', 'ok');
                 } catch (e) {
                     this.toast('GraXpert pre-pass failed: ' + (e.message || ''), 'error');
                     this.siril.modalBgePhase = null;
@@ -8364,7 +8364,7 @@ function ninaApp() {
                             };
                             if (j.completedAt) { resolve(j); return; }
                         }
-                    } catch { /* transient — keep polling */ }
+                    } catch { /* transient, keep polling */ }
                     setTimeout(tick, 1500);
                 };
                 tick();
@@ -8390,7 +8390,7 @@ function ninaApp() {
                         }
                     }
                 } catch (e) {
-                    // Transient — keep polling.
+                    // Transient, keep polling.
                 }
             }, 1500);
         },
@@ -8422,7 +8422,7 @@ function ninaApp() {
                 this.graxpert.status = r;
                 this.toast(r.available
                     ? 'GraXpert detected: v' + (r.version || '?')
-                    : 'GraXpert not found — check the path override', r.available ? 'ok' : 'warn');
+                    : 'GraXpert not found, check the path override', r.available ? 'ok' : 'warn');
             } catch (e) {
                 this.toast('GraXpert detection failed: ' + (e.message || ''), 'error');
             }
@@ -8431,7 +8431,7 @@ function ninaApp() {
         // ─── GX-10: HTTPS info loader ───────────────────────────────
         // Reads the server's HTTPS configuration (port, cert
         // fingerprint, SAN-list hostnames + ready-to-click URLs).
-        // Fetched on startup and after a settings save — surface
+        // Fetched on startup and after a settings save, surface
         // lives in the AI inference banner so the user sees the
         // upgrade path when WebGPU isn't available.
 
@@ -8456,7 +8456,7 @@ function ninaApp() {
                 console.warn('[Onnx] manifest fetch failed', e);
                 this.onnx.manifest = { models: [], error: String(e) };
             }
-            // Cache size probe — non-fatal if IDB unavailable.
+            // Cache size probe, non-fatal if IDB unavailable.
             try { this.onnx.cacheSize = await OnnxRegistry.idbTotalSize(); }
             catch { this.onnx.cacheSize = 0; }
         },
@@ -8544,7 +8544,7 @@ function ninaApp() {
         // (BGE / Decon / Denoise). Defaults pulled from the profile
         // so the modal already has sensible values per op.
         graxpertOpenModal(operation) {
-            // GX-7: open the modal if either path is viable — CLI
+            // GX-7: open the modal if either path is viable, CLI
             // installed OR the matching ONNX model is in the registry.
             // Block only when both are unavailable.
             const cliOk     = !!this.graxpert.status?.available;
@@ -8569,7 +8569,7 @@ function ninaApp() {
             //   Desktop → profile default (typically 2.0.0 or 3.0.2 FP32).
             //   iOS    → smallest available variant. If a quantized
             //            sibling (2.0.0-fp16 / 2.0.0-int8) exists in
-            //            the manifest, prefer it — that's the only
+            //            the manifest, prefer it, that's the only
             //            way to fit under Safari's per-tab budget.
             //            Falls back to v2.0.0 FP32 when no quantized
             //            variant is registered yet.
@@ -8603,7 +8603,7 @@ function ninaApp() {
 
         // Heuristic: warn when the selection appears to be individual
         // light frames rather than a stacked master. Decon/Denoise on
-        // un-stacked lights is usually a mistake — the model bakes
+        // un-stacked lights is usually a mistake, the model bakes
         // in noise that integration would have averaged out, AND
         // strength normalization is computed per-frame so per-tile
         // stretching looks inconsistent across the batch.
@@ -8649,7 +8649,7 @@ function ninaApp() {
             return false;
         },
 
-        // GX-12n: dynamic Denoise model picker — driven by the ONNX
+        // GX-12n: dynamic Denoise model picker, driven by the ONNX
         // manifest so quantized siblings (e.g. 2.0.0-fp16, 2.0.0-int8
         // produced by scripts/quantize_onnx_models.py) appear in the
         // dropdown without any code change. iOS rises the quantized
@@ -8658,7 +8658,7 @@ function ninaApp() {
         denoiseModelChoices() {
             const models = (this.onnx?.manifest?.models || [])
                 .filter(m => m.family === 'denoise');
-            // Build label: "<version> — <sizeMB> MB"
+            // Build label: "<version>, <sizeMB> MB"
             const choices = models.map(m => {
                 const mb = m.sizeBytes
                     ? (m.sizeBytes / (1024 * 1024)).toFixed(0)
@@ -8668,14 +8668,14 @@ function ninaApp() {
                 else if (m.version.endsWith('-int8')) tag = ' (INT8)';
                 return {
                     version: m.version,
-                    label: `v${m.version} — ${mb} MB${tag}`,
+                    label: `v${m.version}, ${mb} MB${tag}`,
                     sizeBytes: m.sizeBytes || 0,
                     isQuantized: tag !== '',
                 };
             });
             // GX-12n2: Sort priority on iOS is NOT just "smallest first".
             // Order matters because ORT Web's WASM execution provider
-            // (the only backend we use on iOS — WebGPU is force-disabled
+            // (the only backend we use on iOS, WebGPU is force-disabled
             // there) does NOT include the INT8 quantized operators
             // bundled in the default ort.webgpu.min.js distribution.
             // Loading an -int8 model on iOS produces "no backend found"
@@ -8706,12 +8706,12 @@ function ninaApp() {
                 return a.version.localeCompare(b.version);
             });
             // Hard fallback when the manifest is empty (server hasn't
-            // rescanned yet) — keep the original built-in choices so
+            // rescanned yet), keep the original built-in choices so
             // the UI doesn't go blank.
             if (choices.length === 0) {
                 return [
-                    { version: '2.0.0', label: 'v2.0.0 — ~284 MB',  sizeBytes: 284e6, isQuantized: false },
-                    { version: '3.0.2', label: 'v3.0.2 — ~456 MB',  sizeBytes: 456e6, isQuantized: false },
+                    { version: '2.0.0', label: 'v2.0.0, ~284 MB',  sizeBytes: 284e6, isQuantized: false },
+                    { version: '3.0.2', label: 'v3.0.2, ~456 MB',  sizeBytes: 456e6, isQuantized: false },
                 ];
             }
             return choices;
@@ -8792,7 +8792,7 @@ function ninaApp() {
             }
         },
 
-        // GX-2: returns true when the operation can run via ORT Web —
+        // GX-2: returns true when the operation can run via ORT Web,
         // depends on the bundle being loadable + the matching model
         // being present in the manifest.
         onnxAvailableForOp(op) {
@@ -8867,7 +8867,7 @@ function ninaApp() {
                     case 'deconvolution':
                         pipeline = new OnnxRegistry.DeconPipeline();
                         // GX-12h: target now comes from the modal
-                        // dropdown — Stars-only picks decon-stars,
+                        // dropdown, Stars-only picks decon-stars,
                         // Object-only picks decon-objects ONNX models.
                         runOpts = {
                             strength: this.graxpert.modalDeconStrength,
@@ -8883,16 +8883,16 @@ function ninaApp() {
                 for (let idx = 0; idx < paths.length; idx++) {
                     const path = paths[idx];
                     const stem = path.split(/[\\/]+/).pop();
-                    this.graxpert.browserPhase = stem + ' — fetching pixels';
+                    this.graxpert.browserPhase = stem + ', fetching pixels';
                     this.graxpert.browserProgress = idx / paths.length;
 
                     const src = await this._onnxFetchSourcePixels(path);
                     if (!src) {
-                        this.toast('Skipped ' + stem + ' — could not decode', 'warn');
+                        this.toast('Skipped ' + stem + ', could not decode', 'warn');
                         continue;
                     }
 
-                    this.graxpert.browserPhase = stem + ' — running ' + op;
+                    this.graxpert.browserPhase = stem + ', running ' + op;
                     const result = await pipeline.run(
                         src.pixels, src.width, src.height,
                         Object.assign({}, runOpts, {
@@ -8901,7 +8901,7 @@ function ninaApp() {
                             // collapsing to the first plane.
                             channels: src.channels,
                             onProgress: (phase, frac) => {
-                                this.graxpert.browserPhase = stem + ' — ' + phase
+                                this.graxpert.browserPhase = stem + ', ' + phase
                                   + (frac != null ? ' ' + Math.round(frac * 100) + '%' : '');
                                 // GX-9 (UX): also drive the overall
                                 // progress bar from within-pipeline
@@ -8916,7 +8916,7 @@ function ninaApp() {
                             }
                         }));
 
-                    this.graxpert.browserPhase = stem + ' — saving sibling FITS';
+                    this.graxpert.browserPhase = stem + ', saving sibling FITS';
                     const outPath = await this._onnxSaveResult(
                         path, suffix, result.pixels, result.width,
                         result.height, result.channels);
@@ -8927,7 +8927,7 @@ function ninaApp() {
                     // {stem}_bge_bg.fits next to the corrected output.
                     // CLI's -bg flag does the same.
                     if (result.background) {
-                        this.graxpert.browserPhase = stem + ' — saving background model';
+                        this.graxpert.browserPhase = stem + ', saving background model';
                         const bgPath = await this._onnxSaveResult(
                             path, suffix + '_bg',
                             result.background, result.width,
@@ -8939,12 +8939,12 @@ function ninaApp() {
                     this.graxpert.browserProgress = (idx + 1) / paths.length;
                 }
                 this.graxpert.browserPhase = 'done';
-                this.toast('Browser GraXpert done — ' + written.length
+                this.toast('Browser GraXpert done, ' + written.length
                           + ' / ' + paths.length + ' written', 'ok');
                 // GX-11: build src→out pairs for the comparator. We
                 // need to re-walk because the inner loop pushed only
                 // outPaths to `written` (saveBackground pushes two
-                // entries per source — main result + bg model — so
+                // entries per source, main result + bg model, so
                 // a positional zip would mis-align). Match by stem.
                 const pairs = [];
                 for (const inPath of paths) {
@@ -8991,7 +8991,7 @@ function ninaApp() {
             fd.append('width',    String(width));
             fd.append('height',   String(height));
             fd.append('channels', String(channels));
-            // Wrap the Uint16Array's underlying ArrayBuffer directly —
+            // Wrap the Uint16Array's underlying ArrayBuffer directly,
             // Blob constructor accepts BufferSource without copying.
             const blob = new Blob([pixels.buffer]);
             fd.append('pixels', blob, 'pixels.bin');
@@ -9010,7 +9010,7 @@ function ninaApp() {
         // "done" modal they have to dismiss manually. Both browser-mode
         // (_graxpertRunInBrowser) and CLI-mode (_graxpertStartPolling)
         // call this on completion. failedCount > 0 keeps the modal
-        // open so the user can read the error context — auto-closing on
+        // open so the user can read the error context, auto-closing on
         // partial failure would hide the diagnostics.
         //
         // GX-11: pairs is an optional [{ src, out, label }, ...] used
@@ -9019,7 +9019,7 @@ function ninaApp() {
         // against the job's results array by index.
         async _graxpertHandleCompletion(writtenPaths, failedCount, pairs) {
             if (failedCount > 0) return;
-            // GX-12r: snapshot the op BEFORE closing the modal —
+            // GX-12r: snapshot the op BEFORE closing the modal,
             // graxpertCloseModal resets modalOp, and we want the
             // comparator title to know which op produced these pairs.
             const opThatRan = this.graxpert.modalOp;
@@ -9029,7 +9029,7 @@ function ninaApp() {
             this.graxpertCloseModal();
             if (this.tab !== 'files') return;
             try { await this.filesReload(); }
-            catch { /* non-fatal — selection step below is best-effort */ }
+            catch { /* non-fatal, selection step below is best-effort */ }
             if (!writtenPaths || writtenPaths.length === 0) return;
             // Pre-select the new siblings so they're visually
             // distinguished from the source. Filter against the actual
@@ -9038,7 +9038,7 @@ function ninaApp() {
             // folder) doesn't silently leave a dangling selection.
             // Match server-emitted paths against entry.fullPath. Both
             // sides come from the same backend so the separator
-            // (Win: '\\', Linux: '/') is consistent — no normalize
+            // (Win: '\\', Linux: '/') is consistent, no normalize
             // needed. Case-insensitive on Windows is also fine since
             // Windows fs is case-insensitive and a mismatch would be
             // a server bug, not a UX one.
@@ -9062,7 +9062,7 @@ function ninaApp() {
             });
             // GX-11: auto-open the before/after comparator on the
             // first src→out pair. Filter to pairs that actually have
-            // both ends populated — saveBackground secondary writes
+            // both ends populated, saveBackground secondary writes
             // share the same source FITS, so duplicates are dropped.
             if (pairs && pairs.length) {
                 const seen = new Set();
@@ -9095,7 +9095,7 @@ function ninaApp() {
             // GX-12r: op identifies the GraXpert pipeline that
             // produced these pairs so the header can read e.g.
             // "GraXpert Denoise Comparison". null in compare-mode
-            // (no op context — see graxpertCompareTitle).
+            // (no op context, see graxpertCompareTitle).
             this.graxpertCompare.op = op || null;
             this.graxpertCompare.open = true;
         },
@@ -9171,7 +9171,7 @@ function ninaApp() {
 
         // URL helper that points the FILES preview endpoint at the
         // FITS file at full-ish resolution (maxDim=2400 matches what
-        // filesOpenPreview uses — gives us a sharp render without
+        // filesOpenPreview uses, gives us a sharp render without
         // dragging the full 24 MP through the wire). Cache-busted by
         // pair index so swapping between pairs reuses cached bytes
         // for the same image but re-fetches when the path changes.
@@ -9181,7 +9181,7 @@ function ninaApp() {
             const p = pair[side];
             if (!p) return '';
             // GX-12c: AFTER renders with the BEFORE file's histogram
-            // params pinned via stretchFrom — otherwise each side
+            // params pinned via stretchFrom, otherwise each side
             // auto-stretches independently and a slight noise-floor
             // shift in the denoised output produces wildly different
             // colour mapping (looks like a colour-balance change
@@ -9226,7 +9226,7 @@ function ninaApp() {
                     if (job?.completedAt) {
                         clearInterval(this.graxpert._pollTimer);
                         this.graxpert._pollTimer = null;
-                        const msg = `GraXpert done — ${job.done} ok, ${job.failed} failed`;
+                        const msg = `GraXpert done, ${job.done} ok, ${job.failed} failed`;
                         this.toast(msg, job.failed ? 'warn' : 'ok');
                         // UX: auto-close + select the new siblings.
                         // GraXpertBatchJob.Results carries the full
@@ -9250,7 +9250,7 @@ function ninaApp() {
                         await this._graxpertHandleCompletion(
                             written, job.failed || 0, pairs);
                     }
-                } catch (e) { /* transient — keep polling */ }
+                } catch (e) { /* transient, keep polling */ }
             }, 1500);
         },
 
@@ -9575,7 +9575,7 @@ function ninaApp() {
             try {
                 const r = await this.apiPost('/api/guider/process/launch');
                 if (r.running) {
-                    this.toast('PHD2 is up — connecting…', 'ok');
+                    this.toast('PHD2 is up, connecting…', 'ok');
                     // Wait a beat then try the JSON-RPC connect
                     setTimeout(() => this.guiderConnect(), 1500);
                 } else {
@@ -9607,7 +9607,7 @@ function ninaApp() {
                 await this.apiPost(`/api/guider/profile/${id}`);
                 this.phd2SelectedProfileId = parseInt(id);
                 this.toast('PHD2 profile switched', 'ok');
-                // Equipment is disconnected by SetProfileAsync — refresh
+                // Equipment is disconnected by SetProfileAsync, refresh
                 await this.fetchPhd2EquipmentConnected();
             } catch (e) { this.toast('Profile switch failed: ' + e.message, 'error'); }
         },
@@ -10022,7 +10022,7 @@ function ninaApp() {
                 setText: '',
             };
 
-            // Tear down any previous chart instance — Chart.js leaks
+            // Tear down any previous chart instance, Chart.js leaks
             // the canvas otherwise and the next render throws "Canvas
             // is already in use".
             if (this._skyInfoChart) {
@@ -10076,7 +10076,7 @@ function ninaApp() {
                         const events = this._skyInfoComputeEvents(data.samples);
                         this.skyInfo.transitText = events.transitText;
                         this.skyInfo.setText = events.setText;
-                        // Render after Alpine commits the DOM — the
+                        // Render after Alpine commits the DOM, the
                         // canvas only exists once skyInfo.altitudeSamples
                         // flips x-show on.
                         this.$nextTick(() => this._renderSkyInfoChart());
@@ -10169,7 +10169,7 @@ function ninaApp() {
         // select pan, but explicit so the user can still trigger it
         // when Auto-center on select is off. The mount-side Slew
         // buttons continue to target whatever's framed in the red
-        // target FOV — i.e. the live map centre — which is now this
+        // target FOV, i.e. the live map centre, which is now this
         // object after Center is clicked.
         async skyInfoCenterMap() {
             if (!Number.isFinite(this.skyInfo.raDeg)
@@ -10185,7 +10185,7 @@ function ninaApp() {
             return this.slewAndCenter();
         },
 
-        // Card action: Slew Only — same target resolution as
+        // Card action: Slew Only, same target resolution as
         // skyInfoSlewCenter but skips the plate-solve centering loop.
         // Mirrors the standalone "Slew Only" button below the map.
         async skyInfoSlewOnly() {
@@ -10202,7 +10202,7 @@ function ninaApp() {
             // Atlas-filter result list shares the same dismissal
             // pattern as the free-text search dropdown: once the
             // user picks one, drop the list and collapse the filter
-            // panel — otherwise it sits open over the map forever
+            // panel, otherwise it sits open over the map forever
             // with no obvious close affordance.
             this.atlasResults = [];
             this.showAtlasFilters = false;
@@ -10238,7 +10238,7 @@ function ninaApp() {
 
         // ASIAIR-style "Slew & Center to whatever's framed in the
         // red target FOV right now". Reads the map centre via the
-        // d3-celestial projection rotation — the same source the
+        // d3-celestial projection rotation, the same source the
         // on-map target rectangle uses, so what the user sees framed
         // is what the mount tries to put under the camera.
         // Falls back to a picked skyTarget if the map centre can't
@@ -10248,7 +10248,7 @@ function ninaApp() {
             // target rectangle is right now). The bridge's change-hook
             // updates skyTarget on every observer.yaw/pitch mutation,
             // but on the very first call after page load it may not
-            // have fired yet — querying the engine directly closes
+            // have fired yet, querying the engine directly closes
             // that gap and gives an exact "go to what's centred"
             // semantics regardless of skyTarget freshness.
             let target = null;
@@ -10279,7 +10279,7 @@ function ninaApp() {
             }
         },
 
-        // Slew Only handler — same target source as slewAndCenter
+        // Slew Only handler, same target source as slewAndCenter
         // (live engine centre = where the red rectangle is) but
         // skips the plate-solve loop.
         async slewToCurrent() {
@@ -10528,7 +10528,7 @@ function ninaApp() {
         // --- Activity bar (bottom) helpers --------------------------
 
         // Derive the chip list from the cached app state. Only
-        // transient operations show up — steady-state things like
+        // transient operations show up, steady-state things like
         // "INDI connected" or "mount tracking" live in the header
         // and aren't duplicated here.
         activityChips() {
@@ -10558,7 +10558,7 @@ function ninaApp() {
                 });
             }
 
-            // Meridian flip — any non-idle stage
+            // Meridian flip, any non-idle stage
             if (this.mfState && this.mfState !== 'idle') {
                 out.push({
                     id: 'mf', icon: '↔️', kind: 'warn',
@@ -10592,7 +10592,7 @@ function ninaApp() {
                 out.push({ id: 'fw', icon: '🎨', kind: 'info', label: 'Filter change' });
             }
 
-            // PHD2 transient. Steady-state guiding is NOT shown —
+            // PHD2 transient. Steady-state guiding is NOT shown,
             // that's the normal background hum during a sequence.
             // Only the eventful transitions matter for the chip row.
             if (this.guider.calibrating) {
@@ -10625,7 +10625,7 @@ function ninaApp() {
                 });
             }
 
-            // Siril active jobs (one chip per job — usually 1)
+            // Siril active jobs (one chip per job, usually 1)
             for (const j of (this.sirilActiveJobs || [])) {
                 out.push({
                     id: 'siril-' + j.jobId, icon: '⚡', kind: 'info',
@@ -10651,7 +10651,7 @@ function ninaApp() {
             return out;
         },
 
-        // Red > 85%, amber 60-85%, green < 60% — same threshold for
+        // Red > 85%, amber 60-85%, green < 60%, same threshold for
         // both CPU and RAM so the user reads "green/amber/red" the
         // same way across both stats.
         hostCpuClass() {
@@ -10729,7 +10729,7 @@ function ninaApp() {
 
         async simulatorLaunch() {
             // Refresh persisted settings first so the launch matches
-            // what the user sees on screen — defensive against the
+            // what the user sees on screen, defensive against the
             // checkbox @change debounce racing the button click.
             await this.saveSimulatorSettings();
             try {
@@ -10761,7 +10761,7 @@ function ninaApp() {
         //     without tearing the whole rig down).
         async simulatorOnDeviceToggle(dev) {
             // x-model has already mutated simulatorSettings.devices
-            // by the time @change fires — persist that.
+            // by the time @change fires, persist that.
             await this.saveSimulatorSettings();
             if (!this.simulator.isRunning) return;
 
@@ -10815,25 +10815,25 @@ function ninaApp() {
         },
         phd2BadgeTitle() {
             const g = this.guider || {};
-            if (!g.connected) return 'PHD2 not connected — click for Guider';
+            if (!g.connected) return 'PHD2 not connected, click for Guider';
             if (g.guiding) {
                 const rms = (g.rmsTotal != null) ? g.rmsTotal.toFixed(2) : '--';
-                return `Guiding — RMS ${rms}" — click for Guider`;
+                return `Guiding, RMS ${rms}", click for Guider`;
             }
-            return `PHD2 ${g.appState || 'connected'} — click for Guider`;
+            return `PHD2 ${g.appState || 'connected'}, click for Guider`;
         },
         hostDeviceTooltip() {
             const d = this.host && this.host.device;
             if (!d) return '';
             // model + OS + (arch + cores) + optional CPU brand line.
             // CPU is null on hosts where /proc/cpuinfo or WMI failed
-            // — only render the line when we actually have it.
+            //, only render the line when we actually have it.
             let s = d.model + '\n' + d.os + '\n' + d.architecture + ' · ' + d.cores + ' cores';
             if (d.cpu) s += '\n' + d.cpu;
             return s;
         },
         formatHostRam(usedMB, totalMB) {
-            if (!totalMB || totalMB <= 0) return '— / —';
+            if (!totalMB || totalMB <= 0) return ', /,';
             // Render in GB once we cross 1 GB total; below that
             // (containers / cgroup limited), stay in MB for accuracy.
             if (totalMB >= 1024) {
@@ -10852,7 +10852,7 @@ function ninaApp() {
             if (!bytes || bytes <= 0) return;
             this._netDeltaRx += bytes;
             this.net.rxTotal += bytes;
-            // Pulse — drop after 120ms so a steady stream looks like a
+            // Pulse, drop after 120ms so a steady stream looks like a
             // gentle flicker (each chunk re-arms it) and a one-off
             // request looks like a single blink.
             if (!this.net.rxPulse) {
@@ -10917,7 +10917,7 @@ function ninaApp() {
             }
 
             // Sum window + compute rate. Window length is whatever's
-            // covered by current samples (max 3s) — gives meaningful
+            // covered by current samples (max 3s), gives meaningful
             // numbers on first ticks before the buffer fills.
             let rx = 0, tx = 0;
             for (const s of this._netSamples) { rx += s.rx; tx += s.tx; }
@@ -10943,7 +10943,7 @@ function ninaApp() {
             return (bps / (1024 * 1024)).toFixed(1) + ' MB/s';
         },
 
-        // Tooltip — cumulative session totals + the current window.
+        // Tooltip, cumulative session totals + the current window.
         netTooltip() {
             const fmtTotal = (b) => {
                 if (b < 1024) return b + ' B';
@@ -10995,7 +10995,7 @@ function ninaApp() {
                 // and auto-hydrate the device list. Without this the
                 // RIGS tab showed "INDI (0 devices)" + every device
                 // dropdown was empty until the user manually clicked
-                // Refresh — even though Camera/Mount/etc were already
+                // Refresh, even though Camera/Mount/etc were already
                 // connected and reporting data via the WS.
                 const wasIndiDisconnected = !this.indiConnected;
                 this.indiConnected = eq.indi.connected;
@@ -11009,7 +11009,7 @@ function ninaApp() {
                 // the backend reports it as actually CONNECTED. The
                 // EquipmentManager keeps Camera!=null after the user
                 // disconnects (the device stays selected; only the
-                // physical link is closed) — without this guard, every
+                // physical link is closed), without this guard, every
                 // status tick after a disconnect re-asserts
                 // selectedCamera = name and the UI toggle flips back
                 // ON within ~1 s, making the camera look like it
@@ -11074,7 +11074,7 @@ function ninaApp() {
                     connected: eq.telescope.connected
                 });
                 // Same "disconnect-doesn't-stick" guard as the camera
-                // above — the EquipmentManager keeps Telescope!=null
+                // above, the EquipmentManager keeps Telescope!=null
                 // after Disconnect, so the WS keeps echoing the name.
                 // Only mirror it to selectedTelescope when the
                 // backend says it's actually connected.
@@ -11086,7 +11086,7 @@ function ninaApp() {
                 // Blue mount-anchored FOV overlay needs to track the
                 // new RA/Dec on every status push so the user sees the
                 // scope walk across the sky during a slew. The
-                // !skyTarget gate from the d3-celestial era is gone —
+                // !skyTarget gate from the d3-celestial era is gone,
                 // with the new screen-anchored red target, skyTarget
                 // is always set (it tracks the engine centre), so that
                 // gate would prevent ALL updates. The bridge has its
@@ -11107,7 +11107,7 @@ function ninaApp() {
                 this.focusMoving = eq.focuser.moving;
                 // Honour the backend's connected flag instead of
                 // assuming "the focuser is in the payload, so it's
-                // connected" — same disconnect-doesn't-stick bug the
+                // connected", same disconnect-doesn't-stick bug the
                 // camera/telescope had. Treat missing 'connected'
                 // (older server build) as true for backward compat.
                 const focuserOnline = eq.focuser.connected !== false;
@@ -11227,7 +11227,7 @@ function ninaApp() {
                     // First time we learn PHD2 is connected (typically
                     // after a page refresh while PHD2 was already up):
                     // fetch the management state the user would normally
-                    // get by clicking Connect — profile list, exposure,
+                    // get by clicking Connect, profile list, exposure,
                     // dec mode, equipment-connected flag, algo presets,
                     // algo params, guide-camera/mount snapshot. Without
                     // this the GUIDE-tab Control surface was blank
@@ -11255,7 +11255,7 @@ function ninaApp() {
                         lastAlert: g.lastAlert || null,
                         lastSettleStatus: g.lastSettleStatus || null,
                         recentSteps: g.recentSteps || [],
-                        // PH2X-9 sub-objects — UI binds chips + state to these.
+                        // PH2X-9 sub-objects, UI binds chips + state to these.
                         profileSync: g.profileSync || null,
                         calibrateJob: g.calibrateJob || null,
                         guiSession: g.guiSession || null
@@ -11338,7 +11338,7 @@ function ninaApp() {
                     }
                 }
             }
-            // Skip the very first payload after a WS connect — those
+            // Skip the very first payload after a WS connect, those
             // are notifications that happened BEFORE the user opened
             // the browser, and replaying 20 stale toasts on page load
             // is more annoying than useful. The id is still recorded
@@ -11356,7 +11356,7 @@ function ninaApp() {
                 }
             }
 
-            // Refresh charts once per status frame (1Hz) — only if their canvas
+            // Refresh charts once per status frame (1Hz), only if their canvas
             // is currently in the DOM, otherwise Chart.js skips silently.
             this.$nextTick(() => {
                 if (this.guider.connected && this.tab === 'guide') this.updateGuideChart();

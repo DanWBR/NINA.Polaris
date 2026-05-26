@@ -11,7 +11,7 @@ namespace NINA.Polaris.Services;
 /// and nudges the mount until the actual centre is within the
 /// requested tolerance (default 30 arcsec).
 ///
-/// Long-running by nature — slews take seconds, each plate solve
+/// Long-running by nature, slews take seconds, each plate solve
 /// takes 3-30s depending on solver. Exposed through a job pattern:
 /// <see cref="StartJob"/> returns immediately with a job id; the
 /// job's state lives in <c>_jobs</c> and is broadcast to the UI by
@@ -65,7 +65,7 @@ public class SlewCenterService {
             job.State = SlewCenterState.Cancelled;
             // Also yank the mount itself. Just cancelling the CTS
             // unwinds the C# pipeline but leaves a SlewAsync that's
-            // already in flight on the wire running to completion —
+            // already in flight on the wire running to completion,
             // the user clicking Cancel almost always means STOP THE
             // SCOPE NOW, not "finish what you started, then stop
             // bothering with the plate solve". Best-effort: log and
@@ -95,7 +95,7 @@ public class SlewCenterService {
                 return;
             }
 
-            // Don't bail upfront if no plate solver is available — the
+            // Don't bail upfront if no plate solver is available, the
             // user explicitly asked to slew, and they value the mount
             // physically moving to the target far more than they value
             // the centering pass. So perform a single Slew step first,
@@ -104,24 +104,24 @@ public class SlewCenterService {
             //
             // Surface the same multi-solver diagnostic in the failure
             // path so the user still gets actionable install / API-key
-            // guidance — just AFTER the mount has moved.
+            // guidance, just AFTER the mount has moved.
             string solverUnavailableError = null;
             if (!_solver.IsAvailable) {
                 var lines = _solver.AllSolvers.Select(s =>
-                    "  • " + s.DisplayName + " — "
+                    "  • " + s.DisplayName + ", "
                     + (s.IsAvailable ? "ready"
                        : s is AstrometryNetOnlineSolver
                            ? "needs PlateSolve:AstrometryApiKey in appsettings"
                            : "binary not found"));
                 solverUnavailableError =
-                    "Slew completed. Centering skipped — no plate solver available:\n"
+                    "Slew completed. Centering skipped, no plate solver available:\n"
                     + string.Join("\n", lines)
                     + "\nTip: install a solver or use Slew Only to skip this message.";
             }
 
             if (solverUnavailableError != null) {
                 // Slew once, then short-circuit to Failed with the
-                // diagnostic — bypasses the iteration loop entirely
+                // diagnostic, bypasses the iteration loop entirely
                 // because every iteration relies on a working solver.
                 job.State = SlewCenterState.Slewing;
                 _logger.LogInformation("Slew-only fallback: slewing to RA={Ra:F4} Dec={Dec:F4} (no plate solver)",
@@ -209,7 +209,7 @@ public class SlewCenterService {
                 // Only runs once per job (on the first successful solve we have
                 // a reliable scale) and skipped if the camera doesn't report a
                 // pixel size or the derived value is wildly different (>50%
-                // off — likely a misidentification of the field).
+                // off, likely a misidentification of the field).
                 if (job.DerivedFocalLengthMm == null) {
                     TryUpdateFocalLengthFromSolve(solveResult.ScaleArcsecPerPixel, job);
                 }
@@ -259,7 +259,7 @@ public class SlewCenterService {
     /// - no camera connected / camera doesn't report pixel size
     /// - scale is non-positive
     /// - derived value is &gt;50% off from the current rig value (likely a
-    ///   misidentification — don't clobber the user's setting on bad data)
+    ///   misidentification, don't clobber the user's setting on bad data)
     ///
     /// Formula (standard plate-scale relation):
     ///   scale (arcsec/px) = pixel_size (um) / focal_length (mm) × 206.265
@@ -271,7 +271,7 @@ public class SlewCenterService {
 
         var pixelSizeUm = _equip.Camera.PixelSizeX;
         if (pixelSizeUm <= 0 || double.IsNaN(pixelSizeUm)) {
-            _logger.LogDebug("Camera does not report PixelSizeX — skipping focal-length auto-update");
+            _logger.LogDebug("Camera does not report PixelSizeX, skipping focal-length auto-update");
             return;
         }
 
@@ -287,14 +287,14 @@ public class SlewCenterService {
             if (ratio < 0.5 || ratio > 1.5) {
                 _logger.LogWarning(
                     "Plate solve suggests focal length {New:F0}mm but rig has {Old:F0}mm " +
-                    "(ratio {Ratio:F2}) — refusing to auto-update; please verify manually",
+                    "(ratio {Ratio:F2}), refusing to auto-update; please verify manually",
                     derived, previous, ratio);
                 return;
             }
         }
 
         if (Math.Abs(derived - previous) < 1.0) {
-            _logger.LogDebug("Focal length already accurate ({FL:F0}mm) — no update", derived);
+            _logger.LogDebug("Focal length already accurate ({FL:F0}mm), no update", derived);
             return;
         }
 

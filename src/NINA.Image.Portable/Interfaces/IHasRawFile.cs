@@ -19,7 +19,7 @@ namespace NINA.Image.Interfaces;
 /// and fall back to the FITS / XISF writer when it's absent.
 /// </summary>
 public interface IHasRawFile {
-    /// <summary>The unmodified bytes the camera SDK handed back —
+    /// <summary>The unmodified bytes the camera SDK handed back,
     /// typically CR2, NEF, or ARW. Null means no raw was captured
     /// for this frame (e.g. driver configured to JPEG-only mode).</summary>
     byte[]? RawFileBytes { get; }

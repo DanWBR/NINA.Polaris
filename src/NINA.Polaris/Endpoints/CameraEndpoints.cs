@@ -18,10 +18,10 @@ public static class CameraEndpoints {
 
                 // Optional pre-capture filter swap. Honour only when the
                 // request carried a non-empty string AND the wheel is
-                // actually connected — otherwise silently keep whatever
+                // actually connected, otherwise silently keep whatever
                 // filter is already in place.
                 // Optional pre-capture filter swap. FilterWheel is null
-                // when not selected/connected — same convention used
+                // when not selected/connected, same convention used
                 // throughout EquipmentManager. We only swap on a non-empty
                 // string in the request, so passing null/"" keeps the
                 // wheel where it is.
@@ -31,7 +31,7 @@ public static class CameraEndpoints {
                         await equip.FilterWheel.SetFilterByNameAsync(request.Filter);
                     } catch {
                         // Don't fail the whole capture on a filter swap
-                        // error — the user sees the wrong filter in
+                        // error, the user sees the wrong filter in
                         // stats and can abort if it matters.
                     }
                 }
@@ -174,7 +174,7 @@ public static class CameraEndpoints {
         // list from the active connection. For vendor SDKs: the
         // SDK-specific enumeration call. Empty list when no cameras
         // are connected (or when the driver isn't supported on this
-        // OS) — never throws.
+        // OS), never throws.
         group.MapGet("/discover", (EquipmentManager equip, string? driver)
             => Results.Ok(equip.GetDiscoveredCamerasFor(driver ?? "indi")));
 
@@ -258,7 +258,7 @@ public static class CameraEndpoints {
         string? TargetName = null);
     public record CoolerRequest(bool Enabled, double? TargetTemperature = null);
 
-    /// <summary>White-balance body. Range is driver-specific — ZWO/QHY
+    /// <summary>White-balance body. Range is driver-specific, ZWO/QHY
     /// typically 0..100 with 50 = neutral; UI bounds the slider to that
     /// per default and lets the user push outside.</summary>
     public record WhiteBalanceRequest(double Red, double Blue);

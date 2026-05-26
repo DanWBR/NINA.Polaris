@@ -7,7 +7,7 @@ namespace NINA.Polaris.Test;
 
 /// <summary>
 /// Pins the cert generation + reuse path. We don't try to verify TLS
-/// handshakes here (that needs a live Kestrel) — instead we check the
+/// handshakes here (that needs a live Kestrel), instead we check the
 /// PFX is valid, contains a private key, has the SAN extension wired,
 /// and is reused across calls when nothing changes about the host.
 /// </summary>
@@ -48,7 +48,7 @@ public class SelfSignedCertServiceTests {
         Assert.That(cert.HasPrivateKey, Is.True,
             "Kestrel needs the private key to handshake; PFX export+import must preserve it.");
         Assert.That(cert.NotAfter, Is.GreaterThan(DateTime.UtcNow.AddYears(4)),
-            "5-year validity (give or take a leap day) — make sure we're not creating a same-day-expiry cert.");
+            "5-year validity (give or take a leap day), make sure we're not creating a same-day-expiry cert.");
         Assert.That(cert.NotBefore, Is.LessThan(DateTime.UtcNow),
             "NotBefore is back-dated so clock-skew on the client doesn't reject the cert.");
         Assert.That(cert.Subject, Does.Contain("NINA.Polaris"));
@@ -71,7 +71,7 @@ public class SelfSignedCertServiceTests {
         var first  = svc.GetOrCreate();
         var second = svc.GetOrCreate();
         Assert.That(second, Is.SameAs(first),
-            "In-memory cache short-circuits — same instance both calls.");
+            "In-memory cache short-circuits, same instance both calls.");
         Assert.That(second.Thumbprint, Is.EqualTo(first.Thumbprint));
     }
 

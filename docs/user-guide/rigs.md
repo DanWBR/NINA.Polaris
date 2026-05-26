@@ -2,11 +2,11 @@
 
 The RIGS tab is your equipment cockpit. It centralizes:
 
-1. **Driver-host connection** — INDI or Alpaca, always visible at top
-2. **Per-role equipment cards** — Main Telescope, Camera, Mount,
+1. **Driver-host connection**, INDI or Alpaca, always visible at top
+2. **Per-role equipment cards**, Main Telescope, Camera, Mount,
    Focuser, Filter Wheel, Guidescope, Guide Camera, plus collapsible
    Accessories (Rotator, Flat Panel, Dome, Weather)
-3. **Multi-rig management** — switch between saved equipment bundles
+3. **Multi-rig management**, switch between saved equipment bundles
 
 ## Connection strip (top of the tab)
 
@@ -32,7 +32,7 @@ Each card has the same skeleton:
 
 ### Main Telescope (metadata-only)
 
-No hardware connection — purely optical specs. Drives FOV calculation
+No hardware connection, purely optical specs. Drives FOV calculation
 + FITS `FOCALLEN` header + plate-solve hints.
 
 Two ways to populate:
@@ -42,7 +42,7 @@ Two ways to populate:
   GSO, Meade, SVBony, Explore Scientific, Astro-Physics, ...)
 - **Model**: filtered by brand, shows aperture + f-ratio
 - **Accessory**: reducers / flatteners / Barlows / extenders compatible
-  with the picked OTA — auto-applies the focal-length multiplier
+  with the picked OTA, auto-applies the focal-length multiplier
 
 **B. Manual entry**: leave Brand = "Manual entry" and fill the numeric
 inputs (Focal length, Aperture, Factor) by hand.
@@ -56,7 +56,7 @@ Sony SDK if installed. Connect → temperature chart, cooler target
 input, gain/binning quick controls. Cooler-power chart bottom-left
 when a cooled sensor is active.
 
-Sensor dimensions auto-detected from the driver — no manual entry
+Sensor dimensions auto-detected from the driver, no manual entry
 needed (this used to be a Settings field; we removed it).
 
 ### Mount
@@ -79,7 +79,7 @@ drive PHD2 pixel-scale sanity checks + the guiding resolution readout.
 
 ### Guide Camera (read-only)
 
-Polaris doesn't manage this directly — PHD2 owns it. The card mirrors
+Polaris doesn't manage this directly, PHD2 owns it. The card mirrors
 PHD2's `get_current_equipment` so you can see at a glance what guide
 cam PHD2 is using.
 
@@ -107,12 +107,12 @@ target + focuser step into the active rig.
 - Inline rename per rig
 - Per-rig devices summary (📷 Camera · 🔭 Mount · 🔍 Focuser · ⚙ Filter Wheel)
 - Per-rig optics summary (focal length, f-ratio, accessory)
-- Per-rig **filter offsets** (collapsible) — `{Filter → ΔSteps}` table
+- Per-rig **filter offsets** (collapsible), `{Filter → ΔSteps}` table
   used by the `MoveToFilterOffsetInstruction` in sequences
 - Activate / Delete buttons per rig
 - "New empty rig" + "Duplicate active" at the footer
 
-The modal is intentionally slim — device pickers + optics live on the
+The modal is intentionally slim, device pickers + optics live on the
 RIGS-tab cards now, no longer duplicated here. Modal is for rig
 lifecycle + filter offsets only.
 
@@ -127,32 +127,32 @@ Beyond the obvious device names, each rig stores:
 - **Guide scope** focal length + aperture + brand + model
 - **PHD2** endpoint (host + port), profile id cache, algo preset, calibration step override, custom algo params
 - **Filter offsets** table
-- **Live-stack triggers** (refocus + recenter policy — see [LIVE](live-stacking.md))
+- **Live-stack triggers** (refocus + recenter policy, see [LIVE](live-stacking.md))
 
 ## Telescope + accessory catalog
 
 The dropdowns are driven by `wwwroot/data/telescopes.json` +
 `wwwroot/data/optical-accessories.json`. Both are checked in to the
-repo — to add a new OTA / reducer, edit the JSON, restart the server,
+repo, to add a new OTA / reducer, edit the JSON, restart the server,
 refresh the browser. Pull requests with additions for popular new
 hardware are welcome.
 
 ## Common pitfalls
 
-**Cards show empty dropdowns even after INDI connects** — INDI hasn't
+**Cards show empty dropdowns even after INDI connects**, INDI hasn't
 finished enumerating devices yet. Click ⟳ Refresh in the connection
 strip, or wait 1-2 seconds.
 
-**Camera connects but sensor dimensions are 0×0** — driver doesn't
+**Camera connects but sensor dimensions are 0×0**, driver doesn't
 populate `CCD_INFO` until first exposure. Take a 0.1s snap from the
 PREVIEW tab and the dimensions populate.
 
-**Switching rigs doesn't disconnect old devices** — by design.
+**Switching rigs doesn't disconnect old devices**, by design.
 Disconnect manually before swapping setups (otherwise INDI ends up
 with multiple devices "connected" to the same hardware).
 
 ## See also
 
-- [GUIDE (PHD2)](guide-phd2.md) — adjacent tab for autoguiding
-- [Settings](#) — observatory location, image output dir, theme
+- [GUIDE (PHD2)](guide-phd2.md), adjacent tab for autoguiding
+- [Settings](#), observatory location, image output dir, theme
 - [Glossary → Rig](GLOSSARY.md#r)

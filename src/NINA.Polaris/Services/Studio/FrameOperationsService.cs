@@ -6,11 +6,11 @@ namespace NINA.Polaris.Services.Studio;
 
 /// <summary>
 /// One-shot per-frame operations the STUDIO viewer can invoke:
-///   - <see cref="DebayerAsync"/> — demosaic an OSC frame to a
+///   - <see cref="DebayerAsync"/>, demosaic an OSC frame to a
 ///     luminance plane (R/G/B blended via Rec.601). Writes a new FITS
 ///     under {rig}/processed/{target}/ with BAYERPAT cleared so
 ///     downstream tools don't re-demosaic.
-///   - <see cref="RemoveGradientAsync"/> — fit a 2D polynomial
+///   - <see cref="RemoveGradientAsync"/>, fit a 2D polynomial
 ///     gradient and subtract it. Same output location.
 ///
 /// Both ops trigger a library rescan so the resulting FITS shows up in

@@ -1,10 +1,10 @@
-// main.js — WASM bootstrap for NINA.Polaris.Wasm.
+// main.js, WASM bootstrap for NINA.Polaris.Wasm.
 //
 // wasm-tools emits this file alongside the .wasm bundle when
 // WasmMainJSPath is set in the csproj. The page loads it via
 // <script type="module"> (see livestack-client.js + index.html).
 //
-// We don't ship a UI here — this is the bare-minimum runtime boot.
+// We don't ship a UI here, this is the bare-minimum runtime boot.
 // The page calls into [JSExport] methods via the returned exports
 // object after the runtime is ready.
 
@@ -31,5 +31,5 @@ window.dispatchEvent(new CustomEvent('nina-wasm-ready', {
     detail: { version: exports.NINA.Polaris.Wasm.Interop.Ping() }
 }));
 
-console.log('[NINA.Polaris.Wasm] runtime ready —',
+console.log('[NINA.Polaris.Wasm] runtime ready,',
     exports.NINA.Polaris.Wasm.Interop.Ping());

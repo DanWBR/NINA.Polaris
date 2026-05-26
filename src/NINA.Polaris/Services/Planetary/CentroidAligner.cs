@@ -3,7 +3,7 @@ namespace NINA.Polaris.Services.Planetary;
 /// <summary>
 /// Brightest-region centroid finder with sub-pixel parabolic refinement.
 /// Used to align planetary frames before stacking. Works well for bright
-/// targets (Moon, Jupiter, Mars, Saturn body — not Saturn rings, where
+/// targets (Moon, Jupiter, Mars, Saturn body, not Saturn rings, where
 /// a thresholded centroid would be better; that's future work).
 ///
 /// Algorithm:

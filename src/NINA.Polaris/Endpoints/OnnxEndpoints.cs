@@ -30,7 +30,7 @@ public static class OnnxEndpoints {
                 });
             }
             // GX-12j: surface enough state for the Settings page to show
-            // a useful banner — "using bundled models from wwwroot" vs
+            // a useful banner, "using bundled models from wwwroot" vs
             // "using configured Onnx:ModelsPath" vs "no models found
             // anywhere, drop them at <bundled>/graxpert/models".
             var scanned = reg.LastScannedPath();
@@ -69,7 +69,7 @@ public static class OnnxEndpoints {
                 if (hash == null) return Results.Problem("Hash compute failed.");
                 var etag = "\"" + hash + "\"";
 
-                // Conditional GET — browser cache hit.
+                // Conditional GET, browser cache hit.
                 var ifNoneMatch = ctx.Request.Headers.IfNoneMatch.ToString();
                 if (!string.IsNullOrEmpty(ifNoneMatch) && ifNoneMatch.Contains(etag)) {
                     ctx.Response.Headers.ETag = etag;

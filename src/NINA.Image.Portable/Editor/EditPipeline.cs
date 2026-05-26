@@ -10,7 +10,7 @@ namespace NINA.Image.Editor;
 /// → crop+resize). Each step short-circuits when its input section is
 /// at defaults so a slider that hasn't been touched costs zero work.
 ///
-/// The pipeline operates on 8-bit byte buffers — by the time the user is
+/// The pipeline operates on 8-bit byte buffers, by the time the user is
 /// in the editor the image has already been auto-stretched into a viewable
 /// 8-bit space (server does the FITS → byte[] preview render once per
 /// session). That keeps the pipeline cheap to run on every slider drag
@@ -27,14 +27,14 @@ public static class EditPipeline {
     /// <summary>
     /// Apply edits in-place. <paramref name="channels"/> is 1 (mono) or 3
     /// (RGB interleaved). Returns the same buffer for chaining. Crop and
-    /// resize are NOT applied here — they change dimensions and are handled
+    /// resize are NOT applied here, they change dimensions and are handled
     /// separately by the caller (so the preview keeps dimensions stable
     /// while sliders move). Use <see cref="ApplyCropResize"/> for those.
     /// </summary>
     public static byte[] Apply(byte[] buf, int width, int height, int channels, EditParams p) {
         if (p == null) return buf;
 
-        // ── 1. White balance (RGB only — no-op for mono)
+        // ── 1. White balance (RGB only, no-op for mono)
         if (channels == 3 && p.WhiteBalance != null && !p.WhiteBalance.IsDefault) {
             var (rG, gG, bG) = ColorSpace.TempTintToGain(p.WhiteBalance.TempK, p.WhiteBalance.Tint);
             for (int i = 0; i < buf.Length; i += 3) {
@@ -67,7 +67,7 @@ public static class EditPipeline {
             }
         }
 
-        // ── 8-9. Colour (vibrance / saturation / hue) — RGB only
+        // ── 8-9. Colour (vibrance / saturation / hue), RGB only
         if (channels == 3 && p.Color != null && !p.Color.IsDefault) {
             ApplyColor(buf, p.Color);
         }
@@ -112,7 +112,7 @@ public static class EditPipeline {
 
         // ── 8.5. Final hue rotation (applied after vibrance/sat so the
         //        rotation acts on the final colour palette)
-        // (already done inside ApplyColor — kept here for ordering doc)
+        // (already done inside ApplyColor, kept here for ordering doc)
         return buf;
     }
 
@@ -190,13 +190,13 @@ public static class EditPipeline {
     private static byte[] BuildLightLut(LightParams light) {
         // Compose: exposure (multiply in linear-ish), then bend the curve
         // for contrast/highlights/shadows/whites/blacks.
-        // For 8-bit input we treat values as gamma-ish (sRGB-encoded) —
+        // For 8-bit input we treat values as gamma-ish (sRGB-encoded),
         // not strictly linear, but matches Lightroom's behaviour where
         // sliders work on the *display* tone rather than scene-referred
         // radiance.
         double expGain = Math.Pow(2, light.Exposure);
         // Contrast slider -1..1. Positive lerps the value toward a
-        // smoothstep S-curve (3v²-2v³) — pulls below-mid down, above-mid
+        // smoothstep S-curve (3v²-2v³), pulls below-mid down, above-mid
         // up, preserving endpoints. Negative lerps toward a flatter
         // midline (compresses dynamic range without clipping).
         double contrastK = light.Contrast;
@@ -262,7 +262,7 @@ public static class EditPipeline {
 
     private static void ApplyColor(byte[] buf, ColorParams c) {
         double satMul = 1 + c.Saturation;
-        // Vibrance acts on the *gap* to full saturation — already-saturated
+        // Vibrance acts on the *gap* to full saturation, already-saturated
         // pixels move less than dull ones. Strength ~0.5 maps -1..1 well.
         double vibStrength = c.Vibrance;
         double hueDelta = c.Hue;

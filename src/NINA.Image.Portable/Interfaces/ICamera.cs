@@ -45,19 +45,19 @@ public interface ICamera {
     int SelectedIso { get; }
 
     /// <summary>Which optional features this backend supports. Drives
-    /// UI affordances — cooler controls hidden when SupportsCooler is
+    /// UI affordances, cooler controls hidden when SupportsCooler is
     /// false, ISO dropdown hidden when SupportsIso is false, etc.</summary>
     CameraCapabilities Capabilities { get; }
 
     Task ConnectAsync(CancellationToken ct = default);
     Task DisconnectAsync(CancellationToken ct = default);
 
-    /// <summary>Take a single exposure. opts is null-safe — when null,
+    /// <summary>Take a single exposure. opts is null-safe, when null,
     /// the backend's current property values are used.</summary>
     Task<IImageData> CaptureAsync(double exposureSeconds, CaptureOptions? opts = null, CancellationToken ct = default);
 
     /// <summary>Backwards-compatible overload for callers that don't
-    /// need per-capture overrides — equivalent to passing
+    /// need per-capture overrides, equivalent to passing
     /// <c>opts: null</c>. Lets the existing sequence engine + capture
     /// endpoints keep using <c>CaptureAsync(seconds, ct)</c> verbatim.</summary>
     Task<IImageData> CaptureAsync(double exposureSeconds, CancellationToken ct)
@@ -100,7 +100,7 @@ public interface ICamera {
 
     /// <summary>Subscribe a frame callback used while a native stream is
     /// open. Returns an IDisposable that removes the subscription. Frames
-    /// are ephemeral (no FITS save, no star detection) — CameraStreamService
+    /// are ephemeral (no FITS save, no star detection), CameraStreamService
     /// routes them straight to ImageRelayService for low-latency display.
     /// Default: returns a no-op disposable so non-streaming backends
     /// can ignore.</summary>
@@ -121,7 +121,7 @@ public interface ICamera {
 internal sealed class NoopDisposable : IDisposable { public void Dispose() { } }
 
 /// <summary>Optional per-stream tunables. Backends pick defaults that
-/// match their driver — typical: ~50 ms exposure / ~10-30 fps.</summary>
+/// match their driver, typical: ~50 ms exposure / ~10-30 fps.</summary>
 public record VideoStreamOptions(
     double? ExposureSeconds = null,
     int? Gain = null,

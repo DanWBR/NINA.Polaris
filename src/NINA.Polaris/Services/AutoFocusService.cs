@@ -148,7 +148,7 @@ public class AutoFocusService {
             int padding = request.StepSize * 2;
             if (bestPosition < rangeMin - padding || bestPosition > rangeMax + padding) {
                 _logger.LogWarning(
-                    "Fitted best position {Best} is far outside swept range [{Lo}..{Hi}] — fit unreliable",
+                    "Fitted best position {Best} is far outside swept range [{Lo}..{Hi}], fit unreliable",
                     bestPosition, rangeMin, rangeMax);
             }
 
@@ -199,7 +199,7 @@ public class AutoFocusService {
                 startPosition, bestPosition, finalPosition, fit.MinY);
 
         } catch (OperationCanceledException) {
-            _logger.LogInformation("Auto-focus cancelled — restoring start position {Pos}", startPosition);
+            _logger.LogInformation("Auto-focus cancelled, restoring start position {Pos}", startPosition);
             try { await focuser.MoveAbsoluteAsync(startPosition, CancellationToken.None); } catch { }
             lock (_stateLock) {
                 LastResult = new AutoFocusResult {
@@ -216,7 +216,7 @@ public class AutoFocusService {
                 State = AutoFocusState.Idle;
             }
         } catch (Exception ex) {
-            _logger.LogError(ex, "Auto-focus failed — restoring start position {Pos}", startPosition);
+            _logger.LogError(ex, "Auto-focus failed, restoring start position {Pos}", startPosition);
             try { await focuser.MoveAbsoluteAsync(startPosition, CancellationToken.None); } catch { }
             lock (_stateLock) {
                 LastError = ex.Message;
@@ -255,11 +255,11 @@ public class AutoFocusService {
         var stars = detector.Detect(image.Data, image.Properties.Width, image.Properties.Height);
 
         if (stars.Count < minStars) {
-            _logger.LogDebug("Only {Count} stars detected (min={Min}) — HFR unreliable", stars.Count, minStars);
+            _logger.LogDebug("Only {Count} stars detected (min={Min}), HFR unreliable", stars.Count, minStars);
             return (0, stars.Count);
         }
 
-        // Use median HFR — robust against outliers
+        // Use median HFR, robust against outliers
         var hfrs = stars.Select(s => s.HFR).OrderBy(h => h).ToList();
         double median = hfrs[hfrs.Count / 2];
         return (median, stars.Count);
@@ -307,7 +307,7 @@ public class AutoFocusService {
 
         // Vertex of y = ax² + bx + c is at x = -b/(2a)
         if (Math.Abs(a) < 1e-12) {
-            // Degenerate (line) — return point of minimum y in sample
+            // Degenerate (line), return point of minimum y in sample
             var min = points.OrderBy(p => p.HFR).First();
             return new ParabolaFit { A = a, B = b, C = c, MinX = min.Position, MinY = min.HFR };
         }

@@ -94,7 +94,7 @@ public static class EquipmentEndpoints {
                 r.FocuserStepSize = update.FocuserStepSize;
                 r.FocuserBacklashSteps = update.FocuserBacklashSteps;
                 // Polar alignment (TPPA) tunables. Defensive: zero from
-                // an old client should not nuke the defaults — clamp.
+                // an old client should not nuke the defaults, clamp.
                 if (update.PolarAlignSlewDegrees > 0)
                     r.PolarAlignSlewDegrees = update.PolarAlignSlewDegrees;
                 if (update.PolarAlignExposureSec > 0)
@@ -111,7 +111,7 @@ public static class EquipmentEndpoints {
                 r.TelescopeModel = update.TelescopeModel ?? "";
                 r.AccessoryType  = update.AccessoryType  ?? "";
                 r.AccessoryModel = update.AccessoryModel ?? "";
-                // Default factor to 1.0 when the client omits it —
+                // Default factor to 1.0 when the client omits it,
                 // matches the no-accessory case.
                 r.AccessoryFactor = update.AccessoryFactor > 0 ? update.AccessoryFactor : 1.0;
                 r.RequiredBackspacingMm = update.RequiredBackspacingMm;

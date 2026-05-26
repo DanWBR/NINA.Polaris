@@ -8,7 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // GX-10: HTTPS self-signed cert. Constructed eagerly here (not via DI)
 // because Kestrel's ConfigureKestrel callback needs the cert *before*
-// builder.Build() runs — and we want the SAME instance shared with the
+// builder.Build() runs, and we want the SAME instance shared with the
 // rest of the app so the Settings UI fingerprint matches what Kestrel
 // is actually serving. Register the constructed singleton so endpoints
 // + the status feed can pick it up by injection.
@@ -45,19 +45,19 @@ builder.WebHost.ConfigureKestrel(options =>
         options.ListenAnyIP(httpsPort, listen => listen.UseHttps(cert));
     }
     // GX-9: the /api/onnx/save endpoint round-trips raw uint16 pixel
-    // bytes for the post-inference image — RGB masters from a modern
+    // bytes for the post-inference image, RGB masters from a modern
     // OSC sensor land around 150 MB (e.g. 6240×4160×3×2). The default
     // 30 MB cap rejects anything bigger than ~2 MP RGB. Also affects
     // /api/editor/upload (user-supplied PNG/TIFF), /api/files/upload
     // (drag-drop into STUDIO library), and /api/onnx/save (the one
-    // we actually hit first). 1 GB hard ceiling — generous enough to
+    // we actually hit first). 1 GB hard ceiling, generous enough to
     // cover a 16k×16k RGB master uncompressed without being unbounded.
     options.Limits.MaxRequestBodySize = 1L * 1024 * 1024 * 1024;
 });
 
 // GX-9: ASP.NET's multipart form parser has its own ceiling
 // (FormOptions.MultipartBodyLengthLimit, default 128 MB) layered on
-// top of Kestrel's request body limit. Both have to grow together —
+// top of Kestrel's request body limit. Both have to grow together,
 // the parser hits its cap first and surfaces a less obvious error
 // ("Multipart body length limit exceeded") before Kestrel sees the
 // stream. Match the 1 GB Kestrel ceiling.
@@ -122,12 +122,12 @@ builder.Services.AddHostedService<NINA.Polaris.Services.Simulator.SimulatorAutoS
 // the event subscription survives request scopes.
 builder.Services.AddSingleton<PHD2ProfileSyncService>();
 builder.Services.AddSingleton<PHD2CalibrationOrchestrator>();
-// xpra-hosted PHD2 GUI session (Linux only — service short-circuits on
+// xpra-hosted PHD2 GUI session (Linux only, service short-circuits on
 // other OSes). Register as singleton AND hosted service so it shows up
 // in DI for endpoint handlers + runs its background loop.
 builder.Services.AddSingleton<Phd2GuiSessionService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Phd2GuiSessionService>());
-// YARP direct forwarder — used by the /phd2-gui/* reverse-proxy below
+// YARP direct forwarder, used by the /phd2-gui/* reverse-proxy below
 // to bridge browser ↔ xpra HTML5 client. Includes WebSocket upgrade
 // support, which is what xpra-html5 needs for the pixel stream.
 builder.Services.AddHttpForwarder();
@@ -138,7 +138,7 @@ builder.Services.AddSingleton<FlatWizardService>();
 // (consumed by StatusStreamHandler) + the in-flight CancellationTokenSource.
 builder.Services.AddSingleton<PolarAlignmentService>();
 // PA-6: TPPA target suggester. Pure read against the catalog + altitude
-// helpers — no state, fine as a singleton.
+// helpers, no state, fine as a singleton.
 builder.Services.AddSingleton<PolarTppaTargetService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Alpaca.AlpacaDiscovery>();
 builder.Services.AddSingleton<StellariumClient>();
@@ -208,7 +208,7 @@ app.Services.GetRequiredService<LiveStackTriggersService>();
 // Re-evaluated on three triggers: relay's WasmCapableCountChanged
 // (client connect/disconnect/capability change), profile activation
 // (user switches rigs), and the PUT /api/equipment/rigs/{id} that
-// edits the override (handled implicitly — the next event reads the
+// edits the override (handled implicitly, the next event reads the
 // fresh value off ProfileService.ActiveEquipmentProfile).
 {
     var liveStack = app.Services.GetRequiredService<LiveStackingService>();
@@ -240,7 +240,7 @@ app.Services.GetRequiredService<LiveStackTriggersService>();
 // header (no 'unsafe-eval', no 'wasm-unsafe-eval') into HTML responses.
 // stellarium-web-engine's Emscripten runtime calls addFunction() during
 // init, which internally uses `new Function(...)` to build callback
-// trampolines — CSP blocks that and the engine never reaches onReady,
+// trampolines, CSP blocks that and the engine never reaches onReady,
 // so addDataSource never fires and the sky stays empty with no Network
 // requests to skydata at all (matches the symptom we hit).
 //
@@ -248,7 +248,7 @@ app.Services.GetRequiredService<LiveStackTriggersService>();
 // sub-app via Response.OnStarting (which runs AFTER all upstream
 // middlewares have set their headers and BEFORE the body streams).
 // The iframe is sandboxed by the parent's sandbox attribute already,
-// so dropping CSP on /sky/ doesn't widen the attack surface — the
+// so dropping CSP on /sky/ doesn't widen the attack surface, the
 // surface is bounded by the iframe sandbox.
 app.Use(async (ctx, next) => {
     if (ctx.Request.Path.StartsWithSegments("/sky")) {
@@ -270,7 +270,7 @@ app.UseDefaultFiles();
 // the dotnet runtime fails to boot with cascading "integrity
 // checks failed" errors. ServeUnknownFileTypes scoped via a
 // custom content-type map is cleaner than blanket allowing
-// everything — keeps obscure extensions outside /js/wasm/ still 404.
+// everything, keeps obscure extensions outside /js/wasm/ still 404.
 var contentTypes = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
 contentTypes.Mappings[".dat"] = "application/octet-stream";
 contentTypes.Mappings[".blat"] = "application/octet-stream";
@@ -283,7 +283,7 @@ contentTypes.Mappings[".gz"] = "application/octet-stream";
 // SWE-3-bugfix: stellarium-web-engine HiPS tile pyramids ship
 // as .eph (binary ephemeris) and the per-survey `properties`
 // metadata files have NO extension at all. The default static
-// middleware refuses both — silently 404s and the engine then
+// middleware refuses both, silently 404s and the engine then
 // renders an empty sky with no console error. Map .eph here and
 // add a scoped ServeUnknownFileTypes pass below for the no-ext
 // `properties` files inside /sky/data/skydata/.
@@ -310,7 +310,7 @@ app.UseWebSockets();
 // ----- PH2X-7: /phd2-gui/* reverse-proxy → xpra HTML5 client -----
 // Same-origin proxy so the iframe's sessionStorage works and Polaris's
 // outer auth layer (Relay tokens / LAN) covers PHD2 GUI access. xpra
-// itself binds to 127.0.0.1 only — never exposed to the network directly.
+// itself binds to 127.0.0.1 only, never exposed to the network directly.
 //
 // MapForwarder handles both static HTML5 client assets (HTML/JS/CSS
 // stripped from the iframe URL) AND the WebSocket upgrade that streams
@@ -400,7 +400,7 @@ app.MapIndiEndpoints();
 // WebSocket streams
 app.Map("/ws/image-stream", ImageStreamHandler.Handle);
 app.Map("/ws/status", StatusStreamHandler.Handle);
-// Remote terminal — gated by Terminal:Enabled in appsettings. The
+// Remote terminal, gated by Terminal:Enabled in appsettings. The
 // handler itself returns 403 when disabled so a curious client can
 // still see why the endpoint exists.
 app.Map("/ws/terminal", TerminalSocketHandler.Handle);
@@ -415,7 +415,7 @@ var startupLogger = app.Services.GetRequiredService<ILoggerFactory>()
 if (httpsEnabled) {
     startupLogger.LogInformation("HTTPS listening on https://*:{Port}  (cert fingerprint {Fp})",
         httpsPort, certService.Fingerprint);
-    startupLogger.LogInformation("HTTPS is the LAN entry point — use one of: {Names}",
+    startupLogger.LogInformation("HTTPS is the LAN entry point, use one of: {Names}",
         string.Join(", ", certService.SanEntries().Take(8)));
 }
 if (httpEnabled) {
@@ -423,11 +423,11 @@ if (httpEnabled) {
     startupLogger.LogInformation("HTTP  listening on http://{Bind}:{Port} {Note}",
         bind, httpPort,
         httpBindAny
-            ? "(LAN-exposed — Server:Http:Bind=any)"
-            : "(loopback only — used by Relay tunnel + host-local scripts)");
+            ? "(LAN-exposed, Server:Http:Bind=any)"
+            : "(loopback only, used by Relay tunnel + host-local scripts)");
 }
 if (!httpsEnabled && !httpEnabled) {
-    startupLogger.LogWarning("Both HTTP and HTTPS are disabled — Polaris will not accept any requests.");
+    startupLogger.LogWarning("Both HTTP and HTTPS are disabled, Polaris will not accept any requests.");
 }
 
 app.Run();

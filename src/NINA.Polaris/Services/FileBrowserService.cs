@@ -16,7 +16,7 @@ namespace NINA.Polaris.Services;
 /// The server runs on the local LAN without authentication, so the
 /// blocklist is the only guard against a hostile peer wiping a system
 /// directory. It's a denylist (not an allowlist) because the user opted
-/// for full-disk browsing — they keep frames on flash drives and
+/// for full-disk browsing, they keep frames on flash drives and
 /// external SSDs that can't sit in a hardcoded sandbox.
 ///
 /// Path safety pattern: every public method that touches a path runs
@@ -31,7 +31,7 @@ public class FileBrowserService {
 
     // Hardcoded blocklist of path prefixes that destructive operations
     // refuse outright and read operations refuse to list contents of.
-    // The rule is conservative — false negatives (allowing a path we
+    // The rule is conservative, false negatives (allowing a path we
     // should have blocked) are worse than false positives (annoying a
     // power user who can override via the local console anyway).
     private static readonly string[] WindowsBlocklist = [
@@ -109,7 +109,7 @@ public class FileBrowserService {
             total = di.TotalSize;
             free  = di.AvailableFreeSpace;
             fmt   = di.DriveFormat;
-        } catch { /* /proc and friends would throw — already filtered above */ }
+        } catch { /* /proc and friends would throw, already filtered above */ }
         bag.Add(new DriveInfoDto(path, display, null, total, free, fmt));
     }
 
@@ -176,7 +176,7 @@ public class FileBrowserService {
         var p = ResolveSafe(path, mustExist: true);
         if (!File.Exists(p)) throw new FileNotFoundException(p);
         // FileShare.Read lets the active capture session keep writing
-        // while the UI downloads an older sibling — common during long
+        // while the UI downloads an older sibling, common during long
         // sequences when the user wants to peek at the previous frame.
         return new FileStream(p, FileMode.Open, FileAccess.Read, FileShare.Read);
     }
@@ -371,7 +371,7 @@ public class FileBrowserService {
 
     private string ResolveSafeDestination(string userPath) {
         // Destination must not be blocked, but is allowed to not exist
-        // yet — that's the entire point of copy/move.
+        // yet, that's the entire point of copy/move.
         if (string.IsNullOrWhiteSpace(userPath))
             throw new ArgumentException("Empty destination", nameof(userPath));
         var full = Path.GetFullPath(userPath);
@@ -404,13 +404,13 @@ public class FileBrowserService {
     private static string SanitiseSegment(string name) {
         var t = (name ?? "").Trim();
         if (string.IsNullOrEmpty(t)) return "";
-        // Reject anything with a path separator — caller wanted ONE
+        // Reject anything with a path separator, caller wanted ONE
         // segment, not a relative path.
         if (t.Contains('/') || t.Contains('\\')) return "";
         // Strip control chars + the invalid-filename set.
         var invalid = Path.GetInvalidFileNameChars();
         foreach (var ch in invalid) t = t.Replace(ch.ToString(), "");
-        // Forbid reserved names on Windows even on Linux — pasting
+        // Forbid reserved names on Windows even on Linux, pasting
         // CON.fits onto a samba share is a portability landmine.
         var stem = Path.GetFileNameWithoutExtension(t).ToUpperInvariant();
         string[] reserved = ["CON", "PRN", "AUX", "NUL",
@@ -419,7 +419,7 @@ public class FileBrowserService {
         if (reserved.Contains(stem)) return "";
         // No leading dots that would make the entry vanish on Windows
         // GUI shells while still being browsable here. Allow `.foo`
-        // though — common for dotfiles.
+        // though, common for dotfiles.
         return t.Trim('.', ' ').Length == 0 ? "" : t;
     }
 
@@ -462,7 +462,7 @@ public class FileBrowserService {
 
     /// <summary>
     /// Minimal mime mapping. Anything not in this table maps to
-    /// <c>application/octet-stream</c> — the browser will offer to
+    /// <c>application/octet-stream</c>, the browser will offer to
     /// download it, which is the right behaviour for unknown formats.
     /// </summary>
     public static string GuessMime(string extension) {

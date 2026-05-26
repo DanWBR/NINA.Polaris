@@ -6,21 +6,21 @@ namespace NINA.Polaris.Services.Studio;
 /// <summary>
 /// Shared FITS-and-FITS-like-bitmap → JPEG path. Extracted from
 /// <see cref="FrameLibraryService"/> so the new FILES tab can render
-/// the same auto-stretched preview for any FITS file on disk —
+/// the same auto-stretched preview for any FITS file on disk,
 /// including files that were never indexed by STUDIO (an arbitrary
 /// master coming back from PixInsight, for example).
 ///
 /// Output is grayscale for single-plane (mono) input or RGB for
 /// NAXIS=3 colour cubes (PixInsight / Siril / GraXpert export
 /// convention). Bayer-pattern frames are still rendered as luminance
-/// — full debayer is a STUDIO pipeline step.
+///, full debayer is a STUDIO pipeline step.
 /// </summary>
 public static class FitsThumbnailer {
 
     /// <summary>
     /// Read a FITS file from disk, auto-stretch, downsample to
     /// <paramref name="maxDim"/> px on the long side, encode JPEG.
-    /// Returns the raw JPEG bytes — caller decides whether to cache
+    /// Returns the raw JPEG bytes, caller decides whether to cache
     /// them to disk or stream them straight to the response.
     /// </summary>
     public static byte[] RenderJpegFromPath(string fitsPath, int maxDim = 256, int quality = 85,
@@ -111,7 +111,7 @@ public static class FitsThumbnailer {
         using var grayCopy = gray.Copy();
         double scale = (double)maxDim / Math.Max(grayCopy.Width, grayCopy.Height);
         // Caller passes maxDim=int.MaxValue (or any larger-than-the-source
-        // value) to skip downsampling — useful for full-res preview.
+        // value) to skip downsampling, useful for full-res preview.
         if (scale > 1) scale = 1;
         int newW = Math.Max(1, (int)Math.Round(grayCopy.Width * scale));
         int newH = Math.Max(1, (int)Math.Round(grayCopy.Height * scale));
@@ -119,7 +119,7 @@ public static class FitsThumbnailer {
         // Pick the source bitmap for the final RGBA pass. When we
         // *do* need to resize, we own a fresh SKBitmap; otherwise we
         // draw straight from grayCopy. The `needsResize` flag drives
-        // the dispose path below — aliasing two `using` variables to
+        // the dispose path below, aliasing two `using` variables to
         // the same SkiaSharp handle double-frees the native object,
         // which presented as silent all-black JPEG output.
         bool needsResize = newW != grayCopy.Width || newH != grayCopy.Height;
@@ -141,7 +141,7 @@ public static class FitsThumbnailer {
 
     /// <summary>
     /// Render an RGB colour preview from a plane-sequential ushort
-    /// buffer (R plane, then G plane, then B plane — each
+    /// buffer (R plane, then G plane, then B plane, each
     /// width*height long). Each channel is auto-stretched
     /// independently so a stacked OSC integration looks natural
     /// (per-channel MTF is what most viewers do for FITS RGB cubes).
@@ -151,7 +151,7 @@ public static class FitsThumbnailer {
                                                  NINA.Image.ImageAnalysis.AutoStretch.StretchParams[]? overrideParams = null) {
         int planeSize = width * height;
         if (pixels.Length < planeSize * 3)
-            // Defensive — caller mis-claimed colour. Fall back to mono
+            // Defensive, caller mis-claimed colour. Fall back to mono
             // so the user at least sees something instead of a crash.
             return RenderJpegFromBuffer(pixels, width, height, bitDepth, maxDim, quality,
                 overrideParams != null && overrideParams.Length > 0 ? overrideParams[0] : null);

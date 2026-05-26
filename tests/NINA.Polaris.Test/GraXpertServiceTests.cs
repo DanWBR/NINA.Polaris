@@ -14,7 +14,7 @@ namespace NINA.Polaris.Test;
 ///   - Job state machine init + cancel flag
 ///
 /// Tests that actually launch the graxpert binary would require
-/// the install + a real FITS — covered by the end-to-end
+/// the install + a real FITS, covered by the end-to-end
 /// verification section of the plan, not this file.
 /// </summary>
 [TestFixture]
@@ -36,7 +36,7 @@ public class GraXpertServiceTests {
 
     [Test]
     public void OutputSuffix_DistinctPerOperation() {
-        // Suffixes are part of the contract — once shipped the user
+        // Suffixes are part of the contract, once shipped the user
         // depends on _bge/_decon/_denoise to spot which file is
         // which in the FILES tab. Pin the values so a refactor
         // doesn't silently change them.
@@ -48,7 +48,7 @@ public class GraXpertServiceTests {
             Is.EqualTo("_denoise"));
     }
 
-    // GX-12i: variant-aware overload — decon stars/objects pick
+    // GX-12i: variant-aware overload, decon stars/objects pick
     // distinct suffixes so the two model outputs don't collide on
     // disk when the user runs both on the same source.
     [Test]
@@ -227,7 +227,7 @@ public class GraXpertServiceTests {
 
     [Test]
     public async Task ProcessFrameAsync_WhenNotAvailable_ReturnsErrorResult() {
-        // Defensive — endpoints already gate on IsAvailable but the
+        // Defensive, endpoints already gate on IsAvailable but the
         // service must fail gracefully even if called bare.
         if (_gx.IsAvailable) Assert.Ignore("GraXpert installed on test host");
         var res = await _gx.ProcessFrameAsync("/tmp/whatever.fits",

@@ -5,7 +5,7 @@ namespace NINA.Camera.CanonEdsdk;
 
 /// <summary>
 /// Singleton-style holder for the EDSDK init / terminate calls. The
-/// Canon SDK is process-global — <c>EdsInitializeSDK</c> must be
+/// Canon SDK is process-global, <c>EdsInitializeSDK</c> must be
 /// called exactly once per process lifetime, and <c>EdsTerminateSDK</c>
 /// must match it. Multiple camera instances share the init.
 ///
@@ -25,7 +25,7 @@ public static class CanonEdsdkRegistry {
     /// DLL search path (next to the Polaris .exe, in
     /// <c>plugins/canon-edsdk/</c>, or anywhere on PATH) and
     /// <c>EdsInitializeSDK</c> returns successfully. Cached after the
-    /// first probe — if the user adds the DLL after startup they need
+    /// first probe, if the user adds the DLL after startup they need
     /// to restart Polaris.</summary>
     public static bool IsAvailable {
         get {

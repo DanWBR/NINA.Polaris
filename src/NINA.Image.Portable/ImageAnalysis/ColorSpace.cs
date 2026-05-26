@@ -2,13 +2,13 @@ namespace NINA.Image.ImageAnalysis;
 
 /// <summary>
 /// Color-space conversions used by the editor pipeline. All inputs and
-/// outputs are normalised 0..1 floats — the caller scales to/from the
+/// outputs are normalised 0..1 floats, the caller scales to/from the
 /// concrete pixel format (ushort, byte, etc.) at the boundary.
 ///
 /// RGB ↔ HSL is the workhorse for vibrance / saturation / hue. The
 /// formulas follow the standard sRGB definitions (Smith 1978); they're
 /// undefined when the input is exactly grayscale (delta == 0), in which
-/// case Hue defaults to 0 and Saturation to 0 — that keeps the editor
+/// case Hue defaults to 0 and Saturation to 0, that keeps the editor
 /// idempotent on mono pixels (a 0% saturation pixel can't have a hue
 /// anyway, so any choice is acceptable).
 ///
@@ -30,7 +30,7 @@ public static class ColorSpace {
         double h, s;
 
         if (max == min) {
-            // Grayscale — Hue undefined. Pick 0 (matches PIL / GIMP).
+            // Grayscale, Hue undefined. Pick 0 (matches PIL / GIMP).
             h = 0;
             s = 0;
         } else {
@@ -133,7 +133,7 @@ public static class ColorSpace {
         b = Math.Clamp(b, 0, 255) / 255.0;
 
         // Normalise so green stays at 1.0 (the "anchor" channel for
-        // exposure — green gain = 1 means we never blow highlights from
+        // exposure, green gain = 1 means we never blow highlights from
         // the WB slider alone).
         if (g > 1e-6) {
             r /= g;

@@ -6,7 +6,7 @@ namespace NINA.Polaris.Test;
 /// <summary>
 /// Pins the LX200 / SynScan sexagesimal encoding the Wi-Fi driver
 /// puts on the wire. The mount silently ignores malformed
-/// coordinates (or replies "0" — slew failed) so a regression here
+/// coordinates (or replies "0", slew failed) so a regression here
 /// surfaces only at run time on the user's first slew attempt.
 /// </summary>
 [TestFixture]

@@ -9,7 +9,7 @@ namespace NINA.Polaris.Wasm;
 
 /// <summary>
 /// Source-generated JSON metadata for the editor's <see cref="EditParams"/>
-/// graph. Required under WASM AOT with full trimming — without this the
+/// graph. Required under WASM AOT with full trimming, without this the
 /// trimmer strips the property setters/ctors that reflection-based
 /// <c>JsonSerializer.Deserialize&lt;EditParams&gt;</c> needs, and slider
 /// edits silently deserialise to all-defaults (so the WASM preview shows
@@ -60,7 +60,7 @@ public static partial class Interop {
     private static int _frameCount;
     private static List<DetectedStar>? _referenceStars;
 
-    /// <summary>Smoke-test entry point. Kept from CLST-2 — the
+    /// <summary>Smoke-test entry point. Kept from CLST-2, the
     /// 'nina-wasm-ready' event handler in app.js calls this to
     /// confirm the bundle loaded and the [JSExport] marshalling
     /// works. Bump the suffix on protocol-breaking changes so a
@@ -88,7 +88,7 @@ public static partial class Interop {
     ///   <item>[0] frameCount AFTER this integration</item>
     ///   <item>[1] medianHfr * 100 (fixed-point, divide by 100 in JS)</item>
     ///   <item>[2] starCount</item>
-    ///   <item>[3] alignmentOk (0 / 1) — always 1 on frame 1 (reference)</item>
+    ///   <item>[3] alignmentOk (0 / 1), always 1 on frame 1 (reference)</item>
     ///   <item>[4] reserved (transform.Tx * 100 in future work)</item>
     /// </list>
     /// The packed-int return avoids the per-call marshalling overhead
@@ -122,7 +122,7 @@ public static partial class Interop {
             alignedData = pixels;
         } else {
             if (width != _width || height != _height) {
-                // Frame size mismatch — bail without bumping count. JS
+                // Frame size mismatch, bail without bumping count. JS
                 // sees frameCount==previous and can log a warning.
                 return [_frameCount, 0, stars.Count, 0, 0];
             }
@@ -145,7 +145,7 @@ public static partial class Interop {
         }
         _frameCount++;
 
-        // Median HFR — same calc as the server.
+        // Median HFR, same calc as the server.
         double medianHfr = 0;
         if (stars.Count > 0) {
             var hfrs = stars.Select(s => s.HFR).Where(h => h > 0).OrderBy(h => h).ToList();
@@ -182,11 +182,11 @@ public static partial class Interop {
 
     // ───────────────────────────────────────────────────────────────────
     // ED-6: editor pipeline in the browser. Same math as the server's
-    // ImageEditService — both reference NINA.Image.Editor.EditPipeline,
+    // ImageEditService, both reference NINA.Image.Editor.EditPipeline,
     // so a given EditParams produces byte-for-byte identical output
     // whether the user is running WASM-mode or server-mode.
     //
-    // Single session in WASM (one buffer, statically held) — matches
+    // Single session in WASM (one buffer, statically held), matches
     // the existing live-stack pattern and keeps lifetime simple. If
     // the user opens a different file the JS calls EditorLoad again
     // and replaces the buffer. The server still owns the long-lived
@@ -244,7 +244,7 @@ public static partial class Interop {
         var working = (byte[])_editorWorking.Clone();
         int w = _editorWidth, h = _editorHeight;
 
-        // Downsample first (same approach as the server) — pipeline runs
+        // Downsample first (same approach as the server), pipeline runs
         // on the smaller buffer when no crop is active.
         if (edits.Crop == null && maxDim > 0 && (w > maxDim || h > maxDim)) {
             double scale = (double)maxDim / Math.Max(w, h);
@@ -309,7 +309,7 @@ public static partial class Interop {
 
         var working = (byte[])_editorWorking.Clone();
         int w = _editorWidth, h = _editorHeight;
-        // Same 512px downsample as the server — statistically equivalent
+        // Same 512px downsample as the server, statistically equivalent
         // for chart purposes + ~50x faster.
         if (w > 512 || h > 512) {
             double scale = 512.0 / Math.Max(w, h);

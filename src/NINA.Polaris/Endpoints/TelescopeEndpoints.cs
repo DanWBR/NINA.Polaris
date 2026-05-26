@@ -115,7 +115,7 @@ public static class TelescopeEndpoints {
         // Mount driver catalogue. Same shape as /api/camera/drivers.
         // INDI is always available; direct WiFi drivers (SynScan UDP,
         // NexStar TCP, LX200 TCP) advertise as "not installed" until
-        // their backend lands — see docs/mounts-wifi.md.
+        // their backend lands, see docs/mounts-wifi.md.
         group.MapGet("/drivers", (EquipmentManager equip)
             => Results.Ok(equip.GetAvailableMountDrivers()));
 

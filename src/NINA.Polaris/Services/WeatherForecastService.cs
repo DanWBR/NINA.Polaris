@@ -9,16 +9,16 @@ namespace NINA.Polaris.Services;
 /// Proxy in front of the 7Timer ASTRO forecast API (https://www.7timer.info/).
 /// 7Timer is a free, no-API-key weather service tuned for astronomy: it
 /// returns categorical cloud cover, atmospheric seeing, transparency, and
-/// lifted index alongside the usual temperature / humidity / wind data —
+/// lifted index alongside the usual temperature / humidity / wind data,
 /// the parameters astrophotographers actually plan around.
 ///
 /// We proxy the call through the backend so that:
 ///   1. Multiple clients (laptop + phone + tablet on the LAN) share an
-///      in-memory cache with a 15-minute TTL — one HTTP call per coord
+///      in-memory cache with a 15-minute TTL, one HTTP call per coord
 ///      regardless of how many tabs the user has open.
 ///   2. Clients on the LAN that have no direct internet route still get
 ///      a forecast as long as the host server does.
-///   3. Errors don't leak as raw fetch failures into the browser — we
+///   3. Errors don't leak as raw fetch failures into the browser, we
 ///      surface them as DTOs with Available=false and a friendly message.
 ///
 /// The 7Timer endpoint we use:
@@ -46,7 +46,7 @@ public class WeatherForecastService {
     /// <summary>
     /// Fetch a forecast for the given coordinates. Returns cached data if
     /// a fresh entry exists; otherwise calls 7Timer and caches the parsed
-    /// result. Never throws — on any failure returns Available=false with
+    /// result. Never throws, on any failure returns Available=false with
     /// the error string set.
     /// </summary>
     public async Task<WeatherForecastDto> GetForecastAsync(double lat, double lon, CancellationToken ct = default) {
@@ -114,7 +114,7 @@ public class WeatherForecastService {
     /// Weights chosen to match how astrophotographers actually rate a night:
     ///   - Cloud cover contributes up to 50 directly (50% weight).
     ///   - Seeing + transparency contribute up to 25 each (25% each), BUT
-    ///     multiplied by a "visibility" factor derived from cloud cover —
+    ///     multiplied by a "visibility" factor derived from cloud cover,
     ///     perfect atmospheric stability is irrelevant if you can't see
     ///     through the clouds.
     ///   - Hard veto on any precipitation.
@@ -132,7 +132,7 @@ public class WeatherForecastService {
         var transparencyComp = (9  - s.Transparency)  * 12.5   * 0.25;  // 0..25
         // Visibility: 1.0 when clear, ~0.11 when fully overcast. Gates the
         // seeing/transparency contribution so a cloudy slot with great
-        // seeing can't sneak into "marginal" — it has to actually be
+        // seeing can't sneak into "marginal", it has to actually be
         // somewhat clear before atmospheric stability matters.
         var visibility = (10 - s.Cloudcover) / 9.0;
         var score = cloudComp + (seeingComp + transparencyComp) * visibility;

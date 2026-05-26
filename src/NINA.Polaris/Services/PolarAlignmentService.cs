@@ -32,7 +32,7 @@ public class PolarAlignmentService {
 
     private readonly ConcurrentDictionary<string, PolarAlignmentJob> _jobs = new();
 
-    /// <summary>Most recent job — Idle when nothing has run yet. The WS
+    /// <summary>Most recent job, Idle when nothing has run yet. The WS
     /// broadcaster reads this. Set to a fresh job by StartJob; mutated
     /// in-place by RunAsync; preserved post-completion so the UI can
     /// keep showing the last computed error vector.</summary>
@@ -56,7 +56,7 @@ public class PolarAlignmentService {
     }
 
     public PolarAlignmentJob StartJob(PolarAlignmentOptions opts) {
-        // Refuse to start a second TPPA on top of a running one — the
+        // Refuse to start a second TPPA on top of a running one, the
         // mount can't be in two places at once. Refinement is gated
         // separately (see StartRefinement).
         if (CurrentJob != null && CurrentJob.IsActive) {
@@ -113,7 +113,7 @@ public class PolarAlignmentService {
             throw new InvalidOperationException("Refinement already running.");
         }
 
-        // Reuse the same Job object — Mode flips to "refine", Phase
+        // Reuse the same Job object, Mode flips to "refine", Phase
         // becomes Refining, but the 3 baseline Points carry over so
         // we can substitute them as new samples arrive. UI gets the
         // continuity for free (same WS payload shape).
@@ -177,12 +177,12 @@ public class PolarAlignmentService {
                     solve = await SolveOnceAsync(image, telescope, ct);
                 } catch (OperationCanceledException) { break; }
                 catch (Exception ex) {
-                    _logger.LogDebug(ex, "Refine: solve threw — skipping iteration");
+                    _logger.LogDebug(ex, "Refine: solve threw, skipping iteration");
                     try { await Task.Delay(job.Options.SettleSeconds * 1000, ct); } catch { break; }
                     continue;
                 }
                 if (!solve.Success) {
-                    _logger.LogDebug("Refine: solve failed ({Err}) — skipping", solve.Error);
+                    _logger.LogDebug("Refine: solve failed ({Err}), skipping", solve.Error);
                     try { await Task.Delay(job.Options.SettleSeconds * 1000, ct); } catch { break; }
                     continue;
                 }
@@ -224,7 +224,7 @@ public class PolarAlignmentService {
             _notify.Push("error", "Refine loop crashed: " + ex.Message);
         }
         // Loop exit: land back at Ok so the Refine button is offered
-        // again. (StopRefinement also handles this — this is the
+        // again. (StopRefinement also handles this, this is the
         // fallback for organic loop exits.)
         if (job.Phase == PolarAlignmentPhase.Refining) {
             job.Phase = PolarAlignmentPhase.Ok;
@@ -236,7 +236,7 @@ public class PolarAlignmentService {
 
     private async Task RunAsync(PolarAlignmentJob job, CancellationToken ct) {
         // Track original mount position so we can slew back at the
-        // end (cosmetic — TPPA already extracted the error vector by
+        // end (cosmetic, TPPA already extracted the error vector by
         // then, but leaving the user 60° off where they expected is
         // surprising).
         double ra0 = 0, dec0 = 0;
@@ -286,7 +286,7 @@ public class PolarAlignmentService {
                 _notify.Push("info", $"Polar align: slewing to point {i + 1}/3 (RA {targetRa:F3}h)", 2000);
                 await telescope.SlewAsync(targetRa, dec0, ct);
 
-                // Settle — mount stops shaking, INDI driver finishes
+                // Settle, mount stops shaking, INDI driver finishes
                 // emitting EQUATORIAL_EOD_COORD updates.
                 if (job.Options.SettleSeconds > 0) {
                     await Task.Delay(job.Options.SettleSeconds * 1000, ct);
@@ -305,7 +305,7 @@ public class PolarAlignmentService {
 
                 var result = await SolveOnceAsync(image, telescope, ct);
                 if (!result.Success) {
-                    // One retry with doubled exposure — common rescue
+                    // One retry with doubled exposure, common rescue
                     // for marginal star count on the first attempt.
                     _logger.LogInformation(
                         "Polar align point {Index} first solve failed ({Err}); retrying with 2x exposure",
@@ -357,7 +357,7 @@ public class PolarAlignmentService {
                 await telescope.SlewAsync(ra0, dec0, ct);
             } catch (Exception ex) {
                 // Don't fail the whole alignment if the home slew
-                // hiccups — the user already has their error vector.
+                // hiccups, the user already has their error vector.
                 _logger.LogWarning(ex, "Polar align: slew back to start failed");
             }
 
@@ -365,7 +365,7 @@ public class PolarAlignmentService {
             job.CompletedAt = DateTime.UtcNow;
             SetPhase(job, PolarAlignmentPhase.Ok);
             _notify.Push("ok",
-                "Polar alignment complete — see POLAR tab for error vector.", 5000);
+                "Polar alignment complete, see POLAR tab for error vector.", 5000);
         } catch (OperationCanceledException) {
             SetPhase(job, PolarAlignmentPhase.Cancelled);
             job.CompletedAt = DateTime.UtcNow;
@@ -374,7 +374,7 @@ public class PolarAlignmentService {
             try {
                 if (_equip.Telescope != null && ra0 > 0)
                     await _equip.Telescope.SlewAsync(ra0, dec0, CancellationToken.None);
-            } catch { /* shutdown — eat it */ }
+            } catch { /* shutdown, eat it */ }
         } catch (Exception ex) {
             _logger.LogError(ex, "Polar alignment RunAsync crashed");
             Fail(job, ex.Message);
@@ -390,7 +390,7 @@ public class PolarAlignmentService {
         try {
             var opts = new PlateSolveOptions {
                 // RA hint in hours, Dec hint in degrees. Helps every
-                // solver narrow the search — especially ASTAP.
+                // solver narrow the search, especially ASTAP.
                 HintRa = telescope.RightAscension,
                 HintDec = telescope.Declination,
                 SearchRadiusDeg = 30,
@@ -427,7 +427,7 @@ public class PolarAlignmentService {
     /// solver derives the real scale from the FITS header too, but
     /// the hint narrows search radius (especially on ASTAP) and is
     /// REQUIRED by PlateSolve3. Returns 0 when either input is
-    /// missing — the solver chain handles the unknown-scale case.</summary>
+    /// missing, the solver chain handles the unknown-scale case.</summary>
     private double ComputePixelScaleHint() {
         var cam = _equip.Camera;
         if (cam == null) return 0;
@@ -469,7 +469,7 @@ public class PolarAlignmentService {
 }
 
 /// <summary>User-supplied TPPA options. All fields have sensible defaults
-/// from the active rig's profile — the UI typically passes the rig
+/// from the active rig's profile, the UI typically passes the rig
 /// values verbatim, but the orchestrator accepts overrides so a
 /// follow-up "tighten alignment" run can use different exposure /
 /// gain without writing them back to the profile.</summary>
@@ -525,7 +525,7 @@ public enum PolarAlignmentPhase {
     SolvingPoint3,
     Computing,
     /// <summary>Cleanup slew back to the user's original RA/Dec so the
-    /// mount isn't left 60° off where they expected. Cosmetic — TPPA
+    /// mount isn't left 60° off where they expected. Cosmetic, TPPA
     /// has already produced the error vector at this point.</summary>
     SlewingHome,
     Ok,

@@ -16,7 +16,7 @@ public static class FITSReader {
         int height = GetIntHeader(headers, "NAXIS2", 0);
         // RGB cubes use NAXIS=3 + NAXIS3=3 (R/G/B planes). Anything
         // else collapses to a single plane (grayscale or just the
-        // first plane of a multi-frame cube — close enough for v1).
+        // first plane of a multi-frame cube, close enough for v1).
         int planes = (naxis >= 3) ? GetIntHeader(headers, "NAXIS3", 1) : 1;
         if (planes != 1 && planes != 3) planes = 1;
         int bzero = GetIntHeader(headers, "BZERO", 0);
@@ -33,7 +33,7 @@ public static class FITSReader {
 
         // Read the full buffer covering every plane. For grayscale this
         // is the existing width*height; for RGB it's 3× larger and
-        // stored plane-sequentially (R first, then G, then B) — the
+        // stored plane-sequentially (R first, then G, then B), the
         // FITS convention also used by PixInsight, Siril, and astropy.
         var pixels = ReadPixelData(stream, width, height * planes, bitpix, bzero, bscale);
 
@@ -58,7 +58,7 @@ public static class FITSReader {
     /// <summary>
     /// Read just the FITS header block, leaving the stream positioned
     /// at the start of the pixel data (which the caller is free to
-    /// ignore). Used by the STUDIO frame index — parsing a 64 MB pixel
+    /// ignore). Used by the STUDIO frame index, parsing a 64 MB pixel
     /// block of every file just to read keywords is wasteful.
     /// </summary>
     public static Dictionary<string, FITSHeaderCard> ReadHeadersOnly(Stream stream) {
@@ -139,7 +139,7 @@ public static class FITSReader {
     /// to know which up front:
     ///   - Normalised stacks (PixInsight, Siril) store values in
     ///     [0.0, 1.0]. A naive `(ushort)val` clamps every pixel to 0
-    ///     and renders the whole image black — the regression that
+    ///     and renders the whole image black, the regression that
     ///     surfaced first when opening a stacked master from the
     ///     FILES tab.
     ///   - Unscaled integer-to-float conversions store values in
@@ -165,7 +165,7 @@ public static class FITSReader {
         }
         if (!double.IsFinite(min) || !double.IsFinite(max) || max <= min) {
             // Degenerate input: constant or all-NaN buffer. Output stays
-            // zero — there's nothing meaningful to show anyway.
+            // zero, there's nothing meaningful to show anyway.
             Array.Clear(pixels, 0, pixels.Length);
             return;
         }

@@ -1,17 +1,17 @@
-# Editor — Lightroom-style post-processing
+# Editor, Lightroom-style post-processing
 
 The **EDITOR** tab is the last step of the Polaris workflow. After STUDIO
 has produced a master integrated image (or you've imported a TIFF/PNG
 from Siril/PixInsight), the editor gives you the same kind of slider-
-driven, non-destructive tone work you'd otherwise do in Lightroom — but
+driven, non-destructive tone work you'd otherwise do in Lightroom, but
 inside the browser, against the file on the Polaris host.
 
 ## Workflow at a glance
 
 1. **Open a source.** Three ways:
-   - **EDITOR → Open file dropzone** — drag a `.fits` / `.xisf` / `.png`
+   - **EDITOR → Open file dropzone**, drag a `.fits` / `.xisf` / `.png`
      / `.jpg` / `.tif` from your desktop, or click to pick from disk.
-   - **EDITOR → From server path** — paste an absolute path of a file
+   - **EDITOR → From server path**, paste an absolute path of a file
      already on the Polaris host (handy when you SSH'd a file in).
    - **STUDIO → select a single master → 🎨 Open in editor** in the
      selection bar, or **FILES → select one file → 🎨 Edit** in the
@@ -23,7 +23,7 @@ inside the browser, against the file on the Polaris host.
    unedited reference. Release to return.
 4. **💾 Save edits** writes a `{source}.edit.json` sidecar next to the
    source. Reopening that source later in the editor hydrates every
-   slider to the saved state — fully non-destructive.
+   slider to the saved state, fully non-destructive.
 5. **↓ Export…** opens the export dialog (format, JPEG quality, resize).
    The exported file lands in `{sourceDir}/edited/{stem}__edited_{stamp}.{ext}`
    and the FILES index rescans automatically.
@@ -47,7 +47,7 @@ inside the browser, against the file on the Polaris host.
 |---|---|
 | **Temp** (K) | White-balance temperature, 2000K (warm/red) ↔ 15000K (cool/blue). Defaults at 6500K (D65 neutral). |
 | **Tint** | Magenta ↔ green balance. Negative = more magenta, positive = greener. |
-| **Vibrance** | Per-pixel saturation boost scaled by `(1 - currentSaturation)` — protects already-saturated pixels so portraits / nebula cores don't go neon. |
+| **Vibrance** | Per-pixel saturation boost scaled by `(1 - currentSaturation)`, protects already-saturated pixels so portraits / nebula cores don't go neon. |
 | **Saturation** | Flat HSL scale of every pixel's S channel. -1 = full grayscale. |
 | **Hue** | Rotates the whole colour wheel by -180° to +180°. |
 
@@ -57,7 +57,7 @@ inside the browser, against the file on the Polaris host.
 |---|---|
 | **Texture** | Mid-radius (~3 px) unsharp-mask. Adds bite to fine structure without affecting overall tonal balance. |
 | **Clarity** | Large-radius (auto: image-width / 80) USM on luminance only. Adds punch to broad structures; doesn't shift colour. |
-| **Dehaze** | Per-channel auto-stretch toward black with mild saturation lift. Approximation of He et al. 2009 — fine for editor UX, won't match a research-grade dehaze algorithm. |
+| **Dehaze** | Per-channel auto-stretch toward black with mild saturation lift. Approximation of He et al. 2009, fine for editor UX, won't match a research-grade dehaze algorithm. |
 | **Vignette** | Radial multiply. Negative darkens corners; positive brightens. Feather controls falloff softness. |
 
 ### Detail
@@ -65,7 +65,7 @@ inside the browser, against the file on the Polaris host.
 | Slider | What it does |
 |---|---|
 | **Sharpen** (amount/radius) | Unsharp-mask on luminance. Amount 0–1, radius 0.5–5 px. |
-| **Noise reduce** | Conservative 3×3 median on luminance, blended back at the slider's strength. For heavy NR run GraXpert Denoise on the FITS first — this is just polish. |
+| **Noise reduce** | Conservative 3×3 median on luminance, blended back at the slider's strength. For heavy NR run GraXpert Denoise on the FITS first, this is just polish. |
 
 ## Pipeline order
 
@@ -104,7 +104,7 @@ the sidecar falls back to
 `%LOCALAPPDATA%\Polaris\sidecars\{md5-of-path}.edit.json` on the Polaris
 host.
 
-The exported file (in `edited/`) doesn't carry a sidecar — re-opening
+The exported file (in `edited/`) doesn't carry a sidecar, re-opening
 the export in the editor will start from defaults. The sidecar always
 lives with the **source**, not the export.
 
@@ -125,7 +125,7 @@ will live in Settings.
 
 ## Known limitations
 
-- **XISF** is supported as source via FITS-like header decode — but
+- **XISF** is supported as source via FITS-like header decode, but
   PixInsight projects that pack multiple frames into one XISF aren't
   parsed (only the primary image). Export it as TIFF/PNG out of
   PixInsight if in doubt.
@@ -150,11 +150,11 @@ All endpoints live under `/api/editor`:
 | `POST /preview` | `{ sessionId, edits, maxDim, quality }` | JPEG bytes |
 | `POST /histogram` | `{ sessionId, edits }` | `int[256]` (mono) or `int[768]` (RGB) |
 | `POST /export` | `{ sessionId, edits, format, quality, targetWidth, targetHeight, outputPath }` | `{ path }` |
-| `GET /sidecar?path=…` | — | `{ exists, edits }` |
+| `GET /sidecar?path=…` |, | `{ exists, edits }` |
 | `PUT /sidecar` | `{ path, edits }` | `{ sidecarPath }` |
 | `POST /upload` | multipart `file` | `{ path }` |
 | `POST /release` | `{ sessionId }` | `{ released: true }` |
-| `GET /sessions` | — | array of active session info (debug) |
+| `GET /sessions` |, | array of active session info (debug) |
 
 Sessions auto-evict after 30 min of inactivity. `POST /release` frees
 one early.

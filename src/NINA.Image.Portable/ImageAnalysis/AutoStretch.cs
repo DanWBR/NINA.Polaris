@@ -11,7 +11,7 @@ public static class AutoStretch {
     public const double DefaultSigma    = 3.0;    // GraXpert: sigma
 
     /// <summary>
-    /// Auto-stretch using GraXpert's "15% Bg, 3 sigma" algorithm —
+    /// Auto-stretch using GraXpert's "15% Bg, 3 sigma" algorithm,
     /// sigma-clipped median + MAD on non-saturated samples, MTF mapping
     /// median to a 15% target background. Drop-in default for the
     /// FILES / STUDIO previews.

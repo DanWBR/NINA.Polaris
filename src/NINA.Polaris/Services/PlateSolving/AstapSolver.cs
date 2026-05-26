@@ -4,7 +4,7 @@ using System.Globalization;
 namespace NINA.Polaris.Services.PlateSolving;
 
 /// <summary>
-/// ASTAP solver — fastest local option, hint-driven by default. Same logic
+/// ASTAP solver, fastest local option, hint-driven by default. Same logic
 /// that used to live inline in PlateSolveService.
 /// </summary>
 public class AstapSolver : IPlateSolver {

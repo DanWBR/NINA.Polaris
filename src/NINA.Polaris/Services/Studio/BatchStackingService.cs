@@ -8,7 +8,7 @@ namespace NINA.Polaris.Services.Studio;
 /// <summary>
 /// Stack N already-calibrated (or raw) light frames into a single
 /// integrated master light. The offline counterpart of
-/// LiveStackingService — same star-matching alignment primitives
+/// LiveStackingService, same star-matching alignment primitives
 /// (<see cref="StarDetector"/>, <see cref="StarMatcher"/>,
 /// <see cref="ImageResampler"/>) but no streaming relay; everything
 /// runs to completion in a background job and produces one FITS.
@@ -16,7 +16,7 @@ namespace NINA.Polaris.Services.Studio;
 /// Pipeline per job:
 ///   1. Load all inputs; detect stars in each.
 ///   2. Pick the reference frame (frame with the most detected stars
-///      — that's the most robust target for affine fitting).
+///     , that's the most robust target for affine fitting).
 ///   3. For every other frame: match its star list against the
 ///      reference's, compute the affine transform, resample the pixels
 ///      into the reference's coordinate system. Frames whose transform
@@ -29,7 +29,7 @@ namespace NINA.Polaris.Services.Studio;
 ///   6. Trigger a library rescan so the master shows up in the
 ///      browser.
 ///
-/// Memory model: same as ST-3 master integration — every input
+/// Memory model: same as ST-3 master integration, every input
 /// (post-alignment) sits in RAM at once. For typical session sizes
 /// (20-30 × 20 MP) that's ~1 GB peak; tiled / streaming integration is
 /// tracked as a follow-up if anyone tries 100+ huge frames.
@@ -151,7 +151,7 @@ public class BatchStackingService {
                 throw new InvalidOperationException(
                     $"Only {aligned.Count} frame(s) survived alignment. Need ≥2.");
 
-            // Free the un-aligned copies — they're no longer needed
+            // Free the un-aligned copies, they're no longer needed
             // and the aligned[] array now owns the working pixels.
             loaded.Clear();
 
@@ -167,7 +167,7 @@ public class BatchStackingService {
                 for (int x = 0; x < W; x++) {
                     int idx = rowOff + x;
                     int valid = 0;
-                    // Skip pixels whose value is 0 — ImageResampler
+                    // Skip pixels whose value is 0, ImageResampler
                     // marks off-canvas regions as 0 after the affine
                     // shift, and rolling them into the average drags
                     // the master down at the edges.

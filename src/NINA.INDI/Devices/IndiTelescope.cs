@@ -18,7 +18,7 @@ public class IndiTelescope : ITelescope {
            && _client.GetSwitch(DeviceName, "CONNECTION", "CONNECT");
 
     /// <summary>INDI mounts come in all shapes. Default to the
-    /// GEM capability profile — for the common WiFi alt-az bodies
+    /// GEM capability profile, for the common WiFi alt-az bodies
     /// (AZ-GTi, NexStar SE) the pier-side indicator simply stays
     /// "unknown" and the UI tolerates it. A future refinement can
     /// inspect the INDI driver name and switch to <see cref="MountCapabilities.AltAz"/>

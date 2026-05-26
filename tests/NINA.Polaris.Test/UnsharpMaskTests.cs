@@ -39,7 +39,7 @@ public class UnsharpMaskTests {
         Assert.That(sharp[18], Is.GreaterThanOrEqualTo(data[18]),
             "Sample on bright side should be boosted");
         // Dark side just before the step should be lower than its
-        // original 0 — except 0 is the floor, so clamp guarantees
+        // original 0, except 0 is the floor, so clamp guarantees
         // ≤ original; really we just verify it doesn't get brighter.
         Assert.That(sharp[14], Is.LessThanOrEqualTo(data[14]),
             "Sample on dark side should be pulled down (or clamped at 0)");

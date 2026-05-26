@@ -77,7 +77,7 @@ public class RelayAuditLogTests {
             log.Record(new AuditRecord { Tenant = "t", Status = i });
         var snap = log.Snapshot().ToArray();
         Assert.That(snap.Length, Is.LessThanOrEqualTo(5));
-        // Oldest should have been dropped — last entry is status=19
+        // Oldest should have been dropped, last entry is status=19
         Assert.That(snap.Last().Status, Is.EqualTo(19));
     }
 

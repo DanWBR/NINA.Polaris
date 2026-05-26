@@ -12,14 +12,14 @@ namespace NINA.Polaris.Services;
 /// Lookup order:
 ///   1. In-memory cache hit (fastest)
 ///   2. On-disk cache hit, TTL 30 days for found images, 1 day for misses
-///   3. NASA Image Library (public domain, no API key) — preferred since
+///   3. NASA Image Library (public domain, no API key), preferred since
 ///      results are usually high-quality press images with credits.
-///   4. Wikipedia REST summary endpoint (CC BY-SA, no API key) — fallback;
+///   4. Wikipedia REST summary endpoint (CC BY-SA, no API key), fallback;
 ///      every Messier/NGC/named comet has a Wikipedia article whose
 ///      lead image is a decent thumbnail.
 ///
 /// Returns <see cref="CelestialImage"/> with Available=false (and the
-/// failure cached briefly) when neither source has anything — never
+/// failure cached briefly) when neither source has anything, never
 /// throws. UI then shows a placeholder.
 /// </summary>
 public class CelestialImageService {
@@ -72,7 +72,7 @@ public class CelestialImageService {
 
         // Live lookup. NASA Library is great for common names ("Carina
         // Nebula", "Andromeda Galaxy") but a mess for raw catalogue
-        // codes and for major solar-system bodies — "M 4" matches an
+        // codes and for major solar-system bodies, "M 4" matches an
         // STS-109 shuttle photo, "Moon" matches a Mineralogy Mapper
         // diagram. For both cases, prefer Wikipedia (which has a
         // reliable article + iconic lead image per entry) and use
@@ -232,7 +232,7 @@ public class CelestialImageService {
         }
     }
 
-    // NASA Image Library — public, no API key. Returns a JSON envelope
+    // NASA Image Library, public, no API key. Returns a JSON envelope
     // with collection.items[]; each item has data[0] (metadata) and
     // links[0] (thumbnail href). We scan the first page looking for the
     // first item whose title / description / keywords mention astronomy,
@@ -243,7 +243,7 @@ public class CelestialImageService {
     // Words that, when they appear in a NASA item's title or description,
     // strongly suggest the result IS the celestial object we asked for.
     // Deliberately doesn't include generic terms like "hubble", "webb",
-    // "telescope" or "shuttle" — those match observatory launches and
+    // "telescope" or "shuttle", those match observatory launches and
     // historical archive items that aren't pictures of a sky target.
     private static readonly string[] AstroKeywords = new[] {
         "nebula", "galaxy", "cluster", "messier", "ngc ", "caldwell",
@@ -268,7 +268,7 @@ public class CelestialImageService {
 
         // Walk up to the first 12 results looking for one with an astro
         // keyword in title/description. Most catalogues (Carina, Beehive,
-        // Andromeda, …) hit on the first item — the loop only matters
+        // Andromeda, …) hit on the first item, the loop only matters
         // when NASA's relevance ranking pulls in historical archive items.
         var max = Math.Min(items.GetArrayLength(), 12);
         for (var i = 0; i < max; i++) {
@@ -308,7 +308,7 @@ public class CelestialImageService {
     // Words whose presence in a NASA item's title strongly suggest it's
     // a science chart, schematic or data-product visualisation rather
     // than a photograph of the target. Reject these even if the
-    // astronomy-keyword filter would otherwise let them through —
+    // astronomy-keyword filter would otherwise let them through,
     // a "Mars Albedo and Water Vapour Signature" diagram is not what
     // an astrophotographer wants to see as a thumbnail of Mars.
     private static readonly string[] NonPhotoTitleHints = new[] {
@@ -371,7 +371,7 @@ public class CelestialImageService {
     private static IEnumerable<string> WikipediaVariants(string name) {
         var trimmed = name.Trim();
         // For Messier catalogue codes try the unambiguous "Messier_N"
-        // article BEFORE "M N" — Wikipedia's bare "M 22" / "M22" entries
+        // article BEFORE "M N", Wikipedia's bare "M 22" / "M22" entries
         // are disambig pages or unrelated (M-22 road, M22 grenade, etc.).
         if (System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"^M(essier)?\s*\d+$",
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase)) {
@@ -390,7 +390,7 @@ public class CelestialImageService {
             var num = trimmed.AsSpan(2).Trim().ToString();
             if (int.TryParse(num, out _)) yield return $"IC_{num}";
         }
-        // Caldwell: "Caldwell N" — Wikipedia uses that exact title.
+        // Caldwell: "Caldwell N", Wikipedia uses that exact title.
         if (System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"^C(aldwell)?\s*\d+$",
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase)) {
             var num = System.Text.RegularExpressions.Regex.Match(trimmed, @"\d+").Value;

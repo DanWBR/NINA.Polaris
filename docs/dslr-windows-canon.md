@@ -2,7 +2,7 @@
 
 On Windows, Polaris talks to Canon EOS bodies (DSLR and mirrorless)
 through Canon's **EOS Digital SDK** (EDSDK). Linux users should use
-the INDI gphoto driver instead — see `dslr-linux.md`.
+the INDI gphoto driver instead, see `dslr-linux.md`.
 
 ## Compatible bodies
 
@@ -28,7 +28,7 @@ themselves. It's a one-time, free process.
    - `EDSDK.dll`
    - `EdsImage.dll`
    - `Mc.dll` (codec helper)
-   - `EDSDK_64.dll` may also be present — copy that too.
+   - `EDSDK_64.dll` may also be present, copy that too.
 5. Create a folder next to the Polaris executable called
    `plugins/canon-edsdk/` and drop the DLLs there.
 
@@ -41,12 +41,12 @@ themselves. It's a one-time, free process.
 ## Connect the camera in Polaris
 
 1. Plug the camera into the host with a USB cable. Use the cable
-   that came with the camera or a known-good USB 2.0 cable — USB 3.0
+   that came with the camera or a known-good USB 2.0 cable, USB 3.0
    cables sometimes confuse the body's USB controller.
 2. Power the camera on, set the mode dial to **M** (manual).
 3. In Polaris **Equipment** → Camera card, pick the **Canon EOS
    (EDSDK)** entry in the driver dropdown. If the entry shows
-   *Not installed*, the SDK probe didn't find the DLLs — confirm
+   *Not installed*, the SDK probe didn't find the DLLs, confirm
    they're in `plugins/canon-edsdk/` and restart.
 4. Click **Detect** to refresh the list of connected Canon bodies.
 5. Pick the body (you'll see "EOS RP", "EOS 6D Mark II", etc.)
@@ -66,7 +66,7 @@ themselves. It's a one-time, free process.
   ISO 50 to ISO 102400.
 - **Shutter speed**: Polaris picks the closest discrete Tv value
   for any exposure ≤ 30 s. Anything past 30 s automatically uses
-  **Bulb** mode — the SDK opens the shutter, Polaris waits the
+  **Bulb** mode, the SDK opens the shutter, Polaris waits the
   requested time, then closes it.
 - **AF / focus**: Polaris does not drive the camera's autofocus
   for you. Set the camera lens / body to **MF** before connecting
@@ -101,7 +101,7 @@ themselves. It's a one-time, free process.
   was set to RAW only. Polaris times out the JPEG download after
   300 ms; if your camera reports a longer transfer this is the
   first thing to suspect.
-- **CR2 saved but no preview shown**: same as above — the JPEG
+- **CR2 saved but no preview shown**: same as above, the JPEG
   asset never arrived. Most modern bodies always emit a JPEG even
   in RAW-only mode (as the image-review thumbnail), but some older
   bodies don't.
@@ -110,5 +110,5 @@ themselves. It's a one-time, free process.
 
 The EDSDK DLLs are licensed under Canon's terms; **don't redistribute**
 them. The Polaris-side wrappers (`NINA.Camera.CanonEdsdk` in this
-repo) are MPL 2.0 — they ship with Polaris but contain only the
+repo) are MPL 2.0, they ship with Polaris but contain only the
 P/Invoke surface, no Canon code.

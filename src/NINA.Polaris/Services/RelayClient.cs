@@ -24,7 +24,7 @@ public class RelayClient : IHostedService, IDisposable {
     private readonly ILogger<RelayClient> _logger;
     // GX-10b: the local HTTP listener moved off 5000 (now HTTPS-on-5000)
     // to 5080 by default. Read the configured port here so the tunnel
-    // doesn't try to forward to a dead port — falls back to 5080 if
+    // doesn't try to forward to a dead port, falls back to 5080 if
     // the setting is absent. The user-facing override is
     // Server:Http:Port in appsettings.json.
     private readonly HttpClient _local;
@@ -89,7 +89,7 @@ public class RelayClient : IHostedService, IDisposable {
                 break;
             } catch (Exception ex) {
                 LastError = ex.Message;
-                _logger.LogWarning("Relay client connection error: {Msg} — retrying in {Sec}s",
+                _logger.LogWarning("Relay client connection error: {Msg}, retrying in {Sec}s",
                     ex.Message, backoff.TotalSeconds);
                 State = RelayClientState.Reconnecting;
             }
@@ -238,7 +238,7 @@ public class RelayClient : IHostedService, IDisposable {
         var localWs = new ClientWebSocket();
         // Use a derived ws:// URI from the local HTTP base address.
         // GX-10b: HTTP port is now configurable (default 5080, loopback
-        // only) — same value the HttpClient above uses.
+        // only), same value the HttpClient above uses.
         var localUri = new Uri($"ws://127.0.0.1:{_localHttpPort}{path}");
         try {
             await localWs.ConnectAsync(localUri, ct);

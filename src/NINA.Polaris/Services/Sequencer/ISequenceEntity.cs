@@ -3,7 +3,7 @@ namespace NINA.Polaris.Services.Sequencer;
 /// <summary>
 /// Anything that can be executed inside the Advanced Sequencer tree:
 /// containers, instructions, conditions, triggers. The tree is a directed
-/// acyclic graph in practice — containers reference their child entities,
+/// acyclic graph in practice, containers reference their child entities,
 /// and the engine walks the tree depth-first by default.
 ///
 /// All entities carry a stable <see cref="Id"/> so the UI can refer to

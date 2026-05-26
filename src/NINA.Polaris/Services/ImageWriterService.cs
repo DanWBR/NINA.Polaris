@@ -27,7 +27,7 @@ namespace NINA.Polaris.Services;
 ///     {rig}/                                     ← active equipment-profile name
 ///       lights/{target}/{filter}/{session}/      ← session = local night (noon-to-noon)
 ///         light_*.fits
-///       calibration/                             ← rig-level — reusable across sessions
+///       calibration/                             ← rig-level, reusable across sessions
 ///         dark/{exposure}s_g{gain}/dark_*.fits
 ///         bias/g{gain}/bias_*.fits
 ///         darkflat/{exposure}s_g{gain}/darkflat_*.fits
@@ -35,13 +35,13 @@ namespace NINA.Polaris.Services;
 ///         masters/master_*.fits                  (written by STUDIO ST-3)
 ///       calibrated/{target}/{filter}/...         (written by STUDIO ST-4)
 ///       integrated/{target}/{filter}/...         (written by STUDIO ST-5)
-///       processed/{target}/...                   (written by STUDIO ST-7 — TIFF/PNG/JPEG)
+///       processed/{target}/...                   (written by STUDIO ST-7, TIFF/PNG/JPEG)
 ///
 /// Rig + session rationale:
 ///   - **Rig as top-level** means each optical chain (different scope,
 ///     camera, focal reducer) gets its own self-contained archive. Master
 ///     darks/biases/flats belong to a specific sensor at a specific
-///     temperature setpoint and gain — they're not transferable. Putting
+///     temperature setpoint and gain, they're not transferable. Putting
 ///     them under the rig prevents cross-contamination when the user
 ///     switches setups.
 ///   - **Session = astronomical night**. A capture started at 02:30 local
@@ -50,7 +50,7 @@ namespace NINA.Polaris.Services;
 ///     the date the night *started*, matching how astronomers describe
 ///     observation runs.
 ///   - **Calibration stays per-rig (not per-session)** so masters can be
-///     reused across nights — typical PixInsight workflow. Raw cal
+///     reused across nights, typical PixInsight workflow. Raw cal
 ///     frames accumulate in the same bucket regardless of which night
 ///     they were shot, then STUDIO ST-3 integrates them into masters.
 ///
@@ -99,7 +99,7 @@ public class ImageWriterService {
 
             // DSLR / mirrorless drivers attach the camera-native RAW
             // bytes via IHasRawFile. When present, the raw is the
-            // authoritative on-disk artefact — we save it verbatim
+            // authoritative on-disk artefact, we save it verbatim
             // instead of generating a FITS / XISF (which would only
             // hold the embedded JPEG we use for the live preview).
             var hasRaw = imageData is IHasRawFile rf
@@ -118,7 +118,7 @@ public class ImageWriterService {
             // Sanitise illegal filename characters
             foreach (var c in Path.GetInvalidFileNameChars()) fileName = fileName.Replace(c, '_');
 
-            // Standard subdirectory layout — keeps lights / calibration /
+            // Standard subdirectory layout, keeps lights / calibration /
             // STUDIO outputs separated so the post-processing pipeline can
             // find matching darks by exposure+gain (and flats by filter+gain)
             // without scanning every header. Frames also bucketed under the
@@ -176,7 +176,7 @@ public class ImageWriterService {
         // Camera (some fields are populated by IndiCamera, fill gaps)
         if (m.Camera.Gain == 0 && gain > 0) m.Camera.Gain = gain;
 
-        // Telescope — focal length comes from the *active rig* (a per-rig
+        // Telescope, focal length comes from the *active rig* (a per-rig
         // optic property), falling back to the legacy profile value only if
         // no rigs have been set up.
         if (_equip.Telescope != null && _equip.Telescope.IsConnected) {
@@ -281,7 +281,7 @@ public class ImageWriterService {
     }
 
     /// <summary>
-    /// Map a local timestamp to its astronomical session date — the date
+    /// Map a local timestamp to its astronomical session date, the date
     /// the *evening* started. A capture at 02:30 local time still belongs
     /// to the previous evening's session, so the rollover is local noon.
     /// This matches how observers describe sessions ("the night of May

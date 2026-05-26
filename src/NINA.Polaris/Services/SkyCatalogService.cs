@@ -69,7 +69,7 @@ public class SkyCatalogService {
     }
 
     /// <summary>
-    /// All catalog objects — used by services that need to walk the full
+    /// All catalog objects, used by services that need to walk the full
     /// list (e.g. TonightsBestService ranking visible DSOs).
     /// </summary>
     public IReadOnlyList<CatalogObject> AllObjects => _catalog;

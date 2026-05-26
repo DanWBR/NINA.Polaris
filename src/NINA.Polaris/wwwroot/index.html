@@ -20,7 +20,7 @@
     <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png">
     <meta name="theme-color" content="#0a1633">
-    <!-- GX-12L: Web App Manifest — enables Android Chrome to treat
+    <!-- GX-12L: Web App Manifest, enables Android Chrome to treat
          Polaris as an installable PWA with proper standalone display,
          splash screen, and adaptive (maskable) icon. iOS already uses
          apple-touch-icon above; manifest is mostly an Android +
@@ -31,12 +31,12 @@
     <meta name="apple-mobile-web-app-title" content="Polaris">
     <meta name="application-name" content="Polaris">
     <!-- Inter font is self-hosted (css/fonts/InterVariable*.woff2)
-         via @font-face in app.css. No external CDN call needed —
+         via @font-face in app.css. No external CDN call needed,
          keeps the UI typeface intact on observatory hosts that
          have no internet. -->
     <link rel="preload" href="/css/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="/css/app.css">
-    <!-- SWE-3-bugfix: celestial.css dropped — SKY tab is now the
+    <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
@@ -50,12 +50,12 @@
          list="exposure-presets" ...> across the UI inherits the same
          combobox: typeable + dropdown of astrophoto-standard values
          from the camera's minimum supported exposure up to 1000s.
-         Single source of truth — tweak the EXPOSURE_PRESETS_ALL
+         Single source of truth, tweak the EXPOSURE_PRESETS_ALL
          array in app.js and every exposure field in the app picks
          up the new list.
 
          Kept around for browser-native fallback ONLY when our custom
-         popover (see below) isn't running — in normal operation the
+         popover (see below) isn't running, in normal operation the
          JS strips the list= attribute off matched inputs and renders
          its own popover that always shows the FULL preset list,
          unfiltered. The native datalist filters by what the user has
@@ -72,7 +72,7 @@
          the moment Alpine hydrates the inputs). On every focus into
          an input that originally carried list="exposure-presets",
          opens a floating <ul> of every preset value from the same
-         exposurePresets() helper — no filtering, no rearrangement.
+         exposurePresets() helper, no filtering, no rearrangement.
          Click a value → writes it to the input + dispatches input
          and change events so Alpine's x-model.number picks the new
          value up. -->
@@ -90,7 +90,7 @@
                         return root._x_dataStack[0].exposurePresets();
                     }
                 } catch (_) { /* Alpine not ready yet */ }
-                // Fallback hardcoded list — kept in sync with
+                // Fallback hardcoded list, kept in sync with
                 // EXPOSURE_PRESETS_ALL in app.js. Used only during
                 // the brief window before Alpine hydrates.
                 return [0.0001, 0.001, 0.01, 0.05, 0.1, 0.5, 1, 2, 3, 4, 5,
@@ -107,7 +107,7 @@
                 // Click delegation on the popover writes the chosen
                 // preset back to whichever input is currently active.
                 pop.addEventListener('mousedown', function (ev) {
-                    // mousedown (not click) so focus stays on input —
+                    // mousedown (not click) so focus stays on input,
                     // a click would blur the input and close us early.
                     var t = ev.target.closest('[data-exposure-value]');
                     if (!t || !activeInput) return;
@@ -197,7 +197,7 @@
     <header class="status-bar">
         <div class="status-bar-left">
             <a href="#" @click.prevent="tab='home'" class="brand" title="Home">
-                <!-- Polaris mountain badge — drop into wwwroot/img/.
+                <!-- Polaris mountain badge, drop into wwwroot/img/.
                      SVG twinkle is the fallback when the image is
                      missing (build hasn't shipped it yet, or 404). -->
                 <img class="brand-badge"
@@ -227,15 +227,15 @@
                  error (red) / off (grey) colour states. -->
             <span class="status-indicator" :class="indiConnected ? 'ok' : 'off'"
                   @click="tab='equip'; equipSource='indi'"
-                  :title="indiConnected ? 'INDI connected' : 'INDI not connected — click to open Equipment'">
+                  :title="indiConnected ? 'INDI connected' : 'INDI not connected, click to open Equipment'">
                 <span x-text="indiConnected ? 'INDI' : 'INDI OFF'"></span>
             </span>
             <span class="status-indicator"
                   :class="(alpaca.servers && alpaca.servers.length) ? 'ok' : 'off'"
                   @click="tab='equip'; equipSource='alpaca'"
                   :title="(alpaca.servers && alpaca.servers.length)
-                          ? alpaca.servers.length + ' Alpaca server(s) discovered — click to open Equipment'
-                          : 'No Alpaca servers found — click to open Equipment'">
+                          ? alpaca.servers.length + ' Alpaca server(s) discovered, click to open Equipment'
+                          : 'No Alpaca servers found, click to open Equipment'">
                 <span>ALPACA</span>
                 <span x-show="alpaca.servers && alpaca.servers.length"
                       x-text="alpaca.servers.length"
@@ -243,7 +243,7 @@
             </span>
             <!-- PHD2 badge: tracks the JSON-RPC connection + live
                  AppState (same source the GUIDE-tab Control panel
-                 uses). Single x-text expression — three x-show'd
+                 uses). Single x-text expression, three x-show'd
                  spans were causing the badge to render empty when
                  Alpine couldn't evaluate one of the cascading
                  conditions cleanly. -->
@@ -540,10 +540,10 @@
                     <div class="control-row">
                         <label>Exp<input type="number" x-model.number="exposure" list="exposure-presets" step="any" min="0" class="input-sm"> s</label>
                         <label>Gain<input type="number" x-model.number="gain" step="10" min="0" class="input-sm"></label>
-                        <!-- ZWO L/M/H gain presets — render only when the
+                        <!-- ZWO L/M/H gain presets, render only when the
                              active camera matches a known ZWO model. -->
                         <span class="zwo-gain-presets" x-show="zwoPresetsForActiveCamera()"
-                              :title="'ZWO preset gains — L=' + zwoPresetsForActiveCamera()?.L + ', M=' + zwoPresetsForActiveCamera()?.M + ', H=' + zwoPresetsForActiveCamera()?.H">
+                              :title="'ZWO preset gains, L=' + zwoPresetsForActiveCamera()?.L + ', M=' + zwoPresetsForActiveCamera()?.M + ', H=' + zwoPresetsForActiveCamera()?.H">
                             <button type="button" class="zwo-gain-preset"
                                     :data-active="gain === zwoPresetsForActiveCamera()?.L"
                                     @click="applyGainPreset('gain', zwoPresetsForActiveCamera().L)">L</button>
@@ -611,7 +611,7 @@
 
                     <!-- LSTR-5: Auto refocus + recenter triggers. Visible
                          whenever live stack toggle is shown (independent of
-                         on/off state — user might want to configure before
+                         on/off state, user might want to configure before
                          starting). Banner-style status when an action runs. -->
                     <details class="livestack-triggers"
                              :open="liveStackTriggers.refocusEnabled || liveStackTriggers.recenterEnabled">
@@ -685,8 +685,8 @@
                                  x-show="liveStackStatus?.triggers?.lastRefocusAt">
                                 Last refocus:
                                 <strong x-text="formatRelativeTime(liveStackStatus?.triggers?.lastRefocusAt)"></strong>
-                                at frame <strong x-text="liveStackStatus?.triggers?.lastRefocusFrame ?? '—'"></strong>
-                                (HFR <strong x-text="liveStackStatus?.triggers?.lastRefocusHfr?.toFixed?.(2) || '—'"></strong>)
+                                at frame <strong x-text="liveStackStatus?.triggers?.lastRefocusFrame ?? ', '"></strong>
+                                (HFR <strong x-text="liveStackStatus?.triggers?.lastRefocusHfr?.toFixed?.(2) || ', '"></strong>)
                             </div>
                         </fieldset>
 
@@ -711,7 +711,7 @@
                                            @change="saveLiveStackTriggers()" class="input-sm" style="width:70px">
                                     minutes
                                 </label>
-                                <label title="Plate-solves every frame — heavy on RPi 4. Leave at 0 unless you need reactive drift correction.">
+                                <label title="Plate-solves every frame, heavy on RPi 4. Leave at 0 unless you need reactive drift correction.">
                                     Drift ≥
                                     <input type="number" min="0" step="5"
                                            x-model.number="liveStackTriggers.recenterDriftArcsec"
@@ -745,8 +745,8 @@
                                  x-show="liveStackStatus?.triggers?.lastRecenterAt">
                                 Last recenter:
                                 <strong x-text="formatRelativeTime(liveStackStatus?.triggers?.lastRecenterAt)"></strong>
-                                at frame <strong x-text="liveStackStatus?.triggers?.lastRecenterFrame ?? '—'"></strong>
-                                (drift <strong x-text="liveStackStatus?.triggers?.lastRecenterDriftArcsec?.toFixed?.(1) || '—'"></strong>")
+                                at frame <strong x-text="liveStackStatus?.triggers?.lastRecenterFrame ?? ', '"></strong>
+                                (drift <strong x-text="liveStackStatus?.triggers?.lastRecenterDriftArcsec?.toFixed?.(1) || ', '"></strong>")
                             </div>
                         </fieldset>
                     </details>
@@ -775,7 +775,7 @@
                                   x-text="stretchAuto ? 'AUTO' : 'MANUAL'"></span>
                         </label>
                         <span class="text-muted" style="font-size: 11px;" x-show="!_lastRawFrame">
-                            (raw mode only — switch image stream to raw)
+                            (raw mode only, switch image stream to raw)
                         </span>
                     </div>
                     <div class="stretch-sliders" :class="stretchAuto ? 'disabled' : ''">
@@ -922,7 +922,7 @@
                         </button>
                         <button class="btn" @click="polarRefineStart()"
                                 :disabled="polar.isActive || !polar.completedOk"
-                                title="Continuous capture+solve loop — see error vector shrink as you adjust knobs">
+                                title="Continuous capture+solve loop, see error vector shrink as you adjust knobs">
                             🔄 Refine
                         </button>
                         <button class="btn" @click="polarRefineStop()"
@@ -958,7 +958,7 @@
                        style="margin: 4px 0 0">
                         No suitable targets above 30° in the high-Dec
                         zone right now. The mount can still TPPA from
-                        wherever it's pointing — just click Start above.
+                        wherever it's pointing, just click Start above.
                     </p>
                     <div class="polar-target-chips"
                          x-show="polarTargets.items.length">
@@ -970,7 +970,7 @@
                                           + ' (RA ' + t.raHours.toFixed(2) + 'h, Dec '
                                           + t.decDeg.toFixed(1) + '°)'">
                                 <span class="polar-target-name"
-                                      x-text="t.commonName ? (t.name + ' — ' + t.commonName) : t.name"></span>
+                                      x-text="t.commonName ? (t.name + ', ' + t.commonName) : t.name"></span>
                                 <span class="polar-target-meta">
                                     <span>Dec
                                         <strong x-text="(t.decDeg >= 0 ? '+' : '')
@@ -986,7 +986,7 @@
                     </div>
                 </div>
 
-                <!-- Live progress bar — visible while a job is in flight -->
+                <!-- Live progress bar, visible while a job is in flight -->
                 <div class="af-progress" x-show="polar.isActive" style="margin-bottom: 12px">
                     <div class="af-progress-bar">
                         <div class="af-progress-fill" :style="'width: ' + polarProgressPercent() + '%'"></div>
@@ -999,7 +999,7 @@
                     </div>
                 </div>
 
-                <!-- Result block — visible once we have an error vector -->
+                <!-- Result block, visible once we have an error vector -->
                 <div class="stats-bar" x-show="polar.completedOk" style="margin-bottom: 12px">
                     <span class="text-ok">✓ Alignment complete</span>
                     <span>Azimuth error: <strong :class="polarAzClass()"
@@ -1046,7 +1046,7 @@
                         gives your alignment error.
                     </p>
                     <p>
-                        After TPPA, click <strong>Refine</strong> to enter a live capture/solve loop —
+                        After TPPA, click <strong>Refine</strong> to enter a live capture/solve loop,
                         adjust your tripod knobs and watch the error vector shrink in real time.
                     </p>
                 </div>
@@ -1173,7 +1173,7 @@
                 </div>
             </div>
 
-            <!-- PREVIEW — snap test shots with optional save -->
+            <!-- PREVIEW, snap test shots with optional save -->
             <div x-show="tab === 'preview'" class="tab-panel preview-tab-panel">
                 <div class="panel-header">
                     Preview
@@ -1187,7 +1187,7 @@
                 <div class="preview-area">
                     <!-- Dedicated canvas pair (separate ids from LIVE so
                          both tabs can coexist in the DOM and the
-                         multi-canvas renderer draws to both — switching
+                         multi-canvas renderer draws to both, switching
                          tabs shows the latest frame instantly without
                          a re-fetch). -->
                     <canvas id="previewCanvas" class="preview-canvas"></canvas>
@@ -1195,7 +1195,7 @@
                     <div class="preview-overlay" x-show="!preview.lastSnapAt">
                         <p x-text="selectedCamera
                                     ? 'Pick exposure + bin, then Take snap'
-                                    : 'No camera connected — connect from Rigs tab first'"></p>
+                                    : 'No camera connected, connect from Rigs tab first'"></p>
                     </div>
                 </div>
 
@@ -1275,7 +1275,7 @@
                                 @click="toggleCameraStream()"
                                 :disabled="!selectedCamera || preview.busy || preview.looping"
                                 :title="cameraStream.supportsNative
-                                    ? 'Native CCD_VIDEO_STREAM available — high fps'
+                                    ? 'Native CCD_VIDEO_STREAM available, high fps'
                                     : 'Server loop fallback (no native stream on this camera)'">
                             <span x-show="!cameraStream.running">🎥 Stream</span>
                             <span x-show="cameraStream.running" x-text="
@@ -1332,8 +1332,8 @@
                             <p x-text="selectedCamera
                                 ? (cameraStream.supportsNative
                                     ? 'Click Start Stream to begin (camera supports native CCD_VIDEO_STREAM)'
-                                    : 'Click Start Stream (server loop mode — fps limited by exposure)')
-                                : 'No camera connected — connect from RIGS tab first'"></p>
+                                    : 'Click Start Stream (server loop mode, fps limited by exposure)')
+                                : 'No camera connected, connect from RIGS tab first'"></p>
                         </div>
                     </div>
 
@@ -1380,7 +1380,7 @@
                             </label>
                         </div>
 
-                        <!-- White-balance row — only visible for OSC color
+                        <!-- White-balance row, only visible for OSC color
                              cameras that expose WB_R + WB_B (ZWO ASI224MC,
                              QHY5III678C, etc.). Hidden on mono cams. -->
                         <div class="control-row" x-show="cameraCaps.whiteBalance">
@@ -1512,7 +1512,7 @@
                             @click="guideTab = 'control'">Control</button>
                     <button class="guide-tab" :class="{ active: guideTab === 'gui' }"
                             @click="guideTab = 'gui'; loadPhd2GuiStatus()">PHD2 GUI</button>
-                    <!-- Profile-sync indicator chip — lives in the strip so
+                    <!-- Profile-sync indicator chip, lives in the strip so
                          it's visible from either tab. -->
                     <span class="profile-sync-indicator" x-show="guider.profileSync"
                           :class="{
@@ -1662,7 +1662,7 @@
                 </div>
 
                 <!-- Smart Calibrate + Algo Preset block (PH2X-4 + PH2X-5).
-                     Visible whenever PHD2 is connected — these wrap the
+                     Visible whenever PHD2 is connected, these wrap the
                      RPC-only orchestrations that PHD2 doesn't expose in
                      its own UI as a single button. -->
                 <div class="phd2-smart-block" x-show="guider.connected" style="margin-top:10px">
@@ -1696,7 +1696,7 @@
                     </div>
                     <details class="phd2-algo-advanced" style="margin-top:6px">
                         <summary style="font-size:11px;color:var(--text-muted);cursor:pointer">
-                            Advanced — individual algorithm knobs
+                            Advanced, individual algorithm knobs
                         </summary>
                         <div style="margin-top:8px;font-size:11px"
                              x-show="phd2AlgoParams && phd2AlgoParams.axes">
@@ -1729,7 +1729,7 @@
                 <!-- ===== TAB 2: PHD2 GUI (xpra HTML5 iframe) ===== -->
                 <div x-show="guideTab === 'gui'" class="phd2-gui-tab">
                     <!-- State 1: Platform unsupported (non-Linux OR 32-bit ARM
-                         like Raspberry Pi 2/3 on 32-bit Raspbian — xpra
+                         like Raspberry Pi 2/3 on 32-bit Raspbian, xpra
                          installs from apt but session-start crashes due to
                          dummy Xorg + GTK/Python issues on ARMv7). Backend
                          populates UnsupportedReason with the specific blurb. -->
@@ -1742,7 +1742,7 @@
                             The <strong>Control</strong> tab on the left covers
                             all JSON-RPC operations (profile switch, exposure,
                             dec mode, guiding, dithering, smart calibrate,
-                            algorithm tuning) — that surface works on every
+                            algorithm tuning), that surface works on every
                             host. Only the embedded GUI window is unavailable
                             here.
                         </p>
@@ -1771,7 +1771,7 @@
                         <p x-show="phd2GuiSession?.lastError" class="text-err"
                            style="margin-top:8px" x-text="phd2GuiSession.lastError"></p>
                     </div>
-                    <!-- State 4: Session running — iframe + toolbar -->
+                    <!-- State 4: Session running, iframe + toolbar -->
                     <div x-show="phd2GuiSession && phd2GuiSession.running" class="phd2-gui-frame-wrap">
                         <div class="phd2-gui-toolbar">
                             <span class="text-ok">✓ xpra v<span x-text="phd2GuiSession?.xpraVersion"></span></span>
@@ -1811,7 +1811,7 @@
                             title="Save current device selections into this rig">💾 Save selections</button>
                 </div>
 
-                <!-- Compact connection strip — visible when an INDI server
+                <!-- Compact connection strip, visible when an INDI server
                      is reachable. Replaces the bottom-of-panel "Disconnect
                      INDI" footer so the user always sees connection state
                      at the top of the tab without scrolling. -->
@@ -1828,7 +1828,7 @@
                     <button class="btn btn-sm btn-danger" @click="disconnectIndi()">Disconnect</button>
                 </div>
 
-                <!-- Driver-source picker (INDI vs ASCOM Alpaca) — shown
+                <!-- Driver-source picker (INDI vs ASCOM Alpaca), shown
                      when nothing is connected yet. The expanded form
                      below acts like an "expanded" variant of the strip. -->
                 <div class="equip-connect-prompt" x-show="!indiConnected">
@@ -1942,7 +1942,7 @@
                      depend on any backend connection. -->
                 <div class="equip-scroll equip-grid">
 
-                    <!-- Main Telescope (OTA optics — metadata only,
+                    <!-- Main Telescope (OTA optics, metadata only,
                          no hardware connection). Fields map 1:1 to
                          EquipmentProfile.{FocalLengthMm, ApertureMm,
                          TelescopeBrand, TelescopeModel, AccessoryType,
@@ -1958,7 +1958,7 @@
                         </div>
                         <div class="equip-card-body">
                             <!-- Catalog picker. Same data source as the
-                                 Manage Rigs modal — Brand + Model selects
+                                 Manage Rigs modal, Brand + Model selects
                                  driven by wwwroot/data/telescopes.json,
                                  Accessory select by optical-accessories.json.
                                  Picking a model auto-fills aperture +
@@ -2085,7 +2085,7 @@
                                      the active indiserver's device list.
                                      Bound via @change + :selected (not x-model)
                                      because x-model fights with dynamic
-                                     <template x-for> options — if the JS sets
+                                     <template x-for> options, if the JS sets
                                      equipCameraChoice to a name before the
                                      matching option exists, x-model writes
                                      the empty string back. :selected on the
@@ -2154,7 +2154,7 @@
                                 <div class="equip-detail-name" x-text="selectedCamera"></div>
                                 <div class="equip-detail-props">
                                     <!-- DSLRs don't report sensor temperature
-                                         or cooler state — hide both rows
+                                         or cooler state, hide both rows
                                          when the active driver is a vendor SDK. -->
                                     <span x-show="!isDslrCamera && cameraTemp !== null">Temp: <strong x-text="(cameraTemp?.toFixed(1) || '--') + '°C'"></strong></span>
                                     <span x-show="!isDslrCamera">Cooler: <strong :class="equipCameraInfo.coolerOn ? 'text-ok' : 'text-muted'"
@@ -2162,7 +2162,7 @@
                                     <span x-show="!isDslrCamera && equipCameraInfo.binX">Bin: <strong x-text="equipCameraInfo.binX + 'x' + equipCameraInfo.binY"></strong></span>
                                     <span x-show="equipCameraInfo.bitDepth">Depth: <strong x-text="equipCameraInfo.bitDepth + '-bit'"></strong></span>
                                     <span x-show="isDslrCamera">ISO: <strong x-text="cameraIso"></strong></span>
-                                    <!-- Sensor metadata — only on real CCDs that
+                                    <!-- Sensor metadata, only on real CCDs that
                                          report it; DSLRs and Alpaca sims often
                                          leave these zero. -->
                                     <span x-show="equipCameraInfo.maxX > 0">Resolution: <strong x-text="equipCameraInfo.maxX + ' × ' + equipCameraInfo.maxY + ' px'"></strong></span>
@@ -2170,9 +2170,9 @@
                                     <span x-show="equipCameraInfo.pixelSizeUm > 0">Pixel: <strong x-text="(equipCameraInfo.pixelSizeUm || 0).toFixed(2) + ' µm'"></strong></span>
                                 </div>
 
-                                <!-- Cooler controls — astronomy cameras only.
+                                <!-- Cooler controls, astronomy cameras only.
                                      Toggle reflects current state at a
-                                     glance (green = ON, red = OFF) —
+                                     glance (green = ON, red = OFF),
                                      replaces the old "Cooler OFF"
                                      button-with-label that read ambiguously. -->
                                 <div class="equip-inline-controls" x-show="!isDslrCamera">
@@ -2193,7 +2193,7 @@
                                     <button class="btn btn-sm" @click="setCooler(true, equipCoolerTarget)">Set</button>
                                 </div>
 
-                                <!-- ISO dropdown — DSLR only. Standard ISO
+                                <!-- ISO dropdown, DSLR only. Standard ISO
                                      steps from 50 to 102400; vendor drivers
                                      pick the closest supported value. -->
                                 <div class="equip-inline-controls" x-show="isDslrCamera">
@@ -2240,7 +2240,7 @@
                                 </select>
                             </div>
 
-                            <!-- Install banner — vendor driver picked but
+                            <!-- Install banner, vendor driver picked but
                                  backend not reachable (NexStar / LX200 /
                                  Alpaca placeholders today). Links to the
                                  mounts-wifi doc that explains the path. -->
@@ -2408,7 +2408,7 @@
                         </div>
                     </div>
 
-                    <!-- Guidescope (OTA optics for the guide setup —
+                    <!-- Guidescope (OTA optics for the guide setup,
                          metadata only, no hardware connection). The
                          guide camera itself is owned by PHD2 (next
                          card). The pixel scale we display here is what
@@ -2459,7 +2459,7 @@
                         </div>
                     </div>
 
-                    <!-- Guide Camera (read-only — PHD2 owns the actual
+                    <!-- Guide Camera (read-only, PHD2 owns the actual
                          guide cam connection. Polaris just surfaces
                          what PHD2 reports). -->
                     <div class="equip-card equip-card-metadata">
@@ -2485,7 +2485,7 @@
                                 PHD2 not connected. Connect from the
                                 <a href="#" @click.prevent="tab = 'guide'"
                                    style="color:var(--accent)">Guide tab</a>
-                                — Polaris doesn't manage guide cameras directly.
+                               , Polaris doesn't manage guide cameras directly.
                             </p>
                             <p class="hint" x-show="guider.connected" style="margin:4px 0 0">
                                 Camera selection is managed by PHD2.
@@ -2498,7 +2498,7 @@
 
                 </div>
 
-                <!-- Accessories — collapsible section below the main
+                <!-- Accessories, collapsible section below the main
                      grid. Auto-expands if any of the four optional
                      devices has a saved selection on the active rig so
                      the user doesn't have to click to see what's there. -->
@@ -2747,13 +2747,13 @@
                 </details>
 
                 <!-- Refresh/Disconnect moved to the compact connection
-                     strip at the top of the panel — no separate footer
+                     strip at the top of the panel, no separate footer
                      needed anymore. -->
             </div>
 
             <!-- SKY EXPLORER -->
             <div x-show="tab === 'sky'" class="tab-panel tab-panel-sky">
-                <!-- Slew preview floating panel — live camera feed
+                <!-- Slew preview floating panel, live camera feed
                      over the sky map. Same draggable-panel pattern
                      as the Mount control: title bar with × button,
                      position persisted across reloads, "📷 Camera"
@@ -2776,7 +2776,7 @@
                                         stroke="currentColor" stroke-width="2"/>
                             </svg>
                             Camera
-                            <span class="cam-float-sub">Slewing — live view</span>
+                            <span class="cam-float-sub">Slewing, live view</span>
                         </span>
                         <button class="cam-float-close"
                                 @click.stop="slewPreviewVisible = false; persistSlewPreviewToggle()"
@@ -2969,7 +2969,7 @@
                     <!-- Map-centre actions overlay (bottom-left). These
                          act on whatever's framed by the red target FOV
                          (the live map centre), NOT on the picked object
-                         — that way the user can compose framing by
+                        , that way the user can compose framing by
                          panning and send the mount there directly.
                          Center on mount lives here too because it's
                          strictly a map-view operation. -->
@@ -3027,7 +3027,7 @@
                 </div>
                 <!-- SWE-5 cleanup: dropped the FOV input + Show-camera-FOV
                      checkbox. Engine FOV is controlled by the user's
-                     mouse-wheel zoom on the iframe — keeping an extra
+                     mouse-wheel zoom on the iframe, keeping an extra
                      UI knob duplicated the control. The camera FOV
                      overlay is always on (blue mount + red target are
                      central to the planning UX, so there's no use
@@ -3071,7 +3071,7 @@
                      Add to Sequence / Tonight's altitude / Plan mosaic.
                      With the translucent info card now duplicating the
                      per-object actions and showing its own altitude
-                     chart, that panel was mostly dead space — its only
+                     chart, that panel was mostly dead space, its only
                      unique controls were the three map-centre slew
                      buttons and Plan mosaic. Plan mosaic moved to the
                      toolbar (top of the SKY tab); the three slew
@@ -3177,12 +3177,12 @@
                 </button>
             </div>
 
-            <!-- EDITOR — Lightroom-style non-destructive image editor.
+            <!-- EDITOR, Lightroom-style non-destructive image editor.
                  Three sources:
                   • Open a master from the STUDIO Library (via the Library
                     button in this panel's source picker)
                   • Pick a file from FILES (via the "Open in editor"
-                    button there — populates editorState.sourcePath)
+                    button there, populates editorState.sourcePath)
                   • Drag-and-drop / upload directly into this tab.
                  Edits live in editorState.edits and persist via the
                  /api/editor/sidecar endpoint as {source}.edit.json.
@@ -3209,7 +3209,7 @@
                             :disabled="!wasmReady"
                             :title="wasmReady
                                     ? 'Click to switch between server-side and client-side (WASM) compute'
-                                    : 'WASM bundle not ready — server-mode only'"
+                                    : 'WASM bundle not ready, server-mode only'"
                             x-text="editorState.computeMode === 'wasm' ? '⚡ WASM' : '🖥 Server'"></button>
                     <button class="btn btn-sm" @click="editorReset()" :disabled="!editorState.session"
                             title="Reset all sliders to defaults">↺ Reset</button>
@@ -3219,7 +3219,7 @@
                             title="Export the final image">↓ Export…</button>
                 </div>
 
-                <!-- Source picker — only visible when no session yet -->
+                <!-- Source picker, only visible when no session yet -->
                 <div class="editor-source-picker" x-show="!editorState.session">
                     <div class="editor-source-card editor-source-dropzone"
                          @dragover.prevent
@@ -3427,21 +3427,21 @@
                                         x-show="onnxAvailableForOp('background-extraction')"
                                         :disabled="editorAi.busy"
                                         @click="editorRunAi('background-extraction')"
-                                        title="Background extraction — removes gradients">
+                                        title="Background extraction, removes gradients">
                                     🌅 Background
                                 </button>
                                 <button class="btn btn-sm"
                                         x-show="onnxAvailableForOp('denoising')"
                                         :disabled="editorAi.busy"
                                         @click="editorRunAi('denoising')"
-                                        title="Denoise — neural noise reduction">
+                                        title="Denoise, neural noise reduction">
                                     🔇 Denoise
                                 </button>
                                 <button class="btn btn-sm"
                                         x-show="onnxAvailableForOp('deconvolution')"
                                         :disabled="editorAi.busy"
                                         @click="editorRunAi('deconvolution')"
-                                        title="Deconvolution — sharpen stars / objects">
+                                        title="Deconvolution, sharpen stars / objects">
                                     ✨ Deconvolve
                                 </button>
                             </div>
@@ -3458,12 +3458,12 @@
                 </div>
             </div>
 
-            <!-- Export modal — quality + format + resize. ED-5.
+            <!-- Export modal, quality + format + resize. ED-5.
                  NOTE: uses .editor-export-backdrop / .editor-export-modal
                  (NOT the generic .modal-backdrop / .modal which don't
                  exist in our CSS). The original markup pointed at
                  unknown classes so the modal rendered invisibly in
-                 the document flow — the Export… header button "did
+                 the document flow, the Export… header button "did
                  nothing" from the user's POV. -->
             <div class="editor-export-backdrop" x-show="editorState.exportModal" x-cloak
                  @click.self="editorState.exportModal = false">
@@ -3551,7 +3551,7 @@
                     <template x-for="item in tonightFiltered()" :key="item.category + '/' + item.name">
                         <div class="tonight-card" :class="'tonight-card--' + item.category.toLowerCase()">
                             <div class="tonight-thumb" :data-name="item.name">
-                                <!-- x-if (not x-show) — only stamp the <img>
+                                <!-- x-if (not x-show), only stamp the <img>
                                      once we have a real URL. An <img src="">
                                      fires the `error` event even when
                                      display:none'd, which would mark every
@@ -3616,7 +3616,7 @@
                             <div class="tonight-actions">
                                 <!-- Map-only: select this object as the SKY
                                      target, open the info card, centre the
-                                     engine on it. Does not move the mount —
+                                     engine on it. Does not move the mount,
                                      for that, use Slew or Slew & Center on
                                      the SKY tab after the map is positioned. -->
                                 <button class="btn btn-sm btn-primary"
@@ -3674,7 +3674,7 @@
                 </div>
                 <div x-show="weather.forecast && weather.forecast.available && !weatherBestWindows().length"
                      class="weather-window-callout weather-window-callout--meh">
-                    No high-quality observation windows tonight. Sky conditions look marginal —
+                    No high-quality observation windows tonight. Sky conditions look marginal,
                     check per-day breakdown for individual slots.
                 </div>
 
@@ -3811,7 +3811,7 @@
                                     <label>G<input type="number" class="seq-input seq-input-num"
                                         x-model.number="item.gain" step="10" min="0"
                                         :disabled="seqState === 'running'"></label>
-                                    <!-- Inline ZWO presets — direct assignment on `item` since
+                                    <!-- Inline ZWO presets, direct assignment on `item` since
                                          applyGainPreset() can't reach into the x-for scope. -->
                                     <span class="zwo-gain-presets"
                                           x-show="zwoPresetsForActiveCamera() && seqState !== 'running'">
@@ -3908,11 +3908,11 @@
                                     style="margin-left: auto;">Abort flip</button>
                         </div>
                         <p class="seq-dither-hint text-muted" x-show="!mount.connected">
-                            ⚠ Mount not connected — meridian time unavailable.
+                            ⚠ Mount not connected, meridian time unavailable.
                         </p>
                         <p class="seq-dither-hint text-muted"
                            x-show="mount.connected && Math.abs(settings.longitude || 0) < 0.01">
-                            ⚠ Observatory longitude is 0 — set it in Settings for correct LST.
+                            ⚠ Observatory longitude is 0, set it in Settings for correct LST.
                         </p>
                     </div>
                 </div>
@@ -3975,10 +3975,10 @@
                             </label>
                         </div>
                         <p class="seq-dither-hint text-muted" x-show="ditherSettings.enabled && !guider.connected">
-                            ⚠ PHD2 not connected — dither will be silently skipped during the run.
+                            ⚠ PHD2 not connected, dither will be silently skipped during the run.
                         </p>
                         <p class="seq-dither-hint text-muted" x-show="ditherSettings.enabled && guider.connected && !guider.guiding">
-                            ⚠ PHD2 connected but not guiding — start guiding before launching the sequence.
+                            ⚠ PHD2 connected but not guiding, start guiding before launching the sequence.
                         </p>
                     </div>
                 </div>
@@ -4036,7 +4036,7 @@
                             Park supersedes stop-tracking. End events always run on natural completion;
                             tick the box above to also run them when you press Stop.
                             <br>
-                            Auto-GraXpert is fire-and-forget — the next exposure does not wait for it.
+                            Auto-GraXpert is fire-and-forget, the next exposure does not wait for it.
                             Output lands next to each light with the <code>_bge</code> suffix.
                         </p>
                     </div>
@@ -4175,7 +4175,7 @@
                 </div>
             </div>
 
-            <!-- STUDIO — Frame browser (ST-1) -->
+            <!-- STUDIO, Frame browser (ST-1) -->
             <div x-show="tab === 'studio'" class="tab-panel studio-panel">
                 <div class="panel-header">
                     Studio
@@ -4242,7 +4242,7 @@
                                     <span x-show="f.gain > 0" x-text="' · g' + f.gain"></span>
                                 </div>
                                 <div class="studio-card-sub muted">
-                                    <span x-text="f.target || '—'"></span>
+                                    <span x-text="f.target || ', '"></span>
                                     <span x-text="' · ' + (f.dateObs ? new Date(f.dateObs).toLocaleString() : '?')"></span>
                                 </div>
                             </div>
@@ -4273,7 +4273,7 @@
                             @click="studioOpenCalibrateDialog()">
                         ✦ Calibrate lights
                     </button>
-                    <!-- ST-5: Batch stack — align + integrate. Works
+                    <!-- ST-5: Batch stack, align + integrate. Works
                          on either raw lights or already-calibrated
                          frames; either way we need ≥2. -->
                     <button class="btn btn-sm btn-primary"
@@ -4282,7 +4282,7 @@
                         ✧ Integrate (stack)
                     </button>
                     <!-- ED-7: hand the single-selected frame to the
-                         Lightroom-style editor. One frame at a time —
+                         Lightroom-style editor. One frame at a time,
                          the editor opens a single session per file. -->
                     <button class="btn btn-sm"
                             :disabled="studio.selectedIds.length !== 1"
@@ -4330,7 +4330,7 @@
                             <div class="muted" style="font-size:12px;margin-top:8px">
                                 <p x-show="studio.master.method === 'SigmaClippedMean'">
                                     Iteratively rejects pixels &gt;3σ from the running mean (2 passes).
-                                    Best general default — handles hot pixels and cosmic ray hits.
+                                    Best general default, handles hot pixels and cosmic ray hits.
                                 </p>
                                 <p x-show="studio.master.method === 'Median'">
                                     Per-pixel median of all frames. Robust against single outliers
@@ -4338,7 +4338,7 @@
                                 </p>
                                 <p x-show="studio.master.method === 'Mean'">
                                     Plain arithmetic mean. Maximum signal-to-noise but doesn't
-                                    reject any outliers — only safe with clean inputs.
+                                    reject any outliers, only safe with clean inputs.
                                 </p>
                             </div>
 
@@ -4553,7 +4553,7 @@
                                 <span class="muted" x-text="studio.viewer.frame
                                     ? (studio.viewer.frame.imageType + ' · '
                                        + studio.viewer.frame.exposureSec.toFixed(1) + 's · '
-                                       + (studio.viewer.frame.filter || '—')
+                                       + (studio.viewer.frame.filter || ', ')
                                        + ' · g' + studio.viewer.frame.gain
                                        + ' · ' + studio.viewer.frame.width + '×' + studio.viewer.frame.height)
                                     : ''"></span>
@@ -4759,7 +4759,7 @@
                     <button class="btn btn-sm btn-danger" @click="filesDelete()"
                             :disabled="files.selectedPaths.length === 0">🗑 Delete</button>
                     <!-- GX-12d: arbitrary two-file before/after comparator.
-                         Reuses the GraXpert run modal — select any two
+                         Reuses the GraXpert run modal, select any two
                          files (FITS or raster), get the slider-divider
                          viewer. The earlier-sorted file is BEFORE so
                          a master next to its _denoise sibling lands
@@ -4770,7 +4770,7 @@
                             @click="filesCompareSelected()"
                             title="Compare the two selected files in a before/after viewer">↔ Compare</button>
                     <!-- Open the selected file in the Lightroom-style editor.
-                         Disabled unless exactly one file is selected — the
+                         Disabled unless exactly one file is selected, the
                          editor opens one frame at a time. Supported types
                          (FITS/XISF/PNG/JPG/TIFF) aren't gated here; the
                          server's /api/editor/load rejects unsupported
@@ -4782,7 +4782,7 @@
                             title="Open this file in the Lightroom-style editor">
                         🎨 Edit
                     </button>
-                    <!-- GraXpert dropdown — visible when EITHER the CLI
+                    <!-- GraXpert dropdown, visible when EITHER the CLI
                          is installed on the host OR the matching ONNX
                          model is detected by the server. The modal's
                          Run-in-browser toggle picks the path; GX-7 lets
@@ -4862,7 +4862,7 @@
                                         <span x-text="entry.name"></span>
                                     </td>
                                     <td class="files-col-size"
-                                        x-text="entry.isDirectory ? '—' : filesFormatBytes(entry.sizeBytes)"></td>
+                                        x-text="entry.isDirectory ? ', ' : filesFormatBytes(entry.sizeBytes)"></td>
                                     <td class="files-col-mod" x-text="filesFormatDate(entry.modifiedUtc)"></td>
                                     <td class="files-col-type" x-text="filesTypeLabel(entry)"></td>
                                 </tr>
@@ -4910,7 +4910,7 @@
                 <div class="panel-header">Settings</div>
 
                 <!-- Appearance / interface scale. Slider writes to a
-                     draft value (uiZoomDraft) while you drag — the
+                     draft value (uiZoomDraft) while you drag, the
                      actual page zoom only updates when you click
                      Apply. The real-time variant we had before made
                      the slider impossible to aim because the UI
@@ -4942,13 +4942,13 @@
                     </p>
                 </div>
 
-                <!-- Remote terminal — opens an SSH shell from the
+                <!-- Remote terminal, opens an SSH shell from the
                      browser via xterm.js + a WebSocket bridge to
                      SSH.NET on the server. Useful when Polaris is
                      running headless on a Raspberry Pi and you need
                      to restart a service (indi, phd2) without
                      plugging in a screen. Gated by Terminal:Enabled
-                     in appsettings (default false) — the backend
+                     in appsettings (default false), the backend
                      returns 403 otherwise.
                      No auto-login: every Connect prompts for user +
                      password again, and credentials never persist. -->
@@ -4995,7 +4995,7 @@
                     <div class="term-error text-warn"
                          x-show="term.lastError" x-cloak
                          x-text="term.lastError"></div>
-                    <!-- Live terminal — xterm.js mounts here. Hidden
+                    <!-- Live terminal, xterm.js mounts here. Hidden
                          until we have a session so the page doesn't
                          render an empty black box on first paint. -->
                     <div class="term-mount" x-show="term.connected || term.lastError"
@@ -5056,7 +5056,7 @@
                         </div>
                         <div class="obs-location-error" x-show="obsAddressError" x-text="obsAddressError"></div>
                         <div class="obs-location-results" x-show="obsAddressResults.length">
-                            <!-- Index-tail key — Nominatim returns multiple hits
+                            <!-- Index-tail key, Nominatim returns multiple hits
                                  with identical displayName for the same admin
                                  boundary (e.g. searching "New York" yields the
                                  city + the state, same displayName). Alpine's
@@ -5151,7 +5151,7 @@
                         Use Advanced Sequencer by default
                     </label>
                     <p class="hint" style="margin-top:6px">
-                        <strong>Simple:</strong> flat list of (filter, exposure, count) items — quick to set up, no triggers.<br>
+                        <strong>Simple:</strong> flat list of (filter, exposure, count) items, quick to set up, no triggers.<br>
                         <strong>Advanced:</strong> tree with containers, loop conditions, and event triggers (auto-focus on temp/HFR/time, meridian flip, dither, safety abort).
                     </p>
                 </div>
@@ -5218,8 +5218,8 @@
                                   x-text="graxpert.status?.available
                                           ? ('✓ Detected v' + (graxpert.status.version || '?')
                                              + (graxpert.status?.supportsDeconvolution
-                                                ? ' — BGE + Decon + Denoise'
-                                                : ' — BGE only'))
+                                                ? ', BGE + Decon + Denoise'
+                                                : ', BGE only'))
                                           : '✗ Not detected'"></span>
                             <button class="btn btn-sm" @click="graxpertRedetect()">Re-detect</button>
                         </div>
@@ -5239,7 +5239,7 @@
                                x-show="!graxpert.status?.available">
                                 Install GraXpert v3.0+ from
                                 <a href="https://www.graxpert.com" target="_blank" rel="noopener">graxpert.com</a>
-                                — Deconvolution + Denoising require v3.0+, BGE works on v2.x too.
+                               , Deconvolution + Denoising require v3.0+, BGE works on v2.x too.
                             </p>
 
                             <!-- Default tuning shown only when detected; saved into the
@@ -5304,7 +5304,7 @@
                      client IS already on a secure context. The full
                      upgrade banner only shows when the user somehow
                      landed on plain HTTP (legacy bookmark, Server:Http:
-                     Bind=any, etc.) — where it's still actionable. -->
+                     Bind=any, etc.), where it's still actionable. -->
                 <template x-if="httpsInfo && httpsInfo.httpsEnabled">
                     <div class="settings-section">
                         <!-- Full upgrade banner: only when NOT on a secure
@@ -5312,7 +5312,7 @@
                         <div x-show="!window.isSecureContext">
                             <h3>🔒 HTTPS endpoints (for WebGPU + multi-thread WASM)</h3>
                             <p class="hint" style="margin-top:0">
-                                Plain HTTP is what you're on right now — Chrome blocks
+                                Plain HTTP is what you're on right now, Chrome blocks
                                 <strong>WebGPU</strong> (client-side AI inference) and
                                 <strong>SharedArrayBuffer</strong> (multi-thread WASM
                                 fallback) until the origin is a "secure context"
@@ -5331,7 +5331,7 @@
                                 </template>
                             </div>
                             <p class="hint" x-show="httpsInfo.fingerprintSha256 || httpsInfo.fingerprint">
-                                Certificate fingerprint — compare against what
+                                Certificate fingerprint, compare against what
                                 your browser shows in <em>cert details</em>:
                                 <br>
                                 <strong>SHA-256</strong> (what modern browsers display):
@@ -5368,7 +5368,7 @@
                         <details x-show="window.isSecureContext"
                                  class="https-info-collapsed">
                             <summary>
-                                🔒 <strong>Secure context active</strong> —
+                                🔒 <strong>Secure context active</strong>,
                                 WebGPU + multi-thread WASM available.
                                 <span class="hint" style="margin-left:6px">
                                     Click for cert fingerprint + other endpoint URLs.
@@ -5407,12 +5407,12 @@
                     <p class="hint" style="margin-top:0">
                         In-browser GraXpert AI (BGE / Denoise / Deconvolution).
                         Server hosts the model files, your browser fetches them
-                        once and runs inference locally — works on any device
+                        once and runs inference locally, works on any device
                         with WebGPU or WASM SIMD (laptops, phones, tablets).
                     </p>
                     <p class="hint" x-show="!window.isSecureContext && httpsInfo?.httpsEnabled"
                        style="color:var(--accent-warn,#f59e0b)">
-                        ⚠ You're on plain HTTP — WebGPU is disabled. Reopen
+                        ⚠ You're on plain HTTP, WebGPU is disabled. Reopen
                         Polaris via the HTTPS link above for GPU-accelerated
                         in-browser inference, or tick "Prefer CLI subprocess"
                         below to run on the server's GraXpert install.
@@ -5427,7 +5427,7 @@
                     <p class="hint">
                         Point at a directory containing the GraXpert layout
                         <code>{family}-ai-models/{version}/model.onnx</code>.
-                        Models are not bundled with Polaris — clone the
+                        Models are not bundled with Polaris, clone the
                         <a href="https://github.com/Steffenhir/GraXpert" target="_blank" rel="noopener">GraXpert repo</a>
                         and point at its <code>models/</code> dir, or copy the
                         <code>.onnx</code> files into a folder of your own.
@@ -5446,7 +5446,7 @@
                             <span x-show="onnx.clearingCache">Clearing…</span>
                         </button>
                     </div>
-                    <!-- Models list — empty state when path unset/invalid. -->
+                    <!-- Models list, empty state when path unset/invalid. -->
                     <div x-show="onnx.manifest?.models?.length"
                          style="margin-top:10px">
                         <table class="onnx-models-table">
@@ -5491,7 +5491,7 @@
                     <details style="margin-top:12px">
                         <summary style="cursor:pointer; font-size:11px;
                                        color:var(--text-muted)">
-                            Advanced — use GraXpert CLI subprocess instead
+                            Advanced, use GraXpert CLI subprocess instead
                         </summary>
                         <label class="checkbox-label" style="margin-top:8px">
                             <input type="checkbox"
@@ -5506,7 +5506,7 @@
                             device, no WebGPU or WASM SIMD) and you want
                             the host's <code>graxpert</code> binary to do
                             the work instead. The in-browser toggle is still
-                            available per-run — this is just the default.
+                            available per-run, this is just the default.
                         </p>
                     </details>
                 </div>
@@ -5520,7 +5520,7 @@
          bottom. Left side: chips per active operation (sequence,
          auto-focus, slew, exposure, Siril job, GraXpert batch, ...).
          Right side: host CPU + RAM. Both feed off the per-second
-         status WS message — no extra polling. -->
+         status WS message, no extra polling. -->
     <footer class="activity-bar"
             :class="{ 'has-activities': activityChips().length > 0 }">
         <div class="activity-bar-ops">
@@ -5541,7 +5541,7 @@
         <span style="flex:1"></span>
         <!-- NET-1: client↔server traffic. Two stacked rows (↓ rx, ↑ tx)
              with auto-scaled units. Pulse class lights up briefly when
-             bytes arrive — gives an LED-style "data flowing" hint that's
+             bytes arrive, gives an LED-style "data flowing" hint that's
              more legible than the changing number alone. -->
         <div class="activity-net" :title="netTooltip()">
             <span class="activity-net-row activity-net-rx"
@@ -5556,7 +5556,7 @@
             </span>
         </div>
         <div class="activity-bar-host" x-show="host.cpuPercent != null || host.device" x-cloak>
-            <!-- Hardware identification — detected once at startup
+            <!-- Hardware identification, detected once at startup
                  (HostInfo.cs). Tooltip carries the full model/OS;
                  short label fits in the bar. -->
             <span class="activity-host-stat activity-host-device" x-show="host.device"
@@ -5592,10 +5592,10 @@
     <div class="location-setup-modal" x-show="mosaicOpen" x-cloak
          @keydown.escape.window="mosaicOpen = false">
         <div class="location-setup-frame" style="max-width:680px">
-            <h2>🧩 Mosaic planner — <span x-text="mosaic.req.targetName"></span></h2>
+            <h2>🧩 Mosaic planner, <span x-text="mosaic.req.targetName"></span></h2>
             <p class="text-muted" style="font-size:13px;margin-bottom:14px">
                 Grid is centred on the selected target. Per-panel FOV is auto-filled
-                from the active rig's sensor + focal length — adjust if needed.
+                from the active rig's sensor + focal length, adjust if needed.
             </p>
 
             <div class="field-row" style="display:flex;gap:12px">
@@ -5650,7 +5650,7 @@
 
             <div x-show="mosaic.plan" class="warn-banner" style="margin:10px 0">
                 <strong x-text="(mosaic.plan?.panels?.length || 0) + ' panels'"></strong>
-                — estimated session time:
+               , estimated session time:
                 <strong x-text="mosaicTimeFormat(mosaic.plan?.estimatedTotalSeconds || 0)"></strong>
                 (slew + plate-solve + exposures, per-rig defaults assumed)
             </div>
@@ -5677,7 +5677,7 @@
                 meridian-flip timing, and twilight calculations. You can change this any time in Settings.
             </p>
 
-            <!-- Address search (OpenStreetMap / Nominatim) — wrapped
+            <!-- Address search (OpenStreetMap / Nominatim), wrapped
                  in a real <form> so iOS Safari's on-screen 'Go' key
                  dispatches submit (the iOS soft keyboard doesn't
                  reliably fire keyup.enter on bare inputs). -->
@@ -5699,7 +5699,7 @@
                      levels of the same place (search "Mossoró" → 2
                      identical-name admin/boundary entries with
                      different coords). Alpine x-for with a
-                     duplicate :key collapses or skips entries —
+                     duplicate :key collapses or skips entries,
                      symptom was "the result panel opens with nothing
                      in it". Key on the array index + a numeric tail
                      so each row is unique. -->
@@ -5750,13 +5750,13 @@
         </div>
     </div>
 
-    <!-- Image Viewer Modal (OpenSeadragon) — shared by Live View
+    <!-- Image Viewer Modal (OpenSeadragon), shared by Live View
          (latest-frame preview) and the FILES tab (any FITS/PNG/JPG
          on disk). The displayed title + loaded URL come from state
          (imageViewerTitle, imageViewerUrl) so both flows reuse the
          same modal frame, close handler, and OSD instance management.
          The toolbar is built from HTML buttons rather than OSD's
-         built-in navigation control — OSD ships PNG sprites for those
+         built-in navigation control, OSD ships PNG sprites for those
          and we don't vendor them, so its native toolbar renders as
          broken-image alt text. The btn-sm buttons here call viewport
          methods directly so we get the same behaviour with theme-correct
@@ -5778,7 +5778,7 @@
             </p>
 
             <!-- Step 1: download (common to all OSes) -->
-            <h3 style="margin-top:18px">Step 1 — Download the certificate</h3>
+            <h3 style="margin-top:18px">Step 1, Download the certificate</h3>
             <p>On the device you want to add, click:</p>
             <p>
                 <a class="btn btn-md"
@@ -5787,13 +5787,13 @@
             </p>
             <p class="hint">
                 Saves <code>polaris-root.crt</code> to your Downloads
-                folder. Only the public certificate is exported — the
+                folder. Only the public certificate is exported, the
                 private key never leaves the server.
             </p>
 
             <!-- Step 2: per-OS install. Tabs pre-pick the right one
                  via certModalOpen()'s UA sniff; the user can flip. -->
-            <h3 style="margin-top:18px">Step 2 — Install + trust it</h3>
+            <h3 style="margin-top:18px">Step 2, Install + trust it</h3>
             <div class="cert-modal-tabs">
                 <button class="cert-modal-tab"
                         :class="{ active: certModal.os === 'windows' }"
@@ -5822,15 +5822,15 @@
                         Authorities</strong> → <strong>OK</strong> → <strong>Next</strong>
                         → <strong>Finish</strong>.</li>
                     <li>Windows shows a security prompt with the cert
-                        fingerprint — compare to the one in Polaris
+                        fingerprint, compare to the one in Polaris
                         Settings, click <strong>Yes</strong>.</li>
-                    <li>Restart Chrome / Edge. Reload Polaris — green padlock 🔒.</li>
+                    <li>Restart Chrome / Edge. Reload Polaris, green padlock 🔒.</li>
                 </ol>
             </div>
 
             <div class="cert-modal-content" x-show="certModal.os === 'macos'">
                 <ol>
-                    <li>Double-click <code>polaris-root.crt</code> — opens
+                    <li>Double-click <code>polaris-root.crt</code>, opens
                         <strong>Keychain Access</strong>.</li>
                     <li>The cert appears under <strong>login → Certificates</strong>.
                         Drag it to <strong>System → Certificates</strong>,
@@ -5840,20 +5840,20 @@
                         <strong>When using this certificate</strong> →
                         <strong>Always Trust</strong>, close the window,
                         authenticate again.</li>
-                    <li>Restart Safari / Chrome. Reload — green padlock 🔒.</li>
+                    <li>Restart Safari / Chrome. Reload, green padlock 🔒.</li>
                 </ol>
             </div>
 
             <div class="cert-modal-content" x-show="certModal.os === 'ios'">
                 <ol>
                     <li>Tap <strong>⬇ Download</strong> above <em>from Safari</em>
-                        (not Chrome — iOS only shows the install prompt for
+                        (not Chrome, iOS only shows the install prompt for
                         Safari downloads). When iOS asks <em>"This website is
                         trying to download a configuration profile. Do you
                         want to allow this?"</em> → <strong>Allow</strong>.</li>
                     <li>Open the <strong>Settings app</strong>. At the very
                         top, a new entry <strong>Profile Downloaded</strong>
-                        appears — tap it → <strong>Install</strong>
+                        appears, tap it → <strong>Install</strong>
                         (top-right) → enter passcode → <strong>Install</strong>
                         again → <strong>Done</strong>.</li>
                     <li style="background: rgba(245, 158, 11, 0.12); padding: 8px; border-radius:6px">
@@ -5864,7 +5864,7 @@
                         trusts the cert for VPN/Mail purposes, NOT for
                         Safari TLS.
                     </li>
-                    <li>Reload Polaris in Safari — green padlock 🔒.</li>
+                    <li>Reload Polaris in Safari, green padlock 🔒.</li>
                 </ol>
             </div>
 
@@ -5872,16 +5872,16 @@
                 <p style="color:var(--accent-warn,#f59e0b)">
                     <strong>⚠ Limitation:</strong> Chrome on Android 7+
                     does <strong>not</strong> trust user-installed
-                    certificates — only system-level certs (require root)
+                    certificates, only system-level certs (require root)
                     work for browser TLS. On stock Android <code>chrome://</code>
                     will keep showing "Not secure".
                 </p>
                 <p><strong>What works on Android:</strong></p>
                 <ul>
                     <li><strong>Add Polaris to home screen as PWA</strong>
-                        (Chrome → ⋮ menu → <em>Install app</em>) — opens
+                        (Chrome → ⋮ menu → <em>Install app</em>), opens
                         in a chromeless window where the warning is hidden.</li>
-                    <li><strong>Use Firefox</strong> — it has its own CA
+                    <li><strong>Use Firefox</strong>, it has its own CA
                         store and respects user-installed certs.</li>
                     <li><strong>Use the Polaris Relay</strong> for a real
                         Let's Encrypt cert (see Relay docs).</li>
@@ -5905,7 +5905,7 @@ sudo apt install libnss3-tools   # debian/ubuntu
 # Import polaris-root.crt as trusted CA in Chrome's NSS DB
 certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     -i ~/Downloads/polaris-root.crt</code></pre>
-                <p>Restart Chrome. Reload — green padlock 🔒.</p>
+                <p>Restart Chrome. Reload, green padlock 🔒.</p>
                 <p><strong>Firefox:</strong> Settings → Privacy &amp;
                 Security → Certificates → View Certificates →
                 Authorities → Import → pick
@@ -5923,7 +5923,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <p style="margin-left:8px" x-show="httpsInfo?.fingerprintSha256">
                 <strong style="font-size:12px">SHA-256</strong>
                 <span style="opacity:0.7; font-size:11px">(what modern
-                    browsers show — copy this and Cmd/Ctrl+F it in
+                    browsers show, copy this and Cmd/Ctrl+F it in
                     your browser's cert-details dialog):</span>
                 <br>
                 <code style="user-select:all; word-break:break-all; font-size:11px"
@@ -5977,7 +5977,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             </div>
 
             <p class="hint" x-show="!siril.currentJob">
-                Calibration frames pre-fill happens in the next iteration —
+                Calibration frames pre-fill happens in the next iteration,
                 for now run the WithoutDark / WithoutFlat / WithoutDBF
                 variants when you don't have masters yet.
             </p>
@@ -6054,7 +6054,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <!-- GraXpert run modal — single modal handles BGE, Decon, and
+    <!-- GraXpert run modal, single modal handles BGE, Decon, and
          Denoise. The op chosen at open() time gates which controls
          render so the user doesn't see Decon sliders when running BGE. -->
     <div class="siril-modal" x-show="graxpert.modalOpen" x-cloak
@@ -6062,9 +6062,9 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          @keydown.escape.window="graxpertCloseModal()">
         <div class="siril-modal-frame">
             <h2>
-                <span x-show="graxpert.modalOp === 'background-extraction'">🌅 GraXpert — Remove gradient</span>
-                <span x-show="graxpert.modalOp === 'deconvolution'">✨ GraXpert — Deconvolution</span>
-                <span x-show="graxpert.modalOp === 'denoising'">🔇 GraXpert — Denoise</span>
+                <span x-show="graxpert.modalOp === 'background-extraction'">🌅 GraXpert, Remove gradient</span>
+                <span x-show="graxpert.modalOp === 'deconvolution'">✨ GraXpert, Deconvolution</span>
+                <span x-show="graxpert.modalOp === 'denoising'">🔇 GraXpert, Denoise</span>
             </h2>
 
             <p class="hint">
@@ -6082,7 +6082,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     Run in browser (ONNX, no CLI subprocess)
                 </label>
                 <p class="hint" style="margin-top:4px">
-                    Inference runs locally in this tab — works on any device with
+                    Inference runs locally in this tab, works on any device with
                     WebGPU or WASM SIMD, no GraXpert install required on the
                     server. First use of each model downloads its ONNX bytes
                     from the Polaris host.
@@ -6097,7 +6097,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                            && httpsInfo?.httpsEnabled
                            && httpsInfo?.exampleHttpsUrls?.length"
                    style="margin-top:8px; color:var(--accent-warn,#f59e0b)">
-                    ⚠ Plain HTTP — Chrome blocks WebGPU here.
+                    ⚠ Plain HTTP, Chrome blocks WebGPU here.
                     <a :href="httpsInfo.exampleHttpsUrls[0]"
                        x-text="'Open ' + httpsInfo.exampleHttpsUrls[0] + ' instead'"
                        style="color:inherit; text-decoration: underline"></a>
@@ -6106,7 +6106,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 </p>
             </div>
             <!-- Browser-mode progress (separate from the CLI progress
-                 block lower down — that one polls the server job, this
+                 block lower down, that one polls the server job, this
                  one is purely client-side). -->
             <div class="siril-modal-progress"
                  x-show="graxpert.browserActive">
@@ -6123,7 +6123,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                x-show="(graxpert.modalOp === 'deconvolution' || graxpert.modalOp === 'denoising')
                        && graxpertPathsLookLikeLights()">
                 ⚠ Decon and Denoise are best applied to integrated masters,
-                not individual lights. The selection looks like lights —
+                not individual lights. The selection looks like lights,
                 results may degrade SNR rather than improve it.
             </p>
 
@@ -6145,7 +6145,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 </label>
             </div>
 
-            <!-- Decon controls — labels + range match GraXpert's UI
+            <!-- Decon controls, labels + range match GraXpert's UI
                  (Method + Deconvolution Strength + Image FWHM in
                  pixels) so a user switching back and forth between
                  the two tools gets the same numbers in the same
@@ -6179,7 +6179,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             </div>
 
             <!-- Denoise controls -->
-            <!-- GX-12k: AI model dropdown — both versions ship in the
+            <!-- GX-12k: AI model dropdown, both versions ship in the
                  GraXpert bundle. v2.0.0 is lighter (~284 MB, ±10 clip,
                  safer on iOS) and v3.0.2 is more aggressive (~456 MB,
                  ±1 clip, better quality on desktop / GPU). Default
@@ -6189,7 +6189,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <!-- GX-12n: list every denoise version registered
                          in the manifest (built-in 2.0.0 / 3.0.2 plus
                          any quantized siblings produced by
-                         scripts/quantize_onnx_models.py — 2.0.0-fp16,
+                         scripts/quantize_onnx_models.py, 2.0.0-fp16,
                          2.0.0-int8, etc). Label injects the on-disk
                          size so the user picks knowingly. -->
                     <select class="input-sm" x-model="graxpert.modalDenoiseVersion">
@@ -6200,7 +6200,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     </select>
                 </label>
                 <label>Strength
-                    <!-- GX-12p: slider — see Decon for rationale. -->
+                    <!-- GX-12p: slider, see Decon for rationale. -->
                     <span class="graxpert-strength-row">
                         <input type="range" class="graxpert-strength-slider"
                                step="0.05" min="0" max="1"
@@ -6251,13 +6251,13 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <div class="editor-export-backdrop" x-show="onnxLicenseModalOpen" x-cloak
          @click.self="onnxLicenseDecline()">
         <div class="editor-export-modal" style="max-width:560px">
-            <h3>AI model licence — CC BY-NC-SA 4.0</h3>
+            <h3>AI model licence, CC BY-NC-SA 4.0</h3>
             <p style="font-size:13px; line-height:1.55">
                 The GraXpert AI models (Background Extraction, Denoising,
                 Deconvolution) are © GraXpert Development Team and licensed
                 under
                 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/"
-                   target="_blank" rel="noopener">CC BY-NC-SA 4.0</a> —
+                   target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>,
                 <strong>non-commercial use only</strong>, with attribution
                 and share-alike on derivative works.
             </p>
@@ -6271,7 +6271,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <div class="editor-export-actions">
                 <button class="btn" @click="onnxLicenseDecline()">Cancel</button>
                 <button class="btn btn-primary" @click="onnxLicenseAccept()">
-                    I agree — continue
+                    I agree, continue
                 </button>
             </div>
         </div>
@@ -6422,7 +6422,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <p class="text-muted" style="font-size: 12px;">
                 A rig is a saved set of equipment selections. Edit device
                 pickers, optics, cooler target and PHD2 endpoint directly
-                on the <strong>cards in the RIGS tab</strong> — they all
+                on the <strong>cards in the RIGS tab</strong>, they all
                 save to the active rig automatically. This modal is for
                 rig management: rename, create, duplicate, delete, switch
                 active, and set per-rig filter offsets.
@@ -6469,7 +6469,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
 
                             <!-- Per-rig filter offset table. Stays in the
                                  modal because no equipment card surfaces
-                                 it — these are pure rig metadata used by
+                                 it, these are pure rig metadata used by
                                  the sequencer when a filter swap happens. -->
                             <details class="rig-filter-offsets" style="margin-top:8px">
                                 <summary style="font-size:11px;color:var(--text-muted);text-transform:uppercase;cursor:pointer">
@@ -6550,12 +6550,12 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          under js/lib/xterm/. -->
     <script src="/js/lib/xterm/xterm.js"></script>
     <script src="/js/lib/xterm/xterm-addon-fit.js"></script>
-    <!-- Pure-JS LZ4 block decoder — required for the raw uint16 image
+    <!-- Pure-JS LZ4 block decoder, required for the raw uint16 image
          stream over /ws/image-stream. Without it every raw frame falls
          through to the REST preview fallback and hammers a 404 loop. -->
     <script src="/js/lib/lz4.js"></script>
     <!-- GX-1b: ONNX pipelines bootstrap (manifest + IndexedDB cache +
-         session helper). Tiny (~6 KB) — the heavy lifting happens
+         session helper). Tiny (~6 KB), the heavy lifting happens
          inside loadOrtWeb() which lazy-injects /js/lib/onnxruntime/ort.min.js
          on first call. Loading the registry up-front means the editor
          AI section + FILES tab can call OnnxRegistry.* synchronously

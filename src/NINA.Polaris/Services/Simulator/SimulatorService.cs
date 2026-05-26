@@ -87,7 +87,7 @@ public class SimulatorService : IDisposable {
                 _logger.LogInformation("Simulator launched: {Devices} on port {Port}",
                     string.Join(",", filtered), port);
             } else {
-                LastError = "Backend rejected launch — see Polaris logs for details.";
+                LastError = "Backend rejected launch, see Polaris logs for details.";
                 _logger.LogWarning("Simulator launch failed: {Devices}", string.Join(",", filtered));
             }
             return ok;
@@ -119,7 +119,7 @@ public class SimulatorService : IDisposable {
         await _lock.WaitAsync(ct);
         try {
             if (!IsRunning) {
-                LastError = "Simulator isn't running — Launch first.";
+                LastError = "Simulator isn't running, Launch first.";
                 return false;
             }
             var ok = await ActiveBackend.AddDeviceAsync(device, ct);
@@ -154,13 +154,13 @@ public class SimulatorService : IDisposable {
         }
     }
 
-    /// <summary>Cheap TCP probe — periodic health check called from
+    /// <summary>Cheap TCP probe, periodic health check called from
     /// the auto-start service. Updates <see cref="IsRunning"/> if the
     /// subprocess died between launch and now.</summary>
     public async Task<bool> ProbeRunningAsync(CancellationToken ct = default) {
         var alive = await ActiveBackend.IsRunningAsync(ct);
         if (IsRunning && !alive) {
-            _logger.LogWarning("Simulator was running but health probe failed — marking down.");
+            _logger.LogWarning("Simulator was running but health probe failed, marking down.");
             IsRunning = false;
             RunningDevices = [];
             LastError = "Simulator process exited unexpectedly.";
@@ -188,7 +188,7 @@ public class SimulatorService : IDisposable {
     }
 }
 
-/// <summary>Snapshot of where the simulator stack is right now —
+/// <summary>Snapshot of where the simulator stack is right now,
 /// serialised verbatim into the WS payload and the
 /// <c>GET /api/simulator/status</c> response. Keep field names
 /// stable; the UI binds to them.</summary>

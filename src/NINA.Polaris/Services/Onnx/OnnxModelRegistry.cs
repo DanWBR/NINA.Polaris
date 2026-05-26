@@ -50,7 +50,7 @@ public class OnnxModelRegistry {
     // hasn't pointed Onnx:ModelsPath at anything (or that path doesn't
     // exist), the registry falls back to {wwwroot}/graxpert/models.
     // Lets the operator drop the GraXpert weights into the published
-    // app folder on a Pi / mini-PC and have zero config to do — no
+    // app folder on a Pi / mini-PC and have zero config to do, no
     // Settings round-trip, no env var, no symlink.
     private readonly string _bundledModelsPath;
 
@@ -81,7 +81,7 @@ public class OnnxModelRegistry {
         _logger = logger;
         // env.WebRootPath is the absolute path to wwwroot in the
         // published layout. In dev (no static files served yet) it can
-        // be null — fall back to {ContentRoot}/wwwroot so this is the
+        // be null, fall back to {ContentRoot}/wwwroot so this is the
         // single source of truth regardless of dev vs prod.
         var webRoot = env.WebRootPath
             ?? Path.Combine(env.ContentRootPath, "wwwroot");
@@ -104,7 +104,7 @@ public class OnnxModelRegistry {
         return "";
     }
 
-    /// <summary>Diagnostic — the bundled fallback path even when it doesn't exist yet.</summary>
+    /// <summary>Diagnostic, the bundled fallback path even when it doesn't exist yet.</summary>
     public string BundledModelsPath => _bundledModelsPath;
 
     /// <summary>
@@ -136,7 +136,7 @@ public class OnnxModelRegistry {
             if (string.IsNullOrWhiteSpace(root)) {
                 _logger.LogInformation(
                     "Onnx rescan: no models path available (profile unset, " +
-                    "bundled fallback {Bundled} doesn't exist) — clearing registry.",
+                    "bundled fallback {Bundled} doesn't exist), clearing registry.",
                     _bundledModelsPath);
                 _models.Clear();
                 return;
@@ -211,7 +211,7 @@ public class OnnxModelRegistry {
         return hash;
     }
 
-    /// <summary>Diagnostic — used by the Settings page.</summary>
+    /// <summary>Diagnostic, used by the Settings page.</summary>
     public string LastScannedPath() => _lastScannedPath;
 
     // ─── helpers ────────────────────────────────────────────────────

@@ -147,7 +147,7 @@ public class IndiClient : IDisposable {
         if (_stream == null) throw new InvalidOperationException("Not connected to INDI server");
 
         if (!await _sendLock.WaitAsync(SendTimeout, ct)) {
-            throw new TimeoutException("INDI send lock timed out — previous send still in progress");
+            throw new TimeoutException("INDI send lock timed out, previous send still in progress");
         }
 
         try {

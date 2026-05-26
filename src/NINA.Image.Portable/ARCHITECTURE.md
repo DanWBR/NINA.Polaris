@@ -1,4 +1,4 @@
-# NINA.Image.Portable — Architecture
+# NINA.Image.Portable, Architecture
 
 Pure code library for **image I/O, analysis, and math**. No host
 dependencies (no ASP.NET, no INDI client). Other projects depend on
@@ -56,7 +56,7 @@ src/NINA.Image.Portable/
 - **Pure code**: no `System.IO.File` paths that hardcode `%LOCALAPPDATA%`,
   no logger sinks, no DI. Everything takes its inputs and produces
   outputs.
-- **`ushort[]` is the canonical pixel storage**. 16-bit monochrome —
+- **`ushort[]` is the canonical pixel storage**. 16-bit monochrome,
   bayer pattern preserved as metadata, not exploded into 3 planes
   until debayer is explicitly requested.
 - **`IImageData` is the boundary type** between this library and the
@@ -102,7 +102,7 @@ height, it:
 
 `StarMatcher` cross-matches detected stars across two frames using
 triangle-invariant features (ratios of sides of triangles formed by
-triplets of stars — invariant under translation, rotation, scale).
+triplets of stars, invariant under translation, rotation, scale).
 The output is a list of corresponding star pairs.
 
 `AffineTransform.FitLeastSquares(pairs)` produces a 2×3 affine that

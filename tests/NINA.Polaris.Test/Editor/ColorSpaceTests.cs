@@ -5,7 +5,7 @@ namespace NINA.Polaris.Test.Editor;
 
 /// <summary>
 /// Pins ColorSpace conversions. The pipeline uses these on every pixel
-/// for vibrance/saturation/hue — regressions silently shift the whole
+/// for vibrance/saturation/hue, regressions silently shift the whole
 /// colour palette of every preview the user sees, so these are worth
 /// hard-pinning.
 /// </summary>
@@ -68,7 +68,7 @@ public class ColorSpaceTests {
     [Test]
     public void TempTintToGain_Neutral6500_NearUnity() {
         var (rG, gG, bG) = ColorSpace.TempTintToGain(6500, 0);
-        // Within 5% of 1.0 — the McCamy fit isn't exactly 6500K=D65 but
+        // Within 5% of 1.0, the McCamy fit isn't exactly 6500K=D65 but
         // close enough that the slider feels neutral at the default.
         Assert.That(rG, Is.EqualTo(1).Within(0.05));
         Assert.That(gG, Is.EqualTo(1).Within(1e-6), "Green always normalised to 1");
@@ -77,7 +77,7 @@ public class ColorSpaceTests {
 
     [Test]
     public void TempTintToGain_ColdSkyBoost_BlueGainHigh() {
-        // 10000K (cool / blue) — blue gain should be > 1, red < 1.
+        // 10000K (cool / blue), blue gain should be > 1, red < 1.
         var (rG, _, bG) = ColorSpace.TempTintToGain(10000, 0);
         Assert.That(bG, Is.GreaterThan(rG), "Cooler colour → blue dominant");
     }

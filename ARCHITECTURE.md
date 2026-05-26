@@ -12,9 +12,9 @@ two things to the browser:
 
 1. **REST endpoints** at `/api/*` for commands + queries
 2. **WebSocket** streams:
-   - `/ws/status` — 1Hz JSON broadcast of all service state
-   - `/ws/image-stream` — binary JPEG/raw frames as they're captured
-   - `/ws/terminal` — bidirectional SSH bridge for the in-browser
+   - `/ws/status`, 1Hz JSON broadcast of all service state
+   - `/ws/image-stream`, binary JPEG/raw frames as they're captured
+   - `/ws/terminal`, bidirectional SSH bridge for the in-browser
      xterm.js terminal (gated by `Terminal:Enabled`, see
      `TerminalSocketHandler`)
 
@@ -46,10 +46,10 @@ endpoints.
 Services live in `src/NINA.Polaris/Services/`. Every service is a
 **DI singleton** unless stated otherwise. They communicate via:
 
-- **Direct DI references** — most common, e.g. `SequenceEngine` holds
+- **Direct DI references**, most common, e.g. `SequenceEngine` holds
   `EquipmentManager` + `ImageRelayService` + `LiveStackingService`
-- **C# events** — e.g. `ProfileService.EquipmentProfileActivated`
-- **WebSocket broadcast** — services expose a `GetStatus()` /
+- **C# events**, e.g. `ProfileService.EquipmentProfileActivated`
+- **WebSocket broadcast**, services expose a `GetStatus()` /
   `CurrentStatus` and `StatusStreamHandler` reads them into the 1Hz payload
 
 ### Service dependency graph
@@ -233,7 +233,7 @@ await Task.Delay(StatusInterval);  // 1000ms
 Every service exposes a snapshot getter (`GetStatus()` /
 `CurrentStatus`) that the handler folds into this single payload.
 The frontend's `handleStatusMessage` in `app.js` switch-cases the
-sub-objects into Alpine state — every tab/panel binds to the same
+sub-objects into Alpine state, every tab/panel binds to the same
 state without polling.
 
 ### An image stream flow
@@ -281,8 +281,8 @@ per-client latency + auto-fallback raw→JPEG when the wire is slow.
   exposure + gain + type. Auto-rescan on startup.
 - **Per-tenant relay state** (when running relay server): JSON file
   `tenants.json`.
-- **No "session" persistence** — sequences + live stacks are in-memory
-  only; restart the server and you start fresh. By design — sessions
+- **No "session" persistence**, sequences + live stacks are in-memory
+  only; restart the server and you start fresh. By design, sessions
   are tied to physical session at the telescope.
 
 ## Cross-cutting concerns
@@ -304,7 +304,7 @@ either:
 
 - **C# events**: `ProfileService.EquipmentProfileActivated`,
   `PHD2Client.AppStateChanged`, `LiveStackingService.SubscribeFrameIntegrated`
-- **Poll the snapshot**: less ideal but simple — most consumers do this
+- **Poll the snapshot**: less ideal but simple, most consumers do this
 
 ### Hosted services (background)
 
@@ -312,11 +312,11 @@ Services that need their own loop / lifetime hook implement
 `IHostedService` (typically as `BackgroundService` subclass) and are
 registered with `AddHostedService`:
 
-- `PHD2AutoStartService` — boots PHD2 + connects 2s after startup
-- `Phd2GuiSessionService` — boots xpra session if `AutoStart=true`
-- `SlewPreviewService` — 1s poll loop for mount-slewing detection
-- `HostMetricsService` — CPU + RAM sampler
-- `MdnsService` — broadcasts the `_nina._tcp.local` service AND
+- `PHD2AutoStartService`, boots PHD2 + connects 2s after startup
+- `Phd2GuiSessionService`, boots xpra session if `AutoStart=true`
+- `SlewPreviewService`, 1s poll loop for mount-slewing detection
+- `HostMetricsService`, CPU + RAM sampler
+- `MdnsService`, broadcasts the `_nina._tcp.local` service AND
   publishes A/AAAA records under `{instanceName}.local` (default
   `polaris-app.local`) pointing at every routable local IP, so the
   service is both discoverable in a Bonjour browser AND directly
@@ -325,8 +325,8 @@ registered with `AddHostedService`:
   because Makaretu's 4-arg ServiceProfile constructor derives a
   malformed `{instance}.{servicePrefix}.local` HostName instead of
   the expected `{instance}.local`.
-- `PluginLoaderService` — discovers MEF plugins
-- `RelayClient` — maintains tunnel to relay server (when enabled)
+- `PluginLoaderService`, discovers MEF plugins
+- `RelayClient`, maintains tunnel to relay server (when enabled)
 
 ### Long-running jobs
 
@@ -349,8 +349,8 @@ Each project folder has its own `ARCHITECTURE.md` for deeper details:
 
 ## See also
 
-- [CONTRIBUTING.md](CONTRIBUTING.md) — how to build + test + add new features
-- [docs/user-guide/](docs/user-guide/) — user perspective
+- [CONTRIBUTING.md](CONTRIBUTING.md), how to build + test + add new features
+- [docs/user-guide/](docs/user-guide/), user perspective
 - Plan history: `C:\Users\danie\.claude\plans\analise-e-fa-a-um-graceful-badger.md`
-  on the maintainer's machine (not in repo) — has the full multi-month
+  on the maintainer's machine (not in repo), has the full multi-month
   planning record of every feature added

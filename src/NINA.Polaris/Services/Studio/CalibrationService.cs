@@ -15,7 +15,7 @@ namespace NINA.Polaris.Services.Studio;
 ///
 /// In words: subtract the dark (removes thermal signal + bias offset),
 /// then divide by the flat (corrects vignetting + dust shadows).
-/// Bias is only applied directly when no dark is provided — darks already
+/// Bias is only applied directly when no dark is provided, darks already
 /// contain the bias signal, so subtracting both double-counts.
 ///
 /// Auto-matching: for each light, the service picks the master whose
@@ -41,7 +41,7 @@ public class CalibrationService {
 
     public record CalibrationRequest(
         List<int> LightIds,
-        // Override hooks — null = auto-match each light to nearest
+        // Override hooks, null = auto-match each light to nearest
         // master. Setting these pins a specific master for the whole
         // batch (useful when auto-match's nearest-neighbour pick is
         // not what the user wants).
@@ -67,7 +67,7 @@ public class CalibrationService {
     private void RunJob(string jobId, CalibrationRequest req) {
         try {
             // Available masters in the library, by category. Pulled
-            // once at job start — if the user creates a new master
+            // once at job start, if the user creates a new master
             // mid-job they'd have to re-start anyway.
             var masters = LoadMasterIndex();
             _logger.LogInformation("Calibration job {Job}: {Lights} lights, masters available: " +
@@ -75,7 +75,7 @@ public class CalibrationService {
                 jobId, req.LightIds.Count,
                 masters.Darks.Count, masters.Flats.Count, masters.Biases.Count);
 
-            // Cache decoded masters across lights — a typical session
+            // Cache decoded masters across lights, a typical session
             // uses 1-2 darks and 1-2 flats for an entire batch.
             var loadedMasters = new Dictionary<int, BaseImageData>();
             BaseImageData LoadMaster(int id) {
@@ -166,7 +166,7 @@ public class CalibrationService {
         // ---- Pick which masters to apply --------------------------
         int? darkId = req.MasterDarkId ?? FindNearestDark(masters.Darks, exposure, gain);
         int? flatId = req.MasterFlatId ?? FindMatchingFlat(masters.Flats, filter, gain);
-        // Bias only matters if we don't have a dark — darks already
+        // Bias only matters if we don't have a dark, darks already
         // include the bias signal. If user *explicitly* passes a bias
         // id we honour it as a flat-calibrator override.
         int? biasId = req.MasterBiasId ?? (darkId == null ? FindMatchingBias(masters.Biases, gain) : null);
@@ -229,7 +229,7 @@ public class CalibrationService {
         }
 
         // Carry every header from the light so OBJCTRA/DEC + camera +
-        // observer metadata survives calibration — Siril and PixInsight
+        // observer metadata survives calibration, Siril and PixInsight
         // expect those untouched on the calibrated frame.
         var props = new ImageProperties {
             Width = W, Height = H, BitDepth = light.Properties.BitDepth,
@@ -255,10 +255,10 @@ public class CalibrationService {
     // --- Helpers -------------------------------------------------
 
     private MasterIndex LoadMasterIndex() {
-        // Pull from the SQLite cache. Filter by type — anything tagged
+        // Pull from the SQLite cache. Filter by type, anything tagged
         // MASTER{X} via the ImageWriterService or the ST-3 master writer
         // qualifies. Frames captured before STUDIO indexed them as
-        // IMAGETYP=LIGHT — those won't show up here, which is correct.
+        // IMAGETYP=LIGHT, those won't show up here, which is correct.
         var all = _library.Query(new FrameQuery(null, null, null, null, null, 500, 0));
         var index = new MasterIndex();
         foreach (var f in all) {
@@ -274,7 +274,7 @@ public class CalibrationService {
 
     private static int? FindNearestDark(IReadOnlyList<FrameRow> darks, double exposure, int gain) {
         if (darks.Count == 0) return null;
-        // Require exact gain match — gain affects read noise pattern,
+        // Require exact gain match, gain affects read noise pattern,
         // can't substitute across gains. Within that, pick the closest
         // exposure (typical pattern is one master dark per (gain, exposure)
         // anyway, so the "closest" usually matches exactly).

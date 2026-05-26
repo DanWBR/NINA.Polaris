@@ -124,7 +124,7 @@ public class PHD2ClientTests {
 
     // --- State-transition events (PHD2 doesn't reliably re-emit
     //     AppState after every transition, so we derive it from the
-    //     transition event itself — see PHD2Client.HandleEvent).
+    //     transition event itself, see PHD2Client.HandleEvent).
 
     [Test]
     public void HandleMessage_GuideStep_ImpliesAppStateGuiding() {
@@ -302,7 +302,7 @@ public class PHD2ClientTests {
 
     [Test]
     public void FlipCalibrationAsync_Disconnected_DoesNotThrowSynchronously() {
-        // The CallAsync path throws when there's no writer — that's surfaced
+        // The CallAsync path throws when there's no writer, that's surfaced
         // as a faulted task, not a synchronous throw. Either is acceptable
         // as long as the wrapper itself doesn't throw before awaiting.
         Assert.DoesNotThrow(() => { var _ = _sut.FlipCalibrationAsync(); });

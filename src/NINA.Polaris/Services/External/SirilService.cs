@@ -8,7 +8,7 @@ using NINA.Polaris.Services;
 namespace NINA.Polaris.Services.External;
 
 /// <summary>
-/// Driver for the Siril CLI (siril-cli) — the user's preferred
+/// Driver for the Siril CLI (siril-cli), the user's preferred
 /// preprocessing + stacking engine. Polaris invokes Siril by writing
 /// the user's frames into a temporary work directory laid out the way
 /// Siril expects (lights/, darks/, flats/, biases/), then runs the
@@ -20,7 +20,7 @@ namespace NINA.Polaris.Services.External;
 /// enumerated so the UI can offer them in the same dropdown.
 ///
 /// Long-running jobs report progress via mutable <see cref="SirilJob"/>
-/// records keyed by short jobId — same pattern as BatchStackingService.
+/// records keyed by short jobId, same pattern as BatchStackingService.
 /// </summary>
 public class SirilService {
     private readonly IConfiguration _config;
@@ -82,13 +82,13 @@ public class SirilService {
     /// Enumerate every .ssf script Polaris can offer the user.
     /// Bundled (shipped with Polaris) + user-installed (Siril's
     /// per-OS scripts dir) + any extra dir the user added in Settings.
-    /// Duplicates are de-deduplicated by filename — user scripts win
+    /// Duplicates are de-deduplicated by filename, user scripts win
     /// over bundled when names collide so power users can override.
     /// </summary>
     public IReadOnlyList<SirilScriptInfo> EnumerateScripts() {
         var byName = new Dictionary<string, SirilScriptInfo>(StringComparer.OrdinalIgnoreCase);
 
-        // Bundled first — they're the floor that user scripts can
+        // Bundled first, they're the floor that user scripts can
         // override. ExtractBundledScripts may throw on disk-full / RO
         // filesystem; swallow + log so the rest of enumeration works.
         try {
@@ -141,7 +141,7 @@ public class SirilService {
     }
 
     /// <summary>
-    /// Public for the Settings panel diagnostic — show every place we
+    /// Public for the Settings panel diagnostic, show every place we
     /// looked for Siril and whether it existed there.
     /// </summary>
     public IReadOnlyList<BinaryLocator.Candidate> EnumerateBinaryCandidates() =>
@@ -214,7 +214,7 @@ public class SirilService {
 
             // 3. Run siril-cli. Stdout drives Stage/PercentDone via
             //    light regex matching on Siril's well-known status
-            //    messages — pure best-effort, no schema guarantee.
+            //    messages, pure best-effort, no schema guarantee.
             job.Stage = "running";
             job.PercentDone = 10;
             var exitCode = await RunCliAsync(scriptPath, workDir, job, jobCts.Token);
@@ -341,7 +341,7 @@ public class SirilService {
 
         var stdoutTask = Task.Run(async () => {
             // Line-by-line stdout reader so we can update progress as
-            // Siril runs. ReadLineAsync returns null at EOF — checking
+            // Siril runs. ReadLineAsync returns null at EOF, checking
             // EndOfStream first would do a synchronous Peek under the
             // hood (CA2024), defeating the async loop.
             while (true) {
@@ -363,7 +363,7 @@ public class SirilService {
 
     /// <summary>
     /// Lightweight pattern match on Siril's stdout. The CLI emits
-    /// human-readable status — there's no machine-readable channel
+    /// human-readable status, there's no machine-readable channel
     /// short of named pipes, which would add OS-specific complexity
     /// for little benefit at this stage.
     /// </summary>
@@ -449,7 +449,7 @@ public class SirilService {
     /// unpack them to a stable AppData path so they have real file
     /// paths siril-cli can consume and so the user can also browse /
     /// edit / share them. Idempotent: re-extracts only if missing or
-    /// stale (compared to the embedded copy via filename — we don't
+    /// stale (compared to the embedded copy via filename, we don't
     /// version individual scripts).
     /// </summary>
     private string ExtractBundledScripts() {
@@ -555,7 +555,7 @@ public sealed record SirilJobRequest(
     string? WorkDirOverride = null);
 
 /// <summary>
-/// Mutable job state — the background task updates fields in place,
+/// Mutable job state, the background task updates fields in place,
 /// the HTTP endpoint serialises a snapshot. Not thread-safe to write
 /// from outside the owning task; safe to read from anywhere.
 /// </summary>

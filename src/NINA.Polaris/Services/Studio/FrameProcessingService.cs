@@ -14,11 +14,11 @@ namespace NINA.Polaris.Services.Studio;
 ///
 /// Slider drags hit /preview many times per second, so the decoded FITS
 /// pixel buffer is kept in a small in-memory LRU keyed by frame id. The
-/// stretch itself is just an LUT pass — cheap enough that we don't
+/// stretch itself is just an LUT pass, cheap enough that we don't
 /// bother caching rendered bytes.
 ///
 /// Encoding stack: SkiaSharp for JPEG + PNG (matches the rest of the
-/// codebase — NINA.Image.Portable.ImageAnalysis.JpegHelper, the live
+/// codebase, NINA.Image.Portable.ImageAnalysis.JpegHelper, the live
 /// stream encoder, all use Skia). 16-bit linear TIFF goes through our
 /// own tiny <see cref="TiffWriter"/> because Skia doesn't ship a TIFF
 /// encoder and we don't want a parallel image stack just for that.
@@ -28,7 +28,7 @@ public class FrameProcessingService {
     private readonly ProfileService _profile;
     private readonly ILogger<FrameProcessingService> _logger;
 
-    // Tiny LRU — decoded FITS buffers are big (64MP × 2 bytes = 128 MB).
+    // Tiny LRU, decoded FITS buffers are big (64MP × 2 bytes = 128 MB).
     // Four entries keeps slider drags responsive when the user is
     // alt-tabbing between two or three frames, no more.
     private const int CacheCapacity = 4;
@@ -99,7 +99,7 @@ public class FrameProcessingService {
         => Task.Run<byte[]?>(() => RenderEncoded(frameId, opts, maxSize, SKEncodedImageFormat.Png, 100), ct);
 
     /// <summary>Compute the auto-stretch defaults the UI should seed
-    /// sliders with — black/mid/white normalised 0..1 — without
+    /// sliders with, black/mid/white normalised 0..1, without
     /// applying or rendering anything.</summary>
     public AutoStretch.StretchParams? AutoStretchDefaults(int frameId) {
         var img = LoadCached(frameId);
@@ -109,7 +109,7 @@ public class FrameProcessingService {
     }
 
     /// <summary>Full statistics + detected-star summary for the frame.
-    /// The star list is capped at 500 entries — that's what StarDetector
+    /// The star list is capped at 500 entries, that's what StarDetector
     /// returns by default and it's more than enough for a viewer
     /// overlay.</summary>
     public FrameStats? ComputeStats(int frameId, bool includeStars = true) {
@@ -148,7 +148,7 @@ public class FrameProcessingService {
     }
 
     /// <summary>Export the frame to {rig}/processed/{target}/ as TIFF
-    /// (16-bit when stretched=false — preserves dynamic range; 8-bit
+    /// (16-bit when stretched=false, preserves dynamic range; 8-bit
     /// when stretched=true), PNG (8-bit stretched), or JPEG (8-bit
     /// stretched). Returns the absolute path of the written file.</summary>
     public Task<string?> ExportAsync(int frameId, string format, StretchOptions opts,
@@ -221,7 +221,7 @@ public class FrameProcessingService {
                         var bytes = ApplyStretch(img, opts);
                         TiffWriter.Write8(bytes, w, h, outPath);
                     } else {
-                        // 16-bit linear — the whole point of TIFF export
+                        // 16-bit linear, the whole point of TIFF export
                         // for downstream PixInsight / Siril.
                         TiffWriter.Write16(img.Data, w, h, outPath);
                     }
@@ -286,7 +286,7 @@ public class FrameProcessingService {
         int newW = (int)Math.Round(src.Width * scale);
         int newH = (int)Math.Round(src.Height * scale);
         var info = new SKImageInfo(newW, newH, src.ColorType, src.AlphaType);
-        // High-quality downsampling — slider previews don't drag this
+        // High-quality downsampling, slider previews don't drag this
         // path on the hot loop (only on first open + format change),
         // so the extra CPU is fine.
         return src.Resize(info, SKSamplingOptions.Default);

@@ -10,7 +10,7 @@ namespace NINA.Polaris.Services;
 /// so we don't re-fire the same toast on every WS tick.
 ///
 /// This is the user-facing channel for background-service events
-/// the user otherwise wouldn't see — auto-connect outcomes, simulator
+/// the user otherwise wouldn't see, auto-connect outcomes, simulator
 /// auto-start results, PHD2 reconnect attempts, etc.
 /// </summary>
 public class NotificationService {
@@ -26,7 +26,7 @@ public class NotificationService {
     public IReadOnlyList<Notification> Snapshot() => _queue.ToArray();
 
     /// <summary>Push a notification. <paramref name="kind"/> is one of
-    /// <c>info</c>, <c>ok</c>, <c>warn</c>, <c>error</c> — anything the
+    /// <c>info</c>, <c>ok</c>, <c>warn</c>, <c>error</c>, anything the
     /// front-end toast styler recognises. <paramref name="ttlMs"/> is
     /// advisory; the client may dismiss earlier.</summary>
     public Notification Push(string kind, string text, int ttlMs = 4000) {

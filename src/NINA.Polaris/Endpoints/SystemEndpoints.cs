@@ -36,14 +36,14 @@ public static class SystemEndpoints {
             var process = Process.GetCurrentProcess();
             // PA-7: surface the auto-incrementing 0.1.{days}.{seconds/2}
             // version that NINA.Polaris.csproj computes at build time.
-            // GetExecutingAssembly() returns this DLL — the AssemblyVersion
+            // GetExecutingAssembly() returns this DLL, the AssemblyVersion
             // and InformationalVersion attributes are both set to the
             // same VersionPrefix in csproj. UI banner reads `version`.
             var asm = Assembly.GetExecutingAssembly();
             var asmVer = asm.GetName().Version?.ToString() ?? "0.0.0.0";
             var infoVer = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
                 ?.InformationalVersion ?? asmVer;
-            // PA-7b: belt-and-suspenders — the csproj sets
+            // PA-7b: belt-and-suspenders, the csproj sets
             // IncludeSourceRevisionInInformationalVersion=false, but
             // some SDK versions / source-link configurations still
             // append "+{git-sha}". Strip anything past '+' so the UI
@@ -115,7 +115,7 @@ public static class SystemEndpoints {
         // in their "import a root CA" dialogs). Stream it as
         // application/x-x509-ca-cert with a Content-Disposition so the
         // browser pops the save-or-install dialog instead of rendering
-        // text. Public bytes only — the PFX with the private key
+        // text. Public bytes only, the PFX with the private key
         // stays on the server and is never exposed.
         group.MapGet("/server-cert", (SelfSignedCertService certSvc) => {
             var cert = certSvc.GetOrCreate();

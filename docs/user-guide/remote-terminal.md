@@ -10,7 +10,7 @@ dark, and I just need to `sudo systemctl restart indiserver`" moment.
 
 ## Enabling it
 
-Off by default — the WebSocket endpoint `/ws/terminal` returns 403 unless
+Off by default, the WebSocket endpoint `/ws/terminal` returns 403 unless
 you opt in.
 
 Edit `appsettings.json` (next to the Polaris binary in your publish folder
@@ -65,11 +65,11 @@ in the **Host** field. `polaris-app.local` works if mDNS is up.
 ## Using it
 
 1. SETTINGS → scroll to **Remote terminal**.
-2. **Host** — `localhost` for the Polaris host itself, or `192.168.x.x` /
+2. **Host**, `localhost` for the Polaris host itself, or `192.168.x.x` /
    `name.local` for another machine.
-3. **Port** — 22 (or whatever your `sshd` listens on).
-4. **User** — your Linux / Windows username on the SSH target.
-5. **Password** — your password. Wiped from the form the moment the auth
+3. **Port**, 22 (or whatever your `sshd` listens on).
+4. **User**, your Linux / Windows username on the SSH target.
+5. **Password**, your password. Wiped from the form the moment the auth
    frame is sent.
 6. **Connect**.
 
@@ -79,18 +79,18 @@ A 80×24 terminal opens with a live PTY. Everything works: `vim`, `htop`,
 Click **Disconnect** when done, or just close the tab. A 10-minute idle
 window also closes the session server-side.
 
-## Security model — read this
+## Security model, read this
 
 - Polaris never persists credentials. They live in memory for exactly the
   lifetime of the WebSocket and disappear on close.
-- No auto-reconnect — each session prompts for credentials again.
+- No auto-reconnect, each session prompts for credentials again.
 - The WebSocket runs over plain HTTP unless you put Polaris behind HTTPS.
   On a LAN that's usually fine; over the internet it isn't. Use the Relay
   server (which terminates TLS via Let's Encrypt) or set up a reverse
   proxy in front of Polaris if you'll expose this beyond the LAN.
 - `Terminal:Enabled = true` makes the endpoint exist. **Don't enable it on
   hosts you don't trust the LAN of.** Polaris doesn't add authentication
-  to its own surface — the SSH credentials themselves are the only gate
+  to its own surface, the SSH credentials themselves are the only gate
   between the WebSocket and a shell.
 - Bonus: if your `sshd` enforces public-key auth and the password the user
   enters doesn't match, the SSH connect fails the same way it would from

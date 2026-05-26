@@ -9,7 +9,7 @@ namespace NINA.Relay.Server;
 /// the current UTC month so the monthly-quota check survives server restarts.
 /// State is flushed to <c>tenant-state.json</c> on each charge (debounced).
 ///
-/// Counters auto-reset when the month rolls over — the first charge of a
+/// Counters auto-reset when the month rolls over, the first charge of a
 /// new UTC month sees the stale <see cref="UsageRecord.MonthKey"/> and
 /// resets <see cref="UsageRecord.BytesThisMonth"/> to zero before adding.
 /// </summary>

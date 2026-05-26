@@ -3,23 +3,23 @@ using System.Text;
 namespace NINA.Polaris.Services.Planetary;
 
 /// <summary>
-/// Writes a SER v3 file — the de-facto standard for planetary
+/// Writes a SER v3 file, the de-facto standard for planetary
 /// astrophotography video recordings (AutoStakkert!, RegiStax, PIPP).
 ///
 /// Layout:
 ///   [0..14)   FileID = "LUCAM-RECORDER" (14 ASCII)
 ///   [14..18)  LuID = 0 (uint32 LE, unused)
-///   [18..22)  ColorID (uint32 LE) — Mono / BayerRGGB / RGB / etc.
+///   [18..22)  ColorID (uint32 LE), Mono / BayerRGGB / RGB / etc.
 ///   [22..26)  LittleEndian flag (uint32 LE, 1 = LE, 0 = BE)
 ///   [26..30)  Width (uint32 LE)
 ///   [30..34)  Height (uint32 LE)
 ///   [34..38)  PixelDepthPerPlane (uint32 LE, 8 or 16)
-///   [38..42)  FrameCount (uint32 LE) — patched on close
+///   [38..42)  FrameCount (uint32 LE), patched on close
 ///   [42..82)  Observer (40 ASCII, null-padded)
 ///   [82..122) Instrument (40 ASCII)
 ///   [122..162) Telescope (40 ASCII)
-///   [162..170) DateTimeUtc (int64 LE — .NET Ticks of UTC start)
-///   [170..178) DateTimeUtcOffset (int64 LE — .NET Ticks of local start)
+///   [162..170) DateTimeUtc (int64 LE, .NET Ticks of UTC start)
+///   [170..178) DateTimeUtcOffset (int64 LE, .NET Ticks of local start)
 ///   [178..)    Frame data, then optional timestamp trailer
 ///
 /// Trailer (after all frames) is FrameCount × int64 LE of .NET Ticks
@@ -151,7 +151,7 @@ public sealed class SerFileWriter : IDisposable {
     }
 }
 
-/// <summary>SER color modes per spec (values are wire-level — don't renumber).</summary>
+/// <summary>SER color modes per spec (values are wire-level, don't renumber).</summary>
 public enum SerColorMode : uint {
     Mono       = 0,
     BayerRGGB  = 8,

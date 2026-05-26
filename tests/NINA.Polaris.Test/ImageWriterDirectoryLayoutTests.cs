@@ -9,7 +9,7 @@ namespace NINA.Polaris.Test;
 /// Verifies the standard folder layout that ImageWriterService.BuildSubDir
 /// produces for each IMAGETYP. This is the contract STUDIO relies on for
 /// auto-matching calibration frames to lights (darks by exposure+gain,
-/// flats by filter+gain) — so it has to stay stable across refactors.
+/// flats by filter+gain), so it has to stay stable across refactors.
 /// </summary>
 [TestFixture]
 public class ImageWriterDirectoryLayoutTests {

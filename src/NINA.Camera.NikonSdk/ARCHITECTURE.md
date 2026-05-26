@@ -1,4 +1,4 @@
-# NINA.Camera.NikonSdk — Architecture
+# NINA.Camera.NikonSdk, Architecture
 
 Windows-only `ICamera` wrapper for the **Nikon Imaging SDK** (Z-series
 mirrorless) and **Nikon MAID SDK** (classic DSLRs).
@@ -6,7 +6,7 @@ mirrorless) and **Nikon MAID SDK** (classic DSLRs).
 For the cross-vendor design rationale (why a separate project, how the
 native DLLs are sourced, how it plugs into Polaris), read
 [NINA.Camera.CanonEdsdk/ARCHITECTURE.md](../NINA.Camera.CanonEdsdk/ARCHITECTURE.md)
-— the structure is identical.
+, the structure is identical.
 
 ## Layout
 
@@ -34,5 +34,5 @@ src/NINA.Camera.NikonSdk/
 ## See also
 
 - [NINA.Camera.CanonEdsdk/ARCHITECTURE.md](../NINA.Camera.CanonEdsdk/ARCHITECTURE.md)
-  — full pattern explanation
+ , full pattern explanation
 - [Root ARCHITECTURE.md](../../ARCHITECTURE.md)

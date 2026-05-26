@@ -46,7 +46,7 @@ public class EquipmentManager : IDisposable {
 
     public IEnumerable<string> GetDeviceNames() => _indiClient.GetDeviceNames();
 
-    /// <summary>Legacy entry-point — assumes the INDI driver. Kept
+    /// <summary>Legacy entry-point, assumes the INDI driver. Kept
     /// for backwards compatibility with the existing capture-endpoint
     /// route <c>POST /api/camera/select/{deviceName}</c>.</summary>
     public ICamera SelectCamera(string deviceName)
@@ -79,7 +79,7 @@ public class EquipmentManager : IDisposable {
         if (!OperatingSystem.IsWindows()) {
             throw new NotSupportedException(
                 "Canon EDSDK only runs on Windows. On Linux, use the INDI " +
-                "gphoto driver instead — see docs/dslr-linux.md.");
+                "gphoto driver instead, see docs/dslr-linux.md.");
         }
         return new NINA.Camera.CanonEdsdk.CanonEdsdkCamera(deviceId);
     }
@@ -88,7 +88,7 @@ public class EquipmentManager : IDisposable {
         if (!OperatingSystem.IsWindows()) {
             throw new NotSupportedException(
                 "Nikon SDK only runs on Windows. On Linux, use the INDI " +
-                "gphoto driver instead — see docs/dslr-linux.md.");
+                "gphoto driver instead, see docs/dslr-linux.md.");
         }
         return new NINA.Camera.NikonSdk.NikonSdkCamera(deviceId);
     }
@@ -113,15 +113,15 @@ public class EquipmentManager : IDisposable {
                 Description: "Canon DSLR / mirrorless. Requires EDSDK DLLs."));
             list.Add(new("nikon-sdk", "Nikon (MAID SDK)",
                 Available: NINA.Camera.NikonSdk.NikonSdkRegistry.IsAvailable,
-                Description: "Nikon DSLR / Z mirrorless. Skeleton driver — " +
+                Description: "Nikon DSLR / Z mirrorless. Skeleton driver, " +
                     "see docs/dslr-windows-nikon.md to wire up the actual SDK."));
         }
         // Sony Camera Remote SDK ships native binaries for both
-        // Windows and Linux, so it shows up on every OS — including
+        // Windows and Linux, so it shows up on every OS, including
         // Raspberry Pi via the SDK's linux-arm64 build.
         list.Add(new("sony-sdk", "Sony α series",
             Available: NINA.Camera.SonySdk.SonySdkRegistry.IsAvailable,
-            Description: "Sony α series. Skeleton driver — see " +
+            Description: "Sony α series. Skeleton driver, see " +
                 "docs/dslr-windows-sony.md (two complementary paths: " +
                 "Wi-Fi Camera Remote API for older bodies, USB SCRSDK " +
                 "v2.x for current bodies)."));
@@ -169,7 +169,7 @@ public class EquipmentManager : IDisposable {
     }
 
     /// <summary>Windows-only inner helper so the platform analyzer
-    /// is satisfied — the OS guard in the caller is implicit here via
+    /// is satisfied, the OS guard in the caller is implicit here via
     /// the attribute.</summary>
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     private static IReadOnlyList<DiscoveredCamera> EnumerateCanonCameras()
@@ -183,7 +183,7 @@ public class EquipmentManager : IDisposable {
             .Select(e => new DiscoveredCamera(e.Id, e.Model, e.PortName))
             .ToList();
 
-    /// <summary>Legacy entry-point — assumes the INDI driver. Kept
+    /// <summary>Legacy entry-point, assumes the INDI driver. Kept
     /// for backwards compatibility with the existing
     /// <c>POST /api/telescope/select/{deviceName}</c> route.</summary>
     public ITelescope SelectTelescope(string deviceName)
@@ -199,11 +199,11 @@ public class EquipmentManager : IDisposable {
         Telescope = driver switch {
             "indi" => new IndiTelescope(_indiClient, deviceId),
             "synscan-wifi" => new NINA.Mount.SynScanWifi.SynScanWifiTelescope(deviceId),
-            // NexStar TCP + LX200 TCP + Alpaca still pending — see
+            // NexStar TCP + LX200 TCP + Alpaca still pending, see
             // docs/mounts-wifi.md for the backlog.
             _ => throw new NotSupportedException(
                 $"Mount driver '{driver}' is not implemented yet. " +
-                "Use 'indi' or 'synscan-wifi' (the rest are still pending — " +
+                "Use 'indi' or 'synscan-wifi' (the rest are still pending, " +
                 "see docs/mounts-wifi.md)."),
         };
         TelescopeDriver = driver;
@@ -216,20 +216,20 @@ public class EquipmentManager : IDisposable {
     /// <c>indi</c>; the WiFi / Alpaca entries are advertised as
     /// "not installed" until their backend lands.</summary>
     public IReadOnlyList<CameraDriverInfo> GetAvailableMountDrivers() {
-        // Reusing CameraDriverInfo here — the shape is identical
+        // Reusing CameraDriverInfo here, the shape is identical
         // (id / name / available / description) and a separate
         // record would just be ceremony.
         return new List<CameraDriverInfo> {
             new("indi", "INDI", Available: true,
-                Description: "Any mount the running INDI server exposes — covers most WiFi mounts via indi_skywatcherAltAzMount / indi_celestron_aux / indi_ioptron_v3 / indi_lx200gps."),
+                Description: "Any mount the running INDI server exposes, covers most WiFi mounts via indi_skywatcherAltAzMount / indi_celestron_aux / indi_ioptron_v3 / indi_lx200gps."),
             new("alpaca", "Alpaca (ASCOM)", Available: false,
                 Description: "ASCOM-over-HTTP mounts. Wiring pending."),
             new("synscan-wifi", "Sky-Watcher SynScan (Wi-Fi UDP)", Available: true,
-                Description: "Direct UDP to AZ-GTi / EQ6-R Pro / EQ8-R Pro / AllView / GoTo Dob (port 11880). Likely also drives ZWO AM5N / AM7 in SynScan-compat mode. Device id format: host[:port] — defaults to 192.168.4.1:11880 (factory AP)."),
+                Description: "Direct UDP to AZ-GTi / EQ6-R Pro / EQ8-R Pro / AllView / GoTo Dob (port 11880). Likely also drives ZWO AM5N / AM7 in SynScan-compat mode. Device id format: host[:port], defaults to 192.168.4.1:11880 (factory AP)."),
             new("nexstar-wifi", "Celestron NexStar (Wi-Fi TCP)", Available: false,
-                Description: "Direct TCP to SkyPortal Wi-Fi accessory / StarSense Explorer Wi-Fi. Driver pending — see docs/mounts-wifi.md."),
+                Description: "Direct TCP to SkyPortal Wi-Fi accessory / StarSense Explorer Wi-Fi. Driver pending, see docs/mounts-wifi.md."),
             new("lx200-tcp", "Meade / LX200 (TCP)", Available: false,
-                Description: "Direct TCP wrapping the LX200 serial protocol. Driver pending — see docs/mounts-wifi.md."),
+                Description: "Direct TCP wrapping the LX200 serial protocol. Driver pending, see docs/mounts-wifi.md."),
         };
     }
 

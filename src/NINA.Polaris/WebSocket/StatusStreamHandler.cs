@@ -62,7 +62,7 @@ public static class StatusStreamHandler {
                 try {
                     var seqStatus = sequence.GetStatus();
 
-                    // Compact summaries of PH2X-3/4/6 services — surface
+                    // Compact summaries of PH2X-3/4/6 services, surface
                     // as sub-objects on the guider block so UI can read
                     // sync/calibrate/embed status without polling endpoints.
                     var profileSyncPayload = new {
@@ -178,7 +178,7 @@ public static class StatusStreamHandler {
 
                     // Compact summaries for the activity bar. Full job
                     // detail (lights paths, results, etc) lives on the
-                    // per-tool endpoints — only the surface needed for
+                    // per-tool endpoints, only the surface needed for
                     // chips makes it into the broadcast.
                     var sirilJobsPayload = siril.ActiveJobs.Select(j => new {
                         j.JobId, j.ScriptName, j.TargetName, j.Stage, j.PercentDone
@@ -208,7 +208,7 @@ public static class StatusStreamHandler {
                             // CLST-1/CLST-4: "full" (server-side accumulator) or
                             // "metricsonly" (client owns the accumulator via WASM).
                             // The client only routes raw frames through its WASM
-                            // stacker when this is "metricsonly" — otherwise the
+                            // stacker when this is "metricsonly", otherwise the
                             // raw frames the server relays ARE the accumulated
                             // stack and re-stacking would compound.
                             mode = liveStack.GetStatus().Mode,
@@ -284,7 +284,7 @@ public static class StatusStreamHandler {
                         graXpertJobs = graXpertJobsPayload,
                         // Server-pushed toasts (auto-connect outcomes,
                         // simulator events, etc.). Client de-dups by id
-                        // — see toast pump in app.js.
+                        //, see toast pump in app.js.
                         notifications = notifications.Snapshot(),
                         // SIM-4: built-in equipment simulator status
                         // (which backend is active, is it installed,
