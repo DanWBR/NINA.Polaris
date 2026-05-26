@@ -5270,11 +5270,18 @@
                                        rel="noopener" x-text="url"></a>
                                 </template>
                             </div>
-                            <p class="hint" x-show="httpsInfo.fingerprint">
-                                Certificate SHA-1 fingerprint (verify against the one
-                                Chrome shows in <em>cert details</em> if you want to
-                                be sure):
-                                <code style="user-select:all" x-text="httpsInfo.fingerprint"></code>
+                            <p class="hint" x-show="httpsInfo.fingerprintSha256 || httpsInfo.fingerprint">
+                                Certificate fingerprint — compare against what
+                                your browser shows in <em>cert details</em>:
+                                <br>
+                                <strong>SHA-256</strong> (what modern browsers display):
+                                <code style="user-select:all; word-break:break-all; font-size:11px"
+                                      x-text="httpsInfo.fingerprintSha256"></code>
+                                <br>
+                                <span style="opacity:0.6">SHA-1 (legacy):
+                                    <code style="user-select:all; font-size:11px"
+                                          x-text="httpsInfo.fingerprint"></code>
+                                </span>
                             </p>
                             <!-- GX-12q: download + install the server cert as
                                  trusted root so the browser stops showing
@@ -5308,9 +5315,10 @@
                                 </span>
                             </summary>
                             <p class="hint" style="margin-top:8px"
-                               x-show="httpsInfo.fingerprint">
-                                Certificate SHA-1 fingerprint:
-                                <code style="user-select:all" x-text="httpsInfo.fingerprint"></code>
+                               x-show="httpsInfo.fingerprintSha256 || httpsInfo.fingerprint">
+                                <strong>SHA-256</strong> fingerprint:
+                                <code style="user-select:all; word-break:break-all; font-size:11px"
+                                      x-text="httpsInfo.fingerprintSha256"></code>
                             </p>
                             <p class="hint">Other URLs covered by the same cert
                                (useful when adding a second device):</p>
@@ -5852,7 +5860,17 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 shows in "Cert details" should match the one in Polaris
                 Settings:
             </p>
-            <p style="margin-left:8px" x-show="httpsInfo?.fingerprint">
+            <p style="margin-left:8px" x-show="httpsInfo?.fingerprintSha256">
+                <strong style="font-size:12px">SHA-256</strong>
+                <span style="opacity:0.7; font-size:11px">(what modern
+                    browsers show — copy this and Cmd/Ctrl+F it in
+                    your browser's cert-details dialog):</span>
+                <br>
+                <code style="user-select:all; word-break:break-all; font-size:11px"
+                      x-text="httpsInfo.fingerprintSha256"></code>
+            </p>
+            <p style="margin-left:8px; opacity:0.6" x-show="httpsInfo?.fingerprint">
+                SHA-1 (legacy):
                 <code style="user-select:all; font-size:11px"
                       x-text="httpsInfo.fingerprint"></code>
             </p>

@@ -112,10 +112,10 @@ public class SelfSignedCertService {
         return _cached;
     }
 
-    /// <summary>The cert's SHA-1 thumbprint (uppercase hex, colon-separated)
-    /// — what a user sees when Chrome shows the cert details. Surfaced
-    /// in Settings so a careful user can verify before clicking through
-    /// the browser's untrusted-cert warning.</summary>
+    /// <summary>The cert's SHA-1 thumbprint (uppercase hex, colon-separated).
+    /// Kept for backwards compatibility but modern browsers (Chrome 90+,
+    /// Firefox 100+, Safari 14+) only show SHA-256 in their cert-details
+    /// dialog — use <see cref="Fingerprint256"/> for those.</summary>
     public string Fingerprint {
         get {
             var c = GetOrCreate();
@@ -123,6 +123,23 @@ public class SelfSignedCertService {
             // Format as XX:XX:... matching Chrome's UI
             return string.Join(":", Enumerable.Range(0, raw.Length / 2)
                 .Select(i => raw.Substring(i * 2, 2)));
+        }
+    }
+
+    /// <summary>The cert's SHA-256 thumbprint (lowercase hex,
+    /// no separators) — the only fingerprint format modern browsers
+    /// show in their cert-details dialog. User compares this against
+    /// Polaris Settings to verify the cert their browser sees is the
+    /// one Polaris generated (not a man-in-the-middle's).
+    ///
+    /// Format matches what Chrome displays: 64 hex chars, lowercase,
+    /// no colons — copy-paste friendly. (Chrome's UI elides whitespace
+    /// when you double-click to select.)</summary>
+    public string Fingerprint256 {
+        get {
+            var c = GetOrCreate();
+            var hash = System.Security.Cryptography.SHA256.HashData(c.RawData);
+            return Convert.ToHexString(hash).ToLowerInvariant();
         }
     }
 

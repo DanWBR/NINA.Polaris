@@ -75,6 +75,10 @@ public static class SystemEndpoints {
                 httpPort,
                 httpsPort,
                 fingerprint = httpsEnabled ? certSvc.Fingerprint : null,
+                // GX-12q2: SHA-256 is what modern browsers actually show
+                // in their cert-details dialog. SHA-1 kept for legacy
+                // tooling that might still query it.
+                fingerprintSha256 = httpsEnabled ? certSvc.Fingerprint256 : null,
                 // Names baked into the cert. Client picks the one
                 // that matches what they typed into the address bar.
                 hostnames = sans,
