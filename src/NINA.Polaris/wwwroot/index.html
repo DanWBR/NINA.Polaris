@@ -6241,8 +6241,11 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                      surface both filenames (showing them in the
                      header too is redundant + clips at narrow
                      viewport widths). -->
-                <strong x-text="graxpertCompare.mode === 'compare'
-                                ? 'Compare' : 'Before vs After'"></strong>
+                <!-- GX-12r: title now reflects the GraXpert op when
+                     known (Denoise / Decon / BGE). Falls back to the
+                     generic "Before vs After" / "Compare" via the
+                     helper for older flows. -->
+                <strong x-text="graxpertCompareTitle()"></strong>
                 <span class="graxpert-compare-label"
                       x-show="graxpertCompare.mode !== 'compare'"
                       x-text="graxpertCompare.pairs[graxpertCompare.index]?.label

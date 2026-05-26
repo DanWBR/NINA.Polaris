@@ -900,6 +900,12 @@ function ninaApp() {
             split: 0.5,
             dragging: false,
             mode: 'gx',
+            // GX-12r: which GraXpert op produced these pairs — drives
+            // the modal title ("GraXpert Denoise Comparison" vs
+            // "GraXpert Decon Comparison" etc). Null when the user
+            // opens the comparator via the FILES "Compare" button
+            // (no op context, mode='compare' rules instead).
+            op: null,
         },
 
         // d3-celestial Sky Viewer (offline, BSD-3-Clause).
@@ -8948,6 +8954,10 @@ function ninaApp() {
         // against the job's results array by index.
         async _graxpertHandleCompletion(writtenPaths, failedCount, pairs) {
             if (failedCount > 0) return;
+            // GX-12r: snapshot the op BEFORE closing the modal —
+            // graxpertCloseModal resets modalOp, and we want the
+            // comparator title to know which op produced these pairs.
+            const opThatRan = this.graxpert.modalOp;
             // Close + null-out the modal flag. graxpertCloseModal also
             // tears down any CLI poll timer so we don't keep hitting
             // the server after the modal goes away.
@@ -8997,7 +9007,7 @@ function ninaApp() {
                     if (seen.has(k)) return false;
                     seen.add(k); return true;
                 });
-                if (valid.length) this.graxpertOpenCompare(valid, 0);
+                if (valid.length) this.graxpertOpenCompare(valid, 0, 'gx', opThatRan);
             }
         },
 
@@ -9008,7 +9018,7 @@ function ninaApp() {
         // moving the handle left reveals the source underneath.
         // pairs: [{ src, out, label }]; index picks which pair to show.
 
-        graxpertOpenCompare(pairs, index, mode) {
+        graxpertOpenCompare(pairs, index, mode, op) {
             this.graxpertCompare.pairs = pairs;
             this.graxpertCompare.index = index || 0;
             this.graxpertCompare.split = 0.5;
@@ -9017,7 +9027,27 @@ function ninaApp() {
             // 'compare' = arbitrary two-file pick from FILES (show
             // the actual filenames on each side).
             this.graxpertCompare.mode = mode || 'gx';
+            // GX-12r: op identifies the GraXpert pipeline that
+            // produced these pairs so the header can read e.g.
+            // "GraXpert Denoise Comparison". null in compare-mode
+            // (no op context — see graxpertCompareTitle).
+            this.graxpertCompare.op = op || null;
             this.graxpertCompare.open = true;
+        },
+
+        // GX-12r: header title resolver for the comparator. Maps the
+        // op tag to a human-readable label; falls back to the
+        // generic Before/After or Compare wording when no op is set
+        // (FILES "Compare" entry point, older snapshots without
+        // op context).
+        graxpertCompareTitle() {
+            if (this.graxpertCompare.mode === 'compare') return 'Compare';
+            switch (this.graxpertCompare.op) {
+                case 'denoising':              return 'GraXpert Denoise Comparison';
+                case 'deconvolution':          return 'GraXpert Decon Comparison';
+                case 'background-extraction':  return 'GraXpert BGE Comparison';
+                default:                       return 'Before vs After';
+            }
         },
 
         // GX-12g: label resolver for the corner tags. Returns the
