@@ -53,11 +53,16 @@ That's it. The browser is now ready to run AI.
 
 ## Running on iPhone / iPad — the FP16 workflow
 
-The Denoise pipeline tiles the master through hundreds of
-`session.run()` calls. iOS Safari's per-tab memory budget (~1 GB
-on iPhone) is too tight for the **FP32** Denoise models in their
-default form — the tab dies silently with no error dialog ("crash
-to home screen"). Two extra steps work around this:
+The GraXpert FP32 weights are too heavy for iOS Safari's per-tab
+memory budget (~1 GB on iPhone). Symptom on the unmodified FP32
+models: the tab dies silently with no error dialog ("crash to
+home screen"). Polaris ships two layers of mitigation that
+together let all four ops (BGE, Denoise, Decon Stars, Decon
+Objects) run on the iPhone GPU via WebGPU.
+
+**Verified working** (May 2026): iPhone 17 Pro Max + Apple GPU.
+All four ops run on WebGPU with the FP16 variants in under
+~2 minutes for a typical master.
 
 ### Step 1 — let Polaris pick the right backend per-model
 
@@ -84,37 +89,64 @@ No user action required. The 200 MB cut-off lives in
 `IOS_WEBGPU_MAX_MODEL_BYTES` in `onnx-pipelines.js` — adjust if a
 future iOS / iPadOS bumps the WebGPU budget.
 
-### Step 2 — generate FP16 variants of the models
+### Step 2 — generate FP16 variants for every model
 
-The FP32 Denoise model is 284 MB (v2) or 456 MB (v3). Plus the ORT
-runtime overhead (~150-200 MB), this crests the iPhone Safari kill
-threshold even with the buffer-shrinking work Polaris already does
-on the JS side. Run the conversion script once to halve the weights:
+The FP32 GraXpert weights are 208 MB (BGE), 267 MB each (Decon
+Stars / Objects) and 284-456 MB (Denoise v2 / v3). All four
+exceed the iPhone Safari budget once the ORT runtime overhead
+(~150-200 MB) lands on top. Run the conversion script once to
+halve every model:
 
 ```bash
 pip install onnx onnxruntime onnxconverter-common
-python scripts/quantize_onnx_models.py --only denoise --fp16
+python scripts/quantize_onnx_models.py --fp16
 ```
 
-This walks `wwwroot/graxpert/models/`, finds every FP32 `model.onnx`,
-and writes a sibling version directory with `-fp16` suffix:
+(No `--only` flag → all five FP32 models get FP16 siblings. Use
+`--only denoise` or `--only decon` to restrict the family.)
+
+The script walks `wwwroot/graxpert/models/`, finds every FP32
+`model.onnx`, and writes a sibling version directory with `-fp16`
+suffix:
 
 ```
+bge-ai-models/
+├── 1.0.1/model.onnx        (208 MB)
+└── 1.0.1-fp16/model.onnx   (~104 MB)
 denoise-ai-models/
-├── 2.0.0/model.onnx        (284 MB, FP32 — original, kept)
-├── 2.0.0-fp16/model.onnx   (142 MB, half precision — new)
+├── 2.0.0/model.onnx        (284 MB)
+├── 2.0.0-fp16/model.onnx   (~142 MB)
 ├── 3.0.2/model.onnx        (456 MB)
-└── 3.0.2-fp16/model.onnx   (228 MB — new)
+└── 3.0.2-fp16/model.onnx   (~228 MB)
+deconvolution-stars-ai-models/
+├── 1.0.0/model.onnx        (267 MB)
+└── 1.0.0-fp16/model.onnx   (~133 MB)
+deconvolution-object-ai-models/
+├── 1.0.1/model.onnx        (267 MB)
+└── 1.0.1-fp16/model.onnx   (~133 MB)
 ```
 
 Then trigger a rescan: either restart Polaris, or
 `POST /api/onnx/rescan`, or click *Re-detect* in the Settings AI
-panel. The Denoise modal dropdown now lists the FP16 variants
-alongside the originals.
+panel.
 
-**On iOS**, the modal opens with the lightest available variant
-pre-selected automatically (FP16 over FP32 over INT8). On desktop
-it still picks FP32 by default — FP32 is fastest on WebGPU.
+**Auto-pick on iOS, per op:**
+
+| Op | UI control | iOS behavior |
+|---|---|---|
+| BGE | (none) | Pipeline silently substitutes `-fp16` if it exists |
+| Decon | Method dropdown (Stars/Objects), Strength, FWHM | Pipeline silently substitutes `-fp16` for the chosen variant |
+| Denoise | AI model dropdown (lists every registered version) | Dropdown pre-selects the lightest available variant (`-fp16` ranked above FP32 ranked above `-int8`) |
+
+Why the difference: Denoise has v2 vs v3 as a meaningful **quality
+trade-off** (clip threshold ±10 vs ±1, different denoising
+strength), so it deserves an explicit user choice. BGE has one
+model and Decon's only variant axis is Stars vs Objects (already
+its own dropdown). Pure FP16-vs-FP32 is just a platform-fit
+detail — auto-pick is the right UX.
+
+On desktop the auto-pick stays out of the way: FP32 keeps being
+selected because WebGPU runs it faster than FP16 there.
 
 ### What about INT8?
 
