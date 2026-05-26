@@ -5288,9 +5288,9 @@
                                 <a class="btn btn-sm" href="/api/system/server-cert"
                                    download="polaris-root.crt"
                                    style="margin-left:6px">⬇ Download certificate</a>
-                                <a href="/docs/user-guide/https-setup.md"
-                                   target="_blank" rel="noopener"
-                                   style="margin-left:6px">Install instructions →</a>
+                                <button class="btn btn-sm"
+                                        @click="certModalOpen()"
+                                        style="margin-left:6px">Install instructions →</button>
                             </p>
                         </div>
                         <!-- Collapsed cert info: shown when already on
@@ -5326,9 +5326,9 @@
                                 <a class="btn btn-sm" href="/api/system/server-cert"
                                    download="polaris-root.crt"
                                    style="margin-left:6px">⬇ Download certificate</a>
-                                <a href="/docs/user-guide/https-setup.md"
-                                   target="_blank" rel="noopener"
-                                   style="margin-left:6px">Install instructions →</a>
+                                <button class="btn btn-sm"
+                                        @click="certModalOpen()"
+                                        style="margin-left:6px">Install instructions →</button>
                             </p>
                         </details>
                     </div>
@@ -5693,6 +5693,180 @@
          broken-image alt text. The btn-sm buttons here call viewport
          methods directly so we get the same behaviour with theme-correct
          styling. -->
+    <!-- GX-12q: Certificate install instructions modal. Opened from
+         Settings → HTTPS endpoints. Per-OS tabs with the step-by-step
+         install flow that matches docs/user-guide/https-setup.md, but
+         in-app so the user doesn't have to chase a 404'd link to a
+         raw .md file the server doesn't serve. -->
+    <div class="siril-modal" x-show="certModal.open" x-cloak
+         @click.self="certModal.open = false"
+         @keydown.escape.window="certModal.open = false">
+        <div class="siril-modal-frame" style="max-width:720px; max-height:88vh; overflow:auto">
+            <h2>🔒 Install Polaris certificate as trusted</h2>
+            <p class="hint" style="margin-top:0">
+                One-time per device. After install, the browser shows
+                the normal green padlock instead of "Not secure",
+                forever (until cert expires in ~5 years).
+            </p>
+
+            <!-- Step 1: download (common to all OSes) -->
+            <h3 style="margin-top:18px">Step 1 — Download the certificate</h3>
+            <p>On the device you want to add, click:</p>
+            <p>
+                <a class="btn btn-md"
+                   href="/api/system/server-cert"
+                   download="polaris-root.crt">⬇ Download polaris-root.crt</a>
+            </p>
+            <p class="hint">
+                Saves <code>polaris-root.crt</code> to your Downloads
+                folder. Only the public certificate is exported — the
+                private key never leaves the server.
+            </p>
+
+            <!-- Step 2: per-OS install. Tabs pre-pick the right one
+                 via certModalOpen()'s UA sniff; the user can flip. -->
+            <h3 style="margin-top:18px">Step 2 — Install + trust it</h3>
+            <div class="cert-modal-tabs">
+                <button class="cert-modal-tab"
+                        :class="{ active: certModal.os === 'windows' }"
+                        @click="certModal.os = 'windows'">Windows</button>
+                <button class="cert-modal-tab"
+                        :class="{ active: certModal.os === 'macos' }"
+                        @click="certModal.os = 'macos'">macOS</button>
+                <button class="cert-modal-tab"
+                        :class="{ active: certModal.os === 'ios' }"
+                        @click="certModal.os = 'ios'">iPhone / iPad</button>
+                <button class="cert-modal-tab"
+                        :class="{ active: certModal.os === 'android' }"
+                        @click="certModal.os = 'android'">Android</button>
+                <button class="cert-modal-tab"
+                        :class="{ active: certModal.os === 'linux' }"
+                        @click="certModal.os = 'linux'">Linux</button>
+            </div>
+
+            <div class="cert-modal-content" x-show="certModal.os === 'windows'">
+                <ol>
+                    <li>Double-click <code>polaris-root.crt</code> in Downloads.</li>
+                    <li><strong>Install Certificate…</strong> →
+                        <strong>Local Machine</strong> → <strong>Next</strong>.</li>
+                    <li><strong>Place all certificates in the following store</strong>
+                        → <strong>Browse…</strong> → <strong>Trusted Root Certification
+                        Authorities</strong> → <strong>OK</strong> → <strong>Next</strong>
+                        → <strong>Finish</strong>.</li>
+                    <li>Windows shows a security prompt with the cert
+                        fingerprint — compare to the one in Polaris
+                        Settings, click <strong>Yes</strong>.</li>
+                    <li>Restart Chrome / Edge. Reload Polaris — green padlock 🔒.</li>
+                </ol>
+            </div>
+
+            <div class="cert-modal-content" x-show="certModal.os === 'macos'">
+                <ol>
+                    <li>Double-click <code>polaris-root.crt</code> — opens
+                        <strong>Keychain Access</strong>.</li>
+                    <li>The cert appears under <strong>login → Certificates</strong>.
+                        Drag it to <strong>System → Certificates</strong>,
+                        authenticate with your password.</li>
+                    <li>Double-click the cert in <strong>System</strong>,
+                        expand <strong>Trust</strong>, set
+                        <strong>When using this certificate</strong> →
+                        <strong>Always Trust</strong>, close the window,
+                        authenticate again.</li>
+                    <li>Restart Safari / Chrome. Reload — green padlock 🔒.</li>
+                </ol>
+            </div>
+
+            <div class="cert-modal-content" x-show="certModal.os === 'ios'">
+                <ol>
+                    <li>Tap <strong>⬇ Download</strong> above <em>from Safari</em>
+                        (not Chrome — iOS only shows the install prompt for
+                        Safari downloads). When iOS asks <em>"This website is
+                        trying to download a configuration profile. Do you
+                        want to allow this?"</em> → <strong>Allow</strong>.</li>
+                    <li>Open the <strong>Settings app</strong>. At the very
+                        top, a new entry <strong>Profile Downloaded</strong>
+                        appears — tap it → <strong>Install</strong>
+                        (top-right) → enter passcode → <strong>Install</strong>
+                        again → <strong>Done</strong>.</li>
+                    <li style="background: rgba(245, 158, 11, 0.12); padding: 8px; border-radius:6px">
+                        <strong>⚠ CRITICAL extra step that catches everyone:</strong>
+                        <strong>Settings → General → About → Certificate
+                        Trust Settings</strong> → toggle ON the
+                        <em>polaris-root</em> entry. Without this iOS only
+                        trusts the cert for VPN/Mail purposes, NOT for
+                        Safari TLS.
+                    </li>
+                    <li>Reload Polaris in Safari — green padlock 🔒.</li>
+                </ol>
+            </div>
+
+            <div class="cert-modal-content" x-show="certModal.os === 'android'">
+                <p style="color:var(--accent-warn,#f59e0b)">
+                    <strong>⚠ Limitation:</strong> Chrome on Android 7+
+                    does <strong>not</strong> trust user-installed
+                    certificates — only system-level certs (require root)
+                    work for browser TLS. On stock Android <code>chrome://</code>
+                    will keep showing "Not secure".
+                </p>
+                <p><strong>What works on Android:</strong></p>
+                <ul>
+                    <li><strong>Add Polaris to home screen as PWA</strong>
+                        (Chrome → ⋮ menu → <em>Install app</em>) — opens
+                        in a chromeless window where the warning is hidden.</li>
+                    <li><strong>Use Firefox</strong> — it has its own CA
+                        store and respects user-installed certs.</li>
+                    <li><strong>Use the Polaris Relay</strong> for a real
+                        Let's Encrypt cert (see Relay docs).</li>
+                </ul>
+                <p>To install system-wide anyway (works for some WebViews):</p>
+                <ol>
+                    <li><strong>Settings → Security → Encryption &amp;
+                        credentials → Install a certificate → CA
+                        certificate</strong> → confirm warning →
+                        pick <code>polaris-root.crt</code> from Downloads.</li>
+                </ol>
+            </div>
+
+            <div class="cert-modal-content" x-show="certModal.os === 'linux'">
+                <p>Chrome on Linux uses an NSS database for its trust
+                store. One command does the install:</p>
+                <pre><code># Install certutil if you don't have it
+sudo apt install libnss3-tools   # debian/ubuntu
+# (or: sudo dnf install nss-tools  on fedora)
+
+# Import polaris-root.crt as trusted CA in Chrome's NSS DB
+certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
+    -i ~/Downloads/polaris-root.crt</code></pre>
+                <p>Restart Chrome. Reload — green padlock 🔒.</p>
+                <p><strong>Firefox:</strong> Settings → Privacy &amp;
+                Security → Certificates → View Certificates →
+                Authorities → Import → pick
+                <code>polaris-root.crt</code> → tick
+                <em>"Trust this CA to identify websites"</em>.</p>
+            </div>
+
+            <!-- Verification (common) -->
+            <h3 style="margin-top:18px">Verify</h3>
+            <p class="hint">
+                After install, the cert SHA-1 fingerprint your browser
+                shows in "Cert details" should match the one in Polaris
+                Settings:
+            </p>
+            <p style="margin-left:8px" x-show="httpsInfo?.fingerprint">
+                <code style="user-select:all; font-size:11px"
+                      x-text="httpsInfo.fingerprint"></code>
+            </p>
+            <p class="hint">
+                Match means you installed the right file. Mismatch
+                means re-download from the trusted server and try again.
+            </p>
+
+            <div style="text-align:right; margin-top:18px">
+                <button class="btn btn-md" @click="certModal.open = false">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Siril run modal (STUDIO entry point) -->
     <div class="siril-modal" x-show="siril.modalOpen" x-cloak
          @click.self="sirilCloseModal()"

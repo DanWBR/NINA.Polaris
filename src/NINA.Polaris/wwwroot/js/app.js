@@ -853,6 +853,32 @@ function ninaApp() {
         //          hostnames: [...], exampleHttpsUrls: [...] }
         httpsInfo: null,
 
+        // GX-12q: cert-install instructions modal. Open from the
+        // Settings → HTTPS endpoints "Install instructions →" button.
+        // `os` auto-picks based on the visiting device's UA so the
+        // tab the user sees first is the right one for the device
+        // they're holding; they can still flip to the others.
+        certModal: {
+            open: false,
+            os: 'windows',   // 'windows' | 'macos' | 'ios' | 'android' | 'linux'
+        },
+
+        certModalOpen() {
+            // UA sniff to default the active tab to the user's OS.
+            // Cheap heuristic; user can flip tabs if we got it wrong
+            // (e.g. cross-device install from a desktop browser).
+            const ua = (navigator.userAgent || '').toLowerCase();
+            const platform = (navigator.platform || '').toLowerCase();
+            let os = 'windows';
+            if (/iphone|ipad|ipod/.test(ua)) os = 'ios';
+            else if (platform === 'macintel' && navigator.maxTouchPoints > 1) os = 'ios';
+            else if (/android/.test(ua)) os = 'android';
+            else if (/mac/.test(platform) || /macintosh/.test(ua)) os = 'macos';
+            else if (/linux/.test(platform) || /linux/.test(ua)) os = 'linux';
+            this.certModal.os = os;
+            this.certModal.open = true;
+        },
+
         // GX-11: before/after comparator state. Auto-opens at the end
         // of a GraXpert run (BGE / Denoise / Decon) with the source
         // FITS and the freshly-written sibling. Slider position is

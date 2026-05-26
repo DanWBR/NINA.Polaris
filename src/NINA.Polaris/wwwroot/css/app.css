@@ -4749,6 +4749,58 @@ label select.input-sm {
        is AFTER; at split=100% the whole image is BEFORE. */
     clip-path: inset(0 0 0 var(--split));
 }
+/* GX-12q: per-OS tab bar inside the certificate-install modal.
+   Five small pills the user toggles between Windows / macOS /
+   iOS / Android / Linux. Active tab gets the accent fill so
+   the user always knows which set of instructions they're
+   reading. */
+.cert-modal-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 8px 0 12px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+}
+.cert-modal-tab {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    border-radius: 14px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+}
+.cert-modal-tab:hover {
+    background: rgba(255,255,255,0.04);
+    color: var(--text-primary);
+}
+.cert-modal-tab.active {
+    background: var(--accent, #5b8def);
+    border-color: var(--accent, #5b8def);
+    color: white;
+}
+.cert-modal-content {
+    font-size: 13px;
+    line-height: 1.55;
+}
+.cert-modal-content ol,
+.cert-modal-content ul {
+    padding-left: 22px;
+    margin: 8px 0;
+}
+.cert-modal-content li { margin: 6px 0; }
+.cert-modal-content pre {
+    background: rgba(0,0,0,0.35);
+    padding: 10px;
+    border-radius: 4px;
+    overflow-x: auto;
+    font-size: 11.5px;
+    line-height: 1.4;
+}
+.cert-modal-content code { font-size: 11.5px; }
+
 /* GX-12p: Strength sliders in the Denoise / Decon modals.
    Replaces the type=number stepper that was too small to hit
    accurately on iPhone (and triggered the iOS soft keyboard,
