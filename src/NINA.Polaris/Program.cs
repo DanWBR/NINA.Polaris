@@ -137,6 +137,9 @@ builder.Services.AddSingleton<FlatWizardService>();
 // PA-1: TPPA orchestrator. Singleton because it holds CurrentJob
 // (consumed by StatusStreamHandler) + the in-flight CancellationTokenSource.
 builder.Services.AddSingleton<PolarAlignmentService>();
+// PA-6: TPPA target suggester. Pure read against the catalog + altitude
+// helpers — no state, fine as a singleton.
+builder.Services.AddSingleton<PolarTppaTargetService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Alpaca.AlpacaDiscovery>();
 builder.Services.AddSingleton<StellariumClient>();
 builder.Services.AddSingleton<AltitudeService>();

@@ -101,6 +101,14 @@ public static class PolarAlignmentEndpoints {
                 isActive = j.IsActive
             });
         });
+
+        // PA-6: best starting targets for TPPA "right now". Read-only,
+        // pure compute against the catalog + altitude helper — cheap
+        // (~5ms for 200 catalog entries). Optional `limit` lets the UI
+        // ask for more or fewer chips.
+        group.MapGet("/best-targets",
+            (PolarTppaTargetService svc, int? limit) =>
+                Results.Ok(svc.Suggest(limit.GetValueOrDefault(5))));
     }
 }
 

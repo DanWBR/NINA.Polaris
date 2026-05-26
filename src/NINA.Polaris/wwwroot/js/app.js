@@ -1020,6 +1020,10 @@ function ninaApp() {
             settleSec: 2,
             gain: 100
         },
+        // PA-6: "Best targets for TPPA now" chip list. Fetched on tab
+        // enter + on demand via Refresh. items[] comes from
+        // /api/polar/best-targets and is sorted server-side by score.
+        polarTargets: { items: [], loading: false, lastFetchUtc: null },
         afParams: {
             steps: 9,
             stepSize: 50,
@@ -7770,6 +7774,53 @@ function ninaApp() {
         },
 
         // ---- PA-4: Polar alignment (TPPA) actions ----
+
+        // PA-6: pull the "best targets for TPPA now" list from the
+        // server. Cheap (~5ms server-side) so we just refetch each
+        // time — no client-side caching beyond the items[] buffer.
+        async loadPolarTargets() {
+            this.polarTargets.loading = true;
+            try {
+                const r = await this.apiGet('/api/polar/best-targets?limit=6');
+                this.polarTargets.items = Array.isArray(r) ? r : [];
+                this.polarTargets.lastFetchUtc = new Date().toISOString();
+            } catch (e) {
+                this.polarTargets.items = [];
+                this.toast('Could not load TPPA targets: ' + (e.message || ''), 'warn');
+            } finally {
+                this.polarTargets.loading = false;
+            }
+        },
+
+        // PA-6: slew + plate-solve + sync on the chosen target. Reuses
+        // skyTarget + slewAndCenter — same flow Tonight's Best / Sky
+        // tab use. We do NOT auto-start TPPA after slew: the user
+        // confirms the field is good and clicks Start. Two reasons:
+        //   1. Plate-solve might fail (cloud, exposure off) — better
+        //      to fix that first than have TPPA also fail mid-flight.
+        //   2. The Start button is right there; one click is fine.
+        async polarGoToTarget(t) {
+            if (!this.mount?.connected) {
+                this.toast('Mount not connected', 'warn');
+                return;
+            }
+            this.skyTarget = {
+                name: t.name,
+                ra: t.raHours,
+                dec: t.decDeg,
+                type: t.type || 'TPPA target',
+                magnitude: t.magnitude != null ? t.magnitude.toFixed(2) : '',
+                raFormatted: this.formatRA(t.raHours),
+                decFormatted: this.formatDec(t.decDeg),
+            };
+            try {
+                await this.slewAndCenter();
+                this.toast('Slewing to ' + t.name + ' — click Start TPPA when ready',
+                    'info');
+            } catch (e) {
+                this.toast('Slew failed: ' + (e.message || ''), 'error');
+            }
+        },
 
         /// Start a TPPA job using the form values (which mirror the
         /// active rig's saved PolarAlign* settings).

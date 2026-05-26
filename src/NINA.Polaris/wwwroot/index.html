@@ -289,7 +289,9 @@
                 <svg viewBox="0 0 24 24" width="22" height="22"><polygon points="12,2 15,10 23,10 17,15 19,23 12,18 5,23 7,15 1,10 9,10" fill="none" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Guide</span>
             </button>
-            <button class="nav-btn" :class="{ active: tab === 'polar' }" @click="tab = 'polar'" title="Polar alignment (TPPA)">
+            <button class="nav-btn" :class="{ active: tab === 'polar' }"
+                    @click="tab = 'polar'; loadPolarTargets()"
+                    title="Polar alignment (TPPA)">
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><line x1="12" y1="2" x2="12" y2="5" stroke="currentColor" stroke-width="2"/><line x1="12" y1="19" x2="12" y2="22" stroke="currentColor" stroke-width="2"/><line x1="2" y1="12" x2="5" y2="12" stroke="currentColor" stroke-width="2"/><line x1="19" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Polar</span>
             </button>
@@ -923,6 +925,56 @@
                                 :disabled="!polar.isActive">
                             ⛔ Abort
                         </button>
+                    </div>
+                </div>
+
+                <!-- PA-6: TPPA target suggestions. Reads
+                     /api/polar/best-targets which picks high-Dec
+                     objects currently above 30° (sized so they stay
+                     above 30° for the next ~10 min). Clicking a chip
+                     sets the sky target + invokes slewAndCenter, the
+                     existing slew + plate-solve + sync workflow. The
+                     user then clicks Start TPPA from the new pointing. -->
+                <div class="polar-targets" style="margin-bottom: 12px"
+                     x-show="!polar.isActive">
+                    <div class="polar-targets-header">
+                        <strong>🎯 Best targets for TPPA now</strong>
+                        <button class="btn btn-sm" @click="loadPolarTargets()"
+                                :disabled="polarTargets.loading"
+                                title="Refresh based on current time + location">
+                            <span x-show="!polarTargets.loading">⟳ Refresh</span>
+                            <span x-show="polarTargets.loading">Loading…</span>
+                        </button>
+                    </div>
+                    <p class="hint" x-show="!polarTargets.items.length && !polarTargets.loading"
+                       style="margin: 4px 0 0">
+                        No suitable targets above 30° in the high-Dec
+                        zone right now. The mount can still TPPA from
+                        wherever it's pointing — just click Start above.
+                    </p>
+                    <div class="polar-target-chips"
+                         x-show="polarTargets.items.length">
+                        <template x-for="t in polarTargets.items" :key="t.name">
+                            <button class="polar-target-chip"
+                                    @click="polarGoToTarget(t)"
+                                    :disabled="!mount?.connected"
+                                    :title="'Slew + center on ' + t.name
+                                          + ' (RA ' + t.raHours.toFixed(2) + 'h, Dec '
+                                          + t.decDeg.toFixed(1) + '°)'">
+                                <span class="polar-target-name"
+                                      x-text="t.commonName ? (t.name + ' — ' + t.commonName) : t.name"></span>
+                                <span class="polar-target-meta">
+                                    <span>Dec
+                                        <strong x-text="(t.decDeg >= 0 ? '+' : '')
+                                            + t.decDeg.toFixed(0) + '°'"></strong></span>
+                                    <span>alt
+                                        <strong x-text="t.currentAltDeg.toFixed(0) + '°'"></strong></span>
+                                    <span>HA
+                                        <strong x-text="(t.hourAngleHours >= 0 ? '+' : '')
+                                            + t.hourAngleHours.toFixed(1) + 'h'"></strong></span>
+                                </span>
+                            </button>
+                        </template>
                     </div>
                 </div>
 

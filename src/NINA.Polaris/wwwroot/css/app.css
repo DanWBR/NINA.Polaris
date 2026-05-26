@@ -4749,6 +4749,67 @@ label select.input-sm {
        is AFTER; at split=100% the whole image is BEFORE. */
     clip-path: inset(0 0 0 var(--split));
 }
+/* PA-6: TPPA target suggestion chips on the POLAR tab. Server
+   ranks high-Dec objects currently above 30°; UI shows them as a
+   pillsy chip grid. Click slews + plate-solves to that target via
+   the existing skyTarget + slewAndCenter flow. */
+.polar-targets {
+    background: var(--bg-secondary, rgba(255, 255, 255, 0.02));
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+}
+.polar-targets-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+.polar-target-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.polar-target-chip {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 8px 12px;
+    background: rgba(91, 141, 239, 0.10);
+    border: 1px solid rgba(91, 141, 239, 0.35);
+    border-radius: 8px;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1.3;
+    text-align: left;
+    transition: background 0.12s, border-color 0.12s, transform 0.08s;
+    min-width: 140px;
+}
+.polar-target-chip:hover:not(:disabled) {
+    background: rgba(91, 141, 239, 0.20);
+    border-color: rgba(91, 141, 239, 0.6);
+}
+.polar-target-chip:active:not(:disabled) { transform: scale(0.98); }
+.polar-target-chip:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.polar-target-name {
+    font-weight: 600;
+    font-size: 13px;
+}
+.polar-target-meta {
+    display: flex;
+    gap: 10px;
+    opacity: 0.78;
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
+}
+.polar-target-meta strong { color: var(--text-primary); font-weight: 600; }
+
 /* GX-12q: Typography normalisation for the cert-install modal.
    Without these the global h3 / p / li / code styles render much
    larger than the rest of the app (h3 ≈ 22-28px, body ≈ 16px+),
