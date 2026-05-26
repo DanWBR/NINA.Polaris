@@ -5276,6 +5276,22 @@
                                 be sure):
                                 <code style="user-select:all" x-text="httpsInfo.fingerprint"></code>
                             </p>
+                            <!-- GX-12q: download + install the server cert as
+                                 trusted root so the browser stops showing
+                                 "Not secure" on polaris-app.local:5000.
+                                 One-time per device. Install steps differ by
+                                 OS; we link the doc rather than embedding
+                                 a long modal here. -->
+                            <p class="hint" x-show="httpsInfo.fingerprint">
+                                <strong>Want the green padlock?</strong> Install
+                                this cert as a trusted root on each device:
+                                <a class="btn btn-sm" href="/api/system/server-cert"
+                                   download="polaris-root.crt"
+                                   style="margin-left:6px">⬇ Download certificate</a>
+                                <a href="/docs/user-guide/https-setup.md"
+                                   target="_blank" rel="noopener"
+                                   style="margin-left:6px">Install instructions →</a>
+                            </p>
                         </div>
                         <!-- Collapsed cert info: shown when already on
                              secure context. Most users will never expand it,
@@ -5305,6 +5321,15 @@
                                        rel="noopener" x-text="url"></a>
                                 </template>
                             </div>
+                            <p class="hint" x-show="httpsInfo.fingerprint" style="margin-top:8px">
+                                Adding a new device that shows "Not secure"?
+                                <a class="btn btn-sm" href="/api/system/server-cert"
+                                   download="polaris-root.crt"
+                                   style="margin-left:6px">⬇ Download certificate</a>
+                                <a href="/docs/user-guide/https-setup.md"
+                                   target="_blank" rel="noopener"
+                                   style="margin-left:6px">Install instructions →</a>
+                            </p>
                         </details>
                     </div>
                 </template>

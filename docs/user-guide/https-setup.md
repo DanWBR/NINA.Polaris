@@ -73,21 +73,110 @@ in its cert-details dialog against the one Settings prints. They must
 match — that's how you know the cert your browser sees is the cert
 Polaris generated, not a man-in-the-middle.
 
-## Permanent trust (optional)
+## Permanent trust — install the cert as a trusted root
 
-If you don't want to click through the warning every time you launch
-a fresh Chrome profile, install the cert as trusted at the OS level:
+One-time per device. After install, the browser shows the normal
+green padlock instead of "Not secure", every time, forever (until
+the cert expires in ~5 years).
 
-- **Windows**: copy `polaris.pfx` to the client, double-click, install
-  to *Local Machine → Trusted Root Certification Authorities*. Restart
-  Chrome.
-- **macOS**: copy + open in Keychain Access, drag to *System →
-  Certificates*, set *Always Trust*.
-- **Linux** (Chrome): import via Chrome's *Settings → Privacy and
-  security → Security → Manage certificates → Authorities → Import*.
+### Step 1 — download the cert (every OS)
 
-This is per-device. Polaris does **not** auto-distribute the cert —
-treat it as a privileged operation.
+On the device you want to add: open Polaris over HTTPS, click
+through the warning once, go to **Settings → 🔒 HTTPS endpoints**,
+and click **⬇ Download certificate**. The file `polaris-root.crt`
+saves to your Downloads folder.
+
+You can also download it directly: `https://polaris-app.local:5000/api/system/server-cert`
+(replace the hostname with whichever name resolves on your LAN).
+The endpoint returns only the **public certificate** (PEM-encoded);
+the private key never leaves the server.
+
+### Step 2 — install + trust it
+
+#### Windows (Chrome / Edge)
+
+1. Double-click `polaris-root.crt` in Downloads.
+2. **Install Certificate…** → **Local Machine** → **Next**.
+3. **Place all certificates in the following store** → **Browse…** →
+   **Trusted Root Certification Authorities** → **OK** → **Next** → **Finish**.
+4. Windows shows a security prompt with the cert fingerprint —
+   compare it to the one in Polaris Settings, click **Yes**.
+5. Restart Chrome / Edge. Reload `https://polaris-app.local:5000` —
+   green padlock.
+
+#### macOS (Safari / Chrome / Firefox)
+
+1. Double-click `polaris-root.crt` — opens **Keychain Access**.
+2. The cert appears under **login → Certificates**. Drag it to
+   **System → Certificates**, authenticate with your password.
+3. Double-click the cert in **System**, expand **Trust**, set
+   **When using this certificate** → **Always Trust**, close the
+   window, authenticate again.
+4. Restart Safari / Chrome. Reload — green padlock.
+
+#### iPhone / iPad (Safari)
+
+1. Tap the **Download certificate** button in Safari. iOS shows
+   *"This website is trying to download a configuration profile.
+   Do you want to allow this?"* → **Allow**.
+2. **Settings app** → at the very top, **Profile Downloaded** →
+   tap it → **Install** (top-right) → enter passcode → **Install**
+   again → **Done**.
+3. **CRITICAL extra step** that catches everyone: **Settings →
+   General → About → Certificate Trust Settings** → toggle ON the
+   *polaris-root* entry. Without this iOS only trusts the cert
+   for VPN/Mail purposes, not for Safari TLS validation.
+4. Reload Polaris in Safari — green padlock.
+
+#### Android (Chrome)
+
+⚠ **Limitation**: Chrome on Android 7+ does **not** trust
+user-installed certificates by default — only system-level certs
+(which require root) work for browser TLS validation. So on stock
+Android you can install the cert system-wide for **apps that opt
+in** (the WiFi captive portal handler, Polaris's PWA via
+WebView…), but `chrome://` itself will keep showing "Not secure".
+
+What works:
+
+- **Add Polaris to home screen as PWA** (Chrome → ⋮ menu → *Install
+  app*) — opens in a chromeless window where the warning is hidden.
+- **Use Firefox** — it has its own CA store and respects user-
+  installed certs.
+- **Use the Polaris Relay** for proper Let's Encrypt cert
+  (see *Why not Let's Encrypt?* below).
+
+To install the cert as system-wide trust anyway (works for some
+WebViews):
+**Settings → Security → Encryption & credentials → Install a
+certificate → CA certificate** → confirm the warning → pick
+`polaris-root.crt` from Downloads.
+
+#### Linux (Chrome)
+
+```bash
+# Import via NSS DB (Chrome uses this on Linux):
+sudo apt install libnss3-tools   # or your distro's equivalent
+certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" -i polaris-root.crt
+```
+
+Restart Chrome. Reload — green padlock.
+
+For Firefox: **Settings → Privacy & Security → Certificates →
+View Certificates → Authorities → Import** → pick
+`polaris-root.crt` → tick *"Trust this CA to identify websites"*.
+
+### Verification
+
+After install, the cert SHA-1 fingerprint your browser shows in
+"Cert details" should match the one Polaris Settings prints. If
+they match, you installed the right file. If they don't, you
+installed someone else's cert — re-download from the trusted
+server and try again.
+
+The install is per-device, **not** per-browser-profile. Once
+installed at the OS / system trust store level, every browser on
+that device that respects the system store trusts Polaris.
 
 ## Disabling HTTPS
 

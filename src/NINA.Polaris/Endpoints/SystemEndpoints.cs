@@ -87,6 +87,28 @@ public static class SystemEndpoints {
             });
         });
 
+        // GX-12q: Download the server's public certificate (PEM-encoded
+        // DER, the format that Windows / macOS / iOS / Linux all accept
+        // in their "import a root CA" dialogs). Stream it as
+        // application/x-x509-ca-cert with a Content-Disposition so the
+        // browser pops the save-or-install dialog instead of rendering
+        // text. Public bytes only — the PFX with the private key
+        // stays on the server and is never exposed.
+        group.MapGet("/server-cert", (SelfSignedCertService certSvc) => {
+            var cert = certSvc.GetOrCreate();
+            var derBytes = cert.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Cert);
+            // PEM wrapper makes desktop "double-click to install" work
+            // reliably on every OS; raw DER would also work but Windows
+            // sometimes opens it in Notepad instead of certmgr.
+            var b64 = Convert.ToBase64String(derBytes,
+                Base64FormattingOptions.InsertLineBreaks);
+            var pem = "-----BEGIN CERTIFICATE-----\n"
+                + b64 + "\n-----END CERTIFICATE-----\n";
+            var bytes = System.Text.Encoding.ASCII.GetBytes(pem);
+            return Results.File(bytes, "application/x-x509-ca-cert",
+                fileDownloadName: "polaris-root.crt");
+        });
+
         // Profiles
         group.MapGet("/profiles", (ProfileService profiles) => {
             var list = profiles.ListProfiles();
