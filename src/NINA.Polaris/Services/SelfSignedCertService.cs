@@ -78,13 +78,24 @@ public class SelfSignedCertService {
                 if (existingHash == sanHash) {
                     var existing = LoadFromDisk();
                     if (existing != null
-                        && existing.NotAfter > DateTime.UtcNow.AddDays(30)) {
+                        && existing.NotAfter > DateTime.UtcNow.AddDays(30)
+                        && IsValidRootCa(existing)) {
                         _logger.LogInformation(
                             "HTTPS cert reused (valid until {Expiry:yyyy-MM-dd}, "
                             + "fingerprint {Thumbprint}). SAN entries: {Count}.",
                             existing.NotAfter, existing.Thumbprint, sanList.Count);
                         _cached = existing;
                         return _cached;
+                    }
+                    if (existing != null && !IsValidRootCa(existing)) {
+                        // GX-12q3: old cert is a leaf (CA:FALSE) or
+                        // missing KeyCertSign, install-as-trusted-root
+                        // workflow won't work with it on Chrome. Force
+                        // regeneration so users get the fixed cert
+                        // automatically after an app update.
+                        _logger.LogInformation(
+                            "HTTPS cert lacks CA:TRUE / KeyCertSign, "
+                            + "regenerating so Chrome accepts it as a trusted root.");
                     }
                 } else {
                     _logger.LogInformation(
@@ -147,6 +158,28 @@ public class SelfSignedCertService {
     /// shows the DNS list so the user knows which URLs are valid.</summary>
     public IReadOnlyList<string> SanEntries() => BuildSanList();
 
+    /// <summary>
+    /// GX-12q3: pre-flight check that the on-disk cert can actually
+    /// function as a Chrome-trusted root anchor when installed.
+    /// Returns false for the old leaf-cert (CA:FALSE) format so the
+    /// next GetOrCreate call regenerates it with the correct
+    /// extensions. Idempotent: a freshly-generated cert always passes.
+    /// </summary>
+    private static bool IsValidRootCa(X509Certificate2 cert) {
+        var bc = cert.Extensions
+            .OfType<X509BasicConstraintsExtension>()
+            .FirstOrDefault();
+        if (bc == null || !bc.CertificateAuthority) return false;
+        var ku = cert.Extensions
+            .OfType<X509KeyUsageExtension>()
+            .FirstOrDefault();
+        if (ku == null) return false;
+        // KeyCertSign is the bit that lets the cert sign other certs,
+        // including itself (the root → leaf chain Chrome expects).
+        return (ku.KeyUsages & X509KeyUsageFlags.KeyCertSign)
+            == X509KeyUsageFlags.KeyCertSign;
+    }
+
     // ─── internals ────────────────────────────────────────────────────
 
     private X509Certificate2? LoadFromDisk() {
@@ -172,17 +205,40 @@ public class SelfSignedCertService {
             HashAlgorithmName.SHA256,
             RSASignaturePadding.Pkcs1);
 
-        // Standard extensions Chrome expects for a TLS server cert.
+        // GX-12q3 fix: previous version emitted CA:FALSE which made
+        // the cert a leaf, useless as a trust anchor. Windows happily
+        // imported it into "Trusted Root Certification Authorities"
+        // but Chrome rejected the chain at validation time because a
+        // non-CA cert can't sign anything, not even itself in browser
+        // logic. Symptom: install succeeds, restart browser, still
+        // shows "Not secure". Self-signed acting as both root + leaf
+        // needs CA:TRUE + KeyCertSign permission.
         req.CertificateExtensions.Add(
-            new X509BasicConstraintsExtension(certificateAuthority: false, false, 0, true));
+            new X509BasicConstraintsExtension(
+                certificateAuthority: true,
+                hasPathLengthConstraint: false,
+                pathLengthConstraint: 0,
+                critical: true));
         req.CertificateExtensions.Add(
             new X509KeyUsageExtension(
-                X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment,
+                // KeyCertSign added: needed to satisfy Chrome's "this
+                // cert is the trust anchor for the chain that ends in
+                // itself" check when installed as Trusted Root.
+                // DigitalSignature + KeyEncipherment: the TLS handshake
+                // cipher suites need them.
+                X509KeyUsageFlags.DigitalSignature
+                | X509KeyUsageFlags.KeyEncipherment
+                | X509KeyUsageFlags.KeyCertSign,
                 critical: true));
         req.CertificateExtensions.Add(
             new X509EnhancedKeyUsageExtension(
                 new OidCollection { new Oid("1.3.6.1.5.5.7.3.1") /* TLS Server Auth */ },
                 critical: true));
+        // Subject Key Identifier, helps Chrome match the leaf usage of
+        // this cert against its own "self as root" entry in the trust
+        // store. Generated from the public key, deterministic.
+        req.CertificateExtensions.Add(
+            new X509SubjectKeyIdentifierExtension(req.PublicKey, critical: false));
 
         // SAN, the part that decides which hostnames/IPs Chrome accepts.
         var sanBuilder = new SubjectAlternativeNameBuilder();
