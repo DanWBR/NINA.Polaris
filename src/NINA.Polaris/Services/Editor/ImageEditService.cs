@@ -126,9 +126,45 @@ public class ImageEditService : IDisposable {
                     var img = FITSReader.Read(fs);
                     width = img.Properties.Width;
                     height = img.Properties.Height;
-                    channels = 1;
-                    // Auto-stretch into 8-bit working space.
-                    working = AutoStretch.Apply(img.Data, width, height, img.Properties.BitDepth);
+                    // CC-4: respect the FITS plane count. ChannelCombineService
+                    // writes RGB FITS (NAXIS=3, NAXIS3=3) for LRGB / RGB /
+                    // PixelMath outputs; without this branch every RGB master
+                    // would silently flatten to its R plane in the editor, the
+                    // exact regression that motivated the fix. Anything other
+                    // than 1 or 3 (multi-frame cubes etc.) gets the legacy
+                    // mono path, FITSReader already collapses NAXIS3>3 to a
+                    // single plane.
+                    channels = img.Properties.Channels == 3 ? 3 : 1;
+                    if (channels == 3) {
+                        // FITSReader returns plane-sequential (R then G then B);
+                        // EditPipeline + Skia wrappers expect RGB-interleaved.
+                        // Stretch each plane independently so each channel
+                        // uses its full dynamic range (matches PixInsight's
+                        // ScreenTransferFunction default and gives a
+                        // viewable preview even when one channel is much
+                        // dimmer than the others). Subsequent Color sliders
+                        // let the user fix any white-balance drift this
+                        // introduces.
+                        int planeSize = width * height;
+                        var rPlane = new ushort[planeSize];
+                        var gPlane = new ushort[planeSize];
+                        var bPlane = new ushort[planeSize];
+                        Array.Copy(img.Data, 0,            rPlane, 0, planeSize);
+                        Array.Copy(img.Data, planeSize,    gPlane, 0, planeSize);
+                        Array.Copy(img.Data, planeSize*2,  bPlane, 0, planeSize);
+                        var rStretched = AutoStretch.Apply(rPlane, width, height, img.Properties.BitDepth);
+                        var gStretched = AutoStretch.Apply(gPlane, width, height, img.Properties.BitDepth);
+                        var bStretched = AutoStretch.Apply(bPlane, width, height, img.Properties.BitDepth);
+                        working = new byte[planeSize * 3];
+                        for (int i = 0, j = 0; i < planeSize; i++, j += 3) {
+                            working[j]     = rStretched[i];
+                            working[j + 1] = gStretched[i];
+                            working[j + 2] = bStretched[i];
+                        }
+                    } else {
+                        // Mono path unchanged.
+                        working = AutoStretch.Apply(img.Data, width, height, img.Properties.BitDepth);
+                    }
                     break;
                 }
                 case ".png":

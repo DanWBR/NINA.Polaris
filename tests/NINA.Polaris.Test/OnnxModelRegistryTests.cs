@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using NINA.Polaris.Services;
@@ -16,6 +18,7 @@ namespace NINA.Polaris.Test;
 public class OnnxModelRegistryTests {
     private string _tempRoot = "";
     private ProfileService _profile = null!;
+    private IWebHostEnvironment _env = null!;
 
     [SetUp]
     public void SetUp() {
@@ -30,6 +33,30 @@ public class OnnxModelRegistryTests {
         var cfg = new ConfigurationBuilder().Build();
         _profile = new ProfileService(cfg, NullLogger<ProfileService>.Instance);
         _profile.Active.OnnxModelsPath = _tempRoot;
+
+        // GX-12j: registry now also consults env.WebRootPath/wwwroot/graxpert/models
+        // as a bundled fallback. We point the bundled root at a sibling
+        // temp dir that stays empty for the unit tests; the profile path
+        // takes priority anyway so this just satisfies the constructor.
+        _env = new FakeWebHostEnvironment(_tempRoot);
+    }
+
+    private OnnxModelRegistry NewRegistry()
+        => new(_profile, _env, NullLogger<OnnxModelRegistry>.Instance);
+
+    private sealed class FakeWebHostEnvironment : IWebHostEnvironment {
+        public FakeWebHostEnvironment(string root) {
+            ContentRootPath = root;
+            WebRootPath = root;
+            ContentRootFileProvider = new NullFileProvider();
+            WebRootFileProvider = new NullFileProvider();
+        }
+        public string EnvironmentName { get; set; } = "Test";
+        public string ApplicationName { get; set; } = "NINA.Polaris.Test";
+        public string ContentRootPath { get; set; }
+        public IFileProvider ContentRootFileProvider { get; set; }
+        public string WebRootPath { get; set; }
+        public IFileProvider WebRootFileProvider { get; set; }
     }
 
     [TearDown]
@@ -42,7 +69,7 @@ public class OnnxModelRegistryTests {
 
     [Test]
     public async Task Rescan_EmptyDir_RegistryIsEmpty() {
-        var reg = new OnnxModelRegistry(_profile, NullLogger<OnnxModelRegistry>.Instance);
+        var reg = NewRegistry();
         await reg.RescanAsync();
         Assert.That(reg.All(), Is.Empty);
     }
@@ -50,7 +77,7 @@ public class OnnxModelRegistryTests {
     [Test]
     public async Task Rescan_PathNotSet_RegistryIsEmpty() {
         _profile.Active.OnnxModelsPath = "";
-        var reg = new OnnxModelRegistry(_profile, NullLogger<OnnxModelRegistry>.Instance);
+        var reg = NewRegistry();
         await reg.RescanAsync();
         Assert.That(reg.All(), Is.Empty);
     }
@@ -64,7 +91,7 @@ public class OnnxModelRegistryTests {
         SeedFake("deconvolution-stars-ai-models", "1.0.0");
         SeedFake("deconvolution-object-ai-models", "1.0.1");
 
-        var reg = new OnnxModelRegistry(_profile, NullLogger<OnnxModelRegistry>.Instance);
+        var reg = NewRegistry();
         await reg.RescanAsync();
 
         var all = reg.All();
@@ -83,7 +110,7 @@ public class OnnxModelRegistryTests {
         // silently, the GraXpert layout match is intentional, drops a
         // .onnx the user happens to dump in the same root.
         SeedFakeAtPath(Path.Combine(_tempRoot, "my-custom", "model.onnx"));
-        var reg = new OnnxModelRegistry(_profile, NullLogger<OnnxModelRegistry>.Instance);
+        var reg = NewRegistry();
         await reg.RescanAsync();
         Assert.That(reg.All(), Is.Empty);
     }
@@ -93,7 +120,7 @@ public class OnnxModelRegistryTests {
         // A `bge-ai-models/latest/model.onnx` should be skipped, the
         // parser is strict about semver-ish version dirs.
         SeedFakeAtPath(Path.Combine(_tempRoot, "bge-ai-models", "latest", "model.onnx"));
-        var reg = new OnnxModelRegistry(_profile, NullLogger<OnnxModelRegistry>.Instance);
+        var reg = NewRegistry();
         await reg.RescanAsync();
         Assert.That(reg.All(), Is.Empty);
     }
@@ -101,7 +128,7 @@ public class OnnxModelRegistryTests {
     [Test]
     public async Task Rescan_RemovedFile_DropsEntry() {
         SeedFake("bge-ai-models", "1.0.1");
-        var reg = new OnnxModelRegistry(_profile, NullLogger<OnnxModelRegistry>.Instance);
+        var reg = NewRegistry();
         await reg.RescanAsync();
         Assert.That(reg.All().Count, Is.EqualTo(1));
 
@@ -115,7 +142,7 @@ public class OnnxModelRegistryTests {
     [Test]
     public async Task GetHash_ComputesAndCaches() {
         SeedFake("bge-ai-models", "1.0.1", bytes: new byte[] { 1, 2, 3, 4, 5 });
-        var reg = new OnnxModelRegistry(_profile, NullLogger<OnnxModelRegistry>.Instance);
+        var reg = NewRegistry();
         await reg.RescanAsync();
 
         var h1 = await reg.GetHashAsync("bge", "1.0.1");
@@ -127,7 +154,7 @@ public class OnnxModelRegistryTests {
 
     [Test]
     public async Task GetHash_UnknownModel_ReturnsNull() {
-        var reg = new OnnxModelRegistry(_profile, NullLogger<OnnxModelRegistry>.Instance);
+        var reg = NewRegistry();
         await reg.RescanAsync();
         Assert.That(await reg.GetHashAsync("nope", "9.9.9"), Is.Null);
     }
