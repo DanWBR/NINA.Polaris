@@ -43,7 +43,12 @@ public static class FITSReader {
             BitDepth = Math.Abs(bitpix) > 16 ? 16 : Math.Abs(bitpix),
             IsBayered = bayerPattern != BayerPatternEnum.None,
             BayerPattern = bayerPattern,
-            Channels = planes
+            Channels = planes,
+            // CCALB-0a: pick up WCS if the FITS was plate-solved and
+            // re-stamped (AstapSolver does this after a successful
+            // solve). Null when the source has no WCS block, which
+            // is the common case for raw lights or un-solved masters.
+            Wcs = WcsHeaders.Read(headers),
         };
 
         var metaData = ExtractMetaData(headers);

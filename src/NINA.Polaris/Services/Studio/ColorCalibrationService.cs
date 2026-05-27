@@ -163,7 +163,8 @@ public class ColorCalibrationService {
             // ── Phase 4: write FITS ──────────────────────────────────
             _jobs[jobId] = _jobs[jobId] with { Stage = "writing" };
             var outPath = WriteOutput(output, W, H, img.Properties.BitDepth,
-                row.Path, row.Target, prefix, req, offsets, gains);
+                row.Path, row.Target, prefix, req, offsets, gains,
+                img.Properties.Wcs);
 
             // ── Phase 5: reindex ─────────────────────────────────────
             _logger.LogInformation(
@@ -192,7 +193,8 @@ public class ColorCalibrationService {
 
     private string WriteOutput(ushort[] data, int W, int H, int bitDepth,
             string sourcePath, string target, string prefix,
-            ColorCalibrationRequest req, double[] offsets, double[] gains) {
+            ColorCalibrationRequest req, double[] offsets, double[] gains,
+            NINA.Image.FileFormat.FITS.WcsInfo? wcs = null) {
         // Sibling FITS: same directory as the source, suffix appended
         // to the stem. Keeps the calibrated output next to the
         // un-calibrated source so a diff is one-folder away (same
@@ -210,6 +212,10 @@ public class ColorCalibrationService {
             BayerPattern = NINA.Core.Enum.BayerPatternEnum.None,
             IsBayered = false,
             Channels = 3,
+            // CCALB-0a: pass plate-solve coords through. Color
+            // calibration does not move pixels, so the source's WCS
+            // remains valid on the output.
+            Wcs = wcs,
         };
         var meta = new ImageMetaData {
             CreationTime = DateTime.UtcNow,

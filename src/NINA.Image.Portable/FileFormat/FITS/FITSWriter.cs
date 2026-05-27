@@ -198,6 +198,18 @@ public static class FITSWriter {
         if (meta.Weather.SkyQuality != 0)
             Add(cards, "MPSAS", Fmt(meta.Weather.SkyQuality), "Sky quality (mag/arcsec^2)");
 
+        // ---- WCS (CCALB-0a) -------------------------------------
+        // Emit the standard WCS keyword block when the source image
+        // carries a plate-solved coordinate system. Downstream tools
+        // (PCC, PixInsight, Siril) pick it up by reading the FITS
+        // headers without re-solving. Emitted BEFORE the custom
+        // keywords so user-provided overrides still win on conflict.
+        if (imageData.Properties.Wcs != null) {
+            var wcsCards = new List<KeyValuePair<string, string>>();
+            WcsHeaders.Add(wcsCards, imageData.Properties.Wcs);
+            foreach (var kv in wcsCards) AddStr(cards, kv.Key, kv.Value);
+        }
+
         // ---- Custom user keywords (last so they can override anything) ----
         if (customKeywords != null) {
             foreach (var kv in customKeywords) {

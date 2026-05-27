@@ -148,7 +148,8 @@ public class ChannelCombineService {
                 inputs.Add(new LoadedChannel(
                     Variable: slot.Variable,
                     Data: img.Data,
-                    FileName: row.FileName));
+                    FileName: row.FileName,
+                    Wcs: img.Properties.Wcs));
                 _jobs[jobId] = _jobs[jobId] with { Done = i + 1 };
             }
 
@@ -427,11 +428,17 @@ public class ChannelCombineService {
                 Path.GetFileNameWithoutExtension(fileName) + $"_{copy++}.fits");
         }
 
+        // CCALB-0a: carry WCS from the reference channel onto the
+        // composed output. Other channels were resampled onto the
+        // reference's grid by the register step, so the reference's
+        // WCS is the correct one for the composed pixel layout.
+        int refIdx = PickReferenceIndex(req.Mode, inputs);
         var props = new ImageProperties {
             Width = W, Height = H, BitDepth = bitDepth,
             BayerPattern = NINA.Core.Enum.BayerPatternEnum.None,
             IsBayered = false,
             Channels = channels,
+            Wcs = inputs[refIdx].Wcs,
         };
         var meta = new ImageMetaData {
             CreationTime = DateTime.UtcNow,
@@ -453,8 +460,8 @@ public class ChannelCombineService {
             new("NCHANNEL", inputs.Count.ToString(CultureInfo.InvariantCulture)),
         };
         // REGREF is the variable name of the reference channel.
+        // refIdx already computed above for the WCS propagation step.
         if (req.Register) {
-            int refIdx = PickReferenceIndex(req.Mode, inputs);
             customKeywords.Add(new("REGREF", inputs[refIdx].Variable));
         }
         // Per-channel headers: REG_<var> with the 6-tuple. Useful for
@@ -527,7 +534,8 @@ public class ChannelCombineService {
         => string.IsNullOrEmpty(s) ? "X"
             : (s.Length <= max ? s : s[..max]);
 
-    private sealed record LoadedChannel(string Variable, ushort[] Data, string FileName);
+    private sealed record LoadedChannel(string Variable, ushort[] Data, string FileName,
+        NINA.Image.FileFormat.FITS.WcsInfo? Wcs);
 }
 
 public record ChannelCombineProgress {

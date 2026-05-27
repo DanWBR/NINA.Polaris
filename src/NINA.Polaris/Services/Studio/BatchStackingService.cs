@@ -115,6 +115,12 @@ public class BatchStackingService {
                 if (loaded[i].Stars.Count > loaded[refIdx].Stars.Count) refIdx = i;
             }
             var refStars = loaded[refIdx].Stars;
+            // CCALB-0a: capture the reference frame's WCS (if it was
+            // plate-solved upstream) so we can stamp the output master
+            // with the same coordinates. Without this, the integrated
+            // master loses pointing info and PCC cannot match catalog
+            // stars without re-solving.
+            var refWcs = loaded[refIdx].Img.Properties.Wcs;
             _logger.LogInformation("Integration job {Job}: reference frame {File} ({N} stars)",
                 jobId, loaded[refIdx].Name, refStars.Count);
 
@@ -214,7 +220,12 @@ public class BatchStackingService {
             var props = new ImageProperties {
                 Width = W, Height = H, BitDepth = bitDepth,
                 BayerPattern = NINA.Core.Enum.BayerPatternEnum.None,
-                IsBayered = false
+                IsBayered = false,
+                // CCALB-0a: carry WCS forward so the master is plate-
+                // solved already from PCC's perspective. Non-reference
+                // frames get resampled onto the reference's grid, so
+                // the reference's WCS is correct for the output.
+                Wcs = refWcs,
             };
             // Reuse the metadata from the original first input we kept
             // (target name + camera + observer survive); flag as
