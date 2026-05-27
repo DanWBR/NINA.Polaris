@@ -626,9 +626,14 @@ Bookworm blocks system-wide `pip install` per PEP 668):
 cd ~
 mkdir -p indiweb && cd indiweb
 pipenv --python=$(which python3)
-pipenv install indiweb
+pipenv install indiweb legacy-cgi
 pipenv --venv
 ```
+
+The `legacy-cgi` PyPI package backports the `cgi` stdlib module that
+Python 3.13 removed. indi-web's vendored `bottle.py` imports `cgi`
+unconditionally and dies at startup without this on Python 3.13+
+(Pi OS images shipped after late 2025).
 
 `pipenv --venv` prints something like
 `/home/polaris/.local/share/virtualenvs/indiweb-AbCd1234`. Note that

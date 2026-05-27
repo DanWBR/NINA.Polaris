@@ -181,6 +181,23 @@ directory", fix one of:
 - Move the Polaris systemd unit to run as the user who DOES own
   the venv (edit `User=` in `/etc/systemd/system/polaris.service`)
 
+**Start failed with `ModuleNotFoundError: No module named 'cgi'`.**
+Python 3.13 removed the `cgi` module from the standard library, but
+indi-web's vendored `bottle.py` still does `import cgi` at the top.
+Fix by installing the PyPI backport into the same venv:
+
+```bash
+sudo /opt/polaris-indiweb-venv/bin/pip install legacy-cgi
+sudo systemctl restart polaris.service
+```
+
+Path is `/opt/polaris-indiweb-venv/` when installed via the Polaris
+.deb, or `~/.local/share/virtualenvs/indiweb-XXXX/` for a pipenv
+install. This bites every install on Pi OS images shipped after
+late 2025 which moved to Python 3.13 as the default; the .deb
+postinst installs `legacy-cgi` automatically, so this only
+affects users who set up indi-web manually.
+
 **Status flips to "Stopped" right after I click ▶ Start.**
 The child process spawned but died before the TCP probe could
 catch it. Check `journalctl -u polaris -f` (or wherever your log

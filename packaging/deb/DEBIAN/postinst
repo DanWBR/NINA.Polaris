@@ -62,7 +62,15 @@ case "$1" in
                 if ! $INDIWEB_VENV/bin/pip install --quiet indiweb; then
                     echo "polaris: WARNING indi-web pip install failed, embedded INDI manager will not work" >&2
                     echo "polaris: most likely no internet during install; retry with:" >&2
-                    echo "polaris:   sudo $INDIWEB_VENV/bin/pip install indiweb" >&2
+                    echo "polaris:   sudo $INDIWEB_VENV/bin/pip install indiweb legacy-cgi" >&2
+                fi
+                # Python 3.13 removed the 'cgi' stdlib module that
+                # indi-web's vendored bottle.py imports unconditionally.
+                # legacy-cgi is a PyPI backport that registers the
+                # 'cgi' module name and makes the import succeed.
+                # Harmless on Python 3.12 and earlier.
+                if ! $INDIWEB_VENV/bin/pip install --quiet legacy-cgi; then
+                    echo "polaris: WARNING legacy-cgi install failed; indi-web may fail to start on Python 3.13+" >&2
                 fi
             fi
         fi
