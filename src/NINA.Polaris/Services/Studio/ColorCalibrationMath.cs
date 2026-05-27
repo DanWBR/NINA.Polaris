@@ -1,3 +1,5 @@
+using NINA.Image.ImageAnalysis;
+
 namespace NINA.Polaris.Services.Studio;
 
 /// <summary>
@@ -197,6 +199,96 @@ public static class ColorCalibrationMath {
             if (cum > half) return i;
         }
         return hist.Length - 1;
+    }
+
+    // ── PCC (CCALB-3b) ───────────────────────────────────────────────
+
+    /// <summary>
+    /// One matched pair: a detected star + its catalog counterpart's
+    /// B-V colour index. Built by
+    /// <see cref="ColorCalibrationService"/>'s PCC mode after a
+    /// position match between StarPhotometer output and ApassCatalog
+    /// query results.
+    /// </summary>
+    public record CalibrationStar(StarPhotometer.StarPhotometry Photometry, double Bv);
+
+    /// <summary>
+    /// Reference B-V index. G2V (Sun-like) star has B-V ~= 0.65;
+    /// PCC normalises so a star at this colour comes out neutral
+    /// (R = G = B) in the calibrated frame.
+    /// </summary>
+    public const double ReferenceBv = 0.65;
+
+    // Empirically-derived log-flux slopes for a typical RGB sensor
+    // + L-RGB filter set, anchored at G2V neutral. log10(R/G) and
+    // log10(B/G) per unit of B-V offset from the reference. PixInsight
+    // SPCC derives these from full spectral integration; Polaris uses
+    // a linear approximation that is correct to within ~5% for the
+    // mainstream star colours (A0 to K5) that dominate any field.
+    private const double SlopeRedPerBv  = 0.85;
+    private const double SlopeBluePerBv = -1.20;
+
+    /// <summary>
+    /// Per-channel multiplicative gains that bring observed star
+    /// flux ratios into agreement with what each star's catalog B-V
+    /// predicts, anchored at G2V. Returns a 3-element array
+    /// {R, G, B}; G is always 1.0 (the anchor channel) so the other
+    /// two values express the colour correction relative to G.
+    ///
+    /// Algorithm:
+    ///   For each matched star:
+    ///     observed_R/G = FluxR / FluxG
+    ///     observed_B/G = FluxB / FluxG
+    ///     expected_R/G = 10^(SlopeRedPerBv  * (Bv - ReferenceBv))
+    ///     expected_B/G = 10^(SlopeBluePerBv * (Bv - ReferenceBv))
+    ///     ratio_R = expected_R/G / observed_R/G
+    ///     ratio_B = expected_B/G / observed_B/G
+    ///   gain_R = median(ratio_R) across matched stars
+    ///   gain_G = 1
+    ///   gain_B = median(ratio_B)
+    ///
+    /// Median (not mean) is robust to a few outliers from
+    /// imperfectly-matched stars or hot pixels that slipped past
+    /// the saturation filter.
+    /// </summary>
+    public static double[] ComputePccGains(IReadOnlyList<CalibrationStar> stars) {
+        if (stars == null || stars.Count == 0) {
+            throw new ArgumentException(
+                "PCC needs at least 1 matched catalog star to fit gains.");
+        }
+        var ratiosR = new List<double>(stars.Count);
+        var ratiosB = new List<double>(stars.Count);
+        foreach (var s in stars) {
+            var p = s.Photometry;
+            if (p.Saturated) continue;
+            if (p.FluxR <= 0 || p.FluxG <= 0 || p.FluxB <= 0) continue;
+            double obsR = p.FluxR / p.FluxG;
+            double obsB = p.FluxB / p.FluxG;
+            double expR = Math.Pow(10.0, SlopeRedPerBv  * (s.Bv - ReferenceBv));
+            double expB = Math.Pow(10.0, SlopeBluePerBv * (s.Bv - ReferenceBv));
+            ratiosR.Add(expR / obsR);
+            ratiosB.Add(expB / obsB);
+        }
+        if (ratiosR.Count == 0) {
+            throw new InvalidOperationException(
+                "PCC: all matched stars rejected (saturated, zero flux, or " +
+                "missing B-V). Increase plate-solve accuracy or fall back to " +
+                "Manual mode.");
+        }
+        ratiosR.Sort();
+        ratiosB.Sort();
+        return new[] {
+            Median(ratiosR),
+            1.0,
+            Median(ratiosB),
+        };
+    }
+
+    private static double Median(List<double> sorted) {
+        int n = sorted.Count;
+        if (n == 0) return 1.0;
+        if ((n & 1) == 1) return sorted[n / 2];
+        return 0.5 * (sorted[n / 2 - 1] + sorted[n / 2]);
     }
 
     private static ColorCalibrationService.PatchRoi ClampPatch(

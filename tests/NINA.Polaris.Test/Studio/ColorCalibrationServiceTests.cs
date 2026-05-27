@@ -1,9 +1,12 @@
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using NINA.Image.FileFormat.FITS;
 using NINA.Image.ImageData;
 using NINA.Polaris.Services;
+using NINA.Polaris.Services.Sky;
 using NINA.Polaris.Services.Studio;
 
 namespace NINA.Polaris.Test.Studio;
@@ -36,8 +39,29 @@ public class ColorCalibrationServiceTests {
 
         _library = new FrameLibraryService(_profile, cfg,
             NullLogger<FrameLibraryService>.Instance);
-        _svc = new ColorCalibrationService(_library, _profile,
+        // Real ApassCatalog pointed at an empty directory so its
+        // IsAvailable returns false. PCC tests exercise this path
+        // (the "catalog missing" error). BG + Manual tests don't
+        // touch the catalog at all.
+        var env = new FakeWebHostEnvironment(_tmpRoot);
+        var catalog = new ApassCatalog(env, NullLogger<ApassCatalog>.Instance);
+        _svc = new ColorCalibrationService(_library, _profile, catalog,
             NullLogger<ColorCalibrationService>.Instance);
+    }
+
+    private sealed class FakeWebHostEnvironment : IWebHostEnvironment {
+        public FakeWebHostEnvironment(string root) {
+            ContentRootPath = root;
+            WebRootPath = root;
+            ContentRootFileProvider = new NullFileProvider();
+            WebRootFileProvider = new NullFileProvider();
+        }
+        public string EnvironmentName { get; set; } = "Test";
+        public string ApplicationName { get; set; } = "NINA.Polaris.Test";
+        public string ContentRootPath { get; set; }
+        public IFileProvider ContentRootFileProvider { get; set; }
+        public string WebRootPath { get; set; }
+        public IFileProvider WebRootFileProvider { get; set; }
     }
 
     [TearDown]
@@ -203,10 +227,96 @@ public class ColorCalibrationServiceTests {
         });
     }
 
-    // ─── PCC not yet implemented ─────────────────────────────────────
+    // ─── PCC math (ComputePccGains) ─────────────────────────────────
 
     [Test]
-    public async Task Photometric_NotYetImplemented_FailsCleanly() {
+    public void Pcc_ComputeGains_ReferenceG2v_ReturnsIdentity() {
+        // A single matched star with the reference B-V (~0.65) and
+        // observed R = G = B should produce gains of (1, 1, 1):
+        // the star already appears neutral, no correction needed.
+        var phot = new NINA.Image.ImageAnalysis.StarPhotometer.StarPhotometry(
+            X: 100, Y: 100, HFR: 2.5,
+            FluxR: 10000, FluxG: 10000, FluxB: 10000,
+            BackgroundR: 100, BackgroundG: 100, BackgroundB: 100,
+            PixelCount: 30, ApertureRadius: 5, Saturated: false);
+        var stars = new List<ColorCalibrationMath.CalibrationStar> {
+            new(phot, ColorCalibrationMath.ReferenceBv),
+        };
+        var gains = ColorCalibrationMath.ComputePccGains(stars);
+        Assert.That(gains[0], Is.EqualTo(1.0).Within(0.001));
+        Assert.That(gains[1], Is.EqualTo(1.0).Within(0.001));
+        Assert.That(gains[2], Is.EqualTo(1.0).Within(0.001));
+    }
+
+    [Test]
+    public void Pcc_ComputeGains_ObservedTooBlue_BoostsRedDimsBlue() {
+        // A G2V-coloured star (B-V=0.65) that we observed with too
+        // much blue and too little red should yield gain_R > 1 and
+        // gain_B < 1, pulling the image back toward neutral.
+        var phot = new NINA.Image.ImageAnalysis.StarPhotometer.StarPhotometry(
+            X: 100, Y: 100, HFR: 2.5,
+            FluxR: 5000, FluxG: 10000, FluxB: 20000,   // way too blue
+            BackgroundR: 0, BackgroundG: 0, BackgroundB: 0,
+            PixelCount: 30, ApertureRadius: 5, Saturated: false);
+        var stars = new List<ColorCalibrationMath.CalibrationStar> {
+            new(phot, ColorCalibrationMath.ReferenceBv),
+        };
+        var gains = ColorCalibrationMath.ComputePccGains(stars);
+        Assert.That(gains[0], Is.GreaterThan(1.0),
+            $"Too-dim R should be boosted (gain > 1), got {gains[0]:F3}");
+        Assert.That(gains[1], Is.EqualTo(1.0).Within(0.001));
+        Assert.That(gains[2], Is.LessThan(1.0),
+            $"Too-bright B should be dimmed (gain < 1), got {gains[2]:F3}");
+    }
+
+    [Test]
+    public void Pcc_ComputeGains_SaturatedStarsIgnored() {
+        // Mix of one saturated star (should be dropped) and three
+        // valid neutral-coloured ones. Result should still be
+        // identity gains.
+        var saturated = new NINA.Image.ImageAnalysis.StarPhotometer.StarPhotometry(
+            X: 0, Y: 0, HFR: 3, FluxR: 0, FluxG: 0, FluxB: 0,
+            BackgroundR: 0, BackgroundG: 0, BackgroundB: 0,
+            PixelCount: 0, ApertureRadius: 0, Saturated: true);
+        var good = new NINA.Image.ImageAnalysis.StarPhotometer.StarPhotometry(
+            X: 100, Y: 100, HFR: 2.5,
+            FluxR: 10000, FluxG: 10000, FluxB: 10000,
+            BackgroundR: 0, BackgroundG: 0, BackgroundB: 0,
+            PixelCount: 30, ApertureRadius: 5, Saturated: false);
+        var stars = new List<ColorCalibrationMath.CalibrationStar> {
+            new(saturated, ColorCalibrationMath.ReferenceBv),
+            new(good, ColorCalibrationMath.ReferenceBv),
+            new(good, ColorCalibrationMath.ReferenceBv),
+            new(good, ColorCalibrationMath.ReferenceBv),
+        };
+        var gains = ColorCalibrationMath.ComputePccGains(stars);
+        Assert.That(gains[0], Is.EqualTo(1.0).Within(0.001));
+        Assert.That(gains[2], Is.EqualTo(1.0).Within(0.001));
+    }
+
+    [Test]
+    public void Pcc_ComputeGains_NoValidStars_Throws() {
+        // All stars saturated, or all with zero flux: nothing to fit.
+        var bad = new NINA.Image.ImageAnalysis.StarPhotometer.StarPhotometry(
+            X: 0, Y: 0, HFR: 3, FluxR: 0, FluxG: 0, FluxB: 0,
+            BackgroundR: 0, BackgroundG: 0, BackgroundB: 0,
+            PixelCount: 0, ApertureRadius: 0, Saturated: true);
+        var stars = new List<ColorCalibrationMath.CalibrationStar> {
+            new(bad, 0.65), new(bad, 0.65),
+        };
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            ColorCalibrationMath.ComputePccGains(stars));
+        Assert.That(ex!.Message, Does.Contain("matched").IgnoreCase
+            .Or.Contain("rejected").IgnoreCase);
+    }
+
+    // ─── PCC pre-flight gates ────────────────────────────────────────
+
+    [Test]
+    public async Task Photometric_NoWcs_FailsWithPlateSolveHint() {
+        // Source has no WCS in the FITS headers. PCC should fail
+        // loudly with a hint pointing the user at the Solve step
+        // rather than silently producing garbage gains.
         var id = SeedRgbFits(32, 32, bgR: 100, bgG: 100, bgB: 100,
             starPeakR: 0, starPeakG: 0, starPeakB: 0);
         await _library.RescanAsync();
@@ -216,8 +326,9 @@ public class ColorCalibrationServiceTests {
         var status = await WaitForJob(jobId, TimeSpan.FromSeconds(5));
 
         Assert.That(status.Stage, Is.EqualTo("error"));
-        Assert.That(status.Error, Does.Contain("CCALB-3").IgnoreCase
-            .Or.Contain("Photometric").IgnoreCase);
+        Assert.That(status.Error, Does.Contain("WCS").IgnoreCase
+            .Or.Contain("plate-solve").IgnoreCase
+            .Or.Contain("plate solve").IgnoreCase);
     }
 
     // ─── input validation ───────────────────────────────────────────

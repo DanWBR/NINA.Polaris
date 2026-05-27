@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using System.Globalization;
 using NINA.Image.FileFormat.FITS;
+using NINA.Image.ImageAnalysis;
 using NINA.Image.ImageData;
+using NINA.Polaris.Services.Sky;
 
 namespace NINA.Polaris.Services.Studio;
 
@@ -31,13 +33,16 @@ namespace NINA.Polaris.Services.Studio;
 public class ColorCalibrationService {
     private readonly FrameLibraryService _library;
     private readonly ProfileService _profile;
+    private readonly ApassCatalog _catalog;
     private readonly ILogger<ColorCalibrationService> _logger;
     private readonly ConcurrentDictionary<string, ColorCalibrationProgress> _jobs = new();
 
     public ColorCalibrationService(FrameLibraryService library, ProfileService profile,
+                                   ApassCatalog catalog,
                                    ILogger<ColorCalibrationService> logger) {
         _library = library;
         _profile = profile;
+        _catalog = catalog;
         _logger = logger;
     }
 
@@ -136,10 +141,15 @@ public class ColorCalibrationService {
                         img.Data, W, H, req.WhitePatch!, offsets);
                     prefix = "ccal";
                     break;
-                case Modes.Photometric:
-                    throw new NotImplementedException(
-                        "Photometric color calibration ships in CCALB-3. " +
-                        "Use BG neutralisation or Manual mode for now.");
+                case Modes.Photometric: {
+                    var pcc = RunPhotometric(img, W, H);
+                    offsets = pcc.offsets;
+                    gains = pcc.gains;
+                    _jobs[jobId] = _jobs[jobId] with {
+                        MatchedStars = pcc.matchedCount };
+                    prefix = "pcc";
+                    break;
+                }
                 default:
                     throw new ArgumentException(
                         $"Unknown color-calibration mode '{req.Mode}'. " +
@@ -249,6 +259,118 @@ public class ColorCalibrationService {
 
     private static string Fmt(double d)
         => d.ToString("0.####", CultureInfo.InvariantCulture);
+
+    // ── PCC orchestration ────────────────────────────────────────────
+
+    /// <summary>
+    /// Run the full Photometric Color Calibration pipeline on a 3-
+    /// channel master. Stages: WCS check, catalog check, star detect,
+    /// per-channel photometry, catalog query, star match, gain fit,
+    /// BG neutralisation (so the final output also has a neutral
+    /// background). Returns (offsets, gains, matchedCount) so the
+    /// caller's apply step is unchanged from the BG and Manual modes.
+    /// </summary>
+    private (double[] offsets, double[] gains, int matchedCount) RunPhotometric(
+            BaseImageData img, int W, int H) {
+        // ── 1. Pre-flight: WCS in FITS ────────────────────────────────
+        var wcs = img.Properties.Wcs;
+        if (wcs == null) {
+            throw new InvalidOperationException(
+                "PCC: source FITS has no WCS (plate-solve) headers. " +
+                "Solve the source first via STUDIO -> Solve, or re-run " +
+                "the integration with plate-solve enabled.");
+        }
+        // ── 2. Pre-flight: catalog available ──────────────────────────
+        if (!_catalog.IsAvailable) {
+            throw new InvalidOperationException(
+                "PCC: APASS catalog is not installed. Run " +
+                "`python scripts/download-apass.py` on the server " +
+                "(~80 MB download), then retry.");
+        }
+
+        // ── 3. Detect stars + measure per-channel photometry ──────────
+        int n = W * H;
+        // Star detection runs on the green channel only (highest SNR
+        // for a typical broadband filter set + matches Siril's
+        // approach). Slice out the G plane into its own buffer.
+        var greenPlane = new ushort[n];
+        Array.Copy(img.Data, n, greenPlane, 0, n);
+        var detector = new StarDetector {
+            SigmaThreshold = 7.0,   // masters have high SNR, raise from default 5
+            MaxStarSize = 80,
+        };
+        var stars = detector.Detect(greenPlane, W, H);
+        if (stars.Count < 5) {
+            throw new InvalidOperationException(
+                $"PCC: only {stars.Count} stars detected on the green " +
+                "channel. PCC needs at least 5; check focus + exposure.");
+        }
+        var phots = StarPhotometer.MeasureRgb(img.Data, W, H, stars);
+
+        // ── 4. Catalog cone search ────────────────────────────────────
+        // Field-of-view radius: half the diagonal in degrees. CD
+        // matrix's CD22 is degrees per pixel, so |CD22| * (H/2)
+        // approximates the vertical extent; pad ~20% for safety.
+        double fovDegV = Math.Abs(wcs.CD22) * H;
+        double fovDegH = Math.Abs(wcs.CD11) * W;
+        double radius = 1.2 * Math.Sqrt(fovDegV * fovDegV + fovDegH * fovDegH) / 2.0;
+        var catalogTask = _catalog.QueryRegionAsync(
+            wcs.RaDeg, wcs.DecDeg, radius, magLimit: 13.0);
+        var catalogStars = catalogTask.GetAwaiter().GetResult();
+
+        // ── 5. Match catalog stars to detected stars ──────────────────
+        // For each catalog star with valid B-V, project to pixel space
+        // and find the nearest detected star within 3 px.
+        var matched = new List<ColorCalibrationMath.CalibrationStar>();
+        const double matchRadiusPx = 3.0;
+        foreach (var c in catalogStars) {
+            if (c.Bv == null) continue;
+            var (px, py) = wcs.RaDecToPixel(c.Ra, c.Dec);
+            if (double.IsNaN(px) || double.IsNaN(py)) continue;
+            // Find nearest detected star within radius.
+            StarPhotometer.StarPhotometry? best = null;
+            double bestDist2 = matchRadiusPx * matchRadiusPx;
+            foreach (var p in phots) {
+                if (p.Saturated) continue;
+                double dx = p.X - px;
+                double dy = p.Y - py;
+                double d2 = dx * dx + dy * dy;
+                if (d2 <= bestDist2) {
+                    bestDist2 = d2;
+                    best = p;
+                }
+            }
+            if (best != null) {
+                matched.Add(new ColorCalibrationMath.CalibrationStar(
+                    Photometry: best, Bv: c.Bv.Value));
+            }
+        }
+        if (matched.Count < 5) {
+            throw new InvalidOperationException(
+                $"PCC: only {matched.Count} catalog stars matched to " +
+                $"detected stars (need >= 5). Detected {phots.Count} stars " +
+                $"in image, found {catalogStars.Count} catalog stars in FOV " +
+                "with valid B-V. Increase plate-solve accuracy, increase " +
+                "exposure, or fall back to Manual mode.");
+        }
+
+        // ── 6. Fit per-channel gains ──────────────────────────────────
+        var gains = ColorCalibrationMath.ComputePccGains(matched);
+
+        // ── 7. BG offsets via auto-detect so the final output is also
+        //      background-neutral. PCC fixes star colours, BG neut
+        //      fixes the sky pedestal; both are needed for a clean
+        //      output.
+        var offsets = ColorCalibrationMath.ComputeBgOffsets(
+            img.Data, W, H, "auto", null, zeroBackground: true);
+
+        _logger.LogInformation(
+            "PCC: {Matched} matched stars, gains R={Gr:F3} G=1 B={Gb:F3}, " +
+            "BG offsets R={Or:F1} G={Og:F1} B={Ob:F1}",
+            matched.Count, gains[0], gains[2], offsets[0], offsets[1], offsets[2]);
+
+        return (offsets, gains, matched.Count);
+    }
 }
 
 public record ColorCalibrationProgress {
