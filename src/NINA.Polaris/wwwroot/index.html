@@ -289,7 +289,9 @@
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><ellipse cx="12" cy="12" rx="10" ry="4" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="12" y1="2" x2="12" y2="22" stroke="currentColor" stroke-width="1.5"/></svg>
                 <span class="nav-label">Sky</span>
             </button>
-            <button class="nav-btn" :class="{ active: tab === 'guide' }" @click="tab = 'guide'" title="Guider">
+            <button class="nav-btn" :class="{ active: tab === 'guide' }"
+                    @click="tab = 'guide'; if (guideTab === 'gui') loadPhd2GuiStatus()"
+                    title="Guider">
                 <svg viewBox="0 0 24 24" width="22" height="22"><polygon points="12,2 15,10 23,10 17,15 19,23 12,18 5,23 7,15 1,10 9,10" fill="none" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Guide</span>
             </button>
@@ -1504,14 +1506,18 @@
                           x-text="guider.connected ? guider.appState : 'Disconnected'"></span>
                 </div>
 
-                <!-- Tabstrip: Control (existing JSON-RPC UI + smart calibrate + presets)
-                     | PHD2 GUI (iframe via reverse-proxy to xpra HTML5 client).
-                     guideTab state is on app.js (default 'control'). -->
+                <!-- Tabstrip: PHD2 GUI (iframe via reverse-proxy to xpra HTML5 client)
+                     | Control (JSON-RPC UI + smart calibrate + presets).
+                     GUI tab is first because that is where the user spends
+                     setup time (Connect Equipment, Loop, select star, manual
+                     calibration); Control is for monitoring + automation
+                     after PHD2 is already running.
+                     guideTab state is on app.js (default 'gui'). -->
                 <div class="guide-tabstrip">
-                    <button class="guide-tab" :class="{ active: guideTab === 'control' }"
-                            @click="guideTab = 'control'">Control</button>
                     <button class="guide-tab" :class="{ active: guideTab === 'gui' }"
                             @click="guideTab = 'gui'; loadPhd2GuiStatus()">PHD2 GUI</button>
+                    <button class="guide-tab" :class="{ active: guideTab === 'control' }"
+                            @click="guideTab = 'control'">Control</button>
                     <!-- Profile-sync indicator chip, lives in the strip so
                          it's visible from either tab. -->
                     <span class="profile-sync-indicator" x-show="guider.profileSync"

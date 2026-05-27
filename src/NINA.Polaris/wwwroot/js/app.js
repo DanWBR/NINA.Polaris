@@ -524,9 +524,10 @@ function ninaApp() {
         phd2Install: null,      // /install-info response: { installed, resolvedPath, downloadUrl, os, ... }
         phd2AutoStart: false,   // bound to checkbox, posted to /api/guider/auto-start/{bool}
 
-        // PH2X tab + state. guideTab toggles between the existing
-        // JSON-RPC control panel and the xpra-hosted GUI iframe.
-        guideTab: 'control',
+        // PH2X tab + state. guideTab toggles between the xpra-hosted GUI
+        // iframe (default; setup work happens there) and the JSON-RPC
+        // control panel (monitoring + automation).
+        guideTab: 'gui',
         phd2AlgoPresetNames: [],
         phd2ActivePreset: 'Default',
         phd2AlgoParams: null,            // { axes: { ra: {Hyst:0.1, ...}, dec: {...} } }
