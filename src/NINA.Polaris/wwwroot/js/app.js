@@ -667,6 +667,7 @@ function ninaApp() {
                 bgSample: 'auto',        // 'auto' | 'patch'
                 bgPatch:    { x: 0, y: 0, w: 64, h: 64 },
                 whitePatch: { x: 0, y: 0, w: 64, h: 64 },
+                catalogStatus: null,     // populated by studioOpenColorCalDialog
                 lastJob: null
             }
         },
@@ -3831,7 +3832,15 @@ function ninaApp() {
             this.studio.colorCal.bgSample = 'auto';
             this.studio.colorCal.activeTab = 'bg';
             this.studio.colorCal.lastJob = null;
+            this.studio.colorCal.catalogStatus = null;
             this.studio.colorCal.open = true;
+            // CCALB-3c: kick off the PCC pre-flight fetch in the
+            // background. Cheap (single GET) + lets the PCC tab
+            // render its catalog badge without waiting for the user
+            // to click the tab first.
+            this.apiGet('/api/studio/colorcal/catalog-status')
+                .then(s => { this.studio.colorCal.catalogStatus = s; })
+                .catch(() => { /* badge stays in 'unknown' state, fine */ });
         },
 
         studioCloseColorCalDialog() {
@@ -3901,8 +3910,15 @@ function ninaApp() {
                             this._studioColorCalPoll = null;
                             this.studio.colorCal.running = false;
                             if (s.stage === 'done') {
-                                this.toast?.(
-                                    `Color calibration done: ${s.outputPath}`, 'ok');
+                                let msg = 'Color calibration done';
+                                if (s.matchedStars > 0) {
+                                    msg += `: ${s.matchedStars} stars matched`;
+                                }
+                                if (s.gainR != null) {
+                                    msg += `, gains R=${s.gainR.toFixed(2)} ` +
+                                           `G=${s.gainG.toFixed(2)} B=${s.gainB.toFixed(2)}`;
+                                }
+                                this.toast?.(msg, 'ok');
                                 this.loadStudio();
                             } else if (s.stage === 'error') {
                                 this.toast?.(

@@ -4898,19 +4898,38 @@
                             <!-- PCC tab -->
                             <div x-show="studio.colorCal.activeTab === 'pcc'" class="combine-tab-body">
                                 <div class="muted" style="font-size:12px;margin-bottom:8px">
-                                    Photometric Color Calibration. Plate-solves the source,
-                                    looks up stars in the bundled APASS catalog, and fits
-                                    per-channel gains so star colours match their catalog
-                                    B-V values. Catalog-driven, science-grade. Output:
+                                    Photometric Color Calibration. Looks up stars in the
+                                    bundled APASS catalog and fits per-channel gains so
+                                    star colours match their catalog B-V values. Output:
                                     <code>{stem}_pcc.fits</code>.
                                 </div>
-                                <div class="muted" style="font-size:11px;padding:8px;
-                                                          background:var(--bg-secondary);
-                                                          border-radius:4px">
-                                    PCC ships in CCALB-3 (next commit batch). Running it
-                                    today will fail with a clear error so the wiring is
-                                    proven end-to-end; come back after the catalog +
-                                    photometry work lands.
+                                <!-- Pre-flight badges -->
+                                <div style="font-size:11px;padding:8px;
+                                            background:var(--bg-secondary);
+                                            border-radius:4px;line-height:1.6">
+                                    <strong>Catalog:</strong>
+                                    <template x-if="studio.colorCal.catalogStatus === null">
+                                        <span class="muted">checking...</span>
+                                    </template>
+                                    <template x-if="studio.colorCal.catalogStatus &&
+                                                    studio.colorCal.catalogStatus.available">
+                                        <span style="color:#86efac">
+                                            ✓ <span x-text="studio.colorCal.catalogStatus.source"></span>
+                                            (<span x-text="studio.colorCal.catalogStatus.starCount.toLocaleString()"></span> stars)
+                                        </span>
+                                    </template>
+                                    <template x-if="studio.colorCal.catalogStatus &&
+                                                    !studio.colorCal.catalogStatus.available">
+                                        <span style="color:#fcd34d">
+                                            ⚠ not installed, run
+                                            <code style="font-size:10px">python scripts/download-apass.py</code>
+                                            on the server (~80 MB download)
+                                        </span>
+                                    </template>
+                                    <br/>
+                                    <strong>WCS in source FITS:</strong>
+                                    <span class="muted">checked server-side at run time, an actionable
+                                        error will surface if the source is not plate-solved.</span>
                                 </div>
                             </div>
 
@@ -4930,6 +4949,10 @@
                                     R=<span x-text="(studio.colorCal.lastJob?.offsetR ?? 0).toFixed(1)"></span>
                                     G=<span x-text="(studio.colorCal.lastJob?.offsetG ?? 0).toFixed(1)"></span>
                                     B=<span x-text="(studio.colorCal.lastJob?.offsetB ?? 0).toFixed(1)"></span>
+                                    <span x-show="studio.colorCal.lastJob?.matchedStars > 0">
+                                        · <strong x-text="studio.colorCal.lastJob.matchedStars"></strong>
+                                        matched stars
+                                    </span>
                                 </div>
                                 <div style="color:#ff9c66;font-size:12px"
                                      x-show="studio.colorCal.lastJob?.error"
