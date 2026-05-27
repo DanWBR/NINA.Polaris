@@ -7,6 +7,7 @@ using System.Diagnostics;
 using NINA.Image.Editor;
 using NINA.Polaris.Services;
 using NINA.Polaris.Services.Editor;
+using NINA.Polaris.Services.PlateSolving;
 using NINA.Polaris.Services.Sky;
 using NINA.Polaris.Services.Studio;
 
@@ -32,11 +33,15 @@ namespace NINA.Polaris.Test.E2E;
 ///
 /// What this fixture does not exercise (intentional):
 ///   - GraXpert ONNX, browser-only pipeline.
-///   - PCC color calibration, needs the bundled APASS DB.
-///   - ASTAP plate-solve, needs the binary installed.
 ///   - Editor sliders, those are Alpine.js UI; we exercise the
 ///     server-side ImageEditService.LoadAsync + RenderPreviewAsync
 ///     instead.
+///
+/// PCC (Step 09) is conditional: it runs only when ASTAP is on PATH
+/// and an APASS DB has been populated under
+/// <c>src/NINA.Polaris/wwwroot/catalogs/apass/apass.db</c> (via
+/// <c>scripts/download-apass.py</c>). Otherwise the step is
+/// <c>Inconclusive</c> with an actionable message.
 /// </summary>
 [TestFixture, Category("E2E"),
  Explicit("Runs against test_data/, takes minutes per test")]
@@ -59,6 +64,9 @@ public class RealDataPipelineTests {
     private ChannelCombineService _combine = null!;
     private ColorCalibrationService _colorcal = null!;
     private ImageEditService _editor = null!;
+    private PlateSolveService _platesolve = null!;
+    private ApassCatalog _apass = null!;
+    private IConfiguration _cfg = null!;
 
     [OneTimeSetUp]
     public void GlobalSetup() {
@@ -70,17 +78,17 @@ public class RealDataPipelineTests {
         // Override Studio:Directory so the SQLite cache + thumbs land
         // in the temp dir, not in %LocalAppData% where they would
         // pollute the dev's real cache.
-        var cfg = new ConfigurationBuilder()
+        _cfg = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> {
                 ["Studio:Directory"] = _tempStudio
             })
             .Build();
 
-        _profile = new ProfileService(cfg, NullLogger<ProfileService>.Instance);
+        _profile = new ProfileService(_cfg, NullLogger<ProfileService>.Instance);
         _profile.Active.ImageOutputDir = _testDataRoot;
         _profile.ActiveEquipmentProfile.Name = E2eRigName;
 
-        _library = new FrameLibraryService(_profile, cfg,
+        _library = new FrameLibraryService(_profile, _cfg,
             NullLogger<FrameLibraryService>.Instance);
         _masters = new MasterFrameService(_library, _profile,
             NullLogger<MasterFrameService>.Instance);
@@ -91,19 +99,36 @@ public class RealDataPipelineTests {
         _combine = new ChannelCombineService(_library, _profile,
             NullLogger<ChannelCombineService>.Instance);
 
-        // ApassCatalog isn't used here (we don't run PCC), it just
-        // needs a non-null IWebHostEnvironment to construct.
-        var apass = new ApassCatalog(
-            new FakeWebHostEnvironment(_tempStudio),
+        // ApassCatalog points at the real bundled DB (populated by
+        // scripts/download-apass.py against VizieR II/336/apass9). If
+        // the DB is missing, Step 09 (PCC) gates itself Inconclusive.
+        // We resolve the repo-root wwwroot path so the catalog the
+        // production server uses is the catalog the fixture uses.
+        var repoWebRoot = Path.Combine(
+            Directory.GetParent(_testDataRoot)!.FullName,
+            "src", "NINA.Polaris", "wwwroot");
+        _apass = new ApassCatalog(
+            new FakeWebHostEnvironment(repoWebRoot),
             NullLogger<ApassCatalog>.Instance);
-        _colorcal = new ColorCalibrationService(_library, _profile, apass,
+        _colorcal = new ColorCalibrationService(_library, _profile, _apass,
             NullLogger<ColorCalibrationService>.Instance);
         _editor = new ImageEditService(_profile,
             NullLogger<ImageEditService>.Instance);
 
+        // PlateSolveService picks up ASTAP via the default Windows /
+        // Linux path lookup inside AstapSolver. The 2-arg constructor
+        // wires every backend (ASTAP / PS3 / astrometry.net online +
+        // local) with no-op loggers; Step 09 picks the configured
+        // primary (ASTAP by default).
+        _platesolve = new PlateSolveService(_cfg,
+            NullLogger<PlateSolveService>.Instance);
+
         Log($"test_data root: {_testDataRoot}");
         Log($"temp studio:    {_tempStudio}");
         Log($"rig name:       {E2eRigName}");
+        Log($"APASS DB:       {_apass.DbPath} (available={_apass.IsAvailable})");
+        Log($"Plate solver:   {_platesolve.PrimarySolver.DisplayName} " +
+            $"at {_platesolve.SolverPath} (available={_platesolve.IsAvailable})");
         Log($"output:         {_testDataRoot}/{E2eRigName}/...");
     }
 
@@ -328,6 +353,145 @@ public class RealDataPipelineTests {
         Assert.That(hist, Is.Not.Null);
 
         _editor.Release(session.SessionId);
+    }
+
+    [Test, Order(9)]
+    public async Task Step09_PCC_OnSHO_RGB_WithRealAstapAndApass() {
+        // Gate: ASTAP binary present + APASS DB populated. Without
+        // either, mark Inconclusive (not Failed) so devs who haven't
+        // set up the offline catalog or solver don't see red.
+        if (!_platesolve.IsAvailable) {
+            Assert.Inconclusive(
+                "ASTAP not detected. Install from https://www.hnsky.org/astap.htm " +
+                "+ a star database (D50 / H17 / H18).");
+        }
+        if (!_apass.IsAvailable) {
+            Assert.Inconclusive(
+                $"APASS DB not populated at {_apass.DbPath}. " +
+                "Run: python scripts/download-apass.py");
+        }
+        Log($"PCC preflight: ASTAP={_platesolve.SolverPath}");
+        Log($"PCC preflight: APASS={_apass.DbPath} " +
+            $"({_apass.StarCount:N0} stars)");
+
+        // The Polaris pipeline through Step 05 produces a SHO RGB
+        // master but BatchStackingService currently emits an
+        // integrated master that ASTAP cannot plate-solve (~500 stars
+        // detected, zero quads match the catalog — likely a
+        // cross-frame alignment smearing bug; tracked as a separate
+        // task). Until that lands, validate the PCC chain against a
+        // known-plate-solvable input: the Siril-stacked Ha master
+        // shipped in test_data, replicated into a synthetic 3-channel
+        // RGB so PCC has something to compute gains on.
+        var siril = Path.Combine(_testDataRoot,
+            "mono", "M 16", "H", "result_H_3060s.fit");
+        if (!File.Exists(siril)) {
+            Assert.Inconclusive($"Missing reference fixture: {siril}");
+        }
+
+        // Build a synthetic 3-channel RGB from the Siril Ha master.
+        // PCC computes per-channel gains from catalog B-V index; since
+        // all three planes are identical here, the resulting gains
+        // should land close to unity. The point of the test is to
+        // exercise the full chain (ASTAP solve -> WCS stamp ->
+        // catalog cone-search -> per-star photometry -> gain fit ->
+        // FITS write), not the specific gain values.
+        NINA.Image.ImageData.BaseImageData mono;
+        using (var fs = File.OpenRead(siril)) {
+            mono = NINA.Image.FileFormat.FITS.FITSReader.Read(fs);
+        }
+        int w = mono.Properties.Width;
+        int h = mono.Properties.Height;
+        var rgb3 = new ushort[w * h * 3];
+        Array.Copy(mono.Data, 0, rgb3, 0,             w * h);
+        Array.Copy(mono.Data, 0, rgb3, w * h,         w * h);
+        Array.Copy(mono.Data, 0, rgb3, w * h * 2,     w * h);
+
+        var rigDir = Path.Combine(_testDataRoot, E2eRigName);
+        Directory.CreateDirectory(rigDir);
+        var pccSrc = Path.Combine(rigDir,
+            "pcc-synthetic-rgb-" + Guid.NewGuid().ToString("N")[..8] + ".fits");
+        var rgbImg = new NINA.Image.ImageData.BaseImageData(rgb3,
+            mono.Properties with { Channels = 3 },
+            mono.MetaData);
+        NINA.Image.FileFormat.FITS.FITSWriter.Write(rgbImg, pccSrc);
+        Log($"PCC source (synthetic 3-channel from Siril Ha): {pccSrc}");
+
+        // ── Plate-solve the synthetic RGB ─────────────────────────
+        var swSolve = Stopwatch.StartNew();
+        var solveResult = await _platesolve.SolveAsync(pccSrc,
+            new PlateSolveOptions {
+                HintRa = 18.31,        // hours
+                HintDec = -13.78,      // degrees
+                SearchRadiusDeg = 5,
+                FovDeg = 2.0,
+            });
+        Log($"  Plate-solve: {swSolve.Elapsed.TotalSeconds:0.0}s " +
+            $"-> success={solveResult.Success} solver={solveResult.SolverUsed}");
+        Assert.That(solveResult.Success, Is.True,
+            $"Plate-solve of Siril reference failed: {solveResult.Error}");
+        Log($"     RA={solveResult.RaHours:0.0000}h " +
+            $"Dec={solveResult.DecDeg:+0.0000;-0.0000}deg " +
+            $"scale={solveResult.ScaleArcsecPerPixel:0.00}\"/px " +
+            $"rot={solveResult.RotationDeg:0.0}deg");
+
+        // AstapSolver's proxy path wrote WCS back into the synthetic
+        // 3-channel FITS. Reindex so FrameLibrary sees the updated
+        // headers, then resolve the row id PCC needs. The global
+        // query caps at 500 rows ordered by date_obs DESC; our
+        // synthetic master has no DATE-OBS so it sorts to the bottom
+        // and falls outside the window when test_data has many older
+        // captures. Query by image_type instead so we only see
+        // calibration outputs.
+        await _library.RescanAsync();
+        FrameRow? rgbSolved = null;
+        foreach (var type in new[] { "Light", "MASTERLIGHT", "MASTERCAL", "MASTER" }) {
+            rgbSolved = _library.Query(new FrameQuery(
+                    Type: type, Filter: null, Target: null,
+                    DateFrom: null, DateTo: null, Limit: 500, Offset: 0))
+                .FirstOrDefault(f => string.Equals(f.Path, pccSrc,
+                    StringComparison.OrdinalIgnoreCase));
+            if (rgbSolved != null) break;
+        }
+        if (rgbSolved == null) {
+            // Last-resort path probe: re-rescan once more and search
+            // unfiltered. If still missing we have a real indexing
+            // bug, fail loud with the path so we can grep for it.
+            await _library.RescanAsync();
+            var allRows = _library.Query(new FrameQuery(
+                null, null, null, null, null, 500, 0));
+            Log($"  rescan saw {allRows.Count} rows; sample paths:");
+            foreach (var r in allRows.Take(5)) Log($"    {r.ImageType}: {r.Path}");
+            Assert.Fail($"Synthetic RGB master not indexed after rescan: {pccSrc}");
+        }
+
+        // ── Run PCC against the plate-solved synthetic RGB ────────
+        var swPcc = Stopwatch.StartNew();
+        var pccJobId = _colorcal.StartJob(
+            new ColorCalibrationService.ColorCalibrationRequest(
+                FrameId: rgbSolved.Id,
+                Mode: ColorCalibrationService.Modes.Photometric,
+                BgSample: "auto"));
+        var pcc = await WaitFor(() => _colorcal.GetStatus(pccJobId),
+            TimeSpan.FromMinutes(5), "ColorCal PCC");
+        Log($"  PCC: {swPcc.Elapsed.TotalSeconds:0.0}s " +
+            $"-> stage={pcc.Stage}");
+        Assert.That(pcc.Stage, Is.EqualTo("done"),
+            $"PCC failed: {pcc.Error}");
+        Log($"     -> {pcc.OutputPath}");
+        Log($"     matched stars: {pcc.MatchedStars}");
+        Log($"     offsets R={pcc.OffsetR:0.0} G={pcc.OffsetG:0.0} B={pcc.OffsetB:0.0}");
+        Log($"     gains   R={pcc.GainR:0.000} G={pcc.GainG:0.000} B={pcc.GainB:0.000}");
+
+        Assert.That(pcc.OutputPath, Is.Not.Null.And.Not.Empty);
+        Assert.That(File.Exists(pcc.OutputPath!), Is.True);
+        // M 16 field is dense; APASS DR9 capped at Vmag <= 13 covers
+        // a few hundred stars in a 2° FOV. Demand at least 10
+        // matched (the PCC code requires >=5 to fit a gain at all,
+        // but 10 is the threshold below which the result is too
+        // noisy to be useful).
+        Assert.That(pcc.MatchedStars, Is.GreaterThanOrEqualTo(10),
+            "Expected at least 10 matched APASS stars in M 16 field");
     }
 
     // ─── helpers ─────────────────────────────────────────────────────

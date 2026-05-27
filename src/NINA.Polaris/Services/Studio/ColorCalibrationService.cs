@@ -308,11 +308,20 @@ public class ColorCalibrationService {
         var phots = StarPhotometer.MeasureRgb(img.Data, W, H, stars);
 
         // ── 4. Catalog cone search ────────────────────────────────────
-        // Field-of-view radius: half the diagonal in degrees. CD
-        // matrix's CD22 is degrees per pixel, so |CD22| * (H/2)
-        // approximates the vertical extent; pad ~20% for safety.
-        double fovDegV = Math.Abs(wcs.CD22) * H;
-        double fovDegH = Math.Abs(wcs.CD11) * W;
+        // Field-of-view radius: half the diagonal in degrees. The
+        // pixel scale isn't |CD22| / |CD11| alone — those are only
+        // the diagonal entries of the rotation+scale matrix, and at
+        // rotations near 90° both go to zero while the off-diagonal
+        // (CD12/CD21) carries the actual scale. Use the column
+        // norms so rotation drops out:
+        //   xScale = sqrt(CD11² + CD21²)   (deg per pixel along X)
+        //   yScale = sqrt(CD12² + CD22²)   (deg per pixel along Y)
+        // Pad ~20% so a slight rotation slop doesn't trim catalog
+        // stars from the cone.
+        double xScale = Math.Sqrt(wcs.CD11 * wcs.CD11 + wcs.CD21 * wcs.CD21);
+        double yScale = Math.Sqrt(wcs.CD12 * wcs.CD12 + wcs.CD22 * wcs.CD22);
+        double fovDegH = xScale * W;
+        double fovDegV = yScale * H;
         double radius = 1.2 * Math.Sqrt(fovDegV * fovDegV + fovDegH * fovDegH) / 2.0;
         var catalogTask = _catalog.QueryRegionAsync(
             wcs.RaDeg, wcs.DecDeg, radius, magLimit: 13.0);

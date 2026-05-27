@@ -66,11 +66,14 @@ public class PlateSolveService {
 
     public async Task<PlateSolveResult> SolveAsync(string fitsPath, PlateSolveOptions options, CancellationToken ct = default) {
         var primary = PrimarySolver;
+        string? primaryError = null;
         if (primary.IsAvailable) {
             var result = await primary.SolveAsync(fitsPath, options, ct);
             if (result.Success) return result;
+            primaryError = result.Error;
             _logger.LogWarning("Primary solver {Name} failed: {Err}", primary.DisplayName, result.Error);
         } else {
+            primaryError = $"{primary.DisplayName} not available at {(primary as AstapSolver)?.SolverPath ?? "(unknown path)"}";
             _logger.LogInformation("Primary solver {Name} not available", primary.DisplayName);
         }
 
@@ -80,12 +83,14 @@ public class PlateSolveService {
             var blindResult = await blind.SolveAsync(fitsPath, options, ct);
             if (blindResult.Success) return blindResult;
             return PlateSolveResult.Failed(
-                $"Primary ({primary.DisplayName}) and blind fallback ({blind.DisplayName}) both failed");
+                $"Primary ({primary.DisplayName}) failed: {primaryError}. " +
+                $"Blind fallback ({blind.DisplayName}) failed: {blindResult.Error}");
         }
 
         return PlateSolveResult.Failed(
-            primary.IsAvailable ? $"{primary.DisplayName} failed and no blind fallback configured"
-                                : $"Primary solver {primary.DisplayName} is not available");
+            primary.IsAvailable
+                ? $"{primary.DisplayName} failed (no blind fallback configured): {primaryError}"
+                : $"Primary solver {primary.DisplayName} is not available: {primaryError}");
     }
 }
 
