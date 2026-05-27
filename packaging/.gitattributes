@@ -1,0 +1,16 @@
+# All files in this directory MUST keep LF line endings, even when
+# checked out on Windows. dpkg-deb refuses control files with CRLF
+# ('parsing of /DEBIAN/control failed'), bash scripts with CRLF die
+# at exec time with 'bad interpreter: /bin/bash^M', and systemd
+# silently misbehaves on units with CRLF.
+
+* text eol=lf
+*.sh text eol=lf
+deb/DEBIAN/control text eol=lf
+deb/DEBIAN/conffiles text eol=lf
+deb/DEBIAN/postinst text eol=lf
+deb/DEBIAN/prerm text eol=lf
+deb/DEBIAN/postrm text eol=lf
+deb/lib/systemd/system/*.service text eol=lf
+deb/opt/polaris/appsettings.json text eol=lf
+deb/usr/share/doc/polaris/* text eol=lf

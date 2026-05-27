@@ -1,0 +1,48 @@
+N.I.N.A. Polaris
+================
+
+Browser-controlled astrophotography server. After installing this
+package, open http://<hostname>.local:5000 from any device on your
+LAN (laptop, tablet, phone) to access the full UI.
+
+Key paths
+---------
+
+    /opt/polaris/                       Binary + assets
+    /opt/polaris/appsettings.json       Editable config (conffile)
+    /lib/systemd/system/polaris.service systemd unit
+    /opt/polaris-indiweb-venv/          indi-web Python venv
+    /home/polaris/files/                Captures (configurable in UI)
+    /home/polaris/.config/NINA.Polaris/ Profiles, edits
+
+Service control
+---------------
+
+    sudo systemctl status polaris
+    sudo systemctl restart polaris
+    sudo systemctl stop polaris
+    journalctl -u polaris -f
+
+Optional add-ons
+----------------
+
+ASTAP star catalog (recommended, ~290 MB):
+
+    cd /tmp
+    wget -O v50.deb https://downloads.sourceforge.net/project/astap-program/star_databases/v50_star_database.deb
+    sudo dpkg -i v50.deb
+
+GraXpert (AI post-processing). Not bundled because of license + ARM
+binary unavailability. See online docs:
+
+    https://github.com/DanWBR/NINA.Polaris/blob/master/docs/user-guide/raspberry-pi-setup.md#44-graxpert-manual-install
+
+Documentation
+-------------
+
+    https://github.com/DanWBR/NINA.Polaris/tree/master/docs/user-guide
+
+Reporting bugs
+--------------
+
+    https://github.com/DanWBR/NINA.Polaris/issues

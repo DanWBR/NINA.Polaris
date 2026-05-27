@@ -1,0 +1,32 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: N.I.N.A. Polaris
+Upstream-Contact: Daniel Boas <daniel@danielboas.com>
+Source: https://github.com/DanWBR/NINA.Polaris
+
+Files: *
+Copyright: 2024-2026 Daniel Boas and contributors
+License: MPL-2.0
+
+License: MPL-2.0
+ Mozilla Public License Version 2.0
+ .
+ This Source Code Form is subject to the terms of the Mozilla Public
+ License, v. 2.0. If a copy of the MPL was not distributed with this
+ file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ .
+ The full text of the MPL 2.0 license is available at
+ /usr/share/common-licenses/MPL-2.0 (if installed) or online at the
+ URL above.
+
+Files: opt/polaris/wwwroot/js/lib/*
+Comment: Vendored third-party libraries (Chart.js, OpenSeadragon,
+ Aladin Lite, SunCalc, ONNX Runtime Web, Sortable.js, LZ4-js, etc).
+ Each has its own license file alongside its source in the wwwroot
+ tree. See https://github.com/DanWBR/NINA.Polaris/blob/master/README.md
+ for the full attribution list.
+
+Files: opt/polaris/*.dll opt/polaris/*.so
+Comment: .NET 10 runtime (self-contained) and managed assemblies.
+ Microsoft .NET runtime: MIT License, Copyright Microsoft Corporation.
+ See https://github.com/dotnet/runtime/blob/main/LICENSE.TXT for the
+ full text.

@@ -1,0 +1,26 @@
+#!/bin/bash
+# Polaris pre-remove: stops the service cleanly before dpkg removes
+# the binary. Runs before files are deleted so the running process
+# does not see its own executable disappear mid-flight.
+
+set -e
+
+case "$1" in
+    remove|upgrade|deconfigure)
+        if [ -d /run/systemd/system ]; then
+            if systemctl is-active --quiet polaris.service; then
+                systemctl stop polaris.service
+            fi
+        fi
+        ;;
+
+    failed-upgrade)
+        ;;
+
+    *)
+        echo "prerm called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+exit 0

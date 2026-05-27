@@ -1,0 +1,41 @@
+[Unit]
+Description=N.I.N.A. Polaris astrophotography server
+Documentation=https://github.com/DanWBR/NINA.Polaris
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=polaris
+Group=polaris
+WorkingDirectory=/opt/polaris
+ExecStart=/opt/polaris/NINA.Polaris
+
+# Polaris listens here. Change to 0.0.0.0:5000 for LAN access (default),
+# or 127.0.0.1:5000 if you only want local access on the Pi itself.
+Environment=ASPNETCORE_URLS=http://0.0.0.0:5000
+
+# Bottle (the framework indi-web uses) reads $HOME on startup; without
+# this it falls back to / and fails silently. Same for appdirs-based
+# Python libs (GraXpert model lookup, etc).
+Environment=HOME=/home/polaris
+
+# Default capture root. User can override via the FILES tab in the
+# UI (saves to profile, which then wins over this env var).
+Environment=POLARIS_IMAGE_OUTPUT_DIR=/home/polaris/files
+
+# Self-contained .NET build: bundles the runtime, no DOTNET_ROOT
+# needed. If you replace /opt/polaris with a framework-dependent
+# build, uncomment and adjust:
+# Environment=DOTNET_ROOT=/opt/dotnet
+# Environment=PATH=/opt/dotnet:/usr/local/bin:/usr/bin:/bin
+
+Restart=on-failure
+RestartSec=5
+
+# Sane limits: Polaris is memory-hungry during batch stacking and
+# editor sessions. These are above defaults but well within Pi 5 8GB.
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

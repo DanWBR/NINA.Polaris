@@ -1,0 +1,25 @@
+Package: polaris
+Version: __VERSION__
+Architecture: __ARCH__
+Maintainer: Daniel Boas <daniel@danielboas.com>
+Section: science
+Priority: optional
+Homepage: https://github.com/DanWBR/NINA.Polaris
+Depends: libfontconfig1, libssl3, libicu72 | libicu76 | libicu74, indi-bin, python3-venv, python3-pip, adduser, systemd
+Recommends: indi-full, astap, phd2, siril, xpra, xserver-xorg-video-dummy, dphys-swapfile, lsof
+Suggests: graxpert
+Description: N.I.N.A. Polaris astrophotography server
+ Browser-controlled astrophotography controller for Raspberry Pi,
+ mini-PCs, and other small Linux hosts. Provides full equipment +
+ capture + processing workflow without a desktop, accessible from
+ any device with a web browser on the LAN.
+ .
+ Includes embedded INDI driver management (via indi-web), automatic
+ plate-solving (ASTAP), PHD2 guider integration, live stacking, batch
+ calibration, color combine, and a Lightroom-style image editor. AI
+ post-processing (GraXpert ONNX models) runs in the client browser
+ via WebGPU, taking compute load off the Pi.
+ .
+ Bundles a self-contained .NET 10 runtime so no separate dotnet
+ install is required. Runs as a system user 'polaris' with captures
+ written to /home/polaris/files by default.

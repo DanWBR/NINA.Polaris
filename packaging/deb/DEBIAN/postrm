@@ -1,0 +1,49 @@
+#!/bin/bash
+# Polaris post-remove: cleanup after dpkg removes the binary.
+# On purge we also wipe the indi-web venv (it was created by us
+# in postinst, so we own it). User data (~/files, profiles) is
+# NEVER touched. The polaris system user is also preserved so it
+# can be reinstalled later without permission churn.
+
+set -e
+
+INDIWEB_VENV=/opt/polaris-indiweb-venv
+
+case "$1" in
+    purge)
+        if [ -d /run/systemd/system ]; then
+            systemctl disable polaris.service >/dev/null 2>&1 || true
+            systemctl daemon-reload >/dev/null 2>&1 || true
+        fi
+
+        # indi-web venv is ours to remove
+        if [ -d $INDIWEB_VENV ]; then
+            rm -rf $INDIWEB_VENV
+        fi
+
+        # User data is intentionally left in place:
+        #   /home/polaris/files          (captures)
+        #   /home/polaris/.config/...    (profiles, edits)
+        # If the operator really wants a clean wipe they run:
+        #   sudo userdel -r polaris
+        echo "polaris: purged. User data preserved in /home/polaris."
+        ;;
+
+    remove)
+        # On remove (not purge), reload systemd in case the unit file
+        # was tracked. dpkg removes the unit file itself.
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload >/dev/null 2>&1 || true
+        fi
+        ;;
+
+    upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        ;;
+
+    *)
+        echo "postrm called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+exit 0

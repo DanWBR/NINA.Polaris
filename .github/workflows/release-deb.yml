@@ -1,0 +1,89 @@
+name: Build and publish Polaris .deb packages
+
+# Triggers:
+#   - tag push matching v*  → builds and uploads to a release
+#   - manual workflow_dispatch → builds without releasing (for testing)
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version string to bake into the .deb (without leading v)'
+        required: true
+        default: '0.0.0-manual'
+
+jobs:
+  build-deb:
+    name: Build polaris_${{ matrix.arch }}.deb
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [arm64, amd64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Derive version
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VER="${GITHUB_REF_NAME#v}"
+          else
+            VER="${{ github.event.inputs.version }}"
+          fi
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          echo "Building version: ${VER}"
+
+      - name: Build .deb
+        run: |
+          chmod +x packaging/build-deb.sh
+          ./packaging/build-deb.sh "${{ steps.ver.outputs.version }}" "${{ matrix.arch }}"
+
+      - name: Lintian (style check, non-fatal)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y lintian
+          lintian "polaris_${{ steps.ver.outputs.version }}_${{ matrix.arch }}.deb" || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: polaris_${{ steps.ver.outputs.version }}_${{ matrix.arch }}
+          path: polaris_${{ steps.ver.outputs.version }}_${{ matrix.arch }}.deb
+          retention-days: 30
+
+  publish-release:
+    name: Attach .deb files to GitHub Release
+    needs: build-deb
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all built .deb files
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List downloaded artifacts
+        run: ls -la dist/
+
+      - name: Create / update Release with .deb assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.deb
+          fail_on_unmatched_files: true
+          generate_release_notes: true

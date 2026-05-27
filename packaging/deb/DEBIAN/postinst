@@ -1,0 +1,125 @@
+#!/bin/bash
+# Polaris post-install: creates the polaris system user, sets up the
+# capture root, installs indi-web into a dedicated venv, then enables
+# and starts the systemd service.
+#
+# Runs after dpkg has unpacked /opt/polaris/, /lib/systemd/system/
+# polaris.service, and /opt/polaris/appsettings.json. Idempotent so
+# upgrades and re-installs do not break existing setups.
+
+set -e
+
+POLARIS_USER=polaris
+POLARIS_GROUP=polaris
+POLARIS_HOME=/home/polaris
+POLARIS_FILES=$POLARIS_HOME/files
+POLARIS_CONFIG_DIR=$POLARIS_HOME/.config/NINA.Polaris
+INDIWEB_VENV=/opt/polaris-indiweb-venv
+
+case "$1" in
+    configure)
+        # ---- 1. System user ----
+        if ! getent passwd $POLARIS_USER >/dev/null; then
+            adduser --system --group --home $POLARIS_HOME \
+                    --shell /bin/bash --gecos "N.I.N.A. Polaris" $POLARIS_USER
+            echo "polaris: created system user $POLARIS_USER"
+        fi
+
+        # adduser usually creates the home, but be defensive in case
+        # someone removed it or pre-created the user differently.
+        if [ ! -d $POLARIS_HOME ]; then
+            mkdir -p $POLARIS_HOME
+            chown $POLARIS_USER:$POLARIS_GROUP $POLARIS_HOME
+            chmod 755 $POLARIS_HOME
+        fi
+
+        # ---- 2. Capture root ----
+        if [ ! -d $POLARIS_FILES ]; then
+            mkdir -p $POLARIS_FILES
+            chown $POLARIS_USER:$POLARIS_GROUP $POLARIS_FILES
+            echo "polaris: created capture root at $POLARIS_FILES"
+        fi
+
+        # ---- 3. Profile dir ----
+        if [ ! -d $POLARIS_CONFIG_DIR ]; then
+            mkdir -p $POLARIS_CONFIG_DIR
+            chown -R $POLARIS_USER:$POLARIS_GROUP $POLARIS_HOME/.config
+        fi
+
+        # ---- 4. indi-web venv ----
+        # One-time install. If user upgrades Polaris we leave the venv
+        # alone; they can refresh indiweb manually with:
+        #   sudo $INDIWEB_VENV/bin/pip install --upgrade indiweb
+        if [ ! -x $INDIWEB_VENV/bin/indi-web ]; then
+            echo "polaris: installing indi-web in $INDIWEB_VENV (one-time, ~30 seconds)"
+            if ! python3 -m venv $INDIWEB_VENV; then
+                echo "polaris: WARNING failed to create indi-web venv, embedded INDI manager will not work" >&2
+                echo "polaris: install manually with: sudo python3 -m venv $INDIWEB_VENV && sudo $INDIWEB_VENV/bin/pip install indiweb" >&2
+            else
+                if ! $INDIWEB_VENV/bin/pip install --quiet --upgrade pip 2>/dev/null; then
+                    echo "polaris: WARNING pip upgrade failed, continuing with bundled pip" >&2
+                fi
+                if ! $INDIWEB_VENV/bin/pip install --quiet indiweb; then
+                    echo "polaris: WARNING indi-web pip install failed, embedded INDI manager will not work" >&2
+                    echo "polaris: most likely no internet during install; retry with:" >&2
+                    echo "polaris:   sudo $INDIWEB_VENV/bin/pip install indiweb" >&2
+                fi
+            fi
+        fi
+
+        # ---- 5. systemd ----
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload
+
+            # Enable on first install; preserve state on upgrade
+            if [ -z "$2" ]; then
+                # $2 empty means fresh install (no previous version)
+                systemctl enable polaris.service >/dev/null 2>&1 || true
+            fi
+
+            # Start (or restart if already running on upgrade)
+            if systemctl is-active --quiet polaris.service; then
+                systemctl restart polaris.service
+            else
+                systemctl start polaris.service
+            fi
+        else
+            echo "polaris: systemd not active, skipping service enable/start"
+            echo "polaris: when systemd is available run: sudo systemctl enable --now polaris.service"
+        fi
+
+        # ---- 6. Friendly summary ----
+        HOST=$(hostname 2>/dev/null || echo "localhost")
+        IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "")
+        echo ""
+        echo "==============================================="
+        echo " N.I.N.A. Polaris installed."
+        echo ""
+        echo " Open in your browser:"
+        echo "   http://${HOST}.local:5000"
+        if [ -n "$IP" ]; then
+            echo "   http://${IP}:5000  (if mDNS does not resolve)"
+        fi
+        echo ""
+        echo " Tail logs:"
+        echo "   journalctl -u polaris.service -f"
+        echo ""
+        echo " Optional next steps:"
+        echo "   - Install an ASTAP star catalog (V50 covers most rigs):"
+        echo "     wget -O /tmp/v50.deb https://downloads.sourceforge.net/project/astap-program/star_databases/v50_star_database.deb"
+        echo "     sudo dpkg -i /tmp/v50.deb"
+        echo "   - Install GraXpert for AI post-processing:"
+        echo "     see https://github.com/DanWBR/NINA.Polaris/blob/master/docs/user-guide/raspberry-pi-setup.md#44-graxpert-manual-install"
+        echo "==============================================="
+        ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+exit 0
