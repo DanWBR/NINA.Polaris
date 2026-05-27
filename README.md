@@ -570,6 +570,54 @@ When Siril / GraXpert isn't installed, the built-in C# pipeline
 remains available as a fallback so users without the externals
 still get a working stacking workflow.
 
+### GraXpert AI in the browser (WebGPU / ONNX Runtime Web)
+
+GraXpert ships its background extraction, deconvolution, and
+denoise models as ONNX files. Polaris hosts them and runs them
+**directly in the client browser via WebGPU + ONNX Runtime Web**,
+not on the Pi. That changes the perf math completely:
+
+- **Server (Pi 4 / 5) load**: zero CPU during inference. Polaris
+  just serves the `.onnx` files (cached locally per-client in
+  IndexedDB) and the raw FITS pixels.
+- **Where the GPU work happens**: your laptop, desktop, tablet,
+  or phone that's connected to the Polaris UI. Modern integrated
+  graphics (Intel Iris Xe, Apple M-series, AMD RDNA, NVIDIA) all
+  expose WebGPU and crunch the GraXpert tile-based pipeline in
+  a fraction of the time the Pi 5 CPU would take.
+- **Fallback**: when WebGPU is unavailable (older browsers, no
+  GPU surfaced), ONNX Runtime Web auto-falls back to **WASM SIMD
+  + multi-threading**. Slower than WebGPU but still entirely
+  client-side.
+
+Typical end-to-end timing for a 6000×4000 RGB master, BGE +
+Denoise + Decon-Stars pass:
+
+| Client | Pipeline time |
+|---|---|
+| Apple M1 Pro (WebGPU) | 8-12 s |
+| Intel Iris Xe / RTX 3060 (WebGPU) | 10-15 s |
+| iPad Pro M2 (WebGPU) | 15-20 s |
+| Older laptop, WASM SIMD fallback | 60-90 s |
+| Pi 5 running GraXpert CLI on the host | 4-8 min |
+
+Same FITS, same output quality (the math is identical, just on
+different hardware). For users running Polaris on a Pi but
+opening the UI from a decent laptop, in-browser AI is **30-50x
+faster** than the CLI on the Pi itself.
+
+In the **EDITOR** tab the AI section has BGE / Denoise / Decon
+buttons that route to the in-browser pipeline by default. The
+existing CLI path is still there (Settings toggle) for cases
+where a strong server CPU + weak client GPU flip the math.
+
+WebGPU on LAN requires HTTPS, which Polaris auto-configures via
+a self-signed cert on port 5000. See
+[docs/user-guide/onnx-inference.md](docs/user-guide/onnx-inference.md)
+for the full breakdown + browser compatibility matrix, and
+[docs/user-guide/https-setup.md](docs/user-guide/https-setup.md)
+for the one-time per-device cert trust step.
+
 ### File explorer
 
 The **Files** tab is a full server-side file explorer. Browse the

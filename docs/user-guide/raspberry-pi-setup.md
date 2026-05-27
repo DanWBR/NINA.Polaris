@@ -682,20 +682,55 @@ For the embedded PHD2 GUI inside the Polaris browser (uses xpra over
 HTTP), see [phd2-gui-embedding.md](../phd2-gui-embedding.md). Optional;
 PHD2 also runs perfectly on the Pi desktop or via SSH X11 forwarding.
 
-## 10. HTTPS for WebGPU (optional, recommended for GraXpert AI)
+## 10. HTTPS + WebGPU: GraXpert AI runs on YOUR laptop, not the Pi
 
-The GraXpert ONNX models run in your browser via WebGPU. Browsers
-require HTTPS for WebGPU on non-localhost origins. Polaris ships a
-self-signed certificate generator:
+**This is one of the bigger wins of the Polaris architecture and
+worth understanding before your first AI pass.**
+
+Polaris hosts GraXpert's `.onnx` model files and feeds them to the
+browser via ONNX Runtime Web. The actual inference (background
+extraction, deconvolution, denoise) happens **on the GPU of the
+device showing the UI**, not on the Pi. The Pi only serves the
+model bytes and the raw FITS pixels.
+
+Why it matters on a Pi 5:
+
+| Where AI runs | 6000x4000 RGB master, BGE + Denoise + Decon |
+|---|---|
+| GraXpert CLI on the Pi 5 itself | 4-8 minutes |
+| In-browser on a laptop with integrated GPU (WebGPU) | 10-15 seconds |
+| In-browser on Apple M-series (WebGPU) | 8-12 seconds |
+| In-browser fallback (no WebGPU, WASM SIMD) | 60-90 seconds |
+
+Even the WASM fallback on a 5-year-old laptop beats the Pi by ~4x.
+A laptop with any modern GPU (Intel Iris Xe, Apple M, NVIDIA, AMD)
+beats it by 20-50x. The Pi never breaks a sweat during the AI pass.
+
+WebGPU requires HTTPS on non-localhost origins (browser security
+policy). The .deb install already starts Polaris with HTTPS on port
+5000 + auto-generated self-signed cert (and the postinst tells you
+to accept the cert warning once per device).
+
+If you ran the manual install instead of the .deb, run:
 
 ```bash
-# in your Polaris install
+cd ~/polaris
 ./NINA.Polaris --setup-https
 ```
 
-This generates a cert and serves on port 5001 in addition to 5000.
-Trust the cert on each client device once (see [https-setup.md](https-setup.md)).
-After that GraXpert AI runs at 5 to 20x the speed of CPU-only WASM.
+This generates the cert and switches Polaris to HTTPS on port 5000.
+Trust the cert on each client device once
+(see [https-setup.md](https-setup.md)). After that the EDITOR's AI
+section uses your client GPU automatically (see
+[onnx-inference.md](onnx-inference.md) for the browser compatibility
+matrix and the WebGPU vs WASM SIMD fallback rules).
+
+The CLI GraXpert install on the Pi (section 4.4) is still useful for
+**auto-during-capture** BGE on each saved light (the SequenceEngine
+fires it as a fire-and-forget background job per frame) and as a
+fallback when no client browser is connected. For interactive
+post-processing of a stacked master, the browser path is what you
+actually want.
 
 ## 11. Verify your setup
 
