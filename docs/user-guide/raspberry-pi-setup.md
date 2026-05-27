@@ -117,37 +117,53 @@ Pi 5 already runs at full USB current with the official 27W PSU. Skip.
 sudo reboot
 ```
 
-## 3. Mount the image storage SSD (optional, recommended)
+## 3. Set up the capture root
 
-If you are putting captures on a USB 3.0 SSD or NVMe drive (highly
-recommended; SD cards die fast under sequence writes), mount it now so
-Polaris can find it later.
+The convention this guide uses:
 
-Plug the drive in. Find it:
+| Path | Purpose |
+|---|---|
+| `/home/polaris/polaris/` | Polaris application binary + assets |
+| `/home/polaris/files/` | Captures, masters, calibration frames, planetary SER, GraXpert output |
+
+Create the captures dir:
+
+```bash
+mkdir -p ~/files
+```
+
+The systemd unit in section 7 seeds the env var
+`POLARIS_IMAGE_OUTPUT_DIR=/home/polaris/files` so Polaris auto-uses
+this path on first boot without you having to click through the UI.
+
+### 3.1. (Optional, recommended) Mount a USB SSD over ~/files
+
+SD cards die fast under sequence writes. If you have a USB 3.0 SSD or
+NVMe drive, mount it at `~/files` so all captures land on the SSD
+without changing any Polaris path.
 
 ```bash
 lsblk
 ```
 
-You will see something like `sda` with a partition `sda1`. Format if
-new (this WIPES the drive):
+Find your drive (typically `sda` with partition `sda1`). Format if new
+(this **WIPES** the drive):
 
 ```bash
 sudo mkfs.ext4 /dev/sda1
 ```
 
-Mount permanently:
+Mount permanently over `~/files`:
 
 ```bash
-sudo mkdir -p /mnt/astro
-echo "UUID=$(sudo blkid -s UUID -o value /dev/sda1) /mnt/astro ext4 defaults,nofail 0 2" \
+echo "UUID=$(sudo blkid -s UUID -o value /dev/sda1) /home/polaris/files ext4 defaults,nofail 0 2" \
   | sudo tee -a /etc/fstab
 sudo mount -a
-sudo chown polaris:polaris /mnt/astro
+sudo chown polaris:polaris /home/polaris/files
 ```
 
-Now `/mnt/astro` is your image library root. You will point Polaris at
-this folder in the FILES tab after first run.
+Now writes to `~/files/` land on the SSD; the SD card only handles the
+OS and Polaris binary.
 
 ## 4. Install all dependencies
 
@@ -405,7 +421,8 @@ sudo usermod -aG docker polaris
 docker run -d --name polaris \
   --network host \
   --restart unless-stopped \
-  -v /mnt/astro:/data \
+  -e POLARIS_IMAGE_OUTPUT_DIR=/data \
+  -v ~/files:/data \
   -v ~/.config/polaris:/root/.config \
   ghcr.io/danwbr/nina-polaris:latest
 ```
@@ -475,6 +492,7 @@ Environment=ASPNETCORE_URLS=http://0.0.0.0:5000
 Environment=HOME=/home/polaris
 Environment=DOTNET_ROOT=/home/polaris/.dotnet
 Environment=PATH=/home/polaris/.dotnet:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=POLARIS_IMAGE_OUTPUT_DIR=/home/polaris/files
 Restart=on-failure
 RestartSec=5
 

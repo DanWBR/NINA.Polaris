@@ -76,17 +76,32 @@ public class ProfileService {
             _activeProfile = new UserProfile { Name = "Default" };
             Save();
             _logger.LogInformation("Created default profile at {Path}", _activeProfilePath);
-            return;
+        } else {
+            try {
+                var json = File.ReadAllText(_activeProfilePath);
+                _activeProfile = JsonSerializer.Deserialize<UserProfile>(json, JsonOpts)
+                    ?? new UserProfile { Name = "Default" };
+                _logger.LogInformation("Loaded profile: {Name}", _activeProfile.Name);
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "Failed to load profile, using defaults");
+                _activeProfile = new UserProfile { Name = "Default" };
+            }
         }
 
-        try {
-            var json = File.ReadAllText(_activeProfilePath);
-            _activeProfile = JsonSerializer.Deserialize<UserProfile>(json, JsonOpts)
-                ?? new UserProfile { Name = "Default" };
-            _logger.LogInformation("Loaded profile: {Name}", _activeProfile.Name);
-        } catch (Exception ex) {
-            _logger.LogWarning(ex, "Failed to load profile, using defaults");
-            _activeProfile = new UserProfile { Name = "Default" };
+        // Deployment-time override for the capture root. Useful for
+        // distribution images (Pi systemd unit, Docker, etc.) that
+        // want a sensible default like /home/polaris/files without
+        // forcing the user to click through the FILES tab on first
+        // boot. Honoured only when the profile has no explicit value
+        // saved; user-set values via the UI always win.
+        if (string.IsNullOrWhiteSpace(_activeProfile.ImageOutputDir)) {
+            var envDir = Environment.GetEnvironmentVariable("POLARIS_IMAGE_OUTPUT_DIR");
+            if (!string.IsNullOrWhiteSpace(envDir)) {
+                _activeProfile.ImageOutputDir = envDir.Trim();
+                _logger.LogInformation(
+                    "ImageOutputDir seeded from POLARIS_IMAGE_OUTPUT_DIR env: {Dir}",
+                    _activeProfile.ImageOutputDir);
+            }
         }
     }
 
