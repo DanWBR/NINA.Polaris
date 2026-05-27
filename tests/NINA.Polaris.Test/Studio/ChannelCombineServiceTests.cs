@@ -276,22 +276,79 @@ public class ChannelCombineServiceTests {
     }
 
     [Test]
-    public async Task PixelMath_NotYetImplemented_FailsCleanly() {
-        var aId = SeedFrame("Ha", 32, 32);
-        var bId = SeedFrame("OIII", 32, 32);
+    public async Task PixelMath_HOOSynth_ProducesRgbFitsWithPmPrefix() {
+        // CC-3: PixelMath mode wires up PixelMathEvaluator. Classic
+        // HOO bicolor synth from Ha + OIII narrowband: R = Ha,
+        // G = (Ha + OIII)/2, B = OIII. Output is RGB FITS (3
+        // expressions = RGB output, MonoOutput=false default).
+        var haId   = SeedFrame("Ha",   32, 32, baseLevel: 12000);
+        var oiiiId = SeedFrame("OIII", 32, 32, baseLevel:  6000);
         await _library.RescanAsync();
 
         var jobId = _svc.StartJob(new ChannelCombineService.ChannelCombineRequest(
             Mode: ChannelCombineService.Modes.PixelMath,
-            ChannelMap: new() { new("Ha", aId), new("OIII", bId) },
+            ChannelMap: new() { new("Ha", haId), new("OIII", oiiiId) },
             Register: false,
             Normalize: false,
-            Expressions: new() { "Ha" }));
+            Expressions: new() {
+                "Ha",
+                "0.5 * Ha + 0.5 * OIII",
+                "OIII",
+            }));
+        var status = await WaitForJob(jobId, TimeSpan.FromSeconds(10));
+
+        Assert.That(status.Stage, Is.EqualTo("done"),
+            $"PixelMath failed: {status.Error}");
+        Assert.That(status.OutputChannels, Is.EqualTo(3));
+        Assert.That(Path.GetFileName(status.OutputPath!), Does.StartWith("pm_"));
+        Assert.That(File.Exists(status.OutputPath!), Is.True);
+    }
+
+    [Test]
+    public async Task PixelMath_MonoOutput_ProducesSingleChannelFits() {
+        // MonoOutput=true with 1 expression yields a 1-channel FITS.
+        // Useful for synthetic-L from RGB ((R+G+B)/3) for an LRGB
+        // workflow that doesn't have a real L master.
+        var rId = SeedFrame("R", 32, 32, baseLevel: 3000);
+        var gId = SeedFrame("G", 32, 32, baseLevel: 6000);
+        var bId = SeedFrame("B", 32, 32, baseLevel: 9000);
+        await _library.RescanAsync();
+
+        var jobId = _svc.StartJob(new ChannelCombineService.ChannelCombineRequest(
+            Mode: ChannelCombineService.Modes.PixelMath,
+            ChannelMap: new() { new("R", rId), new("G", gId), new("B", bId) },
+            Register: false,
+            Normalize: false,
+            MonoOutput: true,
+            Expressions: new() { "(R + G + B) / 3" }));
+        var status = await WaitForJob(jobId, TimeSpan.FromSeconds(10));
+
+        Assert.That(status.Stage, Is.EqualTo("done"),
+            $"PixelMath mono failed: {status.Error}");
+        Assert.That(status.OutputChannels, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task PixelMath_BadExpression_FailsBeforeProcessing() {
+        // Typo in the variable name surfaces at compile-time as a
+        // job error; user fixes the expression in the modal and
+        // retries without losing minutes to a doomed job.
+        var rId = SeedFrame("R", 32, 32);
+        var gId = SeedFrame("G", 32, 32);
+        var bId = SeedFrame("B", 32, 32);
+        await _library.RescanAsync();
+
+        var jobId = _svc.StartJob(new ChannelCombineService.ChannelCombineRequest(
+            Mode: ChannelCombineService.Modes.PixelMath,
+            ChannelMap: new() { new("R", rId), new("G", gId), new("B", bId) },
+            Register: false,
+            Normalize: false,
+            Expressions: new() { "R", "G", "blueTypo" }));   // wrong name
         var status = await WaitForJob(jobId, TimeSpan.FromSeconds(5));
 
         Assert.That(status.Stage, Is.EqualTo("error"));
-        Assert.That(status.Error, Does.Contain("CC-3").IgnoreCase
-            .Or.Contain("PixelMath").IgnoreCase);
+        Assert.That(status.Error, Does.Contain("blueTypo")
+            .Or.Contain("unknown variable").IgnoreCase);
     }
 
     // ─── normalize ───────────────────────────────────────────────────

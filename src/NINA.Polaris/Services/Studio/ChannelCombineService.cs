@@ -262,8 +262,10 @@ public class ChannelCombineService {
                     prefix = "lrgb";
                     break;
                 case Modes.PixelMath:
-                    throw new NotImplementedException(
-                        "PixelMath ships in CC-3 (PixelMathEvaluator). Use RgbCompose for now.");
+                    composed = ComposePixelMath(inputs, W, H,
+                        req.Expressions, req.MonoOutput);
+                    prefix = "pm";
+                    break;
                 default:
                     throw new ArgumentException(
                         $"Unknown combine mode '{req.Mode}'. Expected one of: rgb, lrgb, pixelmath.");
@@ -337,6 +339,60 @@ public class ChannelCombineService {
             : LrgbCombiner.LrgbAlgorithm.Lab;
         var packed = LrgbCombiner.Combine(r, g, b, l, W, H, algo);
         return (packed, 3);
+    }
+
+    // ── compose: PixelMath ───────────────────────────────────────────
+
+    private static (ushort[] data, int channels) ComposePixelMath(
+            List<LoadedChannel> inputs, int W, int H,
+            List<string>? expressions, bool monoOutput) {
+        if (expressions == null || expressions.Count == 0) {
+            throw new InvalidOperationException(
+                "PixelMath mode requires at least one expression in the request " +
+                "(1 expression for mono output, 3 for RGB output).");
+        }
+        int outChannels = monoOutput ? 1 : 3;
+        if (expressions.Count != outChannels) {
+            throw new InvalidOperationException(
+                $"PixelMath: expected {outChannels} expression(s) for " +
+                $"{(monoOutput ? "mono" : "RGB")} output, got {expressions.Count}.");
+        }
+
+        // Compile every expression upfront so a typo errors out before
+        // the per-pixel loop starts (and before any FITS write).
+        var known = new HashSet<string>(
+            inputs.Select(i => i.Variable), StringComparer.Ordinal);
+        var compiled = new PixelMathEvaluator.Eval[outChannels];
+        for (int c = 0; c < outChannels; c++) {
+            try {
+                compiled[c] = PixelMathEvaluator.Compile(expressions[c], known);
+            } catch (Exception ex) {
+                throw new InvalidOperationException(
+                    $"PixelMath: expression #{c + 1} did not parse. {ex.Message}", ex);
+            }
+        }
+
+        int n = W * H;
+        var output = new ushort[n * outChannels];
+        var planes = inputs.ToDictionary(
+            i => i.Variable, i => i.Data, StringComparer.Ordinal);
+        var pixelVars = new Dictionary<string, float>(planes.Count,
+            StringComparer.Ordinal);
+
+        for (int i = 0; i < n; i++) {
+            // Populate the per-pixel variable bag, single dict reused
+            // across pixels to avoid the per-iteration allocation hit
+            // on big masters (24 Mpx × 5 channels = 120M dict updates
+            // is the kind of place that shows up on a Pi).
+            foreach (var (name, plane) in planes) {
+                pixelVars[name] = plane[i];
+            }
+            for (int c = 0; c < outChannels; c++) {
+                float v = compiled[c](pixelVars);
+                output[c * n + i] = (ushort)Math.Clamp(v, 0, 65535);
+            }
+        }
+        return (output, outChannels);
     }
 
     private static ushort[]? FindChannel(List<LoadedChannel> inputs, string name) {
