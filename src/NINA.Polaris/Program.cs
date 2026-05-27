@@ -352,6 +352,18 @@ app.Map("/phd2-gui/{**rest}", async (HttpContext ctx, Phd2GuiSessionService gui)
         });
         return;
     }
+    // Strip the /phd2-gui prefix in-place so xpra's HTML5 client
+    // sees its own root paths (the HTML serves asset URLs like
+    // /js/Client.js that need to resolve to upstream root, not
+    // /phd2-gui/js/Client.js). Same approach as the indi-web proxy
+    // below. Without this the iframe loads the xpra HTML shell but
+    // every JS/CSS/WebSocket request 404s and the screen stays black.
+    var rest = ctx.Request.Path.Value ?? "/";
+    if (rest.StartsWith("/phd2-gui", StringComparison.OrdinalIgnoreCase)) {
+        rest = rest["/phd2-gui".Length..];
+        if (string.IsNullOrEmpty(rest)) rest = "/";
+    }
+    ctx.Request.Path = rest;
     var target = $"http://127.0.0.1:{gui.BindPort}";
     var err = await phd2GuiForwarder.SendAsync(ctx, target, phd2GuiHttpClient,
         ForwarderRequestConfig.Empty, phd2GuiTransform);
