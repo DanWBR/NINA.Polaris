@@ -8,7 +8,7 @@ stacking + before the editor:
 |---|---|---|
 | **BG neutralize** | Subtract per-channel offsets so the background is neutral grey. | Quick first pass on any colour-cast master. No setup. |
 | **Manual** | BG neutralize + a white-reference patch you pick. | When the BG step alone leaves a tint and you have a known-white target in frame (G2V star, galaxy core). |
-| **PCC** | Photometric Color Calibration via bundled APASS DR10 catalog. | The gold standard. Star colours match catalog B-V values. Requires plate-solved source + the catalog populated. |
+| **PCC** | Photometric Color Calibration via bundled APASS DR9 catalog. | The gold standard. Star colours match catalog B-V values. Requires plate-solved source + the catalog populated. |
 
 All three are non-destructive: each writes a sibling FITS next to
 the source (`{stem}_bgneu.fits` / `{stem}_ccal.fits` / `{stem}_pcc.fits`)
@@ -43,7 +43,7 @@ result.
      white patch (e.g. a small rect around a known G2V star), then
      click **▶ Calibrate**.
    - **PCC**: check the catalog badge at the top of the tab. If it
-     shows ✓ APASS DR10, click **▶ Calibrate**. Otherwise see the
+     shows ✓ APASS DR9, click **▶ Calibrate**. Otherwise see the
      "Setup" section below.
 4. Wait. BG/Manual take a few seconds; PCC takes 10-30 s depending
    on input size + matched star count.
@@ -92,7 +92,7 @@ gains.
 ### PCC (Photometric Color Calibration)
 
 The science-grade tool, modelled after Siril's PCC. Requires a
-plate-solved source + the bundled APASS DR10 catalog.
+plate-solved source + the bundled APASS DR9 catalog.
 
 Pipeline:
 1. Read the WCS coords from the source FITS headers (must be
@@ -133,18 +133,36 @@ the master first, then retry.
 
 ### 2. APASS catalog
 
-Bundled APASS DR10 lives at `wwwroot/catalogs/apass/apass.db`
-(~80 MB). The file is **not committed to the repo** because of
-size + the catalog's CC-BY attribution requirement. Populate it
-once on the deployment host:
+Bundled APASS DR9 lives at `wwwroot/catalogs/apass/apass.db`
+(~600 MB at the default Vmag ≤ 13 cap, ~5.3M stars). The file
+is **not committed to the repo** because of size + the catalog's
+CC-BY attribution requirement. Populate it once on the deployment
+host:
 
 ```bash
 python scripts/download-apass.py
 ```
 
-That fetches the AAVSO APASS DR10 ASCII data, filters to stars
-with V mag ≤ 13, and builds the SQLite database with an R*tree
-spatial index. ~10 min wall-clock on a Pi 5, less on a desktop.
+The script pulls APASS DR9 from CDS VizieR's TAP service
+(`II/336/apass9`) in Dec stripes, filters to stars with V mag ≤
+13, and builds the SQLite database with an R*tree spatial index.
+~5 min wall-clock on a desktop with a reasonable home internet
+link, ~15 min on a Pi 5. Per-stripe TSVs are kept in
+`scripts/.apass-cache/` so a re-run with `--skip-download`
+rebuilds the SQLite from the cache without hitting VizieR again.
+
+Why DR9 and not DR10: AAVSO has not published DR10 as a
+programmatic download. DR9 is what Siril and the rest of the
+astrophotography toolchain ship against today; it contains 62
+million stars and is more than enough for PCC. If AAVSO publishes
+DR10 download endpoints later, swap the TAP source in
+`scripts/download-apass.py` and rerun.
+
+Override the magnitude cap with `--mag-limit 15` (catalog grows
+to ~3 GB) for plate solves at very long focal lengths. Override
+the per-query Dec stripe with `--stripe-deg 2.5` if the default
+5-degree stripes hit the VizieR TAP per-query row cap on a future
+catalog update.
 
 The PCC tab's catalog badge tells you whether the file is in
 place. If you see "⚠ not installed", run the script and reload
@@ -235,5 +253,5 @@ APASS data is provided by the AAVSO under a CC-BY 4.0 license. If
 you publish images calibrated with PCC, please credit:
 
 > Henden, A. A., Levine, S., Terrell, D., Welch, D. L., Munari, U.,
-> & Kloppenborg, B. K. (2018). "The APASS Data Release 10." VizieR
-> On-line Data Catalog: II/336.
+> & Kloppenborg, B. K. (2016). "AAVSO Photometric All Sky Survey
+> (APASS) DR9." VizieR On-line Data Catalog: II/336.
