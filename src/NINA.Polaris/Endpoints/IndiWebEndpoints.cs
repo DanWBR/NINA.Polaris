@@ -46,7 +46,7 @@ public static class IndiWebEndpoints {
             }
             if (!svc.Installed) {
                 return Results.Json(
-                    new { error = "indi-web not installed. Run: pip install indiwebmanager" },
+                    new { error = "indi-web not installed. Run: pip install indiweb" },
                     statusCode: 501);
             }
             var ok = await svc.StartAsync();

@@ -43,27 +43,57 @@ Start.
 One-line, on the Polaris host:
 
 ```bash
-pip install indiwebmanager
+pip install indiweb
 ```
 
 You don't need to start `indi-web` yourself — Polaris's
 `IndiWebManagerService` detects the binary, manages the process,
 and surfaces it in the RIGS tab.
 
-If `pip install` lands in a virtual environment, point Polaris at
-the absolute path of the `indi-web` binary in your
-`appsettings.json`:
+If `pip install` lands in a virtual environment (recommended on
+Raspberry Pi OS Bookworm+, where system-wide `pip install` is
+blocked by PEP 668), point Polaris at the absolute path of the
+`indi-web` binary in your `appsettings.json`. For a plain venv:
 
 ```json
 {
   "IndiWeb": {
-    "ExecutablePath": "/home/danie/.venv/polaris/bin/indi-web",
+    "ExecutablePath": "/home/polaris/.venv/polaris/bin/indi-web",
     "AutoStart": true,
     "Port": 8624,
     "BindAddress": "127.0.0.1"
   }
 }
 ```
+
+For a pipenv-managed install (per the upstream README's
+recommended path):
+
+```bash
+sudo apt install pipenv
+cd ~ && mkdir indiweb && cd indiweb
+pipenv --python=$(which python3)
+pipenv install indiweb
+# discover the venv path pipenv chose:
+pipenv --venv
+```
+
+`pipenv --venv` prints something like
+`/home/polaris/.local/share/virtualenvs/indiweb-AbCd1234`. The
+binary is at `{that path}/bin/indi-web`. Plug it into
+`IndiWeb:ExecutablePath` the same way:
+
+```json
+{
+  "IndiWeb": {
+    "ExecutablePath": "/home/polaris/.local/share/virtualenvs/indiweb-AbCd1234/bin/indi-web",
+    "AutoStart": true
+  }
+}
+```
+
+The hash suffix changes if the Pipfile changes (rare); set once
+and forget unless you `pipenv update` to a new release.
 
 `BindAddress` should stay on loopback unless you really know what
 you're doing — `indi-web` has no auth, so binding it to `0.0.0.0`
@@ -127,7 +157,7 @@ installed with `pip install --user` and ran Polaris under a
 different user (e.g. systemd as `polaris`), `~/.local/bin` may not
 be in that user's PATH. Either:
 
-- Install system-wide with `sudo pip install indiwebmanager`
+- Install system-wide with `sudo pip install indiweb`
 - Or set `IndiWeb:ExecutablePath` to the absolute path in
   `appsettings.json`
 

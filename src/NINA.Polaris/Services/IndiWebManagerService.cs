@@ -98,7 +98,8 @@ public class IndiWebManagerService : BackgroundService {
         if (!Installed) {
             _logger.LogInformation(
                 "IndiWebManagerService: indi-web not found, install via " +
-                "'pip install indiwebmanager' to enable embedded INDI driver management");
+                "'pip install indiweb' (or 'pipenv install indiweb' in a venv) " +
+                "to enable embedded INDI driver management");
         }
 
         // 3 s stagger after Polaris boot so PHD2 / simulator services
@@ -148,11 +149,11 @@ public class IndiWebManagerService : BackgroundService {
 
             // indi-web has a `--version` flag in current builds, but
             // older releases don't, so fall back to "pip show
-            // indiwebmanager" if the binary doesn't print one.
+            // indiweb" if the binary doesn't print one.
             var ver = await RunCommandAsync(ExecutablePath, "--version", ct);
             Version = (ver.stdout + " " + ver.stderr).Trim();
             if (string.IsNullOrEmpty(Version) || ver.exitCode != 0) {
-                var pip = await RunCommandAsync("pip", "show indiwebmanager", ct);
+                var pip = await RunCommandAsync("pip", "show indiweb", ct);
                 var line = pip.stdout
                     .Split('\n')
                     .FirstOrDefault(l => l.StartsWith("Version:",
