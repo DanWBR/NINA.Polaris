@@ -80,6 +80,32 @@ Select calibrated lights → **Integrate** button:
 Output: `integrated/{Target}/{Filter}/master_{Target}_{Filter}_{N}x{Exp}s.fits`
 with `NCOMBINE`, `EXPTOTAL`, `INTMETH`, `REJECT` headers.
 
+## Channel combine (mono LRGB / RGB / PixelMath)
+
+For mono shooters: after per-filter integration leaves you with one
+master per filter, select two or more masters and click **Combine**
+in the selection bar. The modal has three tabs:
+
+- **RGB**, pack 3 mono masters (R/G/B) into a single RGB FITS.
+- **LRGB**, RGB plus a luminance master, combined via Lab swap
+  (default, preserves chrominance) or Ratio (classical, faster).
+- **PixelMath**, evaluate per-pixel expressions over named channels.
+  Useful for narrowband palettes (HOO, SHO) and synthetic luminance.
+  Supports +, -, *, /, **, parens, plus min/max/abs/pow/sqrt/exp/
+  log/clamp.
+
+Cross-channel star registration is on by default (the per-filter
+masters come out of `BatchStackingService` aligned to their own
+reference frame, not to each other, so without registration you
+get coloured fringes on every star). Per-channel normalize is also
+on by default.
+
+Output: `integrated/{Target}/composed/{rgb|lrgb|pm}_{Target}_{stamp}.fits`
+with `CHCOMBINE`, `REGISTER`, `REGREF`, `REG_<channel>`, `NORMLIZE`
+custom headers describing the recipe.
+
+Full walkthrough in [Mono LRGB workflow](lrgb-mono-workflow.md).
+
 ## Debayer + background extraction
 
 Click a frame in the viewer → **Debayer** button (only enabled when

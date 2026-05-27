@@ -22,6 +22,12 @@ This guide is split into **flows** (do this to accomplish X) and
    calibrate, integrate, GraXpert AI cleanup (BGE / Denoise / Decon),
    editor pass, export. Stitches every Polaris feature into one
    continuous night with a worked-example time budget.
+4. **[Mono LRGB workflow](lrgb-mono-workflow.md)**, the mono-camera
+   branch of the end-to-end pipeline: combine per-filter masters
+   (R/G/B + L) into one RGB or LRGB FITS via the STUDIO Combine tool
+   (Lab swap, Ratio, or PixelMath for narrowband palettes), then
+   continue through GraXpert and the editor exactly like the OSC
+   path.
 
 ## By feature
 

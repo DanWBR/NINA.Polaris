@@ -266,6 +266,14 @@ Detail: [STUDIO, light calibration](studio.md#light-calibration).
 In STUDIO, filter by the calibrated frames you just produced. Select
 them all and click **Integrate**.
 
+> **Mono shooters**: integrate produces one master per filter (a
+> separate `master_*.fits` under each filter sub-directory). After
+> the per-filter integration step, jump to the
+> [Mono LRGB workflow](lrgb-mono-workflow.md) to combine those
+> per-filter masters into a single RGB or LRGB file using the
+> STUDIO **Combine** button, then return here at step 5 with the
+> composed master.
+
 Pick:
 
 - **Integration method**: Average for max SNR, Sigma-clipped average
