@@ -15,7 +15,235 @@
   verbatim, only the prose around them was translated.
 -->
 
-# Current plan: Client-side live stacking via WASM (CLST)
+# Current plan: Pi 5 first-class deployment + .deb packaging + tag-driven release pipeline (DEB-* / PI5-* / PHD2GUI-*)
+
+> Previous plan (CLST, client-side live stacking via WASM) preserved
+> below starting at `# Previous plan: Client-side live stacking via WASM (CLST)`.
+> The entire CLST-1..8 stack is in production; this plan builds the
+> distribution and operability layer on top so a regular
+> astrophotographer can install Polaris on a Pi 5 with `apt install`
+> and never need a shell.
+
+## Context
+
+After CLST + the SIM/PA/SWE/ED/GX/CC/CCALB/INDI-WEB feature plans
+landed, Polaris on a Pi 4/5 was technically functional but operating
+it required:
+- A ~500-line setup doc (`raspberry-pi-setup.md`)
+- Manual apt installs, .NET runtime install, indi-web pipenv setup
+- SSH access to debug any service that misbehaved
+- Manual `xpra start` + `pkill` + `pip install` for recovery
+
+To get to "regular user, no shell, no debugging" four things had
+to happen:
+
+1. **One-line install** via a Debian package wrapping all setup
+2. **Release pipeline** that publishes the package automatically on tag
+3. **Single source of truth doc** for Pi 5 install (consolidated guide)
+4. **Recovery flows that work from the browser** (no SSH for common breakage)
+
+Plus a fifth requirement that surfaced during real-Pi testing: the
+PHD2 GUI iframe (PH2X-7) had been written but never end-to-end
+validated against a real PHD2 install, so several bugs hid there
+(proxy prefix strip missing, RAM widget reporting 100%, postinst URL
+saying http://, Python 3.13 cgi removal breaking indi-web, etc).
+
+## Decisions confirmed with the user
+
+- **.deb is the recommended install path on Pi**; manual setup doc
+  stays as fallback for users who want to understand the pieces.
+- **Self-contained .NET 10 runtime** bundled in the .deb (~150 MB
+  package, but eliminates the fragile "install dotnet runtime
+  separately" step on Bookworm where it's not in apt).
+- **Six release targets** in one workflow: deb arm64/amd64, portable
+  tar.gz arm64/x64, portable zip win-x64/win-arm64.
+- **Tag-driven version** flows through to the assembly so the UI
+  banner shows the same number as the .deb filename and the GitHub
+  Release.
+- **PHD2 GUI subtab is the default** in the GUIDE panel (setup happens
+  there; Control is for monitoring).
+- **No SSH required for recovery**: Relaunch PHD2 button + iframe
+  reload + Restart all work from the browser.
+- **WebGPU in-browser AI prominent in docs**: the user explicitly
+  flagged that "GraXpert running on client GPU directly in the
+  browser" was buried and deserved top-billing in the README.
+
+## What shipped (chronological commit order)
+
+### Discovery + small fixes (before .deb landed)
+
+- `665526c` GraXpert: add `~/graxpert/{graxpert,GraXpert}` to Linux
+  auto-detect candidates. User extracted GraXpert tarball under
+  lowercase path; the existing candidate list only had capital-G.
+- `f293edc` GraXpert: detect Python venv installs and invoke via
+  `python -m graxpert.main`. ARM users typically have GraXpert as a
+  PyPI package in a venv (no prebuilt ARM binary), so the
+  `IsPythonInvocation` check + `ArgsPrefix` synthesize the
+  `-m graxpert.main` prefix transparently. `BuildArgs` contract
+  unchanged so existing tests keep pinning.
+- `c7c849c` docs(rpi-setup): GraXpert via pip venv + manual AI
+  model transfer to `~/.local/share/GraXpert/{ai-models,bge-ai-models}/`.
+
+### Single consolidated Pi setup doc
+
+- New `docs/user-guide/raspberry-pi-setup.md`: hardware checklist
+  (Pi 4 vs Pi 5 PSU/cooling/NVMe), OS flashing, first-boot tasks
+  (apt upgrade, aarch64 verify, 2 GB swap, Pi 4 GPU split), optional
+  SSD mount over `~/files/`, single apt block, three install paths
+  (release tarball / Docker / build from source), systemd unit with
+  `HOME` + `DOTNET_ROOT` + `PATH` env baked in, INDI driver loading
+  (manual `indiserver` vs indi-web), PHD2 + HTTPS optional sections,
+  end-to-end verification using the simulator stack, update +
+  troubleshooting.
+
+### `.deb` packaging (DEB-1..6)
+
+- New `packaging/` tree:
+  - `deb/DEBIAN/control`: metadata, depends (libfontconfig1, libssl3,
+    libicu72|76, indi-bin, python3-venv, adduser, systemd),
+    recommends (indi-full, astap, phd2, siril, xpra,
+    xserver-xorg-video-dummy, dphys-swapfile)
+  - `deb/DEBIAN/conffiles`: marks `/opt/polaris/appsettings.json`
+  - `deb/DEBIAN/postinst`: creates `polaris` system user, mkdir
+    `~/files`, creates `/opt/polaris-indiweb-venv/` and pip-installs
+    `indiweb` + `legacy-cgi`, enables + starts systemd unit, prints
+    URL summary with HTTPS
+  - `deb/DEBIAN/prerm`: stops service cleanly before file removal
+  - `deb/DEBIAN/postrm`: on purge wipes venv + disables service,
+    preserves `/home/polaris/files` and profile data
+  - `deb/lib/systemd/system/polaris.service`: hard-coded
+    `User=polaris`, `HOME=/home/polaris`, `POLARIS_IMAGE_OUTPUT_DIR=/home/polaris/files`
+  - `deb/opt/polaris/appsettings.json`: default IndiWeb path
+    (`/opt/polaris-indiweb-venv/bin/indi-web`)
+- `packaging/.gitattributes`: forces LF on all packaging files
+  (dpkg rejects CRLF on control + shell scripts dies with
+  `bad interpreter`)
+- `packaging/build-deb.sh`: local build script (dotnet publish
+  self-contained + dpkg-deb), accepts VERSION arg, forwards to
+  `-p:Version` so the assembly matches the .deb filename
+- `packaging/README.md`: build/install/upgrade/purge docs
+
+### Real-Pi shakedown fixes (caught during first .deb install)
+
+- `7990736` indi-web: install `legacy-cgi` alongside `indiweb` in
+  postinst. Python 3.13 (Bookworm late-2025 images) removed the
+  `cgi` stdlib module that indi-web's vendored bottle.py imports
+  unconditionally; without legacy-cgi the iframe shows
+  "Start failed: unknown" because indi-web crashes at startup.
+- `e778e5d` host-metrics: read /proc/meminfo on Linux instead of
+  `IResourceMonitor.MemoryUsedPercentage` (which counts buff/cache
+  as used and makes a healthy Pi with file cache show 4.0/4.0 GB
+  red). Now matches what humans see in `free -h` available column.
+- `0bf34d6` proxy fix: strip `/phd2-gui` prefix in the reverse proxy
+  before forwarding to xpra. Without this xpra returned 404 for
+  `/phd2-gui/js/Client.js` etc and the iframe showed bare HTML
+  shell with no JS, hence the long-running "iframe black" bug. Same
+  pattern as the `/indi-web/*` proxy a few lines below had since
+  the start, just got missed in PH2X-7.
+- `d3ccf2f` postinst + rpi doc: `https://` everywhere on port 5000
+  (Polaris auto-generates self-signed cert via GX-10; `http://` on
+  5000 fails with "Empty reply from server" because port speaks
+  TLS only). Explainer about the self-signed cert warning + WebGPU
+  rationale baked into the summary.
+
+### CI release pipeline (DEPLOY-1..3)
+
+- `1a4c979` `.github/workflows/release.yml`: consolidated workflow
+  triggered on `v*` tag push or workflow_dispatch. Six matrix jobs
+  (deb-arm64/amd64, linux-arm64/x64 tarball, win-x64/arm64 zip),
+  each self-contained .NET publish. Lintian style-check job on the
+  .debs. Release job downloads all artifacts, attaches to GitHub
+  Release with auto-generated notes + per-platform install
+  commands in the body.
+- `bcb7ff6` tag-driven version. NINA.Polaris.csproj honors
+  `-p:Version=X.Y.Z` when passed (release workflow + build-deb.sh
+  both forward it), so the UI banner matches the tag. Falls back
+  to the auto-stamp `0.1.{days}.{seconds}` for local dev builds
+  without an explicit version.
+- Release body now uses `/releases/latest/download/polaris_arm64.deb`
+  (unversioned URLs that resolve to the newest release). Workflow
+  copies versioned files to unversioned names so both exist on
+  every release.
+
+### PHD2 GUI iframe UX (PHD2GUI-1..3)
+
+- `0604c4e` PHD2 GUI subtab is now default in the GUIDE tab (was
+  Control). Matches the actual workflow: setup (Connect Equipment,
+  Loop, select star) happens in the GUI; Control is for monitoring
+  + automation after PHD2 is configured. Sidebar GUIDE button also
+  calls `loadPhd2GuiStatus()` to refresh state when guideTab is gui.
+- `688d885` PHD2 GUI iframe grows to fill remaining viewport height
+  via `flex: 1 + min-height: 0` chain through `.phd2-gui-tab` and
+  `.phd2-gui-frame-wrap` (previously clamped to 600 px, wasting
+  30-40% of a 1080 viewport).
+- `c5e80e2` PHD2-inside-xpra detection + UI "Relaunch PHD2" button.
+  New `Phd2Running` property polled every 15 s via pgrep, exposed
+  on the gui-session status JSON. UI toolbar gains a green / amber
+  PHD2 chip distinguishing "xpra up + phd2 alive" from "xpra up
+  but phd2 missing", plus an amber `Relaunch PHD2` button that
+  calls `xpra control :100 start-child phd2` after pkill'ing any
+  orphan phd2 (new `RelaunchPhd2Async` + `/api/guider/gui-session/relaunch-phd2`
+  endpoint). User feedback was explicit: "a regular user is not
+  going to SSH into the Pi to recover". All recovery now from the
+  browser.
+
+### Documentation alignment (DOC-PI5-*)
+
+- `ae1571d` docs aligned: README Deployment section rewritten to
+  lead with the .deb one-liner; tarball + zip for non-Debian
+  platforms; old `publish-linux-arm64.sh` / `install.sh` recipe
+  removed. user-guide README pointer updated. `guide-phd2.md`
+  documents the new toolbar chips + Relaunch button + tab order.
+  `packaging/README.md` gains a release-process section.
+- `fa490d1` README + rpi-setup get a dedicated section on the
+  in-browser GraXpert AI / WebGPU architecture. User flagged this
+  was buried. Now top-billing with concrete timing table (Pi CLI
+  4-8 min vs M1 WebGPU 8-12 s vs WASM-fallback 60-90 s) and a
+  clear explanation that the Pi never runs the AI: serves .onnx
+  files + raw FITS pixels, client GPU does the work.
+
+## Verification
+
+End-user happy path on fresh Raspberry Pi OS Lite (64-bit) Bookworm:
+
+```bash
+# After flashing OS and SSH'ing in (one time):
+sudo apt update && sudo apt full-upgrade -y
+sudo reboot
+# SSH back in
+wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb
+sudo apt install ./polaris_arm64.deb
+# postinst prints: "Polaris running at https://polaris-pi.local:5000"
+```
+
+From a laptop / tablet / phone on the LAN:
+1. Open `https://polaris-pi.local:5000`, accept self-signed cert once
+2. Aba GUIDE → PHD2 GUI subtab → ▶ Start session → iframe shows PHD2 native window
+3. Aba RIGS → INDI Drivers section → pick simulator profile in indi-web → Start
+4. RIGS cards autopopulate with simulators → Connect All
+5. PREVIEW tab → Take Snap → frame appears with real GSC stars
+6. EDITOR tab → AI section → Background Extraction → runs on the
+   laptop GPU (WebGPU), Pi sits at ~5% CPU
+
+Zero shell commands after the initial install. Zero failed
+recovery paths that need shell intervention.
+
+## Out of scope (deferred)
+
+- **apt repo hosting** (`deb https://polaris.repo/...`): would let
+  users `apt update && apt install polaris` for upgrades. Requires
+  GPG-signed repo on GitHub Pages or similar. v1 ships .deb via
+  GitHub Releases only; upgrade is `wget` + `apt install ./newer.deb`.
+- **SD card image** (`image-build/README.md` plan): would bake the
+  .deb into a Pi OS image so users skip even the OS install step.
+  Plan exists but no scripts yet.
+- **Windows MSI installer**: portable zip works for now; MSI/MSIX
+  is polish for later.
+- **Snap / Flatpak**: same idea, different ecosystems, lower priority.
+
+---
+
+# Previous plan: Client-side live stacking via WASM (CLST)
 
 > Previous plan (LSTR, auto re-focus / re-center triggers) preserved
 > below starting at `# Previous plan: Live stacking triggers`. The entire
