@@ -199,11 +199,15 @@ public class ChannelCombineServiceTests {
     }
 
     [Test]
-    public async Task LrgbCompose_NotYetImplemented_FailsCleanly() {
-        var rId = SeedFrame("R", 32, 32);
-        var gId = SeedFrame("G", 32, 32);
-        var bId = SeedFrame("B", 32, 32);
-        var lId = SeedFrame("L", 32, 32);
+    public async Task LrgbCompose_ProducesLrgbFitsWithLrgbPrefix() {
+        // CC-2: LrgbCompose mode wires up LrgbCombiner. Output lands
+        // under composed/ with the "lrgb_" prefix instead of "rgb_",
+        // and FITS Channels == 3 (luminance is folded into RGB, not
+        // stored as a 4th plane).
+        var rId = SeedFrame("R", 32, 32, baseLevel: 4000);
+        var gId = SeedFrame("G", 32, 32, baseLevel: 5000);
+        var bId = SeedFrame("B", 32, 32, baseLevel: 6000);
+        var lId = SeedFrame("L", 32, 32, baseLevel: 15000);   // brighter luminance
         await _library.RescanAsync();
 
         var jobId = _svc.StartJob(new ChannelCombineService.ChannelCombineRequest(
@@ -212,12 +216,63 @@ public class ChannelCombineServiceTests {
                 new("R", rId), new("G", gId), new("B", bId), new("L", lId)
             },
             Register: false,
+            Normalize: false,
+            LrgbAlgo: "lab"));
+        var status = await WaitForJob(jobId, TimeSpan.FromSeconds(10));
+
+        Assert.That(status.Stage, Is.EqualTo("done"),
+            $"LrgbCompose failed: {status.Error}");
+        Assert.That(status.OutputChannels, Is.EqualTo(3));
+        Assert.That(Path.GetFileName(status.OutputPath!), Does.StartWith("lrgb_"));
+        Assert.That(File.Exists(status.OutputPath!), Is.True);
+    }
+
+    [Test]
+    public async Task LrgbCompose_MissingL_FailsWithClearError() {
+        // Without a channel named "L" the LRGB combine cannot apply
+        // the luminance overlay; the service should fail loudly so
+        // the UI surfaces a fixable error to the user.
+        var rId = SeedFrame("R", 32, 32);
+        var gId = SeedFrame("G", 32, 32);
+        var bId = SeedFrame("B", 32, 32);
+        await _library.RescanAsync();
+
+        var jobId = _svc.StartJob(new ChannelCombineService.ChannelCombineRequest(
+            Mode: ChannelCombineService.Modes.LrgbCompose,
+            ChannelMap: new() { new("R", rId), new("G", gId), new("B", bId) },
+            Register: false,
             Normalize: false));
         var status = await WaitForJob(jobId, TimeSpan.FromSeconds(5));
 
         Assert.That(status.Stage, Is.EqualTo("error"));
-        Assert.That(status.Error, Does.Contain("CC-2").IgnoreCase
-            .Or.Contain("LrgbCombiner").IgnoreCase);
+        Assert.That(status.Error, Does.Contain("L").And.Contain("luminance").IgnoreCase
+            .Or.Contain("requires").IgnoreCase);
+    }
+
+    [Test]
+    public async Task LrgbCompose_RatioAlgorithm_AlsoSucceeds() {
+        // Both lab and ratio code paths must be reachable through the
+        // service. Verify by running the same input twice with the
+        // two algos and confirming both produce an output FITS.
+        var rId = SeedFrame("R", 32, 32, baseLevel: 4000);
+        var gId = SeedFrame("G", 32, 32, baseLevel: 5000);
+        var bId = SeedFrame("B", 32, 32, baseLevel: 6000);
+        var lId = SeedFrame("L", 32, 32, baseLevel: 15000);
+        await _library.RescanAsync();
+
+        var jobId = _svc.StartJob(new ChannelCombineService.ChannelCombineRequest(
+            Mode: ChannelCombineService.Modes.LrgbCompose,
+            ChannelMap: new() {
+                new("R", rId), new("G", gId), new("B", bId), new("L", lId)
+            },
+            Register: false,
+            Normalize: false,
+            LrgbAlgo: "ratio"));
+        var status = await WaitForJob(jobId, TimeSpan.FromSeconds(10));
+
+        Assert.That(status.Stage, Is.EqualTo("done"),
+            $"LrgbCompose (ratio) failed: {status.Error}");
+        Assert.That(File.Exists(status.OutputPath!), Is.True);
     }
 
     [Test]

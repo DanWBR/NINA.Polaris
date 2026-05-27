@@ -258,8 +258,9 @@ public class ChannelCombineService {
                     prefix = "rgb";
                     break;
                 case Modes.LrgbCompose:
-                    throw new NotImplementedException(
-                        "LrgbCompose ships in CC-2 (LrgbCombiner). Use RgbCompose for now.");
+                    composed = ComposeLrgb(inputs, W, H, req.LrgbAlgo);
+                    prefix = "lrgb";
+                    break;
                 case Modes.PixelMath:
                     throw new NotImplementedException(
                         "PixelMath ships in CC-3 (PixelMathEvaluator). Use RgbCompose for now.");
@@ -316,6 +317,25 @@ public class ChannelCombineService {
                                                           plane * sizeof(ushort));
         Buffer.BlockCopy(b, 0, packed, plane * 2 * sizeof(ushort),
                                                           plane * sizeof(ushort));
+        return (packed, 3);
+    }
+
+    // ── compose: LRGB ────────────────────────────────────────────────
+
+    private static (ushort[] data, int channels) ComposeLrgb(
+            List<LoadedChannel> inputs, int W, int H, string? algoName) {
+        var r = FindChannel(inputs, "R") ?? throw new InvalidOperationException(
+            "LrgbCompose requires a channel named 'R'.");
+        var g = FindChannel(inputs, "G") ?? throw new InvalidOperationException(
+            "LrgbCompose requires a channel named 'G'.");
+        var b = FindChannel(inputs, "B") ?? throw new InvalidOperationException(
+            "LrgbCompose requires a channel named 'B'.");
+        var l = FindChannel(inputs, "L") ?? throw new InvalidOperationException(
+            "LrgbCompose requires a channel named 'L' (luminance master).");
+        var algo = string.Equals(algoName, "ratio", StringComparison.OrdinalIgnoreCase)
+            ? LrgbCombiner.LrgbAlgorithm.Ratio
+            : LrgbCombiner.LrgbAlgorithm.Lab;
+        var packed = LrgbCombiner.Combine(r, g, b, l, W, H, algo);
         return (packed, 3);
     }
 
