@@ -14,7 +14,10 @@ This guide is split into **flows** (do this to accomplish X) and
 1. **[Installation](installation.md)**, get the server running on your
    Pi / mini-PC / Windows box. ~10 minutes. For the Pi-specific
    end-to-end recipe (blank SD card to auto-start systemd unit), see
-   **[Raspberry Pi 4 / 5 setup](raspberry-pi-setup.md)**.
+   **[Raspberry Pi 4 / 5 setup](raspberry-pi-setup.md)**. On Pi the
+   fastest path is the `.deb` package: `sudo apt install ./polaris_arm64.deb`
+   handles every dependency, systemd, indi-web, and user setup in one
+   command. Section 5 Option A in the Pi guide covers it.
 2. **[First-night setup](first-night.md)**, connect your gear, run
    your first sequence. ~30 minutes. Walks through INDI/Alpaca,
    creating a rig, hooking PHD2, slew-and-center, and triggering a

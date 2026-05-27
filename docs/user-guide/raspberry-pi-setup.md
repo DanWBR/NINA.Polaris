@@ -2,8 +2,37 @@
 
 End-to-end recipe to take a brand new Raspberry Pi from blank SD card
 to a Polaris server that auto-starts on boot, hosts INDI drivers, plate
-solves, and is reachable from any laptop or phone on your LAN. Roughly
-60 to 90 minutes the first time, mostly waiting on `apt`.
+solves, and is reachable from any laptop or phone on your LAN.
+
+## Two paths
+
+**Fast path (recommended): install the .deb.** Sections 0 through 3 of
+this guide cover the hardware checklist + flashing the OS + creating
+the capture folder, which you still need to do once. After that, skip
+straight to section 5 and use the .deb option instead of the long
+manual install. Total time: ~30 minutes, most of it OS update + reboot.
+
+```bash
+# After Raspberry Pi OS Lite is flashed, booted, and you SSH in:
+sudo apt update && sudo apt full-upgrade -y
+sudo reboot
+# ... back via SSH ...
+wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb
+sudo apt install ./polaris_arm64.deb
+# Polaris running at http://<hostname>.local:5000
+```
+
+The .deb pulls in every apt dependency, creates the `polaris` system
+user, sets up `~/files/` as the capture root, installs indi-web in a
+managed venv, and enables the systemd unit. See
+[packaging/README.md](../../packaging/README.md) for the full
+breakdown of what the .deb does.
+
+**Manual path (full understanding):** follow this guide top to bottom.
+Roughly 60 to 90 minutes, mostly waiting on `apt`. Useful if you want
+to know exactly what each component does, or you are building a
+custom variant (different paths, different .NET install, source
+builds of INDI / PHD2 / xpra, etc.).
 
 Single page on purpose. If you already have a working Pi and just need
 to install Polaris, jump to [Install Polaris](#5-install-polaris).
@@ -418,9 +447,47 @@ which siril         # /usr/bin/siril
 
 ## 5. Install Polaris
 
-Pick one of three paths. Pre-built release is fastest.
+Pick one of four paths. The .deb is by far the fastest because it
+also handles sections 4, 6, and 7 of this guide automatically (apt
+deps, systemd, indi-web venv, the polaris user, the capture root env
+var). Use it unless you have a specific reason not to.
 
-### Option A: pre-built release (recommended)
+### Option A: Debian .deb (recommended, supersedes sections 4 + 6 + 7)
+
+```bash
+cd /tmp
+wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb
+sudo apt install ./polaris_arm64.deb
+# 60 to 90 seconds later, postinst prints:
+#   Polaris running at http://<hostname>.local:5000
+```
+
+What the .deb resolves on your behalf:
+
+- All apt deps from section 4 (indi-bin, libfontconfig1, python3-venv,
+  recommends indi-full + phd2 + astap + siril + xpra + dphys-swapfile)
+- Self-contained .NET 10 runtime (no separate dotnet install needed,
+  section 4.1 dotnet block is skipped)
+- The `polaris` system user
+- `/home/polaris/files/` capture root (section 3)
+- indi-web in `/opt/polaris-indiweb-venv/` (section 8.2)
+- systemd unit at `/lib/systemd/system/polaris.service` (section 7),
+  enabled and started
+
+What you still need to do manually after the .deb:
+
+- ASTAP star catalog download (section 4.3, the .deb just pulls the
+  ASTAP binary, not the catalog)
+- GraXpert install + AI models transfer (section 4.4)
+- Optional: mount USB SSD over `/home/polaris/files/` (section 3.1)
+- Optional: HTTPS for WebGPU on LAN (section 10)
+
+Full breakdown in [packaging/README.md](../../packaging/README.md).
+
+### Option B: pre-built tarball release
+
+If you want to skip the systemd auto-config and run Polaris manually
+or via your own service definition:
 
 ```bash
 mkdir -p ~/polaris && cd ~/polaris
@@ -429,7 +496,7 @@ curl -L https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-
 chmod +x NINA.Polaris
 ```
 
-### Option B: Docker
+### Option C: Docker
 
 ```bash
 sudo apt install -y docker.io
@@ -448,7 +515,7 @@ docker run -d --name polaris \
 faster than through Docker's bridge. Skip the systemd steps below if
 you use Docker; the container handles restart on its own.
 
-### Option C: build from source
+### Option D: build from source
 
 For developers iterating on Polaris itself. See
 [rpi-debug-from-vs.md](rpi-debug-from-vs.md) for the full developer
