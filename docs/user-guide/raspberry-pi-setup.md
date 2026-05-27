@@ -288,32 +288,88 @@ binary. The `/opt/astap` path is read-anyone, works for all users.
 
 ### 4.4. GraXpert (manual install)
 
-GraXpert ships as a self-contained AppImage or tarball. Drop it into
-the polaris user's home so the systemd-run Polaris process can find it:
+GraXpert ships in two forms: a self-contained binary (Windows / macOS,
+plus old Linux releases) and a Python package on PyPI (the only
+reliable form on Pi today, since pre-built ARM binaries are not
+always published). Polaris auto-detects both styles.
+
+**Recommended on Pi: install via pip in a venv.**
 
 ```bash
-mkdir -p ~/graxpert && cd ~/graxpert
-# Grab the latest Linux build from https://www.graxpert.com/
-# Example (replace VERSION with current):
-wget https://github.com/Steffenhir/GraXpert/releases/download/VERSION/GraXpert-linux-VERSION
-chmod +x GraXpert-linux-VERSION
-ln -sf GraXpert-linux-VERSION graxpert    # stable name Polaris can find
+sudo apt install -y python3-venv python3-pip
+mkdir -p ~/GraXpert && cd ~/GraXpert
+python3 -m venv graxpert
+./graxpert/bin/pip install --upgrade pip
+./graxpert/bin/pip install graxpert
 ```
 
-You should end up with an executable at `~/graxpert/graxpert`. After
-Polaris is running, go to **Settings, External Tools, GraXpert path**
-and paste `/home/polaris/graxpert/graxpert`. Hit Re-detect. The status
-flips to green with the detected version + supported operations (BGE
-on 2.x, BGE + Deconvolution + Denoising on 3.x).
+That gives you `/home/polaris/GraXpert/graxpert/bin/python` with the
+`graxpert` module installed. Polaris auto-detects this layout (no
+Settings configuration needed) and invokes it as
+`python -m graxpert.main ARGS`.
 
-You can also drop the binary at `/usr/local/bin/graxpert` instead, in
-which case Polaris auto-detects it without the manual path config.
-The `~/graxpert` location is cleaner if you want to keep multiple
-versions side by side.
+Verify:
 
-The GraXpert AI models are downloaded on first run; first invocation
-of each operation will hang for a few minutes while pulling weights
-from GitHub.
+```bash
+~/GraXpert/graxpert/bin/python -m graxpert.main --version
+```
+
+If you have the standalone binary instead (downloaded from
+[graxpert.com](https://www.graxpert.com/)), drop it at
+`/home/polaris/graxpert/graxpert` (lowercase folder + binary) or
+`/usr/local/bin/graxpert`. Polaris auto-detects both.
+
+#### Installing AI models
+
+GraXpert v3 no longer auto-downloads the AI models; you have to drop
+them in place by hand. Each operation (BGE, deconvolution, denoise)
+needs its model directory.
+
+The location follows the XDG Base Directory spec via Python's
+`appdirs.user_data_dir(appname="GraXpert")`, which on Linux resolves
+to `~/.local/share/GraXpert/`. Final layout:
+
+```
+/home/polaris/.local/share/GraXpert/
+├── ai-models/                  # decon + denoise models
+│   ├── deconvolution-stars/{version}/model.onnx
+│   ├── deconvolution-object/{version}/model.onnx
+│   └── denoise/{version}/model.onnx
+└── bge-ai-models/              # background extraction
+    └── {version}/model.onnx
+```
+
+If you already have the models on your Windows PC (under
+`%LOCALAPPDATA%\GraXpert\`, i.e. `C:\Users\YOU\AppData\Local\GraXpert\`),
+copy them to the Pi over SSH:
+
+```powershell
+# From Windows PowerShell:
+scp -r "$env:LOCALAPPDATA\GraXpert\ai-models" polaris@polaris.local:.local/share/GraXpert/
+scp -r "$env:LOCALAPPDATA\GraXpert\bge-ai-models" polaris@polaris.local:.local/share/GraXpert/
+```
+
+Or, from WSL / Git Bash:
+
+```bash
+rsync -avh "/mnt/c/Users/YOU/AppData/Local/GraXpert/" polaris@polaris.local:.local/share/GraXpert/
+```
+
+Verify on the Pi:
+
+```bash
+ls ~/.local/share/GraXpert/
+du -sh ~/.local/share/GraXpert/*
+```
+
+You should see both `ai-models/` and `bge-ai-models/` with a few
+hundred MB each.
+
+**systemd gotcha**: the unit in section 7 sets
+`Environment=HOME=/home/polaris`. Without that, the `appdirs` lookup
+inside GraXpert returns a path that does not exist and you get
+"model not found" errors at runtime even when the files are in place.
+Same root cause as the indi-web "stopped right after start" gotcha.
 
 ### 4.5. Verify external binaries
 
@@ -322,7 +378,9 @@ dotnet --info       # Microsoft.AspNetCore.App 10.x.x
 indiserver --help   # should print usage
 which astap         # /usr/bin/astap (or /usr/local/bin/astap if from source)
 which siril         # /usr/bin/siril
-~/graxpert/graxpert --version    # prints GraXpert version
+# GraXpert: pick the line that matches your install style
+~/GraXpert/graxpert/bin/python -m graxpert.main --version   # venv install
+~/graxpert/graxpert --version                                # standalone binary
 ```
 
 ## 5. Install Polaris
