@@ -1448,6 +1448,18 @@ Contributions are welcome! This project follows the same coding standards as the
 - **Frontend** is plain HTML/JS/CSS in `src/NINA.Polaris/wwwroot/`, no build step required
 - **Tests** go in `tests/NINA.Polaris.Test/` using NUnit
 
+## Data attribution
+
+When the Photometric Color Calibration (PCC) workflow is enabled,
+Polaris uses the AAVSO **APASS DR10** star catalog under a CC-BY
+4.0 license. The catalog is downloaded by `scripts/download-apass.py`
+to `wwwroot/catalogs/apass/apass.db` (gitignored). If you publish
+images calibrated with PCC, please credit:
+
+> Henden, A. A., Levine, S., Terrell, D., Welch, D. L., Munari, U.,
+> & Kloppenborg, B. K. (2018). "The APASS Data Release 10." VizieR
+> On-line Data Catalog: II/336. https://www.aavso.org/apass
+
 ## License
 
 This project is licensed under the Mozilla Public License 2.0.

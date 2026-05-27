@@ -274,6 +274,13 @@ them all and click **Integrate**.
 > STUDIO **Combine** button, then return here at step 5 with the
 > composed master.
 
+> **Want neutral colour before the AI step?** Run STUDIO →
+> [Color calibration](color-calibration.md) on the master between
+> Combine and AI cleanup. BG neutralize handles a simple cast in
+> seconds; PCC fits per-channel gains against the bundled APASS
+> star catalog for science-grade colour. Optional but recommended
+> when the source has a visible tint.
+
 Pick:
 
 - **Integration method**: Average for max SNR, Sigma-clipped average

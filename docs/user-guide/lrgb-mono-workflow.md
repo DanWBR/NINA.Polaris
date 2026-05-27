@@ -200,7 +200,28 @@ A toast confirms the output path on completion. The new file shows
 up in the STUDIO frame browser after the auto-rescan with a 3-channel
 badge (or 1-channel for PixelMath mono output).
 
-## Step 6: Continue with AI cleanup and editor
+## Step 6: (Optional but recommended) Color calibration
+
+Click the **🎯 Color calibration** button in the selection bar with
+the composed master selected. The modal has three modes:
+
+- **BG neutralize**, neutralises a background colour cast in
+  seconds, no setup. Use this on every master as a quick first pass.
+- **Manual**, BG neutralize plus a white-reference patch you pick.
+  Use when the BG step alone leaves a tint and you have a G2V star
+  or galaxy core in frame.
+- **PCC**, Photometric Color Calibration via the bundled APASS
+  DR10 catalog. Requires plate-solved source + the catalog
+  populated (run `python scripts/download-apass.py` once on the
+  server). Science-grade: per-channel gains fit from real star
+  colours, not heuristics.
+
+Output is a sibling FITS (`_bgneu.fits` / `_ccal.fits` /
+`_pcc.fits`) that you carry into the next step.
+
+Full walkthrough in [Color calibration (Siril-style)](color-calibration.md).
+
+## Step 7: Continue with AI cleanup and editor
 
 The composed RGB/LRGB FITS is just a frame; everything downstream
 treats it like any other master:

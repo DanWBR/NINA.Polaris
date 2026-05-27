@@ -29,6 +29,12 @@ This guide is split into **flows** (do this to accomplish X) and
    luminance master, and PixelMath for narrowband palettes like HOO
    and SHO. Then continues through GraXpert and the editor exactly
    like the OSC path.
+5. **[Color calibration (Siril-style)](color-calibration.md)**,
+   three calibrators that sit between combine and AI cleanup: BG
+   neutralize (zero-config), Manual (BG + white reference), and
+   PCC (Photometric Color Calibration via bundled APASS DR10 star
+   catalog). Plate-solve-driven, science-grade colour without
+   leaving Polaris.
 
 ## By feature
 

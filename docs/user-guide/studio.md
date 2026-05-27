@@ -80,6 +80,32 @@ Select calibrated lights → **Integrate** button:
 Output: `integrated/{Target}/{Filter}/master_{Target}_{Filter}_{N}x{Exp}s.fits`
 with `NCOMBINE`, `EXPTOTAL`, `INTMETH`, `REJECT` headers.
 
+## Color calibration (Siril-style)
+
+After channel combine produces an RGB master, click **🎯 Color
+calibration** in the selection bar (single-frame selection) to
+neutralise colour cast and (optionally) fit per-channel gains from
+real catalog star photometry.
+
+Three modes in the modal:
+
+- **BG neutralize**, auto or patch-based background sampling +
+  per-channel offset subtraction. Output:
+  `{stem}_bgneu.fits`.
+- **Manual**, BG neutralize + a white-reference patch picker.
+  Output: `{stem}_ccal.fits`.
+- **PCC (Photometric Color Calibration)**, plate-solve-driven
+  catalog lookup (bundled APASS DR10) + per-star B-V → expected
+  RGB ratios + median gain fit. Requires WCS in the source FITS +
+  the catalog populated via `scripts/download-apass.py`. Output:
+  `{stem}_pcc.fits` plus `CCAL_NSTAR` matched-star count.
+
+All output FITS carry the recipe in custom headers (`CCAL_MOD`,
+`CCAL_OFR/G/B`, `CCAL_GNR/G/B`, `CCAL_SRC`) for audit in
+PixInsight's FITS Header view.
+
+Full walkthrough in [Color calibration](color-calibration.md).
+
 ## Channel combine (mono LRGB / RGB / PixelMath)
 
 For mono shooters: after per-filter integration leaves you with one
