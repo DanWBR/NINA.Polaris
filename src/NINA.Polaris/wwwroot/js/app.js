@@ -632,6 +632,28 @@ function ninaApp() {
                 running: false,
                 method: 'SigmaClippedMean',
                 lastJob: null
+            },
+            // CC-6: channel combine modal. Three tabs (rgb / lrgb /
+            // pixelmath) backed by their own mapping state so the user
+            // can flip between tabs without losing selections. Common
+            // controls (register, normalize) sit above the tabs.
+            // Mappings hold frameId per variable name; UI pre-fills
+            // them from the selected frames' filters on open.
+            combine: {
+                open: false,
+                running: false,
+                activeTab: 'rgb',
+                register: true,
+                normalize: true,
+                lrgbAlgo: 'lab',         // 'lab' | 'ratio'
+                monoOutput: false,
+                rgb:  { mapping: { R: null, G: null, B: null } },
+                lrgb: { mapping: { R: null, G: null, B: null, L: null } },
+                pm: {
+                    rows: [],            // [{ var: 'Ha', frameId: 42 }, ...]
+                    expressions: ['R', 'G', 'B']
+                },
+                lastJob: null
             }
         },
         _studioRescanPoll: null,
@@ -640,6 +662,7 @@ function ninaApp() {
         _studioMasterPoll: null,
         _studioCalibratePoll: null,
         _studioIntegratePoll: null,
+        _studioCombinePoll: null,
 
         // Observatory location helpers (Settings → Observatory)
         obsAddressQuery: '',
@@ -3606,6 +3629,168 @@ function ninaApp() {
                     done: 0, total: 0, combined: 0, dropped: 0, totalExposureSec: 0
                 };
                 this.toast?.('Integration start failed: ' + e.message, 'error');
+            }
+        },
+
+        // ─── CC-6: channel combine modal (RGB / LRGB / PixelMath) ──
+        // Selection bar surface for the mono LRGB workflow's last
+        // step before the editor. Modal has three tabs that share
+        // the register/normalize toggles + the progress block.
+
+        studioOpenCombineDialog() {
+            const frames = this._studioSelectedFrames();
+            // Auto-fill the per-tab mappings from the selected frames'
+            // FILTER headers. Users who run mono LRGB sequences end up
+            // with FITS metadata that already says "R"/"G"/"B"/"L" or
+            // "Ha"/"OIII"/"SII", we map by filter == variable name
+            // (case-insensitive). Anything that doesn't match stays
+            // empty so the user picks it manually from the dropdown.
+            const byFilter = {};
+            for (const f of frames) {
+                const k = (f.filter || '').toUpperCase();
+                if (k && !byFilter[k]) byFilter[k] = f.id;
+            }
+            const pick = (name) => byFilter[name.toUpperCase()] ?? null;
+            this.studio.combine.rgb.mapping  = { R: pick('R'), G: pick('G'), B: pick('B') };
+            this.studio.combine.lrgb.mapping = {
+                R: pick('R'), G: pick('G'), B: pick('B'), L: pick('L'),
+            };
+            // PixelMath: one row per selected frame, variable name
+            // defaults to the filter (or "v1", "v2" ... if unset so
+            // the expression at least has SOMETHING to reference).
+            this.studio.combine.pm.rows = frames.map((f, i) => ({
+                var: (f.filter || `v${i + 1}`),
+                frameId: f.id,
+            }));
+            this.studio.combine.pm.expressions = ['R', 'G', 'B'];
+            this.studio.combine.lastJob = null;
+            this.studio.combine.activeTab = 'rgb';
+            this.studio.combine.open = true;
+        },
+
+        studioCloseCombineDialog() {
+            this.studio.combine.open = false;
+            if (this._studioCombinePoll) {
+                clearInterval(this._studioCombinePoll);
+                this._studioCombinePoll = null;
+            }
+        },
+
+        // Helpers: hand the modal the list of currently-selected
+        // frames + their thin metadata (id, name, filter) so the
+        // mapping <select>s can render without re-querying the
+        // backend. Pulled from this.studio.frames which is the live
+        // list shown in the studio grid.
+        _studioSelectedFrames() {
+            const ids = new Set(this.studio.selectedIds || []);
+            return (this.studio.frames || []).filter(f => ids.has(f.id));
+        },
+
+        studioCombineCanRun() {
+            if (this.studio.combine.running) return false;
+            switch (this.studio.combine.activeTab) {
+                case 'rgb':
+                    return this._allFilled(this.studio.combine.rgb.mapping, ['R', 'G', 'B']);
+                case 'lrgb':
+                    return this._allFilled(this.studio.combine.lrgb.mapping, ['R', 'G', 'B', 'L']);
+                case 'pm':
+                    if (this.studio.combine.pm.rows.length < 2) return false;
+                    const need = this.studio.combine.monoOutput ? 1 : 3;
+                    return this.studio.combine.pm.expressions
+                        .slice(0, need)
+                        .every(e => (e || '').trim().length > 0);
+                default: return false;
+            }
+        },
+
+        _allFilled(mapping, keys) {
+            return keys.every(k => mapping[k] != null);
+        },
+
+        _studioPmExpressionsCount() {
+            // Resize the expressions array to match RGB (3) or mono (1).
+            // Pads with empty strings on growth, trims on shrink.
+            const need = this.studio.combine.monoOutput ? 1 : 3;
+            const cur = this.studio.combine.pm.expressions;
+            if (cur.length === need) return cur;
+            const defaults = ['R', 'G', 'B'];
+            const next = [];
+            for (let i = 0; i < need; i++) {
+                next.push(cur[i] != null ? cur[i] : defaults[i] || '');
+            }
+            this.studio.combine.pm.expressions = next;
+            return next;
+        },
+
+        async studioStartCombine() {
+            if (!this.studioCombineCanRun()) return;
+            const tab = this.studio.combine.activeTab;
+            let body = {
+                mode: tab === 'pm' ? 'pixelmath' : tab,
+                channelMap: [],
+                register: this.studio.combine.register,
+                normalize: this.studio.combine.normalize,
+            };
+            if (tab === 'rgb') {
+                for (const v of ['R', 'G', 'B']) {
+                    body.channelMap.push({
+                        variable: v, frameId: this.studio.combine.rgb.mapping[v],
+                    });
+                }
+            } else if (tab === 'lrgb') {
+                for (const v of ['R', 'G', 'B', 'L']) {
+                    body.channelMap.push({
+                        variable: v, frameId: this.studio.combine.lrgb.mapping[v],
+                    });
+                }
+                body.lrgbAlgo = this.studio.combine.lrgbAlgo;
+            } else {
+                // PixelMath: emit each row + the expressions list.
+                for (const row of this.studio.combine.pm.rows) {
+                    if (!row.var || !row.frameId) continue;
+                    body.channelMap.push({
+                        variable: row.var.trim(), frameId: row.frameId,
+                    });
+                }
+                const need = this.studio.combine.monoOutput ? 1 : 3;
+                body.expressions = this.studio.combine.pm.expressions.slice(0, need);
+                body.monoOutput = this.studio.combine.monoOutput;
+            }
+
+            this.studio.combine.running = true;
+            this.studio.combine.lastJob = {
+                stage: 'queued', mode: body.mode, done: 0,
+                total: body.channelMap.length,
+            };
+            try {
+                const resp = await this.apiPost('/api/studio/combine', body);
+                const r = await resp.json();
+                this._studioCombinePoll = setInterval(async () => {
+                    try {
+                        const s = await this.apiGet(`/api/studio/combine/${r.jobId}`);
+                        this.studio.combine.lastJob = s;
+                        if (!s.inProgress) {
+                            clearInterval(this._studioCombinePoll);
+                            this._studioCombinePoll = null;
+                            this.studio.combine.running = false;
+                            if (s.stage === 'done') {
+                                this.toast?.(
+                                    `Combine done: ${s.outputPath}`, 'ok');
+                                this.loadStudio();
+                            } else if (s.stage === 'error') {
+                                this.toast?.(
+                                    'Combine failed: ' + s.error, 'error');
+                            }
+                        }
+                    } catch { /* swallow transient failure */ }
+                }, 800);
+            } catch (e) {
+                this.studio.combine.running = false;
+                this.studio.combine.lastJob = {
+                    stage: 'error', error: e.message,
+                    done: 0, total: body.channelMap.length,
+                };
+                this.toast?.('Combine start failed: ' + e.message, 'error');
             }
         },
 

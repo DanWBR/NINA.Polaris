@@ -4281,6 +4281,19 @@
                             @click="studioOpenIntegrateDialog()">
                         ✧ Integrate (stack)
                     </button>
+                    <!-- CC-6: Channel combine (RGB / LRGB / PixelMath).
+                         Last step of the mono workflow: take N
+                         per-filter masters and produce one RGB or
+                         LRGB image, or evaluate a PixelMath expression
+                         to synthesise narrowband palettes. ≥2 frames
+                         since RGB needs three and PixelMath needs at
+                         least two named variables. -->
+                    <button class="btn btn-sm btn-primary"
+                            :disabled="studio.selectedIds.length < 2"
+                            @click="studioOpenCombineDialog()"
+                            title="Combine channels into one RGB/LRGB FITS, or run a PixelMath expression">
+                        🎨 Combine
+                    </button>
                     <!-- ED-7: hand the single-selected frame to the
                          Lightroom-style editor. One frame at a time,
                          the editor opens a single session per file. -->
@@ -4536,6 +4549,199 @@
                                         :disabled="studio.integrate.running || studio.selectedIds.length < 2">
                                     <span x-show="!studio.integrate.running">▶ Integrate</span>
                                     <span x-show="studio.integrate.running">Working…</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CC-6: Channel combine modal (RGB / LRGB / PixelMath) -->
+                <div class="studio-viewer-modal" x-show="studio.combine.open"
+                     x-cloak @click.self="studioCloseCombineDialog()"
+                     @keydown.escape.window="studio.combine.open && studioCloseCombineDialog()">
+                    <div class="studio-master-modal" style="max-width:760px">
+                        <div class="studio-viewer-header">
+                            <div class="studio-viewer-title">
+                                <strong>Combine channels</strong>
+                                <span class="muted" x-text="studio.selectedIds.length + ' frames selected'"></span>
+                            </div>
+                            <button class="btn btn-sm" @click="studioCloseCombineDialog()" :disabled="studio.combine.running">✕</button>
+                        </div>
+                        <div class="studio-master-body">
+                            <!-- Tab strip -->
+                            <div class="combine-tabs">
+                                <button class="combine-tab"
+                                        :class="{ active: studio.combine.activeTab === 'rgb' }"
+                                        @click="studio.combine.activeTab = 'rgb'"
+                                        :disabled="studio.combine.running">RGB</button>
+                                <button class="combine-tab"
+                                        :class="{ active: studio.combine.activeTab === 'lrgb' }"
+                                        @click="studio.combine.activeTab = 'lrgb'"
+                                        :disabled="studio.combine.running">LRGB</button>
+                                <button class="combine-tab"
+                                        :class="{ active: studio.combine.activeTab === 'pm' }"
+                                        @click="studio.combine.activeTab = 'pm'"
+                                        :disabled="studio.combine.running">PixelMath</button>
+                            </div>
+
+                            <!-- RGB tab: 3 channel slots auto-filled from filter. -->
+                            <div x-show="studio.combine.activeTab === 'rgb'" class="combine-tab-body">
+                                <div class="muted" style="font-size:12px;margin-bottom:8px">
+                                    Pack 3 mono per-filter masters into one RGB FITS. The
+                                    file lands in <code>{rig}/integrated/{target}/composed/rgb_*.fits</code>.
+                                </div>
+                                <template x-for="slot in ['R','G','B']" :key="'rgb-'+slot">
+                                    <label class="control-row">
+                                        <span style="min-width:30px" x-text="slot"></span>
+                                        <select x-model.number="studio.combine.rgb.mapping[slot]"
+                                                :disabled="studio.combine.running" class="input-md">
+                                            <option :value="null">... pick a frame ...</option>
+                                            <template x-for="f in _studioSelectedFrames()" :key="f.id">
+                                                <option :value="f.id"
+                                                        x-text="`${f.fileName}  (${f.filter || 'no filter'})`"></option>
+                                            </template>
+                                        </select>
+                                    </label>
+                                </template>
+                            </div>
+
+                            <!-- LRGB tab: RGB + L + algorithm radio. -->
+                            <div x-show="studio.combine.activeTab === 'lrgb'" class="combine-tab-body">
+                                <div class="muted" style="font-size:12px;margin-bottom:8px">
+                                    Combine R, G, B with a luminance L master. Output:
+                                    <code>{rig}/integrated/{target}/composed/lrgb_*.fits</code>.
+                                    Both algorithms trust that L and RGB were stretched
+                                    together upstream (re-stretch in STUDIO if the
+                                    brightness gap is large).
+                                </div>
+                                <template x-for="slot in ['R','G','B','L']" :key="'lrgb-'+slot">
+                                    <label class="control-row">
+                                        <span style="min-width:30px" x-text="slot"></span>
+                                        <select x-model.number="studio.combine.lrgb.mapping[slot]"
+                                                :disabled="studio.combine.running" class="input-md">
+                                            <option :value="null">... pick a frame ...</option>
+                                            <template x-for="f in _studioSelectedFrames()" :key="f.id">
+                                                <option :value="f.id"
+                                                        x-text="`${f.fileName}  (${f.filter || 'no filter'})`"></option>
+                                            </template>
+                                        </select>
+                                    </label>
+                                </template>
+                                <label class="control-row">
+                                    <span style="min-width:90px">Algorithm</span>
+                                    <select x-model="studio.combine.lrgbAlgo"
+                                            :disabled="studio.combine.running" class="input-md">
+                                        <option value="lab">Lab swap (preserves chrominance)</option>
+                                        <option value="ratio">Ratio (classical, faster)</option>
+                                    </select>
+                                </label>
+                            </div>
+
+                            <!-- PixelMath tab: variable bindings + per-output-channel expressions. -->
+                            <div x-show="studio.combine.activeTab === 'pm'" class="combine-tab-body">
+                                <div class="muted" style="font-size:12px;margin-bottom:8px">
+                                    Evaluate per-pixel expressions over named input channels.
+                                    Useful for narrowband palettes (HOO, SHO, ...). Output:
+                                    <code>{rig}/integrated/{target}/composed/pm_*.fits</code>.
+                                    Supported operators: <code>+ - * / **</code>,
+                                    functions: <code>min max abs pow sqrt exp log clamp</code>.
+                                </div>
+
+                                <div class="muted" style="font-size:11px;text-transform:uppercase;
+                                                          letter-spacing:0.05em;margin-top:6px">
+                                    Variable bindings
+                                </div>
+                                <template x-for="(row, idx) in studio.combine.pm.rows"
+                                          :key="'pm-row-'+idx">
+                                    <div class="control-row" style="gap:8px">
+                                        <input type="text" x-model="row.var"
+                                               :disabled="studio.combine.running"
+                                               style="width:80px" placeholder="name"/>
+                                        <select x-model.number="row.frameId"
+                                                :disabled="studio.combine.running" class="input-md">
+                                            <option :value="null">... pick a frame ...</option>
+                                            <template x-for="f in _studioSelectedFrames()" :key="f.id">
+                                                <option :value="f.id"
+                                                        x-text="`${f.fileName}  (${f.filter || 'no filter'})`"></option>
+                                            </template>
+                                        </select>
+                                    </div>
+                                </template>
+
+                                <label class="control-row" style="margin-top:10px">
+                                    <input type="checkbox" x-model="studio.combine.monoOutput"
+                                           @change="_studioPmExpressionsCount()"
+                                           :disabled="studio.combine.running"/>
+                                    <span>Mono output (1 expression, single-channel FITS)</span>
+                                </label>
+
+                                <div class="muted" style="font-size:11px;text-transform:uppercase;
+                                                          letter-spacing:0.05em;margin-top:6px">
+                                    Output expressions
+                                </div>
+                                <template x-for="(_, ci) in _studioPmExpressionsCount()"
+                                          :key="'pm-expr-'+ci">
+                                    <label class="control-row">
+                                        <span style="min-width:30px"
+                                              x-text="studio.combine.monoOutput ? 'L' : ['R','G','B'][ci]"></span>
+                                        <input type="text"
+                                               :value="studio.combine.pm.expressions[ci] || ''"
+                                               @input="studio.combine.pm.expressions[ci] = $event.target.value"
+                                               :disabled="studio.combine.running"
+                                               style="flex:1;font-family:monospace"
+                                               placeholder="e.g. 0.7*R + 0.3*Ha"/>
+                                    </label>
+                                </template>
+                            </div>
+
+                            <!-- Common controls -->
+                            <div class="combine-common" style="margin-top:10px;
+                                 padding-top:10px;border-top:1px solid var(--border)">
+                                <label class="control-row">
+                                    <input type="checkbox" x-model="studio.combine.register"
+                                           :disabled="studio.combine.running"/>
+                                    <span>Register channels (recommended)</span>
+                                </label>
+                                <div class="muted" style="font-size:11px;padding-left:24px">
+                                    Cross-channel star alignment. Disable only if your
+                                    masters were captured in a single session with no
+                                    re-framing and the same reference frame across all
+                                    filters (rare).
+                                </div>
+                                <label class="control-row">
+                                    <input type="checkbox" x-model="studio.combine.normalize"
+                                           :disabled="studio.combine.running"/>
+                                    <span>Normalize per-channel (scale to common median)</span>
+                                </label>
+                            </div>
+
+                            <!-- Progress -->
+                            <div class="studio-master-progress"
+                                 x-show="studio.combine.running || studio.combine.lastJob">
+                                <div class="muted" style="font-size:12px;text-transform:uppercase;letter-spacing:0.05em">
+                                    Status: <span x-text="studio.combine.lastJob?.stage || 'idle'"></span>
+                                    <span x-show="studio.combine.lastJob?.referenceChannel"
+                                          x-text="' (ref: ' + studio.combine.lastJob.referenceChannel + ')'"></span>
+                                </div>
+                                <div class="studio-master-bar" x-show="studio.combine.lastJob?.total > 0">
+                                    <div class="studio-master-bar-fill"
+                                         :style="'width:' + Math.round(100 * (studio.combine.lastJob?.done || 0) / (studio.combine.lastJob?.total || 1)) + '%'"></div>
+                                </div>
+                                <div style="color:#ff9c66;font-size:12px"
+                                     x-show="studio.combine.lastJob?.error"
+                                     x-text="'⚠ ' + studio.combine.lastJob?.error"></div>
+                                <div style="color:#88e088;font-size:12px;word-break:break-all"
+                                     x-show="studio.combine.lastJob?.outputPath"
+                                     x-text="'→ ' + studio.combine.lastJob?.outputPath"></div>
+                            </div>
+
+                            <div class="control-row actions" style="margin-top:14px">
+                                <button class="btn" @click="studioCloseCombineDialog()"
+                                        :disabled="studio.combine.running">Close</button>
+                                <button class="btn btn-primary" @click="studioStartCombine()"
+                                        :disabled="!studioCombineCanRun()">
+                                    <span x-show="!studio.combine.running">▶ Combine</span>
+                                    <span x-show="studio.combine.running">Working…</span>
                                 </button>
                             </div>
                         </div>

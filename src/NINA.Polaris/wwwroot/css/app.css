@@ -5459,6 +5459,43 @@ label select.input-sm {
     transition: width 0.3s ease;
 }
 
+/* CC-6: combine modal tab strip + tab body. Three modes share the
+   same modal shell + the common controls section below, so each
+   tab body collapses to a compact area between header + actions. */
+.combine-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 10px;
+}
+.combine-tab {
+    flex: 1;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+}
+.combine-tab:hover:not(:disabled) {
+    color: var(--text-primary);
+}
+.combine-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+.combine-tab:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+.combine-tab-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
 /* ===========================================================
    External tools (Siril + GraXpert), Settings section + Siril
    run modal. Each "row" is a card per tool with status pill +
