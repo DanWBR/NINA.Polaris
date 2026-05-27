@@ -6,7 +6,7 @@ INDI drivers without ssh'ing into the host and editing
 `indiserver` command lines by hand.
 
 Unlike the embedded PHD2 GUI (which needs xpra to stream a desktop
-window), `indi-web` is already a browser app — Polaris just
+window), `indi-web` is already a browser app, Polaris just
 reverse-proxies it through `/indi-web/` and shows it in an iframe.
 No extra display server, no extra streaming bandwidth.
 
@@ -14,7 +14,7 @@ No extra display server, no extra streaming bandwidth.
 
 Polaris's normal `IndiClient` connects to a running `indiserver` on
 port 7624 and lists whatever drivers that server has already loaded.
-It cannot, by itself, add or remove drivers — that requires either
+It cannot, by itself, add or remove drivers, that requires either
 restarting `indiserver` with new arguments or talking to its FIFO.
 The embedded `indi-web` panel gives you:
 
@@ -33,10 +33,10 @@ Start.
 
 | | |
 |---|---|
-| OS | Linux or macOS. Windows is unsupported — `indiserver` itself doesn't ship for Windows. |
+| OS | Linux or macOS. Windows is unsupported, `indiserver` itself doesn't ship for Windows. |
 | Python | 3.x with `pip` on PATH. |
-| INDI core | Installed via `apt install indi-bin` (Debian/Ubuntu/Raspberry Pi OS) or your distro's equivalent — `indi-web` shells out to `indiserver`, it does not bundle it. |
-| Port | 8624 (`indi-web`'s default). Bound to `127.0.0.1` only — Polaris proxies access through itself. |
+| INDI core | Installed via `apt install indi-bin` (Debian/Ubuntu/Raspberry Pi OS) or your distro's equivalent, `indi-web` shells out to `indiserver`, it does not bundle it. |
+| Port | 8624 (`indi-web`'s default). Bound to `127.0.0.1` only, Polaris proxies access through itself. |
 
 ## Install
 
@@ -46,7 +46,7 @@ One-line, on the Polaris host:
 pip install indiweb
 ```
 
-You don't need to start `indi-web` yourself — Polaris's
+You don't need to start `indi-web` yourself, Polaris's
 `IndiWebManagerService` detects the binary, manages the process,
 and surfaces it in the RIGS tab.
 
@@ -96,7 +96,7 @@ The hash suffix changes if the Pipfile changes (rare); set once
 and forget unless you `pipenv update` to a new release.
 
 `BindAddress` should stay on loopback unless you really know what
-you're doing — `indi-web` has no auth, so binding it to `0.0.0.0`
+you're doing, `indi-web` has no auth, so binding it to `0.0.0.0`
 re-exposes driver control to anyone on the LAN.
 
 ## Workflow
@@ -105,10 +105,10 @@ re-exposes driver control to anyone on the LAN.
 2. Scroll to the **INDI Drivers** section near the bottom of the
    page (below Accessories).
 3. The status pill shows the current state:
-   - **● Running** — green, indi-web is up and the iframe is loaded
-   - **Stopped** — installed but not currently running, click ▶ Start
-   - **Not installed** — pip install hint shown inline
-   - **OS not supported** — Windows banner with the reason
+   - **● Running**, green, indi-web is up and the iframe is loaded
+   - **Stopped**, installed but not currently running, click ▶ Start
+   - **Not installed**, pip install hint shown inline
+   - **OS not supported**, Windows banner with the reason
 4. Click **▶ Start**. The iframe mounts after the TCP probe
    confirms indi-web is listening (typically 1-3 seconds).
 5. Use the embedded UI to: pick a Profile (or create one), tick
@@ -161,10 +161,51 @@ be in that user's PATH. Either:
 - Or set `IndiWeb:ExecutablePath` to the absolute path in
   `appsettings.json`
 
+**Banner shows the binary path but status is "Not installed"
+(detection runs, comes back empty).**
+The user that runs Polaris cannot read/execute the path. With
+systemd that user is whoever the unit's `User=` directive names
+(often `polaris` or `root`), not your interactive login. Verify:
+
+```bash
+# pretend to be the Polaris user and try the binary directly:
+sudo -u polaris /home/polaris/.local/share/virtualenvs/indiweb-XXXXXXXX/bin/indi-web --version
+```
+
+If that errors with "Permission denied" or "No such file or
+directory", fix one of:
+
+- Make the venv readable by the Polaris user (`chmod -R o+rx`
+  on the venv tree if it's currently 700, or `chown -R polaris:polaris`
+  if it should belong to that user)
+- Move the Polaris systemd unit to run as the user who DOES own
+  the venv (edit `User=` in `/etc/systemd/system/polaris.service`)
+
+**Status flips to "Stopped" right after I click ▶ Start.**
+The child process spawned but died before the TCP probe could
+catch it. Check `journalctl -u polaris -f` (or wherever your log
+lands), Polaris logs `Spawning indi-web: {path} {args}` followed
+by either the listener-up message or an `indi-web exited
+prematurely (code N)` line with N being the exit code.
+
+Common reasons:
+
+- **HOME not set in the systemd unit.** Bottle (the framework
+  indi-web uses) reads config from `$HOME` on startup. Some
+  systemd units run with an empty `$HOME` and indi-web exits
+  immediately. Add `Environment=HOME=/home/polaris` to the
+  `[Service]` block of the unit and `systemctl daemon-reload`.
+- **Port 8624 already in use.** Something else (an old
+  indi-web from a previous shell, a docker container) holds the
+  port. `lsof -i:8624` to find it, kill it, restart Polaris.
+- **Missing system libraries.** indi-web depends on libindi
+  being installed. `apt list --installed | grep indi-bin`, if
+  empty, `sudo apt install indi-bin`.
+
 **Iframe shows "Bad Gateway"** (502).
 The reverse proxy got an error talking to `127.0.0.1:8624`. Check
 the Polaris log for the inner error. Usually means indi-web died
-between the status probe and the iframe fetch — click **⟳** in
+between the status probe and the iframe fetch, click **⟳** in
 the Polaris control row to re-probe.
 
 **Iframe shows the indi-web UI but driver list is empty.**
@@ -179,11 +220,29 @@ Polaris's `IndiClient` connects via TCP to `indiserver` on the
 configured host:port (Settings → INDI). Check that the host:port
 match what indi-web's "Server" page reports.
 
+**I want to manage indi-web with my own systemd unit instead.**
+Don't, `IndiWebManagerService` is designed to be the sole owner
+of the indi-web process. If you run a parallel systemd unit:
+
+- On boot, Polaris probes `127.0.0.1:8624`, sees a listener, and
+  flips the status to running. The Stop button in the UI then
+  fails silently because it tries to kill a `_process` reference
+  that's null (Polaris didn't spawn this one).
+- If `IndiWeb:AutoStart=true` AND the systemd unit also starts on
+  boot, both try to bind 8624 and one loses with `EADDRINUSE`.
+
+For 24/7 observatory rigs where the Polaris server is itself a
+systemd unit, set `IndiWeb:AutoStart=true` and let Polaris handle
+the lifecycle. The standalone systemd unit only makes sense when
+Polaris runs interactively (dev mode), and even then the simpler
+fix is leaving Polaris's `AutoStart=true` and accepting the 3 s
+warmup at app boot.
+
 ## See also
 
-- [Equipment setup](equipment.md) — pre-`indi-web` workflow,
+- [Equipment setup](equipment.md), pre-`indi-web` workflow,
   still relevant when you'd rather edit `indiserver` args manually
-- [Simulator mode](simulator-mode.md) — built-in equipment
+- [Simulator mode](simulator-mode.md), built-in equipment
   simulator (see Coexistence section above for the rules)
-- [PHD2 deep integration](phd2-gui-embedding.md) — for the more
+- [PHD2 deep integration](phd2-gui-embedding.md), for the more
   complex xpra-hosted PHD2 GUI; this is the lighter-weight cousin
