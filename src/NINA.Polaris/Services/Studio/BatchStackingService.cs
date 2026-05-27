@@ -152,6 +152,30 @@ public class BatchStackingService {
                         _logger.LogWarning("Drop frame {File}: alignment failed", loaded[i].Name);
                         dropped++;
                     } else {
+                        // Pre-resample alignment-quality probe: project
+                        // every current-frame star through the transform
+                        // and find its nearest reference star. Median
+                        // residual >1px means the transform smears the
+                        // master and ASTAP will fail to match quads
+                        // even though raw star counts look healthy.
+                        var residual = MedianAlignmentResidualPx(
+                            refStars, loaded[i].Stars, transform);
+                        if (residual > 2.0) {
+                            _logger.LogWarning(
+                                "Frame {File}: alignment residual median {Residual:F2}px " +
+                                "exceeds 2px (transform: M00={M00:F3} M01={M01:F3} " +
+                                "M10={M10:F3} M11={M11:F3} Tx={Tx:F1} Ty={Ty:F1}); " +
+                                "expect smearing in the integrated master.",
+                                loaded[i].Name, residual,
+                                transform.M00, transform.M01, transform.M10, transform.M11,
+                                transform.Tx, transform.Ty);
+                        } else {
+                            _logger.LogDebug(
+                                "Frame {File}: aligned, residual median {Residual:F2}px " +
+                                "(Tx={Tx:F1}, Ty={Ty:F1})",
+                                loaded[i].Name, residual, transform.Tx, transform.Ty);
+                        }
+
                         var resampled = ImageResampler.ApplyTransform(
                             loaded[i].Img.Data, W, H, transform);
                         aligned.Add(resampled);
@@ -309,6 +333,34 @@ public class BatchStackingService {
                 Error = ex.Message
             };
         }
+    }
+
+    /// <summary>
+    /// Median nearest-neighbor residual (in reference-pixel space)
+    /// after applying the transform to every current-frame star.
+    /// Used as a post-fit alignment-quality probe in the integration
+    /// log: small values mean the affine truly maps cur → ref, large
+    /// values mean the matcher locked onto a wrong-but-plausible
+    /// transform and the master will smear.
+    /// </summary>
+    private static double MedianAlignmentResidualPx(
+            IReadOnlyList<DetectedStar> refStars,
+            IReadOnlyList<DetectedStar> curStars,
+            AffineTransform transform) {
+        if (refStars.Count == 0 || curStars.Count == 0) return double.NaN;
+        var residuals = new List<double>(curStars.Count);
+        foreach (var cs in curStars) {
+            var (tx, ty) = transform.Apply(cs.X, cs.Y);
+            double best = double.PositiveInfinity;
+            foreach (var rs in refStars) {
+                double dx = rs.X - tx, dy = rs.Y - ty;
+                double d2 = dx * dx + dy * dy;
+                if (d2 < best) best = d2;
+            }
+            residuals.Add(Math.Sqrt(best));
+        }
+        residuals.Sort();
+        return residuals[residuals.Count / 2];
     }
 
     private static string Sanitize(string s) {

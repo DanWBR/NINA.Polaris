@@ -176,11 +176,28 @@ public class ChannelCombineService {
                     Stage = "registering", Done = 0, Total = inputs.Count,
                     ReferenceChannel = inputs[refIdx].Variable,
                 };
-                // SigmaThreshold=7 (vs default 5) because per-filter
-                // masters have much higher SNR than single subs and the
-                // default would flood-detect faint halos. MaxStarSize=80
-                // (vs default 200) because integrated stars are tighter.
-                var detector = new StarDetector { SigmaThreshold = 7.0, MaxStarSize = 80 };
+                // Detector tuned to ISOLATE REAL STARS from nebulosity,
+                // not just "anything above noise". Narrowband masters
+                // (Ha/OIII/SII) and bright DSO targets contain large
+                // connected emission regions whose pixels routinely
+                // exceed a 5-7σ threshold; with default flood-fill
+                // limits those regions register as huge "stars" up to
+                // MaxStarSize pixels in area, the top-50 by flux are
+                // dominated by them, and cross-channel star matching
+                // collapses because the brightest "stars" in OIII vs
+                // Ha are at totally different positions (different
+                // nebula structure per filter).
+                //
+                // SigmaThreshold=40 admits only sharp peaks well
+                // above any diffuse glow. MaxStarSize=12 (vs default
+                // 200, vs the earlier 80 here) caps each flood-fill
+                // at a stellar PSF footprint, so saturated nebular
+                // patches get rejected rather than mistaken for a
+                // bright star with a long tail. Verified on the
+                // M16 SHO test_data masters: both OIII and SII
+                // recover clean rigid affines (det ≈ 1, no shear)
+                // instead of degenerate fits.
+                var detector = new StarDetector { SigmaThreshold = 40.0, MaxStarSize = 12 };
                 var refStars = detector.Detect(inputs[refIdx].Data, W, H);
                 if (refStars.Count < 5) {
                     throw new InvalidOperationException(
@@ -197,11 +214,16 @@ public class ChannelCombineService {
                         continue;
                     }
                     var stars = detector.Detect(inputs[i].Data, W, H);
-                    // maxSearchRadius bumped from 50 (single-sub default)
-                    // to 100, cross-filter offset between masters can
-                    // exceed 50 px when filter wheels carry the field
-                    // around during a multi-night run.
-                    var t = StarMatcher.Match(refStars, stars, maxSearchRadius: 100);
+                    // maxSearchRadius is generous (500 px): for channel
+                    // combine the inputs can come from different sessions
+                    // / different framing offsets, and we have observed
+                    // 250+ px Y shifts on real SHO masters. The matcher's
+                    // coarse-translation pre-alignment makes this radius
+                    // safe — it caps the offset-histogram search window
+                    // but does not relax the tight per-pair tolerance
+                    // used after pre-alignment, so admitting a larger
+                    // window does not re-introduce false pairings.
+                    var t = StarMatcher.Match(refStars, stars, maxSearchRadius: 500);
                     if (t == null) {
                         throw new InvalidOperationException(
                             $"Could not register channel '{inputs[i].Variable}' to " +
