@@ -406,3 +406,12 @@ src/NINA.Polaris/processed/
 # models in matching the GraXpert layout (see README.md).
 src/NINA.Polaris/wwwroot/graxpert/models/**/*.onnx
 nanobanana-output/
+
+# CCALB-3a: bundled APASS DR10 star catalog used by Photometric
+# Color Calibration (PCC). The .db file is ~80 MB and is built by
+# scripts/download-apass.py from the AAVSO APASS data. Skipped from
+# the repo because (a) size, (b) catalog data is third-party with
+# its own attribution requirement (CC-BY). Polaris's publish output
+# picks it up via the default wwwroot/** rule.
+src/NINA.Polaris/wwwroot/catalogs/apass/*.db
+scripts/.apass-cache/

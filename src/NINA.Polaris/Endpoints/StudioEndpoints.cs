@@ -227,6 +227,19 @@ public static class StudioEndpoints {
             return p == null ? Results.NotFound() : Results.Ok(p);
         });
 
+        // PCC pre-flight: tells the UI whether the bundled APASS
+        // catalog is present so the modal can render an "OK" badge
+        // (or a "run the download script" hint) before the user
+        // commits to running PCC.
+        g.MapGet("/colorcal/catalog-status", (NINA.Polaris.Services.Sky.ApassCatalog cat) => {
+            return Results.Ok(new {
+                available = cat.IsAvailable,
+                dbPath = cat.DbPath,
+                starCount = cat.IsAvailable ? cat.StarCount : 0,
+                source = "APASS DR10",
+            });
+        });
+
         // --- ST-6: debayer + background extraction -------------------
 
         // Debayer an OSC frame to a single-channel luminance plane.
