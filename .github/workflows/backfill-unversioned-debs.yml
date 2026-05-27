@@ -1,0 +1,127 @@
+name: Backfill unversioned .deb assets on a release
+
+# One-shot helper for releases whose workflow run predated the
+# "Add unversioned copies for /releases/latest/download/* URLs" step
+# in release.yml (introduced in commit ae1571d, after v0.1.0 was
+# tagged at bcb7ff6).
+#
+# What it does:
+#   1. Downloads polaris_<version>_<arch>.deb from the named tag's
+#      release for arm64 + amd64
+#   2. Uploads renamed copies polaris_<arch>.deb to the SAME release
+#
+# After this runs, /releases/latest/download/polaris_arm64.deb works.
+#
+# Trigger manually from the Actions tab. Idempotent: re-running just
+# overwrites the unversioned assets.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to backfill (e.g. v0.1.0)'
+        required: true
+        default: 'v0.1.0'
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Derive numeric version
+        id: ver
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          VER="${TAG#v}"
+          echo "tag=${TAG}"   >> "$GITHUB_OUTPUT"
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          echo "Backfilling release ${TAG} (version ${VER})"
+
+      - name: Locate release id
+        id: rel
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          RID=$(curl -sSL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${REPO}/releases/tags/${TAG}" \
+            | python3 -c "import json,sys;print(json.load(sys.stdin)['id'])")
+          echo "Release id: $RID"
+          echo "id=${RID}" >> "$GITHUB_OUTPUT"
+
+      - name: Download versioned .deb assets + upload unversioned copies
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ steps.ver.outputs.tag }}
+          VERSION: ${{ steps.ver.outputs.version }}
+          RELEASE_ID: ${{ steps.rel.outputs.id }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          for arch in arm64 amd64; do
+            SRC="polaris_${VERSION}_${arch}.deb"
+            DST="polaris_${arch}.deb"
+
+            echo ""
+            echo "===== ${arch}: ${SRC} -> ${DST} ====="
+
+            # Resolve asset URL via the release JSON (asset id is needed
+            # for the raw octet-stream download endpoint).
+            ASSET_ID=$(curl -sSL \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${REPO}/releases/${RELEASE_ID}/assets?per_page=100" \
+              | python3 -c "import json,sys,os;src=os.environ['SRC'];a=[x for x in json.load(sys.stdin) if x['name']==src];print(a[0]['id'] if a else '')" SRC="$SRC")
+
+            if [ -z "$ASSET_ID" ]; then
+              echo "ERROR: versioned asset ${SRC} not found on release ${TAG}"
+              exit 1
+            fi
+            echo "Source asset id: $ASSET_ID"
+
+            curl -sSL --fail \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/octet-stream" \
+              -o "dist/${DST}" \
+              "https://api.github.com/repos/${REPO}/releases/assets/${ASSET_ID}"
+            ls -lh "dist/${DST}"
+
+            # Delete any prior copy of the unversioned asset so the upload
+            # doesn't conflict (the assets endpoint rejects duplicate names).
+            EXISTING=$(curl -sSL \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${REPO}/releases/${RELEASE_ID}/assets?per_page=100" \
+              | python3 -c "import json,sys,os;dst=os.environ['DST'];a=[x for x in json.load(sys.stdin) if x['name']==dst];print(a[0]['id'] if a else '')" DST="$DST")
+            if [ -n "$EXISTING" ]; then
+              echo "Deleting prior unversioned asset id $EXISTING"
+              curl -sSL -X DELETE \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/${REPO}/releases/assets/${EXISTING}"
+            fi
+
+            # Upload via the uploads.github.com host (required for asset
+            # uploads; api.github.com rejects the POST).
+            echo "Uploading unversioned copy..."
+            curl -sSL --fail -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Content-Type: application/vnd.debian.binary-package" \
+              --data-binary @"dist/${DST}" \
+              "https://uploads.github.com/repos/${REPO}/releases/${RELEASE_ID}/assets?name=${DST}" \
+              | python3 -c "import json,sys;d=json.load(sys.stdin);print('Uploaded:',d.get('name'),d.get('size'),'bytes')"
+          done
+
+          echo ""
+          echo "===== Final release assets ====="
+          curl -sSL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${REPO}/releases/${RELEASE_ID}/assets?per_page=100" \
+            | python3 -c "import json,sys;[print(' ',x['name'],x['size']) for x in json.load(sys.stdin)]"
