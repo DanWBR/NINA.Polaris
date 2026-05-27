@@ -1,0 +1,230 @@
+name: Build and release Polaris packages
+
+# Triggers:
+#   - push of a tag matching v*  → build all targets + attach to GitHub Release
+#   - workflow_dispatch          → build only, no release upload (manual testing)
+#
+# Matrix produces six artifacts per release:
+#
+#   polaris_VERSION_arm64.deb           Pi 4 / 5 (apt install ./polaris_arm64.deb)
+#   polaris_VERSION_amd64.deb           x64 Debian / Ubuntu desktops + servers
+#   polaris-linux-arm64.tar.gz          Portable Linux ARM64 (manual systemd setup)
+#   polaris-linux-x64.tar.gz            Portable Linux x64 (manual systemd setup)
+#   polaris-win-x64.zip                 Portable Windows x64 (.exe + assets)
+#   polaris-win-arm64.zip               Portable Windows ARM64 (Surface Pro X etc)
+#
+# Each is self-contained: bundles the .NET 10 runtime, no separate
+# dotnet install needed on the target machine. Size: ~120-160 MB each.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (without leading v)'
+        required: true
+        default: '0.0.0-manual'
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Debian .deb packages: include systemd unit + indi-web venv
+          # postinst + polaris user creation. Linux only.
+          - { target: deb-arm64,   os: ubuntu-latest,  rid: linux-arm64, kind: deb }
+          - { target: deb-amd64,   os: ubuntu-latest,  rid: linux-x64,   kind: deb }
+
+          # Portable Linux tarballs: no systemd config, user wires
+          # their own service. For non-Debian distros (Fedora, Arch,
+          # etc) or for users who want full manual control.
+          - { target: linux-arm64, os: ubuntu-latest,  rid: linux-arm64, kind: tar }
+          - { target: linux-x64,   os: ubuntu-latest,  rid: linux-x64,   kind: tar }
+
+          # Portable Windows zips: unzip + run NINA.Polaris.exe.
+          # User wires their own service (sc.exe, NSSM, scheduled
+          # task, or just runs interactively).
+          - { target: win-x64,     os: windows-latest, rid: win-x64,     kind: zip }
+          - { target: win-arm64,   os: windows-latest, rid: win-arm64,   kind: zip }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Derive version
+        id: ver
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VER="${GITHUB_REF_NAME#v}"
+          else
+            VER="${{ github.event.inputs.version }}"
+          fi
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          echo "Building version: ${VER} target ${{ matrix.target }}"
+
+      # -------- Debian .deb path --------
+      - name: Build .deb
+        if: matrix.kind == 'deb'
+        run: |
+          ARCH="${{ matrix.target == 'deb-arm64' && 'arm64' || 'amd64' }}"
+          chmod +x packaging/build-deb.sh
+          ./packaging/build-deb.sh "${{ steps.ver.outputs.version }}" "$ARCH"
+
+      # -------- Portable Linux tarball path --------
+      - name: Build Linux tarball
+        if: matrix.kind == 'tar'
+        run: |
+          OUT_DIR="build/publish-${{ matrix.target }}"
+          STAGE="polaris-${{ matrix.target }}"
+          mkdir -p "$OUT_DIR"
+          dotnet publish src/NINA.Polaris/NINA.Polaris.csproj \
+            -c Release -r ${{ matrix.rid }} --self-contained true \
+            -p:PublishSingleFile=false \
+            -p:DebugType=none -p:DebugSymbols=false \
+            -o "$OUT_DIR" --nologo
+          # Mark the entry point executable
+          chmod +x "$OUT_DIR/NINA.Polaris" || true
+          # Rename the directory so tar extracts cleanly into a named subdir
+          mv "$OUT_DIR" "build/${STAGE}"
+          tar -czf "${STAGE}.tar.gz" -C build "${STAGE}"
+          ls -lh "${STAGE}.tar.gz"
+
+      # -------- Portable Windows zip path --------
+      - name: Build Windows zip
+        if: matrix.kind == 'zip'
+        shell: pwsh
+        run: |
+          $stage = "polaris-${{ matrix.target }}"
+          $outDir = "build/publish-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+          dotnet publish src/NINA.Polaris/NINA.Polaris.csproj `
+            -c Release -r ${{ matrix.rid }} --self-contained true `
+            -p:PublishSingleFile=false `
+            -p:DebugType=none -p:DebugSymbols=false `
+            -o $outDir --nologo
+          # Wrap output in named subdir so unzip is clean
+          $staged = "build/$stage"
+          if (Test-Path $staged) { Remove-Item -Recurse -Force $staged }
+          Move-Item $outDir $staged
+          Compress-Archive -Path "$staged/*" -DestinationPath "$stage.zip" -Force
+          Get-Item "$stage.zip" | Select-Object Name, Length
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: |
+            polaris_*.deb
+            polaris-*.tar.gz
+            polaris-*.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  # Lint .deb files (non-fatal style checks). Only runs when at least
+  # one .deb artifact is in the matrix.
+  lint-deb:
+    needs: build
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Lintian style check
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y lintian
+          for deb in dist/*.deb; do
+            [ -f "$deb" ] || continue
+            echo ""
+            echo "===== lintian $(basename $deb) ====="
+            lintian "$deb" || true
+          done
+
+  release:
+    name: Attach to GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List artifacts
+        run: |
+          ls -la dist/
+          echo ""
+          echo "Total size:"
+          du -sh dist/
+
+      - name: Create / update Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.deb
+            dist/*.tar.gz
+            dist/*.zip
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          body: |
+            ## Install
+
+            ### Raspberry Pi 4 / 5 (Debian / Ubuntu ARM64)
+
+            ```bash
+            wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/polaris_${{ github.ref_name }}_arm64.deb
+            sudo apt install ./polaris_${{ github.ref_name }}_arm64.deb
+            ```
+
+            ### x64 Linux desktop / server (Debian / Ubuntu)
+
+            ```bash
+            wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/polaris_${{ github.ref_name }}_amd64.deb
+            sudo apt install ./polaris_${{ github.ref_name }}_amd64.deb
+            ```
+
+            ### Other Linux (portable tarball, you wire your own service)
+
+            ```bash
+            wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/polaris-linux-x64.tar.gz
+            tar -xzf polaris-linux-x64.tar.gz
+            cd polaris-linux-x64
+            ./NINA.Polaris
+            ```
+
+            Replace `linux-x64` with `linux-arm64` on ARM hosts.
+
+            ### Windows x64 / ARM64 (portable zip)
+
+            Download `polaris-win-x64.zip` (or `polaris-win-arm64.zip`),
+            extract, and run `NINA.Polaris.exe`. Open
+            `http://localhost:5000` in any browser.
+
+            For unattended Windows installs see the optional NSSM /
+            scheduled-task recipes in
+            [docs/user-guide/installation.md](https://github.com/${{ github.repository }}/blob/master/docs/user-guide/installation.md).
+
+            ## Verification
+
+            All packages are self-contained: bundle .NET 10 runtime, no
+            separate dotnet install required.
