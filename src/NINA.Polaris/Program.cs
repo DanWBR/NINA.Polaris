@@ -154,6 +154,7 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Studio.MasterFrameService>()
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.CalibrationService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.BatchStackingService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.ChannelCombineService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Studio.ColorCalibrationService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.FrameOperationsService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Editor.ImageEditService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Editor.EditSidecarStore>();

@@ -197,6 +197,36 @@ public static class StudioEndpoints {
             return p == null ? Results.NotFound() : Results.Ok(p);
         });
 
+        // --- CCALB-1/2/3: Siril-style color calibration ---------------
+        // Calibrate an RGB FITS so the background is neutral grey
+        // (BgNeutral) and / or the chosen reference is neutral white
+        // (Manual), or fit per-channel gains against catalog star
+        // photometry (Photometric / PCC, ships in CCALB-3). Output
+        // is always a sibling FITS so the original stays intact.
+        //
+        // Body:
+        //   { frameId: 42, mode: "bg"|"manual"|"pcc",
+        //     bgSample: "auto"|"patch",
+        //     bgPatch:    { x, y, w, h } | null,
+        //     whitePatch: { x, y, w, h } | null }
+        g.MapPost("/colorcal", (ColorCalibrationService svc,
+                                ColorCalibrationService.ColorCalibrationRequest req) => {
+            if (req == null || req.FrameId <= 0) {
+                return Results.BadRequest(new { error = "frameId required." });
+            }
+            try {
+                var jobId = svc.StartJob(req);
+                return Results.Accepted(value: new { jobId });
+            } catch (ArgumentException ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        g.MapGet("/colorcal/{jobId}", (ColorCalibrationService svc, string jobId) => {
+            var p = svc.GetStatus(jobId);
+            return p == null ? Results.NotFound() : Results.Ok(p);
+        });
+
         // --- ST-6: debayer + background extraction -------------------
 
         // Debayer an OSC frame to a single-channel luminance plane.
