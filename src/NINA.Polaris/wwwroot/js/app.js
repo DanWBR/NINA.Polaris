@@ -654,6 +654,20 @@ function ninaApp() {
                     expressions: ['R', 'G', 'B']
                 },
                 lastJob: null
+            },
+            // CCALB-1/2/3: Siril-style color calibration on a single
+            // selected RGB master. Three tabs (BG / Manual / PCC)
+            // mirror the combine modal pattern.
+            colorCal: {
+                open: false,
+                running: false,
+                activeTab: 'bg',         // 'bg' | 'manual' | 'pcc'
+                frameId: null,
+                sourceName: '',
+                bgSample: 'auto',        // 'auto' | 'patch'
+                bgPatch:    { x: 0, y: 0, w: 64, h: 64 },
+                whitePatch: { x: 0, y: 0, w: 64, h: 64 },
+                lastJob: null
             }
         },
         _studioRescanPoll: null,
@@ -663,6 +677,7 @@ function ninaApp() {
         _studioCalibratePoll: null,
         _studioIntegratePoll: null,
         _studioCombinePoll: null,
+        _studioColorCalPoll: null,
 
         // Observatory location helpers (Settings → Observatory)
         obsAddressQuery: '',
@@ -3791,6 +3806,117 @@ function ninaApp() {
                     done: 0, total: body.channelMap.length,
                 };
                 this.toast?.('Combine start failed: ' + e.message, 'error');
+            }
+        },
+
+        // ─── CCALB-1/2/3: Color calibration modal ───────────────────
+        // Siril-style colour calibration on a single selected RGB
+        // master. Three tabs (BG / Manual / PCC) share the modal
+        // shell + the progress block, mirroring the Combine modal.
+
+        studioOpenColorCalDialog() {
+            const frame = this._studioSelectedFrames()[0];
+            if (!frame) return;
+            this.studio.colorCal.frameId = frame.id;
+            this.studio.colorCal.sourceName = frame.fileName || '';
+            // Seed patch defaults to the centre of the frame so the
+            // user only has to nudge dimensions, not coordinates,
+            // when they enter Manual mode.
+            const w = Math.max(64, (frame.width || 1000) >> 4);
+            const h = Math.max(64, (frame.height || 1000) >> 4);
+            const cx = Math.max(0, ((frame.width || 1000) >> 1) - (w >> 1));
+            const cy = Math.max(0, ((frame.height || 1000) >> 1) - (h >> 1));
+            this.studio.colorCal.bgPatch    = { x: cx, y: cy, w, h };
+            this.studio.colorCal.whitePatch = { x: cx, y: cy, w, h };
+            this.studio.colorCal.bgSample = 'auto';
+            this.studio.colorCal.activeTab = 'bg';
+            this.studio.colorCal.lastJob = null;
+            this.studio.colorCal.open = true;
+        },
+
+        studioCloseColorCalDialog() {
+            this.studio.colorCal.open = false;
+            if (this._studioColorCalPoll) {
+                clearInterval(this._studioColorCalPoll);
+                this._studioColorCalPoll = null;
+            }
+        },
+
+        studioColorCalCanRun() {
+            if (this.studio.colorCal.running) return false;
+            if (!this.studio.colorCal.frameId) return false;
+            const tab = this.studio.colorCal.activeTab;
+            if (tab === 'bg') {
+                if (this.studio.colorCal.bgSample === 'patch') {
+                    const p = this.studio.colorCal.bgPatch;
+                    return p && p.w > 0 && p.h > 0;
+                }
+                return true;
+            }
+            if (tab === 'manual') {
+                const w = this.studio.colorCal.whitePatch;
+                if (!w || w.w <= 0 || w.h <= 0) return false;
+                if (this.studio.colorCal.bgSample === 'patch') {
+                    const p = this.studio.colorCal.bgPatch;
+                    if (!p || p.w <= 0 || p.h <= 0) return false;
+                }
+                return true;
+            }
+            // PCC: backend gates with an error toast on Run; UI
+            // doesn't have enough info to pre-flight (catalog +
+            // WCS status come from the server). Let the user click
+            // Run and see the error if anything is missing.
+            return true;
+        },
+
+        async studioStartColorCal() {
+            if (!this.studioColorCalCanRun()) return;
+            const tab = this.studio.colorCal.activeTab;
+            const mode = tab === 'bg' ? 'bg'
+                       : tab === 'manual' ? 'manual'
+                       : 'pcc';
+            const body = {
+                frameId: this.studio.colorCal.frameId,
+                mode,
+                bgSample: this.studio.colorCal.bgSample,
+                bgPatch: this.studio.colorCal.bgSample === 'patch'
+                    ? this.studio.colorCal.bgPatch
+                    : null,
+                whitePatch: tab === 'manual'
+                    ? this.studio.colorCal.whitePatch
+                    : null,
+            };
+            this.studio.colorCal.running = true;
+            this.studio.colorCal.lastJob = { stage: 'queued', mode };
+            try {
+                const resp = await this.apiPost('/api/studio/colorcal', body);
+                const r = await resp.json();
+                // ~5-30s for BG/Manual depending on input size.
+                this._studioColorCalPoll = setInterval(async () => {
+                    try {
+                        const s = await this.apiGet(`/api/studio/colorcal/${r.jobId}`);
+                        this.studio.colorCal.lastJob = s;
+                        if (!s.inProgress) {
+                            clearInterval(this._studioColorCalPoll);
+                            this._studioColorCalPoll = null;
+                            this.studio.colorCal.running = false;
+                            if (s.stage === 'done') {
+                                this.toast?.(
+                                    `Color calibration done: ${s.outputPath}`, 'ok');
+                                this.loadStudio();
+                            } else if (s.stage === 'error') {
+                                this.toast?.(
+                                    'Color calibration failed: ' + s.error, 'error');
+                            }
+                        }
+                    } catch { /* swallow transient failure */ }
+                }, 800);
+            } catch (e) {
+                this.studio.colorCal.running = false;
+                this.studio.colorCal.lastJob = {
+                    stage: 'error', mode, error: e.message,
+                };
+                this.toast?.('Color calibration start failed: ' + e.message, 'error');
             }
         },
 

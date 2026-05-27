@@ -4294,6 +4294,17 @@
                             title="Combine channels into one RGB/LRGB FITS, or run a PixelMath expression">
                         🎨 Combine
                     </button>
+                    <!-- CCALB-1/2/3: Color calibration on a single
+                         RGB master. Siril-style BG neutralisation,
+                         Manual (BG + white-reference) and Photometric
+                         (catalog-driven, PCC). Single frame only since
+                         it operates on a composed RGB master. -->
+                    <button class="btn btn-sm btn-primary"
+                            :disabled="studio.selectedIds.length !== 1"
+                            @click="studioOpenColorCalDialog()"
+                            title="Calibrate the RGB master's colour balance">
+                        🎯 Color calibration
+                    </button>
                     <!-- ED-7: hand the single-selected frame to the
                          Lightroom-style editor. One frame at a time,
                          the editor opens a single session per file. -->
@@ -4747,6 +4758,194 @@
                                         :disabled="!studioCombineCanRun()">
                                     <span x-show="!studio.combine.running">▶ Combine</span>
                                     <span x-show="studio.combine.running">Working…</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CCALB-1/2/3: Color calibration modal (BG / Manual / PCC) -->
+                <div class="studio-viewer-modal" x-show="studio.colorCal.open"
+                     x-cloak @click.self="studioCloseColorCalDialog()"
+                     @keydown.escape.window="studio.colorCal.open && studioCloseColorCalDialog()">
+                    <div class="studio-master-modal" style="max-width:720px">
+                        <div class="studio-viewer-header">
+                            <div class="studio-viewer-title">
+                                <strong>Color calibration</strong>
+                                <span class="muted" x-text="studio.colorCal.sourceName || ''"></span>
+                            </div>
+                            <button class="btn btn-sm" @click="studioCloseColorCalDialog()"
+                                    :disabled="studio.colorCal.running">✕</button>
+                        </div>
+                        <div class="studio-master-body">
+                            <!-- Tab strip mirrors the Combine modal -->
+                            <div class="combine-tabs">
+                                <button class="combine-tab"
+                                        :class="{ active: studio.colorCal.activeTab === 'bg' }"
+                                        @click="studio.colorCal.activeTab = 'bg'"
+                                        :disabled="studio.colorCal.running">BG neutralize</button>
+                                <button class="combine-tab"
+                                        :class="{ active: studio.colorCal.activeTab === 'manual' }"
+                                        @click="studio.colorCal.activeTab = 'manual'"
+                                        :disabled="studio.colorCal.running">Manual</button>
+                                <button class="combine-tab"
+                                        :class="{ active: studio.colorCal.activeTab === 'pcc' }"
+                                        @click="studio.colorCal.activeTab = 'pcc'"
+                                        :disabled="studio.colorCal.running">PCC (photometric)</button>
+                            </div>
+
+                            <!-- BG tab -->
+                            <div x-show="studio.colorCal.activeTab === 'bg'" class="combine-tab-body">
+                                <div class="muted" style="font-size:12px;margin-bottom:8px">
+                                    Subtract per-channel offsets so the background goes
+                                    neutral grey. Pre-step for the AI cleanup / editor
+                                    pass. Output:
+                                    <code>{stem}_bgneu.fits</code> next to the source.
+                                </div>
+                                <label class="control-row">
+                                    <span style="min-width:90px">Sample</span>
+                                    <select x-model="studio.colorCal.bgSample"
+                                            :disabled="studio.colorCal.running" class="input-md">
+                                        <option value="auto">Auto (lowest-luminance 5%)</option>
+                                        <option value="patch">Patch (use the ROI fields below)</option>
+                                    </select>
+                                </label>
+                                <div x-show="studio.colorCal.bgSample === 'patch'">
+                                    <label class="control-row">
+                                        <span style="min-width:90px">BG patch</span>
+                                        <input type="number" min="0" placeholder="x"
+                                               :disabled="studio.colorCal.running"
+                                               x-model.number="studio.colorCal.bgPatch.x"
+                                               style="width:70px"/>
+                                        <input type="number" min="0" placeholder="y"
+                                               :disabled="studio.colorCal.running"
+                                               x-model.number="studio.colorCal.bgPatch.y"
+                                               style="width:70px"/>
+                                        <input type="number" min="1" placeholder="w"
+                                               :disabled="studio.colorCal.running"
+                                               x-model.number="studio.colorCal.bgPatch.w"
+                                               style="width:70px"/>
+                                        <input type="number" min="1" placeholder="h"
+                                               :disabled="studio.colorCal.running"
+                                               x-model.number="studio.colorCal.bgPatch.h"
+                                               style="width:70px"/>
+                                    </label>
+                                    <div class="muted" style="font-size:11px;padding-left:90px">
+                                        Pixel coordinates of a rectangle covering a dark,
+                                        empty-sky region. Crosshair picker on the viewer is
+                                        a follow-up; for now type the rect by hand or use
+                                        Auto.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Manual tab -->
+                            <div x-show="studio.colorCal.activeTab === 'manual'" class="combine-tab-body">
+                                <div class="muted" style="font-size:12px;margin-bottom:8px">
+                                    BG neutralisation plus a white-reference rescale. Pick
+                                    a known-white region (G2V star, galaxy core, neutral
+                                    nebula patch) and Polaris scales channels so that
+                                    region becomes neutral. Output:
+                                    <code>{stem}_ccal.fits</code>.
+                                </div>
+                                <label class="control-row">
+                                    <span style="min-width:90px">BG sample</span>
+                                    <select x-model="studio.colorCal.bgSample"
+                                            :disabled="studio.colorCal.running" class="input-md">
+                                        <option value="auto">Auto (lowest-luminance 5%)</option>
+                                        <option value="patch">Patch</option>
+                                    </select>
+                                </label>
+                                <div x-show="studio.colorCal.bgSample === 'patch'">
+                                    <label class="control-row">
+                                        <span style="min-width:90px">BG patch</span>
+                                        <input type="number" min="0" placeholder="x"
+                                               x-model.number="studio.colorCal.bgPatch.x"
+                                               style="width:70px"/>
+                                        <input type="number" min="0" placeholder="y"
+                                               x-model.number="studio.colorCal.bgPatch.y"
+                                               style="width:70px"/>
+                                        <input type="number" min="1" placeholder="w"
+                                               x-model.number="studio.colorCal.bgPatch.w"
+                                               style="width:70px"/>
+                                        <input type="number" min="1" placeholder="h"
+                                               x-model.number="studio.colorCal.bgPatch.h"
+                                               style="width:70px"/>
+                                    </label>
+                                </div>
+                                <label class="control-row">
+                                    <span style="min-width:90px">White patch</span>
+                                    <input type="number" min="0" placeholder="x"
+                                           x-model.number="studio.colorCal.whitePatch.x"
+                                           style="width:70px"/>
+                                    <input type="number" min="0" placeholder="y"
+                                           x-model.number="studio.colorCal.whitePatch.y"
+                                           style="width:70px"/>
+                                    <input type="number" min="1" placeholder="w"
+                                           x-model.number="studio.colorCal.whitePatch.w"
+                                           style="width:70px"/>
+                                    <input type="number" min="1" placeholder="h"
+                                           x-model.number="studio.colorCal.whitePatch.h"
+                                           style="width:70px"/>
+                                </label>
+                                <div class="muted" style="font-size:11px;padding-left:90px">
+                                    Rectangle covering a known-white reference. Aim for a
+                                    G2V star or the core of a spiral galaxy. Required for
+                                    Manual mode.
+                                </div>
+                            </div>
+
+                            <!-- PCC tab -->
+                            <div x-show="studio.colorCal.activeTab === 'pcc'" class="combine-tab-body">
+                                <div class="muted" style="font-size:12px;margin-bottom:8px">
+                                    Photometric Color Calibration. Plate-solves the source,
+                                    looks up stars in the bundled APASS catalog, and fits
+                                    per-channel gains so star colours match their catalog
+                                    B-V values. Catalog-driven, science-grade. Output:
+                                    <code>{stem}_pcc.fits</code>.
+                                </div>
+                                <div class="muted" style="font-size:11px;padding:8px;
+                                                          background:var(--bg-secondary);
+                                                          border-radius:4px">
+                                    PCC ships in CCALB-3 (next commit batch). Running it
+                                    today will fail with a clear error so the wiring is
+                                    proven end-to-end; come back after the catalog +
+                                    photometry work lands.
+                                </div>
+                            </div>
+
+                            <!-- Progress -->
+                            <div class="studio-master-progress"
+                                 x-show="studio.colorCal.running || studio.colorCal.lastJob">
+                                <div class="muted" style="font-size:12px;text-transform:uppercase;letter-spacing:0.05em">
+                                    Status: <span x-text="studio.colorCal.lastJob?.stage || 'idle'"></span>
+                                </div>
+                                <div style="font-size:11px;color:var(--text-muted)"
+                                     x-show="studio.colorCal.lastJob?.gainR != null && studio.colorCal.lastJob?.stage === 'done'">
+                                    Gains:
+                                    R=<span x-text="(studio.colorCal.lastJob?.gainR ?? 1).toFixed(3)"></span>
+                                    G=<span x-text="(studio.colorCal.lastJob?.gainG ?? 1).toFixed(3)"></span>
+                                    B=<span x-text="(studio.colorCal.lastJob?.gainB ?? 1).toFixed(3)"></span>
+                                    · Offsets:
+                                    R=<span x-text="(studio.colorCal.lastJob?.offsetR ?? 0).toFixed(1)"></span>
+                                    G=<span x-text="(studio.colorCal.lastJob?.offsetG ?? 0).toFixed(1)"></span>
+                                    B=<span x-text="(studio.colorCal.lastJob?.offsetB ?? 0).toFixed(1)"></span>
+                                </div>
+                                <div style="color:#ff9c66;font-size:12px"
+                                     x-show="studio.colorCal.lastJob?.error"
+                                     x-text="'⚠ ' + studio.colorCal.lastJob?.error"></div>
+                                <div style="color:#88e088;font-size:12px;word-break:break-all"
+                                     x-show="studio.colorCal.lastJob?.outputPath"
+                                     x-text="'→ ' + studio.colorCal.lastJob?.outputPath"></div>
+                            </div>
+
+                            <div class="control-row actions" style="margin-top:14px">
+                                <button class="btn" @click="studioCloseColorCalDialog()"
+                                        :disabled="studio.colorCal.running">Close</button>
+                                <button class="btn btn-primary" @click="studioStartColorCal()"
+                                        :disabled="!studioColorCalCanRun()">
+                                    <span x-show="!studio.colorCal.running">▶ Calibrate</span>
+                                    <span x-show="studio.colorCal.running">Working...</span>
                                 </button>
                             </div>
                         </div>
