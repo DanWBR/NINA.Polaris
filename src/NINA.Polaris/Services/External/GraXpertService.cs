@@ -38,6 +38,31 @@ public class GraXpertService {
     public string? BinaryPath => Locate();
     public bool IsAvailable => !string.IsNullOrEmpty(BinaryPath);
 
+    /// <summary>
+    /// True when the resolved BinaryPath is a Python interpreter
+    /// (e.g. a venv's bin/python or bin/python3). In that case
+    /// GraXpert lives as the `graxpert` PyPI package inside that venv
+    /// and is invoked via `python -m graxpert.main ARGS` instead of
+    /// `graxpert ARGS`. Adds `-m graxpert.main` as the args prefix
+    /// transparently so callers (BuildArgs, ProbeVersion) don't need
+    /// to know which install style the user has.
+    /// </summary>
+    private bool IsPythonInvocation {
+        get {
+            var bin = BinaryPath;
+            if (string.IsNullOrEmpty(bin)) return false;
+            var name = Path.GetFileName(bin);
+            return name.StartsWith("python", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    /// <summary>
+    /// Args prefix prepended before the GraXpert CLI args. Empty for
+    /// standalone binary installs, "-m graxpert.main " for venv-based
+    /// pip installs.
+    /// </summary>
+    private string ArgsPrefix => IsPythonInvocation ? "-m graxpert.main " : "";
+
     /// <summary>Cached version probed via `graxpert --version`. Empty when missing.</summary>
     public string Version {
         get {
@@ -94,7 +119,7 @@ public class GraXpertService {
         var outputPath = DefaultOutputPath(inputPath, opts);
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
 
-        var args = BuildArgs(inputPath, outputPath, opts);
+        var args = ArgsPrefix + BuildArgs(inputPath, outputPath, opts);
         var sw = Stopwatch.StartNew();
         _logger.LogInformation("FileOp GraXpert {Op} {In} -> {Out}",
             opts.Operation, inputPath, outputPath);
@@ -339,24 +364,42 @@ public class GraXpertService {
         ];
     }
 
-    private static string[] LinuxCandidates() => [
-        "/usr/bin/graxpert",
-        "/usr/local/bin/graxpert",
-        "/opt/graxpert/graxpert",
-        "/opt/GraXpert/GraXpert",
-        // Common Pi / headless layout: tarball extracted to ~/graxpert/
-        // with a 'graxpert' symlink pointing at the versioned binary.
-        // Covers both casings since GraXpert's release filenames vary
-        // (graxpert-linux-VERSION vs GraXpert-VERSION).
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            "graxpert", "graxpert"),
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            "graxpert", "GraXpert"),
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            "GraXpert", "GraXpert"),
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".local", "bin", "graxpert")
-    ];
+    private static string[] LinuxCandidates() {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return [
+            // Standalone binary layouts (.deb / tarball / portable)
+            "/usr/bin/graxpert",
+            "/usr/local/bin/graxpert",
+            "/opt/graxpert/graxpert",
+            "/opt/GraXpert/GraXpert",
+            Path.Combine(home, "graxpert", "graxpert"),
+            Path.Combine(home, "graxpert", "GraXpert"),
+            Path.Combine(home, "GraXpert", "GraXpert"),
+            Path.Combine(home, ".local", "bin", "graxpert"),
+
+            // Pip / pipenv install: GraXpert is a Python package
+            // (`pip install graxpert`), invoked via `python -m
+            // graxpert.main`. The "binary" we resolve is the venv's
+            // python; ProcessFrameAsync / ProbeVersion detect that
+            // and prepend `-m graxpert.main` to all subprocess args.
+            //
+            // Covers the common pipenv / venv layouts:
+            //   ~/GraXpert/graxpert/bin/python   (project dir GraXpert, venv graxpert)
+            //   ~/GraXpert/.venv/bin/python      (python -m venv .venv)
+            //   ~/GraXpert/venv/bin/python       (older convention)
+            //   ~/graxpert/.venv/bin/python      (all-lowercase)
+            Path.Combine(home, "GraXpert", "graxpert", "bin", "python"),
+            Path.Combine(home, "GraXpert", "graxpert", "bin", "python3"),
+            Path.Combine(home, "GraXpert", ".venv", "bin", "python"),
+            Path.Combine(home, "GraXpert", ".venv", "bin", "python3"),
+            Path.Combine(home, "GraXpert", "venv", "bin", "python"),
+            Path.Combine(home, "GraXpert", "venv", "bin", "python3"),
+            Path.Combine(home, "graxpert", ".venv", "bin", "python"),
+            Path.Combine(home, "graxpert", ".venv", "bin", "python3"),
+            Path.Combine(home, "graxpert", "venv", "bin", "python"),
+            Path.Combine(home, "graxpert", "venv", "bin", "python3")
+        ];
+    }
 
     private static string[] MacCandidates() => [
         "/Applications/GraXpert.app/Contents/MacOS/GraXpert",
@@ -370,7 +413,7 @@ public class GraXpertService {
         try {
             using var proc = Process.Start(new ProcessStartInfo {
                 FileName = bin,
-                Arguments = "--version",
+                Arguments = ArgsPrefix + "--version",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
