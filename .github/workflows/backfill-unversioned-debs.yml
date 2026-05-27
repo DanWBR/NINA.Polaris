@@ -77,7 +77,7 @@ jobs:
               -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               "https://api.github.com/repos/${REPO}/releases/${RELEASE_ID}/assets?per_page=100" \
-              | python3 -c "import json,sys,os;src=os.environ['SRC'];a=[x for x in json.load(sys.stdin) if x['name']==src];print(a[0]['id'] if a else '')" SRC="$SRC")
+              | SRC="$SRC" python3 -c "import json,sys,os;src=os.environ['SRC'];a=[x for x in json.load(sys.stdin) if x['name']==src];print(a[0]['id'] if a else '')")
 
             if [ -z "$ASSET_ID" ]; then
               echo "ERROR: versioned asset ${SRC} not found on release ${TAG}"
@@ -98,7 +98,7 @@ jobs:
               -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               "https://api.github.com/repos/${REPO}/releases/${RELEASE_ID}/assets?per_page=100" \
-              | python3 -c "import json,sys,os;dst=os.environ['DST'];a=[x for x in json.load(sys.stdin) if x['name']==dst];print(a[0]['id'] if a else '')" DST="$DST")
+              | DST="$DST" python3 -c "import json,sys,os;dst=os.environ['DST'];a=[x for x in json.load(sys.stdin) if x['name']==dst];print(a[0]['id'] if a else '')")
             if [ -n "$EXISTING" ]; then
               echo "Deleting prior unversioned asset id $EXISTING"
               curl -sSL -X DELETE \
