@@ -344,6 +344,14 @@ public class GraXpertService {
         "/usr/local/bin/graxpert",
         "/opt/graxpert/graxpert",
         "/opt/GraXpert/GraXpert",
+        // Common Pi / headless layout: tarball extracted to ~/graxpert/
+        // with a 'graxpert' symlink pointing at the versioned binary.
+        // Covers both casings since GraXpert's release filenames vary
+        // (graxpert-linux-VERSION vs GraXpert-VERSION).
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "graxpert", "graxpert"),
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "graxpert", "GraXpert"),
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             "GraXpert", "GraXpert"),
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
