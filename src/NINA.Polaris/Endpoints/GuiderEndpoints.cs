@@ -467,6 +467,7 @@ public static class GuiderEndpoints {
             xpraVersion = gui.XpraVersion,
             xpraPath = gui.XpraPath,
             sessionRunning = gui.SessionRunning,
+            phd2Running = gui.Phd2Running,
             displayNumber = gui.DisplayNumber,
             bindPort = gui.BindPort,
             lastHealthCheckAt = gui.LastHealthCheckAt,
@@ -499,6 +500,19 @@ public static class GuiderEndpoints {
                 return Results.Json(new { error = "Not supported" }, statusCode: 501);
             var ok = await gui.RestartSessionAsync();
             return Results.Ok(new { running = ok, error = ok ? null : gui.LastError });
+        });
+
+        // Relaunch PHD2 inside the existing xpra session without
+        // tearing down xpra. UI surfaces this as the "Relaunch PHD2"
+        // button when xpra is up but the phd2 process is missing
+        // (most commonly because xpra's '--start=phd2' failed silently
+        // at session-start time on a host where PHD2 was not yet
+        // installed, or because PHD2 crashed mid-session).
+        group.MapPost("/gui-session/relaunch-phd2", async (Phd2GuiSessionService gui) => {
+            if (!gui.IsSupportedOs || !gui.XpraInstalled)
+                return Results.Json(new { error = "Not supported" }, statusCode: 501);
+            var ok = await gui.RelaunchPhd2Async();
+            return Results.Ok(new { phd2Running = ok, error = ok ? null : gui.LastError });
         });
     }
 

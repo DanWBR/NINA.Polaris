@@ -10204,7 +10204,41 @@ function ninaApp() {
             finally {
                 this.phd2GuiBusy = false;
                 await this.loadPhd2GuiStatus();
+                // Force the iframe to reload so the user sees the
+                // refreshed PHD2 window without having to hard-refresh.
+                this._reloadPhd2GuiIframe();
             }
+        },
+        async phd2GuiRelaunchPhd2() {
+            this.phd2GuiBusy = true;
+            try {
+                const r = await this.apiPost('/api/guider/gui-session/relaunch-phd2');
+                if (r.phd2Running) {
+                    this.toast('PHD2 relaunched inside session', 'ok');
+                    // Iframe currently shows a bare xpra desktop; reload
+                    // to pick up the freshly-spawned PHD2 window.
+                    this._reloadPhd2GuiIframe();
+                } else {
+                    this.toast('Relaunch failed: ' + (r.error || 'unknown'), 'error');
+                }
+            } catch (e) {
+                this.toast('Relaunch failed: ' + e.message, 'error');
+            } finally {
+                this.phd2GuiBusy = false;
+                await this.loadPhd2GuiStatus();
+            }
+        },
+        _reloadPhd2GuiIframe() {
+            // Defer + reassign src so xpra HTML5 client reconnects
+            // after a session restart / phd2 relaunch.
+            this.$nextTick(() => {
+                const iframe = document.querySelector('.phd2-gui-iframe');
+                if (iframe) {
+                    // Cache-buster ensures the iframe actually re-fetches
+                    // even if it would otherwise reuse the existing connection.
+                    iframe.src = '/phd2-gui/?_=' + Date.now();
+                }
+            });
         },
         async guiderStart() {
             try {

@@ -1784,9 +1784,30 @@
                             <span class="text-muted" style="font-size:11px">
                                 port <span x-text="phd2GuiSession?.port"></span>
                             </span>
+                            <!-- PHD2 sub-state. When xpra is up but
+                                 phd2 process is not, surface a clear
+                                 banner + dedicated relaunch button so
+                                 the user does not need shell access
+                                 to figure out why the iframe shows a
+                                 bare desktop. -->
+                            <span x-show="phd2GuiSession?.phd2Running"
+                                  class="text-ok" style="margin-left:14px">
+                                · PHD2 running
+                            </span>
+                            <span x-show="phd2GuiSession && phd2GuiSession.running && !phd2GuiSession.phd2Running"
+                                  class="text-warn" style="margin-left:14px">
+                                · PHD2 not running inside session
+                            </span>
                             <span style="flex:1"></span>
+                            <button x-show="phd2GuiSession && phd2GuiSession.running && !phd2GuiSession.phd2Running"
+                                    class="btn btn-sm btn-warn" @click="phd2GuiRelaunchPhd2()"
+                                    :disabled="phd2GuiBusy"
+                                    title="Spawn a new phd2 process inside the running xpra session">
+                                <span x-show="!phd2GuiBusy">▶ Relaunch PHD2</span>
+                                <span x-show="phd2GuiBusy">Working...</span>
+                            </button>
                             <button class="btn btn-sm" @click="phd2GuiRestart()" :disabled="phd2GuiBusy"
-                                    title="Stop + restart the xpra session (recovers from hung sessions)">↻ Restart</button>
+                                    title="Stop + restart the xpra session (kills xpra and phd2, then spawns both fresh)">↻ Restart</button>
                             <button class="btn btn-sm btn-danger" @click="phd2GuiStop()" :disabled="phd2GuiBusy">Stop</button>
                         </div>
                         <iframe class="phd2-gui-iframe" src="/phd2-gui/"

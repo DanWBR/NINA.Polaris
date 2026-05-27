@@ -74,6 +74,16 @@ public class Phd2GuiSessionService : BackgroundService {
     public DateTime? LastHealthCheckAt { get; private set; }
     public string? LastError { get; private set; }
 
+    /// <summary>True when a <c>phd2</c> or <c>phd2.bin</c> process is
+    /// currently alive on the host. Refreshed by the 15 s health-probe
+    /// loop alongside the xpra TCP probe. Lets the UI distinguish
+    /// "xpra session up, PHD2 inside" from "xpra session up but PHD2
+    /// is missing" (the second happens when xpra's <c>--start=phd2</c>
+    /// fails silently, or when PHD2 crashes inside the session). Both
+    /// cases would otherwise show the same green pill, which is what
+    /// triggered users to need shell access to debug.</summary>
+    public bool Phd2Running { get; private set; }
+
     public Phd2GuiSessionService(IConfiguration config,
                                  ILogger<Phd2GuiSessionService> logger) {
         _config = config;
@@ -216,11 +226,68 @@ public class Phd2GuiSessionService : BackgroundService {
             var winner = await Task.WhenAny(connect, timeout);
             LastHealthCheckAt = DateTime.UtcNow;
             SessionRunning = winner == connect && tcp.Connected;
-            return SessionRunning;
         } catch {
             SessionRunning = false;
+        }
+        // Refresh Phd2Running alongside the xpra probe. Cheap, single
+        // pgrep call, no need to be conditional on SessionRunning.
+        try {
+            var res = await RunCommandAsync("pgrep", "-x phd2.bin", ct, timeoutMs: 2000);
+            Phd2Running = res.exitCode == 0 && !string.IsNullOrWhiteSpace(res.stdout);
+            if (!Phd2Running) {
+                // Some distros register the binary as just 'phd2' (no .bin suffix)
+                var alt = await RunCommandAsync("pgrep", "-x phd2", ct, timeoutMs: 2000);
+                Phd2Running = alt.exitCode == 0 && !string.IsNullOrWhiteSpace(alt.stdout);
+            }
+        } catch {
+            Phd2Running = false;
+        }
+        return SessionRunning;
+    }
+
+    /// <summary>
+    /// Spawn a PHD2 process inside the already-running xpra session.
+    /// Used by the UI's "Relaunch PHD2" button when the user sees the
+    /// xpra session is alive but PHD2 is not (xpra's <c>--start=phd2</c>
+    /// failed silently or PHD2 crashed mid-session). Does NOT restart
+    /// xpra, so any other windows the user opened in the session stay.
+    /// </summary>
+    public async Task<bool> RelaunchPhd2Async(CancellationToken ct = default) {
+        if (!IsSupportedOs) { LastError = "OS not supported"; return false; }
+        if (!XpraInstalled) { LastError = "xpra not installed"; return false; }
+        if (!await ProbeHealthAsync(ct)) {
+            // No xpra session to talk to. Caller should start one first.
+            LastError = "xpra session not running, call /start before /relaunch-phd2";
             return false;
         }
+        // First, kill any orphan phd2 still hanging around. Otherwise
+        // xpra start-child will spawn a second one and we get two phd2
+        // processes both fighting for port 4400.
+        try { await RunCommandAsync("pkill", "-x phd2.bin", ct, timeoutMs: 3000); } catch { }
+        try { await RunCommandAsync("pkill", "-x phd2", ct, timeoutMs: 3000); } catch { }
+        try { await Task.Delay(800, ct); } catch (TaskCanceledException) { return false; }
+
+        var args = $"control :{DisplayNumber} start-child phd2";
+        _logger.LogInformation("Relaunching PHD2 inside xpra session :{Display}", DisplayNumber);
+        var res = await RunCommandAsync("xpra", args, ct, timeoutMs: 10000);
+        if (res.exitCode != 0) {
+            LastError = $"xpra start-child phd2 exited {res.exitCode}: {res.stderr}";
+            _logger.LogWarning("{Error}", LastError);
+            return false;
+        }
+        // Give PHD2 up to 15 s to register a process so the UI can pin
+        // success without polling.
+        for (int i = 0; i < 30; i++) {
+            try { await Task.Delay(500, ct); } catch (TaskCanceledException) { return false; }
+            await ProbeHealthAsync(ct);
+            if (Phd2Running) {
+                LastError = null;
+                _logger.LogInformation("PHD2 relaunch confirmed (process visible)");
+                return true;
+            }
+        }
+        LastError = "PHD2 relaunch dispatched to xpra but no phd2 process appeared";
+        return false;
     }
 
     private static async Task<(int exitCode, string stdout, string stderr)>
