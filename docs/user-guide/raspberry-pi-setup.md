@@ -19,7 +19,9 @@ sudo reboot
 # ... back via SSH ...
 wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb
 sudo apt install ./polaris_arm64.deb
-# Polaris running at http://<hostname>.local:5000
+# Polaris running at https://<hostname>.local:5000
+# (HTTPS with auto-generated self-signed cert; trust once per device.
+#  HTTP on port 5080 also available but loopback-only.)
 ```
 
 The .deb pulls in every apt dependency, creates the `polaris` system
@@ -459,7 +461,7 @@ cd /tmp
 wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb
 sudo apt install ./polaris_arm64.deb
 # 60 to 90 seconds later, postinst prints:
-#   Polaris running at http://<hostname>.local:5000
+#   Polaris running at https://<hostname>.local:5000
 ```
 
 What the .deb resolves on your behalf:
@@ -546,8 +548,15 @@ info: NINA.Polaris.Services.MdnsService[0]
       Advertising _nina._tcp on <hostname>.local
 ```
 
-From your laptop, open `http://<hostname>.local:5000` (or
-`http://<pi-ip>:5000`). The Polaris home page loads. Ctrl-C to stop.
+From your laptop, open `https://<hostname>.local:5000` (or
+`https://<pi-ip>:5000`). The browser will warn about the self-signed
+cert on first visit; accept it once per device. The Polaris home
+page loads. Ctrl-C to stop.
+
+(HTTP on port 5080 is also available but loopback-only on the Pi
+itself, for SSH-tunneled or local reverse-proxy access. LAN access
+is HTTPS:5000 only because WebGPU acceleration for in-browser
+GraXpert AI inference requires HTTPS.)
 
 If the page does not load: check firewall on the Pi (`sudo ufw status`,
 default is none on Pi OS Lite) and your router's client isolation
@@ -692,7 +701,8 @@ After that GraXpert AI runs at 5 to 20x the speed of CPU-only WASM.
 
 End-to-end check from your laptop:
 
-1. Browse to `http://<hostname>.local:5000`.
+1. Browse to `https://<hostname>.local:5000` (accept the self-signed
+   cert warning once per device).
 2. Home page loads with sidebar tabs (RIGS, GUIDE, FOCUS, PREVIEW,
    AUTORUN, etc).
 3. RIGS tab: INDI Drivers section shows green "Running" pill (or
