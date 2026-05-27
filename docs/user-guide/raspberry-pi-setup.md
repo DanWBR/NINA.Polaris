@@ -37,18 +37,18 @@ ONNX models do not ship 32-bit ARM builds.
    "Raspberry Pi OS Lite (64-bit)".
 4. Choose Storage, then your SD card.
 5. Click the gear icon (Advanced options) BEFORE writing:
-   - Set hostname: `polaris` (so `polaris.local` works on the LAN).
+   - Set hostname: pick anything (this guide uses `polaris-pi` as an example, so the Pi becomes reachable at `polaris-pi.local` on the LAN).
    - Enable SSH, use password authentication (or paste a public key).
    - Set username: `polaris`, password: whatever you want.
    - Configure WiFi if you do not have Ethernet at the scope.
    - Set locale: your timezone, keyboard layout.
 6. Write the card, eject, boot the Pi.
 
-After boot it shows up on your network as `polaris.local` (mDNS) or by
+After boot it shows up on your network as `<hostname>.local` (mDNS) or by
 IP from your router admin page. SSH in:
 
 ```bash
-ssh polaris@polaris.local
+ssh polaris@<hostname>.local
 ```
 
 ## 2. First-boot system tasks
@@ -361,14 +361,14 @@ copy them to the Pi over SSH:
 
 ```powershell
 # From Windows PowerShell:
-scp -r "$env:LOCALAPPDATA\GraXpert\ai-models" polaris@polaris.local:.local/share/GraXpert/
-scp -r "$env:LOCALAPPDATA\GraXpert\bge-ai-models" polaris@polaris.local:.local/share/GraXpert/
+scp -r "$env:LOCALAPPDATA\GraXpert\ai-models" polaris@<hostname>.local:.local/share/GraXpert/
+scp -r "$env:LOCALAPPDATA\GraXpert\bge-ai-models" polaris@<hostname>.local:.local/share/GraXpert/
 ```
 
 Or, from WSL / Git Bash:
 
 ```bash
-rsync -avh "/mnt/c/Users/YOU/AppData/Local/GraXpert/" polaris@polaris.local:.local/share/GraXpert/
+rsync -avh "/mnt/c/Users/YOU/AppData/Local/GraXpert/" polaris@<hostname>.local:.local/share/GraXpert/
 ```
 
 Verify on the Pi:
@@ -459,10 +459,10 @@ You should see log lines like:
 info: Microsoft.Hosting.Lifetime[14]
       Now listening on: http://0.0.0.0:5000
 info: NINA.Polaris.Services.MdnsService[0]
-      Advertising _nina._tcp on polaris.local
+      Advertising _nina._tcp on <hostname>.local
 ```
 
-From your laptop, open `http://polaris.local:5000` (or
+From your laptop, open `http://<hostname>.local:5000` (or
 `http://<pi-ip>:5000`). The Polaris home page loads. Ctrl-C to stop.
 
 If the page does not load: check firewall on the Pi (`sudo ufw status`,
@@ -514,7 +514,7 @@ journalctl -u polaris.service -f
 # tail logs in real time, Ctrl-C to exit
 ```
 
-Reboot the Pi: `sudo reboot`. After ~30 seconds `polaris.local:5000`
+Reboot the Pi: `sudo reboot`. After ~30 seconds `<hostname>.local:5000`
 should be back without you touching anything.
 
 ## 8. INDI: pick how drivers are loaded
@@ -603,7 +603,7 @@ After that GraXpert AI runs at 5 to 20x the speed of CPU-only WASM.
 
 End-to-end check from your laptop:
 
-1. Browse to `http://polaris.local:5000`.
+1. Browse to `http://<hostname>.local:5000`.
 2. Home page loads with sidebar tabs (RIGS, GUIDE, FOCUS, PREVIEW,
    AUTORUN, etc).
 3. RIGS tab: INDI Drivers section shows green "Running" pill (or
@@ -640,7 +640,7 @@ extraction (they live elsewhere). Profiles are stored in
 
 ## 13. Troubleshooting
 
-**`polaris.local` does not resolve.** Some routers block mDNS across
+**`<hostname>.local` does not resolve.** Some routers block mDNS across
 VLANs or guest networks. Fall back to IP: find it with
 `hostname -I` on the Pi.
 
