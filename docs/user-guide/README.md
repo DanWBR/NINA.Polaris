@@ -12,7 +12,9 @@ This guide is split into **flows** (do this to accomplish X) and
 ## New to Polaris? Start here
 
 1. **[Installation](installation.md)**, get the server running on your
-   Pi / mini-PC / Windows box. ~10 minutes.
+   Pi / mini-PC / Windows box. ~10 minutes. For the Pi-specific
+   end-to-end recipe (blank SD card to auto-start systemd unit), see
+   **[Raspberry Pi 4 / 5 setup](raspberry-pi-setup.md)**.
 2. **[First-night setup](first-night.md)**, connect your gear, run
    your first sequence. ~30 minutes. Walks through INDI/Alpaca,
    creating a rig, hooking PHD2, slew-and-center, and triggering a
