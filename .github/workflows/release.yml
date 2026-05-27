@@ -94,6 +94,7 @@ jobs:
             -c Release -r ${{ matrix.rid }} --self-contained true \
             -p:PublishSingleFile=false \
             -p:DebugType=none -p:DebugSymbols=false \
+            -p:Version="${{ steps.ver.outputs.version }}" \
             -o "$OUT_DIR" --nologo
           # Mark the entry point executable
           chmod +x "$OUT_DIR/NINA.Polaris" || true
@@ -114,6 +115,7 @@ jobs:
             -c Release -r ${{ matrix.rid }} --self-contained true `
             -p:PublishSingleFile=false `
             -p:DebugType=none -p:DebugSymbols=false `
+            -p:Version="${{ steps.ver.outputs.version }}" `
             -o $outDir --nologo
           # Wrap output in named subdir so unzip is clean
           $staged = "build/$stage"

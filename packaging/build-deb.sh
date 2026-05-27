@@ -55,6 +55,10 @@ mkdir -p "$BUILD_DIR"
 cp -r "$SRC_DEB/." "$BUILD_DIR/"
 
 # 2. Publish self-contained Polaris into /opt/polaris
+#    -p:Version forwards the VERSION arg to MSBuild so the
+#    assembly + the UI version banner show the same number that the
+#    .deb is named with, instead of the auto-generated date-based
+#    stamp the csproj falls back to for local dev builds.
 echo "==> dotnet publish (this takes a few minutes)"
 dotnet publish "$REPO_ROOT/src/NINA.Polaris/NINA.Polaris.csproj" \
     -c Release \
@@ -63,6 +67,7 @@ dotnet publish "$REPO_ROOT/src/NINA.Polaris/NINA.Polaris.csproj" \
     -p:PublishSingleFile=false \
     -p:DebugType=none \
     -p:DebugSymbols=false \
+    -p:Version="$VERSION" \
     -o "$BUILD_DIR/opt/polaris" \
     --nologo
 

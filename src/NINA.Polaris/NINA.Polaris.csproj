@@ -30,16 +30,33 @@
     <_VersionBaseDate>2026-01-01</_VersionBaseDate>
     <_VersionDays>$([System.DateTime]::UtcNow.Subtract($([System.DateTime]::Parse('$(_VersionBaseDate)'))).TotalDays.ToString('F0'))</_VersionDays>
     <_VersionSeconds>$([MSBuild]::Divide($([System.DateTime]::UtcNow.TimeOfDay.TotalSeconds), 2).ToString('F0'))</_VersionSeconds>
-    <VersionPrefix>0.1.$(_VersionDays).$(_VersionSeconds)</VersionPrefix>
+
+    <!-- Release-driven version override.
+         When the build is invoked via `dotnet publish -p:Version=X.Y.Z`
+         (release.yml workflow + packaging/build-deb.sh both pass the
+         tag-derived version this way), that wins and the UI shows the
+         user-facing release number (e.g. 0.1.0, 0.2.0).
+         When unset (local dev builds, `dotnet build` from VS, etc), we
+         fall back to the auto-generated date-based stamp so every dev
+         build still gets a unique version identifier visible in the UI.
+         AssemblyVersion has stricter rules than InformationalVersion
+         (4-part numeric only, no -beta suffix), so when Version carries
+         a suffix we strip it for AssemblyVersion/FileVersion. -->
+    <VersionPrefix Condition="'$(Version)' == ''">0.1.$(_VersionDays).$(_VersionSeconds)</VersionPrefix>
+    <VersionPrefix Condition="'$(Version)' != ''">$(Version.Split('-')[0])</VersionPrefix>
     <!-- AssemblyVersion is what reflection (Assembly.GetName().Version)
-         surfaces — this is what the /api/system/status endpoint reads
+         surfaces, this is what the /api/system/status endpoint reads
          and the UI banner displays. FileVersion is the same so Windows
-         "right-click → Properties" shows matching numbers. -->
+         "right-click , Properties" shows matching numbers. Both must
+         be strictly 4-part numeric (no -beta suffix), hence VersionPrefix
+         which strips suffixes above. -->
     <AssemblyVersion>$(VersionPrefix)</AssemblyVersion>
     <FileVersion>$(VersionPrefix)</FileVersion>
     <!-- InformationalVersion is the human-readable string; can carry
-         pre-release suffixes if we want them. Keep equal for now. -->
-    <InformationalVersion>$(VersionPrefix)</InformationalVersion>
+         pre-release suffixes (e.g. "0.1.0-beta1"). Mirrors the user-
+         supplied Version when set, otherwise the auto-gen prefix. -->
+    <InformationalVersion Condition="'$(Version)' != ''">$(Version)</InformationalVersion>
+    <InformationalVersion Condition="'$(Version)' == ''">$(VersionPrefix)</InformationalVersion>
     <!-- The .NET SDK auto-appends "+{git-commit-sha}" to
          InformationalVersion whenever the source tree is a git repo
          (via the GenerateAssemblyInfo target's source-link integration).
