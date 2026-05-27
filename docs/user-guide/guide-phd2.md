@@ -157,8 +157,24 @@ States:
    install xpra xserver-xorg-video-dummy`
 3. **Linux + xpra installed but session not running**, "▶ Start PHD2
    GUI session" button (~5-10s spin-up)
-4. **Session running**, iframe + small toolbar (Restart, Stop,
-   fullscreen)
+4. **Session running**, iframe (full available viewport height) +
+   toolbar. Toolbar shows:
+   - `✓ xpra v6.x.x port 14600`, confirms the xpra session is alive
+   - `PHD2 running` (green) or `PHD2 not running inside session`
+     (amber), distinguishes the two failure modes that previously
+     looked identical
+   - `▶ Relaunch PHD2` button (only when PHD2 missing), spawns
+     `xpra control :100 start-child phd2` inside the live xpra
+     session, no full restart of xpra. Useful when PHD2 crashed
+     mid-session or never spawned (most commonly because xpra's
+     `--start=phd2` ran before PHD2 was installed on the host).
+   - `↻ Restart`, full teardown + recreate of xpra (and PHD2 inside it)
+   - `Stop`, kills the xpra session
+
+Tab order in the GUIDE panel: **PHD2 GUI first, Control second**.
+This matches the workflow: setup (Connect Equipment, Loop, Auto-Select
+Star, manual calibration) happens in the GUI; Control is for
+monitoring + automation after PHD2 is configured.
 
 Auto-start at Polaris boot is opt-in via `Phd2Gui:AutoStart` in
 `appsettings.json` (uses ~150MB RAM constantly).
@@ -177,6 +193,19 @@ in the Control tab connection panel.
 launch takes 5-10s for Xorg-dummy to come up. Wait, then refresh.
 If it persists, check `/etc/xpra/conf.d/55_server_x11.conf` for the
 Xorg-dummy switchover.
+
+**PHD2 GUI iframe shows a bare blue desktop (no PHD2 window)**, xpra
+started but PHD2 itself crashed or never spawned. The toolbar will
+show `PHD2 not running inside session` in amber. Click the
+**▶ Relaunch PHD2** button to spawn a fresh PHD2 inside the existing
+xpra session. If that fails repeatedly, the host probably is missing
+PHD2 entirely (`sudo apt install phd2`) or the binary is not on the
+systemd PATH.
+
+**Iframe shows JSON `{"error":"xpra session not running. POST .../start
+to launch it."}`**, exactly what it says: click ▶ Start session (or
+POST to `/api/guider/gui-session/start`). The error renders verbatim
+because the proxy correctly forwards Polaris's pre-check response.
 
 ## See also
 

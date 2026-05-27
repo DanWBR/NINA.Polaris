@@ -9,8 +9,8 @@
 #   ARCH:    arm64    (Pi 4 / 5)
 #
 # Examples:
-#   ./packaging/build-deb.sh 0.42.0 arm64
-#   ./packaging/build-deb.sh 0.42.0 amd64
+#   ./packaging/build-deb.sh 0.1.0 arm64
+#   ./packaging/build-deb.sh 0.1.0 amd64
 #
 # Output: polaris_${VERSION}_${ARCH}.deb in the current working dir.
 #

@@ -172,6 +172,32 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Derive numeric version (strip v from tag)
+        id: ver
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+
+      - name: Add unversioned copies for /releases/latest/download/* URLs
+        # The docs link to /releases/latest/download/polaris_arm64.deb
+        # etc., which the GitHub Releases redirect resolves to an asset
+        # of that EXACT name on the latest release. Without unversioned
+        # copies the URL would 404 because the matrix produces
+        # polaris_0.1.0_arm64.deb (with the version baked in). We just
+        # cp the versioned files to unversioned names so both exist on
+        # the release.
+        run: |
+          cd dist
+          ls -la
+          for arch in arm64 amd64; do
+            v=$(ls polaris_*_${arch}.deb 2>/dev/null | head -1)
+            [ -n "$v" ] && cp "$v" "polaris_${arch}.deb"
+          done
+          # tar.gz + zip are already named without a version
+          echo ""
+          echo "After unversioned copies:"
+          ls -la
+
       - name: List artifacts
         run: |
           ls -la dist/
@@ -194,16 +220,21 @@ jobs:
             ### Raspberry Pi 4 / 5 (Debian / Ubuntu ARM64)
 
             ```bash
-            wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/polaris_${{ github.ref_name }}_arm64.deb
-            sudo apt install ./polaris_${{ github.ref_name }}_arm64.deb
+            wget https://github.com/${{ github.repository }}/releases/latest/download/polaris_arm64.deb
+            sudo apt install ./polaris_arm64.deb
             ```
 
             ### x64 Linux desktop / server (Debian / Ubuntu)
 
             ```bash
-            wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/polaris_${{ github.ref_name }}_amd64.deb
-            sudo apt install ./polaris_${{ github.ref_name }}_amd64.deb
+            wget https://github.com/${{ github.repository }}/releases/latest/download/polaris_amd64.deb
+            sudo apt install ./polaris_amd64.deb
             ```
+
+            ### Versioned downloads (pin to this exact release)
+
+            - `polaris_${{ steps.ver.outputs.version }}_arm64.deb`
+            - `polaris_${{ steps.ver.outputs.version }}_amd64.deb`
 
             ### Other Linux (portable tarball, you wire your own service)
 

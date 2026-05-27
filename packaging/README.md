@@ -24,7 +24,7 @@ for users who do not want to type commands.
 End user sees:
 
 ```bash
-sudo apt install ./polaris_0.42.0_arm64.deb
+sudo apt install ./polaris_0.1.0_arm64.deb
 # ... apt resolves dependencies, runs postinst ...
 # Polaris running at http://polaris-pi.local:5000
 ```
@@ -55,31 +55,65 @@ sudo apt install ./polaris_0.42.0_arm64.deb
   `/home/polaris/.config/NINA.Polaris/profiles`, and saved sessions
   survive `apt remove polaris` AND `apt purge polaris`.
 
-## Build
+## Release process
 
-Requires `dotnet` SDK 10.x with linux-arm64 / linux-x64 runtime
-targets installed, plus `dpkg-deb` (any Debian / Ubuntu host or WSL).
+For a public release, push a `v*` tag and GitHub Actions
+(`.github/workflows/release.yml`) does the build + publish:
 
 ```bash
-# From repo root:
-./packaging/build-deb.sh 0.42.0 arm64    # for Pi 4 / 5
-./packaging/build-deb.sh 0.42.0 amd64    # for x86 mini-PCs
-
-# Output: polaris_0.42.0_arm64.deb (or _amd64.deb)
+# After commits land in master:
+git tag v0.1.0
+git push origin v0.1.0
 ```
+
+In ~10-15 minutes the workflow produces 6 artifacts on the
+[Releases page](https://github.com/DanWBR/NINA.Polaris/releases),
+each with the version baked into the binary (so the UI banner
+shows `v0.1.0` matching the release):
+
+| Artifact | Target |
+|---|---|
+| `polaris_0.1.0_arm64.deb` | Pi 4 / 5 (apt install) |
+| `polaris_0.1.0_amd64.deb` | x64 Debian / Ubuntu (apt install) |
+| `polaris_arm64.deb` | Same as above, unversioned name for `/latest/download/` URLs |
+| `polaris_amd64.deb` | Same as above, unversioned name for `/latest/download/` URLs |
+| `polaris-linux-arm64.tar.gz` | Non-Debian Linux ARM (Fedora, Arch) |
+| `polaris-linux-x64.tar.gz` | Non-Debian Linux x64 |
+| `polaris-win-x64.zip` | Windows 10/11 x64 portable |
+| `polaris-win-arm64.zip` | Windows on ARM portable |
+
+Local dev builds (without a tag) bypass the workflow:
+
+```bash
+# From repo root, requires dotnet SDK 10.x + dpkg-deb
+./packaging/build-deb.sh 0.1.0 arm64    # for Pi 4 / 5
+./packaging/build-deb.sh 0.1.0 amd64    # for x86 mini-PCs
+
+# Output: polaris_0.1.0_arm64.deb (or _amd64.deb)
+```
+
+If you omit the version it defaults to `0.0.0-dev` and the UI
+falls back to the auto-generated date-based stamp.
 
 On a Pi (or any Debian), validate before publishing:
 
 ```bash
-dpkg-deb -I polaris_0.42.0_arm64.deb         # control metadata
-dpkg-deb -c polaris_0.42.0_arm64.deb | head  # payload listing
-lintian polaris_0.42.0_arm64.deb             # style checks
+dpkg-deb -I polaris_0.1.0_arm64.deb         # control metadata
+dpkg-deb -c polaris_0.1.0_arm64.deb | head  # payload listing
+lintian polaris_0.1.0_arm64.deb             # style checks
 ```
 
 ## Install on the target
 
 ```bash
-sudo apt install ./polaris_0.42.0_arm64.deb
+# Latest released version (unversioned URL, always points at the
+# newest release):
+wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb
+sudo apt install ./polaris_arm64.deb
+
+# Or pin to an exact version:
+wget https://github.com/DanWBR/NINA.Polaris/releases/download/v0.1.0/polaris_0.1.0_arm64.deb
+sudo apt install ./polaris_0.1.0_arm64.deb
 ```
 
 `apt install ./file.deb` is the modern equivalent of `dpkg -i` plus
@@ -89,7 +123,7 @@ etc. automatically.
 If you only have `dpkg`:
 
 ```bash
-sudo dpkg -i polaris_0.42.0_arm64.deb
+sudo dpkg -i polaris_0.1.0_arm64.deb
 sudo apt --fix-broken install   # resolves any missing deps
 ```
 
@@ -98,7 +132,7 @@ sudo apt --fix-broken install   # resolves any missing deps
 Drop a newer .deb on top:
 
 ```bash
-sudo apt install ./polaris_0.43.0_arm64.deb
+sudo apt install ./polaris_0.2.0_arm64.deb
 ```
 
 The postinst is idempotent: existing user, dirs, and indi-web venv

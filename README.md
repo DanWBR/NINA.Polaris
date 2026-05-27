@@ -937,56 +937,71 @@ dotnet test
 
 ## Deployment
 
-### Raspberry Pi / Linux ARM64
+### Raspberry Pi 4 / 5 (one-line install)
 
-1. **Build on your development machine:**
-
-```bash
-chmod +x deploy/publish-linux-arm64.sh
-./deploy/publish-linux-arm64.sh
-```
-
-2. **Copy to the Pi:**
+The `.deb` package (built automatically by GitHub Actions on every
+tag push) handles user creation, systemd unit, indi-web venv, apt
+dependencies, and self-signed HTTPS cert generation. End-user install:
 
 ```bash
-scp -r publish/linux-arm64/* pi@raspberrypi:/tmp/nina-polaris/
+wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb
+sudo apt install ./polaris_arm64.deb
+# 30 seconds later: Polaris running at https://<hostname>.local:5000
 ```
 
-3. **Install on the Pi:**
-
-```bash
-ssh pi@raspberrypi
-sudo bash /tmp/nina-polaris/deploy/install.sh /tmp/nina-polaris
-```
-
-This creates a `nina` system user, installs to `/opt/nina-polaris`, enables and starts the systemd service.
-
-4. **Access:** Open `http://raspberrypi:5000` from any device on the network.
+The postinst prints the URL, sets up the service, and starts it.
+Full breakdown in [packaging/README.md](packaging/README.md). Pi-
+specific end-to-end recipe (hardware checklist, OS flashing, optional
+SSD mount) in [docs/user-guide/raspberry-pi-setup.md](docs/user-guide/raspberry-pi-setup.md).
 
 **Manage the service:**
 
 ```bash
-sudo systemctl status nina-polaris    # Check status
-sudo journalctl -u nina-polaris -f    # Follow logs
-sudo systemctl restart nina-polaris   # Restart
+sudo systemctl status polaris       # Check status
+sudo journalctl -u polaris -f       # Follow logs
+sudo systemctl restart polaris      # Restart
 ```
+
+### Other Linux (portable tarball)
+
+For non-Debian distros (Fedora, Arch, etc) or when you prefer no
+systemd integration:
+
+```bash
+wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-linux-arm64.tar.gz
+tar -xzf polaris-linux-arm64.tar.gz
+cd polaris-linux-arm64
+./NINA.Polaris   # foreground; wire your own service unit if needed
+```
+
+Replace `linux-arm64` with `linux-x64` for Intel/AMD 64-bit Linux.
 
 ### Windows Mini PC
 
+Download the portable zip from
+[GitHub Releases](https://github.com/DanWBR/NINA.Polaris/releases/latest):
+
+```powershell
+# x64 (most desktops/laptops):
+Invoke-WebRequest -Uri "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-x64.zip" -OutFile polaris.zip
+Expand-Archive polaris.zip
+cd polaris-win-x64
+.\NINA.Polaris.exe
+
+# ARM64 (Surface Pro X, some Copilot+ PCs):
+Invoke-WebRequest -Uri "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-arm64.zip" -OutFile polaris.zip
+Expand-Archive polaris.zip
+cd polaris-win-arm64
+.\NINA.Polaris.exe
+```
+
+Open `https://localhost:5000` (accept the self-signed cert once).
+
+For unattended Windows installs, wire your own service via `sc.exe`,
+NSSM, or a scheduled task. Build-from-source path:
+
 ```powershell
 .\deploy\publish-win-x64.ps1
-```
-
-**Run as console app:**
-
-```powershell
-.\publish\win-x64\NINA.Polaris.exe
-```
-
-**Install as Windows Service:**
-
-```powershell
-.\deploy\publish-win-x64.ps1 -InstallService
 ```
 
 ### Docker
