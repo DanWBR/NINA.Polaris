@@ -456,6 +456,8 @@ app.MapWeatherEndpoints();
 app.MapGuiderEndpoints();
 app.MapSimulatorEndpoints();
 app.MapIndiWebEndpoints();
+// WIFI-3: hotspot ↔ station mode switch (Linux + NetworkManager only)
+app.MapNetworkEndpoints();
 app.MapAutoFocusEndpoints();
 app.MapMeridianFlipEndpoints();
 app.MapPolarAlignmentEndpoints();
