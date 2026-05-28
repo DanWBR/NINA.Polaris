@@ -5608,6 +5608,12 @@
                  x-init="$watch('tab', t => { if (t === 'settings') loadSimulatorSettings(); })">
                 <div class="panel-header">Settings</div>
 
+                <!-- Card grid (parallels the RIGS tab layout). Each
+                     .settings-section below renders as its own card
+                     via the .settings-section CSS rules; long forms
+                     opt into a full-row span with .settings-section--wide. -->
+                <div class="settings-grid">
+
                 <!-- Appearance / interface scale. Slider writes to a
                      draft value (uiZoomDraft) while you drag, the
                      actual page zoom only updates when you click
@@ -5926,8 +5932,11 @@
 
                 <!-- External post-processing tools (Siril + GraXpert).
                      Both run as external binaries; auto-detected on
-                     startup, configurable via override paths. -->
-                <div class="settings-section">
+                     startup, configurable via override paths. Spans
+                     the full grid row because each tool row carries
+                     a path input + status + Re-detect button, which
+                     does not lay out cleanly in a 420 px column. -->
+                <div class="settings-section settings-section--wide">
                     <h3>External tools</h3>
                     <p class="hint" style="margin-top:0;margin-bottom:10px">
                         Polaris can drive Siril (preprocessing + stacking) and GraXpert (background
@@ -6074,7 +6083,7 @@
                      landed on plain HTTP (legacy bookmark, Server:Http:
                      Bind=any, etc.), where it's still actionable. -->
                 <template x-if="httpsInfo && httpsInfo.httpsEnabled">
-                    <div class="settings-section">
+                    <div class="settings-section settings-section--wide">
                         <!-- Full upgrade banner: only when NOT on a secure
                              context. Drives the user to switch origins. -->
                         <div x-show="!window.isSecureContext">
@@ -6170,7 +6179,7 @@
                     </div>
                 </template>
 
-                <div class="settings-section">
+                <div class="settings-section settings-section--wide">
                     <h3>AI inference (ONNX)</h3>
                     <p class="hint" style="margin-top:0">
                         In-browser GraXpert AI (BGE / Denoise / Deconvolution).
@@ -6279,6 +6288,7 @@
                     </details>
                 </div>
 
+                </div><!-- /.settings-grid -->
             </div>
 
         </main>

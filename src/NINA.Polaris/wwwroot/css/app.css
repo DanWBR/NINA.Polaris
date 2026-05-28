@@ -2556,10 +2556,27 @@ label select.input-sm {
     color: var(--text-muted);
 }
 
-/* Settings */
-.settings-section {
+/* Settings — card grid layout mirroring the RIGS tab. Each section
+   below renders as its own card, so the dense single-column scroll
+   of old looks like the equipment panel: rounded border, header band
+   for the <h3>, body padding, optional 2-col span for the long
+   sections (External tools, AI inference). */
+.settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+    gap: 14px;
     padding: 14px 16px;
-    border-bottom: 1px solid var(--border);
+    /* Dense flow lets shorter cards backfill the rows above instead
+       of leaving giant gaps when the tallest card stretches its row. */
+    grid-auto-flow: dense;
+    align-items: start;
+}
+.settings-section {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0;
+    overflow: hidden;
     /* Baseline font-size for every text node inside a settings section.
        Without this, the top sections that opt-in to `style="font-size: 11px/12px"`
        inline look noticeably smaller than the bottom sections that inherit
@@ -2568,6 +2585,18 @@ label select.input-sm {
        visible). Pinning 12px here unifies the baseline so a single zoom value
        scales everything to the same effective rendered size. */
     font-size: 12px;
+    transition: border-color var(--transition);
+    display: flex;
+    flex-direction: column;
+}
+.settings-section:hover {
+    border-color: rgba(255, 255, 255, 0.1);
+}
+/* Wide variant: spans the full grid row for the long forms that
+   would otherwise wrap awkwardly inside a 420 px card (External
+   tools, AI inference, HTTPS endpoints banner). */
+.settings-section--wide {
+    grid-column: 1 / -1;
 }
 
 /* Inputs, selects, textareas inside settings inherit the same baseline so
@@ -2581,13 +2610,41 @@ label select.input-sm {
     font-size: inherit;
 }
 
-.settings-section h3 {
+.settings-section > h3 {
+    /* h3 now acts as the card header band, like .equip-card-header
+       on the RIGS cards: padded, darker background, sits above the
+       body padding. Children below the h3 live inside an implicit
+       body (handled with > * + * margin since the markup doesn't
+       wrap them in a body div). */
     font-size: 13px;
     font-weight: 600;
     color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    margin-bottom: 10px;
+    margin: 0;
+    padding: 10px 14px;
+    background: rgba(0, 0, 0, 0.18);
+    border-bottom: 1px solid var(--border);
+}
+/* Anything that isn't the header gets the body padding. The first
+   non-h3 child also gets a top inset; the rest stack with their own
+   margins (existing styles in form rows + .hint already define
+   spacing). */
+.settings-section > *:not(h3) {
+    padding-left: 14px;
+    padding-right: 14px;
+}
+.settings-section > *:nth-child(2) {
+    padding-top: 12px;
+}
+.settings-section > *:last-child {
+    padding-bottom: 12px;
+}
+/* Conditional sections (x-show / x-cloak) that render before the
+   h3 (status-only sections like "indi connected" mini-card) keep
+   their full padding too. */
+.settings-section > div:first-child:not(:has(h3)) {
+    padding: 12px 14px;
 }
 
 .settings-section label {
