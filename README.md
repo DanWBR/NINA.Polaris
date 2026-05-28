@@ -851,6 +851,18 @@ Built for unreliable field WiFi:
 - **mDNS announcer**, host reachable at `polaris-app.local:5000` from any device on the LAN (no IP needed). Override the instance name via `Mdns:InstanceName` in `appsettings.json` if you need a different label (e.g. multiple Polaris instances on the same network).
 - **Alpaca (ASCOM HTTP) support**, UDP discovery on port 32227 plus base Camera / Telescope wrappers, so you can drive Windows-only ASCOM drivers exposed over the network
 
+### WiFi mode switch (Hotspot ↔ Station)
+
+ASIAIR-style WiFi management built into the .deb. The Pi comes up
+as a hotspot named `Polaris-Hotspot` (password `polaris1234`) on
+first boot, so you can reach `https://polaris-pi.local:5000` from
+a phone in the field without ever plugging in a monitor. From the
+Settings → Network panel you switch the Pi onto your home WiFi at
+home, with a 30 s try-and-revert safety net that pops the hotspot
+back if the new credentials fail. Linux + NetworkManager only
+(Pi OS Bookworm default). See
+[docs/user-guide/network-mode.md](docs/user-guide/network-mode.md).
+
 ### Remote Terminal (SSH from the browser)
 
 Embedded xterm.js + SSH.NET bridge under SETTINGS → **Remote terminal**.
