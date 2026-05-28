@@ -5738,6 +5738,15 @@
                      Windows / macOS / no-wifi mini-PCs. -->
                 <div class="settings-section network-section">
                     <h3><span class="settings-card-icon">📡</span>Network (WiFi)</h3>
+                    <!-- Body wrapper: forces consistent padding on the
+                         four x-if branches. Without it, the rendered
+                         <template> content lands as a direct child of
+                         .settings-section but lacks the leading <div>
+                         the h3 + * CSS rule was tuned for, so the
+                         "WiFi management requires Linux + NetworkManager..."
+                         message touched the card's left edge on
+                         Windows. -->
+                    <div class="settings-card-body">
                     <template x-if="network && !network.supportedOs">
                         <p class="text-muted" style="font-size: 12px; max-width:560px">
                             <span x-text="network.unsupportedReason || 'WiFi management not available'"></span>
@@ -5799,6 +5808,7 @@
                             </p>
                         </div>
                     </template>
+                    </div><!-- /.settings-card-body -->
                 </div>
 
                 <div class="settings-section">

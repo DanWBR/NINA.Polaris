@@ -2557,19 +2557,22 @@ label select.input-sm {
 }
 
 /* Settings — card grid layout mirroring the RIGS tab. Each section
-   below renders as its own card, so the dense single-column scroll
-   of old looks like the equipment panel: rounded border, header band
-   for the <h3>, body padding, optional 2-col span for the long
-   sections (External tools, AI inference). */
+   below renders as its own card. Column count is viewport-driven
+   instead of auto-fit/minmax math so narrow laptops always land on
+   2 cols (not 1) and wide desktops cap at 3 (auto-fit would slide
+   to 4 on a 32 inch screen, which makes per-card text feel cramped
+   when read across the room at night). */
 .settings-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+    grid-template-columns: 1fr;
     gap: 14px;
     padding: 14px 16px;
-    /* Dense flow lets shorter cards backfill the rows above instead
-       of leaving giant gaps when the tallest card stretches its row. */
-    grid-auto-flow: dense;
-    align-items: start;
+}
+@media (min-width: 900px) {
+    .settings-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (min-width: 1500px) {
+    .settings-grid { grid-template-columns: 1fr 1fr 1fr; }
 }
 .settings-section {
     background: var(--bg-secondary);
@@ -2598,14 +2601,13 @@ label select.input-sm {
 .settings-section:hover {
     border-color: rgba(255, 255, 255, 0.1);
 }
-/* Wide variant: spans the full grid row for the long forms that
-   would otherwise wrap awkwardly inside a 420 px card (External
-   tools, AI inference, HTTPS endpoints banner). Stays at the 400 px
-   card height so the bottom of the page still aligns to the grid;
-   internal scrollbar covers the case where content exceeds it. */
-.settings-section--wide {
-    grid-column: 1 / -1;
-}
+/* .settings-section--wide previously forced full-row spans for
+   External tools / AI inference / HTTPS endpoints. Removed: with
+   the 400 px internal-scroll card pattern, long forms scroll inside
+   the card instead of breaking the column flow. The selector is
+   kept as a no-op so existing markup on the class does not have to
+   strip the attribute (harmless redundancy). */
+.settings-section--wide {}
 
 /* Inputs, selects, textareas inside settings inherit the same baseline so
    their value text matches the labels around them, otherwise Chrome falls
@@ -2666,12 +2668,27 @@ label select.input-sm {
    even when their forms vary in length. The actual children stay
    in document order so each section's existing form layout (label
    stacks, .control-row.actions, .term-mount terminal embed, etc.)
-   keeps working. */
+   keeps working.
+   Note: <template x-if> creates DOM siblings, but the rendered
+   content lands AFTER the <template> tag (which itself is
+   display:none). So h3 ~ * matches both the (invisible) templates
+   AND the rendered children, which means the padding-top on h3+*
+   (which matches the first <template>, also invisible) does no
+   harm and h3 ~ * still applies left/right padding to the
+   rendered <p>/<div>. */
 .settings-section > h3 ~ * {
     padding-left: 14px;
     padding-right: 14px;
 }
+.settings-section > h3 ~ *:first-of-type,
 .settings-section > h3 + * {
+    padding-top: 12px;
+}
+/* Template-rendered children also need the top padding so single-
+   branch x-if blocks (like the Network unsupported message) do not
+   hug the header band. Sibling combinator on TEMPLATE catches the
+   real rendered element that lands after it. */
+.settings-section > template + * {
     padding-top: 12px;
 }
 /* Conditional sections (x-show / x-cloak) that render WITHOUT an
@@ -2683,6 +2700,16 @@ label select.input-sm {
 .settings-section > *:last-child {
     padding-bottom: 12px;
 }
+/* Explicit body wrapper used by sections whose content lives inside
+   <template x-if> branches (Network). The template-rendered children
+   would otherwise sit as direct children of .settings-section and
+   bypass the h3 + * padding-top rule (the rule matches the template
+   tag itself, not the rendered <p>/<div>). Forcing a real <div>
+   wrapper makes the padding land on actually-rendered content. */
+.settings-section > .settings-card-body {
+    padding: 12px 14px;
+}
+
 /* Custom scrollbar styling to match the .equip-card-body look. */
 .settings-section::-webkit-scrollbar {
     width: 6px;
@@ -5971,12 +5998,21 @@ label select.input-sm {
    for their content. */
 .equip-grid {
     display: grid;
-    /* minmax floor bumped 280 → 420 px (per user request: "aumente o
-       comprimento dos cards em 50%"). auto-fit still collapses to
-       fewer columns on narrow viewports without media queries. */
-    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+    /* Mirrors the SETTINGS grid: viewport-driven 1 / 2 / 3 columns
+       instead of auto-fit/minmax math. Caps at 3 cols on wide desktops
+       so a Camera card with cooler chart + sensor metadata + connect
+       toggle keeps enough width for the chart to be readable; auto-fit
+       would otherwise drop to 4 cols on a 32-inch screen and compress
+       each card past the point those internal widgets stay legible. */
+    grid-template-columns: 1fr;
     gap: 12px;
     padding: 0;
+}
+@media (min-width: 900px) {
+    .equip-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (min-width: 1500px) {
+    .equip-grid { grid-template-columns: 1fr 1fr 1fr; }
 }
 
 /* Metadata-only card variant (Main Telescope, Guidescope, Guide
