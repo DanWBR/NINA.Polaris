@@ -279,7 +279,13 @@ public class FrameLibraryService {
                   "gain, offset_val, width, height, bayer, date_obs, file_size " +
                   "FROM frames";
         if (where.Count > 0) sql += " WHERE " + string.Join(" AND ", where);
-        sql += " ORDER BY date_obs DESC LIMIT $limit OFFSET $offset";
+        // NULLS FIRST: a freshly-indexed file that the FITS reader
+        // couldn't pull DATE-OBS from (synthetic exports, third-party
+        // tools, manually placed masters) is exactly the thing the
+        // user just dropped into the folder, so it should surface at
+        // the top of the recent list, not sort past LIMIT alongside
+        // files that genuinely have no metadata.
+        sql += " ORDER BY date_obs DESC NULLS FIRST LIMIT $limit OFFSET $offset";
         cmd.CommandText = sql;
         cmd.Parameters.AddWithValue("$limit",  Math.Clamp(q.Limit, 1, 500));
         cmd.Parameters.AddWithValue("$offset", Math.Max(0, q.Offset));
