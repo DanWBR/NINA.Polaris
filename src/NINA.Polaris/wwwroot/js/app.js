@@ -91,6 +91,46 @@ function ninaApp() {
         cameraPanel: { x: 24, y: 360 },
         _mountDrag: null,
 
+        // AUTH-3: shared-password gate for the local server.
+        // Boot flow: init() calls _authBoot() which restores any
+        // saved token, hits /api/auth/status, and either:
+        //  - configured=false -> needSetup=true (wizard overlay)
+        //  - enabled=false -> nothing, app loads as before
+        //  - configured=true && !authenticated -> needLogin=true
+        //  - authenticated=true -> token persists, rest of init runs
+        // 401 from apiFetch flips needLogin=true and shows overlay.
+        // rememberMe=true persists in localStorage (cross-session),
+        // false sticks to sessionStorage (cleared on tab close).
+        auth: {
+            token: '',
+            configured: false,
+            enabled: true,
+            authenticated: false,
+            sessionTimeoutHours: 24,
+            needLogin: false,
+            needSetup: false,
+            loginPassword: '',
+            loginError: '',
+            rememberMe: false,
+            // Wizard fields
+            setupPassword: '',
+            setupConfirm: '',
+            setupError: '',
+            // Change-password modal fields (Settings)
+            cpOpen: false,
+            cpCurrent: '',
+            cpNew: '',
+            cpConfirm: '',
+            cpError: '',
+            cpBusy: false,
+            // Disable toggle confirm modal (Settings)
+            disableOpen: false,
+            disablePassword: '',
+            disableError: '',
+            disableBusy: false,
+            booting: true        // hides app shell until /status responds
+        },
+
         // Focus
         focusPosition: 0,
         focusStep: 50,
@@ -1232,6 +1272,27 @@ function ninaApp() {
             setInterval(() => this.updateClock(), 1000);
             this.updateFov();
 
+            // AUTH-3: gate the rest of init on auth. _authBoot is
+            // async; it restores the saved token, queries /status,
+            // and either sets needLogin/needSetup (deferring the
+            // heavy init until the user authenticates) or proceeds
+            // straight to _initAfterAuth. The clock + FOV math above
+            // are pre-auth so the login overlay isn't a blank page.
+            this._authBoot();
+        },
+
+        // AUTH-3: deferred init that runs once auth clears (either
+        // because auth is disabled, or after the user logs in / sets
+        // up). Pulls everything the original init used to call into a
+        // single function so login can replay it once.
+        _initAfterAuth() {
+            if (this._authInited) return;
+            this._authInited = true;
+            this._initCore();
+        },
+
+        _initCore() {
+
             // PA-7: pull the running version once. Cheap, fire-and-forget.
             // 'cache: no-store' so a long-lived browser tab against an
             // updated server picks up the new version after a Polaris
@@ -1456,8 +1517,23 @@ function ninaApp() {
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), timeout);
 
+            // AUTH-3: inject the bearer token on every request when we
+            // have one. The server's AuthMiddleware accepts the header
+            // OR the polaris_session cookie (auto-attached same-origin),
+            // but we send the header anyway as the primary path so it
+            // survives even when cookies are blocked (incognito, third-
+            // party blockers, etc.). Existing Authorization headers in
+            // opts.headers win, so callers can override per-request if
+            // ever needed.
+            const headers = options.headers ? { ...options.headers } : {};
+            if (this.auth && this.auth.token &&
+                    !headers.Authorization && !headers.authorization) {
+                headers.Authorization = 'Bearer ' + this.auth.token;
+            }
+
             const promise = fetch(url, {
                 ...options,
+                headers,
                 signal: controller.signal
             }).then(resp => {
                 clearTimeout(timer);
@@ -1466,6 +1542,21 @@ function ninaApp() {
                 if (!this.serverReachable) {
                     this.serverReachable = true;
                     this.toast('Server reconnected', 'ok');
+                }
+
+                if (resp.status === 401) {
+                    // AUTH-3: token expired / invalidated by a remote
+                    // password change / server restart. Trigger the
+                    // login overlay so the user can re-authenticate
+                    // without a full reload. The body MAY contain
+                    // { authConfigured: false } which means the
+                    // operator wiped the profile, show wizard instead.
+                    return resp.text().then(body => {
+                        let payload = null;
+                        try { payload = JSON.parse(body); } catch {}
+                        this._handle401(payload);
+                        throw new ApiError(401, body);
+                    });
                 }
 
                 if (!resp.ok) {
@@ -1509,6 +1600,253 @@ function ninaApp() {
         async apiGet(url, opts = {}) {
             const resp = await this.apiFetch(url, opts);
             return resp.json();
+        },
+
+        // ---- AUTH-3: client-side auth boot + login + wizard ----------
+
+        // Restore saved token (sessionStorage by default, localStorage
+        // when the user ticked "remember me"), then ask the server
+        // what state we're in. Branches into wizard / login / app.
+        // Called once at init() from outside the gated rest-of-init.
+        async _authBoot() {
+            try {
+                const saved = sessionStorage.getItem('polaris_token')
+                    || localStorage.getItem('polaris_token');
+                if (saved) {
+                    this.auth.token = saved;
+                    this.auth.rememberMe = !!localStorage.getItem('polaris_token');
+                }
+                // Use bare fetch (not apiFetch) so a 401 here doesn't
+                // recurse through _handle401 before we've decided what
+                // to do with it.
+                const headers = this.auth.token
+                    ? { Authorization: 'Bearer ' + this.auth.token } : {};
+                const r = await fetch('/api/auth/status',
+                    { cache: 'no-store', headers });
+                const s = await r.json();
+                this.auth.configured = !!s.configured;
+                this.auth.enabled = !!s.enabled;
+                this.auth.authenticated = !!s.authenticated;
+                this.auth.sessionTimeoutHours = s.sessionTimeoutHours || 24;
+                if (!this.auth.enabled) {
+                    // Opt-out toggle ON: skip the gate entirely.
+                    this.auth.booting = false;
+                    this._initAfterAuth();
+                    return;
+                }
+                if (!this.auth.configured) {
+                    this.auth.needSetup = true;
+                    this.auth.booting = false;
+                    return;
+                }
+                if (!this.auth.authenticated) {
+                    // Saved token was invalid or expired. Drop it.
+                    this.auth.token = '';
+                    sessionStorage.removeItem('polaris_token');
+                    localStorage.removeItem('polaris_token');
+                    this.auth.needLogin = true;
+                    this.auth.booting = false;
+                    return;
+                }
+                this.auth.booting = false;
+                this._initAfterAuth();
+            } catch (e) {
+                // Backend unreachable: surface login screen with a
+                // generic error so the user knows the server is down
+                // rather than seeing a blank page.
+                this.auth.loginError = 'Cannot reach Polaris server';
+                this.auth.needLogin = true;
+                this.auth.booting = false;
+            }
+        },
+
+        async authLogin() {
+            this.auth.loginError = '';
+            try {
+                const r = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: this.auth.loginPassword })
+                });
+                if (r.status === 401) {
+                    this.auth.loginError = 'Invalid password';
+                    return;
+                }
+                if (!r.ok) {
+                    this.auth.loginError = 'Login failed (HTTP ' + r.status + ')';
+                    return;
+                }
+                const j = await r.json();
+                this._authStoreToken(j.token);
+                this.auth.loginPassword = '';
+                this.auth.needLogin = false;
+                this.auth.authenticated = true;
+                this._initAfterAuth();
+            } catch (e) {
+                this.auth.loginError = 'Network error';
+            }
+        },
+
+        async authSetup() {
+            this.auth.setupError = '';
+            if (!this.auth.setupPassword || this.auth.setupPassword.length < 8) {
+                this.auth.setupError = 'Password must be at least 8 characters';
+                return;
+            }
+            if (this.auth.setupPassword !== this.auth.setupConfirm) {
+                this.auth.setupError = 'Passwords do not match';
+                return;
+            }
+            try {
+                const r = await fetch('/api/auth/setup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: this.auth.setupPassword })
+                });
+                if (!r.ok) {
+                    const t = await r.text();
+                    this.auth.setupError = 'Setup failed: ' + t;
+                    return;
+                }
+                const j = await r.json();
+                this._authStoreToken(j.token);
+                this.auth.setupPassword = '';
+                this.auth.setupConfirm = '';
+                this.auth.needSetup = false;
+                this.auth.configured = true;
+                this.auth.authenticated = true;
+                this._initAfterAuth();
+            } catch (e) {
+                this.auth.setupError = 'Network error';
+            }
+        },
+
+        async authLogout() {
+            try {
+                await this.apiPost('/api/auth/logout');
+            } catch {}
+            this._authClearToken();
+            this.auth.needLogin = true;
+            // Stop active WS connections so they don't reconnect with
+            // a stale token. The login flow re-runs _initAfterAuth
+            // which will re-open them.
+            try { this._statusWs && this._statusWs.close(); } catch {}
+            try { this._imageWs && this._imageWs.close(); } catch {}
+        },
+
+        // Settings -> Change password
+        async authChangePassword() {
+            this.auth.cpError = '';
+            if (!this.auth.cpNew || this.auth.cpNew.length < 8) {
+                this.auth.cpError = 'New password must be at least 8 characters';
+                return;
+            }
+            if (this.auth.cpNew !== this.auth.cpConfirm) {
+                this.auth.cpError = 'New passwords do not match';
+                return;
+            }
+            this.auth.cpBusy = true;
+            try {
+                const r = await this.apiPost('/api/auth/change-password', {
+                    current: this.auth.cpCurrent,
+                    new: this.auth.cpNew
+                });
+                if (!r.ok) {
+                    const t = await r.text();
+                    this.auth.cpError = 'Failed: ' + t;
+                    return;
+                }
+                this.auth.cpOpen = false;
+                this.auth.cpCurrent = '';
+                this.auth.cpNew = '';
+                this.auth.cpConfirm = '';
+                this.toast('Password changed', 'ok');
+            } catch (e) {
+                if (e instanceof ApiError && e.status === 401) {
+                    this.auth.cpError = 'Current password incorrect';
+                } else {
+                    this.auth.cpError = 'Network error';
+                }
+            } finally {
+                this.auth.cpBusy = false;
+            }
+        },
+
+        // Settings -> Disable auth (opt-out)
+        async authDisable() {
+            this.auth.disableError = '';
+            this.auth.disableBusy = true;
+            try {
+                const r = await this.apiPost('/api/auth/disable',
+                    { password: this.auth.disablePassword });
+                if (!r.ok) {
+                    const t = await r.text();
+                    this.auth.disableError = 'Failed: ' + t;
+                    return;
+                }
+                this.auth.enabled = false;
+                this.auth.disableOpen = false;
+                this.auth.disablePassword = '';
+                this.toast('Authentication disabled', 'warn');
+            } catch (e) {
+                this.auth.disableError = e instanceof ApiError
+                        && e.status === 401
+                    ? 'Invalid password'
+                    : 'Network error';
+            } finally {
+                this.auth.disableBusy = false;
+            }
+        },
+
+        async authEnable() {
+            // Re-enable doesn't need a confirm modal: prompt() inline
+            // so the user types the password once, we POST, done.
+            const pwd = prompt('Re-enable authentication, enter the password:');
+            if (!pwd) return;
+            try {
+                const r = await this.apiPost('/api/auth/enable',
+                    { password: pwd });
+                if (!r.ok) {
+                    this.toast('Failed to enable auth', 'error');
+                    return;
+                }
+                this.auth.enabled = true;
+                this.toast('Authentication enabled', 'ok');
+            } catch (e) {
+                this.toast('Network error', 'error');
+            }
+        },
+
+        _authStoreToken(token) {
+            this.auth.token = token;
+            if (this.auth.rememberMe) {
+                localStorage.setItem('polaris_token', token);
+                sessionStorage.removeItem('polaris_token');
+            } else {
+                sessionStorage.setItem('polaris_token', token);
+                localStorage.removeItem('polaris_token');
+            }
+        },
+
+        _authClearToken() {
+            this.auth.token = '';
+            this.auth.authenticated = false;
+            sessionStorage.removeItem('polaris_token');
+            localStorage.removeItem('polaris_token');
+        },
+
+        // Called by apiFetch when a request returns 401. Drops the
+        // token + shows the right overlay so the user can recover
+        // without a full reload.
+        _handle401(payload) {
+            this._authClearToken();
+            if (payload && payload.authConfigured === false) {
+                this.auth.needSetup = true;
+                this.auth.needLogin = false;
+            } else {
+                this.auth.needLogin = true;
+                this.auth.needSetup = false;
+            }
         },
 
         // ---- Exposure preset dropdown source --------------------------

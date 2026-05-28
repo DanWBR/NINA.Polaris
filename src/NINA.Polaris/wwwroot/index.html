@@ -46,6 +46,89 @@
 </head>
 <body x-data="ninaApp()" x-init="init()">
 
+    <!-- AUTH-3: full-screen overlay that intercepts EVERY interaction
+         until auth resolves. Three states:
+           - booting: spinner while /api/auth/status replies
+           - needSetup: first-run wizard, must create password
+           - needLogin: returning user, password prompt
+         Pinned at z-index: 99999 so nothing else floats over it. -->
+    <div class="auth-overlay"
+         x-cloak
+         x-show="auth.booting || auth.needSetup || auth.needLogin">
+
+        <!-- Boot spinner: shown for the brief window between page
+             load and /api/auth/status reply. Keeps the rest of the
+             app hidden so we don't flash unauthenticated UI. -->
+        <div class="auth-modal" x-show="auth.booting">
+            <h2>N.I.N.A. Polaris</h2>
+            <p class="auth-hint">Loading…</p>
+        </div>
+
+        <!-- First-run wizard: AuthService.IsConfigured == false on
+             the server. Force the operator to set a password before
+             any other tab is reachable; no default credentials means
+             no skipped-the-step-forgot-to-change-it problem. -->
+        <div class="auth-modal" x-show="auth.needSetup && !auth.booting">
+            <h2>Set a password</h2>
+            <p class="auth-hint">
+                Polaris is reachable from any device on this network.
+                Pick a password that protects this rig from
+                unauthorized access. You will use this on every fresh
+                browser / device.
+            </p>
+            <form @submit.prevent="authSetup()">
+                <label class="auth-field">
+                    <span>New password</span>
+                    <input type="password"
+                           x-model="auth.setupPassword"
+                           autocomplete="new-password"
+                           autofocus required minlength="8" />
+                </label>
+                <label class="auth-field">
+                    <span>Confirm password</span>
+                    <input type="password"
+                           x-model="auth.setupConfirm"
+                           autocomplete="new-password"
+                           required minlength="8" />
+                </label>
+                <p class="auth-error" x-show="auth.setupError"
+                   x-text="auth.setupError"></p>
+                <button class="btn btn-primary" type="submit">
+                    Set password &amp; continue
+                </button>
+                <p class="auth-hint auth-recover">
+                    Forgot the password later? SSH to the Pi and
+                    clear AuthPasswordHash + AuthPasswordSalt in
+                    ~/.config/NINA.Polaris/profiles/active.json,
+                    then restart the polaris service.
+                </p>
+            </form>
+        </div>
+
+        <!-- Returning-user login: configured=true, !authenticated. -->
+        <div class="auth-modal" x-show="auth.needLogin && !auth.booting">
+            <h2>Sign in</h2>
+            <form @submit.prevent="authLogin()">
+                <label class="auth-field">
+                    <span>Password</span>
+                    <input type="password"
+                           x-model="auth.loginPassword"
+                           autocomplete="current-password"
+                           autofocus required />
+                </label>
+                <label class="auth-remember">
+                    <input type="checkbox" x-model="auth.rememberMe" />
+                    <span>Remember on this device</span>
+                </label>
+                <p class="auth-error" x-show="auth.loginError"
+                   x-text="auth.loginError"></p>
+                <button class="btn btn-primary" type="submit">
+                    Sign in
+                </button>
+            </form>
+        </div>
+    </div>
+
     <!-- Shared exposure preset dropdown. Any <input type="number"
          list="exposure-presets" ...> across the UI inherits the same
          combobox: typeable + dropdown of astrophoto-standard values

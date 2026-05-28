@@ -6861,3 +6861,94 @@ label select.input-sm {
     height: 200px;
     width: 100%;
 }
+
+/* AUTH-3: full-screen login + first-run wizard overlay. Pinned
+   above EVERYTHING (status bar 50, modals ~1000, toasts ~2000) so
+   nothing leaks unauthenticated UI. */
+.auth-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(2, 4, 10, 0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+.auth-modal {
+    width: min(420px, 92vw);
+    padding: 28px 28px 22px;
+    background: rgba(20, 24, 36, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 12px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+    color: var(--text-primary);
+    font-size: 13px;
+}
+.auth-modal h2 {
+    margin: 0 0 12px;
+    font-size: 18px;
+    font-weight: 600;
+}
+.auth-hint {
+    margin: 0 0 18px;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
+.auth-recover {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    line-height: 1.4;
+}
+.auth-field {
+    display: block;
+    margin-bottom: 12px;
+}
+.auth-field > span {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-muted);
+}
+.auth-field input[type="password"] {
+    width: 100%;
+    padding: 9px 11px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+.auth-field input[type="password"]:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+.auth-remember {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+.auth-error {
+    margin: 0 0 12px;
+    padding: 8px 10px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    border-radius: 5px;
+    color: #fca5a5;
+    font-size: 12px;
+}
+.auth-modal .btn-primary {
+    width: 100%;
+    padding: 10px;
+    font-size: 14px;
+}
