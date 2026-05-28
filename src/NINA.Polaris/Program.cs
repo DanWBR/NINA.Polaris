@@ -459,6 +459,10 @@ app.MapIndiWebEndpoints();
 // WIFI-3: hotspot ↔ station mode switch (Linux + NetworkManager only)
 app.MapNetworkEndpoints();
 app.MapAutoFocusEndpoints();
+// MFOC-3: Bahtinov mask analyser endpoint, lives under the same
+// /api/focus group as future manual-assist sub-features (donut
+// metric, gaussian FWHM fit, ...).
+app.MapFocusEndpoints();
 app.MapMeridianFlipEndpoints();
 app.MapPolarAlignmentEndpoints();
 app.MapFlatWizardEndpoints();

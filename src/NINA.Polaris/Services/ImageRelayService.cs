@@ -35,6 +35,14 @@ public class ImageRelayService : IDisposable {
     private ImageBuffer? _latestImage;
     private byte[]? _latestJpeg;
 
+    /// <summary>The most recently relayed frame, as a decoded
+    /// ushort[] pixel buffer with width/height. Null until the first
+    /// capture lands. Consumed by post-processing endpoints (e.g.
+    /// /api/focus/bahtinov) that want to analyse the current scene
+    /// without forcing a duplicate capture. Lifetime: replaced on
+    /// every RelayImageAsync call.</summary>
+    public ImageBuffer? LatestImage => _latestImage;
+
     private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(10);
     private const int MaxConsecutiveFailures = 3;
 
