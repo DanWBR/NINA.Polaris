@@ -145,6 +145,17 @@ public static class EquipmentEndpoints {
                 // old clients leaves the existing setting alone.
                 if (!string.IsNullOrWhiteSpace(update.LiveStackComputeMode))
                     r.LiveStackComputeMode = update.LiveStackComputeMode.Trim().ToLowerInvariant();
+                // VIDEO tab FOV / ROI persistence. -1 leaves the field
+                // untouched (lets PUTs that only update other fields
+                // skip ROI), 0 clears, positive sets. Mirrors the
+                // nullable-int idiom we use elsewhere for partial PUTs.
+                if (update.LastVideoRoiW.HasValue) r.LastVideoRoiW = Math.Max(0, update.LastVideoRoiW.Value);
+                if (update.LastVideoRoiH.HasValue) r.LastVideoRoiH = Math.Max(0, update.LastVideoRoiH.Value);
+                if (update.LastVideoRoiX.HasValue) r.LastVideoRoiX = Math.Max(0, update.LastVideoRoiX.Value);
+                if (update.LastVideoRoiY.HasValue) r.LastVideoRoiY = Math.Max(0, update.LastVideoRoiY.Value);
+                if (update.LastVideoRoiSize.HasValue) r.LastVideoRoiSize = Math.Max(0, update.LastVideoRoiSize.Value);
+                if (!string.IsNullOrWhiteSpace(update.LastVideoRoiAspect))
+                    r.LastVideoRoiAspect = update.LastVideoRoiAspect;
             });
             return ok ? Results.Ok(new { message = "Rig updated" })
                       : Results.NotFound(new { error = "Rig not found" });

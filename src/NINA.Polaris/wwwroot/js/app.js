@@ -375,10 +375,16 @@ function ninaApp() {
             maxDurationSec: 60,
             wbR: 50,
             wbB: 50,
-            // 0 = full sensor, otherwise the side of a centered square
-            // ROI applied via POST /api/camera/subframe. Used by the
-            // FOV pills in the VIDEO Capture tab.
+            // FOV / ROI state. roiSize = 0 means full sensor; non-zero
+            // (square pills) keeps the square aspect for compatibility
+            // with the prior shape. roiW/roiH/roiX/roiY mirror the
+            // last-applied subframe (any aspect ratio). Persisted on
+            // the active rig (LastVideoRoi*).
             roiSize: 0,
+            roiW: 0, roiH: 0,
+            roiX: 0, roiY: 0,
+            roiAspect: 'square',     // 'square' | '4:3' | '16:9' (for active-pill check)
+            roiHintDismissed: false,
             // Process side
             processSerPath: '',
             serList: [],          // [{ path, label }]
@@ -6950,6 +6956,17 @@ function ninaApp() {
             // CLST-7: per-rig compute target override. Defaults to
             // "auto" for old rigs without the field.
             this.liveStackComputeMode = rig.liveStackComputeMode || 'auto';
+            // VIDEO tab FOV / ROI hydration. Restore the last-picked
+            // crop so opening VIDEO after a reload lands on the same
+            // box around the planet, instead of forcing the user to
+            // re-pick a 640 ROI every session. Old rigs (no fields)
+            // boot at full sensor.
+            this.video.roiW = rig.lastVideoRoiW || 0;
+            this.video.roiH = rig.lastVideoRoiH || 0;
+            this.video.roiX = rig.lastVideoRoiX || 0;
+            this.video.roiY = rig.lastVideoRoiY || 0;
+            this.video.roiSize = rig.lastVideoRoiSize || 0;
+            this.video.roiAspect = rig.lastVideoRoiAspect || 'square';
             this.equipCameraChoice = rig.camera || '';
             // Hydrate the camera-driver dropdown from the rig. Old
             // rigs without the field default to "indi" via the
@@ -7827,38 +7844,123 @@ function ninaApp() {
                 if (r && typeof r.maxY === 'number') this.cameraCaps.maxY = r.maxY;
                 if (r && typeof r.whiteBalanceR === 'number') this.video.wbR = r.whiteBalanceR;
                 if (r && typeof r.whiteBalanceB === 'number') this.video.wbB = r.whiteBalanceB;
+                // If the rig had a saved ROI, push it to the camera
+                // now (subframe sticks across server restarts but not
+                // across camera reconnects, which is the more common
+                // case). Skip when a stream is already running — the
+                // driver would reject the change mid-exposure.
+                if (this.video.roiW > 0 && this.video.roiH > 0
+                    && !this.cameraStream.running
+                    && this.cameraCaps.roi !== false) {
+                    try {
+                        const resp = await this.apiPost('/api/camera/subframe', {
+                            x: this.video.roiX, y: this.video.roiY,
+                            width: this.video.roiW, height: this.video.roiH
+                        });
+                        await resp.json();
+                    } catch (e) { /* non-fatal; user can re-pick */ }
+                }
             } catch (e) { /* no camera connected yet */ }
         },
 
-        // POST /api/camera/subframe with a square ROI centered on the
-        // sensor. size=0 clears the ROI and shoots the full sensor;
-        // any other size is clamped to fit + centered via (max - size)/2.
-        // Driver applies the new geometry on the next capture; if a
-        // stream / record is in flight the UI disables the pills, so
-        // we don't have to restart the stream here.
-        async videoSetRoi(size) {
+        // POST /api/camera/subframe with width×height centered on the
+        // sensor. width=height=0 clears the ROI. Square pills pass
+        // (w==h, aspect='square', squareSize=size) so the square-row
+        // active-pill check still works; rectangular pills pass
+        // (different w,h, aspect='4:3'|'16:9', squareSize=0). Driver
+        // applies the new geometry on the next capture; the UI disables
+        // pills while a stream / record is in flight so we don't have
+        // to restart the stream here.
+        async videoSetRoiRect(width, height, aspect, squareSize) {
             let x = 0, y = 0, w = 0, h = 0;
-            if (size > 0) {
+            if (width > 0 && height > 0) {
                 const mx = this.cameraCaps.maxX | 0;
                 const my = this.cameraCaps.maxY | 0;
-                const sw = mx > 0 ? Math.min(size, mx) : size;
-                const sh = my > 0 ? Math.min(size, my) : size;
-                x = mx > sw ? Math.floor((mx - sw) / 2) : 0;
-                y = my > sh ? Math.floor((my - sh) / 2) : 0;
-                w = sw;
-                h = sh;
+                w = mx > 0 ? Math.min(width, mx) : width;
+                h = my > 0 ? Math.min(height, my) : height;
+                x = mx > w ? Math.floor((mx - w) / 2) : 0;
+                y = my > h ? Math.floor((my - h) / 2) : 0;
             }
             try {
                 const resp = await this.apiPost('/api/camera/subframe',
                     { x, y, width: w, height: h });
                 await resp.json();
-                this.video.roiSize = size;
-                this.toast(size === 0
+                this.video.roiSize = squareSize | 0;
+                this.video.roiW = w; this.video.roiH = h;
+                this.video.roiX = x; this.video.roiY = y;
+                this.video.roiAspect = aspect || 'square';
+                await this._videoPersistRoi();
+                this.toast((w === 0 || h === 0)
                     ? 'FOV: full sensor'
                     : `FOV: ${w} × ${h} centered`, 'ok');
             } catch (e) {
                 this.toast('ROI set failed: ' + (e.message || 'driver rejected'), 'warn');
             }
+        },
+
+        // Click on the preview canvas while a ROI is active → re-center
+        // the ROI on that point. Canvas always shows the current ROI's
+        // pixels (the camera only captures what's inside the box), so a
+        // click at (fx, fy) of the canvas in 0..1 maps to sensor coords
+        // via (current ROI top-left) + fx * (current ROI width). New
+        // ROI is the same width × height, just shifted so its centre
+        // sits on the click.
+        async videoCenterRoiAt(ev) {
+            if (this.video.roiW <= 0 || this.video.roiH <= 0) return; // FULL = nothing to recenter
+            if (!this.cameraStream.running) return;       // canvas idle, click would not match a frame
+            const canvas = ev.currentTarget;
+            const rect = canvas.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) return;
+            const fx = (ev.clientX - rect.left) / rect.width;
+            const fy = (ev.clientY - rect.top) / rect.height;
+            if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return;
+            // Sensor coordinates of the click (currently roi'd view)
+            const sensorClickX = this.video.roiX + fx * this.video.roiW;
+            const sensorClickY = this.video.roiY + fy * this.video.roiH;
+            // New top-left so the click lands at the centre of the new ROI
+            let nx = Math.floor(sensorClickX - this.video.roiW / 2);
+            let ny = Math.floor(sensorClickY - this.video.roiH / 2);
+            // Clamp to sensor bounds
+            const mx = this.cameraCaps.maxX | 0;
+            const my = this.cameraCaps.maxY | 0;
+            if (mx > 0) nx = Math.max(0, Math.min(nx, mx - this.video.roiW));
+            if (my > 0) ny = Math.max(0, Math.min(ny, my - this.video.roiH));
+            try {
+                const resp = await this.apiPost('/api/camera/subframe',
+                    { x: nx, y: ny, width: this.video.roiW, height: this.video.roiH });
+                await resp.json();
+                this.video.roiX = nx;
+                this.video.roiY = ny;
+                this.video.roiHintDismissed = true;
+                await this._videoPersistRoi();
+            } catch (e) {
+                this.toast('Re-center failed: ' + (e.message || 'driver rejected'), 'warn');
+            }
+        },
+
+        // Persist the current ROI on the active rig so the next session
+        // (or a tab reload) restores it without the user re-picking. The
+        // backend stores LastVideoRoi{W,H,X,Y,Size,Aspect} on the rig;
+        // null roiW means "always boot at FULL" so reloads on a known-
+        // good setup do not surprise the user with a stale ROI.
+        async _videoPersistRoi() {
+            if (!this.equipmentProfile?.id) return;
+            try {
+                await this.apiPost(
+                    '/api/equipment/rigs/' + encodeURIComponent(this.equipmentProfile.id),
+                    null, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            lastVideoRoiW: this.video.roiW,
+                            lastVideoRoiH: this.video.roiH,
+                            lastVideoRoiX: this.video.roiX,
+                            lastVideoRoiY: this.video.roiY,
+                            lastVideoRoiSize: this.video.roiSize,
+                            lastVideoRoiAspect: this.video.roiAspect
+                        })
+                    });
+            } catch (e) { /* non-fatal; ROI still applied on the device */ }
         },
         async videoSetWhiteBalance() {
             try {

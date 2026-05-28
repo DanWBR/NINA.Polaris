@@ -1333,13 +1333,25 @@
                 <!-- ===== Tab 1: Capture ===== -->
                 <div x-show="videoTab === 'capture'" class="video-pane">
                     <div class="preview-area">
-                        <canvas id="videoCaptureCanvas" class="preview-canvas"></canvas>
+                        <canvas id="videoCaptureCanvas" class="preview-canvas"
+                                @click="videoCenterRoiAt($event)"
+                                :style="(video.roiSize > 0 && cameraStream.running) ? 'cursor: crosshair' : ''"></canvas>
                         <div class="preview-overlay" x-show="!cameraStream.running">
                             <p x-text="selectedCamera
                                 ? (cameraStream.supportsNative
                                     ? 'Click Start Stream to begin (camera supports native CCD_VIDEO_STREAM)'
                                     : 'Click Start Stream (server loop mode, fps limited by exposure)')
                                 : 'No camera connected, connect from RIGS tab first'"></p>
+                        </div>
+                        <!-- ROI re-center hint: when a ROI is active and
+                             the stream is running, surface that clicking
+                             on the canvas re-centers the ROI on that
+                             point in sensor coords. The hint fades to
+                             muted after the first click in a session. -->
+                        <div class="video-roi-hint" x-cloak
+                             x-show="cameraStream.running && video.roiSize > 0 && !video.roiHintDismissed">
+                            <span>Click on the planet to re-center the ROI</span>
+                            <button class="btn btn-sm" @click.stop="video.roiHintDismissed = true">×</button>
                         </div>
                     </div>
 
@@ -1395,6 +1407,17 @@
                              Jupiter is plenty). FULL clears the ROI.
                              Hidden when the camera reports SupportsRoi
                              false (DSLRs, most Alpaca remotes). -->
+                        <!-- FOV / ROI. Two rows of presets:
+                             - Square row: 320 / 640 / 800 / 1024 / 1280 / 1920
+                               (planetary at long focal length, where the
+                               planet disc fits a square box)
+                             - Rectangular row: 16:9 (1280×720, 1920×1080) +
+                               4:3 (640×480, 1024×768, 1600×1200) for
+                               lunar / solar / wide-field framing
+                             FULL clears the ROI. Pills larger than the
+                             sensor grey out. Hidden when the camera
+                             reports SupportsRoi=false (DSLRs, most
+                             Alpaca remotes). -->
                         <div class="control-row"
                              x-show="cameraCaps.roi !== false">
                             <span style="font-size:11px; color:var(--text-muted); min-width:34px">FOV</span>
@@ -1405,20 +1428,42 @@
                                         @click="videoSetRoi(0)">FULL</button>
                                 <template x-for="sz in [320, 640, 800, 1024, 1280, 1920]" :key="sz">
                                     <button type="button" class="bin-preset"
-                                            :data-active="video.roiSize === sz"
+                                            :data-active="video.roiSize === sz && video.roiAspect === 'square'"
                                             :disabled="cameraStream.running || videoRecording.recording
                                                        || (cameraCaps.maxX > 0 && sz > cameraCaps.maxX)
                                                        || (cameraCaps.maxY > 0 && sz > cameraCaps.maxY)"
-                                            @click="videoSetRoi(sz)"
+                                            @click="videoSetRoiRect(sz, sz, 'square', sz)"
                                             x-text="sz"></button>
+                                </template>
+                            </span>
+                        </div>
+                        <div class="control-row"
+                             x-show="cameraCaps.roi !== false">
+                            <span style="font-size:11px; color:var(--text-muted); min-width:34px"></span>
+                            <span class="bin-presets" role="group" aria-label="Rectangular ROI presets">
+                                <template x-for="r in [
+                                    { w: 640,  h: 480,  label: '640×480',   aspect: '4:3'  },
+                                    { w: 1024, h: 768,  label: '1024×768',  aspect: '4:3'  },
+                                    { w: 1280, h: 720,  label: '1280×720',  aspect: '16:9' },
+                                    { w: 1600, h: 1200, label: '1600×1200', aspect: '4:3'  },
+                                    { w: 1920, h: 1080, label: '1920×1080', aspect: '16:9' }
+                                ]" :key="r.label">
+                                    <button type="button" class="bin-preset"
+                                            :data-active="video.roiW === r.w && video.roiH === r.h"
+                                            :disabled="cameraStream.running || videoRecording.recording
+                                                       || (cameraCaps.maxX > 0 && r.w > cameraCaps.maxX)
+                                                       || (cameraCaps.maxY > 0 && r.h > cameraCaps.maxY)"
+                                            @click="videoSetRoiRect(r.w, r.h, r.aspect, 0)"
+                                            x-text="r.label"></button>
                                 </template>
                             </span>
                             <span class="text-muted" style="font-size:11px"
                                   x-show="cameraCaps.maxX > 0 && cameraCaps.maxY > 0"
-                                  x-text="video.roiSize === 0
+                                  x-text="video.roiSize === 0 && video.roiW === 0
                                       ? ('full sensor · ' + cameraCaps.maxX + ' × ' + cameraCaps.maxY)
-                                      : ('centered · ' + video.roiSize + ' × ' + video.roiSize
-                                         + ' on a ' + cameraCaps.maxX + ' × ' + cameraCaps.maxY + ' sensor')"></span>
+                                      : (video.roiW + ' × ' + video.roiH
+                                         + ' @ (' + video.roiX + ', ' + video.roiY + ')'
+                                         + ' on ' + cameraCaps.maxX + ' × ' + cameraCaps.maxY)"></span>
                         </div>
 
                         <!-- White-balance row, only visible for OSC color

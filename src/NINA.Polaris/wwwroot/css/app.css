@@ -6522,3 +6522,33 @@ label select.input-sm {
     opacity: 0.45;
     cursor: not-allowed;
 }
+
+/* VIDEO Capture: click-to-recenter ROI hint. Floats above the
+   preview canvas's bottom edge; dismissable via the × button so
+   power users don't see it every session. */
+.video-roi-hint {
+    position: absolute;
+    left: 50%;
+    bottom: 12px;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px 6px 14px;
+    background: rgba(7, 13, 26, 0.82);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border: 1px solid rgba(96, 165, 250, 0.5);
+    border-radius: 16px;
+    font-size: 11px;
+    color: var(--text-primary);
+    pointer-events: auto;
+    z-index: 5;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.video-roi-hint > .btn {
+    padding: 0 6px;
+    min-width: 22px;
+    font-size: 13px;
+    line-height: 1;
+}

@@ -611,6 +611,22 @@ public class EquipmentProfile {
     /// Stored per-rig because the trade-off depends on the host:
     /// Pi 2/3 → client; Pi 5 / mini-PC → either works.</summary>
     public string LiveStackComputeMode { get; set; } = "auto";
+
+    /// <summary>Last-used VIDEO tab ROI / FOV (subframe). Persisted so
+    /// the next session restores the same crop without the user re-
+    /// picking. Nullable on every dimension so partial-PUT bodies
+    /// from the JS client (which only ship the ROI fields, not the
+    /// entire rig) can leave them untouched when they're null. The
+    /// X/Y are sensor pixels (top-left of the box), W/H are the box
+    /// dimensions. Size + Aspect are UI-side state (which pill was
+    /// active) so the highlight is restored too. W=0 or H=0 means
+    /// "full sensor, no ROI saved".</summary>
+    public int? LastVideoRoiW { get; set; }
+    public int? LastVideoRoiH { get; set; }
+    public int? LastVideoRoiX { get; set; }
+    public int? LastVideoRoiY { get; set; }
+    public int? LastVideoRoiSize { get; set; }
+    public string? LastVideoRoiAspect { get; set; }
 }
 
 public class ProfileSummary {
