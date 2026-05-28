@@ -5621,7 +5621,7 @@
                      the slider impossible to aim because the UI
                      reflowed under your cursor on every input tick. -->
                 <div class="settings-section">
-                    <h3>Appearance</h3>
+                    <h3><span class="settings-card-icon">🎨</span>Appearance</h3>
                     <label style="display:flex; align-items:center; gap:12px; max-width:560px">
                         <span style="min-width:90px">UI scale</span>
                         <input type="range" min="0.5" max="1.5" step="0.05"
@@ -5658,7 +5658,7 @@
                      No auto-login: every Connect prompts for user +
                      password again, and credentials never persist. -->
                 <div class="settings-section">
-                    <h3>Remote terminal</h3>
+                    <h3><span class="settings-card-icon">🖥</span>Remote terminal</h3>
                     <p class="text-muted" style="font-size: 12px; max-width:560px">
                         SSH into the Polaris host (or any other Linux box on your LAN)
                         from the browser. Credentials are sent per-session and never
@@ -5708,7 +5708,7 @@
                 </div>
 
                 <div class="settings-section">
-                    <h3>INDI Server</h3>
+                    <h3><span class="settings-card-icon">🔌</span>INDI Server</h3>
                     <label>Host<input type="text" x-model="settings.indiHost" class="input-md"></label>
                     <label>Port<input type="number" x-model.number="settings.indiPort" class="input-sm"></label>
                     <div class="control-row actions">
@@ -5719,6 +5719,7 @@
                 </div>
 
                 <div class="settings-section" x-show="indiConnected">
+                    <h3><span class="settings-card-icon">✅</span>INDI Status</h3>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span class="status-indicator ok" style="font-size: 11px;">Connected</span>
                         <span class="text-muted" style="font-size: 12px;" x-text="devices.length + ' devices found'"></span>
@@ -5736,7 +5737,7 @@
                      (Pi OS Bookworm), banner explains the limitation on
                      Windows / macOS / no-wifi mini-PCs. -->
                 <div class="settings-section network-section">
-                    <h3>Network (WiFi)</h3>
+                    <h3><span class="settings-card-icon">📡</span>Network (WiFi)</h3>
                     <template x-if="network && !network.supportedOs">
                         <p class="text-muted" style="font-size: 12px; max-width:560px">
                             <span x-text="network.unsupportedReason || 'WiFi management not available'"></span>
@@ -5801,7 +5802,7 @@
                 </div>
 
                 <div class="settings-section">
-                    <h3>Observatory</h3>
+                    <h3><span class="settings-card-icon">🌍</span>Observatory</h3>
 
                     <!-- Two helpers above the raw lat/lng inputs: address
                          search (geocoded via Nominatim) and "use my
@@ -5869,7 +5870,7 @@
                 </div>
 
                 <div class="settings-section">
-                    <h3>Image Output</h3>
+                    <h3><span class="settings-card-icon">💾</span>Image Output</h3>
                     <!-- The actual root-picker moved to the FILES tab so the
                          user can browse to the folder instead of typing it.
                          Keep a read-only summary + jump-link here so the
@@ -5908,7 +5909,7 @@
                 </div>
 
                 <div class="settings-section">
-                    <h3>Hardware</h3>
+                    <h3><span class="settings-card-icon">⚙</span>Hardware</h3>
                     <label class="checkbox-label" title="When Polaris starts up, automatically connect to INDI, run an Alpaca discovery on the local network, and connect every device saved on the active rig. Toasts surface each step.">
                         <input type="checkbox" x-model="settings.autoConnectOnStartup" @change="saveSettingsToServer()">
                         Auto-connect hardware on server startup
@@ -5919,7 +5920,7 @@
                 </div>
 
                 <div class="settings-section">
-                    <h3>Sequencer</h3>
+                    <h3><span class="settings-card-icon">📑</span>Sequencer</h3>
                     <label class="checkbox-label" title="Land on the Advanced (tree-based) sequencer tab by default. Both sequencers stay available regardless.">
                         <input type="checkbox" x-model="settings.preferAdvancedSequencer" @change="saveSettingsToServer()">
                         Use Advanced Sequencer by default
@@ -5937,7 +5938,7 @@
                      a path input + status + Re-detect button, which
                      does not lay out cleanly in a 420 px column. -->
                 <div class="settings-section settings-section--wide">
-                    <h3>External tools</h3>
+                    <h3><span class="settings-card-icon">🛠</span>External tools</h3>
                     <p class="hint" style="margin-top:0;margin-bottom:10px">
                         Polaris can drive Siril (preprocessing + stacking) and GraXpert (background
                         extraction, deconvolution, denoising) as external binaries when installed
@@ -6087,7 +6088,7 @@
                         <!-- Full upgrade banner: only when NOT on a secure
                              context. Drives the user to switch origins. -->
                         <div x-show="!window.isSecureContext">
-                            <h3>🔒 HTTPS endpoints (for WebGPU + multi-thread WASM)</h3>
+                            <h3><span class="settings-card-icon">🔒</span>HTTPS endpoints (for WebGPU + multi-thread WASM)</h3>
                             <p class="hint" style="margin-top:0">
                                 Plain HTTP is what you're on right now, Chrome blocks
                                 <strong>WebGPU</strong> (client-side AI inference) and
@@ -6180,7 +6181,7 @@
                 </template>
 
                 <div class="settings-section settings-section--wide">
-                    <h3>AI inference (ONNX)</h3>
+                    <h3><span class="settings-card-icon">🧠</span>AI inference (ONNX)</h3>
                     <p class="hint" style="margin-top:0">
                         In-browser GraXpert AI (BGE / Denoise / Deconvolution).
                         Server hosts the model files, your browser fetches them

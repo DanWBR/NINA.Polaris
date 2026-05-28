@@ -2576,7 +2576,15 @@ label select.input-sm {
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 0;
-    overflow: hidden;
+    /* Uniform 400 px card height so a Hardware card (two checkboxes
+       + a hint line) does not look stunted next to a Network card
+       that has a status row + four buttons + body text. Matches the
+       400 px floor on the RIGS equip cards. Body content beyond
+       400 px scrolls inside the card; the h3 stays pinned at the
+       top via position:sticky below. */
+    height: 400px;
+    overflow-y: auto;
+    overflow-x: hidden;
     /* Baseline font-size for every text node inside a settings section.
        Without this, the top sections that opt-in to `style="font-size: 11px/12px"`
        inline look noticeably smaller than the bottom sections that inherit
@@ -2586,15 +2594,15 @@ label select.input-sm {
        scales everything to the same effective rendered size. */
     font-size: 12px;
     transition: border-color var(--transition);
-    display: flex;
-    flex-direction: column;
 }
 .settings-section:hover {
     border-color: rgba(255, 255, 255, 0.1);
 }
 /* Wide variant: spans the full grid row for the long forms that
    would otherwise wrap awkwardly inside a 420 px card (External
-   tools, AI inference, HTTPS endpoints banner). */
+   tools, AI inference, HTTPS endpoints banner). Stays at the 400 px
+   card height so the bottom of the page still aligns to the grid;
+   internal scrollbar covers the case where content exceeds it. */
 .settings-section--wide {
     grid-column: 1 / -1;
 }
@@ -2611,11 +2619,15 @@ label select.input-sm {
 }
 
 .settings-section > h3 {
-    /* h3 now acts as the card header band, like .equip-card-header
-       on the RIGS cards: padded, darker background, sits above the
-       body padding. Children below the h3 live inside an implicit
-       body (handled with > * + * margin since the markup doesn't
-       wrap them in a body div). */
+    /* h3 acts as the card header band, like .equip-card-header on
+       the RIGS cards: padded, darker background. position:sticky
+       pins it at the top of the scrolling card so the icon + title
+       stay visible while the body scrolls underneath. The icon
+       (.settings-card-icon span inside h3) sits inline before the
+       text. */
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-size: 13px;
     font-weight: 600;
     color: var(--text-secondary);
@@ -2623,28 +2635,64 @@ label select.input-sm {
     letter-spacing: 0.5px;
     margin: 0;
     padding: 10px 14px;
-    background: rgba(0, 0, 0, 0.18);
+    background: var(--bg-secondary);
     border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 1;
 }
-/* Anything that isn't the header gets the body padding. The first
-   non-h3 child also gets a top inset; the rest stack with their own
-   margins (existing styles in form rows + .hint already define
-   spacing). */
-.settings-section > *:not(h3) {
+.settings-section > h3::before {
+    /* Subtle darker overlay so the header band reads distinct from
+       the body even though position:sticky requires a solid colour
+       (semi-transparent rgba would show body text scrolling through
+       on top of it). */
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.18);
+    z-index: -1;
+}
+.settings-card-icon {
+    /* Mirrors .equip-card-icon. Emoji glyphs render slightly larger
+       than the surrounding caps so they look balanced. */
+    font-size: 16px;
+    line-height: 1;
+    text-transform: none;
+    letter-spacing: 0;
+    flex-shrink: 0;
+}
+/* The card body: everything after the h3 collapses into one
+   scrolling block so all cards visually share the same height
+   even when their forms vary in length. The actual children stay
+   in document order so each section's existing form layout (label
+   stacks, .control-row.actions, .term-mount terminal embed, etc.)
+   keeps working. */
+.settings-section > h3 ~ * {
     padding-left: 14px;
     padding-right: 14px;
 }
-.settings-section > *:nth-child(2) {
+.settings-section > h3 + * {
     padding-top: 12px;
+}
+/* Conditional sections (x-show / x-cloak) that render WITHOUT an
+   h3 (status-only mini-cards like "INDI Connected") get their own
+   padding block so they still look like a card body. */
+.settings-section > div:first-child:not(:has(h3)) {
+    padding: 12px 14px;
 }
 .settings-section > *:last-child {
     padding-bottom: 12px;
 }
-/* Conditional sections (x-show / x-cloak) that render before the
-   h3 (status-only sections like "indi connected" mini-card) keep
-   their full padding too. */
-.settings-section > div:first-child:not(:has(h3)) {
-    padding: 12px 14px;
+/* Custom scrollbar styling to match the .equip-card-body look. */
+.settings-section::-webkit-scrollbar {
+    width: 6px;
+}
+.settings-section::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 3px;
+}
+.settings-section::-webkit-scrollbar-track {
+    background: transparent;
 }
 
 .settings-section label {
