@@ -8612,8 +8612,74 @@ function ninaApp() {
             const b = s[s.length - 3].hfr;
             return a - b;
         },
-        // Placeholder, real implementation lands in MFOC-2 (chart).
-        _renderManualFocusChart() { /* MFOC-2 */ },
+        // MFOC-2: HFR trend chart. Time-series scatter+line plot.
+        // X = seconds elapsed from now (negative going back, so the
+        // most recent sample sits at x=0 on the right edge), Y =
+        // HFR (px). Best-HFR baseline drawn as a flat dashed line
+        // across the whole X range so the user sees when they've
+        // overshot. Reuses _ensureChart so the same Chart.js
+        // instance is rebound across re-renders.
+        _renderManualFocusChart() {
+            const t = this._chartTheme();
+            const c = this._ensureChart('manualFocusChart', 'manualFocus', 'line', () => ({
+                type: 'line',
+                data: {
+                    datasets: [
+                        { label: 'HFR', data: [], borderColor: '#64b5f6',
+                          backgroundColor: '#64b5f6', pointRadius: 3,
+                          showLine: true, borderWidth: 2, tension: 0.25,
+                          spanGaps: true },
+                        { label: 'Best',
+                          data: [], borderColor: '#4caf50',
+                          borderDash: [4, 3], backgroundColor: 'transparent',
+                          pointRadius: 0, borderWidth: 1.5, showLine: true,
+                          tension: 0 }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, animation: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            ticks: { color: t.tick, font: { size: 10 },
+                                     callback: v => v + 's' },
+                            grid: { color: t.grid },
+                            title: { display: true, text: 'seconds ago',
+                                     color: t.tick, font: { size: 10 } }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            ticks: { color: t.tick, font: { size: 10 } },
+                            grid: { color: t.grid },
+                            title: { display: true, text: 'HFR (px)',
+                                     color: t.tick, font: { size: 10 } }
+                        }
+                    }
+                }
+            }));
+            if (!c) return;
+            const now = Date.now();
+            const samples = this.manualFocus.samples
+                .filter(s => Number.isFinite(s.hfr));
+            const points = samples.map(s => ({
+                x: (s.t - now) / 1000,    // negative seconds back from now
+                y: s.hfr
+            }));
+            c.data.datasets[0].data = points;
+            if (points.length > 0 && this.manualFocus.bestHfr != null) {
+                // Flat dashed line at y=bestHfr across the visible X range
+                const xMin = points[0].x;
+                const xMax = points[points.length - 1].x;
+                c.data.datasets[1].data = [
+                    { x: xMin, y: this.manualFocus.bestHfr },
+                    { x: xMax, y: this.manualFocus.bestHfr }
+                ];
+            } else {
+                c.data.datasets[1].data = [];
+            }
+            c.update('none');
+        },
 
         async startAutoFocus() {
             try {

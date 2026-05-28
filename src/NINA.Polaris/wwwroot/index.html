@@ -1217,6 +1217,27 @@
                         <div class="text-warn" x-show="manualFocus.lastError" style="font-size:11px"
                              x-text="'⚠ ' + manualFocus.lastError"></div>
                     </div>
+
+                    <!-- MFOC-2: HFR trend chart. Below the canvas +
+                         sidebar so the chart gets the full panel
+                         width. Time-series (X = elapsed seconds back
+                         from now, ranging 0..-120s), Y = HFR (px).
+                         A horizontal baseline line marks bestHfr so
+                         the user sees when they've overshot. Hidden
+                         until at least 2 samples have landed so the
+                         chart doesn't render an empty axis on first
+                         tab activation. -->
+                    <div class="manual-focus-chart"
+                         x-show="manualFocus.samples.length >= 2">
+                        <div class="chart-container">
+                            <canvas x-ref="manualFocusChart" id="manualFocusChart"></canvas>
+                        </div>
+                        <div class="af-chart-legend">
+                            <span><span class="legend-dot" style="background:#64b5f6;"></span>HFR</span>
+                            <span><span class="legend-dot" style="background:#4caf50;"></span>Best</span>
+                            <span class="text-muted">last 60 samples</span>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- ===== Auto V-curve subtab (existing) ===== -->

@@ -6816,3 +6816,18 @@ label select.input-sm {
         max-height: 50vh;
     }
 }
+
+/* MFOC-2: HFR trend chart container under the pane. Reuses the
+   af-chart-legend look-and-feel (legend dot + label). */
+.manual-focus-chart {
+    margin-top: 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+}
+.manual-focus-chart .chart-container {
+    position: relative;
+    height: 200px;
+    width: 100%;
+}
