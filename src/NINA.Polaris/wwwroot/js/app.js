@@ -11349,6 +11349,32 @@ function ninaApp() {
             if (p == null) return '';
             return p > 85 ? 'host-red' : p > 60 ? 'host-amber' : 'host-green';
         },
+        // Disk free / total. Colour by % USED of the capture volume so
+        // the gauge flips amber / red before a sequence runs into an
+        // ENOSPC. host.diskFreeGB / diskTotalGB come from the backend
+        // HostMetricsService (DriveInfo on the active rig's
+        // ImageOutputDir, walked to the longest matching mount).
+        hostDiskClass() {
+            const total = this.host.diskTotalGB || 0;
+            const free = this.host.diskFreeGB || 0;
+            if (total <= 0) return '';
+            const usedPct = 100 * (1 - free / total);
+            return usedPct > 90 ? 'host-red'
+                 : usedPct > 75 ? 'host-amber'
+                 : 'host-green';
+        },
+        hostDiskTooltip() {
+            const total = this.host.diskTotalGB || 0;
+            const free = this.host.diskFreeGB || 0;
+            const mount = this.host.diskMountName || '';
+            const root = this.settings?.imageOutputDir || '(not set)';
+            if (total <= 0) return 'Disk usage probe failed (no rig / unmounted path).';
+            const usedPct = (100 * (1 - free / total)).toFixed(1);
+            return 'Capture root: ' + root
+                + '\nMount: ' + (mount || '(unknown)')
+                + '\nFree: ' + free.toFixed(1) + ' GB of ' + total.toFixed(1) + ' GB'
+                + '\nUsed: ' + usedPct + '%';
+        },
         // Picks an emoji icon matching the device kind classification
         // done server-side by HostInfo.ClassifyLinuxModel /
         // ClassifyWindowsModel. Generic fallback for anything we

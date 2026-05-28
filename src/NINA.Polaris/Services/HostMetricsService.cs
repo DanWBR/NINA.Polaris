@@ -38,6 +38,7 @@ namespace NINA.Polaris.Services;
 public class HostMetricsService : BackgroundService {
     private readonly IResourceMonitor _monitor;
     private readonly ILogger<HostMetricsService> _logger;
+    private readonly ProfileService _profiles;
 
     /// <summary>Most recent successful sample. Initialised to zeros.</summary>
     public HostMetricsSnapshot Latest { get; private set; } = new();
@@ -49,8 +50,11 @@ public class HostMetricsService : BackgroundService {
 
     private static readonly TimeSpan SampleInterval = TimeSpan.FromSeconds(2);
 
-    public HostMetricsService(IResourceMonitor monitor, ILogger<HostMetricsService> logger) {
+    public HostMetricsService(IResourceMonitor monitor,
+                               ProfileService profiles,
+                               ILogger<HostMetricsService> logger) {
         _monitor = monitor;
+        _profiles = profiles;
         _logger = logger;
     }
 
@@ -137,6 +141,12 @@ public class HostMetricsService : BackgroundService {
         // most recent value instead of the value at Process.GetCurrentProcess().
         process.Refresh();
 
+        // Disk usage on the volume that hosts the active rig's capture
+        // root. Surfaces free / total space in the activity bar so the
+        // user notices a full SSD before a sequence fails mid-frame.
+        var (diskFree, diskTotal, diskName) = TryGetDiskInfo(
+            _profiles?.Active?.ImageOutputDir);
+
         return new HostMetricsSnapshot {
             CpuPercent = Math.Round(util.CpuUsedPercentage, 1),
             MemoryPercent = Math.Round(usedPercent, 1),
@@ -144,8 +154,42 @@ public class HostMetricsService : BackgroundService {
             MemoryTotalMB = totalBytes / (1024 * 1024),
             ProcessCpuPercent = Math.Round(processCpu, 1),
             ProcessMemoryMB = process.WorkingSet64 / (1024 * 1024),
+            DiskFreeGB = diskTotal > 0 ? Math.Round(diskFree / 1073741824.0, 1) : 0,
+            DiskTotalGB = diskTotal > 0 ? Math.Round(diskTotal / 1073741824.0, 1) : 0,
+            DiskMountName = diskName,
             SampledAt = now
         };
+    }
+
+    /// <summary>
+    /// Disk usage for the volume that contains <paramref name="capturePath"/>.
+    /// Walks <see cref="DriveInfo.GetDrives"/> and returns the longest mount
+    /// whose Name is a prefix of the path. This correctly attributes a path
+    /// like <c>/mnt/usb-ssd/polaris/files</c> to the USB SSD mount rather
+    /// than the root filesystem on Linux. Returns zeros when the path is
+    /// empty / unmounted / probe fails so the UI hides the metric instead
+    /// of showing a misleading "0 / 0 GB".
+    /// </summary>
+    internal static (long freeBytes, long totalBytes, string mountName) TryGetDiskInfo(string? capturePath) {
+        try {
+            if (string.IsNullOrWhiteSpace(capturePath)) {
+                capturePath = Environment.CurrentDirectory;
+            }
+            var full = Path.GetFullPath(capturePath);
+            DriveInfo? best = null;
+            foreach (var d in DriveInfo.GetDrives()) {
+                if (!d.IsReady) continue;
+                if (full.StartsWith(d.Name, StringComparison.OrdinalIgnoreCase)) {
+                    if (best == null || d.Name.Length > best.Name.Length) {
+                        best = d;
+                    }
+                }
+            }
+            if (best == null) return (0, 0, string.Empty);
+            return (best.AvailableFreeSpace, best.TotalSize, best.Name);
+        } catch {
+            return (0, 0, string.Empty);
+        }
     }
 
     /// <summary>
@@ -193,6 +237,16 @@ public sealed record HostMetricsSnapshot {
     public long MemoryTotalMB { get; init; }
     public double ProcessCpuPercent { get; init; }
     public long ProcessMemoryMB { get; init; }
+    /// <summary>Free + total bytes on the volume hosting the active rig's
+    /// capture root. GB-rounded (1 decimal) since the activity bar shows
+    /// "234.5 / 931.5 GB" not byte-precise. Zero on both axes = probe
+    /// failed (no rig, unmounted path, sandbox) → UI hides the chip.</summary>
+    public double DiskFreeGB { get; init; }
+    public double DiskTotalGB { get; init; }
+    /// <summary>Mount name of the volume above ("C:\" on Windows, "/" or
+    /// "/mnt/usb-ssd" on Linux). Tooltip context so the user knows which
+    /// disk they are reading the free-space gauge for.</summary>
+    public string DiskMountName { get; init; } = string.Empty;
     public DateTime SampledAt { get; init; }
 
     /// <summary>Host hardware identification, same instance is shared

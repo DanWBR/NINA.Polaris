@@ -6504,6 +6504,18 @@
                 <span class="activity-host-value" :class="hostMemClass()"
                       x-text="formatHostRam(host.memoryUsedMB, host.memoryTotalMB)"></span>
             </span>
+            <!-- Disk free / total on the volume hosting the active
+                 rig's capture root. Hidden when the server didn't
+                 manage to probe a mount (no rig, sandbox). Colour
+                 reflects free-space pressure so a near-full SSD is
+                 obvious before a sequence runs into an ENOSPC. -->
+            <span class="activity-host-stat" :title="hostDiskTooltip()"
+                  x-show="host.diskTotalGB > 0">
+                <span class="activity-host-label">Disk</span>
+                <span class="activity-host-value" :class="hostDiskClass()"
+                      x-text="(host.diskFreeGB || 0).toFixed(0)
+                              + ' / ' + (host.diskTotalGB || 0).toFixed(0) + ' GB'"></span>
+            </span>
             <span class="activity-host-stat" title="Polaris process CPU + memory"
                   x-show="host.processCpuPercent != null">
                 <span class="activity-host-label">Polaris</span>
