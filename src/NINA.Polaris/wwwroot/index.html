@@ -6170,6 +6170,120 @@
                      station toggle. Only useful on Linux + NetworkManager
                      (Pi OS Bookworm), banner explains the limitation on
                      Windows / macOS / no-wifi mini-PCs. -->
+                <!-- AUTH-3: Authentication card (Sign out, Change
+                     password, Disable toggle). Status row mirrors
+                     Network / Simulator visual pattern. Disable
+                     requires confirming the current password so a
+                     stolen session token alone can't undo the gate. -->
+                <div class="settings-section">
+                    <h3><span class="settings-card-icon">🔐</span>Authentication</h3>
+                    <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
+                        Password gate for this Polaris server. Loopback
+                        (127.0.0.1) always bypasses, so SSH tunnels and
+                        local scripts work unchanged.
+                    </p>
+                    <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px; font-size:12px">
+                        <div>
+                            Status:
+                            <span x-show="auth.enabled" style="color:#86efac">🟢 Enabled</span>
+                            <span x-show="!auth.enabled" style="color:#fcd34d">🟡 Disabled</span>
+                        </div>
+                        <div x-show="auth.enabled">
+                            Session timeout:
+                            <strong x-text="auth.sessionTimeoutHours + 'h'"></strong>
+                            of inactivity
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:14px">
+                        <button class="btn btn-sm"
+                                @click="auth.cpOpen=true; auth.cpError=''; auth.cpCurrent=''; auth.cpNew=''; auth.cpConfirm=''"
+                                x-show="auth.enabled">🔑 Change password</button>
+                        <button class="btn btn-sm" @click="authLogout()"
+                                x-show="auth.enabled">🚪 Sign out</button>
+                        <button class="btn btn-sm btn-danger"
+                                @click="auth.disableOpen=true; auth.disableError=''; auth.disablePassword=''"
+                                x-show="auth.enabled">Disable auth…</button>
+                        <button class="btn btn-sm" @click="authEnable()"
+                                x-show="!auth.enabled">Re-enable auth</button>
+                    </div>
+
+                    <!-- Change-password modal. -->
+                    <div class="auth-overlay" x-cloak x-show="auth.cpOpen">
+                        <div class="auth-modal">
+                            <h2>Change password</h2>
+                            <form @submit.prevent="authChangePassword()">
+                                <label class="auth-field">
+                                    <span>Current password</span>
+                                    <input type="password"
+                                           x-model="auth.cpCurrent"
+                                           autocomplete="current-password" required />
+                                </label>
+                                <label class="auth-field">
+                                    <span>New password</span>
+                                    <input type="password"
+                                           x-model="auth.cpNew"
+                                           autocomplete="new-password"
+                                           required minlength="8" />
+                                </label>
+                                <label class="auth-field">
+                                    <span>Confirm new password</span>
+                                    <input type="password"
+                                           x-model="auth.cpConfirm"
+                                           autocomplete="new-password"
+                                           required minlength="8" />
+                                </label>
+                                <p class="auth-error" x-show="auth.cpError"
+                                   x-text="auth.cpError"></p>
+                                <div style="display:flex; gap:8px">
+                                    <button type="button" class="btn"
+                                            @click="auth.cpOpen=false"
+                                            :disabled="auth.cpBusy">Cancel</button>
+                                    <button type="submit" class="btn btn-primary"
+                                            :disabled="auth.cpBusy"
+                                            style="flex:1">
+                                        <span x-show="!auth.cpBusy">Change password</span>
+                                        <span x-show="auth.cpBusy">Saving…</span>
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Disable-auth confirm modal. -->
+                    <div class="auth-overlay" x-cloak x-show="auth.disableOpen">
+                        <div class="auth-modal">
+                            <h2>Disable authentication</h2>
+                            <p class="auth-hint">
+                                Anyone on this network will be able to
+                                control Polaris without a password. Only
+                                do this on a closed / trusted LAN.
+                            </p>
+                            <form @submit.prevent="authDisable()">
+                                <label class="auth-field">
+                                    <span>Confirm with current password</span>
+                                    <input type="password"
+                                           x-model="auth.disablePassword"
+                                           autocomplete="current-password"
+                                           required />
+                                </label>
+                                <p class="auth-error" x-show="auth.disableError"
+                                   x-text="auth.disableError"></p>
+                                <div style="display:flex; gap:8px">
+                                    <button type="button" class="btn"
+                                            @click="auth.disableOpen=false"
+                                            :disabled="auth.disableBusy">Cancel</button>
+                                    <button type="submit" class="btn btn-danger"
+                                            :disabled="auth.disableBusy"
+                                            style="flex:1">
+                                        <span x-show="!auth.disableBusy">Disable</span>
+                                        <span x-show="auth.disableBusy">Saving…</span>
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="settings-section network-section">
                     <h3><span class="settings-card-icon">📡</span>Network (WiFi)</h3>
                     <!-- Body wrapper: forces consistent padding on the
