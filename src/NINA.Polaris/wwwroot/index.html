@@ -1356,15 +1356,46 @@
                     </div>
 
                     <div class="quick-controls">
+                        <!-- Exposure (ms). Planetary video typically lives
+                             between 1 ms (Jupiter, ASI224) and a few
+                             hundred ms (Mars at f/15). Slider in ms +
+                             a small number readout so the user can both
+                             drag for fine-tuning and type for precision.
+                             Underlying x-model field is in seconds
+                             (capture path expects that) so the two-way
+                             bridge multiplies by 1000 in both directions.
+                             -- and ++ touch buttons come from the
+                             _augmentRangeInputs() pass in app.js. -->
                         <div class="control-row">
-                            <label>Exposure (s)
-                                <input type="number" x-model.number="video.exposure"
-                                       list="exposure-presets" step="any" min="0" class="input-sm"
+                            <label style="flex:1; display:flex; align-items:center; gap:8px; min-width:280px">
+                                <span style="min-width:84px">Exposure (ms)</span>
+                                <input type="range" min="1" max="5000" step="1"
+                                       :value="Math.round((video.exposure || 0) * 1000)"
+                                       @input="video.exposure = (parseInt($event.target.value, 10) || 0) / 1000"
+                                       style="flex:1"
+                                       :disabled="cameraStream.running || videoRecording.recording">
+                                <input type="number" min="0" max="60000" step="1"
+                                       :value="Math.round((video.exposure || 0) * 1000)"
+                                       @change="video.exposure = (parseInt($event.target.value, 10) || 0) / 1000"
+                                       class="input-sm" style="width:80px"
                                        :disabled="cameraStream.running || videoRecording.recording">
                             </label>
-                            <label>Gain
-                                <input type="number" x-model.number="video.gain"
-                                       step="10" min="0" class="input-sm"
+                        </div>
+                        <!-- Gain slider. ZWO planetary cameras typically
+                             top out at 300-500; 600 is a safe upper for
+                             every model we have seen. L / M / H ZWO-aware
+                             preset pills stay on the side as a one-click
+                             shortcut. -->
+                        <div class="control-row">
+                            <label style="flex:1; display:flex; align-items:center; gap:8px; min-width:280px">
+                                <span style="min-width:84px">Gain</span>
+                                <input type="range" min="0" max="600" step="1"
+                                       x-model.number="video.gain"
+                                       style="flex:1"
+                                       :disabled="cameraStream.running || videoRecording.recording">
+                                <input type="number" min="0" max="600" step="10"
+                                       x-model.number="video.gain"
+                                       class="input-sm" style="width:80px"
                                        :disabled="cameraStream.running || videoRecording.recording">
                             </label>
                             <span class="zwo-gain-presets"
@@ -1379,6 +1410,8 @@
                                         :data-active="video.gain === zwoPresetsForActiveCamera()?.H"
                                         @click="applyGainPreset('video.gain', zwoPresetsForActiveCamera().H)">H</button>
                             </span>
+                        </div>
+                        <div class="control-row">
                             <span class="bin-presets" role="group" aria-label="Binning">
                                 <template x-for="b in ['1','2']" :key="b">
                                     <button type="button" class="bin-preset"
