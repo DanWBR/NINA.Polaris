@@ -75,7 +75,22 @@ case "$1" in
             fi
         fi
 
-        # ---- 5. systemd ----
+        # ---- 5. WiFi bootstrap script + PolicyKit ----
+        # Mark the bootstrap script executable; dpkg-deb sometimes
+        # loses the mode bit if the build host's umask is loose.
+        # Idempotent: chmod is a no-op when the bits are already set.
+        chmod 0755 /opt/polaris/bin/polaris-wifi-bootstrap.sh 2>/dev/null || true
+
+        # PolicyKit reload picks up /etc/polkit-1/rules.d/50-polaris-nm.rules
+        # which grants the polaris user nmcli access without sudo
+        # prompts. polkit may not be installed on minimal containers;
+        # the rule still lives on disk, ready for whenever polkit
+        # arrives.
+        if [ -d /run/systemd/system ]; then
+            systemctl restart polkit.service >/dev/null 2>&1 || true
+        fi
+
+        # ---- 6. systemd ----
         if [ -d /run/systemd/system ]; then
             systemctl daemon-reload
 
@@ -83,6 +98,10 @@ case "$1" in
             if [ -z "$2" ]; then
                 # $2 empty means fresh install (no previous version)
                 systemctl enable polaris.service >/dev/null 2>&1 || true
+                # First-boot WiFi bootstrap. Only enabled on a fresh
+                # install so we do not stomp on a user who already
+                # customised polaris-hotspot via the UI.
+                systemctl enable polaris-wifi-bootstrap.service >/dev/null 2>&1 || true
             fi
 
             # Start (or restart if already running on upgrade)
@@ -96,7 +115,7 @@ case "$1" in
             echo "polaris: when systemd is available run: sudo systemctl enable --now polaris.service"
         fi
 
-        # ---- 6. Friendly summary ----
+        # ---- 7. Friendly summary ----
         HOST=$(hostname 2>/dev/null || echo "localhost")
         IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "")
         echo ""
@@ -118,6 +137,12 @@ case "$1" in
         echo " Polaris also listens on http://127.0.0.1:5080 (loopback only,"
         echo " for SSH-tunneled access or a local reverse proxy fronting TLS"
         echo " elsewhere). LAN access is HTTPS:5000 only."
+        echo ""
+        echo " WiFi: on the next boot the Pi comes up as a hotspot named"
+        echo "   SSID:     Polaris-Hotspot"
+        echo "   Password: polaris1234"
+        echo " Connect any device, open https://${HOST}.local:5000, then go to"
+        echo " Settings → Network to switch the Pi onto your home WiFi instead."
         echo ""
         echo " Tail logs:"
         echo "   journalctl -u polaris.service -f"

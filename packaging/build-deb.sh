@@ -106,14 +106,24 @@ chmod 0755 "$BUILD_DIR/opt/polaris/NINA.Polaris"
 find "$BUILD_DIR/opt/polaris" -name "*.so" -exec chmod 0755 {} \;
 find "$BUILD_DIR/opt/polaris" -name "*.so.*" -exec chmod 0755 {} \;
 
-# Systemd unit + config
+# Systemd units + config
 chmod 0644 "$BUILD_DIR/lib/systemd/system/polaris.service"
+chmod 0644 "$BUILD_DIR/lib/systemd/system/polaris-wifi-bootstrap.service" 2>/dev/null || true
 chmod 0644 "$BUILD_DIR/opt/polaris/appsettings.json"
 chmod 0644 "$BUILD_DIR/usr/share/doc/polaris/README" \
            "$BUILD_DIR/usr/share/doc/polaris/copyright" \
            "$BUILD_DIR/usr/share/doc/polaris/changelog.Debian.gz"
 find "$BUILD_DIR/usr" -type d -exec chmod 0755 {} \;
 find "$BUILD_DIR/lib" -type d -exec chmod 0755 {} \;
+# WIFI-5: bootstrap script + polkit rule
+if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-wifi-bootstrap.sh" ]; then
+    chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-wifi-bootstrap.sh"
+fi
+find "$BUILD_DIR/opt/polaris/bin" -type d -exec chmod 0755 {} \; 2>/dev/null || true
+if [ -f "$BUILD_DIR/etc/polkit-1/rules.d/50-polaris-nm.rules" ]; then
+    chmod 0644 "$BUILD_DIR/etc/polkit-1/rules.d/50-polaris-nm.rules"
+fi
+find "$BUILD_DIR/etc" -type d -exec chmod 0755 {} \; 2>/dev/null || true
 
 # 7. Build the .deb
 echo "==> dpkg-deb --build"

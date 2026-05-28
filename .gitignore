@@ -28,6 +28,12 @@ x86/
 [Aa][Rr][Mm]64/
 bld/
 [Bb]in/
+# Packaging-tree 'bin/' dirs are intentional Debian filesystem layout
+# (e.g. packaging/deb/opt/polaris/bin/polaris-wifi-bootstrap.sh) so
+# negate the global Bin/ ignore for them. Anything under
+# packaging/deb/ ships in the .deb verbatim.
+!packaging/deb/**/bin/
+!packaging/deb/**/bin/**
 [Oo]bj/
 [Oo]ut/
 [Ll]og/

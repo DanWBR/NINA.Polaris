@@ -1,0 +1,22 @@
+[Unit]
+# First-boot helper that seeds the polaris-hotspot NetworkManager
+# connection. After it runs once, ExecStartPost drops a sentinel
+# file in /var/lib/polaris/ and the ConditionPathExists below
+# short-circuits the unit on subsequent boots.
+#
+# Deleting the sentinel makes the unit run again on the next boot,
+# which is the supported recovery path when something garbled the
+# hotspot connection.
+Description=Polaris first-boot WiFi hotspot bootstrap
+After=NetworkManager.service
+Requires=NetworkManager.service
+ConditionPathExists=!/var/lib/polaris/wifi-bootstrap.done
+
+[Service]
+Type=oneshot
+ExecStart=/opt/polaris/bin/polaris-wifi-bootstrap.sh
+ExecStartPost=/bin/sh -c 'mkdir -p /var/lib/polaris && touch /var/lib/polaris/wifi-bootstrap.done'
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target

@@ -13,12 +13,25 @@ case "$1" in
     purge)
         if [ -d /run/systemd/system ]; then
             systemctl disable polaris.service >/dev/null 2>&1 || true
+            systemctl disable polaris-wifi-bootstrap.service >/dev/null 2>&1 || true
             systemctl daemon-reload >/dev/null 2>&1 || true
         fi
 
         # indi-web venv is ours to remove
         if [ -d $INDIWEB_VENV ]; then
             rm -rf $INDIWEB_VENV
+        fi
+
+        # WiFi bootstrap sentinel + NetworkManager connections we
+        # created. Leaving the polaris-hotspot connection in place
+        # after purge would surprise the next admin who installed
+        # the package: they would see the AP coming back on every
+        # boot even though Polaris is gone.
+        rm -f /var/lib/polaris/wifi-bootstrap.done 2>/dev/null || true
+        rmdir /var/lib/polaris 2>/dev/null || true
+        if command -v nmcli >/dev/null 2>&1; then
+            nmcli connection delete polaris-hotspot >/dev/null 2>&1 || true
+            nmcli connection delete polaris-station >/dev/null 2>&1 || true
         fi
 
         # User data is intentionally left in place:

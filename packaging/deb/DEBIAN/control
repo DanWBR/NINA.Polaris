@@ -5,7 +5,7 @@ Maintainer: Daniel Boas <daniel@danielboas.com>
 Section: science
 Priority: optional
 Homepage: https://github.com/DanWBR/NINA.Polaris
-Depends: libfontconfig1, libssl3, libicu72 | libicu76 | libicu74, indi-bin, python3-venv, python3-pip, adduser, systemd
+Depends: libfontconfig1, libssl3, libicu72 | libicu76 | libicu74, indi-bin, python3-venv, python3-pip, adduser, systemd, network-manager, policykit-1 | polkitd
 Recommends: indi-full, astap, phd2, siril, xpra, xserver-xorg-video-dummy, dphys-swapfile, lsof
 Suggests: graxpert
 Description: N.I.N.A. Polaris astrophotography server
@@ -23,3 +23,10 @@ Description: N.I.N.A. Polaris astrophotography server
  Bundles a self-contained .NET 10 runtime so no separate dotnet
  install is required. Runs as a system user 'polaris' with captures
  written to /home/polaris/files by default.
+ .
+ On Linux hosts with WiFi the Pi automatically comes up as a
+ hotspot named 'Polaris-Hotspot' (password polaris1234) on first
+ boot so the user can connect without a monitor. The Polaris UI
+ then offers a 'Switch to Station Mode' button that hands the
+ device to the home WiFi via NetworkManager, with a 30 s try-and-
+ revert safety net if the new credentials fail.

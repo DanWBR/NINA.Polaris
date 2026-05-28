@@ -1,0 +1,15 @@
+// PolicyKit rule shipped by the polaris .deb. Grants the 'polaris'
+// system user (created in postinst) unrestricted access to
+// NetworkManager so the in-browser Settings → Network panel can
+// switch between Hotspot and Station modes via nmcli without sudo
+// prompts.
+//
+// Scope is intentionally narrow: only org.freedesktop.NetworkManager.*
+// actions, only the polaris user. Other users on the host (pi,
+// root sessions, etc.) keep their normal PolicyKit defaults.
+polkit.addRule(function(action, subject) {
+    if (action.id.indexOf("org.freedesktop.NetworkManager.") === 0
+        && subject.user == "polaris") {
+        return polkit.Result.YES;
+    }
+});
