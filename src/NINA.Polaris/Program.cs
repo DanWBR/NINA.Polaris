@@ -1,4 +1,5 @@
 using NINA.Polaris.Endpoints;
+using NINA.Polaris.Middleware;
 using NINA.Polaris.Services;
 using NINA.Polaris.WebSocket;
 using NINA.INDI.Client;
@@ -323,6 +324,25 @@ app.UseStaticFiles(new StaticFileOptions {
     ServeUnknownFileTypes = true,
     DefaultContentType = "application/octet-stream"
 });
+
+// AUTH-2: gate /api/*, /ws/*, /phd2-gui/*, /indi-web/*, /sky/*
+// behind the bearer token issued by AuthService. /api/auth/* and
+// /api/system/version are exempt. Loopback (127.0.0.1/::1) and the
+// AuthEnabled=false toggle bypass too. The login page itself + every
+// static asset (CSS, JS, images, fonts) live outside the gated
+// prefixes so they load without a token, the JS then drives the
+// status -> wizard/login/app boot flow.
+//
+// Order: AFTER UseStaticFiles (so wwwroot assets terminate first)
+// and BEFORE UseWebSockets / the /sky+/phd2-gui reverse proxies
+// / endpoint mapping (so gated requests bounce here with 401
+// instead of hitting handlers).
+//
+// NOTE: the /sky CSP-strip middleware above also runs before this
+// for path matching, but it only adds a Response.OnStarting hook
+// and calls next() unconditionally, so we still catch /sky/ here.
+app.UseAuthMiddleware();
+
 app.UseWebSockets();
 
 // ----- PH2X-7: /phd2-gui/* reverse-proxy → xpra HTML5 client -----
