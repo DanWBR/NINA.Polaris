@@ -6246,3 +6246,47 @@ label select.input-sm {
 .livestack-triggers-row label > input[type="number"] {
     margin: 0 2px;
 }
+
+/* WIFI-4: Network panel in Settings tab. Compact pill + meta row,
+   no card chrome since the panel sits inside .settings-section. */
+.network-section .network-card {
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-secondary);
+    max-width: 720px;
+}
+.network-status-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+.network-mode-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-primary);
+}
+.network-mode-hotspot      { border-color: rgba(34, 197, 94, 0.6); }
+.network-mode-station      { border-color: rgba(56, 132, 255, 0.6); }
+.network-mode-disconnected { border-color: rgba(245, 158, 11, 0.6); }
+.network-mode-unsupported,
+.network-mode-unknown      { color: var(--text-muted); }
+.network-ssid {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.network-ip {
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+}
+.network-signal {
+    font-size: 11px;
+}

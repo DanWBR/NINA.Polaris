@@ -3636,6 +3636,116 @@
                 </div>
             </div>
 
+            <!-- WIFI-4: Switch to Station mode modal. List the scanned
+                 networks + a password input. Once Connect is clicked
+                 the POST blocks up to 35s and the iframe socket may
+                 die mid-response when the active hotspot WiFi link
+                 drops; the JS handler tolerates that and surfaces
+                 "Reconnect to your home WiFi and reopen Polaris" as
+                 the recovery instruction. -->
+            <div class="editor-export-backdrop" x-show="networkStation.open" x-cloak
+                 @click.self="networkStation.open = networkSwitching">
+                <div class="editor-export-modal">
+                    <h3>Switch to Station mode</h3>
+                    <p class="hint" style="margin-bottom: 8px">
+                        Polaris will hand the Pi to your home WiFi and stop broadcasting
+                        the <code x-text="(network && network.hotspotSsid) || 'Polaris-Hotspot'"></code> hotspot.
+                        If the connection fails (wrong password / out of range), the
+                        hotspot auto-reverts after 30 s.
+                    </p>
+                    <label class="editor-export-row">
+                        <span>Network</span>
+                        <select x-model="networkStation.ssid" :disabled="networkSwitching">
+                            <option value="">— pick a WiFi network —</option>
+                            <template x-for="n in (networkStation.scanResults || [])" :key="n.ssid">
+                                <option :value="n.ssid"
+                                        x-text="n.ssid + '  (' + n.signal + '% · ' + (n.security || 'open') + ')'"></option>
+                            </template>
+                            <option value="__hidden__">Other (hidden SSID)…</option>
+                        </select>
+                        <button class="btn btn-sm" @click="networkRescan()"
+                                :disabled="networkSwitching || networkStation.scanning">
+                            <span x-show="!networkStation.scanning">↻ Rescan</span>
+                            <span x-show="networkStation.scanning">Scanning…</span>
+                        </button>
+                    </label>
+                    <label class="editor-export-row" x-show="networkStation.ssid === '__hidden__'">
+                        <span>SSID</span>
+                        <input type="text" class="input-md"
+                               x-model="networkStation.hiddenSsid"
+                               :disabled="networkSwitching"
+                               placeholder="Network name">
+                    </label>
+                    <label class="editor-export-row">
+                        <span>Password</span>
+                        <input type="password" class="input-md"
+                               x-model="networkStation.password"
+                               :disabled="networkSwitching"
+                               minlength="8" maxlength="63"
+                               placeholder="8-63 characters (WPA2)">
+                    </label>
+                    <p class="hint text-warn" x-show="networkSwitching">
+                        Switching… the Pi is dropping the hotspot and trying the new
+                        connection. This can take up to 30 s. If your browser is
+                        currently connected to the Pi via the hotspot you will lose
+                        the link as soon as the switch starts; reconnect to your home
+                        WiFi and reopen <code x-text="networkExpectedReachUrl()"></code>.
+                    </p>
+                    <p class="hint text-warn" x-show="networkStation.lastError"
+                       x-text="networkStation.lastError"></p>
+                    <div class="editor-export-actions">
+                        <button class="btn" @click="networkStation.open = false"
+                                :disabled="networkSwitching">Cancel</button>
+                        <button class="btn btn-primary"
+                                @click="networkSwitchToStation()"
+                                :disabled="networkSwitching || !networkStationCanSubmit()">
+                            <span x-show="!networkSwitching">Connect &amp; switch</span>
+                            <span x-show="networkSwitching">Switching…</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WIFI-4: Edit hotspot SSID + password modal. Lighter
+                 than the Station switch (no scan, no DHCP wait). -->
+            <div class="editor-export-backdrop" x-show="networkHotspot.open" x-cloak
+                 @click.self="networkHotspot.open = networkSwitching">
+                <div class="editor-export-modal">
+                    <h3>Edit hotspot credentials</h3>
+                    <p class="hint" style="margin-bottom: 8px">
+                        Changes apply immediately. Any device connected to the old
+                        hotspot SSID will be kicked off; reconnect with the new
+                        credentials.
+                    </p>
+                    <label class="editor-export-row">
+                        <span>SSID</span>
+                        <input type="text" class="input-md"
+                               x-model="networkHotspot.ssid"
+                               :disabled="networkSwitching"
+                               minlength="1" maxlength="32">
+                    </label>
+                    <label class="editor-export-row">
+                        <span>Password</span>
+                        <input type="password" class="input-md"
+                               x-model="networkHotspot.password"
+                               :disabled="networkSwitching"
+                               minlength="8" maxlength="63">
+                    </label>
+                    <p class="hint text-warn" x-show="networkHotspot.lastError"
+                       x-text="networkHotspot.lastError"></p>
+                    <div class="editor-export-actions">
+                        <button class="btn" @click="networkHotspot.open = false"
+                                :disabled="networkSwitching">Cancel</button>
+                        <button class="btn btn-primary"
+                                @click="networkSaveHotspotCredentials()"
+                                :disabled="networkSwitching || !networkHotspot.ssid || (networkHotspot.password || '').length < 8">
+                            <span x-show="!networkSwitching">Save &amp; restart hotspot</span>
+                            <span x-show="networkSwitching">Saving…</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- TONIGHT'S BEST -->
             <div x-show="tab === 'tonight'" class="tab-panel tonight-panel">
                 <div class="panel-header">
@@ -5614,6 +5724,75 @@
                      End users do not run the built-in simulator; backend
                      (/api/simulator/*) stays available for dev curl-driven
                      usage. Restore the UI from commit 68bd25b if needed. -->
+
+                <!-- WIFI-4: host WiFi management. ASIAIR-style hotspot ↔
+                     station toggle. Only useful on Linux + NetworkManager
+                     (Pi OS Bookworm), banner explains the limitation on
+                     Windows / macOS / no-wifi mini-PCs. -->
+                <div class="settings-section network-section">
+                    <h3>Network (WiFi)</h3>
+                    <template x-if="network && !network.supportedOs">
+                        <p class="text-muted" style="font-size: 12px; max-width:560px">
+                            <span x-text="network.unsupportedReason || 'WiFi management not available'"></span>
+                        </p>
+                    </template>
+                    <template x-if="network && network.supportedOs && !network.nmcliInstalled">
+                        <p class="text-warn" style="font-size: 12px; max-width:560px">
+                            nmcli not detected. Install with
+                            <code>sudo apt install network-manager</code>
+                            and reboot, then the WiFi panel will appear here.
+                        </p>
+                    </template>
+                    <template x-if="network && network.supportedOs && network.nmcliInstalled && !network.hasWifi">
+                        <p class="text-muted" style="font-size: 12px; max-width:560px">
+                            No WiFi interface detected on this host. Ethernet-only
+                            mini-PCs are managed via the OS settings.
+                        </p>
+                    </template>
+                    <template x-if="network && network.supportedOs && network.nmcliInstalled && network.hasWifi">
+                        <div class="network-card">
+                            <div class="network-status-row">
+                                <span class="network-mode-pill"
+                                      :class="'network-mode-' + (network.mode || 'unknown')">
+                                    <span x-text="networkModeLabel()"></span>
+                                </span>
+                                <span class="network-ssid" x-text="network.ssid || '—'"></span>
+                                <span class="network-ip text-muted" x-text="network.ip || ''"></span>
+                                <template x-if="network.mode === 'station' && network.signal > 0">
+                                    <span class="network-signal text-muted"
+                                          x-text="network.signal + '% signal'"></span>
+                                </template>
+                            </div>
+                            <template x-if="network.lastError">
+                                <div class="text-warn" style="font-size: 12px; margin-top: 4px"
+                                     x-text="network.lastError"></div>
+                            </template>
+                            <div class="control-row actions" style="margin-top: 8px">
+                                <button class="btn btn-primary"
+                                        @click="networkOpenSwitchDialog()"
+                                        x-show="network.mode !== 'station'">
+                                    Switch to Station mode
+                                </button>
+                                <button class="btn"
+                                        @click="networkSwitchToHotspot()"
+                                        x-show="network.mode === 'station'"
+                                        :disabled="networkSwitching">
+                                    Switch back to Hotspot
+                                </button>
+                                <button class="btn btn-sm"
+                                        @click="networkOpenHotspotDialog()">
+                                    Edit hotspot SSID / password
+                                </button>
+                            </div>
+                            <p class="text-muted" style="font-size: 11px; margin-top: 6px; max-width:560px">
+                                Default hotspot: <code>Polaris-Hotspot</code> / <code>polaris1234</code>.
+                                Switching to Station mode hands the Pi to your home WiFi
+                                so it stops broadcasting its own network. Auto-reverts
+                                to Hotspot after 30 s if the new connection cannot get a DHCP lease.
+                            </p>
+                        </div>
+                    </template>
+                </div>
 
                 <div class="settings-section">
                     <h3>Observatory</h3>

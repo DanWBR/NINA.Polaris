@@ -535,6 +535,20 @@ function ninaApp() {
         phd2GuiSession: null,            // { supportedOs, xpraInstalled, running, port, ... }
         phd2GuiBusy: false,
 
+        // WIFI-4: NetworkManagerService snapshot, updated each 1Hz WS tick.
+        // null until the first payload arrives so the template gates on
+        // (network && network.supportedOs) instead of flashing the
+        // "unsupported" banner on first paint.
+        network: null,                   // { mode, ssid, ip, signal, supportedOs, ... }
+        networkSwitching: false,
+        networkStation: {
+            open: false, ssid: '', hiddenSsid: '', password: '',
+            scanResults: [], scanning: false, lastError: ''
+        },
+        networkHotspot: {
+            open: false, ssid: 'Polaris-Hotspot', password: '', lastError: ''
+        },
+
         // Advanced Sequencer state
         advSeq: {
             doc: { name: 'Untitled', root: null },
@@ -11228,6 +11242,167 @@ function ninaApp() {
             }
         },
 
+        // ── WIFI-4: NetworkManagerService client ────────────────────
+        // Settings → Network panel + Switch / Edit modals dispatch
+        // to /api/network/*. The 'Switch to station' path is tricky
+        // because the HTTP socket itself rides on the WiFi link that
+        // is about to drop, so we have to tolerate the response never
+        // arriving (browser sees ECONNRESET, then the home network
+        // route kicks in once the user reconnects their laptop).
+
+        networkModeLabel() {
+            if (!this.network) return 'Unknown';
+            switch (this.network.mode) {
+                case 'hotspot':       return '🟢 Hotspot';
+                case 'station':       return '🟢 Station';
+                case 'disconnected':  return '⚠ Disconnected';
+                case 'unsupported':   return '— Unsupported';
+                default:              return '— Unknown';
+            }
+        },
+
+        networkExpectedReachUrl() {
+            // Best-effort hint for the user when they need to reconnect
+            // to their home WiFi. The hostname stays the same (mDNS), but
+            // the IP changes. Fall back to the current hostname if we
+            // cannot guess anything better.
+            const host = (window.location && window.location.hostname) || 'polaris-pi.local';
+            return `https://${host}:${window.location.port || 5000}/`;
+        },
+
+        networkStationCanSubmit() {
+            if (this.networkSwitching) return false;
+            const ssid = this.networkStation.ssid === '__hidden__'
+                ? (this.networkStation.hiddenSsid || '').trim()
+                : (this.networkStation.ssid || '').trim();
+            const pwd = this.networkStation.password || '';
+            return ssid.length > 0 && ssid.length <= 32 && pwd.length >= 8 && pwd.length <= 63;
+        },
+
+        async networkOpenSwitchDialog() {
+            this.networkStation.open = true;
+            this.networkStation.ssid = '';
+            this.networkStation.hiddenSsid = '';
+            this.networkStation.password = '';
+            this.networkStation.lastError = '';
+            await this.networkRescan();
+        },
+
+        networkOpenHotspotDialog() {
+            this.networkHotspot.open = true;
+            this.networkHotspot.ssid = (this.network && this.network.hotspotSsid) || 'Polaris-Hotspot';
+            this.networkHotspot.password = '';
+            this.networkHotspot.lastError = '';
+        },
+
+        async networkRescan() {
+            this.networkStation.scanning = true;
+            this.networkStation.lastError = '';
+            try {
+                const results = await this.apiGet('/api/network/scan');
+                this.networkStation.scanResults = Array.isArray(results) ? results : [];
+            } catch (e) {
+                this.networkStation.lastError = 'Scan failed: ' + (e.message || e);
+                this.networkStation.scanResults = [];
+            } finally {
+                this.networkStation.scanning = false;
+            }
+        },
+
+        async networkSwitchToStation() {
+            if (!this.networkStationCanSubmit()) return;
+            const ssid = this.networkStation.ssid === '__hidden__'
+                ? this.networkStation.hiddenSsid.trim()
+                : this.networkStation.ssid.trim();
+            const password = this.networkStation.password;
+            this.networkSwitching = true;
+            this.networkStation.lastError = '';
+            try {
+                const resp = await this.apiPost('/api/network/station', { ssid, password });
+                const r = await resp.json();
+                if (r && r.ok) {
+                    this.toast(
+                        `Connected to ${ssid}. The Pi is now at https://polaris-pi.local${window.location.port ? ':' + window.location.port : ''}/ on your home network. Reconnect this device to ${ssid}.`,
+                        'ok');
+                    this.networkStation.open = false;
+                } else {
+                    this.networkStation.lastError = (r && r.error) || 'Switch failed';
+                    this.toast(this.networkStation.lastError, 'warn');
+                }
+            } catch (e) {
+                // The most common failure mode here is the socket itself
+                // disappearing because the WiFi link dropped between
+                // "POST sent" and "response read". We surface a helpful
+                // recovery message but do NOT auto-assume success, the
+                // try-and-revert path on the server might already have
+                // reverted to the hotspot.
+                this.networkStation.lastError =
+                    'Lost contact with the Pi. If your laptop / phone is connected ' +
+                    'via the hotspot, reconnect it to ' + ssid + ' and reopen ' +
+                    this.networkExpectedReachUrl() + '. If the new network failed, ' +
+                    'reconnect to Polaris-Hotspot (auto-reverts after 30 s).';
+            } finally {
+                this.networkSwitching = false;
+            }
+        },
+
+        async networkSwitchToHotspot() {
+            this.networkSwitching = true;
+            try {
+                const resp = await this.apiPost('/api/network/hotspot');
+                const r = await resp.json();
+                if (r && r.ok) {
+                    this.toast('Hotspot restored. Reconnect to ' +
+                        ((this.network && this.network.hotspotSsid) || 'Polaris-Hotspot') +
+                        ' to keep using Polaris.', 'ok');
+                } else {
+                    this.toast((r && r.error) || 'Hotspot switch failed', 'warn');
+                }
+            } catch (e) {
+                // Same reasoning as networkSwitchToStation, we may lose
+                // the link mid-call when the station drops.
+                this.toast('Lost contact with the Pi during hotspot switch. ' +
+                    'Reconnect to the hotspot WiFi to continue.', 'warn');
+            } finally {
+                this.networkSwitching = false;
+            }
+        },
+
+        async networkSaveHotspotCredentials() {
+            const ssid = (this.networkHotspot.ssid || '').trim();
+            const password = this.networkHotspot.password || '';
+            if (!ssid || password.length < 8 || password.length > 63) return;
+            this.networkSwitching = true;
+            this.networkHotspot.lastError = '';
+            try {
+                // apiPost with method override (PUT). The repo's HTTP
+                // helper layer is POST/GET only by convention so PUTs
+                // come through apiPost's opts overload.
+                const resp = await this.apiPost('/api/network/hotspot/credentials',
+                    null, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ssid, password })
+                    });
+                const r = await resp.json();
+                if (r && r.ok) {
+                    this.toast(
+                        `Hotspot now: ${ssid}. Reconnect with the new credentials.`,
+                        'ok');
+                    this.networkHotspot.open = false;
+                } else {
+                    this.networkHotspot.lastError = (r && r.error) || 'Save failed';
+                }
+            } catch (e) {
+                // Same socket-drop tolerance as the station switch.
+                this.networkHotspot.lastError =
+                    'Lost contact with the Pi while restarting the hotspot. ' +
+                    'Reconnect to ' + ssid + ' with the new password.';
+            } finally {
+                this.networkSwitching = false;
+            }
+        },
+
         // ── INDI-WEB-3: indi-web (indiwebmanager) lifecycle ─────
         // Fetches /api/indi/web/status, fires lifecycle commands,
         // surfaces install hint + iframe URL. Called by the RIGS
@@ -11852,6 +12027,12 @@ function ninaApp() {
             // SIM-6: simulator backend status (kind/installed/version/
             // running/runningDevices). The Settings panel binds to this.
             if (msg.simulator) this.simulator = msg.simulator;
+            // WIFI-4: host WiFi snapshot. Skip overwriting while a
+            // switch is in flight, the 5s server refresh can briefly
+            // race the mid-switch transition and flicker the UI back
+            // to the pre-switch state, the actual SwitchToStation
+            // response is the source of truth in that window.
+            if (msg.network && !this.networkSwitching) this.network = msg.network;
             if (msg.cameraStream) {
                 // Preserve last-known values so the button label stays
                 // readable while the stream service initialises.
