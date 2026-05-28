@@ -859,6 +859,35 @@ companion **NINA.Relay.Server** project that acts as a reverse tunnel.
   deployment instructions, Caddy reverse-proxy example, full `tenants.json`
   schema, and protocol details
 
+### In-app Help / tutorials
+
+A `?` icon at the end of the sidebar opens a HELP tab with four
+guided paths:
+
+- **First night** (5 steps): browser + cert, password wizard,
+  location, WiFi mode, first device connect. The "I just
+  installed Polaris" checklist.
+- **Capture to export** (12 steps): connect → polar align →
+  focus → pick target → slew & center → start guiding → build
+  sequence → live stack → calibrate + integrate → AI cleanup →
+  edit → export. The main end-to-end workflow.
+- **Specific workflows**: LRGB / mono pipeline, planetary lucky
+  imaging, photometric color calibration. Three short steppers
+  for the variant paths.
+- **Troubleshooting & FAQ**: collapsible Q+A for the most
+  common "I can't reach Polaris" / "plate solve fails" /
+  "GraXpert model not found" / etc, each pointing into the
+  deeper docs.
+
+Each step has a hero screenshot slot + 2-4 paragraph body +
+optional "Open this tab" button + optional "Read more" link
+into the docs. Screenshots live under
+`wwwroot/screenshots/{topic}/{NN}-{slug}.png`; missing ones
+render a placeholder card printing the expected path, so the
+tutorials work end-to-end before every screenshot is in place.
+Tutorial position persists per browser via localStorage, jump
+into another tab and come back to resume.
+
 ### Authentication
 
 Password gate for the local HTTP API + WebSockets + embedded

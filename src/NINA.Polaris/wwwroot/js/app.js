@@ -1971,23 +1971,409 @@ function ninaApp() {
         // HELP-2..5 fill these arrays with real content.
         _helpTutorials() {
             return {
+
+                // HELP-3: First-night checklist (~5 steps). Targeted
+                // at someone who just installed Polaris and hasn't
+                // connected anything yet. Walks them from "URL works
+                // in the browser" through "first device responds".
                 firstNight: [
-                    { title: 'TODO HELP-3', body: ['First-night content lands in HELP-3.'] }
+                    {
+                        title: 'Open Polaris in your browser',
+                        screenshot: 'first-night/01-browser-cert.png',
+                        docLink: 'installation.md',
+                        body: [
+                            'Open https://polaris-pi.local:5000 from any device on the same WiFi. On the Pi the hostname is whatever you set; on a fresh .deb install it defaults to polaris-pi.',
+                            'Your browser will warn about a self-signed certificate. That is expected, Polaris generates one on first boot so HTTPS works on the LAN without a CA. Click Advanced / Proceed; the browser remembers the exception per device.',
+                            'If polaris-pi.local does not resolve, fall back to the IP printed in the install summary or hostname -I on the Pi.'
+                        ],
+                        tip: 'HTTPS on port 5000 is required for in-browser GraXpert (WebGPU). HTTP on port 5080 is loopback-only for SSH tunnels.'
+                    },
+                    {
+                        title: 'Set a password',
+                        screenshot: 'first-night/02-password.png',
+                        docLink: 'authentication.md',
+                        body: [
+                            'The first visit shows a full-screen wizard asking you to set a password. There is no default and no skip, this protects the rig from anyone else on the same WiFi.',
+                            'Pick something at least 8 characters. You will use this on every other device that opens Polaris (laptop, phone, second tablet). The "Remember on this device" checkbox at the login screen later persists across browser restarts.'
+                        ],
+                        warn: 'Forgot it later? SSH to the Pi and clear AuthPasswordHash + AuthPasswordSalt in ~/.config/NINA.Polaris/profiles/active.json, restart the service, set a new one in the wizard.'
+                    },
+                    {
+                        title: 'Set the observatory location',
+                        tab: 'settings',
+                        tabLabel: 'SETTINGS',
+                        screenshot: 'first-night/03-location.png',
+                        docLink: 'first-night.md',
+                        body: [
+                            'Settings → Location. Type your latitude / longitude / altitude or click the "Use my location" button (browser geolocation; needs HTTPS, which Polaris already serves).',
+                            'This drives every astronomy calculation in the app: altitude charts, twilight times on the Sky map, sun/moon positions on the Tonight tab, and the polar alignment math. Bad coords = wrong sky.'
+                        ]
+                    },
+                    {
+                        title: 'WiFi: Hotspot or join your home network',
+                        tab: 'settings',
+                        tabLabel: 'SETTINGS',
+                        screenshot: 'first-night/04-wifi.png',
+                        docLink: 'network-mode.md',
+                        body: [
+                            'On a fresh .deb install the Pi comes up as a hotspot named "Polaris-Hotspot" (password "polaris1234") so you can reach it without plugging in a screen. The hotspot is great in the field but useless at home, your phone disconnects from the internet whenever you join it.',
+                            'Settings → Network has a "Switch to Station" button: pick your home SSID, type the password, click Switch. The Pi joins your home WiFi, mDNS keeps the polaris-pi.local hostname pointing at the new IP. If something goes wrong (wrong password, dead AP), it auto-reverts to hotspot after 30s.'
+                        ],
+                        tip: 'Linux only (NetworkManager). On Windows mini-PCs the button is hidden, manage WiFi through Windows itself.'
+                    },
+                    {
+                        title: 'Connect your first device',
+                        tab: 'equip',
+                        tabLabel: 'RIGS',
+                        screenshot: 'first-night/05-first-device.png',
+                        docLink: 'rigs.md',
+                        body: [
+                            'RIGS tab is where every camera / mount / focuser / filter wheel lives. Pick a driver (INDI is the default on Linux + cross-platform, Alpaca / native vendor drivers also work), connect, and Polaris remembers it as part of the active rig profile.',
+                            'For Linux + INDI: open the "INDI Drivers" sub-tab, enable indi-web, pick your hardware from the Web Manager, then come back to "Connect" sub-tab and hit Connect All.',
+                            'When the badges turn green you are ready to start capturing. The full Capture-to-export tutorial picks up from here.'
+                        ],
+                        tip: 'No hardware on hand? Enable Simulator on Settings → Equipment simulator and you get a fake CCD + Telescope + Focuser + FilterWheel to drive the whole pipeline end-to-end.'
+                    }
                 ],
+
+                // HELP-2: Capture-to-export end-to-end (~12 steps).
+                // The main tutorial. Each step is short on purpose,
+                // 2-4 sentence summary + link to the deep doc.
                 capture: [
-                    { title: 'TODO HELP-2', body: ['Capture-to-export content lands in HELP-2.'] }
+                    {
+                        title: 'Welcome to Polaris',
+                        screenshot: 'capture/01-welcome.png',
+                        body: [
+                            'This tutorial walks you from cold equipment all the way to a finished image you can post or print. About 12 steps, mostly waiting on the night sky.',
+                            'You will spend most of the time inside the AUTORUN tab once the sequence is running; the steps before it are setup, the steps after it are post-processing. Each step has a "Read more" link into the deeper docs for when you want detail.'
+                        ],
+                        tip: 'Skim every step first, then come back and execute. The order matters: focus before sequence, sequence before stack.'
+                    },
+                    {
+                        title: 'Connect equipment in RIGS',
+                        tab: 'equip',
+                        tabLabel: 'RIGS',
+                        screenshot: 'capture/02-rigs.png',
+                        docLink: 'rigs.md',
+                        body: [
+                            'Open the RIGS tab. Each device (Main Telescope, Main Camera, Mount, Focuser, Filter Wheel, Guidescope, Guide Camera) is a card. Pick the driver, pick the specific device the driver reports, hit Connect.',
+                            'Save the result as a named rig profile ("OnStep + ASI2600MC + EAF"). Polaris remembers it and lets you switch rigs without re-typing focal lengths, pixel sizes, etc.'
+                        ]
+                    },
+                    {
+                        title: 'Polar alignment',
+                        tab: 'polar',
+                        tabLabel: 'POLAR',
+                        screenshot: 'capture/03-polar.png',
+                        docLink: 'polar-alignment.md',
+                        body: [
+                            'POLAR runs Three-Point Polar Alignment (TPPA): it slews the mount to three points, plate-solves each, and computes how far off your physical mount axis is from the true pole.',
+                            'Adjust the alt/az bolts on the wedge while watching the error vector overlay shrink. Goal: error under 1 arcmin for unguided + nominal exposures, under 10 arcsec for guided + long subs.'
+                        ],
+                        warn: 'Needs a connected camera + mount + working plate solver (ASTAP). Solver path is configured in Settings if auto-detect misses it.'
+                    },
+                    {
+                        title: 'Focus',
+                        tab: 'focus',
+                        tabLabel: 'FOCUS',
+                        screenshot: 'capture/04-focus.png',
+                        docLink: 'focus.md',
+                        body: [
+                            'Two flavors: Manual Assist (HFR trend loop + optional Bahtinov overlay) for setups without an electronic focuser, and Auto V-curve for motorised focusers.',
+                            'Manual: turn the knob, watch HFR drop, stop when it bottoms out. Auto: pick a bright star, hit Start AF, the focuser sweeps and lands on the minimum of the parabola fit. Either way: HFR (half-flux radius) is the metric, lower = sharper.'
+                        ]
+                    },
+                    {
+                        title: 'Pick a target on SKY',
+                        tab: 'sky',
+                        tabLabel: 'SKY',
+                        screenshot: 'capture/05-sky.png',
+                        docLink: 'sky-explorer.md',
+                        body: [
+                            'SKY embeds the Stellarium Web engine: pan around, type a name in the search bar (M31, NGC 7000, etc), click the result. The FOV overlay shows what your camera will actually see overlaid on the sky.',
+                            'Use the TONIGHT tab if you want a ranked list of "best for tonight" based on altitude, twilight, moon distance, and your camera FOV instead of picking blind.'
+                        ],
+                        tip: 'Drag the FOV rectangle to compose framing before slewing; Polaris remembers the rotation and re-uses it for plate solve.'
+                    },
+                    {
+                        title: 'Slew & Center on the target',
+                        tab: 'sky',
+                        tabLabel: 'SKY',
+                        screenshot: 'capture/06-slew-center.png',
+                        docLink: 'sky-explorer.md',
+                        body: [
+                            'With the target picked, hit "Slew & Center". The mount slews, Polaris takes a plate-solve frame, computes the offset, nudges the mount, and re-checks. The loop converges until the target is inside the tolerance you configured (default 30 arcsec).',
+                            'No more "I hope the alignment was good" trial-and-error. The center is exact.'
+                        ]
+                    },
+                    {
+                        title: 'Start guiding with PHD2',
+                        tab: 'guide',
+                        tabLabel: 'GUIDE',
+                        screenshot: 'capture/07-guide.png',
+                        docLink: 'guide-phd2.md',
+                        body: [
+                            'GUIDE tab embeds the PHD2 protocol client + (on Linux) the actual PHD2 GUI via xpra. Pick a profile (or create one in the wizard), connect equipment, hit Calibrate then Guide.',
+                            'Polaris also offers Smart Calibrate: one click computes step size from pixel scale + guide rate, slews to the celestial equator for the cleanest calibration, runs it, validates the result. Saves 5 minutes of manual setup per session.'
+                        ],
+                        tip: 'No PHD2? It is optional. Short subs (<1 min) work unguided on a well-polar-aligned mount. Long DSO subs need guiding.'
+                    },
+                    {
+                        title: 'Build the sequence in AUTORUN',
+                        tab: 'sequence',
+                        tabLabel: 'AUTORUN',
+                        screenshot: 'capture/08-sequence.png',
+                        docLink: 'sequence.md',
+                        body: [
+                            'AUTORUN runs the simple sequencer: N frames per filter at a given exposure + gain, with optional triggers (auto-refocus on temperature change, dither every K frames, meridian flip, etc).',
+                            'For a typical 3-hour OSC session: target name, 60-120 lights of 60-120s each, dither every 3, refocus on +/-3 degC delta, meridian flip enabled. Hit Start.'
+                        ],
+                        warn: 'Advanced (ADV) sequencer is the tree-based version with conditional containers and parallel branches. Pick that for multi-target nights with rotator + filter wheel choreography.'
+                    },
+                    {
+                        title: 'Watch live stacking',
+                        tab: 'live',
+                        tabLabel: 'LIVE',
+                        screenshot: 'capture/09-live.png',
+                        docLink: 'live-stacking.md',
+                        body: [
+                            'LIVE accumulates every frame the sequence captures into a running mean stack, aligned by star matching. SNR climbs in real time, you watch the nebula emerge over the first 20 frames.',
+                            'Optional triggers: auto-refocus when HFR degrades by 30% or temperature drifts 2 degC, recenter when plate-solve drift crosses 30 arcsec. Set them once and let the night run unattended.'
+                        ]
+                    },
+                    {
+                        title: 'Calibrate + integrate in STUDIO',
+                        tab: 'studio',
+                        tabLabel: 'STUDIO',
+                        screenshot: 'capture/10-studio.png',
+                        docLink: 'studio.md',
+                        body: [
+                            'After the night is over, STUDIO is the offline pipeline: select lights, apply darks + flats + bias (or build them on the spot from raw cal frames), then integrate with sigma-clipping for a clean master.',
+                            'The frame library indexes everything under ImageOutputDir, organized by rig / target / filter / session. Multi-night M31 just means dragging both sessions into the integration job.'
+                        ]
+                    },
+                    {
+                        title: 'AI cleanup (optional)',
+                        tab: 'editor',
+                        tabLabel: 'EDITOR',
+                        screenshot: 'capture/11-ai.png',
+                        docLink: 'onnx-inference.md',
+                        body: [
+                            'EDITOR has an AI section: GraXpert BGE (gradient removal), Denoise, Decon. All three run in the browser via WebAssembly + WebGPU when supported; falls back to CLI subprocess on the server otherwise.',
+                            'Typical order: BGE first to flatten the background, Denoise to clean shadows, Decon to sharpen detail. Each operation is non-destructive and persists as a sidecar JSON next to the master.'
+                        ]
+                    },
+                    {
+                        title: 'Edit + export',
+                        tab: 'editor',
+                        tabLabel: 'EDITOR',
+                        screenshot: 'capture/12-editor-export.png',
+                        docLink: 'editor.md',
+                        body: [
+                            'Tone curves, stretch (autostretch or manual), saturation, sharpening, vignette. Every adjustment is a slider, all non-destructive: the sidecar stores the recipe, the master never gets overwritten.',
+                            'When happy, Export: JPEG / PNG / 16-bit TIFF, optional downscale, optional EXIF stamp. The result lands under {rig}/processed/edited/ and shows up in the FILES tab next to everything else.'
+                        ],
+                        tip: 'You can come back later and re-edit, the sidecar is just JSON. Sliders restore exactly where you left them.'
+                    }
                 ],
+
+                // HELP-4: LRGB / mono pipeline (~5 steps).
                 lrgb: [
-                    { title: 'TODO HELP-4', body: ['LRGB content lands in HELP-4.'] }
+                    {
+                        title: 'Why LRGB instead of OSC',
+                        screenshot: 'lrgb/01-overview.png',
+                        docLink: 'lrgb-mono-workflow.md',
+                        body: [
+                            'Mono sensors capture more light per pixel because they skip the Bayer mosaic. You shoot through a filter wheel: Luminance for detail, Red / Green / Blue for color, optionally Hydrogen-Alpha / OIII / SII for narrowband emission nebulae.',
+                            'Trade-off: each filter is a separate target session. Same target = 4x the time vs OSC. Reward: cleaner data, sharper detail, way better narrowband.'
+                        ]
+                    },
+                    {
+                        title: 'Capture per filter',
+                        tab: 'sequence',
+                        tabLabel: 'AUTORUN',
+                        screenshot: 'lrgb/02-per-filter.png',
+                        docLink: 'sequence.md',
+                        body: [
+                            'AUTORUN with the Advanced sequencer (ADV tab) handles multi-filter cleanly: a loop container with a "switch filter" step + "take exposure" step + nested dither + meridian flip triggers.',
+                            'Typical OSC-equivalent OSC: 60 L + 30 R + 30 G + 30 B at 120s. Narrowband (Ha/OIII/SII) at 300-600s; fewer subs but longer each.'
+                        ],
+                        tip: 'Refocus per filter swap; the rig profile remembers per-filter focuser offsets so the swap + refocus is one button.'
+                    },
+                    {
+                        title: 'Integrate per filter',
+                        tab: 'studio',
+                        tabLabel: 'STUDIO',
+                        screenshot: 'lrgb/03-integrate.png',
+                        docLink: 'studio.md',
+                        body: [
+                            'STUDIO: build one master per filter. Calibrate + sigma-clip integrate L, then R, G, B (and Ha/OIII/SII if you have them). Output: 4-7 mono FITS, one per filter.'
+                        ]
+                    },
+                    {
+                        title: 'Channel combine into RGB',
+                        tab: 'studio',
+                        tabLabel: 'STUDIO',
+                        screenshot: 'lrgb/04-combine.png',
+                        docLink: 'lrgb-mono-workflow.md',
+                        body: [
+                            'STUDIO → Channel Combine: pick R + G + B masters, optional L for the luminance channel, optional pixel-math expressions for narrowband palettes (HOO, SHO, HaRGB).',
+                            'Output: a single integrated RGB master, color-calibrated and ready for the editor.'
+                        ]
+                    },
+                    {
+                        title: 'Edit + export the color master',
+                        tab: 'editor',
+                        tabLabel: 'EDITOR',
+                        screenshot: 'lrgb/05-edit.png',
+                        docLink: 'editor.md',
+                        body: [
+                            'Same as the OSC editor flow: AI cleanup if you want it, stretch, color balance, saturation, sharpening, export. The RGB master from channel combine behaves exactly like a OSC master from this point on.'
+                        ]
+                    }
                 ],
+
+                // HELP-4: Planetary / lucky imaging (~4 steps).
                 planetary: [
-                    { title: 'TODO HELP-4', body: ['Planetary content lands in HELP-4.'] }
+                    {
+                        title: 'Why lucky imaging is different',
+                        screenshot: 'planetary/01-overview.png',
+                        docLink: 'video-planetary.md',
+                        body: [
+                            'Planets are bright and small, the limit is atmospheric seeing, not photons. You record THOUSANDS of short frames (5-50ms each), then keep only the few percent where seeing happened to be still, and stack those.',
+                            'Polaris does this via the VIDEO tab + SER recording + per-frame quality analysis. Very different from DSO capture.'
+                        ]
+                    },
+                    {
+                        title: 'Record an SER stream',
+                        tab: 'video',
+                        tabLabel: 'VIDEO',
+                        screenshot: 'planetary/02-record.png',
+                        docLink: 'video-planetary.md',
+                        body: [
+                            'VIDEO → Capture sub-tab. Set exposure (5-20ms for Jupiter, 30-80ms for Saturn at f/20+), gain high enough to fill the histogram to ~60%, click Record. Polaris streams native CCD_VIDEO_STREAM (INDI) or falls back to a tight capture loop.',
+                            'Aim for 5-20 thousand frames. SER files end up in {rig}/planetary/{target}/, openable in AutoStakkert / RegiStax later if you want to compare.'
+                        ],
+                        tip: 'Crop to a tight ROI around the planet, smaller frames = higher framerate = more "lucky" moments captured.'
+                    },
+                    {
+                        title: 'Analyze + rank frames',
+                        tab: 'video',
+                        tabLabel: 'VIDEO',
+                        screenshot: 'planetary/03-analyze.png',
+                        docLink: 'video-planetary.md',
+                        body: [
+                            'VIDEO → Process sub-tab. Open the SER, the Laplacian variance metric scores every frame for sharpness, sorts them best-first, shows you a quality histogram.',
+                            'Pick a "keep" percentage (typically 10-25% of the total). Polaris stacks those into a single image, aligned by brightest-pixel centroid.'
+                        ]
+                    },
+                    {
+                        title: 'Export the planet image',
+                        tab: 'editor',
+                        tabLabel: 'EDITOR',
+                        screenshot: 'planetary/04-export.png',
+                        docLink: 'editor.md',
+                        body: [
+                            'The stacked planet master opens in EDITOR like any other FITS. Apply Decon for the wavelet-like sharpening planets crave, optional color saturation boost, export to PNG / TIFF.',
+                            'Final tweaks (false-color, derotation, animations) are usually done in WinJUPOS / RegiStax post-Polaris.'
+                        ]
+                    }
                 ],
+
+                // HELP-4: Photometric color calibration (~3 steps).
                 pcc: [
-                    { title: 'TODO HELP-4', body: ['PCC content lands in HELP-4.'] }
+                    {
+                        title: 'What PCC does',
+                        screenshot: 'pcc/01-overview.png',
+                        docLink: 'color-calibration.md',
+                        body: [
+                            'Photometric color calibration removes the color bias of your sensor + filters + atmosphere by comparing the brightness of stars in your image against a catalog of stars with known colors (APASS).',
+                            'Result: the white point is mathematically calibrated, not eyeballed. Every nebula renders in its "true" color. The alternative (manual color balance sliders) is fast but subjective.'
+                        ]
+                    },
+                    {
+                        title: 'Plate-solve the master',
+                        tab: 'studio',
+                        tabLabel: 'STUDIO',
+                        screenshot: 'pcc/02-solve.png',
+                        docLink: 'color-calibration.md',
+                        body: [
+                            'PCC needs to know where each star in your image is on the sky. Open the integrated master in STUDIO, hit "Plate solve" (ASTAP). WCS coordinates get baked into the FITS header.',
+                            'Without WCS the catalog match cannot run. Polaris will refuse to start PCC and tell you why.'
+                        ]
+                    },
+                    {
+                        title: 'Run PCC, apply the gains',
+                        tab: 'studio',
+                        tabLabel: 'STUDIO',
+                        screenshot: 'pcc/03-run.png',
+                        docLink: 'color-calibration.md',
+                        body: [
+                            'STUDIO → Color Calibration → PCC mode. Polaris queries the APASS catalog for stars in your field, matches them with the stars it detects, fits per-channel gains that minimize the color error.',
+                            'Output: a new color-calibrated master. Open it in EDITOR for the rest of the workflow.'
+                        ],
+                        warn: 'APASS bundled dataset (~80 MB) needs to be downloaded once. Run scripts/download-apass.py on the server. Polaris prints a clear error pointing at this if the DB is missing.'
+                    }
                 ],
+
+                // HELP-5: Troubleshoot accordion. NOT a stepper; the
+                // template renders this array as <details> entries.
+                // Each item has title + body (string[]) + optional
+                // docLink. No screenshot, no Open-tab button.
                 troubleshoot: [
-                    { title: 'TODO HELP-5', body: ['Troubleshooting content lands in HELP-5.'] }
+                    {
+                        title: "I can't reach https://polaris-pi.local:5000",
+                        docLink: 'troubleshooting.md',
+                        body: [
+                            "mDNS may not resolve on every device (especially Android). Find the Pi's IP with hostname -I on the Pi or your router's DHCP table, then open https://192.168.x.y:5000 instead.",
+                            "If you're trying to reach the hotspot (SSID Polaris-Hotspot, password polaris1234), make sure your phone actually joined that network, then open https://10.42.0.1:5000.",
+                            "Check the systemd service status on the Pi: sudo systemctl status polaris.service should show 'active (running)'. Logs: journalctl -u polaris.service -f."
+                        ]
+                    },
+                    {
+                        title: "Plate solve always fails",
+                        docLink: 'plate-solving.md',
+                        body: [
+                            "Three things to check: (1) ASTAP is installed and Polaris found the binary (Settings → External tools shows the path), (2) you have a star catalog installed (V50 covers most setups, ~1.5 GB), (3) the field actually has stars (open a preview snap and confirm).",
+                            "Give the solver hints: RA/Dec from the mount (Polaris does this automatically when the mount is connected), search radius 5-10 degrees, expected pixel scale from your rig profile. Without hints the solver may take minutes; with hints, seconds.",
+                            "Star catalogs go in the same dir as the ASTAP binary. On Linux: /opt/astap/. Download V50 deb from the ASTAP project on SourceForge."
+                        ]
+                    },
+                    {
+                        title: "Sequence won't start, says 'no camera connected'",
+                        docLink: 'rigs.md',
+                        body: [
+                            "Go to RIGS, check the camera card. Is it green? If not, click Connect. If the driver dropdown is empty, the discovery missed your hardware, re-check on the INDI Web sub-tab.",
+                            "Some drivers (especially DSLR) need the device to be powered on + USB-connected BEFORE you click Connect. Plug it in first, then drive picker, then Connect.",
+                            "If the camera is green but capture immediately fails, look at the activity bar at the bottom for the actual error chip. Common: cooler can't reach setpoint, exposure timeout, full disk."
+                        ]
+                    },
+                    {
+                        title: "PHD2 won't connect / no guide camera",
+                        docLink: 'guide-phd2.md',
+                        body: [
+                            "PHD2 must be running BEFORE you click Connect in GUIDE. Polaris doesn't auto-launch on Windows; on Linux the Phd2GuiSessionService can launch xpra + PHD2 for you (toggle in Settings).",
+                            "The guide camera lives inside PHD2's profile, not in Polaris's RIGS tab. Pick the right PHD2 profile (the dropdown in GUIDE → Control) and Polaris will sync.",
+                            "Smart Calibrate fails with 'no star found': lower the SigmaThreshold in PHD2 Brain → Star detection, or hand-pick a star in the PHD2 GUI tab."
+                        ]
+                    },
+                    {
+                        title: "GraXpert says 'model not found'",
+                        docLink: 'onnx-inference.md',
+                        body: [
+                            "Browser mode (default): the ONNX models live under wwwroot/graxpert/models/ on the server OR /home/polaris/models on Linux. Polaris auto-discovers either layout, no Settings config needed if the files are in one of those paths.",
+                            "CLI mode (advanced toggle in Settings): GraXpert v3 expects models under ~/.local/share/GraXpert/{ai-models, bge-ai-models}/. The Pi setup doc has rsync one-liners to copy them from a Windows machine."
+                        ]
+                    },
+                    {
+                        title: "Live stack drifts, target slides out of frame",
+                        docLink: 'live-stacking.md',
+                        body: [
+                            "Two root causes: bad polar alignment (mount tracks a small circle around the wrong pole) or no guiding (no closed-loop drift correction). Fix the upstream cause; live stacking can't paper over either.",
+                            "Quick check: open POLAR and re-run TPPA. If the residual is over 1 arcmin, that's your drift source.",
+                            "Workaround for short sessions: enable 'auto recenter' in LIVE → Triggers with a 30 arcsec threshold. Polaris will plate-solve every N frames and nudge the mount back on target. Costs CPU but covers light drift."
+                        ]
+                    }
                 ]
             };
         },
