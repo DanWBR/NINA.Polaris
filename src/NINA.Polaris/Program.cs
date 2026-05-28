@@ -133,6 +133,11 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<Phd2GuiSessionServ
 // health probe) runs.
 builder.Services.AddSingleton<IndiWebManagerService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<IndiWebManagerService>());
+// WIFI-1: NetworkManager-based WiFi mode switch (Hotspot ↔ Station).
+// Same dual-registration shape as Phd2Gui / IndiWeb. Linux-only;
+// gracefully short-circuits on Windows / macOS via IsSupportedOs.
+builder.Services.AddSingleton<NetworkManagerService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<NetworkManagerService>());
 // YARP direct forwarder, used by the /phd2-gui/* AND /indi-web/*
 // reverse-proxies below to bridge browser ↔ embedded webapp.
 // Includes WebSocket upgrade support, which xpra-html5 needs for
