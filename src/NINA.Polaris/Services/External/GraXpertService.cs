@@ -394,10 +394,17 @@ public class GraXpertService {
             Path.Combine(home, "GraXpert", ".venv", "bin", "python3"),
             Path.Combine(home, "GraXpert", "venv", "bin", "python"),
             Path.Combine(home, "GraXpert", "venv", "bin", "python3"),
+            // graxpert-env is the venv name used by the official
+            // GraXpert "manual install on Linux" docs, so it's the
+            // most common name on a Pi setup.
+            Path.Combine(home, "GraXpert", "graxpert-env", "bin", "python"),
+            Path.Combine(home, "GraXpert", "graxpert-env", "bin", "python3"),
             Path.Combine(home, "graxpert", ".venv", "bin", "python"),
             Path.Combine(home, "graxpert", ".venv", "bin", "python3"),
             Path.Combine(home, "graxpert", "venv", "bin", "python"),
-            Path.Combine(home, "graxpert", "venv", "bin", "python3")
+            Path.Combine(home, "graxpert", "venv", "bin", "python3"),
+            Path.Combine(home, "graxpert", "graxpert-env", "bin", "python"),
+            Path.Combine(home, "graxpert", "graxpert-env", "bin", "python3")
         ];
     }
 
