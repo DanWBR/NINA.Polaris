@@ -556,11 +556,14 @@
                                     :data-active="gain === zwoPresetsForActiveCamera()?.H"
                                     @click="applyGainPreset('gain', zwoPresetsForActiveCamera().H)">H</button>
                         </span>
-                        <label>Bin<select x-model="binning" class="input-sm">
-                            <option value="1">1x1</option>
-                            <option value="2">2x2</option>
-                            <option value="4">4x4</option>
-                        </select></label>
+                        <span class="bin-presets" role="group" aria-label="Binning">
+                            <template x-for="b in ['1','2','3','4']" :key="b">
+                                <button type="button" class="bin-preset"
+                                        :data-active="String(binning) === b"
+                                        @click="binning = b"
+                                        x-text="'BIN' + b"></button>
+                            </template>
+                        </span>
                         <label x-show="filterWheel.connected">Filter<select class="input-sm"
                             @change="setFilter($event.target.value)"
                             :value="filterWheel.currentFilter">
@@ -1224,14 +1227,15 @@
                                     :data-active="preview.gain === zwoPresetsForActiveCamera()?.H"
                                     @click="applyGainPreset('preview.gain', zwoPresetsForActiveCamera().H)">H</button>
                         </span>
-                        <label>Bin
-                            <select x-model="preview.binning" class="input-sm"
-                                    :disabled="preview.busy">
-                                <option value="1">1x1</option>
-                                <option value="2">2x2</option>
-                                <option value="4">4x4</option>
-                            </select>
-                        </label>
+                        <span class="bin-presets" role="group" aria-label="Binning">
+                            <template x-for="b in ['1','2','3','4']" :key="b">
+                                <button type="button" class="bin-preset"
+                                        :data-active="String(preview.binning) === b"
+                                        :disabled="preview.busy"
+                                        @click="preview.binning = b"
+                                        x-text="'BIN' + b"></button>
+                            </template>
+                        </span>
                         <label x-show="filterWheel.connected && filterWheel.filters.length > 0">
                             Filter
                             <select x-model="preview.filter" class="input-sm"
@@ -1363,13 +1367,15 @@
                                         :data-active="video.gain === zwoPresetsForActiveCamera()?.H"
                                         @click="applyGainPreset('video.gain', zwoPresetsForActiveCamera().H)">H</button>
                             </span>
-                            <label>Bin
-                                <select x-model="video.binning" class="input-sm"
-                                        :disabled="cameraStream.running || videoRecording.recording">
-                                    <option value="1">1×1</option>
-                                    <option value="2">2×2</option>
-                                </select>
-                            </label>
+                            <span class="bin-presets" role="group" aria-label="Binning">
+                                <template x-for="b in ['1','2']" :key="b">
+                                    <button type="button" class="bin-preset"
+                                            :data-active="String(video.binning) === b"
+                                            :disabled="cameraStream.running || videoRecording.recording"
+                                            @click="video.binning = b"
+                                            x-text="'BIN' + b"></button>
+                                </template>
+                            </span>
                             <label>Target name
                                 <input type="text" x-model="video.targetName"
                                        class="input-sm" style="width:120px"
@@ -4063,12 +4069,15 @@
                                                 :data-active="item.gain === zwoPresetsForActiveCamera()?.H"
                                                 @click="item.gain = zwoPresetsForActiveCamera().H">H</button>
                                     </span>
-                                    <label>Bin<select class="seq-input" x-model.number="item.binning"
-                                        :disabled="seqState === 'running'">
-                                        <option value="1">1</option>
-                                        <option value="2">2</option>
-                                        <option value="4">4</option>
-                                    </select></label>
+                                    <span class="bin-presets" role="group" aria-label="Binning">
+                                        <template x-for="b in [1,2,3,4]" :key="b">
+                                            <button type="button" class="bin-preset"
+                                                    :data-active="item.binning === b"
+                                                    :disabled="seqState === 'running'"
+                                                    @click="item.binning = b"
+                                                    x-text="'BIN' + b"></button>
+                                        </template>
+                                    </span>
                                     <label x-show="filterWheel.connected && filterWheel.filters.length > 0">
                                         Filter<select class="seq-input" x-model="item.filter"
                                             :disabled="seqState === 'running'">

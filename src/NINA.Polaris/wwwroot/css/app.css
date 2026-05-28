@@ -6485,3 +6485,40 @@ label select.input-sm {
     opacity: 0.4;
     cursor: not-allowed;
 }
+
+/* Binning button group (BIN1 / BIN2 / BIN3 / BIN4). Replaces the
+   undersized native <select> across the Live, Preview, Video, and
+   Sequencer panels. Same visual idiom as .zwo-gain-preset (L/M/H
+   pills) so the row of pills lines up consistently. */
+.bin-presets {
+    display: inline-flex;
+    gap: 4px;
+    vertical-align: middle;
+}
+.bin-preset {
+    min-width: 40px;
+    padding: 3px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: 0.4px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease;
+    touch-action: manipulation;
+}
+.bin-preset:hover:not(:disabled) {
+    background: rgba(96, 165, 250, 0.18);
+    border-color: rgba(96, 165, 250, 0.5);
+}
+.bin-preset[data-active="true"] {
+    background: rgba(96, 165, 250, 0.28);
+    border-color: rgba(96, 165, 250, 0.7);
+}
+.bin-preset:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
