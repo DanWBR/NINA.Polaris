@@ -1411,6 +1411,38 @@
                                         @click="applyGainPreset('video.gain', zwoPresetsForActiveCamera().H)">H</button>
                             </span>
                         </div>
+                        <!-- Focus motor absolute-position slider. Only
+                             shows when a focuser is connected + has a
+                             positive MaxPosition (driver-reported).
+                             Live focusPosition updates the slider via
+                             WS push at 1 Hz unless the user is mid-
+                             drag (focusSliderDirty guard). @change
+                             fires the move on mouseup / touchend, so
+                             the driver isn't spammed with intermediate
+                             positions during a drag. -->
+                        <div class="control-row" x-show="focusConnected && focusMaxPosition > 0">
+                            <label style="flex:1; display:flex; align-items:center; gap:8px; min-width:280px">
+                                <span style="min-width:84px">Focus</span>
+                                <input type="range" min="0" :max="focusMaxPosition" step="1"
+                                       x-model.number="focusSliderTarget"
+                                       @input="focusSliderDirty = true"
+                                       @change="focusMoveTo(focusSliderTarget); focusSliderDirty = false"
+                                       style="flex:1"
+                                       :disabled="focusMoving">
+                                <input type="number" min="0" :max="focusMaxPosition" step="1"
+                                       x-model.number="focusSliderTarget"
+                                       @change="focusMoveTo(focusSliderTarget); focusSliderDirty = false"
+                                       class="input-sm" style="width:80px"
+                                       :disabled="focusMoving">
+                            </label>
+                            <span class="text-muted" style="font-size:11px"
+                                  x-text="(focusMoving ? '⚙ moving · ' : '')
+                                          + focusPosition + ' / ' + focusMaxPosition
+                                          + (focusTemp != null && !isNaN(focusTemp)
+                                             ? ' · ' + focusTemp.toFixed(1) + ' °C'
+                                             : '')"></span>
+                        </div>
+
                         <div class="control-row">
                             <span class="bin-presets" role="group" aria-label="Binning">
                                 <template x-for="b in ['1','2']" :key="b">

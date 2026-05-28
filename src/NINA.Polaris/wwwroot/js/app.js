@@ -97,6 +97,19 @@ function ninaApp() {
         focusTemp: null,
         focusMoving: false,
         focusConnected: false,
+        // Driver-reported MaxPosition (capped travel of the focuser
+        // gear). Used by sliders that want an absolute scale (VIDEO
+        // sidebar) so the user can drag from min to max without
+        // hand-typing a ceiling. Defaults to 0 = "unknown / show no
+        // slider".
+        focusMaxPosition: 0,
+        // Pending value while the user drags the absolute-position
+        // slider in VIDEO. Decoupled from focusPosition so the WS
+        // status push (~1 Hz) does not snap the slider back under
+        // your finger mid-drag. Committed on @change (mouseup /
+        // touchend).
+        focusSliderTarget: 0,
+        focusSliderDirty: false,
 
         // Filter Wheel
         filterWheel: {
@@ -12078,6 +12091,18 @@ function ninaApp() {
                 this.focusPosition = eq.focuser.position;
                 this.focusTemp = eq.focuser.temperature;
                 this.focusMoving = eq.focuser.moving;
+                if (typeof eq.focuser.maxPosition === 'number'
+                    && eq.focuser.maxPosition > 0) {
+                    this.focusMaxPosition = eq.focuser.maxPosition;
+                }
+                // Sync the slider's pending value to the current
+                // position unless the user is actively dragging
+                // (focusSliderDirty). Without this guard the 1 Hz
+                // WS push snaps the slider back to the live position
+                // mid-drag and you can't actually move it.
+                if (!this.focusSliderDirty) {
+                    this.focusSliderTarget = eq.focuser.position;
+                }
                 // Honour the backend's connected flag instead of
                 // assuming "the focuser is in the payload, so it's
                 // connected", same disconnect-doesn't-stick bug the
