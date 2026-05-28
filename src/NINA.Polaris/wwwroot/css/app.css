@@ -6600,3 +6600,110 @@ label select.input-sm {
     font-size: 13px;
     line-height: 1;
 }
+
+/* iOS / ASIAIR-style vertical drum picker. Looks like a numeric
+   wheel where the current value sits in the middle of a tall
+   column with neighboring values visible above and below. Drag
+   vertically (or use scroll wheel) to change. Snaps to step on
+   release. Set up in app.js via WheelPicker class auto-mounted
+   on every .wheel-picker found in the DOM. */
+.wheel-picker {
+    position: relative;
+    width: 84px;
+    height: 168px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;       /* JS handles pointer drag */
+    flex-shrink: 0;
+    cursor: ns-resize;
+}
+.wheel-picker[data-disabled="true"] {
+    opacity: 0.5;
+    pointer-events: none;
+}
+.wheel-picker-label {
+    position: absolute;
+    top: 4px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 9px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    pointer-events: none;
+    z-index: 3;
+}
+.wheel-picker-list {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    will-change: transform;
+    /* Transition only when JS sets .snapping; bare drag is
+       transform-only (no animation) so it feels instantaneous. */
+}
+.wheel-picker-list.snapping {
+    transition: transform 180ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.wheel-picker-item {
+    height: 28px;
+    line-height: 28px;
+    text-align: center;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    transition: color 120ms ease, font-size 120ms ease,
+                font-weight 120ms ease;
+}
+/* Center item sits at index = visibleCount/2 + 1; JS pins
+   .wheel-picker-item--center on it on every render. */
+.wheel-picker-item--center {
+    color: var(--text-primary);
+    font-size: 17px;
+    font-weight: 600;
+}
+.wheel-picker-item--adjacent {
+    color: rgba(255, 255, 255, 0.55);
+}
+/* Center highlight band (line at top + bottom of the centre slot).
+   Drawn with pseudo-elements so it doesn't move with the list. */
+.wheel-picker::before,
+.wheel-picker::after {
+    content: "";
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    height: 1px;
+    background: rgba(96, 165, 250, 0.55);
+    pointer-events: none;
+    z-index: 2;
+}
+.wheel-picker::before { top: calc(50% - 14px); }
+.wheel-picker::after  { top: calc(50% + 14px); }
+/* Soft fade at top/bottom so out-of-focus values gently dim. */
+.wheel-picker > .wheel-picker-fade {
+    position: absolute;
+    left: 0; right: 0;
+    height: 60px;
+    pointer-events: none;
+    z-index: 1;
+}
+.wheel-picker > .wheel-picker-fade-top    { top: 0;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent); }
+.wheel-picker > .wheel-picker-fade-bottom { bottom: 0;
+    background: linear-gradient(to top,    rgba(0,0,0,0.6), transparent); }
+
+/* Row layout: wheel pickers sit side by side with a label above
+   each one. The video sidebar stacks them in a 2-col grid for
+   compactness. */
+.wheel-picker-group {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+    gap: 10px;
+    justify-items: center;
+}

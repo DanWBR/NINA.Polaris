@@ -1210,6 +1210,23 @@ function ninaApp() {
             // tick loop is running and the rolling window absorbs them.
             this._netStartMeter();
 
+            // iOS / ASIAIR vertical drum pickers. Same auto-mount
+            // pattern as the range-slider augmentation below: walk
+            // the DOM for [data-wheel-picker], turn each one into
+            // an interactive wheel, and re-run on every mutation
+            // so Alpine-mounted modals / sidebar swaps get picked
+            // up too.
+            this._mountWheelPickers();
+            const wheelObs = new MutationObserver(() => {
+                if (this._wheelObsPending) return;
+                this._wheelObsPending = true;
+                queueMicrotask(() => {
+                    this._wheelObsPending = false;
+                    this._mountWheelPickers();
+                });
+            });
+            wheelObs.observe(document.body, { childList: true, subtree: true });
+
             // Touch-friendly range slider augmentation: walks the DOM
             // looking for <input type="range"> and wraps each one in
             // a [-] slider [+] control row. Idempotent; safe to run
@@ -11852,6 +11869,77 @@ function ninaApp() {
          * onto the wrapper instead so the row, not just the track,
          * stretches.
          */
+        /**
+         * Mount iOS / ASIAIR-style vertical drum pickers. Auto-scans
+         * the DOM for `[data-wheel-picker]` divs and attaches a
+         * WheelPicker behind each one. Two-way binding to an Alpine
+         * state field is opt-in via `data-bind="path.to.field"` (the
+         * picker reads the field via dot-walk, writes back on
+         * change). Optional `data-scale="1000"` multiplies the
+         * stored value before display (e.g. seconds → ms).
+         *
+         * Markup:
+         *   <div data-wheel-picker
+         *        data-label="Exposure (ms)"
+         *        data-min="1" data-max="5000" data-step="1"
+         *        data-bind="video.exposure" data-scale="1000"></div>
+         *
+         * Idempotent via the data-wheel-mounted sentinel.
+         */
+        _mountWheelPickers() {
+            const els = document.querySelectorAll(
+                '[data-wheel-picker]:not([data-wheel-mounted])');
+            for (const el of els) {
+                el.dataset.wheelMounted = '1';
+                const opts = {
+                    min: parseFloat(el.dataset.min || '0'),
+                    max: parseFloat(el.dataset.max || '100'),
+                    step: parseFloat(el.dataset.step || '1'),
+                    label: el.dataset.label || '',
+                    scale: parseFloat(el.dataset.scale || '1'),
+                    bind: el.dataset.bind || '',
+                };
+                const picker = new WheelPicker(el, opts);
+                if (opts.bind) {
+                    // Initial value from the bound Alpine field.
+                    const initial = this._wheelGetBound(opts.bind);
+                    if (Number.isFinite(initial)) {
+                        picker.setValue(initial * opts.scale, /*silent*/ true);
+                    }
+                    // Two-way: when the user changes the wheel, write
+                    // back to Alpine. When Alpine updates the field
+                    // elsewhere (e.g. preset button), sync the wheel.
+                    picker.onChange = (v) => {
+                        this._wheelSetBound(opts.bind, v / opts.scale);
+                    };
+                    this.$watch(opts.bind, (v) => {
+                        if (Number.isFinite(v) && v * opts.scale !== picker.value) {
+                            picker.setValue(v * opts.scale, /*silent*/ true);
+                        }
+                    });
+                }
+            }
+        },
+        _wheelGetBound(path) {
+            const parts = path.split('.');
+            let o = this;
+            for (const p of parts) {
+                if (o == null) return null;
+                o = o[p];
+            }
+            return o;
+        },
+        _wheelSetBound(path, value) {
+            const parts = path.split('.');
+            const last = parts.pop();
+            let o = this;
+            for (const p of parts) {
+                if (o[p] == null) return;
+                o = o[p];
+            }
+            o[last] = value;
+        },
+
         _augmentRangeInputs() {
             const sliders = document.querySelectorAll(
                 'input[type="range"]:not([data-range-augmented])');
@@ -12874,3 +12962,194 @@ class ApiError extends Error {
         this.body = body;
     }
 }
+
+/**
+ * Vertical drum / wheel picker. Renders an iOS-date-picker-style
+ * scrolling column inside the host element. Pointer drag (touch
+ * + mouse), mouse wheel, and click-on-adjacent-item all change
+ * the value. Snaps to step on release. Virtualised: only
+ * renders a small window of items around the current value, so
+ * a 5000-step range stays cheap.
+ *
+ * Constructor opts:
+ *   min, max, step:  numeric range + grid (defaults 0/100/1)
+ *   label:           caption painted at the top
+ *
+ * Public API:
+ *   setValue(v, silent)  - move the wheel to `v` (clamped + snapped).
+ *                          When silent=true, does not fire onChange.
+ *   onChange             - callback (v) → void, fired on user-driven
+ *                          value changes. Reassignable.
+ */
+class WheelPicker {
+    static ITEM_HEIGHT = 28;
+    static VISIBLE_COUNT = 5;          // 2 above + center + 2 below
+
+    constructor(el, opts) {
+        this.el = el;
+        this.min = opts.min;
+        this.max = opts.max;
+        this.step = opts.step || 1;
+        this.label = opts.label || '';
+        this.value = this._clamp(this.min);
+        this.onChange = null;
+
+        this.el.classList.add('wheel-picker');
+
+        // Label
+        if (this.label) {
+            const lab = document.createElement('div');
+            lab.className = 'wheel-picker-label';
+            lab.textContent = this.label;
+            this.el.appendChild(lab);
+        }
+
+        // Fades
+        const ftop = document.createElement('div');
+        ftop.className = 'wheel-picker-fade wheel-picker-fade-top';
+        const fbot = document.createElement('div');
+        fbot.className = 'wheel-picker-fade wheel-picker-fade-bottom';
+        this.el.appendChild(ftop);
+        this.el.appendChild(fbot);
+
+        // Item list container
+        this.list = document.createElement('div');
+        this.list.className = 'wheel-picker-list';
+        this.el.appendChild(this.list);
+
+        this._dragging = false;
+        this._dragStartY = 0;
+        this._dragStartValue = 0;
+        this._pointerId = null;
+        // Cached center-of-container Y so we can render items at
+        // the correct vertical offset for the current value.
+        this._centerY = this.el.clientHeight / 2;
+
+        this.el.addEventListener('pointerdown', this._onDown.bind(this));
+        this.el.addEventListener('pointermove', this._onMove.bind(this));
+        this.el.addEventListener('pointerup',   this._onUp.bind(this));
+        this.el.addEventListener('pointercancel', this._onUp.bind(this));
+        this.el.addEventListener('wheel', this._onWheel.bind(this), { passive: false });
+
+        this._render();
+    }
+
+    _clamp(v) {
+        if (v < this.min) return this.min;
+        if (v > this.max) return this.max;
+        return v;
+    }
+    _snap(v) {
+        const k = Math.round((v - this.min) / this.step);
+        return this._clamp(this.min + k * this.step);
+    }
+    _decimals() {
+        const s = String(this.step);
+        const i = s.indexOf('.');
+        return i < 0 ? 0 : (s.length - i - 1);
+    }
+    _format(v) {
+        return v.toFixed(this._decimals());
+    }
+
+    setValue(v, silent) {
+        const snapped = this._snap(v);
+        if (snapped === this.value) return;
+        this.value = snapped;
+        this._render();
+        if (!silent && this.onChange) this.onChange(this.value);
+    }
+
+    _render() {
+        // Render a virtualised window of (VISIBLE_COUNT + 4) items
+        // centered on this.value. The list itself is translated so
+        // the centre item sits at the centre band.
+        const dec = this._decimals();
+        const stepsAroundCenter = Math.floor(WheelPicker.VISIBLE_COUNT / 2) + 2;
+        const items = [];
+        for (let i = -stepsAroundCenter; i <= stepsAroundCenter; i++) {
+            const v = this.value + i * this.step;
+            if (v < this.min - this.step || v > this.max + this.step) {
+                items.push({ value: null, blank: true });
+            } else if (v < this.min || v > this.max) {
+                items.push({ value: null, blank: true });
+            } else {
+                items.push({ value: v, blank: false });
+            }
+        }
+        // Build / reuse children
+        while (this.list.children.length < items.length) {
+            const d = document.createElement('div');
+            d.className = 'wheel-picker-item';
+            this.list.appendChild(d);
+        }
+        while (this.list.children.length > items.length) {
+            this.list.removeChild(this.list.lastChild);
+        }
+        for (let i = 0; i < items.length; i++) {
+            const child = this.list.children[i];
+            const offset = i - stepsAroundCenter;          // -N..+N
+            const absOffset = Math.abs(offset);
+            child.textContent = items[i].blank
+                ? ''
+                : items[i].value.toFixed(dec);
+            child.classList.toggle('wheel-picker-item--center', offset === 0);
+            child.classList.toggle('wheel-picker-item--adjacent', absOffset === 1);
+        }
+        // Position the list so the center item sits at the center band
+        const containerH = this.el.clientHeight || 168;
+        const topOfFirst = (containerH / 2) - WheelPicker.ITEM_HEIGHT / 2
+                           - stepsAroundCenter * WheelPicker.ITEM_HEIGHT;
+        this.list.style.transform = `translateY(${topOfFirst}px)`;
+    }
+
+    _onDown(ev) {
+        if (this.el.dataset.disabled === 'true') return;
+        ev.preventDefault();
+        this._dragging = true;
+        this._dragStartY = ev.clientY;
+        this._dragStartValue = this.value;
+        this._pointerId = ev.pointerId;
+        this.list.classList.remove('snapping');
+        try { this.el.setPointerCapture(ev.pointerId); } catch {}
+    }
+    _onMove(ev) {
+        if (!this._dragging || ev.pointerId !== this._pointerId) return;
+        const deltaY = ev.clientY - this._dragStartY;
+        // Dragging DOWN should move to LOWER values (numbers scroll
+        // up on the wheel as your finger pulls down). One ITEM_HEIGHT
+        // of finger movement = one step.
+        const stepsDelta = -deltaY / WheelPicker.ITEM_HEIGHT;
+        const target = this._dragStartValue + stepsDelta * this.step;
+        const snapped = this._snap(target);
+        if (snapped !== this.value) {
+            this.value = snapped;
+            this._render();
+            if (this.onChange) this.onChange(this.value);
+        }
+    }
+    _onUp(ev) {
+        if (!this._dragging) return;
+        this._dragging = false;
+        this.list.classList.add('snapping');
+        try { this.el.releasePointerCapture(this._pointerId); } catch {}
+        this._pointerId = null;
+        // Final render to re-anchor (in case the drag moved the list
+        // off-grid pixels). The CSS .snapping transition smooths it.
+        this._render();
+        // Fire a DOM event so consumers that want a single "commit"
+        // hook on drag-end (e.g. fire-and-forget focuser move) can
+        // attach @wheel-pick-end without having to debounce the
+        // per-step onChange firehose.
+        this.el.dispatchEvent(new CustomEvent('wheel-pick-end', {
+            bubbles: true, detail: { value: this.value }
+        }));
+    }
+    _onWheel(ev) {
+        if (this.el.dataset.disabled === 'true') return;
+        ev.preventDefault();
+        const direction = ev.deltaY > 0 ? 1 : -1;
+        this.setValue(this.value + direction * this.step);
+    }
+}
+window.WheelPicker = WheelPicker;
