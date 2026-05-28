@@ -6269,28 +6269,76 @@ label select.input-sm {
 }
 .video-pane {
     display: flex;
-    flex-direction: column;
-    gap: 10px;
+    /* Desktop: 2-column layout, preview canvas on the left, controls
+       in a 340 px vertical sidebar on the right. Sliders stack top
+       to bottom there (ASIAIR-style) so the user can drag a long
+       slider track without competing for horizontal real estate
+       with bin pills, FOV rows, and gain presets. Mobile falls
+       back to the legacy single-column stack (media query below). */
+    flex-direction: row;
+    gap: 12px;
     /* Claim all remaining space inside .video-tab-panel so the
        preview-area's flex:1 actually has something to grow into.
-       overflow-y:auto lets the controls scroll within the pane on
-       narrow viewports rather than pushing the whole layout. */
+       overflow:hidden because the sidebar handles its own
+       overflow-y:auto, not the pane. */
     flex: 1;
     min-height: 0;
-    overflow-y: auto;
+    overflow: hidden;
 }
-/* Preview area inside VIDEO Capture fills the remaining space above
-   the .quick-controls row. The wrapping .video-pane has min-height:0
-   + overflow:auto so this flex:1 + min-height:200 doesn't push the
-   layout past the viewport (that was the bug we hit before). */
+/* Preview area is the flex:1 left column; min-width:0 lets it shrink
+   under the 340 px sidebar without forcing horizontal scroll. */
 .video-pane .preview-area {
     flex: 1;
+    min-width: 0;
     min-height: 200px;
 }
-/* Controls row docked at the bottom of the pane, never grows or
-   shrinks, always reserves its intrinsic height. */
+/* Vertical control sidebar on the right. Fixed width so the canvas
+   gets a predictable amount of remaining width. Internal scroll
+   handles tall content (FOV rows + WB sliders + bin row + ...). */
 .video-pane .quick-controls {
-    flex: 0 0 auto;
+    flex: 0 0 340px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    overflow-y: auto;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+/* Inside the sidebar each .control-row becomes its own vertical
+   block: the label / slider / readout still flow horizontally
+   within the row but every row sits stacked top-to-bottom. The
+   labels inherit the same look as elsewhere. */
+.video-pane .quick-controls .control-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    min-width: 0;
+}
+.video-pane .quick-controls .control-row > label {
+    min-width: 0;
+    max-width: 100%;
+}
+/* Compact stats / hint lines inside the sidebar shouldn't expand
+   horizontally past the panel; allow wrapping. */
+.video-pane .quick-controls .text-muted {
+    white-space: normal;
+}
+
+/* Mobile: fall back to the single-column stack so the canvas + the
+   controls each get full viewport width. The sidebar becomes a
+   bottom-docked block instead of a right-side column. */
+@media (max-width: 900px) {
+    .video-pane {
+        flex-direction: column;
+    }
+    .video-pane .quick-controls {
+        flex: 0 0 auto;
+        max-height: 50vh;
+    }
 }
 
 /* SKY tab inset showing the live camera feed while the mount slews.
