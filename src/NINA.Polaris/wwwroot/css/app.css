@@ -334,14 +334,19 @@ html, body {
     width: auto;
     border-radius: 4px;
     flex-shrink: 0;
-    filter: drop-shadow(0 0 4px rgba(33, 150, 243, 0.4));
+    /* Glow tinted to the new icy-cyan brand mid-tone (#0891b2). */
+    filter: drop-shadow(0 0 4px rgba(8, 145, 178, 0.4));
 }
 .brand-name {
     font-weight: 800;
     font-size: 17px;
     letter-spacing: 2.5px;
     line-height: 1;
-    background: linear-gradient(90deg, #4fc3f7 0%, #2196f3 60%, #7e57c2 100%);
+    /* Brand gradient: deep-night blue -> icy cyan -> stellar white.
+       Inspired by the colour temperature of O/B-class stars + dark
+       sky background. Replaces the previous blue->purple stock
+       gradient that read as a generic SaaS marketing splash. */
+    background: linear-gradient(90deg, #1e3a8a 0%, #0891b2 40%, #67e8f9 75%, #f0f9ff 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -355,7 +360,11 @@ html, body {
     font-size: 17px;
     letter-spacing: 2.5px;
     line-height: 1;
-    background: linear-gradient(90deg, #4fc3f7 0%, #2196f3 60%, #7e57c2 100%);
+    /* Brand gradient: deep-night blue -> icy cyan -> stellar white.
+       Inspired by the colour temperature of O/B-class stars + dark
+       sky background. Replaces the previous blue->purple stock
+       gradient that read as a generic SaaS marketing splash. */
+    background: linear-gradient(90deg, #1e3a8a 0%, #0891b2 40%, #67e8f9 75%, #f0f9ff 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -5587,7 +5596,9 @@ label select.input-sm {
 }
 .studio-master-bar-fill {
     height: 100%;
-    background: linear-gradient(90deg, #4fc3f7, #9cb3ff);
+    /* Progress fill in the new icy-cyan palette (matches the brand
+       wordmark gradient). */
+    background: linear-gradient(90deg, #0891b2, #67e8f9);
     transition: width 0.3s ease;
 }
 
@@ -5743,7 +5754,9 @@ label select.input-sm {
 }
 .siril-modal-progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, #4fc3f7, #9cb3ff);
+    /* Progress fill in the new icy-cyan palette (matches the brand
+       wordmark gradient). */
+    background: linear-gradient(90deg, #0891b2, #67e8f9);
     transition: width 0.4s ease;
 }
 .siril-modal-progress-meta {
