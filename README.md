@@ -859,6 +859,39 @@ companion **NINA.Relay.Server** project that acts as a reverse tunnel.
   deployment instructions, Caddy reverse-proxy example, full `tenants.json`
   schema, and protocol details
 
+### Authentication
+
+Password gate for the local HTTP API + WebSockets + embedded
+sub-apps. Default ON, no default password: first browser hit
+shows a full-screen wizard that forces the operator to pick a
+password before any other tab loads. Subsequent devices get a
+**Sign in** overlay with optional "remember on this device"
+checkbox.
+
+- **PBKDF2-SHA256** (100k iterations, 16-byte random salt) hash
+  stored on the active profile. 32-byte random session tokens
+  with sliding 24h expiration. Per-IP rate limit: 5 failed
+  attempts / minute then exponential backoff capped at 1h.
+- **Loopback bypass** (127.0.0.1 / ::1) for SSH tunnels + local
+  scripts, same convention as Jupyter / Grafana / RStudio.
+- **Gates** `/api/*` (except `/api/auth/*` and
+  `/api/system/version`), `/ws/*`, `/phd2-gui/*`, `/indi-web/*`,
+  `/sky/*`. Static assets (login page, JS, CSS, images) stay
+  open so the UI itself can load.
+- **Token transport** via `Authorization: Bearer`, `?token=`
+  query string, or HttpOnly `polaris_session` cookie (browser
+  auto-attaches to same-origin XHR, fetch, WS upgrades, iframe
+  loads). Bearer is primary; the cookie covers iframes + bare
+  fetches without per-site refactors.
+- **Opt-out toggle** in Settings → Authentication (requires
+  current password) for closed/trusted LANs.
+- **Recovery**: edit `~/.config/NINA.Polaris/profiles/active.json`,
+  clear `AuthPasswordHash` + `AuthPasswordSalt`, restart the
+  service; first-run wizard kicks in again.
+
+See [docs/user-guide/authentication.md](docs/user-guide/authentication.md)
+for the full walkthrough.
+
 ### Network Resilience
 
 Built for unreliable field WiFi:
