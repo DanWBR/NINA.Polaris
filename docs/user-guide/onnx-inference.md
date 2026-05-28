@@ -30,17 +30,25 @@ on the host, and keeps the server's CPU free for capture/guiding.
 
 2. **Point Polaris at the models**, in priority order:
 
-   **(a) Drop them into the bundled folder** (zero-config, recommended
-   for Pi / mini-PC deploys): copy the layout above into
-   `src/NINA.Polaris/wwwroot/graxpert/models/` (or the published
-   `wwwroot/graxpert/models/`). `OnnxModelRegistry` walks this folder
-   at startup automatically. No Settings entry required.
+   **(a) Pi / .deb installs**: drop the GraXpert layout above into
+   `/home/polaris/models/` (the postinst creates this directory
+   owned by the polaris service user). Zero config: the
+   `OnnxModelRegistry` checks here on every Linux start. Copy
+   over SSH:
+   ```bash
+   rsync -avh ai-models bge-ai-models polaris@<hostname>.local:models/
+   ```
 
-   **(b) Or point a profile setting at an absolute path** (handy when
+   **(b) Bundled fallback** (any platform): drop the same layout
+   into `src/NINA.Polaris/wwwroot/graxpert/models/` (or the
+   published `wwwroot/graxpert/models/`). The registry walks this
+   folder when neither (a) nor a profile path is set.
+
+   **(c) Or point a profile setting at an absolute path** (handy when
    your models live on an external SSD): Settings → **AI inference
    (ONNX)** → *Models path* → paste the absolute path → tab out.
-   If both (a) and (b) exist, **the profile path wins**, the
-   bundled folder is a fallback.
+   Priority: profile path > `/home/polaris/models` (Linux) >
+   bundled `wwwroot/graxpert/models`.
 
    First-time scan computes SHA-256 hashes (~5 seconds total on SSD).
 
@@ -283,8 +291,9 @@ AND keep the ONNX path enabled. The toggle picks per invocation.
 │  Polaris server                         │
 │  OnnxModelRegistry                      │
 │    1. profile's Onnx:ModelsPath if set  │
-│    2. wwwroot/graxpert/models (bundled) │
-│    3. nothing (UI shows configure tip)  │
+│    2. /home/polaris/models (Linux .deb) │
+│    3. wwwroot/graxpert/models (bundled) │
+│    4. nothing (UI shows configure tip)  │
 │    walks recursively, infers            │
 │    family/version from path layout      │
 │    (also recognises -fp16 / -int8       │

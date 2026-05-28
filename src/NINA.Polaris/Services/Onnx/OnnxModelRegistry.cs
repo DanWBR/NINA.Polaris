@@ -53,6 +53,14 @@ public class OnnxModelRegistry {
     // app folder on a Pi / mini-PC and have zero config to do, no
     // Settings round-trip, no env var, no symlink.
     private readonly string _bundledModelsPath;
+    // Pi / Linux convention: the .deb postinst creates
+    // /home/polaris/models owned by the polaris service user so the
+    // operator (or a deploy script) can drop the GraXpert weights
+    // there without touching /opt and without configuring anything
+    // in Settings. Checked between (1) profile config and (2) the
+    // bundled wwwroot fallback. Only Linux because Windows uses a
+    // different home convention and the bundled path covers it.
+    private const string LinuxPolarisModelsPath = "/home/polaris/models";
 
     // GraXpert layout: "{family-prefix}-ai-models" → canonical family id.
     // Maintained as a static table so a path like
@@ -91,14 +99,18 @@ public class OnnxModelRegistry {
     /// <summary>
     /// GX-12j: Effective directory the registry will scan. Priority is:
     /// (1) profile's <c>OnnxModelsPath</c> if set AND exists, otherwise
-    /// (2) the bundled <c>wwwroot/graxpert/models</c> if it exists, otherwise
-    /// (3) empty (registry stays empty, UI shows the "configure" banner).
+    /// (2) <c>/home/polaris/models</c> on Linux if it exists (Pi /
+    ///     .deb convention; postinst creates the dir), otherwise
+    /// (3) the bundled <c>wwwroot/graxpert/models</c> if it exists, otherwise
+    /// (4) empty (registry stays empty, UI shows the "configure" banner).
     /// Public so the Settings UI can surface which path is in use.
     /// </summary>
     public string ResolveModelsPath() {
         var configured = _profile.Active?.OnnxModelsPath ?? "";
         if (!string.IsNullOrWhiteSpace(configured) && Directory.Exists(configured))
             return configured;
+        if (OperatingSystem.IsLinux() && Directory.Exists(LinuxPolarisModelsPath))
+            return LinuxPolarisModelsPath;
         if (Directory.Exists(_bundledModelsPath))
             return _bundledModelsPath;
         return "";

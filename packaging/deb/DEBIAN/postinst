@@ -13,6 +13,7 @@ POLARIS_USER=polaris
 POLARIS_GROUP=polaris
 POLARIS_HOME=/home/polaris
 POLARIS_FILES=$POLARIS_HOME/files
+POLARIS_MODELS=$POLARIS_HOME/models
 POLARIS_CONFIG_DIR=$POLARIS_HOME/.config/NINA.Polaris
 INDIWEB_VENV=/opt/polaris-indiweb-venv
 
@@ -38,6 +39,17 @@ case "$1" in
             mkdir -p $POLARIS_FILES
             chown $POLARIS_USER:$POLARIS_GROUP $POLARIS_FILES
             echo "polaris: created capture root at $POLARIS_FILES"
+        fi
+
+        # ---- 2b. GraXpert ONNX models dir ----
+        # OnnxModelRegistry checks /home/polaris/models as the Linux
+        # default before falling back to the bundled wwwroot path.
+        # Create empty so the operator (or a separate deploy script)
+        # can rsync the GraXpert weights into it without sudo.
+        if [ ! -d $POLARIS_MODELS ]; then
+            mkdir -p $POLARIS_MODELS
+            chown $POLARIS_USER:$POLARIS_GROUP $POLARIS_MODELS
+            echo "polaris: created models dir at $POLARIS_MODELS"
         fi
 
         # ---- 3. Profile dir ----
