@@ -1058,13 +1058,21 @@
             </div>
 
             <!-- FOCUS -->
-            <div x-show="tab === 'focus'" class="tab-panel">
+            <div x-show="tab === 'focus'" class="tab-panel"
+                 x-init="$watch('tab', t => { if (t === 'focus') manualFocusOnTabEnter(); });
+                         $watch('focusTab', () => manualFocusOnTabSwitch())">
                 <div class="panel-header">
                     Focus Control
                     <span class="status-indicator-sm" :class="focusConnected ? 'ok' : 'error'"
                           x-text="selectedFocuser || 'Not connected'"></span>
                 </div>
-                <div class="focus-controls">
+                <!-- Motor stepper stays above the tabstrip because it is
+                     a universal control for users WITH an electronic
+                     focuser: relative move buttons + a step-size slider +
+                     a live temperature / moving readout. Hidden when no
+                     focuser is connected so the page doesn't show
+                     dead controls. -->
+                <div class="focus-controls" x-show="focusConnected">
                     <div class="stepper">
                         <button class="btn btn-lg" @click="focusMove(-focusStep)" :disabled="!focusConnected">&lt;&lt;</button>
                         <button class="btn" @click="focusMove(-1)" :disabled="!focusConnected">&lt;</button>
@@ -1077,7 +1085,7 @@
                         <input type="range" min="1" max="500" x-model.number="focusStep">
                         <span x-text="focusStep"></span>
                     </label>
-                    <div class="focus-info" x-show="focusConnected">
+                    <div class="focus-info">
                         <div class="info-row" x-show="focusTemp !== null">
                             <span>Temperature:</span><strong x-text="focusTemp !== null ? focusTemp.toFixed(1) + ' C' : '--'"></strong>
                         </div>
@@ -1086,6 +1094,133 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- MFOC-1: tabstrip splitting Manual Assist (HFR
+                     loop + Bahtinov for users without a motor or
+                     for fine-tune after a V-curve) from the existing
+                     Auto V-curve. Default lands on Assist when no
+                     motor is connected, otherwise on V-curve. -->
+                <div class="video-tabstrip">
+                    <button class="video-tab" :class="{ active: focusTab === 'assist' }"
+                            @click="focusTab = 'assist'">Manual Assist</button>
+                    <button class="video-tab" :class="{ active: focusTab === 'vcurve' }"
+                            @click="focusTab = 'vcurve'"
+                            :disabled="!focusConnected"
+                            :title="focusConnected ? '' : 'Connect a focuser motor in RIGS to enable V-curve auto-focus'">
+                        Auto V-curve
+                        <span x-show="!focusConnected" style="opacity:0.6">·</span>
+                    </button>
+                </div>
+
+                <!-- ===== Manual Assist subtab ===== -->
+                <div x-show="focusTab === 'assist'" class="manual-focus-pane">
+                    <div class="preview-area manual-focus-preview-area">
+                        <canvas id="manualFocusCanvas" class="preview-canvas"></canvas>
+                        <canvas id="manualFocusOverlayCanvas" class="preview-overlay-canvas"></canvas>
+                        <div class="preview-overlay" x-show="!selectedCamera">
+                            <p>Connect a camera in RIGS first to use the focus assist.</p>
+                        </div>
+                        <div class="preview-overlay"
+                             x-show="selectedCamera && !manualFocus.running && manualFocus.samples.length === 0">
+                            <p>Click ▶ Start loop. Focuser knob = HFR drops as you find focus, rises again when you pass.</p>
+                        </div>
+                    </div>
+
+                    <div class="quick-controls manual-focus-controls">
+                        <!-- Capture parameters -->
+                        <div class="control-row">
+                            <label style="display:flex; align-items:center; gap:6px">
+                                Exposure (s)
+                                <input type="number" x-model.number="manualFocus.exposureSec"
+                                       list="exposure-presets" min="0.01" step="0.1"
+                                       class="input-sm" style="width:72px"
+                                       :disabled="manualFocus.running">
+                            </label>
+                            <label style="display:flex; align-items:center; gap:6px">
+                                Gain
+                                <input type="number" x-model.number="manualFocus.gain"
+                                       min="0" step="10" class="input-sm" style="width:72px"
+                                       :disabled="manualFocus.running">
+                            </label>
+                            <label style="display:flex; align-items:center; gap:6px">
+                                Interval (s)
+                                <input type="number" x-model.number="manualFocus.intervalSec"
+                                       min="1" max="30" step="1" class="input-sm" style="width:60px"
+                                       :disabled="manualFocus.running"
+                                       title="Time between auto-captures during the loop">
+                            </label>
+                            <label style="display:flex; align-items:center; gap:6px">
+                                Min stars
+                                <input type="number" x-model.number="manualFocus.minStars"
+                                       min="1" step="1" class="input-sm" style="width:56px"
+                                       :disabled="manualFocus.running"
+                                       title="Frames with fewer detected stars than this report HFR=NaN">
+                            </label>
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="control-row actions">
+                            <button class="btn btn-primary"
+                                    @click="manualFocusToggle()"
+                                    :disabled="!selectedCamera">
+                                <span x-show="!manualFocus.running">▶ Start loop</span>
+                                <span x-show="manualFocus.running">⏸ Stop</span>
+                            </button>
+                            <button class="btn"
+                                    @click="manualFocusSnap()"
+                                    :disabled="!selectedCamera || manualFocus.running"
+                                    title="Take a single test exposure without running the loop">
+                                📸 Snap once
+                            </button>
+                            <button class="btn btn-sm"
+                                    @click="manualFocusResetBaseline()"
+                                    title="Clear the rolling HFR history + bestHfr marker">
+                                ↻ Reset
+                            </button>
+                            <span x-show="manualFocus.running" class="text-muted" style="font-size:11px">
+                                Loop active, capturing every <strong x-text="manualFocus.intervalSec"></strong>s
+                            </span>
+                        </div>
+
+                        <!-- Live metrics block -->
+                        <div class="manual-focus-metrics" x-show="manualFocus.samples.length > 0 || manualFocus.lastError">
+                            <div class="manual-focus-metric"
+                                 :class="manualFocusHfrClass()">
+                                <span class="manual-focus-metric-label">HFR (px)</span>
+                                <span class="manual-focus-metric-value"
+                                      x-text="manualFocusFormat('hfr')"></span>
+                                <span class="manual-focus-metric-trend"
+                                      x-text="manualFocusTrend()"></span>
+                            </div>
+                            <div class="manual-focus-metric">
+                                <span class="manual-focus-metric-label">FWHM (px)</span>
+                                <span class="manual-focus-metric-value"
+                                      x-text="manualFocusFormat('fwhm')"></span>
+                            </div>
+                            <div class="manual-focus-metric">
+                                <span class="manual-focus-metric-label">Stars</span>
+                                <span class="manual-focus-metric-value"
+                                      x-text="manualFocusLastSample()?.starCount ?? '—'"></span>
+                            </div>
+                            <div class="manual-focus-metric">
+                                <span class="manual-focus-metric-label">Laplacian</span>
+                                <span class="manual-focus-metric-value"
+                                      x-text="manualFocusFormat('laplacian')"></span>
+                            </div>
+                            <div class="manual-focus-metric manual-focus-metric--best"
+                                 x-show="manualFocus.bestHfr != null">
+                                <span class="manual-focus-metric-label">Best HFR</span>
+                                <span class="manual-focus-metric-value"
+                                      x-text="manualFocus.bestHfr?.toFixed(2) ?? '—'"></span>
+                            </div>
+                        </div>
+                        <div class="text-warn" x-show="manualFocus.lastError" style="font-size:11px"
+                             x-text="'⚠ ' + manualFocus.lastError"></div>
+                    </div>
+                </div>
+
+                <!-- ===== Auto V-curve subtab (existing) ===== -->
+                <div x-show="focusTab === 'vcurve'" class="af-panel-wrapper">
                 <!-- Auto-focus panel -->
                 <div class="af-panel">
                     <div class="af-header">
@@ -1176,6 +1311,7 @@
                         </div>
                     </div>
                 </div>
+                </div><!-- /focusTab === 'vcurve' wrapper -->
             </div>
 
             <!-- PREVIEW, snap test shots with optional save -->

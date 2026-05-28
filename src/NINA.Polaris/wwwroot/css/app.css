@@ -6707,3 +6707,112 @@ label select.input-sm {
     gap: 10px;
     justify-items: center;
 }
+
+/* ── MFOC: Manual Focus Assist subtab ──────────────────────
+   2-column layout mirroring the VIDEO Capture tab: preview
+   canvas on the left, control sidebar on the right. Wraps to
+   a single column under 900 px viewports. */
+.manual-focus-pane {
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+    min-height: 0;
+    margin-top: 10px;
+}
+.manual-focus-preview-area {
+    flex: 1;
+    min-width: 0;
+    min-height: 200px;
+    position: relative;
+}
+.manual-focus-controls {
+    flex: 0 0 340px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow-y: auto;
+    max-height: 70vh;
+}
+.manual-focus-controls .control-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+.manual-focus-controls .control-row.actions {
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+}
+/* Live metrics grid: 2 columns of HFR/FWHM/Stars/Laplacian
+   pills, each pill is a compact card with a label above its
+   value. Best HFR row spans both columns. */
+.manual-focus-metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 8px;
+}
+.manual-focus-metric {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    transition: border-color 200ms ease;
+}
+.manual-focus-metric-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+.manual-focus-metric-value {
+    font-size: 18px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+}
+.manual-focus-metric-trend {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-left: 6px;
+}
+.manual-focus-metric--good {
+    border-color: rgba(34, 197, 94, 0.55);
+    background: rgba(34, 197, 94, 0.08);
+}
+.manual-focus-metric--good .manual-focus-metric-trend {
+    color: rgb(74, 222, 128);
+}
+.manual-focus-metric--bad {
+    border-color: rgba(239, 68, 68, 0.55);
+    background: rgba(239, 68, 68, 0.08);
+}
+.manual-focus-metric--bad .manual-focus-metric-trend {
+    color: rgb(248, 113, 113);
+}
+.manual-focus-metric--flat {
+    border-color: rgba(245, 158, 11, 0.45);
+}
+.manual-focus-metric--best {
+    grid-column: 1 / -1;
+    border-color: rgba(56, 132, 255, 0.55);
+    background: rgba(56, 132, 255, 0.08);
+}
+
+@media (max-width: 900px) {
+    .manual-focus-pane {
+        flex-direction: column;
+    }
+    .manual-focus-controls {
+        flex: 0 0 auto;
+        max-height: 50vh;
+    }
+}

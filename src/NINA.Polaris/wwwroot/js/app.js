@@ -111,6 +111,34 @@ function ninaApp() {
         focusSliderTarget: 0,
         focusSliderDirty: false,
 
+        // MFOC: FOCUS tab subtab. 'assist' = manual HFR loop +
+        // Bahtinov; 'vcurve' = the existing motor-driven V-curve.
+        // Defaults to whichever is more useful given the current
+        // hardware (no motor → assist).
+        focusTab: 'assist',
+
+        // MFOC-1: rolling state for the Manual Assist loop.
+        // Samples is a circular buffer of the last 60 captures; each
+        // entry is { t, hfr, fwhm, starCount, laplacian }.
+        // bestHfr tracks the lowest non-NaN HFR seen since the last
+        // Reset baseline click (the chart marks it with a horizontal
+        // line so the user knows when they overshot).
+        manualFocus: {
+            running: false,
+            exposureSec: 2,
+            gain: 100,
+            intervalSec: 2,
+            minStars: 3,
+            samples: [],
+            bestHfr: null,
+            lastError: null,
+            // MFOC-4 hooks, populated when the Bahtinov checkbox is
+            // ticked; live UI lives in the next subtask.
+            showBahtinov: false,
+            bahtinovResult: null
+        },
+        _manualFocusTimer: null,
+
         // Filter Wheel
         filterWheel: {
             connected: false,
@@ -1871,7 +1899,8 @@ function ninaApp() {
             img.onload = () => {
                 const targets = ['liveCanvas', 'previewCanvas',
                                  'focusCanvas', 'videoCaptureCanvas',
-                                 'slewPreviewCanvas'];
+                                 'slewPreviewCanvas',
+                                 'manualFocusCanvas'];
                 let drewAny = false;
                 for (const id of targets) {
                     const canvas = document.getElementById(id);
@@ -1917,7 +1946,7 @@ function ninaApp() {
             const src = document.getElementById('liveCanvas');
             if (!src) return;
             if (src.width === 0 || src.height === 0) return;
-            for (const id of ['previewCanvas', 'focusCanvas', 'videoCaptureCanvas', 'slewPreviewCanvas']) {
+            for (const id of ['previewCanvas', 'focusCanvas', 'videoCaptureCanvas', 'slewPreviewCanvas', 'manualFocusCanvas']) {
                 const dst = document.getElementById(id);
                 if (!dst) continue;
                 // Size the destination canvas to fit its container
@@ -2535,7 +2564,8 @@ function ninaApp() {
         // bitmap via the existing mirror call.
         _fanOutFrameToCanvases(src, srcW, srcH) {
             const targets = ['liveCanvas', 'previewCanvas', 'focusCanvas',
-                             'videoCaptureCanvas', 'slewPreviewCanvas'];
+                             'videoCaptureCanvas', 'slewPreviewCanvas',
+                             'manualFocusCanvas'];
             const skipLive = (src && src.id === 'liveCanvas');   // src IS liveCanvas → don't blit-to-self
             // Diagnostic accumulator, one log entry per fan-out the
             // first time, then once per 60 fan-outs (so a video stream
@@ -8415,6 +8445,175 @@ function ninaApp() {
         async focusAbort() {
             try { await this.apiPost('/api/focuser/abort'); } catch (e) { }
         },
+
+        // ─── MFOC-1: Manual Focus Assist ─────────────────────────
+        // Default tab selection when the FOCUS tab opens. If a motor
+        // is connected the V-curve auto-focus is the primary workflow,
+        // so land there; otherwise the manual assist is the only
+        // useful thing. The user can flip freely either way.
+        manualFocusOnTabEnter() {
+            if (this.focusConnected && this.focusTab === 'assist'
+                && this.manualFocus.samples.length === 0) {
+                this.focusTab = 'vcurve';
+            } else if (!this.focusConnected) {
+                this.focusTab = 'assist';
+            }
+        },
+        // Re-render the trend chart whenever the assist subtab regains
+        // focus (otherwise Chart.js draws into an offscreen canvas at
+        // mount time and the bars look blank on first activation).
+        manualFocusOnTabSwitch() {
+            if (this.focusTab === 'assist') {
+                this.$nextTick(() => this._renderManualFocusChart());
+            }
+        },
+
+        // Loop start / stop. The loop is purely client-driven: every
+        // intervalSec we POST /api/camera/capture, the existing
+        // endpoint already returns HFR + starCount + laplacianVar
+        // inline (no server-side focus-loop state to manage). Each
+        // result is appended to a rolling 60-sample buffer that
+        // drives the live metrics block + the trend chart.
+        manualFocusToggle() {
+            if (this.manualFocus.running) this.manualFocusStop();
+            else this.manualFocusStart();
+        },
+        manualFocusStart() {
+            if (!this.selectedCamera) {
+                this.toast('Connect a camera in RIGS first', 'warn');
+                return;
+            }
+            this.manualFocus.running = true;
+            this.manualFocus.lastError = null;
+            // Fire the first capture immediately so the user does
+            // not stare at an empty canvas for `intervalSec` after
+            // clicking Start.
+            this._manualFocusTick();
+        },
+        manualFocusStop() {
+            this.manualFocus.running = false;
+            if (this._manualFocusTimer) {
+                clearTimeout(this._manualFocusTimer);
+                this._manualFocusTimer = null;
+            }
+        },
+        async manualFocusSnap() {
+            // Out-of-loop single capture. Same code path as the
+            // looping tick but doesn't reschedule.
+            const prevRunning = this.manualFocus.running;
+            this.manualFocus.running = false;
+            try {
+                await this._manualFocusCaptureOnce();
+            } finally {
+                this.manualFocus.running = prevRunning;
+            }
+        },
+        manualFocusResetBaseline() {
+            this.manualFocus.samples = [];
+            this.manualFocus.bestHfr = null;
+            this.manualFocus.lastError = null;
+            this._renderManualFocusChart();
+        },
+        // Captures one exposure, parses the stats, appends a sample,
+        // updates bestHfr, re-renders the chart. Used by both the
+        // loop and the Snap-once button.
+        async _manualFocusCaptureOnce() {
+            try {
+                const resp = await this.apiPost('/api/camera/capture', {
+                    exposure: this.manualFocus.exposureSec,
+                    gain: this.manualFocus.gain,
+                    binning: 1,
+                    saveToDisk: false
+                });
+                const r = await resp.json();
+                if (r.status !== 'complete') {
+                    this.manualFocus.lastError = 'Capture cancelled';
+                    return;
+                }
+                const stats = r.stats || {};
+                const hfr = Number.isFinite(stats.hfr) && stats.hfr > 0
+                    ? stats.hfr : NaN;
+                const goodStarCount = (stats.starCount | 0)
+                    >= (this.manualFocus.minStars | 0);
+                const usableHfr = goodStarCount ? hfr : NaN;
+                this.manualFocus.samples.push({
+                    t: Date.now(),
+                    hfr: usableHfr,
+                    fwhm: Number.isFinite(usableHfr) ? usableHfr * 2.355 : NaN,
+                    starCount: stats.starCount | 0,
+                    laplacian: Number.isFinite(stats.laplacianVar)
+                        ? stats.laplacianVar : 0
+                });
+                if (this.manualFocus.samples.length > 60) {
+                    this.manualFocus.samples.shift();
+                }
+                if (Number.isFinite(usableHfr) &&
+                    (this.manualFocus.bestHfr == null
+                     || usableHfr < this.manualFocus.bestHfr)) {
+                    this.manualFocus.bestHfr = usableHfr;
+                }
+                this.manualFocus.lastError = goodStarCount
+                    ? null
+                    : `Only ${stats.starCount} stars detected (need ${this.manualFocus.minStars}+). HFR ignored.`;
+                this._renderManualFocusChart();
+            } catch (e) {
+                this.manualFocus.lastError = 'Capture failed: '
+                    + (e?.message || String(e));
+            }
+        },
+        async _manualFocusTick() {
+            if (!this.manualFocus.running) return;
+            await this._manualFocusCaptureOnce();
+            if (!this.manualFocus.running) return;
+            // Schedule next tick after intervalSec. setTimeout chain
+            // (not setInterval) so a slow capture doesn't stack
+            // backlogged ticks.
+            this._manualFocusTimer = setTimeout(
+                () => this._manualFocusTick(),
+                Math.max(500, (this.manualFocus.intervalSec | 0) * 1000));
+        },
+        // Helpers for the live metrics block in the sidebar.
+        manualFocusLastSample() {
+            const s = this.manualFocus.samples;
+            return s.length ? s[s.length - 1] : null;
+        },
+        manualFocusFormat(field) {
+            const s = this.manualFocusLastSample();
+            if (!s) return '—';
+            const v = s[field];
+            if (!Number.isFinite(v)) return '—';
+            if (field === 'laplacian') {
+                return v >= 1000 ? v.toExponential(1) : v.toFixed(1);
+            }
+            return v.toFixed(2);
+        },
+        manualFocusHfrClass() {
+            // Colour the HFR metric box by trend over the last 3
+            // samples: green = decreasing (focus improving),
+            // amber = flat, red = increasing (lost focus).
+            const t = this.manualFocusTrendNumeric();
+            if (t == null) return '';
+            if (t < -0.05) return 'manual-focus-metric--good';
+            if (t > 0.05)  return 'manual-focus-metric--bad';
+            return 'manual-focus-metric--flat';
+        },
+        manualFocusTrend() {
+            const t = this.manualFocusTrendNumeric();
+            if (t == null) return '';
+            if (t < -0.05) return '▼';
+            if (t > 0.05)  return '▲';
+            return '◆';
+        },
+        manualFocusTrendNumeric() {
+            const s = this.manualFocus.samples
+                .filter(x => Number.isFinite(x.hfr));
+            if (s.length < 3) return null;
+            const a = s[s.length - 1].hfr;
+            const b = s[s.length - 3].hfr;
+            return a - b;
+        },
+        // Placeholder, real implementation lands in MFOC-2 (chart).
+        _renderManualFocusChart() { /* MFOC-2 */ },
 
         async startAutoFocus() {
             try {

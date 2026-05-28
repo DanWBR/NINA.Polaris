@@ -56,6 +56,21 @@ public static class CameraEndpoints {
                     await relay.RelayImageAsync(imageData!);
 
                 var stats = imageData!.Statistics;
+                // MFOC-1: Laplacian variance sharpness metric. Cheap
+                // 3x3 convolution over a 256 px ROI in the centre of
+                // the frame (FrameQualityAnalyzer caps the ROI to keep
+                // this < 5 ms even on Pi 4). Consumed by the FOCUS
+                // tab's Manual subtab loop, where it's a secondary
+                // focus indicator for sparse / no-star scenes (lunar,
+                // Bahtinov-on-a-bright-star) that defeat HFR.
+                double laplacianVar = 0;
+                try {
+                    laplacianVar = NINA.Polaris.Services.Planetary
+                        .FrameQualityAnalyzer.LaplacianVariance(
+                            imageData.Data, imageData.Properties.Width,
+                            imageData.Properties.Height, roiSize: 256);
+                } catch { /* defensive: never fail the capture for a
+                             secondary stats field */ }
                 return Results.Ok(new {
                     status = "complete",
                     width = imageData.Properties.Width,
@@ -67,6 +82,7 @@ public static class CameraEndpoints {
                         stdev = stats.StDev,
                         starCount = stats.StarCount,
                         hfr = stats.HFR,
+                        laplacianVar = laplacianVar,
                         min = stats.Min,
                         max = stats.Max
                     }
