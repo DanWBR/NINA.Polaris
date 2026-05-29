@@ -4623,7 +4623,7 @@
             </div>
 
             <!-- SEQUENCE -->
-            <div x-show="tab === 'sequence'" class="tab-panel">
+            <div x-show="tab === 'sequence'" class="tab-panel tab-panel-autorun">
                 <div class="panel-header">
                     Autorun
                     <span class="status-indicator-sm" :class="{
@@ -4633,25 +4633,14 @@
                     }" x-text="seqState.toUpperCase()"></span>
                 </div>
 
-                <!-- Progress bar (visible when running or paused) -->
-                <div class="seq-progress-section" x-show="seqState !== 'idle' && seqStatus">
-                    <div class="seq-progress-bar">
-                        <div class="seq-progress-fill" :style="'width: ' + seqProgress() + '%'"></div>
-                    </div>
-                    <div class="seq-progress-info">
-                        <span x-text="seqProgress() + '%'"></span>
-                        <span x-text="(seqStatus?.totalFramesCompleted || 0) + ' / ' + (seqStatus?.totalFrames || 0) + ' frames'"></span>
-                        <span x-show="seqStatus?.estimatedRemainingSeconds > 0">
-                            ETA: <strong x-text="formatTime(seqStatus?.estimatedRemainingSeconds)"></strong>
-                        </span>
-                        <span x-show="seqStatus?.elapsedSeconds > 0">
-                            Elapsed: <strong x-text="formatTime(seqStatus?.elapsedSeconds)"></strong>
-                        </span>
-                    </div>
-                    <div class="seq-error" x-show="seqStatus?.lastError">
-                        <span x-text="seqStatus?.lastError"></span>
-                    </div>
-                </div>
+                <!-- SHUT-4: 2-column pane. Left = sequence editor +
+                     dither / meridian-flip / end-actions config. Right
+                     = .autorun-sidebar with centered Polaris Shutter
+                     + Pause/Resume + progress numbers (no horizontal
+                     seq-progress-section anymore — replaced by the
+                     shutter ring). -->
+                <div class="autorun-pane">
+                <div class="autorun-list-col">
 
                 <!-- Empty state -->
                 <div class="sequence-empty" x-show="sequence.length === 0">
@@ -4941,17 +4930,84 @@
                     </span>
                 </div>
 
-                <!-- Controls -->
+                <!-- Add item stays as a footer button; Start/Pause/
+                     Stop move to the right sidebar around the shutter. -->
                 <div class="control-row actions" style="margin-top: 1rem;">
                     <button class="btn" @click="addSequenceItem()" :disabled="seqState === 'running'">+ Add</button>
-                    <button class="btn btn-primary" @click="startSequence()"
-                            :disabled="seqState === 'running' || sequence.length === 0">Start</button>
-                    <button class="btn" @click="pauseSequence()"
-                            :disabled="seqState === 'idle'"
-                            x-text="seqState === 'paused' ? 'Resume' : 'Pause'"></button>
-                    <button class="btn btn-danger" @click="stopSequence()"
-                            :disabled="seqState === 'idle'">Stop</button>
                 </div>
+                </div><!-- /.autorun-list-col -->
+
+                <!-- SHUT-4: right sidebar with the Polaris Shutter
+                     (start / abort), Pause/Resume toggle, and the
+                     progress text that used to live in the horizontal
+                     seq-progress-section. -->
+                <div class="quick-controls autorun-sidebar">
+                    <div class="shutter-inputs">
+                        <div class="control-row text-muted" style="font-size:11px"
+                             x-show="sequence.length > 0">
+                            <span x-text="sequence.length + ' item' + (sequence.length === 1 ? '' : 's')"></span>
+                            <span x-show="seqState !== 'idle'"
+                                  x-text="' · ' + (seqStatus?.totalFrames || 0) + ' frames total'"></span>
+                        </div>
+                    </div>
+
+                    <div class="shutter-wrap">
+                        <div class="polaris-shutter"
+                             :class="{
+                                 'shutter-active': seqState === 'running' || seqState === 'paused',
+                                 'shutter-arming': armingLoop
+                             }"
+                             :aria-disabled="sequence.length === 0"
+                             role="button"
+                             :aria-label="seqState === 'idle' ? 'Start sequence' : 'Stop sequence'"
+                             @pointerdown="shutterPointerDown($event, autorunShutterCtx())"
+                             @pointerup="shutterPointerUp($event, autorunShutterCtx())"
+                             @pointercancel="shutterPointerCancel()"
+                             @pointerleave="shutterPointerCancel()">
+                            <svg class="shutter-svg" viewBox="0 0 100 100">
+                                <circle class="shutter-track" cx="50" cy="50" r="46"></circle>
+                                <circle class="shutter-progress" cx="50" cy="50" r="46"
+                                        :style="'stroke-dashoffset: '
+                                            + (armingLoop
+                                                ? (289 * (1 - _shutterArmProgress()))
+                                                : autorunShutterDashoffset())"></circle>
+                            </svg>
+                            <span class="shutter-icon">
+                                <svg viewBox="0 0 24 24" x-show="seqState === 'idle'">
+                                    <polygon points="8,5 19,12 8,19"></polygon>
+                                </svg>
+                                <svg viewBox="0 0 24 24" x-show="seqState !== 'idle'">
+                                    <rect x="7" y="7" width="10" height="10" rx="1.5"></rect>
+                                </svg>
+                            </span>
+                            <span class="shutter-countdown" x-text="autorunShutterCountdown()"></span>
+                        </div>
+                    </div>
+
+                    <div class="shutter-secondary">
+                        <div class="control-row">
+                            <button class="btn"
+                                    @click="pauseSequence()"
+                                    :disabled="seqState === 'idle'"
+                                    x-text="seqState === 'paused' ? '▶ Resume' : '⏸ Pause'"
+                                    style="flex:1"></button>
+                        </div>
+                        <div class="control-row text-muted" style="font-size:11px; flex-direction:column; align-items:flex-start; gap:2px"
+                             x-show="seqState !== 'idle' && seqStatus">
+                            <span x-text="seqProgress() + '% · ' + (seqStatus?.totalFramesCompleted || 0) + '/' + (seqStatus?.totalFrames || 0)"></span>
+                            <span x-show="seqStatus?.estimatedRemainingSeconds > 0">
+                                ETA <strong x-text="formatTime(seqStatus?.estimatedRemainingSeconds)"></strong>
+                            </span>
+                            <span x-show="seqStatus?.elapsedSeconds > 0">
+                                Elapsed <strong x-text="formatTime(seqStatus?.elapsedSeconds)"></strong>
+                            </span>
+                        </div>
+                        <div class="seq-error" x-show="seqStatus?.lastError">
+                            <span x-text="seqStatus?.lastError"></span>
+                        </div>
+                    </div>
+                </div>
+                </div><!-- /.autorun-pane -->
             </div>
 
             <!-- ADVANCED SEQUENCER -->

@@ -9044,6 +9044,47 @@ function ninaApp() {
             return f + ' frames';
         },
 
+        /// AUTORUN shutter context. Tap = startSequence(),
+        /// long-press = same (no distinct loop), tap-while-active =
+        /// stopSequence(). Pause/Resume stays as a separate button
+        /// in the sidebar since it's a third state that doesn't fit
+        /// the tap/long-press/abort grammar.
+        autorunShutterCtx() {
+            return {
+                isActive: () => this.seqState === 'running'
+                    || this.seqState === 'paused',
+                disabled: () => this.sequence.length === 0,
+                onTap: () => {
+                    if (this.seqState === 'idle') this.startSequence();
+                },
+                onLongPress: () => {
+                    if (this.seqState === 'idle') this.startSequence();
+                },
+                onAbort: () => this.stopSequence()
+            };
+        },
+        /// Progress for AUTORUN. Reads the existing seqProgress()
+        /// helper (frames completed / total) so the ring shows the
+        /// progress of the whole sequence, not the current sub-
+        /// exposure. Returns 0..1.
+        autorunShutterProgress() {
+            if (this.armingLoop) return this._shutterArmProgress();
+            if (this.seqState === 'idle') return 0;
+            // seqProgress() returns 0-100 (integer percent).
+            return Math.max(0, Math.min(1, (this.seqProgress() || 0) / 100));
+        },
+        autorunShutterDashoffset() {
+            return this._shutterDashoffsetFor(this.autorunShutterProgress());
+        },
+        autorunShutterCountdown() {
+            if (this.armingLoop) return 'hold...';
+            if (this.seqState === 'idle') return '';
+            const done = this.seqStatus?.totalFramesCompleted || 0;
+            const total = this.seqStatus?.totalFrames || 0;
+            if (this.seqState === 'paused') return done + '/' + total + ' · paused';
+            return done + '/' + total;
+        },
+
         // --- PREVIEW tab (snap-and-look) ---
 
         // Take one test shot. Reuses the LIVE capture endpoint with the
@@ -12937,6 +12978,9 @@ function ninaApp() {
                 await this.apiPost('/api/sequence', this.sequence);
                 await this.apiPost('/api/sequence/start');
                 this.seqState = 'running';
+                // SHUT-4: kick the shutter tick so the autorun ring
+                // animates smoothly as frames complete.
+                this._startShutterTick();
                 this.toast('Sequence started', 'ok');
             } catch (e) {
                 this.toast('Start failed: ' + e.message, 'error');

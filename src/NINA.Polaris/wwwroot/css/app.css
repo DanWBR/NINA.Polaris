@@ -600,12 +600,14 @@ html, body {
    it to the side reclaims that for the bitmap. Mobile breakpoint
    (≤900px) collapses back to the legacy single-column stack. */
 .tab-panel-live,
-.preview-tab-panel {
+.preview-tab-panel,
+.tab-panel-autorun {
     min-height: 0;
     overflow: hidden;
 }
 .live-pane,
-.preview-pane {
+.preview-pane,
+.autorun-pane {
     display: flex;
     flex-direction: row;
     gap: 12px;
@@ -615,14 +617,16 @@ html, body {
     padding: 8px 8px 0;
 }
 .live-pane > .preview-area,
-.preview-pane > .preview-area {
+.preview-pane > .preview-area,
+.autorun-pane > .autorun-list-col {
     flex: 1;
     min-width: 0;
     min-height: 200px;
     border-radius: var(--radius);
 }
 .live-pane > .quick-controls,
-.preview-pane > .quick-controls {
+.preview-pane > .quick-controls,
+.autorun-pane > .quick-controls {
     flex: 0 0 320px;
     display: flex;
     flex-direction: column;
@@ -633,6 +637,14 @@ html, body {
     border: 1px solid var(--border);
     border-radius: var(--radius);
     border-top: 1px solid var(--border);    /* override the default top-border-only style */
+}
+/* AUTORUN list column on the left is just a vertical stack with its
+   own scroll (sequence list + dither/MF panels can grow tall). */
+.autorun-pane > .autorun-list-col {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 0 4px 12px;
 }
 .live-pane > .quick-controls .control-row,
 .preview-pane > .quick-controls .control-row {
@@ -678,7 +690,8 @@ html, body {
         gap: 8px;
     }
     .live-pane > .quick-controls,
-    .preview-pane > .quick-controls {
+    .preview-pane > .quick-controls,
+    .autorun-pane > .quick-controls {
         flex: 0 0 auto;
         max-height: none;
     }
