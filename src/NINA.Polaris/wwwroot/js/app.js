@@ -225,7 +225,11 @@ function ninaApp() {
             bahtinovResult: null,
             bahtinovError: null,
             lastFrameWidth: 0,
-            lastFrameHeight: 0
+            lastFrameHeight: 0,
+            // SHUT-3: timestamp of the current loop cycle for the
+            // shutter ring fill. Reset at the top of each
+            // _manualFocusTick + each manualFocusSnap.
+            _tickStartedAt: null
         },
         _manualFocusTimer: null,
 
@@ -8962,6 +8966,84 @@ function ninaApp() {
                 this.preview._snapStartedAt, this.preview._snapExposure);
         },
 
+        /// FOCUS Manual Assist shutter context. Tap = single snap,
+        /// long-press = start loop, tap-while-active = stop loop.
+        focusShutterCtx() {
+            return {
+                isActive: () => !!this.manualFocus.running,
+                disabled: () => !this.selectedCamera,
+                onTap: () => this.manualFocusSnap(),
+                onLongPress: () => this.manualFocusStart(),
+                onAbort: () => this.manualFocusStop()
+            };
+        },
+        /// Progress for FOCUS shutter. While looping, fills 0 to 1
+        /// across each intervalSec cycle so the user can see the next
+        /// snap coming. Idle single-snap: leaves the ring empty (the
+        /// snap is a one-shot, no meaningful "progress").
+        focusShutterProgress() {
+            if (this.armingLoop) return this._shutterArmProgress();
+            if (!this.manualFocus.running) return 0;
+            return this._shutterProgressFor(
+                this.manualFocus._tickStartedAt,
+                this.manualFocus.intervalSec || 1);
+        },
+        focusShutterDashoffset() {
+            return this._shutterDashoffsetFor(this.focusShutterProgress());
+        },
+        focusShutterCountdown() {
+            if (this.armingLoop) return 'hold for loop...';
+            if (!this.manualFocus.running) return '';
+            return this._shutterCountdownFor(
+                this.manualFocus._tickStartedAt,
+                this.manualFocus.intervalSec || 1);
+        },
+
+        /// VIDEO Capture shutter context. Record is a single toggle
+        /// (no separate snap vs loop), so long-press maps to the same
+        /// action as tap, and tap-while-active is the stop.
+        videoShutterCtx() {
+            return {
+                isActive: () => !!this.videoRecording.recording,
+                disabled: () => !this.selectedCamera,
+                onTap: () => this.videoToggleRecord(),
+                onLongPress: () => this.videoToggleRecord(),
+                onAbort: () => this.videoToggleRecord()
+            };
+        },
+        /// Progress for VIDEO shutter. With a max duration set we
+        /// show recorded elapsed / max. Without one, we hand back
+        /// 0 and the template flips the shutter into the
+        /// .shutter-indeterminate spinner via shutter-indeterminate
+        /// class.
+        videoShutterIndeterminate() {
+            return !!this.videoRecording.recording
+                && !(this.video.maxDurationSec > 0);
+        },
+        videoShutterProgress() {
+            if (this.armingLoop) return this._shutterArmProgress();
+            if (!this.videoRecording.recording) return 0;
+            if (!(this.video.maxDurationSec > 0)) return 0;
+            return Math.max(0, Math.min(1,
+                (this.videoRecording.durationSec || 0)
+                / this.video.maxDurationSec));
+        },
+        videoShutterDashoffset() {
+            return this._shutterDashoffsetFor(this.videoShutterProgress());
+        },
+        videoShutterCountdown() {
+            if (this.armingLoop) return 'hold...';
+            if (!this.videoRecording.recording) return '';
+            const f = this.videoRecording.frames || 0;
+            if (this.video.maxDurationSec > 0) {
+                const remaining = Math.max(0,
+                    this.video.maxDurationSec
+                    - (this.videoRecording.durationSec || 0));
+                return f + ' · ' + remaining.toFixed(0) + 's left';
+            }
+            return f + ' frames';
+        },
+
         // --- PREVIEW tab (snap-and-look) ---
 
         // Take one test shot. Reuses the LIVE capture endpoint with the
@@ -9744,6 +9826,9 @@ function ninaApp() {
             }
             this.manualFocus.running = true;
             this.manualFocus.lastError = null;
+            // SHUT-3: shutter ring needs a start time to animate.
+            this.manualFocus._tickStartedAt = Date.now();
+            this._startShutterTick();
             // Fire the first capture immediately so the user does
             // not stare at an empty canvas for `intervalSec` after
             // clicking Start.
@@ -9764,6 +9849,7 @@ function ninaApp() {
         },
         manualFocusStop() {
             this.manualFocus.running = false;
+            this.manualFocus._tickStartedAt = null;
             if (this._manualFocusTimer) {
                 clearTimeout(this._manualFocusTimer);
                 this._manualFocusTimer = null;
@@ -9877,6 +9963,10 @@ function ninaApp() {
         },
         async _manualFocusTick() {
             if (!this.manualFocus.running) return;
+            // SHUT-3: reset the shutter ring start time at the top of
+            // each cycle so the ring restarts from empty + fills across
+            // the (capture + intervalSec) cycle.
+            this.manualFocus._tickStartedAt = Date.now();
             await this._manualFocusCaptureOnce();
             if (!this.manualFocus.running) return;
             // Schedule next tick after intervalSec. setTimeout chain

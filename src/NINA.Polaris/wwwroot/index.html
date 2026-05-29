@@ -1382,27 +1382,51 @@
                             </label>
                         </div>
 
-                        <!-- Actions -->
-                        <div class="control-row actions">
-                            <button class="btn btn-primary"
-                                    @click="manualFocusToggle()"
-                                    :disabled="!selectedCamera">
-                                <span x-show="!manualFocus.running">▶ Start loop</span>
-                                <span x-show="manualFocus.running">⏸ Stop</span>
-                            </button>
-                            <button class="btn"
-                                    @click="manualFocusSnap()"
-                                    :disabled="!selectedCamera || manualFocus.running"
-                                    title="Take a single test exposure without running the loop">
-                                📸 Snap once
-                            </button>
+                        <!-- SHUT-3: Polaris Shutter for FOCUS Manual.
+                             Tap = single snap, long-press = start loop,
+                             tap during loop = stop loop. Reset baseline
+                             stays as a secondary button below. -->
+                        <div class="shutter-wrap">
+                            <div class="polaris-shutter"
+                                 :class="{
+                                     'shutter-active': manualFocus.running,
+                                     'shutter-arming': armingLoop
+                                 }"
+                                 :aria-disabled="!selectedCamera"
+                                 role="button"
+                                 :aria-label="manualFocus.running ? 'Stop loop' : 'Snap once'"
+                                 @pointerdown="shutterPointerDown($event, focusShutterCtx())"
+                                 @pointerup="shutterPointerUp($event, focusShutterCtx())"
+                                 @pointercancel="shutterPointerCancel()"
+                                 @pointerleave="shutterPointerCancel()">
+                                <svg class="shutter-svg" viewBox="0 0 100 100">
+                                    <circle class="shutter-track" cx="50" cy="50" r="46"></circle>
+                                    <circle class="shutter-progress" cx="50" cy="50" r="46"
+                                            :style="'stroke-dashoffset: '
+                                                + (armingLoop
+                                                    ? (289 * (1 - _shutterArmProgress()))
+                                                    : focusShutterDashoffset())"></circle>
+                                </svg>
+                                <span class="shutter-icon">
+                                    <svg viewBox="0 0 24 24" x-show="!manualFocus.running">
+                                        <circle cx="12" cy="12" r="7"></circle>
+                                    </svg>
+                                    <svg viewBox="0 0 24 24" x-show="manualFocus.running">
+                                        <rect x="7" y="7" width="10" height="10" rx="1.5"></rect>
+                                    </svg>
+                                </span>
+                                <span class="shutter-countdown" x-text="focusShutterCountdown()"></span>
+                            </div>
+                        </div>
+
+                        <div class="control-row">
                             <button class="btn btn-sm"
                                     @click="manualFocusResetBaseline()"
                                     title="Clear the rolling HFR history + bestHfr marker">
-                                ↻ Reset
+                                ↻ Reset baseline
                             </button>
                             <span x-show="manualFocus.running" class="text-muted" style="font-size:11px">
-                                Loop active, capturing every <strong x-text="manualFocus.intervalSec"></strong>s
+                                Loop · every <strong x-text="manualFocus.intervalSec"></strong>s
                             </span>
                         </div>
 
@@ -1979,7 +2003,47 @@
                                     title="Reset to neutral (50/50)">↻</button>
                         </div>
 
-                        <div class="control-row actions">
+                        <!-- SHUT-3: Polaris Shutter for VIDEO Record.
+                             Tap = toggle (start when idle, stop when
+                             recording). Long-press = same toggle (no
+                             distinct loop concept for video). Stream
+                             stays as its own toggle below (Record
+                             requires Stream to be running first). -->
+                        <div class="shutter-wrap">
+                            <div class="polaris-shutter"
+                                 :class="{
+                                     'shutter-active': videoRecording.recording,
+                                     'shutter-arming': armingLoop,
+                                     'shutter-indeterminate': videoShutterIndeterminate()
+                                 }"
+                                 :aria-disabled="!cameraStream.running"
+                                 role="button"
+                                 :aria-label="videoRecording.recording ? 'Stop recording' : 'Start recording'"
+                                 @pointerdown="shutterPointerDown($event, videoShutterCtx())"
+                                 @pointerup="shutterPointerUp($event, videoShutterCtx())"
+                                 @pointercancel="shutterPointerCancel()"
+                                 @pointerleave="shutterPointerCancel()">
+                                <svg class="shutter-svg" viewBox="0 0 100 100">
+                                    <circle class="shutter-track" cx="50" cy="50" r="46"></circle>
+                                    <circle class="shutter-progress" cx="50" cy="50" r="46"
+                                            :style="'stroke-dashoffset: '
+                                                + (armingLoop
+                                                    ? (289 * (1 - _shutterArmProgress()))
+                                                    : videoShutterDashoffset())"></circle>
+                                </svg>
+                                <span class="shutter-icon">
+                                    <svg viewBox="0 0 24 24" x-show="!videoRecording.recording">
+                                        <circle cx="12" cy="12" r="7"></circle>
+                                    </svg>
+                                    <svg viewBox="0 0 24 24" x-show="videoRecording.recording">
+                                        <rect x="7" y="7" width="10" height="10" rx="1.5"></rect>
+                                    </svg>
+                                </span>
+                                <span class="shutter-countdown" x-text="videoShutterCountdown()"></span>
+                            </div>
+                        </div>
+
+                        <div class="control-row">
                             <button class="btn"
                                     :class="cameraStream.running ? 'btn-active' : ''"
                                     @click="videoToggleStream()"
@@ -1988,17 +2052,9 @@
                                 <span x-show="cameraStream.running"
                                       x-text="'⏹ Stop Stream (' + (cameraStream.fps?.toFixed?.(1) || '0.0') + ' fps)'"></span>
                             </button>
-                            <button class="btn btn-primary"
-                                    @click="videoToggleRecord()"
-                                    :disabled="!cameraStream.running"
-                                    :class="videoRecording.recording ? 'btn-danger' : ''">
-                                <span x-show="!videoRecording.recording">⏺ Record</span>
-                                <span x-show="videoRecording.recording"
-                                      x-text="'⏹ Stop (' + (videoRecording.frames || 0) + ' frames · '
-                                              + ((videoRecording.bytes / 1048576) | 0) + ' MB)'"></span>
-                            </button>
                             <span x-show="videoRecording.recording" class="text-muted" style="font-size:11px">
                                 → <code x-text="videoRecording.path"></code>
+                                · <span x-text="((videoRecording.bytes / 1048576) | 0) + ' MB'"></span>
                             </span>
                         </div>
 
