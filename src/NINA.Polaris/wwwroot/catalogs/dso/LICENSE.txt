@@ -1,0 +1,73 @@
+N.I.N.A. Polaris bundled DSO catalog (dso.db)
+==============================================
+
+This SQLite database aggregates the following astronomical catalogs.
+All sources are public-domain or openly licensed; Polaris itself
+(MPL 2.0) does not own the underlying data. Run
+`scripts/build-dso-catalog.py` to rebuild from the original sources.
+
+-------------------------------------------------------------------
+1. OpenNGC (NGC + IC complete, Messier + Caldwell cross-IDs)
+-------------------------------------------------------------------
+   Source:  https://github.com/mattiaverga/OpenNGC
+   File:    database_files/NGC.csv
+   License: Creative Commons Attribution-ShareAlike 4.0 International
+            (CC BY-SA 4.0)
+            https://creativecommons.org/licenses/by-sa/4.0/
+   Attribution:
+      "OpenNGC by Mattia Verga, licensed under CC BY-SA 4.0."
+
+-------------------------------------------------------------------
+2. Sharpless 2 (HII Regions)
+-------------------------------------------------------------------
+   Source:  CDS VizieR catalog VII/20/catalog
+            (Sharpless 1959, "A Catalogue of HII Regions")
+   License: Public domain via the CDS, Strasbourg.
+
+-------------------------------------------------------------------
+3. ARP Atlas of Peculiar Galaxies
+-------------------------------------------------------------------
+   Source:  CDS VizieR catalog VII/192A/arplist
+            (Arp 1966, "Atlas of Peculiar Galaxies")
+   License: Public domain via the CDS, Strasbourg.
+
+-------------------------------------------------------------------
+4. Abell Catalog of Planetary Nebulae
+-------------------------------------------------------------------
+   Source:  CDS VizieR catalog V/84/abell
+            (Abell 1966)
+   License: Public domain via the CDS, Strasbourg.
+
+-------------------------------------------------------------------
+5. Hickson Compact Groups
+-------------------------------------------------------------------
+   Source:  CDS VizieR catalog VII/213/groups
+            (Hickson 1982; Hickson et al. 1989)
+   License: Public domain via the CDS, Strasbourg.
+
+-------------------------------------------------------------------
+6. Abell-Corwin-Olowin (ACO) Galaxy Clusters
+-------------------------------------------------------------------
+   Source:  CDS VizieR catalog VII/110A/table3
+            (Abell, Corwin & Olowin 1989)
+   License: Public domain via the CDS, Strasbourg.
+
+-------------------------------------------------------------------
+VizieR acknowledgment
+-------------------------------------------------------------------
+Catalogs 2-6 above were obtained from VizieR, the CDS Strasbourg
+astronomical catalogues service. As requested by CDS, please cite:
+
+   "This research has made use of the VizieR catalogue access tool,
+    CDS, Strasbourg, France (DOI: 10.26093/cds/vizier). The original
+    description of the VizieR service was published in 2000, A&AS
+    143, 23."
+
+-------------------------------------------------------------------
+Caldwell cross-references
+-------------------------------------------------------------------
+The Caldwell numbering (C1..C109, Patrick Moore 1995) is a hand-
+picked assignment of existing NGC / IC entries to Caldwell numbers.
+The mapping table is embedded in scripts/build-dso-catalog.py as
+public-domain coordinates; the underlying objects come from
+OpenNGC.
