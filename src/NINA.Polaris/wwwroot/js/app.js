@@ -1729,6 +1729,30 @@ function ninaApp() {
             return resp.json();
         },
 
+        // ─── AUTH helper for <img>, <iframe>, <a> URLs ─────────────────
+        //
+        // Browser <img src=...> and <iframe src=...> requests don't
+        // carry the Authorization header the way fetch does, they fall
+        // through to cookie auth instead. The polaris_session cookie
+        // covers most cases, but it dies on browser close and isn't
+        // sent over plain HTTP when set Secure. The AuthMiddleware also
+        // accepts ?token=... as a query-string fallback (used by
+        // /api/files/download already), so we just append the bearer
+        // token here for any URL that needs to render through a tag
+        // instead of fetch.
+        //
+        // Pass the URL through and either:
+        //   /api/foo                  → /api/foo?token=xxx
+        //   /api/foo?bar=baz          → /api/foo?bar=baz&token=xxx
+        // Skipped when auth.token is empty (e.g. auth disabled OR not
+        // yet logged in — the request will 401 either way, and the
+        // ?token= would just be empty).
+        authUrl(url) {
+            if (!url || !this.auth?.token) return url;
+            const sep = url.includes('?') ? '&' : '?';
+            return url + sep + 'token=' + encodeURIComponent(this.auth.token);
+        },
+
         // ─── XFER-1: per-transfer progress helpers ─────────────────────
 
         _transferStart({ label, direction, total }) {
@@ -7020,8 +7044,14 @@ function ninaApp() {
             if (imgExts.includes(ext)) {
                 // Reuse the same OpenSeadragon viewer STUDIO uses. Set
                 // the URL to the FILES preview endpoint.
-                const url = '/api/files/preview?path=' + encodeURIComponent(entry.fullPath)
-                          + '&maxDim=2400&t=' + Date.now();
+                // authUrl appends ?token=... so OSD's internal <img>
+                // request authenticates without relying on the session
+                // cookie (which is HttpOnly + browser-close lifetime
+                // and silently drops if the session expired or the
+                // user re-opened the tab via mDNS hostname switch).
+                const url = this.authUrl(
+                    '/api/files/preview?path=' + encodeURIComponent(entry.fullPath)
+                    + '&maxDim=2400&t=' + Date.now());
                 this._openImageViewerWithUrl(url, entry.name);
                 // Kick off the FITS header fetch in parallel with the
                 // image load. The overlay panel renders as soon as the
@@ -7884,10 +7914,13 @@ function ninaApp() {
                 // Bust the cache + reuse whatever URL the viewer is
                 // configured for. The live-camera path needs the
                 // timestamp; a static file path is harmless.
+                // authUrl: <img> can't carry the Authorization header,
+                // so append the bearer token as a query-string fallback
+                // for OSD's internal image fetch.
                 const sep = this.imageViewerUrl.includes('?') ? '&' : '?';
                 this._osdViewer.open({
                     type: 'image',
-                    url: this.imageViewerUrl + sep + 't=' + Date.now()
+                    url: this.authUrl(this.imageViewerUrl + sep + 't=' + Date.now())
                 });
             }
         },
@@ -7907,7 +7940,8 @@ function ninaApp() {
                 id: 'osd-viewer',
                 tileSources: {
                     type: 'image',
-                    url: this.imageViewerUrl + sep + 't=' + Date.now()
+                    // authUrl: see reloadImageViewer comment above.
+                    url: this.authUrl(this.imageViewerUrl + sep + 't=' + Date.now())
                 },
                 showNavigationControl: false,
                 showNavigator: true,
@@ -12188,7 +12222,11 @@ function ninaApp() {
             if (side === 'out' && pair.src) {
                 url += '&stretchFrom=' + encodeURIComponent(pair.src);
             }
-            return url;
+            // <img> can't carry the Authorization header; append the
+            // bearer token as a query-string fallback so the preview
+            // request authenticates even when the session cookie is
+            // missing / expired / not sent.
+            return this.authUrl(url);
         },
 
         // Mouse / touch handlers for the drag handle. Position is

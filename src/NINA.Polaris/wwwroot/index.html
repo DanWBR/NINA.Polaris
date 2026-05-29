@@ -5517,7 +5517,10 @@
                              @dblclick="studioOpenViewer(f)"
                              title="Click to select · Double-click to open viewer">
                             <div class="studio-thumb">
-                                <img :src="'/api/studio/frames/' + f.id + '/thumb'"
+                                <!-- authUrl appends ?token= so the <img>
+                                     request authenticates even when the
+                                     polaris_session cookie is missing. -->
+                                <img :src="authUrl('/api/studio/frames/' + f.id + '/thumb')"
                                      :alt="f.fileName" loading="lazy"
                                      onerror="this.style.display='none'">
                             </div>
