@@ -617,7 +617,15 @@
             </div>
 
             <!-- LIVE VIEW -->
-            <div x-show="tab === 'live'" class="tab-panel">
+            <div x-show="tab === 'live'" class="tab-panel tab-panel-live">
+                <!-- Two-column pane: preview canvas left, vertical control
+                     sidebar right. Mirrors the VIDEO Capture pane pattern
+                     (.video-pane) so the canvas keeps growing into
+                     vertical viewport space instead of being squashed by
+                     a horizontal control row sitting under it. Mobile
+                     falls back to a column stack (see media query in
+                     app.css). -->
+                <div class="live-pane">
                 <div class="preview-area"
                      @mousemove="onPreviewMouseMove($event)"
                      @mouseleave="hoverPixel = null">
@@ -913,6 +921,7 @@
                         </fieldset>
                     </details>
                 </div>
+                </div><!-- /.live-pane -->
                 <div class="stats-bar">
                     <span>Stars: <strong x-text="stats.starCount">--</strong></span>
                     <span>HFR: <strong x-text="stats.hfr || '--'">--</strong></span>

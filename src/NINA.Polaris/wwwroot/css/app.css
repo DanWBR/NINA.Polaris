@@ -590,6 +590,91 @@ html, body {
     overflow: hidden;
 }
 
+/* LIVE tab two-column layout. Same pattern as .video-pane (VIDEO
+   Capture tab): preview canvas on the left grows into all available
+   width + height; the existing control row (Exp/Gain/Bin/Filter +
+   action buttons + Stack/Compute + REFSUG callout + Auto re-focus
+   triggers) drops into a fixed-width vertical sidebar on the right.
+   The horizontal bar that used to live below the canvas added ~80 px
+   of vertical chrome to every viewport; moving it to the side
+   reclaims that for the bitmap. Mobile breakpoint (≤900px) collapses
+   back to the legacy single-column stack. */
+.tab-panel-live {
+    min-height: 0;
+    overflow: hidden;
+}
+.live-pane {
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    padding: 8px 8px 0;
+}
+.live-pane > .preview-area {
+    flex: 1;
+    min-width: 0;
+    min-height: 200px;
+    border-radius: var(--radius);
+}
+.live-pane > .quick-controls {
+    flex: 0 0 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    overflow-y: auto;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    border-top: 1px solid var(--border);    /* override the default top-border-only style */
+}
+.live-pane > .quick-controls .control-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    min-width: 0;
+}
+.live-pane > .quick-controls .control-row > label {
+    min-width: 0;
+    max-width: 100%;
+}
+.live-pane > .quick-controls .control-row.actions {
+    margin-top: 4px;
+}
+/* Inside the sidebar, the trigger details panel + refocus callout
+   should not blow up horizontally; rely on wrapping. */
+.live-pane > .quick-controls .livestack-triggers,
+.live-pane > .quick-controls .livestack-refocus-callout {
+    margin-top: 4px;
+}
+.live-pane > .quick-controls .text-muted,
+.live-pane > .quick-controls .text-warn,
+.live-pane > .quick-controls .text-err {
+    white-space: normal;
+}
+
+/* Mobile: revert to the legacy single-column stack so the canvas and
+   sidebar each get full viewport width. The sidebar becomes a docked
+   block below the canvas. Threshold matches .video-pane (≤900px). */
+@media (max-width: 900px) {
+    .live-pane {
+        flex-direction: column;
+        padding: 0;
+        gap: 8px;
+    }
+    .live-pane > .quick-controls {
+        flex: 0 0 auto;
+        max-height: none;
+    }
+    .live-pane > .preview-area {
+        border-radius: 0;
+    }
+}
+
 .preview-canvas {
     width: 100%;
     height: 100%;
