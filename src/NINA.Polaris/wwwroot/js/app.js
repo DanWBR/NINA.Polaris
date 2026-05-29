@@ -4400,6 +4400,14 @@ function ninaApp() {
         // delivered in order to the iframe.
         _skyLookAt(raHours, decDeg, fovDeg, objectName) {
             this._skyPushObserverAndTime();
+            // Mark a "programmatic pan in progress" window so the
+            // bridge's centre echoes during the smooth-pan animation
+            // don't clobber skyTarget.name. The engine's pan typically
+            // completes in ~500–1500 ms; 3 s gives the trailing centre
+            // events room to land. The 'center' handler reads this
+            // timestamp and treats any echo before it as a pan-echo
+            // (skyTarget kept verbatim) instead of a user drag.
+            this._skyProgrammaticPanUntil = Date.now() + 3000;
             this._skySendMessage({
                 type: 'look-at',
                 raDeg: (raHours || 0) * 15,
@@ -4538,36 +4546,24 @@ function ninaApp() {
                             && Number.isFinite(msg.center.raDeg)
                             && Number.isFinite(msg.center.decDeg)) {
                             const c = msg.center;
-                            // When the centre lands within ~1° of an
-                            // existing named target (e.g. user clicked
-                            // Moon → engine smooth-pans → centre arrives
-                            // at the Moon), preserve the name instead of
-                            // clobbering it with "Centre ra°,dec°".
-                            // Without this guard, every programmatic
-                            // look-at echoes back as a centre event and
-                            // strips the object name within ~500 ms of
-                            // the user clicking it — which then
-                            // propagates into Add-to-sequence and the
-                            // sidecar thumbnail lookup. Tolerance is
-                            // generous (1°) because the engine's pan
-                            // animation can overshoot slightly on the
-                            // final frame.
-                            const t = this.skyTarget;
-                            const hasNamed = t && t.name
-                                && !t.name.startsWith('Centre ')
-                                && Number.isFinite(t.ra) && Number.isFinite(t.dec);
-                            const closeEnough = hasNamed
-                                && Math.abs((t.ra * 15) - c.raDeg) < 1.0
-                                && Math.abs(t.dec - c.decDeg) < 1.0;
-                            if (closeEnough) {
-                                // Update coords (engine has the exact
-                                // value now) but keep the name.
-                                this.skyTarget = {
-                                    ...t,
-                                    ra: c.raDeg / 15,
-                                    dec: c.decDeg
-                                };
-                            } else {
+                            // _skyLookAt() set a 3 s "programmatic pan
+                            // in progress" window. While that window is
+                            // open, the centre events arriving are pan
+                            // echoes from the engine animating toward
+                            // the user-picked target — NOT a genuine
+                            // drag. Treat them as such: keep skyTarget
+                            // verbatim (especially .name, which was set
+                            // to the object name by _populateSkyInfo
+                            // milliseconds ago), only refresh the FOV
+                            // overlay so the red rectangle tracks the
+                            // moving centre. Without this gate, the
+                            // intermediate centre frames overwrite
+                            // skyTarget.name with "Centre ra,dec" and
+                            // Add-to-sequence picks up the coord string
+                            // instead of "Moon" / "M31" / etc.
+                            const inPan = this._skyProgrammaticPanUntil
+                                && Date.now() < this._skyProgrammaticPanUntil;
+                            if (!inPan) {
                                 this.skyTarget = {
                                     name: 'Centre ' + c.raDeg.toFixed(2) + '°,' + c.decDeg.toFixed(2) + '°',
                                     ra: c.raDeg / 15,
