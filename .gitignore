@@ -432,3 +432,5 @@ src/NINA.Polaris/wwwroot/catalogs/apass/*.db
 test_data/
 scripts/.apass-cache/
 /external_tools
+/build/deb-arm64
+/scripts/.dso-cache
