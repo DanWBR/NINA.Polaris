@@ -328,6 +328,34 @@ function ninaApp() {
         // Sequence
         sequence: [],
         seqState: 'idle',
+        // FW-2: AUTORUN sub-tab toggle. 'sequence' = the existing
+        // editor; 'flat' = Flat Wizard sub-tab. Defaults to sequence
+        // so existing muscle memory + first-open lands on the
+        // familiar pane. Switching to 'flat' triggers
+        // flatWizardOpenTab() which hydrates form + trained cache.
+        autorunTab: 'sequence',
+        // Flat Wizard state. Form fields mirror EquipmentProfile.FlatWizard
+        // (FW-1) and are hydrated by flatWizardOpenTab() from
+        // activeRig.flatWizard. WS payload populates state/progress/
+        // lastError each tick via handleStatusMessage absorption.
+        flatWizard: {
+            state: 'idle',         // 'idle' | 'running'
+            progress: null,        // populated while running, see WS payload
+            lastError: null,
+            trained: {},           // { "L_bin1": 1.85, "R_bin1": 2.34, ... }
+            // Form mirror of EquipmentProfile.FlatWizard, defaults
+            // match FlatWizardSettings.cs so a brand-new browser
+            // session renders sane values before the rig hydrates.
+            targetAdu: 30000,
+            tolerance: 0.05,
+            framesPerFilter: 20,
+            minExposureSec: 0.1,
+            maxExposureSec: 30.0,
+            binning: 1,
+            maxSearchIterations: 10,
+            panelBrightness: 0,
+            selectedFilters: []
+        },
         seqStatus: null,
         _seqPollTimer: null,
 
@@ -8774,7 +8802,8 @@ function ninaApp() {
                 || (this.preview && (this.preview.busy || this.preview.looping))
                 || (this.manualFocus && this.manualFocus.running)
                 || (this.videoRecording && this.videoRecording.recording)
-                || this.seqState === 'running';
+                || this.seqState === 'running'
+                || (this.flatWizard && this.flatWizard.state === 'running');
         },
 
         /// Start the 50ms tick that drives the shutter ring's
@@ -9083,6 +9112,156 @@ function ninaApp() {
             const total = this.seqStatus?.totalFrames || 0;
             if (this.seqState === 'paused') return done + '/' + total + ' · paused';
             return done + '/' + total;
+        },
+
+        // ----- FW-2: Flat Wizard tab glue -----
+
+        /// Hydrate form + trained cache when the user clicks the
+        /// Flat Wizard sub-tab. Reads from active rig (already
+        /// loaded into this.rigs) and fetches /api/flatwizard/trained.
+        async flatWizardOpenTab() {
+            const rig = this.rigs?.find(r => r.id === this.activeRigId);
+            const s = rig?.flatWizard;
+            if (s) {
+                this.flatWizard.targetAdu = s.targetAdu ?? 30000;
+                this.flatWizard.tolerance = s.tolerance ?? 0.05;
+                this.flatWizard.framesPerFilter = s.framesPerFilter ?? 20;
+                this.flatWizard.minExposureSec = s.minExposureSec ?? 0.1;
+                this.flatWizard.maxExposureSec = s.maxExposureSec ?? 30.0;
+                this.flatWizard.binning = s.binning ?? 1;
+                this.flatWizard.maxSearchIterations = s.maxSearchIterations ?? 10;
+                this.flatWizard.panelBrightness = s.panelBrightness ?? 0;
+            }
+            try {
+                const trained = await this.apiGet('/api/flatwizard/trained');
+                this.flatWizard.trained = trained || {};
+            } catch (e) {
+                /* first run before any save, ignore */
+            }
+        },
+
+        flatWizardToggleFilter(f) {
+            const idx = this.flatWizard.selectedFilters.indexOf(f);
+            if (idx >= 0) this.flatWizard.selectedFilters.splice(idx, 1);
+            else this.flatWizard.selectedFilters.push(f);
+        },
+        flatWizardSelectAll() {
+            this.flatWizard.selectedFilters = [...(this.filterWheel.filters || [])];
+        },
+        flatWizardClearFilters() {
+            this.flatWizard.selectedFilters = [];
+        },
+
+        /// Debounced PUT into the active rig. Settings live on
+        /// EquipmentProfile.FlatWizard (FW-1). Reuses saveRig() so
+        /// it gets the same 400ms debounce + error-toast surface that
+        /// every other rig-side input uses.
+        flatWizardSave() {
+            const rig = this.rigs?.find(r => r.id === this.activeRigId);
+            if (!rig) return;
+            rig.flatWizard = {
+                targetAdu: this.flatWizard.targetAdu,
+                tolerance: this.flatWizard.tolerance,
+                framesPerFilter: this.flatWizard.framesPerFilter,
+                minExposureSec: this.flatWizard.minExposureSec,
+                maxExposureSec: this.flatWizard.maxExposureSec,
+                binning: this.flatWizard.binning,
+                maxSearchIterations: this.flatWizard.maxSearchIterations,
+                panelBrightness: this.flatWizard.panelBrightness
+            };
+            this.saveRig(rig);
+        },
+
+        async flatWizardStart() {
+            if (this.flatWizard.selectedFilters.length === 0) {
+                this.toast('Pick at least 1 filter', 'warn');
+                return;
+            }
+            if (!this.selectedCamera) {
+                this.toast('Connect a camera first', 'warn');
+                return;
+            }
+            // If a flat panel is connected and the user picked a non-zero
+            // brightness, set it before kicking the wizard. 0 means
+            // "don't touch the panel" — sky / T-shirt flats.
+            if (this.flatDevice?.connected && this.flatWizard.panelBrightness > 0) {
+                try {
+                    await this.apiPost('/api/flatdevice/brightness', null, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ brightness: this.flatWizard.panelBrightness })
+                    });
+                } catch (e) {
+                    this.toast('Set panel brightness failed: ' + e.message, 'warn');
+                    // keep going — user may want to proceed without panel
+                }
+            }
+            try {
+                await this.apiPost('/api/flatwizard/start', null, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        filters: this.flatWizard.selectedFilters,
+                        framesPerFilter: this.flatWizard.framesPerFilter,
+                        targetAdu: this.flatWizard.targetAdu,
+                        tolerance: this.flatWizard.tolerance,
+                        minExposure: this.flatWizard.minExposureSec,
+                        maxExposure: this.flatWizard.maxExposureSec,
+                        binning: this.flatWizard.binning,
+                        maxSearchIterations: this.flatWizard.maxSearchIterations
+                    })
+                });
+                this._startShutterTick();
+            } catch (e) {
+                this.toast('Start flat wizard failed: ' + e.message, 'error');
+            }
+        },
+        async flatWizardAbort() {
+            try {
+                await this.apiPost('/api/flatwizard/abort');
+            } catch (e) {
+                this.toast('Abort failed: ' + e.message, 'warn');
+            }
+        },
+
+        /// Per-tab shutter context. Tap and long-press both fire start
+        /// (no separate loop concept — the wizard runs to completion
+        /// once kicked). Tap-during-active aborts.
+        flatWizardShutterCtx() {
+            return {
+                isActive: () => this.flatWizard.state === 'running',
+                disabled: () => !this.selectedCamera
+                    || !this.filterWheel?.connected
+                    || this.flatWizard.selectedFilters.length === 0,
+                onTap: () => this.flatWizardStart(),
+                onLongPress: () => this.flatWizardStart(),
+                onAbort: () => this.flatWizardAbort()
+            };
+        },
+        /// Progress for the AUTORUN > Flat Wizard shutter ring.
+        /// Composite progress: (filtersDone + frames-in-current-filter)
+        /// / totalFilters. Returns 0..1.
+        flatWizardShutterProgress() {
+            if (this.armingLoop) return this._shutterArmProgress();
+            const p = this.flatWizard.progress;
+            if (this.flatWizard.state !== 'running' || !p || !p.totalFilters) return 0;
+            const frameFrac = (p.framesCaptured || 0)
+                / Math.max(1, p.totalFramesPerFilter || 1);
+            const overall = ((p.currentFilterIndex || 0) + frameFrac)
+                / p.totalFilters;
+            return Math.max(0, Math.min(1, overall));
+        },
+        flatWizardShutterDashoffset() {
+            return this._shutterDashoffsetFor(this.flatWizardShutterProgress());
+        },
+        flatWizardShutterCountdown() {
+            if (this.armingLoop) return 'hold...';
+            if (this.flatWizard.state !== 'running') return '';
+            const p = this.flatWizard.progress;
+            if (!p) return 'starting...';
+            const f = p.currentFilter || '?';
+            const phase = p.phase || '';
+            return f + ' · ' + phase;
         },
 
         // --- PREVIEW tab (snap-and-look) ---
@@ -14304,6 +14483,31 @@ function ninaApp() {
             if (msg.videoRecording) this.videoRecording = msg.videoRecording;
             if (msg.videoStack !== undefined) this.videoStack = msg.videoStack;  // null when idle
             if (msg.slewPreview) this.slewPreview = msg.slewPreview;
+            // FW-1: Flat Wizard tick. state + lastError always present;
+            // progress is null when the wizard never ran (preserved as
+            // null so the UI hides the progress block). When a run
+            // completes, progress.filterResults stays populated so the
+            // user can read the final per-filter outcome.
+            if (msg.flatWizard) {
+                this.flatWizard.state = msg.flatWizard.state || 'idle';
+                this.flatWizard.lastError = msg.flatWizard.lastError || null;
+                if (msg.flatWizard.progress !== undefined) {
+                    this.flatWizard.progress = msg.flatWizard.progress;
+                }
+                // When a run just transitioned idle → running, kick the
+                // shutter tick so the ring renders smoothly.
+                if (this.flatWizard.state === 'running') this._startShutterTick();
+                // When a run finishes, refresh trained exposures so the
+                // table picks up the new converged values without a
+                // second tab-open.
+                if (this.flatWizard.state === 'idle'
+                    && msg.flatWizard.progress?.filterResults?.length > 0
+                    && this.autorunTab === 'flat') {
+                    this.apiGet('/api/flatwizard/trained').then(t => {
+                        if (t) this.flatWizard.trained = t;
+                    }).catch(() => {});
+                }
+            }
             if (msg.sirilJobs) this.sirilActiveJobs = msg.sirilJobs;
             if (msg.graXpertJobs) this.graXpertActiveJobs = msg.graXpertJobs;
             // Server-pushed toasts. Server keeps a ring buffer; we

@@ -4633,13 +4633,25 @@
                     }" x-text="seqState.toUpperCase()"></span>
                 </div>
 
+                <!-- FW-2: AUTORUN sub-tabs. Sequence = the existing
+                     editor/sidebar. Flat Wizard = automated flat
+                     acquisition (per-filter binary-search exposure
+                     + N frames per filter). Same .video-tabstrip
+                     visual pattern used in GUIDE / VIDEO / FOCUS. -->
+                <div class="video-tabstrip">
+                    <button class="video-tab" :class="{ active: autorunTab === 'sequence' }"
+                            @click="autorunTab = 'sequence'">Sequence</button>
+                    <button class="video-tab" :class="{ active: autorunTab === 'flat' }"
+                            @click="autorunTab = 'flat'; flatWizardOpenTab()">Flat Wizard</button>
+                </div>
+
                 <!-- SHUT-4: 2-column pane. Left = sequence editor +
                      dither / meridian-flip / end-actions config. Right
                      = .autorun-sidebar with centered Polaris Shutter
                      + Pause/Resume + progress numbers (no horizontal
                      seq-progress-section anymore — replaced by the
                      shutter ring). -->
-                <div class="autorun-pane">
+                <div class="autorun-pane" x-show="autorunTab === 'sequence'">
                 <div class="autorun-list-col">
 
                 <!-- Empty state -->
@@ -5008,6 +5020,275 @@
                     </div>
                 </div>
                 </div><!-- /.autorun-pane -->
+
+                <!-- FW-2: Flat Wizard sub-tab pane. 2-column layout
+                     mirroring .autorun-pane (config column on the left,
+                     shutter sidebar on the right). Shutter reuses the
+                     same polaris-shutter component, fed by
+                     flatWizardShutterCtx(). Form fields write back to
+                     the active rig's FlatWizard settings via debounced
+                     PUT /api/equipment/rigs/{id} (saveRig). -->
+                <div class="autorun-pane flatwiz-pane" x-show="autorunTab === 'flat'">
+                    <div class="autorun-list-col">
+
+                        <!-- Pre-flight: what's connected? -->
+                        <div class="settings-section">
+                            <h4 style="margin-top:0">Pre-flight</h4>
+                            <div class="flatwiz-preflight">
+                                <div class="flatwiz-preflight-row"
+                                     :class="selectedCamera ? 'ok' : 'err'">
+                                    <span x-text="selectedCamera ? '✓' : '✗'"></span>
+                                    <span>Camera:</span>
+                                    <strong x-text="selectedCamera || 'not connected'"></strong>
+                                </div>
+                                <div class="flatwiz-preflight-row"
+                                     :class="(filterWheel.connected && filterWheel.filters.length > 0) ? 'ok' : 'err'">
+                                    <span x-text="(filterWheel.connected && filterWheel.filters.length > 0) ? '✓' : '✗'"></span>
+                                    <span>Filter wheel:</span>
+                                    <strong x-show="filterWheel.connected && filterWheel.filters.length > 0"
+                                            x-text="filterWheel.filters.length + ' filter' + (filterWheel.filters.length === 1 ? '' : 's')"></strong>
+                                    <strong x-show="!filterWheel.connected || filterWheel.filters.length === 0">not connected</strong>
+                                </div>
+                                <div class="flatwiz-preflight-row"
+                                     :class="flatDevice.connected ? 'ok' : 'warn'">
+                                    <span x-text="flatDevice.connected ? '✓' : '⚠'"></span>
+                                    <span>Flat panel:</span>
+                                    <strong x-show="flatDevice.connected" x-text="flatDevice.name"></strong>
+                                    <strong x-show="!flatDevice.connected">not connected (sky / T-shirt OK)</strong>
+                                </div>
+                            </div>
+                            <p class="hint" x-show="!selectedCamera || !filterWheel.connected" style="margin-top:8px">
+                                Connect camera + filter wheel in the
+                                <a href="#" @click.prevent="tab = 'equip'">RIGS</a> tab first.
+                            </p>
+                        </div>
+
+                        <!-- Filter pick -->
+                        <div class="settings-section" x-show="filterWheel.connected && filterWheel.filters.length > 0">
+                            <h4 style="margin-top:0">Filters to capture</h4>
+                            <div class="control-row" style="margin-bottom:6px">
+                                <button class="btn btn-sm" @click="flatWizardSelectAll()">Select all</button>
+                                <button class="btn btn-sm" @click="flatWizardClearFilters()">Clear</button>
+                                <span class="text-muted" style="font-size:11px"
+                                      x-text="flatWizard.selectedFilters.length + ' of ' + filterWheel.filters.length + ' picked'"></span>
+                            </div>
+                            <div class="flatwiz-filter-pick">
+                                <template x-for="f in filterWheel.filters" :key="f">
+                                    <label class="flatwiz-filter-chip">
+                                        <input type="checkbox"
+                                               :checked="flatWizard.selectedFilters.includes(f)"
+                                               @change="flatWizardToggleFilter(f)">
+                                        <span x-text="f"></span>
+                                    </label>
+                                </template>
+                            </div>
+                            <p class="hint" style="margin-top:6px">
+                                Filters are captured in the order picked.
+                                Trained exposures (when available) seed the
+                                binary search so converging takes 1-2 frames
+                                instead of 5-8.
+                            </p>
+                        </div>
+
+                        <!-- Settings form -->
+                        <div class="settings-section">
+                            <h4 style="margin-top:0">Settings</h4>
+                            <div class="settings-grid">
+                                <label>
+                                    <span>Target ADU</span>
+                                    <input type="number" min="100" max="65535" step="100"
+                                           x-model.number="flatWizard.targetAdu"
+                                           @change="flatWizardSave()">
+                                </label>
+                                <label>
+                                    <span>Tolerance (%)</span>
+                                    <input type="number" min="0.5" max="50" step="0.5"
+                                           :value="(flatWizard.tolerance * 100).toFixed(1)"
+                                           @change="flatWizard.tolerance = parseFloat($event.target.value) / 100; flatWizardSave()">
+                                </label>
+                                <label>
+                                    <span>Frames per filter</span>
+                                    <input type="number" min="1" max="500" step="1"
+                                           x-model.number="flatWizard.framesPerFilter"
+                                           @change="flatWizardSave()">
+                                </label>
+                                <label>
+                                    <span>Min exposure (s)</span>
+                                    <input type="number" min="0.001" max="60" step="0.01"
+                                           x-model.number="flatWizard.minExposureSec"
+                                           @change="flatWizardSave()">
+                                </label>
+                                <label>
+                                    <span>Max exposure (s)</span>
+                                    <input type="number" min="0.1" max="300" step="0.5"
+                                           x-model.number="flatWizard.maxExposureSec"
+                                           @change="flatWizardSave()">
+                                </label>
+                                <label>
+                                    <span>Binning</span>
+                                    <input type="number" min="1" max="4" step="1"
+                                           x-model.number="flatWizard.binning"
+                                           @change="flatWizardSave()">
+                                </label>
+                                <label>
+                                    <span>Max iterations</span>
+                                    <input type="number" min="3" max="30" step="1"
+                                           x-model.number="flatWizard.maxSearchIterations"
+                                           @change="flatWizardSave()">
+                                </label>
+                            </div>
+                            <p class="hint">
+                                The binary search halves the bracket each
+                                iteration; 10 covers ~3 decades of dynamic
+                                range. Drop tolerance to ±1-2% if your
+                                pipeline is sensitive to flat-field
+                                normalization.
+                            </p>
+                        </div>
+
+                        <!-- Trained exposures table -->
+                        <div class="settings-section">
+                            <h4 style="margin-top:0">Trained exposures</h4>
+                            <div x-show="Object.keys(flatWizard.trained || {}).length === 0"
+                                 class="text-muted" style="font-size:12px">
+                                No trained exposures yet. Run the wizard once
+                                to populate the cache.
+                            </div>
+                            <table class="flatwiz-trained-table"
+                                   x-show="Object.keys(flatWizard.trained || {}).length > 0">
+                                <thead>
+                                    <tr>
+                                        <th>Filter</th>
+                                        <th>Binning</th>
+                                        <th>Exposure</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="(exp, key) in flatWizard.trained" :key="key">
+                                        <tr>
+                                            <td x-text="(key.split('_bin')[0] || key)"></td>
+                                            <td x-text="(key.split('_bin')[1] || '?')"></td>
+                                            <td><strong x-text="exp.toFixed(3) + 's'"></strong></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+
+                    </div><!-- /.autorun-list-col -->
+
+                    <!-- Right sidebar: brightness + shutter + progress -->
+                    <div class="quick-controls autorun-sidebar">
+                        <div class="shutter-inputs">
+                            <!-- Flat panel brightness slider, visible only
+                                 when a flat device is connected. 0 means
+                                 "don't touch the panel". -->
+                            <div x-show="flatDevice.connected">
+                                <label style="display:flex; flex-direction:column; gap:4px">
+                                    <span style="display:flex; justify-content:space-between">
+                                        <span>Panel brightness</span>
+                                        <strong x-text="flatWizard.panelBrightness + '%'"></strong>
+                                    </span>
+                                    <input type="range" min="0" max="100" step="1"
+                                           x-model.number="flatWizard.panelBrightness"
+                                           @change="flatWizardSave()">
+                                </label>
+                                <p class="hint" x-show="flatWizard.panelBrightness === 0">
+                                    0 = don't touch the panel (sky / T-shirt flats).
+                                </p>
+                            </div>
+                            <div class="control-row text-muted" style="font-size:11px">
+                                <span x-show="flatWizard.selectedFilters.length === 0">
+                                    Pick at least 1 filter to enable shutter.
+                                </span>
+                                <span x-show="flatWizard.selectedFilters.length > 0"
+                                      x-text="flatWizard.selectedFilters.length + ' filter' + (flatWizard.selectedFilters.length === 1 ? '' : 's') + ' x ' + flatWizard.framesPerFilter + ' frames'"></span>
+                            </div>
+                        </div>
+
+                        <div class="shutter-wrap">
+                            <div class="polaris-shutter"
+                                 :class="{
+                                     'shutter-active': flatWizard.state === 'running',
+                                     'shutter-arming': armingLoop
+                                 }"
+                                 :aria-disabled="flatWizardShutterCtx().disabled()"
+                                 role="button"
+                                 :aria-label="flatWizard.state === 'running' ? 'Abort flat wizard' : 'Start flat wizard'"
+                                 @pointerdown="shutterPointerDown($event, flatWizardShutterCtx())"
+                                 @pointerup="shutterPointerUp($event, flatWizardShutterCtx())"
+                                 @pointercancel="shutterPointerCancel()"
+                                 @pointerleave="shutterPointerCancel()">
+                                <svg class="shutter-svg" viewBox="0 0 100 100">
+                                    <circle class="shutter-track" cx="50" cy="50" r="46"></circle>
+                                    <circle class="shutter-progress" cx="50" cy="50" r="46"
+                                            :style="'stroke-dashoffset: '
+                                                + (armingLoop
+                                                    ? (289 * (1 - _shutterArmProgress()))
+                                                    : flatWizardShutterDashoffset())"></circle>
+                                </svg>
+                                <span class="shutter-icon">
+                                    <svg viewBox="0 0 24 24" x-show="flatWizard.state !== 'running'">
+                                        <polygon points="8,5 19,12 8,19"></polygon>
+                                    </svg>
+                                    <svg viewBox="0 0 24 24" x-show="flatWizard.state === 'running'">
+                                        <rect x="7" y="7" width="10" height="10" rx="1.5"></rect>
+                                    </svg>
+                                </span>
+                                <span class="shutter-countdown" x-text="flatWizardShutterCountdown()"></span>
+                            </div>
+                        </div>
+
+                        <div class="shutter-secondary">
+                            <!-- Live progress: search attempt + median ADU
+                                 during the binary search, then frame
+                                 counter during capture. -->
+                            <div x-show="flatWizard.state === 'running' && flatWizard.progress" class="text-muted"
+                                 style="font-size:11px; display:flex; flex-direction:column; gap:4px">
+                                <span>
+                                    Filter
+                                    <strong x-text="(flatWizard.progress?.currentFilterIndex + 1) + '/' + flatWizard.progress?.totalFilters"></strong>
+                                    <span x-show="flatWizard.progress?.currentFilter">·
+                                        <strong x-text="flatWizard.progress?.currentFilter"></strong>
+                                    </span>
+                                </span>
+                                <span x-show="flatWizard.progress?.phase === 'searching'">
+                                    Searching attempt
+                                    <strong x-text="flatWizard.progress?.searchAttempt"></strong>:
+                                    <strong x-text="flatWizard.progress?.currentExposure?.toFixed(3) + 's'"></strong>
+                                    →
+                                    <strong x-text="Math.round(flatWizard.progress?.lastMedian || 0)"></strong> ADU
+                                </span>
+                                <span x-show="flatWizard.progress?.phase === 'capturing'">
+                                    Capturing
+                                    <strong x-text="(flatWizard.progress?.framesCaptured || 0) + 1 + '/' + flatWizard.progress?.totalFramesPerFilter"></strong>
+                                    at
+                                    <strong x-text="flatWizard.progress?.currentExposure?.toFixed(3) + 's'"></strong>
+                                </span>
+                            </div>
+                            <!-- After-the-fact per-filter results -->
+                            <div x-show="flatWizard.progress?.filterResults?.length > 0"
+                                 class="text-muted" style="font-size:11px; margin-top:4px">
+                                <strong>Done:</strong>
+                                <ul style="margin:4px 0 0 12px; padding:0">
+                                    <template x-for="r in flatWizard.progress.filterResults" :key="r.filter">
+                                        <li>
+                                            <span x-text="r.filter"></span>:
+                                            <strong x-show="r.converged" x-text="r.finalExposure.toFixed(3) + 's'"></strong>
+                                            <span x-show="!r.converged" class="text-warn">did not converge</span>
+                                            <span x-show="r.converged && r.framesCaptured > 0"
+                                                  x-text="' (' + r.framesCaptured + ' frames)'"></span>
+                                        </li>
+                                    </template>
+                                </ul>
+                            </div>
+                            <div x-show="flatWizard.lastError" class="text-err"
+                                 style="font-size:11px; margin-top:6px">
+                                <strong>Error:</strong> <span x-text="flatWizard.lastError"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div><!-- /.flatwiz-pane -->
             </div>
 
             <!-- ADVANCED SEQUENCER -->
