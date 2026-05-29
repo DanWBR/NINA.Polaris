@@ -2897,7 +2897,9 @@ function ninaApp() {
 
             // Open the WebSocket bridge.
             const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const url = wsProto + '//' + location.host + '/ws/terminal';
+            // Same authUrl rationale as the other WS endpoints, the
+            // WebSocket upgrade can't carry an Authorization header.
+            const url = this.authUrl(wsProto + '//' + location.host + '/ws/terminal');
             const ws = new WebSocket(url);
             ws.binaryType = 'arraybuffer';
             this._termSocket = ws;
@@ -3031,7 +3033,15 @@ function ninaApp() {
             }
 
             const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const ws = new WebSocket(`${protocol}//${location.host}/ws/status`);
+            // WebSocket upgrade can't carry the Authorization header,
+            // browsers only attach cookies on same-origin upgrades.
+            // The polaris_session cookie covers most cases, but it
+            // dies on browser close + isn't sent under some hostname /
+            // scheme combos (mDNS hostname switch after a WiFi mode
+            // flip, etc). authUrl appends ?token= as the query fallback
+            // the AuthMiddleware also accepts.
+            const ws = new WebSocket(
+                this.authUrl(`${protocol}//${location.host}/ws/status`));
 
             ws.onopen = () => {
                 this._statusWsAttempt = 0;
@@ -3066,7 +3076,11 @@ function ninaApp() {
             }
 
             const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const ws = new WebSocket(`${protocol}//${location.host}/ws/image-stream`);
+            // Same authUrl rationale as /ws/status: WebSocket upgrades
+            // can't carry the Authorization header; ?token= falls
+            // through to AuthMiddleware's query-fallback path.
+            const ws = new WebSocket(
+                this.authUrl(`${protocol}//${location.host}/ws/image-stream`));
 
             ws.binaryType = 'arraybuffer';
 
