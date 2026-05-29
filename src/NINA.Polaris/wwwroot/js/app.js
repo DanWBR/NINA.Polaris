@@ -4538,11 +4538,42 @@ function ninaApp() {
                             && Number.isFinite(msg.center.raDeg)
                             && Number.isFinite(msg.center.decDeg)) {
                             const c = msg.center;
-                            this.skyTarget = {
-                                name: 'Centre ' + c.raDeg.toFixed(2) + '°,' + c.decDeg.toFixed(2) + '°',
-                                ra: c.raDeg / 15,
-                                dec: c.decDeg
-                            };
+                            // When the centre lands within ~1° of an
+                            // existing named target (e.g. user clicked
+                            // Moon → engine smooth-pans → centre arrives
+                            // at the Moon), preserve the name instead of
+                            // clobbering it with "Centre ra°,dec°".
+                            // Without this guard, every programmatic
+                            // look-at echoes back as a centre event and
+                            // strips the object name within ~500 ms of
+                            // the user clicking it — which then
+                            // propagates into Add-to-sequence and the
+                            // sidecar thumbnail lookup. Tolerance is
+                            // generous (1°) because the engine's pan
+                            // animation can overshoot slightly on the
+                            // final frame.
+                            const t = this.skyTarget;
+                            const hasNamed = t && t.name
+                                && !t.name.startsWith('Centre ')
+                                && Number.isFinite(t.ra) && Number.isFinite(t.dec);
+                            const closeEnough = hasNamed
+                                && Math.abs((t.ra * 15) - c.raDeg) < 1.0
+                                && Math.abs(t.dec - c.decDeg) < 1.0;
+                            if (closeEnough) {
+                                // Update coords (engine has the exact
+                                // value now) but keep the name.
+                                this.skyTarget = {
+                                    ...t,
+                                    ra: c.raDeg / 15,
+                                    dec: c.decDeg
+                                };
+                            } else {
+                                this.skyTarget = {
+                                    name: 'Centre ' + c.raDeg.toFixed(2) + '°,' + c.decDeg.toFixed(2) + '°',
+                                    ra: c.raDeg / 15,
+                                    dec: c.decDeg
+                                };
+                            }
                             // Re-push so the red target rectangle
                             // re-anchors at the new centre. Mount
                             // rectangle stays at mount.ra/dec.
@@ -13986,7 +14017,10 @@ function ninaApp() {
         },
 
         addToSequence() {
-            if (!this.skyTarget) return;
+            if (!this.skyTarget) {
+                this.toast('Pick a target on the map first', 'warn');
+                return;
+            }
             const item = {
                 name: this.skyTarget.name,
                 exposure: this.exposure,
@@ -14008,6 +14042,13 @@ function ninaApp() {
             this.sequence.push(item);
             this._loadCelestialThumb(item);
             this.syncSequenceToServer();
+            // Toast so the user gets confirmation without switching
+            // tabs to verify the add landed. Includes the new
+            // sequence total so they know how many items are queued.
+            const n = this.sequence.length;
+            this.toast(
+                `Added "${item.name}" to sequence (${n} item${n === 1 ? '' : 's'})`,
+                'ok');
         },
 
         // Resolve a sequence item's name to a Wikipedia / NASA
