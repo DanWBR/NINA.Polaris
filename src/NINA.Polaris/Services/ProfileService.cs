@@ -34,6 +34,11 @@ public class ProfileService {
 
     public UserProfile Active => _activeProfile;
 
+    /// <summary>Where small auxiliary state files (sessions snapshot,
+    /// etc.) can live next to the profile data. Exposed so other
+    /// services don't have to re-derive the path from IConfiguration.</summary>
+    public string DataDir => _profileDir;
+
     public ProfileService(IConfiguration config, ILogger<ProfileService> logger) {
         _logger = logger;
 

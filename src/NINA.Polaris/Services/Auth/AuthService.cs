@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Security.Cryptography;
+using System.Text.Json;
 
 namespace NINA.Polaris.Services.Auth;
 
@@ -34,6 +35,8 @@ public class AuthService : IDisposable {
     private readonly ConcurrentDictionary<string, SessionInfo> _sessions = new();
     private readonly ConcurrentDictionary<string, AttemptBucket> _attempts = new();
     private readonly Timer _sweeper;
+    private readonly string _sessionStorePath;
+    private readonly SemaphoreSlim _persistLock = new(1, 1);
 
     private const int Pbkdf2Iterations = 100_000;
     private const int SaltBytes = 16;
@@ -46,6 +49,14 @@ public class AuthService : IDisposable {
     public AuthService(ProfileService profile, ILogger<AuthService> logger) {
         _profile = profile;
         _logger = logger;
+        _sessionStorePath = Path.Combine(profile.DataDir, "auth-sessions.json");
+        // Restore sessions from disk so a `systemctl restart polaris`
+        // doesn't invalidate every logged-in browser. Without this,
+        // any redeploy boots every device out + the user has to
+        // re-type the password — and worse, in-flight <img>/<ws>
+        // requests fail silently with 401 because they can't
+        // intercept and prompt for re-login the way JSON fetches can.
+        LoadSessionsFromDisk();
         _sweeper = new Timer(_ => SweepExpired(), null,
             TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(10));
     }
@@ -109,6 +120,7 @@ public class AuthService : IDisposable {
         }
         _logger.LogInformation("Auth: password changed; {Count} other sessions invalidated",
             _sessions.Count - 1);
+        PersistSessions();
         return keepSessionToken;
     }
 
@@ -134,7 +146,7 @@ public class AuthService : IDisposable {
     /// <summary>Drop a single session. Idempotent.</summary>
     public void Logout(string token) {
         if (string.IsNullOrEmpty(token)) return;
-        _sessions.TryRemove(token, out _);
+        if (_sessions.TryRemove(token, out _)) PersistSessions();
     }
 
     /// <summary>Toggle auth on or off, requires current password.</summary>
@@ -173,7 +185,80 @@ public class AuthService : IDisposable {
             CreatedAt = DateTime.UtcNow,
             LastActivityAt = DateTime.UtcNow
         };
+        PersistSessions();
         return token;
+    }
+
+    // ----- session persistence ---------------------------------------
+    //
+    // Sessions used to be in-memory only, with the documented "I forgot
+    // the password" workaround being to restart the server. That had
+    // two real-world failure modes:
+    //
+    //   1. Any redeploy (apt upgrade, systemctl restart) silently
+    //      invalidated every logged-in browser. The user had to
+    //      re-type the password on every device, and any in-flight
+    //      <img> / <iframe> / WebSocket request returned 401 with no
+    //      automatic re-prompt (they can't intercept 401 like JSON
+    //      fetch handlers do).
+    //   2. The password-reset workaround stayed: deleting the file
+    //      below has the same effect as the old "restart server"
+    //      trick, just with a clearer mental model ("I'm wiping the
+    //      session store" vs "I'm restarting a daemon").
+    //
+    // Format is a tiny JSON: an array of { Token, CreatedAt,
+    // LastActivityAt }. File mode 0600 from the systemd unit's
+    // umask + chmod in postinst; nothing here forces it explicitly
+    // because the data dir already inherits the right permissions
+    // from ProfileService. Writes are best-effort: a disk error
+    // logs a warning but doesn't break login.
+
+    private void LoadSessionsFromDisk() {
+        try {
+            if (!File.Exists(_sessionStorePath)) return;
+            var json = File.ReadAllText(_sessionStorePath);
+            var entries = JsonSerializer.Deserialize<List<SessionInfo>>(json);
+            if (entries == null) return;
+            var cutoff = DateTime.UtcNow - SessionTtl;
+            foreach (var s in entries) {
+                if (string.IsNullOrEmpty(s.Token)) continue;
+                if (s.LastActivityAt < cutoff) continue;   // drop stale
+                _sessions[s.Token] = s;
+            }
+            _logger.LogInformation(
+                "Auth: restored {Count} session(s) from {Path}",
+                _sessions.Count, _sessionStorePath);
+        } catch (Exception ex) {
+            _logger.LogWarning(ex,
+                "Auth: failed to load session store at {Path}, " +
+                "starting fresh", _sessionStorePath);
+        }
+    }
+
+    private void PersistSessions() {
+        // Best-effort, fire-and-forget on a background thread so a
+        // slow SD card doesn't block the login response. The
+        // semaphore serialises writes so two concurrent logins can't
+        // tear the file.
+        _ = Task.Run(async () => {
+            await _persistLock.WaitAsync();
+            try {
+                var snapshot = _sessions.Values.ToList();
+                var json = JsonSerializer.Serialize(snapshot);
+                // Write-temp + rename so a kill mid-write doesn't
+                // leave half a file on disk (which would silently
+                // make every session look invalid on next boot).
+                var tmp = _sessionStorePath + ".tmp";
+                await File.WriteAllTextAsync(tmp, json);
+                File.Move(tmp, _sessionStorePath, overwrite: true);
+            } catch (Exception ex) {
+                _logger.LogWarning(ex,
+                    "Auth: failed to persist sessions to {Path}",
+                    _sessionStorePath);
+            } finally {
+                _persistLock.Release();
+            }
+        });
     }
 
     private static string NewToken() {
@@ -217,11 +302,19 @@ public class AuthService : IDisposable {
 
     private void SweepExpired() {
         var cutoff = DateTime.UtcNow - SessionTtl;
+        bool removedAny = false;
         foreach (var kv in _sessions.ToArray()) {
             if (kv.Value.LastActivityAt < cutoff) {
-                _sessions.TryRemove(kv.Key, out _);
+                if (_sessions.TryRemove(kv.Key, out _)) removedAny = true;
             }
         }
+        // Sweeper also takes the opportunity to flush LastActivityAt
+        // bumps that accumulated since the last persist. ValidateToken
+        // intentionally doesn't write per-request (would thrash the
+        // SD card), so a 10-min sweeper cadence is good enough for
+        // crash-survival of "user was active right before restart".
+        PersistSessions();
+        _ = removedAny;
         // Bucket cleanup, keep only the last hour's data.
         var attemptCutoff = DateTime.UtcNow - MaxLockout;
         foreach (var kv in _attempts.ToArray()) {
