@@ -414,13 +414,34 @@ Random pixel-offset between frames to defeat fixed-pattern noise:
 
 ### Sky Catalog & Sky Atlas
 
-Embedded deep sky catalog with 200+ objects:
+Bundled deep sky catalog with **~14,500 objects** indexed by SQLite
++ R*tree (`wwwroot/catalogs/dso/dso.db`, ~2.6 MB committed to the
+repo). Covers:
 
-- All 110 Messier objects + popular Caldwell + notable NGC/IC targets
-- Fuzzy search by designation, common name, or alias ("M31", "Andromeda", "NGC 224")
-- **Filtered browser**, type / magnitude range / declination range, sorted brightest first
-- **Altitude chart**, target altitude across tonight's window (sunset → sunrise) with civil / nautical / astronomical twilight transitions
-- Object metadata: coordinates (J2000), magnitude, type, common names
+- Complete NGC (~7570) + IC (~5000)
+- Complete Messier (107) + Caldwell (104 of 109 NGC/IC-backed
+  entries)
+- Arp Atlas of Peculiar Galaxies (592)
+- Sharpless 2 HII Regions (313)
+- Hickson Compact Groups (100)
+- Abell-Corwin-Olowin galaxy clusters (767, brightest 30% of the
+  Abell 1989 set)
+
+See [docs/user-guide/sky-explorer.md](docs/user-guide/sky-explorer.md)
+for the full per-catalog license + attribution table. Rebuild from
+the original sources with `python scripts/build-dso-catalog.py`
+(stdlib-only, no external Python deps).
+
+- Search by designation, common name, or cross-ref alias ("NGC 7331",
+  "Andromeda", "M31", "Arp 273", "Sh2-279", "HCG 92")
+- **Filtered browser** with catalog / type / constellation / magnitude
+  range / declination range, sorted brightest first
+- **Cone search** endpoint `GET /api/sky/catalog/near?ra=&dec=&radius=`
+  for "what's inside my FOV" + future mosaic auto-suggest
+- **Altitude chart**, target altitude across tonight's window
+  (sunset → sunrise) with civil / nautical / astronomical twilight
+- Object metadata: coordinates (J2000), magnitude, size in arcmin,
+  type, common names, constellation, source catalog
 
 ### Sky Map
 

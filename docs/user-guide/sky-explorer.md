@@ -22,11 +22,52 @@ the host UI tells it via postMessage (mount RA/Dec, search hit,
 > framebuffer), the SKY tab shows a graceful fallback banner,
 > open Polaris from a desktop/laptop/tablet browser instead.
 
+## Catalogs bundled
+
+Search + Atlas filter + Tonight's Best all draw from a SQLite +
+R*tree-indexed bundle at `wwwroot/catalogs/dso/dso.db` (~2.6 MB,
+~14.5k objects). Sources, with attribution:
+
+| Catalog        | Entries | Source                                                   | License        |
+|---             |---:     |---                                                       |---             |
+| **NGC**        | ~7570   | [OpenNGC](https://github.com/mattiaverga/OpenNGC)        | CC BY-SA 4.0   |
+| **IC**         | ~5000   | OpenNGC (same file)                                      | CC BY-SA 4.0   |
+| **M** (Messier)| 107     | OpenNGC cross-reference (M-tagged duplicates)            | CC BY-SA 4.0   |
+| **C** (Caldwell)| 104    | Embedded Caldwell↔NGC/IC mapping in the build script     | Public domain  |
+| **Arp**        | 592     | CDS Vizier `VII/192A/arplist` (Arp 1966)                 | Public domain  |
+| **Sh2**        | 313     | CDS Vizier `VII/20/catalog` (Sharpless 1959)             | Public domain  |
+| **HCG**        | 100     | CDS Vizier `VII/213/groups` (Hickson 1982/89)            | Public domain  |
+| **AGC**        | 767     | CDS Vizier `VII/110A/table3` (Abell-Corwin-Olowin 1989)  | Public domain  |
+
+The AGC entry is magnitude-trimmed at m10 < 17 to keep the brightest
+~30% of the 2712-cluster catalog — fainter clusters require deep
+imaging beyond typical amateur reach.
+
+To rebuild the bundle from the original sources, run:
+
+```
+python scripts/build-dso-catalog.py
+```
+
+Output overwrites `src/NINA.Polaris/wwwroot/catalogs/dso/dso.db`.
+The script needs only Python 3.8+ stdlib (`urllib` + `sqlite3`);
+no external dependencies. Cached downloads live in
+`scripts/.dso-cache/` for fast re-runs.
+
+When `dso.db` is missing (dev clone without the bundle), the SKY
+tab silently falls back to a small ~150-object hardcoded list
+(Messier complete + handful of popular NGC), so the app still works
+but search hits like "NGC 7331" / "Arp 273" / "Sh2-279" come up
+empty.
+
+Full attribution + per-source license notes ship at
+`wwwroot/catalogs/dso/LICENSE.txt`.
+
 ## Search
 
 Top of tab: text input + Search button. Resolves names against the
-built-in catalog (Messier, NGC, IC, common names). Matches show as
-result cards with:
+bundled catalog (NGC / IC / M / C / Arp / Sh2 / HCG / AGC, plus
+common names like "Andromeda"). Matches show as result cards with:
 
 - **Name** + alternate designations
 - **RA / Dec** (J2000)
@@ -40,12 +81,17 @@ Click a result → it overlays on the map, centred + highlighted.
 
 **Filters** button toggles a panel:
 
-- **Constellation** dropdown
-- **Object type** multi-select
-- **Magnitude range** slider
-- **Size range** slider
-- **Min altitude tonight**, only show targets above N° during the
-  upcoming dark window
+- **Catalog** dropdown — narrow to a single source (NGC / IC / M / C
+  / Arp / Sh2 / HCG / AGC). Hidden when the expanded DB isn't loaded.
+- **Object type** dropdown (Galaxy / Globular Cluster / HII Region /
+  Peculiar Galaxy / Planetary Nebula / Supernova Remnant / ...). The
+  list of types comes live from whatever's in the catalog.
+- **Constellation** 3-letter IAU abbrev free-text ("Cyg", "Ori",
+  "And", ...). Hidden when the expanded DB isn't loaded.
+- **Magnitude range** Min/Max inputs
+- **Dec range** Min/Max inputs in degrees (useful for filtering by
+  hemisphere — set MinDec=0 to keep only northern targets, MaxDec=0
+  for southern)
 
 ## Tonight's altitude chart
 
