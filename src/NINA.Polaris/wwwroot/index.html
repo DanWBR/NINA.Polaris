@@ -4871,6 +4871,20 @@
                                 <button class="btn btn-sm btn-icon-only" @click="removeSequenceItem(i)"
                                         :disabled="seqState === 'running'" title="Remove">&times;</button>
                             </div>
+                            <!-- Celestial thumbnail for Sky-added targets.
+                                 Resolved server-side via the NASA Image
+                                 Library / Wikipedia REST adapter that
+                                 already powers the Tonight tab. Hidden
+                                 for manual "+ Add" items and for any
+                                 catalog name the service couldn't
+                                 resolve, so the card still looks tight
+                                 in those cases. -->
+                            <img class="seq-card-thumb"
+                                 x-show="item.thumbUrl"
+                                 :src="item.thumbUrl"
+                                 :alt="item.name + ' thumbnail'"
+                                 loading="lazy"
+                                 @error="item.thumbUrl = null">
                             <div class="seq-item-body">
                                 <!-- Frame-type pill selector (Light / Bias / Flat / Dark) -->
                                 <div class="seq-type-pills">

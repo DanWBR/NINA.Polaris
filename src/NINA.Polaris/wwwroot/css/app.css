@@ -3859,6 +3859,14 @@ label select.input-sm {
     padding: 8px 12px 0;
 }
 .autorun-option-chip {
+    /* Defeat the OS-default <button> look (gray gradient on Win,
+       rounded blue on macOS, etc.) so the chips render the same
+       across hosts. Without these resets the chips painted as
+       white Windows-default buttons in early testing. */
+    appearance: none;
+    -webkit-appearance: none;
+    font-family: inherit;
+    line-height: 1.2;
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -4062,6 +4070,12 @@ label select.input-sm {
 }
 
 .sequence-item {
+    /* Relative so the celestial-thumbnail <img> (added for Sky-
+       picked targets) can position absolutely in the bottom-right
+       corner of the card without disturbing the existing flex
+       column layout. padding-right reserved for the thumb so its
+       overlap with the params row stays comfortable. */
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -4070,6 +4084,25 @@ label select.input-sm {
     border-radius: var(--radius);
     background: var(--bg-primary);
     transition: border-color var(--transition), background var(--transition);
+}
+.sequence-item:has(.seq-card-thumb:not([style*="display: none"])) {
+    /* When a thumb is present, reserve space on the right so the
+       BIN/filter row doesn't run into the picture. :has() is
+       widely supported in evergreen browsers; falls back to
+       overlap on older ones, still readable. */
+    padding-right: 80px;
+}
+.seq-card-thumb {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 64px;
+    height: 64px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-secondary);
+    pointer-events: none;     /* clicks fall through to the card */
 }
 
 .sequence-item.seq-active {

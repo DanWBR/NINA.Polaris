@@ -13796,10 +13796,39 @@ function ninaApp() {
                 count: 10,
                 filter: null,
                 ra: parseFloat(this.skyTarget.ra) || null,
-                dec: parseFloat(this.skyTarget.dec) || null
+                dec: parseFloat(this.skyTarget.dec) || null,
+                // Mark items added from Sky Explorer so the card UI
+                // knows it has a catalog name worth resolving against
+                // the celestial-image service (NASA / Wikipedia
+                // thumbnail). Manual "+ Add" items default to false
+                // and only attempt the lookup if the user later types
+                // a name that looks catalogish.
+                fromSky: true,
+                thumbUrl: null
             };
             this.sequence.push(item);
+            this._loadCelestialThumb(item);
             this.syncSequenceToServer();
+        },
+
+        // Resolve a sequence item's name to a Wikipedia / NASA
+        // thumbnail via the existing CelestialImageService that
+        // already powers the Tonight tab. Result cached on the item
+        // itself (item.thumbUrl) so Alpine re-renders pick it up
+        // and we never re-hit the API for the same item. Silent
+        // no-op when the catalog has no match — the card just
+        // renders without a thumb.
+        async _loadCelestialThumb(item) {
+            if (!item || !item.name) return;
+            try {
+                const r = await this.apiGet(
+                    '/api/sky/image?name=' + encodeURIComponent(item.name));
+                if (r && r.available && (r.thumbnailUrl || r.url)) {
+                    // Prefer the smaller thumbnail; fall back to the
+                    // full URL when the upstream only gave us one.
+                    item.thumbUrl = r.thumbnailUrl || r.url;
+                }
+            } catch { /* no match / offline — render without a thumb */ }
         },
 
         // --- Sequence ---
@@ -13868,7 +13897,20 @@ function ninaApp() {
         async loadSequenceFromServer() {
             try {
                 const data = await this.apiGet('/api/sequence');
-                if (data.items) this.sequence = data.items;
+                if (data.items) {
+                    this.sequence = data.items;
+                    // Rehydrate celestial thumbnails for catalog targets
+                    // — the server doesn't persist thumbUrl (it's a
+                    // pure UI cache), so on reload we re-resolve any
+                    // item that was originally added from Sky. Server
+                    // caches the API response on disk for 30 days so
+                    // this is a cheap re-fetch.
+                    for (const item of this.sequence) {
+                        if (item && item.fromSky && item.name && !item.thumbUrl) {
+                            this._loadCelestialThumb(item);
+                        }
+                    }
+                }
                 this.seqState = data.state || 'idle';
             } catch (e) { }
         },
