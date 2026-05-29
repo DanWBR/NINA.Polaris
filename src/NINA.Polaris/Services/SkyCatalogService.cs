@@ -1,14 +1,48 @@
 namespace NINA.Polaris.Services;
 
+/// <summary>
+/// Sky-catalog facade consumed by SKY tab search, Atlas filter,
+/// Tonight's Best ranking, Slew &amp; Center "Go to" cards, and the
+/// mosaic planner.
+///
+/// CAT-3: this used to be a self-contained ~150-object hardcoded
+/// list (Messier + bright Caldwell + popular NGC). It still embeds
+/// that list as a fallback, but when the bundled
+/// <see cref="NINA.Polaris.Services.Sky.DsoCatalog"/> SQLite DB
+/// exists at <c>wwwroot/catalogs/dso/dso.db</c> (CAT-1/CAT-2),
+/// every public query delegates to it instead, giving callers
+/// access to ~14.5k NGC/IC/M/C/Arp/Sh2/HCG/AGC entries without
+/// changing the API shape.
+/// </summary>
 public class SkyCatalogService {
     private readonly List<CatalogObject> _catalog;
+    private readonly NINA.Polaris.Services.Sky.DsoCatalog? _dso;
+    // Lazy cache for AllObjects when sourced from the DB. We cap
+    // magnitude at 12 so the in-memory footprint stays bounded on a
+    // Pi 2/3 (~5k rows * ~200 B = ~1 MB).
+    private List<CatalogObject>? _dsoAllCache;
+    private readonly object _allLock = new();
 
-    public SkyCatalogService() {
+    /// <summary>Parameterless ctor kept for tests / legacy callers
+    /// that don't go through DI. DsoCatalog stays null in that case,
+    /// every query falls back to the hardcoded list.</summary>
+    public SkyCatalogService() : this(null) { }
+
+    public SkyCatalogService(NINA.Polaris.Services.Sky.DsoCatalog? dso) {
+        _dso = dso;
         _catalog = BuildCatalog();
     }
 
+    private bool UseDso => _dso != null && _dso.IsAvailable;
+
     public List<CatalogObject> Search(string query, int maxResults = 20) {
         if (string.IsNullOrWhiteSpace(query)) return [];
+
+        if (UseDso) {
+            var hits = _dso!.SearchAsync(query, maxResults)
+                .GetAwaiter().GetResult();
+            return hits.Select(FromDso).ToList();
+        }
 
         var q = query.Trim();
 
@@ -33,6 +67,21 @@ public class SkyCatalogService {
     /// empty values are ignored. Results sorted by magnitude (brightest first).
     /// </summary>
     public List<CatalogObject> Filter(CatalogFilter filter, int maxResults = 50) {
+        if (UseDso) {
+            var hits = _dso!.FilterAsync(new NINA.Polaris.Services.Sky.DsoCatalog.DsoFilter(
+                Query:        filter.Query,
+                Type:         filter.Type,
+                Catalog:      filter.Catalog,
+                Constellation: filter.Constellation,
+                MinMagnitude: filter.MinMagnitude,
+                MaxMagnitude: filter.MaxMagnitude,
+                MinDec:       filter.MinDec,
+                MaxDec:       filter.MaxDec,
+                Limit:        maxResults
+            )).GetAwaiter().GetResult();
+            return hits.Select(FromDso).ToList();
+        }
+
         IEnumerable<CatalogObject> q = _catalog;
 
         if (!string.IsNullOrWhiteSpace(filter.Query)) {
@@ -59,10 +108,31 @@ public class SkyCatalogService {
     }
 
     /// <summary>Distinct object types present in the catalog (for filter dropdowns).</summary>
-    public List<string> GetObjectTypes() =>
-        _catalog.Select(o => o.Type).Distinct().OrderBy(t => t).ToList();
+    public List<string> GetObjectTypes() {
+        if (UseDso) {
+            return _dso!.GetTypesAsync().GetAwaiter().GetResult().ToList();
+        }
+        return _catalog.Select(o => o.Type).Distinct().OrderBy(t => t).ToList();
+    }
+
+    /// <summary>Distinct catalog sources present (NGC, IC, M, C, Arp, Sh2,
+    /// HCG, AGC). Returns empty when running on the legacy hardcoded
+    /// list (which only carries M / C / NGC).</summary>
+    public List<string> GetCatalogs() {
+        if (UseDso) {
+            return _dso!.GetCatalogsAsync().GetAwaiter().GetResult().ToList();
+        }
+        // Fallback: derive catalog from name prefix on hardcoded entries.
+        return _catalog.Select(o => InferCatalogFromName(o.Name))
+            .Where(c => !string.IsNullOrEmpty(c))
+            .Distinct().OrderBy(c => c).ToList()!;
+    }
 
     public CatalogObject? GetByName(string name) {
+        if (UseDso) {
+            var hit = _dso!.GetByNameAsync(name).GetAwaiter().GetResult();
+            return hit == null ? null : FromDso(hit);
+        }
         return _catalog.FirstOrDefault(o =>
             o.Name.Equals(name, StringComparison.OrdinalIgnoreCase) ||
             o.Aliases.Any(a => a.Equals(name, StringComparison.OrdinalIgnoreCase)));
@@ -70,9 +140,56 @@ public class SkyCatalogService {
 
     /// <summary>
     /// All catalog objects, used by services that need to walk the full
-    /// list (e.g. TonightsBestService ranking visible DSOs).
+    /// list (e.g. TonightsBestService ranking visible DSOs). When the
+    /// expanded DSO DB is available, this lazy-loads everything brighter
+    /// than mag 12 (~5k rows, ~1 MB) to keep iteration cheap on Pi 2/3
+    /// hosts. When falling back to the hardcoded list, returns the 150
+    /// entries directly.
     /// </summary>
-    public IReadOnlyList<CatalogObject> AllObjects => _catalog;
+    public IReadOnlyList<CatalogObject> AllObjects {
+        get {
+            if (!UseDso) return _catalog;
+            if (_dsoAllCache != null) return _dsoAllCache;
+            lock (_allLock) {
+                if (_dsoAllCache != null) return _dsoAllCache;
+                var loaded = _dso!.LoadAllAsync(magCap: 12.0)
+                    .GetAwaiter().GetResult();
+                _dsoAllCache = loaded.Select(FromDso).ToList();
+            }
+            return _dsoAllCache;
+        }
+    }
+
+    /// <summary>Convert a <see cref="NINA.Polaris.Services.Sky.DsoCatalog.DsoObject"/>
+    /// into the legacy <see cref="CatalogObject"/> shape consumed by
+    /// existing services + endpoints. NULL magnitudes get a sentinel
+    /// 99.0 so filters like "magnitude &lt;= 10" + Tonight's Best's
+    /// "Magnitude &gt; 10 → skip" gate naturally hide them.</summary>
+    private static CatalogObject FromDso(NINA.Polaris.Services.Sky.DsoCatalog.DsoObject d) {
+        return new CatalogObject {
+            Name          = d.Name,
+            Ra            = d.RaHours,
+            Dec           = d.DecDeg,
+            Magnitude     = d.Magnitude ?? 99.0,
+            Type          = d.Type,
+            CommonName    = d.CommonName,
+            Aliases       = d.Aliases,
+            Catalog       = d.Catalog,
+            CatalogId     = d.CatalogId,
+            Constellation = d.Constellation,
+            SizeArcmin    = d.SizeArcmin,
+        };
+    }
+
+    /// <summary>Crude fallback for the hardcoded path: read the catalog
+    /// prefix off the name string ("NGC 7000" → "NGC").</summary>
+    private static string? InferCatalogFromName(string name) {
+        if (string.IsNullOrEmpty(name)) return null;
+        if (name.StartsWith("M") && name.Length > 1 && char.IsDigit(name[1])) return "M";
+        if (name.StartsWith("C") && name.Length > 1 && char.IsDigit(name[1])) return "C";
+        var sp = name.IndexOf(' ');
+        return sp > 0 ? name[..sp] : null;
+    }
 
     private static bool Matches(CatalogObject obj, string normalized, string original) {
         var nameNorm = obj.Name.Replace(" ", "").ToUpperInvariant();
@@ -296,6 +413,13 @@ public class CatalogFilter {
     public double? MaxMagnitude { get; set; }
     public double? MinDec { get; set; }
     public double? MaxDec { get; set; }
+    /// <summary>CAT-3: catalog source filter ("NGC", "Arp", "Sh2", ...).
+    /// Only meaningful when the expanded DsoCatalog DB is loaded;
+    /// ignored by the legacy hardcoded fallback.</summary>
+    public string? Catalog { get; set; }
+    /// <summary>CAT-3: 3-letter IAU constellation abbreviation
+    /// ("And", "Ori", ...). Only meaningful with DsoCatalog.</summary>
+    public string? Constellation { get; set; }
 }
 
 public class CatalogObject {
@@ -306,6 +430,19 @@ public class CatalogObject {
     public string Type { get; set; } = "";
     public string? CommonName { get; set; }
     public string[] Aliases { get; set; } = [];
+    /// <summary>CAT-3: source catalog ("NGC", "M", "Arp", ...). Empty
+    /// when hand-built from the legacy hardcoded list. Useful for
+    /// grouping in the Atlas filter UI.</summary>
+    public string? Catalog { get; set; }
+    /// <summary>CAT-3: identifier inside the source catalog ("7331",
+    /// "31", "273"). Pairs with Catalog to reconstruct the full name.</summary>
+    public string? CatalogId { get; set; }
+    /// <summary>CAT-3: 3-letter IAU constellation abbreviation
+    /// (e.g. "Cyg" for Cygnus). Null on hardcoded entries.</summary>
+    public string? Constellation { get; set; }
+    /// <summary>CAT-3: major-axis angular diameter in arcmin. Null
+    /// when the source catalog didn't carry size info.</summary>
+    public double? SizeArcmin { get; set; }
 
     public string RaFormatted {
         get {
