@@ -5164,11 +5164,19 @@ label select.input-sm {
    top toolbar still has its own Reset for muscle memory. */
 .editor-controls-header {
     display: flex;
-    gap: 8px;
+    flex-wrap: wrap;        /* the row used to hold Auto + Reset only;
+                               with Crop + BGE + Denoise + Decon added
+                               in subsequent passes, the buttons must
+                               wrap to a second line on narrow columns
+                               instead of all 6 squeezing to 36 px each. */
+    gap: 6px;
     margin-bottom: 12px;
 }
 .editor-controls-header .btn {
-    flex: 1;
+    /* Content-sized; the row wraps when it runs out of room. The old
+       `flex: 1` made each button equal-width — fine for 2 buttons,
+       broke entirely past 4. */
+    flex: 0 0 auto;
 }
 .editor-section {
     margin-bottom: 8px;
