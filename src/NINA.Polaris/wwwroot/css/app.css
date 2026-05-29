@@ -651,6 +651,16 @@ body {
     border-radius: var(--radius);
     border-top: 1px solid var(--border);    /* override the default top-border-only style */
 }
+
+/* AUTORUN sidebar is shutter-only (no exposure / gain / filter
+   pickers like LIVE/PREVIEW have) — narrow it down to just fit
+   the 128 px shutter + the Pause button below + breathing room,
+   so the sequence card grid on the left gets the reclaimed
+   ~150 px of horizontal real estate. */
+.autorun-pane > .quick-controls {
+    flex: 0 0 168px;
+    align-items: center;
+}
 /* AUTORUN list column on the left is just a vertical stack with its
    own scroll (sequence list + dither/MF panels can grow tall). */
 .autorun-pane > .autorun-list-col,
