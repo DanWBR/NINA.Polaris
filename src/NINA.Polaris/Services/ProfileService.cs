@@ -236,6 +236,21 @@ public class ProfileService {
                 RecenterEveryMinutes = src.LiveStackTriggers.RecenterEveryMinutes,
                 RecenterDriftArcsec = src.LiveStackTriggers.RecenterDriftArcsec,
                 RecenterToleranceArcsec = src.LiveStackTriggers.RecenterToleranceArcsec
+            },
+            // FW-1: Flat Wizard per-rig defaults (TargetADU, tolerance,
+            // frame count, exposure bounds, binning, max iterations,
+            // panel brightness). Same rationale as LiveStackTriggers:
+            // different scope/aperture pairs converge to different
+            // exposures + flat-field workflows.
+            FlatWizard = new FlatWizardSettings {
+                TargetAdu = src.FlatWizard.TargetAdu,
+                Tolerance = src.FlatWizard.Tolerance,
+                FramesPerFilter = src.FlatWizard.FramesPerFilter,
+                MinExposureSec = src.FlatWizard.MinExposureSec,
+                MaxExposureSec = src.FlatWizard.MaxExposureSec,
+                Binning = src.FlatWizard.Binning,
+                MaxSearchIterations = src.FlatWizard.MaxSearchIterations,
+                PanelBrightness = src.FlatWizard.PanelBrightness
             }
         };
         _activeProfile.EquipmentProfiles.Add(copy);
@@ -610,6 +625,16 @@ public class EquipmentProfile {
     /// guiding precision vary by setup. Default = all triggers disabled.
     /// </summary>
     public LiveStackTriggers LiveStackTriggers { get; set; } = new();
+
+    /// <summary>
+    /// FW-1: Flat Wizard defaults (TargetADU, tolerance, frame count,
+    /// exposure bounds, binning, max iterations, panel brightness).
+    /// Persisted per-rig because aperture + f-ratio + filter set drive
+    /// very different flat-field setups (e.g. f/5 refractor vs f/10
+    /// SCT both want their own TargetADU + max-exposure ceiling so
+    /// the binary search doesn't waste iterations).
+    /// </summary>
+    public FlatWizardSettings FlatWizard { get; set; } = new();
 
     /// <summary>CLST-7: where live-stacking math runs.
     /// <list type="bullet">

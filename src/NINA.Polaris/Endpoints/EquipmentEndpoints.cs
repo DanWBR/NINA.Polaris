@@ -140,6 +140,11 @@ public static class EquipmentEndpoints {
                 // keeps old clients from clobbering the field.
                 if (update.LiveStackTriggers != null)
                     r.LiveStackTriggers = update.LiveStackTriggers;
+                // FW-1: Flat Wizard per-rig defaults. Same defensive
+                // null-check, so a pre-FW client PUT-ing a rig keeps
+                // the existing FlatWizard block untouched.
+                if (update.FlatWizard != null)
+                    r.FlatWizard = update.FlatWizard;
                 // CLST-7: live-stack compute target override. "auto"
                 // (default), "server", or "client". Empty/null from
                 // old clients leaves the existing setting alone.

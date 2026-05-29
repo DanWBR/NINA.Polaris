@@ -26,6 +26,7 @@ public static class StatusStreamHandler {
         var slewPreview = context.RequestServices.GetRequiredService<SlewPreviewService>();
         var liveStackTriggers = context.RequestServices.GetRequiredService<LiveStackTriggersService>();
         var refocusSuggest = context.RequestServices.GetRequiredService<RefocusSuggestionService>();
+        var flatWizard = context.RequestServices.GetRequiredService<FlatWizardService>();
         var liveStack = context.RequestServices.GetRequiredService<LiveStackingService>();
         var sequence = context.RequestServices.GetRequiredService<SequenceEngine>();
         var phd2 = context.RequestServices.GetRequiredService<PHD2Client>();
@@ -275,6 +276,33 @@ public static class StatusStreamHandler {
                             done = videoStacker.CurrentJob.Phase
                                 is NINA.Polaris.Services.Planetary.StackPhase.Ok
                                 or NINA.Polaris.Services.Planetary.StackPhase.Fail
+                        },
+                        // FW-1: Flat Wizard state (AUTORUN → Flat Wizard
+                        // sub-tab). Always emitted so the UI shutter +
+                        // progress section can render "idle" without
+                        // a separate poll. progress is null when the
+                        // wizard never ran; populated by the service
+                        // while running and after the last filter
+                        // completes (FilterResults accumulates).
+                        flatWizard = new {
+                            state = flatWizard.State.ToString().ToLowerInvariant(),
+                            lastError = flatWizard.LastError,
+                            progress = flatWizard.State == FlatWizardState.Idle
+                                       && flatWizard.Progress.TotalFilters == 0
+                                ? null
+                                : (object)new {
+                                    startedAt = flatWizard.Progress.StartedAt,
+                                    totalFilters = flatWizard.Progress.TotalFilters,
+                                    currentFilterIndex = flatWizard.Progress.CurrentFilterIndex,
+                                    currentFilter = flatWizard.Progress.CurrentFilter,
+                                    phase = flatWizard.Progress.Phase,
+                                    searchAttempt = flatWizard.Progress.SearchAttempt,
+                                    currentExposure = flatWizard.Progress.CurrentExposure,
+                                    lastMedian = flatWizard.Progress.LastMedian,
+                                    totalFramesPerFilter = flatWizard.Progress.TotalFramesPerFilter,
+                                    framesCaptured = flatWizard.Progress.FramesCaptured,
+                                    filterResults = flatWizard.Progress.FilterResults
+                                }
                         },
                         // Auto-slew-preview state (SKY tab inset card).
                         slewPreview = new {
