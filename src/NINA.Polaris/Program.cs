@@ -183,6 +183,11 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Studio.BatchStackingService>
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.ChannelCombineService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.ColorCalibrationService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Sky.ApassCatalog>();
+// CAT-2: bundled expanded DSO catalog (NGC/IC/M/C/Arp/Sh2/HCG/AGC,
+// ~14.5k objects in wwwroot/catalogs/dso/dso.db). SkyCatalogService
+// delegates to it when IsAvailable, falls back to the hardcoded
+// 150-object legacy list when missing.
+builder.Services.AddSingleton<NINA.Polaris.Services.Sky.DsoCatalog>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.FrameOperationsService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Editor.ImageEditService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Editor.EditSidecarStore>();
