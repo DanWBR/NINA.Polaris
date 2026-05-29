@@ -4129,6 +4129,28 @@
                     <!-- Right rail: collapsible sliders panels (Lightroom-mobile layout) -->
                     <div class="editor-controls-col">
 
+                        <!-- AUTOED-2: Auto / Reset pair, parked at the top of the
+                             sliders column so the two most-used decisions
+                             ("give me a starting point" / "wipe everything")
+                             sit right next to the controls they affect. The
+                             toolbar Reset further up still works for muscle
+                             memory; this one is the discoverable spot. -->
+                        <div class="editor-controls-header">
+                            <button class="btn btn-primary btn-sm"
+                                    @click="editorAuto()"
+                                    :disabled="editorState.autoBusy || !editorState.session"
+                                    title="Compute reasonable Light + Color values from the frame statistics">
+                                <span x-show="!editorState.autoBusy">✨ Auto</span>
+                                <span x-show="editorState.autoBusy">Computing…</span>
+                            </button>
+                            <button class="btn btn-sm"
+                                    @click="editorReset()"
+                                    :disabled="!editorState.session"
+                                    title="Reset all sliders to defaults (zero edits)">
+                                ↺ Reset
+                            </button>
+                        </div>
+
                         <!-- LUZ / LIGHT -->
                         <details class="editor-section" open>
                             <summary>Light</summary>

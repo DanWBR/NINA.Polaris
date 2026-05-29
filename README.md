@@ -692,6 +692,14 @@ buttons that route to the in-browser pipeline by default. The
 existing CLI path is still there (Settings toggle) for cases
 where a strong server CPU + weak client GPU flip the math.
 
+The same EDITOR tab has an **✨ Auto** button at the top of the
+sliders column that computes a Lightroom-style starting point
+(Exposure, Contrast, Highlights, Shadows, Whites, Blacks +
+Vibrance on RGB) from the histogram of the loaded master. **↺ Reset**
+sits next to it. Both are non-destructive and undoable. See
+[docs/user-guide/editor.md#auto-adjust](docs/user-guide/editor.md#auto-adjust)
+for the heuristic details.
+
 WebGPU on LAN requires HTTPS, which Polaris auto-configures via
 a self-signed cert on port 5000. See
 [docs/user-guide/onnx-inference.md](docs/user-guide/onnx-inference.md)

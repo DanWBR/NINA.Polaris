@@ -923,6 +923,7 @@ function ninaApp() {
             pathInput: '',         // text in the "open by path" field
             loading:  false,
             rendering: false,
+            autoBusy: false,       // AUTOED-2: true while /auto is in flight
             error:    '',
             edits:    {},          // EditParams shape
             dirty:    false,       // edits changed since last sidecar save
@@ -5618,6 +5619,40 @@ function ninaApp() {
             // Reset is itself an undoable step, push immediately
             // instead of waiting for the slider-idle timer.
             this._editorPushHistory();
+        },
+
+        // AUTOED-2: Compute reasonable Light + Color slider values from
+        // the session's working buffer histogram and apply them through
+        // the same setters the manual sliders use. The setters handle
+        // dirty marking + history snapshots + preview re-render, so Auto
+        // behaves exactly like a fast manual fiddle session: one undoable
+        // step (the debounced history push collapses the burst), Save
+        // still persists to sidecar, individual sliders can be refined.
+        async editorAuto() {
+            if (!this.editorState.session) return;
+            if (this.editorState.autoBusy) return;
+            this.editorState.autoBusy = true;
+            try {
+                const resp = await this.apiPost('/api/editor/auto',
+                    { sessionId: this.editorState.session });
+                if (!resp) return;
+                const r = await resp.json();
+                if (r.light) {
+                    for (const [k, v] of Object.entries(r.light)) {
+                        if (typeof v === 'number') this.editorSetLight(k, v);
+                    }
+                }
+                if (r.color) {
+                    for (const [k, v] of Object.entries(r.color)) {
+                        if (typeof v === 'number') this.editorSetColor(k, v);
+                    }
+                }
+                this.toast('Auto adjustments applied', 'success');
+            } catch (e) {
+                this.toast('Auto failed: ' + (e?.message || e), 'error');
+            } finally {
+                this.editorState.autoBusy = false;
+            }
         },
 
         // ─── GX-5: AI section runner ────────────────────────────────────

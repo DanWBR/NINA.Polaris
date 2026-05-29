@@ -163,6 +163,30 @@ public static class EditorEndpoints {
                 "X-Width, X-Height, X-Channels";
             return Results.File(data, "application/octet-stream");
         });
+
+        // ─── auto-tune (AUTOED) ───────────────────────────────────────
+        // Compute reasonable Light + Color slider values from the
+        // working buffer's histogram. Returns the suggestion as JSON;
+        // the client applies it through the existing setters so the
+        // history stack + sidecar-dirty flag fire normally and the
+        // user can refine each slider afterwards.
+        g.MapPost("/auto", (ImageEditService svc, AutoRequest req) => {
+            if (string.IsNullOrEmpty(req.SessionId)) {
+                return Results.BadRequest(new { error = "sessionId is required" });
+            }
+            var buf = svc.GetWorkingBuffer(req.SessionId);
+            if (buf == null) {
+                return Results.NotFound(new { error = "Session not found." });
+            }
+            var (data, w, h, channels) = buf.Value;
+            var suggestion = EditAutoTuner.Compute(data, w, h, channels);
+            // Shape mirrors EditParams JSON, sub-objects only present when
+            // they have meaningful values (Color = null on mono sources).
+            return Results.Ok(new {
+                light = suggestion.Light,
+                color = suggestion.Color
+            });
+        });
     }
 
     public record LoadRequest(string Path);
@@ -174,4 +198,5 @@ public static class EditorEndpoints {
                                     string? OutputPath);
     public record SidecarRequest(string Path, EditParams? Edits);
     public record ReleaseRequest(string SessionId);
+    public record AutoRequest(string SessionId);
 }

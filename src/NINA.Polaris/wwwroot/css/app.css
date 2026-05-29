@@ -5019,6 +5019,17 @@ label select.input-sm {
     background: var(--bg-secondary);
     border-left: 1px solid var(--border);
 }
+/* AUTOED-2: Auto + Reset pair sitting above the sliders. Keeps the
+   two starting-point buttons next to the controls they affect, the
+   top toolbar still has its own Reset for muscle memory. */
+.editor-controls-header {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.editor-controls-header .btn {
+    flex: 1;
+}
 .editor-section {
     margin-bottom: 8px;
     background: rgba(255, 255, 255, 0.02);

@@ -28,6 +28,36 @@ inside the browser, against the file on the Polaris host.
    The exported file lands in `{sourceDir}/edited/{stem}__edited_{stamp}.{ext}`
    and the FILES index rescans automatically.
 
+## Auto adjust
+
+The **✨ Auto** button at the top of the right-rail sliders computes a
+reasonable starting point for the Light and Color sections from the
+source frame's histogram. The sliders move to the computed values, the
+preview re-renders, and you can keep tweaking from there. **↺ Reset**
+sits next to Auto and zeros every slider in one click.
+
+What Auto touches:
+
+| Section | Sliders set | Logic |
+|---|---|---|
+| **Light** | Exposure / Contrast / Highlights / Shadows / Whites / Blacks | Reads p0.5, p5, median, p99.5 from the histogram. Exposure nudges the median toward Zone V (0.18), capped at &plusmn;1.5 stops because the source is already auto-stretched upstream. Highlights/Shadows/Whites/Blacks engage only when the histogram is actually clipped or has unused headroom. Contrast gets a gentle +0.10 bias unless the histogram already spans most of the range. |
+| **Color** (RGB only) | Vibrance | Gentle +0.25 bump. Vibrance protects already-saturated pixels (star cores stay coloured, they don't blow neon). Saturation stays at 0. |
+
+What Auto does **not** touch: White Balance (use the PCC or BG
+Neutralization tools in STUDIO for scientifically grounded WB), Tone
+Curve, Effects, Detail. Those stay where they were, so you can stack
+Auto on top of an existing edit without losing previous work.
+
+Behaviour:
+
+- Each computed value is applied via the same setter the slider uses,
+  so Auto becomes one undoable step (press the toolbar **Undo** to
+  revert) and the sidecar-dirty flag fires normally.
+- After Auto you can refine any slider manually; the new value
+  overrides what Auto picked.
+- The endpoint reads the cached working buffer; there's no extra
+  decoding cost. Roundtrip is typically under 50 ms even on a Pi.
+
 ## Sections
 
 ### Light
