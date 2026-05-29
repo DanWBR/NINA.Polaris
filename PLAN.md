@@ -15,7 +15,397 @@
   verbatim, only the prose around them was translated.
 -->
 
-# Current plan: Pi 5 first-class deployment + .deb packaging + tag-driven release pipeline (DEB-* / PI5-* / PHD2GUI-*)
+# Current plan: Expanded sky-view catalogs (CAT-1..5)
+
+> Previous plan (Pi 5 first-class deployment + .deb packaging) is
+> preserved below starting at `# Previous plan: Pi 5 first-class
+> deployment + .deb packaging + tag-driven release pipeline (DEB-* /
+> PI5-* / PHD2GUI-*)`. That stack is in production, and many other
+> feature plans landed between it and this one (PA, SWE, ED, NET,
+> GX, CC, CCALB, INDI-WEB, WIFI, MFOC, AUTH, HELP, CLOCK, REFSUG,
+> SHUT, FW) — see the project's git log for the chronological
+> commit trail; their full plan text lives only in the Portuguese
+> working notes (`~/.claude/plans/...`). The plan below is the most
+> recent one to be translated for PLAN.md.
+
+## Context
+
+The `SkyCatalogService` historically hardcoded ~150 objects in C#
+(`AddMessier()` + `AddCaldwell()`: 110 Messier + ~30 Caldwell +
+~20 popular NGC). Limitations:
+
+- **Search failed for anything outside that top-150**, typing
+  "NGC 7331", "Arp 273", or "Sh2-279" returned empty. Users had to
+  open Stellarium externally, copy coords, and paste them into the
+  Sky tab.
+- **Filter panel** only listed types that appeared in those 150
+  entries (Globular Cluster, Open Cluster, Emission Nebula etc),
+  missing things like HII Region (Sh2), Peculiar Galaxy (Arp),
+  Galaxy Group (HCG), Galaxy Cluster (Abell).
+- **Tonight's Best** iterated only those 150, missing bright
+  NGC/IC targets outside the Messier catalog.
+- **Slew & Center via "Go to" cards on Tonight + RA/Dec search in
+  the Sky tab** depended on the same source, so NGC targets fell
+  outside its reach.
+
+The stellarium-web-engine already labels NGC/IC/Messier on the
+**map itself** (via HiPS tiles bundled under
+`wwwroot/sky/data/skydata/dso/`), so when the user zooms in they
+see the labels. But search / filter / Tonight runs against the
+C# `SkyCatalogService` — that's the bottleneck this plan addresses.
+
+Decisions (locked in via AskUserQuestion):
+
+- **Storage**: SQLite + R*tree (the same pattern as
+  `Services/Sky/ApassCatalog.cs`). Unlocks spatial queries
+  (objects inside a FOV, nearest neighbour to a given RA/Dec)
+  that pave the way for a future Mosaic-planner auto-suggest and
+  plate-solve overlays.
+- **v1 scope**: Caldwell + complete Messier + complete NGC/IC +
+  ARP + Sharpless 2 + Abell PN + Hickson Compact Groups + Abell
+  galaxy clusters. ~17k objects targeted, ~14.5k actually shipped
+  (V/84 PN catalog deferred — Vizier only exposes B1950
+  sexagesimal columns for it, would require a separate parse path).
+- **Distribution**: bundled in the repo (under
+  `wwwroot/catalogs/dso/`). The catalog is small enough (~2.6 MB)
+  not to need a script-download step like APASS. Works offline at
+  first boot, zero setup.
+- **No map overlay**: the stellarium engine already covers the
+  popular catalogs via HiPS. The extra layer powers search /
+  filter / Tonight / slew only. Visible markers stay as a
+  follow-up (CAT-6) if there's demand.
+
+## Architecture
+
+### Data source (build-time)
+
+A `scripts/build-dso-catalog.py` orchestrator builds the SQLite DB
+once on the release machine (not at runtime, the `.db` file is
+committed). It downloads from:
+
+1. **OpenNGC** master CSV at
+   `https://github.com/mattiaverga/OpenNGC/raw/master/database_files/NGC.csv`
+   (CC-BY-SA 4.0). Covers 13,226 NGC/IC objects with name, RA, Dec,
+   type, V-mag, size (major/minor axis), constellation, and
+   built-in Messier cross-references.
+2. **Sharpless 2** via Vizier `VII/20/catalog` (313 HII regions,
+   public domain via CDS).
+3. **ARP peculiar galaxies** via Vizier `VII/192A/arplist` (~338
+   Arp numbers, ~592 individual component rows).
+4. **Hickson Compact Groups** via Vizier `VII/213/groups` (100
+   groups).
+5. **Abell-Corwin-Olowin galaxy clusters** via Vizier
+   `VII/110A/table3`, magnitude-trimmed to m10 < 17 to keep the
+   ~767 brightest of 2,712.
+
+All Vizier downloads go through the `asu-tsv` REST endpoint with
+`-out=_RAJ2000` + `-out=_DEJ2000` so we always get decimal-degree
+coordinates regardless of the catalog's native epoch (B1900 /
+B1950 / etc) — no precession code on our side.
+
+The script also synthesizes Caldwell rows: an embedded mapping
+table (109 entries) joins each Caldwell number to its underlying
+NGC/IC entry, emitting a separate "C"-cataloged row pointing at
+the same coordinates so a search for `C14` matches directly
+without needing OpenNGC to carry the cross-ref column.
+
+### SQLite schema
+
+```sql
+CREATE TABLE objects (
+    id           INTEGER PRIMARY KEY,
+    catalog      TEXT NOT NULL,    -- 'NGC' | 'IC' | 'M' | 'C' | 'Arp' | 'Sh2' | 'HCG' | 'AGC'
+    catalog_id   TEXT NOT NULL,
+    name         TEXT NOT NULL,
+    common_name  TEXT,
+    type         TEXT NOT NULL,
+    ra_hours     REAL NOT NULL,
+    dec_deg      REAL NOT NULL,
+    magnitude    REAL,
+    size_arcmin  REAL,
+    constellation TEXT,
+    aliases      TEXT
+);
+CREATE VIRTUAL TABLE objects_idx USING rtree(
+    id, min_ra, max_ra, min_dec, max_dec
+);
+CREATE INDEX idx_objects_name      ON objects(name COLLATE NOCASE);
+CREATE INDEX idx_objects_catalog   ON objects(catalog, catalog_id);
+CREATE INDEX idx_objects_type      ON objects(type);
+CREATE INDEX idx_objects_magnitude ON objects(magnitude);
+```
+
+### New service: `Services/Sky/DsoCatalog.cs`
+
+Singleton. Mirrors `Services/Sky/ApassCatalog.cs` exactly: same
+read-only connection per query, lazy `ObjectCount` cache, R*tree
+bounding-box pre-filter + great-circle distance check for cone
+searches.
+
+Public API:
+
+- `IsAvailable` / `ObjectCount` / `DbPath` — status + sanity check.
+- `GetByNameAsync(name)` — exact-name (case-insensitive) or alias
+  substring lookup.
+- `SearchAsync(query, limit)` — prefix-match on name, LIKE on
+  `common_name` + `aliases`, ranked by exact-match-first then
+  magnitude-ascending.
+- `FilterAsync(DsoFilter)` — combines type / catalog / constellation
+  / magnitude range / dec range / limit, magnitude-ascending ranked.
+- `QueryRegionAsync(raHours, decDeg, radiusDeg, magLimit, limit)`
+  — cone search with RA-wrap handling (splits at 0h/24h).
+- `GetCatalogsAsync()` / `GetTypesAsync()` — distinct-list helpers
+  for the Atlas filter dropdowns.
+- `LoadAllAsync(magCap = 12.0)` — streams every row brighter than
+  the cap for `SkyCatalogService`'s lazy `AllObjects` cache.
+
+### `SkyCatalogService` becomes a facade
+
+Same public shape (`Search`, `Filter`, `GetByName`,
+`GetObjectTypes`, `AllObjects`) so every existing caller
+(`TonightsBestService`, `SkyEndpoints`, frontend search /
+atlas wiring) keeps working. New ctor injects the `DsoCatalog`
+singleton; parameterless ctor is preserved for tests / legacy
+callers (DsoCatalog stays null in that case, every query falls
+through to the existing hardcoded path unchanged).
+
+When `_dso?.IsAvailable == true`:
+
+- `Search / Filter / GetByName / GetObjectTypes` delegate to
+  `DsoCatalog` and convert `DsoObject` → `CatalogObject` via
+  `FromDso()`. `DsoObject.Magnitude` is nullable; the converter
+  maps null → 99.0 sentinel so the existing `if (mag > 10) skip`
+  gates in `TonightsBestService` and the Atlas filter hide them
+  naturally.
+- `AllObjects` lazy-loads at first access via
+  `DsoCatalog.LoadAllAsync(magCap: 12.0)`, so the Pi 2/3 in-memory
+  footprint stays ~1 MB (~5k rows) even though the DB holds 14.5k
+  rows. Subsequent accesses hit the cached list. Thread-safe via
+  a `_allLock` lock.
+- A new `GetCatalogs()` helper feeds the Atlas filter's catalog
+  dropdown.
+
+`CatalogObject` gains 4 optional fields: `Catalog`, `CatalogId`,
+`Constellation`, `SizeArcmin`. Defaults are safe (null), so JSON
+round-trips for old clients don't break.
+
+`CatalogFilter` gains `Catalog` + `Constellation` params. Both
+no-op in the legacy fallback path.
+
+### New endpoints (`Endpoints/SkyEndpoints.cs`)
+
+- `GET /api/sky/catalog/catalogs` — list of distinct catalog
+  sources (`['NGC','IC','M','C','Arp','Sh2','HCG','AGC']`). Feeds
+  the Atlas filter's catalog dropdown.
+- `GET /api/sky/catalog/filter` extended with `?catalogId=` +
+  `?constellation=` (back-compat: old clients omit them).
+- `GET /api/sky/catalog/near?ra=&dec=&radius=&maxMag=&limit=` —
+  cone search. Returns 503 with a clear "run
+  build-dso-catalog.py" message when the expanded DB is missing.
+
+### Frontend (minimal)
+
+The Atlas filter panel gains two new chips, visible only when
+`atlasCatalogs.length > 0` (i.e. the expanded DB is loaded):
+
+1. **Catalog** dropdown — "Any" + every source in the DB.
+2. **Constellation** 3-letter IAU free-text input ("Cyg", "Ori",
+   ...). Free text because the constellation set is fixed + tiny
+   — quicker to type than scroll.
+
+Both stay hidden on old installs so the UI doesn't show
+broken-looking empty dropdowns. `atlasSearch()` forwards the new
+params; `loadAtlasTypes()` also pulls the catalogs list at boot;
+`resetAtlasFilters()` clears the new fields.
+
+Search box behaviour unchanged — already pulls from
+`SkyCatalogService.Search`, so the new ~14.5k entries are reachable
+without any frontend changes.
+
+## Phases (5 commits, all shipped)
+
+### CAT-1 (`f49f059`): build script + bundled `dso.db` + LICENSE
+
+- `scripts/build-dso-catalog.py` (~430 lines) — orchestrates
+  downloads + ETL + writes `wwwroot/catalogs/dso/dso.db`.
+  Dependencies: Python 3.8+ stdlib only (`urllib` + `sqlite3` +
+  `csv`). Idempotent, caches downloads under `scripts/.dso-cache/`
+  for fast re-runs.
+- `wwwroot/catalogs/dso/LICENSE.txt` — attribution for OpenNGC
+  (CC BY-SA 4.0) + per-catalog CDS Vizier license notes +
+  Vizier acknowledgment boilerplate.
+- The Web SDK's default `wwwroot/**` Content include picks the new
+  tree up on `dotnet publish` automatically — no csproj change
+  needed (same as `apass/*` + `sky/data/` already do).
+- Committed `dso.db` (~2.6 MB, 14,555 rows). Per-catalog counts:
+  NGC 7572, IC 5000, M 107, C 104, Arp 592, Sh2 313, HCG 100,
+  AGC 767.
+
+### CAT-2 (`7bf5b48`): `DsoCatalog` service + tests
+
+- `src/NINA.Polaris/Services/Sky/DsoCatalog.cs` (~330 lines).
+- Registered as singleton in `Program.cs`.
+- `tests/NINA.Polaris.Test/DsoCatalogTests.cs` (11 cases):
+  IsAvailable + count > 10k sanity; `GetByName` known objects
+  (NGC 7331 / IC 5146 / M31 / C14 / Arp 273 / Sh2 279 / HCG 92)
+  all resolve with valid RA/Dec/type; miss returns null;
+  `SearchAsync` prefix match + brightest-first rank;
+  `FilterAsync` by catalog and by type+mag; `GetCatalogs` returns
+  all 8 sources; `GetTypes` includes Galaxy + Nebula;
+  `QueryRegion` near NGC 7331 finds HCG 92 (~30 arcmin away);
+  `LoadAll` mag cap filters dim rows. When the DB is missing,
+  `SetUp` ignores all assertions with a clear pointer to
+  `python scripts/build-dso-catalog.py`.
+
+### CAT-3 (`7c0c54b`): `SkyCatalogService` as facade
+
+- Refactored to inject `DsoCatalog?` and delegate when available.
+- `CatalogObject` gains `Catalog` / `CatalogId` /
+  `Constellation` / `SizeArcmin` optional fields.
+- `CatalogFilter` gains `Catalog` / `Constellation`.
+
+### CAT-4 (`43e9efa`): endpoints + Atlas UI chips
+
+- `SkyEndpoints.cs` gains `/catalog/catalogs` + `/catalog/near`;
+  `/catalog/filter` extended with `catalogId=` + `constellation=`.
+- `index.html` Atlas filter panel gains catalog dropdown +
+  constellation text input.
+- `app.js`: state `atlasCatalogs`, methods `loadAtlasTypes`
+  (extended to also pull catalogs), `atlasSearch` (forwards new
+  params), `resetAtlasFilters` (clears new fields).
+
+### CAT-5 (`005da5c`): docs + verify + README
+
+- `docs/user-guide/sky-explorer.md` gains "Catalogs bundled"
+  section with full per-source table + license + rebuild
+  pointer + fallback note.
+- README "Sky Catalog & Sky Atlas" bullet expands from "200+
+  objects" to "~14,500" with the per-source breakdown.
+
+## Files created
+
+- `scripts/build-dso-catalog.py`
+- `src/NINA.Polaris/Services/Sky/DsoCatalog.cs`
+- `src/NINA.Polaris/wwwroot/catalogs/dso/dso.db` (~2.6 MB,
+  committed)
+- `src/NINA.Polaris/wwwroot/catalogs/dso/LICENSE.txt`
+- `tests/NINA.Polaris.Test/DsoCatalogTests.cs`
+
+## Files modified
+
+- `src/NINA.Polaris/Services/SkyCatalogService.cs` — facade
+  delegating to DsoCatalog, public shape preserved.
+- `src/NINA.Polaris/Endpoints/SkyEndpoints.cs` —
+  `/catalogs`, `/near`, `/filter` extended.
+- `src/NINA.Polaris/Program.cs` — register `DsoCatalog`
+  singleton.
+- `src/NINA.Polaris/wwwroot/index.html` — Atlas filter panel
+  (catalog dropdown + constellation input).
+- `src/NINA.Polaris/wwwroot/js/app.js` — `atlasCatalog` /
+  `atlasConstellation` state + extended methods.
+- `docs/user-guide/sky-explorer.md` — Catalogs bundled section,
+  Filters section updated.
+- `README.md` — Sky Catalog & Sky Atlas bullet expanded.
+
+## Reused code
+
+- **`Services/Sky/ApassCatalog.cs`** — template literal for the
+  SQLite + R*tree pattern, lazy-connection-per-query, Haversine
+  cone search. Copied shape into DsoCatalog.
+- **`scripts/download-apass.py`** — template for the orchestrator
+  shell (stdlib-only Python, cache directory pattern,
+  argparse + Path).
+- **`Services/SkyCatalogService.CatalogObject` record** — only
+  gained 4 optional fields, existing callers don't break because
+  the new properties have safe defaults.
+- **`Endpoints/SkyEndpoints.cs:/api/sky/catalog/filter`** —
+  endpoint kept, extended with 2 new optional query params.
+- **stellarium-web-engine HiPS DSO tiles** — not touched. Still
+  labels NGC/IC/M on the map. The DsoCatalog layer powers
+  search / filter / Tonight only.
+- **`TonightsBestService`** — iterates `catalog.AllObjects`
+  unchanged. Picks up the new ~5000 mag≤12 objects automatically.
+- **Frontend `atlasSearch()`** — only added the 2 new params to
+  the querystring when set. Result rendering unchanged (already
+  shows name / type / magnitude / commonName).
+
+## End-to-end verification
+
+### Build + tests
+
+- `python scripts/build-dso-catalog.py` on the release machine
+  produces `dso.db` ~2.6 MB with 14,555 entries
+  (`SELECT COUNT(*) FROM objects`).
+- `dotnet build src/NINA.Polaris/NINA.Polaris.csproj` — clean.
+- `dotnet test tests/NINA.Polaris.Test --filter "FullyQualifiedName~DsoCatalog"`
+  — 11 new cases pass.
+
+### Smoke API
+
+- `curl https://localhost:5000/api/sky/catalog/search?query=NGC+7331`
+  returns RA/Dec/mag/type/aliases for NGC 7331 (mag 9.4).
+- Same for `Arp+273`, `Sh2-279`, `HCG+92`, `IC+5146`, `M31`, `C14`.
+- `curl https://localhost:5000/api/sky/catalog/catalogs` returns
+  `['AGC','Arp','C','HCG','IC','M','NGC','Sh2']`.
+- `curl 'https://localhost:5000/api/sky/catalog/filter?catalogId=Arp&limit=1000'`
+  returns 592 entries.
+- `curl 'https://localhost:5000/api/sky/catalog/near?ra=22.617&dec=34.4&radius=2&maxMag=14'`
+  returns both NGC 7331 and HCG 92 (Stephan's Quintet ~30' away).
+
+### Smoke UI
+
+- SKY tab → Atlas dropdown gains Catalog entry
+  (NGC/IC/M/C/Arp/Sh2/HCG/AGC).
+- Filter by `catalog=Sh2` → lists Sharpless 2 nebulae.
+- Search "NGC 7000" → result, click → Slew & Center works.
+- Tonight tab gains many more cards (not Messier-only).
+- With `dso.db` deleted manually → service falls back to hardcoded
+  150-object list, app still usable.
+
+## License + size notes
+
+- **OpenNGC**: CC BY-SA 4.0, share-alike. Polaris is MPL 2.0
+  (code); data in a separate license is fine to bundle as long
+  as (1) attribution preserved (`LICENSE.txt` adjacent), (2) any
+  modifications to the original data remain CC BY-SA. Our script
+  only normalises the schema, doesn't alter values → still
+  CC BY-SA original.
+- **Vizier sources**: CDS Strasbourg redistributes public-domain
+  catalogs (Sharpless, ARP, Hickson, Abell ACO). Attribution
+  recommended ("This research has made use of the VizieR catalogue
+  access tool, CDS, Strasbourg, France"), shipped in
+  `LICENSE.txt`.
+- **Bundle size**: 2.6 MB. `.csproj` already includes
+  `wwwroot/**` in publish output, so `.deb` + Docker image grow
+  by ~3 MB. Negligible vs APASS (80 MB optional) or skydata
+  HiPS (~300 MB).
+- **Performance**: SQLite + R*tree responds to queries in &lt; 10 ms
+  even on Pi 2/3 (proven with APASS at 5M rows). Boot adds ~50 ms
+  to open + sanity-check.
+
+## Out of scope (deferred)
+
+- **Map markers / overlay** for niche catalogs (ARP / Sh2 / HCG)
+  on the stellarium engine. The engine already has NGC/IC/M
+  natively via HiPS; ARP + Sh2 markers would need to push geojson
+  + a toggle UI. Follow-up CAT-6.
+- **PN-G / Strasbourg-ESO PN catalog (V/84)** — attempted but
+  Vizier only exposes B1950 sexagesimal columns for it; would
+  need a sexagesimal-string parse path in
+  `ingest_vizier_tsv`. OpenNGC already covers the PNe with
+  NGC/IC designations.
+- **Automatic refresh** script that updates the `.db` by
+  re-downloading OpenNGC / Vizier. For now manual re-run at
+  release.
+- **Multi-language** common names (some catalogs have German /
+  Latin names). v1 English only.
+- **User-added objects** (comet positions, ad-hoc targets).
+  Separate `comets.json` already covers comets; ad-hoc stays a
+  distinct feature.
+
+---
+
+# Previous plan: Pi 5 first-class deployment + .deb packaging + tag-driven release pipeline (DEB-* / PI5-* / PHD2GUI-*)
 
 > Previous plan (CLST, client-side live stacking via WASM) preserved
 > below starting at `# Previous plan: Client-side live stacking via WASM (CLST)`.
