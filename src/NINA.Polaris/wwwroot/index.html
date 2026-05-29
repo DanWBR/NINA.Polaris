@@ -1547,6 +1547,11 @@
                                    : (selectedCamera || 'No camera'))"></span>
                 </div>
 
+                <!-- Two-column pane (mirrors .live-pane / .video-pane):
+                     canvas left grows into all available width + height,
+                     control sidebar 320px on the right. Mobile (≤900px)
+                     collapses back to a single-column stack. -->
+                <div class="preview-pane">
                 <div class="preview-area">
                     <!-- Dedicated canvas pair (separate ids from LIVE so
                          both tabs can coexist in the DOM and the
@@ -1656,6 +1661,7 @@
                                 title="Full-resolution zoom/pan viewer">⛶ View</button>
                     </div>
                 </div>
+                </div><!-- /.preview-pane -->
 
                 <div class="stats-bar" x-show="preview.lastStats">
                     <span>Stars: <strong x-text="preview.lastStats?.starCount ?? '--'"></strong></span>

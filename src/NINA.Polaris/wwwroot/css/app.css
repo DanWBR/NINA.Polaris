@@ -590,20 +590,22 @@ html, body {
     overflow: hidden;
 }
 
-/* LIVE tab two-column layout. Same pattern as .video-pane (VIDEO
-   Capture tab): preview canvas on the left grows into all available
-   width + height; the existing control row (Exp/Gain/Bin/Filter +
-   action buttons + Stack/Compute + REFSUG callout + Auto re-focus
-   triggers) drops into a fixed-width vertical sidebar on the right.
-   The horizontal bar that used to live below the canvas added ~80 px
-   of vertical chrome to every viewport; moving it to the side
-   reclaims that for the bitmap. Mobile breakpoint (≤900px) collapses
-   back to the legacy single-column stack. */
-.tab-panel-live {
+/* LIVE + PREVIEW two-column layout. Same pattern as .video-pane
+   (VIDEO Capture tab): preview canvas on the left grows into all
+   available width + height; the existing control row (Exp/Gain/Bin/
+   Filter + action buttons + LIVE: Stack/Compute + REFSUG callout +
+   Auto re-focus triggers) drops into a fixed-width vertical sidebar
+   on the right. The horizontal bar that used to live below the
+   canvas added ~80 px of vertical chrome to every viewport; moving
+   it to the side reclaims that for the bitmap. Mobile breakpoint
+   (≤900px) collapses back to the legacy single-column stack. */
+.tab-panel-live,
+.preview-tab-panel {
     min-height: 0;
     overflow: hidden;
 }
-.live-pane {
+.live-pane,
+.preview-pane {
     display: flex;
     flex-direction: row;
     gap: 12px;
@@ -612,13 +614,15 @@ html, body {
     overflow: hidden;
     padding: 8px 8px 0;
 }
-.live-pane > .preview-area {
+.live-pane > .preview-area,
+.preview-pane > .preview-area {
     flex: 1;
     min-width: 0;
     min-height: 200px;
     border-radius: var(--radius);
 }
-.live-pane > .quick-controls {
+.live-pane > .quick-controls,
+.preview-pane > .quick-controls {
     flex: 0 0 320px;
     display: flex;
     flex-direction: column;
@@ -630,7 +634,8 @@ html, body {
     border-radius: var(--radius);
     border-top: 1px solid var(--border);    /* override the default top-border-only style */
 }
-.live-pane > .quick-controls .control-row {
+.live-pane > .quick-controls .control-row,
+.preview-pane > .quick-controls .control-row {
     display: flex;
     flex-direction: row;
     flex-wrap: wrap;
@@ -638,11 +643,13 @@ html, body {
     gap: 6px 8px;
     min-width: 0;
 }
-.live-pane > .quick-controls .control-row > label {
+.live-pane > .quick-controls .control-row > label,
+.preview-pane > .quick-controls .control-row > label {
     min-width: 0;
     max-width: 100%;
 }
-.live-pane > .quick-controls .control-row.actions {
+.live-pane > .quick-controls .control-row.actions,
+.preview-pane > .quick-controls .control-row.actions {
     margin-top: 4px;
 }
 /* Inside the sidebar, the trigger details panel + refocus callout
@@ -653,7 +660,10 @@ html, body {
 }
 .live-pane > .quick-controls .text-muted,
 .live-pane > .quick-controls .text-warn,
-.live-pane > .quick-controls .text-err {
+.live-pane > .quick-controls .text-err,
+.preview-pane > .quick-controls .text-muted,
+.preview-pane > .quick-controls .text-warn,
+.preview-pane > .quick-controls .text-err {
     white-space: normal;
 }
 
@@ -661,16 +671,19 @@ html, body {
    sidebar each get full viewport width. The sidebar becomes a docked
    block below the canvas. Threshold matches .video-pane (≤900px). */
 @media (max-width: 900px) {
-    .live-pane {
+    .live-pane,
+    .preview-pane {
         flex-direction: column;
         padding: 0;
         gap: 8px;
     }
-    .live-pane > .quick-controls {
+    .live-pane > .quick-controls,
+    .preview-pane > .quick-controls {
         flex: 0 0 auto;
         max-height: none;
     }
-    .live-pane > .preview-area {
+    .live-pane > .preview-area,
+    .preview-pane > .preview-area {
         border-radius: 0;
     }
 }
