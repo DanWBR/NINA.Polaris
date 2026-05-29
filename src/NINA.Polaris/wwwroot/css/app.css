@@ -7582,6 +7582,81 @@ label select.input-sm {
 }
 
 /* ===== FW-2: Flat Wizard sub-tab (AUTORUN → Flat Wizard) ===== */
+
+/* Sections inside the Flat Wizard pane reuse the .settings-section
+   visual chrome (card background + border) but override the SETTINGS-
+   tab specific quirks that hurt here:
+   - Drop the 400 px fixed height (those cards live in a CSS grid
+     where uniform height matters; our sections stack vertically
+     inside .autorun-list-col and should grow with content).
+   - Loosen the inner padding so h4 + form sit comfortably without
+     the sticky h3 chrome.
+   - Bump the baseline font to 13 px so number inputs + labels are
+     readable on phones / tablets. */
+.flatwiz-pane .settings-section {
+    height: auto;
+    overflow: visible;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    font-size: 13px;
+}
+.flatwiz-pane .settings-section > h4 {
+    margin: 0 0 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Dark + roomy form controls. Browser defaults render white bg + dark
+   text which clashes with the rest of the dark theme; explicitly style
+   number / text / select to use the input variables. Min-height + 9 px
+   vertical padding gives a ~38 px touch target so the inputs are
+   comfortable to tap on phones + tablets (Apple HIG recommends >= 44 px,
+   Material >= 48 px; 38 px is the floor before things feel cramped). */
+.flatwiz-pane input[type="number"],
+.flatwiz-pane input[type="text"],
+.flatwiz-pane select {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-size: 14px;
+    padding: 9px 10px;
+    min-height: 38px;
+    outline: none;
+    transition: border-color var(--transition);
+    width: 100%;
+    box-sizing: border-box;
+}
+.flatwiz-pane input[type="number"]:focus,
+.flatwiz-pane input[type="text"]:focus,
+.flatwiz-pane select:focus {
+    border-color: var(--accent);
+}
+/* Settings form: each <label> stacks its caption above the input,
+   which gives more horizontal room for the value (no cramped baseline
+   row with caption + control fighting for width). */
+.flatwiz-pane .settings-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 0;
+}
+@media (min-width: 900px) {
+    .flatwiz-pane .settings-grid { grid-template-columns: 1fr 1fr 1fr; }
+}
+@media (max-width: 600px) {
+    .flatwiz-pane .settings-grid { grid-template-columns: 1fr; }
+}
+.flatwiz-pane .settings-grid > label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
 .flatwiz-preflight {
     display: flex;
     flex-direction: column;
