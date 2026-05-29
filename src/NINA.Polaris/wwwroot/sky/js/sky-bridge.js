@@ -858,6 +858,42 @@
         skyHandleMessage(msg);
     });
 
+    // Diagnostic: read back the engine's view of the Sun in the OBSERVED
+    // frame and log its altitude. Lets us tell at-a-glance whether
+    // observer + time were applied correctly (sun above horizon at
+    // night = engine bug, sun below horizon at day = engine bug, the
+    // happy path matches local twilight tables).
+    function skyLogSunDiag(tag) {
+        try {
+            var stel = window.__stel;
+            if (!stel || !stel.core || !stel.core.observer) return;
+            var sun = stel.getObj('Sun');
+            if (!sun) return;
+            var icrf = sun.getInfo('radec', stel.core.observer);
+            // icrf is a 4-vector unit direction in the ICRF frame. Convert
+            // to the OBSERVED frame (alt-az), z component is sin(altitude).
+            var observed = stel.convertFrame(stel.core.observer,
+                                              'ICRF', 'OBSERVED', icrf);
+            if (!observed || observed.length < 3) return;
+            var z = observed[2];
+            var x = observed[0], y = observed[1];
+            var horiz = Math.sqrt(x * x + y * y);
+            var altDeg = Math.atan2(z, horiz) * 180 / Math.PI;
+            var azDeg = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+            var obs = stel.core.observer;
+            var latDeg = obs.latitude * 180 / Math.PI;
+            var lngDeg = obs.longitude * 180 / Math.PI;
+            console.log('[Sky] sun diag ' + tag
+                + ' | observer lat=' + latDeg.toFixed(2)
+                + '° lng=' + lngDeg.toFixed(2)
+                + '° utc(mjd)=' + obs.utc.toFixed(4)
+                + ' | sun alt=' + altDeg.toFixed(1)
+                + '° az=' + azDeg.toFixed(1) + '°');
+        } catch (e) {
+            console.warn('[Sky] sun diag failed:', e);
+        }
+    }
+
     function skyHandleMessage(msg) {
         var stel = window.__stel;
         switch (msg.type) {
@@ -865,10 +901,12 @@
                 if (typeof msg.lat === 'number') stel.core.observer.latitude = msg.lat * stel.D2R;
                 if (typeof msg.lng === 'number') stel.core.observer.longitude = msg.lng * stel.D2R;
                 if (typeof msg.elevation === 'number') stel.core.observer.elevation = msg.elevation;
+                skyLogSunDiag('after set-observer');
                 break;
             case 'set-time':
                 if (typeof msg.utc === 'number') {
                     stel.core.observer.utc = stel.date2MJD(new Date(msg.utc));
+                    skyLogSunDiag('after set-time');
                 }
                 break;
             case 'look-at':
