@@ -15,7 +15,173 @@
   verbatim, only the prose around them was translated.
 -->
 
-# Current plan: Transfer progress bars in the activity bar (XFER-1..4)
+# Current chapter: Pi 5 hardening sweep (auth + transport + native deps)
+
+> No big new feature this round. A diagnostic session on the user's
+> Pi 5 surfaced a cascade of issues that LOOKED like 5 different
+> bugs but were actually one root cause hiding behind 4 symptoms.
+> Documenting the chain here so the order of investigation is
+> recoverable if anything regresses.
+>
+> Reading order top-to-bottom (newest first): Pi 5 hardening →
+> XFER → AUTOED → CAT → FW → SHUT → REFSUG → HELP → AUTH → MFOC →
+> WIFI → CCALB → CC → GX → NET → ED → SWE → PA → SIM → Pi 5
+> packaging → CLST → LSTR → VIDEO → PHD2 deep → RIGS → PREVIEW →
+> Activity bar → Siril+GraXpert → FILES → DSLR → Gap analysis →
+> STUDIO → Weather → Tonight.
+
+## Context
+
+User opened a FITS in the editor on the Pi 5 and got `HTTP 401`.
+Each "fix" surfaced the next layer of the same underlying mess.
+Final root cause was a native dependency mismatch in SkiaSharp;
+the auth-layer fixes were independently right but masked by the
+crash loop.
+
+## The chain (chronological)
+
+### 1. 14 bare `fetch()` sites bypassing auth (`0b7e818`)
+
+AUTH-4 swept 29 `fetch()` sites over to `apiFetch` so the bearer
+token was injected automatically. 14 more sites added after that
+sweep (editor / FILES / ONNX / livestack / sequencer) kept the
+bare `fetch()` shape and silently 401-d. The editor upload was
+the first one the user actually hit.
+
+Fix: `await this.apiFetch(...)` everywhere except the three
+`/api/auth/*` sites that the AuthMiddleware exempts so they can
+run pre-login.
+
+### 2. `<img>` / `<iframe>` URLs can't carry Authorization (`37d46f2`)
+
+Browser tag-based requests don't attach the `Authorization`
+header. AUTH-4 relied on the `polaris_session` cookie for them.
+The cookie quietly fails: HttpOnly + Secure + browser-close
+lifetime, plus mDNS hostname switches after a WiFi mode flip
+drop it sporadically.
+
+The AuthMiddleware already accepts `?token=` as a third-tier
+fallback (used by `/api/files/download`). Added a tiny
+`authUrl(url)` helper that appends the bearer token from
+`this.auth.token` to any URL that has to render through a tag
+instead of fetch. Routed it through `graxpertCompareSrc`, FILES
+preview, OpenSeadragon viewer (init + reload), STUDIO thumbnail.
+
+### 3. Double-applied `authUrl` (`819d619`)
+
+XFER and the auth-URL fix both touched the FILES preview path, so
+the same URL got `&token=` appended twice. ASP.NET parsed it as
+`StringValues` with two entries, `.ToString()` flattened to
+`"abc,abc"`, validation failed, 401. The FITS headers panel
+loaded because that call used `apiFetch` (single bearer header),
+so the regression only showed on the `<img>` side.
+
+Fix: only the OSD-internal wrappers (`_initOsdViewer` +
+`reloadImageViewer`) wrap the URL with `authUrl`. Caller passes
+the URL unwrapped. Single auth point ⇒ no duplication.
+
+### 4. WebSocket URLs missing `?token=` (`3b61cdd`)
+
+WS upgrades also can't carry the `Authorization` header. Same
+cookie problem as `<img>`. Appended `authUrl(...)` to all three
+WS endpoints: `/ws/status`, `/ws/image-stream`, `/ws/terminal`.
+Symptom was status + image-stream WS connections looping
+"failed:" with no specific reason in DevTools.
+
+### 5. Auth sessions wiped on every server restart (`244fe9a`)
+
+Sessions lived in a `ConcurrentDictionary<string, SessionInfo>`
+in memory only. Any `systemctl restart polaris` (apt upgrade,
+deploy, crash) wiped every device's session at once. The user
+was told "you need to log in again" with no explanation, and
+browser tabs in-flight returned 401 with no automatic re-prompt
+(`<img>` / `<iframe>` can't intercept 401 the way JSON fetch
+handlers can).
+
+Fix: persist sessions to `~/.local/share/NINA.Polaris/profiles/auth-sessions.json`.
+Write on Login / Logout / ChangePassword + on the 10-min
+sweeper (flushes LastActivityAt bumps that ValidateToken
+intentionally doesn't write per-request to spare the SD card).
+Write-temp + rename so a kill mid-write doesn't truncate. Load
+on boot + filter by SessionTtl so a week-old session doesn't
+reanimate. Password-reset workaround still works: delete the
+file or clear the hash in `profile.json`.
+
+### 6. Root cause — `libSkiaSharp.so` symbol lookup error (`f279248`)
+
+After all the auth fixes shipped, user still saw
+`ERR_CONNECTION_REFUSED` on `/api/files/preview` even with a
+healthy `systemctl status polaris`. The clue was `NRestarts=7`
+in `systemctl show` output: the service was crash-looping every
+~30s. Journal showed the smoking gun before every crash:
+
+```
+Fontconfig warning: ".../05-reset-dirs-sample.conf"...
+/opt/polaris/NINA.Polaris: symbol lookup error:
+  /opt/polaris/libSkiaSharp.so: undefined symbol: FT_Get_BDF_Property
+polaris.service: Main process exited, code=exited, status=127
+```
+
+`SkiaSharp.NativeAssets.Linux 3.119.0` ships a `libSkiaSharp.so`
+for `linux-arm64` that dynamic-links system FreeType and calls
+`FT_Get_BDF_Property` — only present when FreeType is built with
+`FT_CONFIG_OPTION_BDF`. Debian Bookworm / Pi OS 64-bit ship
+FreeType 2.12.1 **without** BDF. Any code path that lazy-inits
+SkiaSharp's font subsystem (every FITS preview through
+`FitsThumbnailer` → `SKBitmap`) triggers the dynamic linker,
+which aborts the process with exit 127. systemd restarts in 5s,
+the `ERR_CONNECTION_REFUSED` window is the restart, user clicks
+again, crashes again. Loop.
+
+Fix: swap the NuGet:
+
+```diff
+- <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.119.0" />
++ <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.0" />
+```
+
+`NoDependencies` statically links FreeType + Fontconfig + Expat
+into `libSkiaSharp.so`, so distro library drift can't kill the
+process. Same SkiaSharp API; native binary grows ~3 MB. Windows
++ macOS unaffected (separate NativeAssets packages).
+
+User confirmed after rebuild + redeploy: `NRestarts=0`, no more
+symbol lookup errors, FITS preview renders, WS stays connected,
+GraXpert denoise save round-trip works.
+
+## What got documented from this
+
+- Auth chain is now reliable across `<img>`, `<iframe>`, `<a
+  href>`, WS, fetch, and pre-startup (`/api/auth/*` is exempt;
+  everything else picks up the token via the right channel).
+- Server restarts no longer invalidate sessions (persistent
+  `auth-sessions.json` is the system of record).
+- Native deps for any new SkiaSharp-using project should default
+  to the `.NoDependencies` variant on Linux, especially for
+  arm64. Windows + macOS keep the default platform packages.
+
+## Files modified during the sweep
+
+- `src/NINA.Polaris/wwwroot/js/app.js` — bare fetch sweep,
+  authUrl helper + bindings, WS URL auth, transfer chip site
+  cleanup
+- `src/NINA.Polaris/wwwroot/index.html` — STUDIO thumbnail
+  authUrl
+- `src/NINA.Polaris/Services/Auth/AuthService.cs` — session
+  persistence + restore
+- `src/NINA.Polaris/Services/ProfileService.cs` — expose
+  `DataDir` so other services can park sibling state files
+- `src/NINA.Image.Portable/NINA.Image.Portable.csproj` — switch
+  SkiaSharp native package
+
+## Tests
+
+Existing 798/805 suite stays green; the SkiaSharp swap is a NuGet
+package change with no API delta, no test code touched.
+
+---
+
+# Previous plan: Transfer progress bars in the activity bar (XFER-1..4)
 
 > Reading order top-to-bottom (newest first): XFER → AUTOED → CAT
 > → FW → SHUT → REFSUG → HELP → AUTH → MFOC → WIFI → CCALB → CC →
