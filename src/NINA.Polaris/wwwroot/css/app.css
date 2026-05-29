@@ -5835,10 +5835,226 @@ label select.input-sm {
 /* ─── STUDIO tab, frame browser (ST-1) ─────────────────────────────── */
 .studio-panel {
     padding: 16px;
-    overflow-y: auto;
+    overflow: hidden;             /* the layout below owns scrolling */
     gap: 12px;
     display: flex;
     flex-direction: column;
+}
+
+/* Two-column STUDIO workspace: tree on the left, single-frame
+   preview on the right. The wrapper takes whatever vertical
+   space the panel has after header + filters + selection-bar,
+   and each column owns its own scroll. min-height:0 + the
+   parent flex:1 are both required for the inner scrolls to
+   actually engage instead of pushing the whole page. */
+.studio-layout {
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+    flex: 1;
+    min-height: 0;
+}
+.studio-tree-col {
+    flex: 0 0 320px;
+    overflow-y: auto;
+    padding-right: 4px;
+    border-right: 1px solid var(--border);
+}
+.studio-preview-col {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Native <details>/<summary> drive expand/collapse — no JS,
+   no state to persist, and keyboard nav (Space/Enter on the
+   summary) comes free. The chevron is the default disclosure
+   triangle; we just style spacing + colours around it. */
+.studio-tree-target,
+.studio-tree-type,
+.studio-tree-filter {
+    margin: 0;
+}
+.studio-tree-target > summary,
+.studio-tree-type > summary,
+.studio-tree-filter > summary {
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+    color: var(--text-primary);
+}
+.studio-tree-target > summary::-webkit-details-marker,
+.studio-tree-type > summary::-webkit-details-marker,
+.studio-tree-filter > summary::-webkit-details-marker { display: none; }
+.studio-tree-target > summary::before,
+.studio-tree-type > summary::before,
+.studio-tree-filter > summary::before {
+    content: '▸';
+    color: var(--text-muted);
+    transition: transform 0.1s ease;
+    font-size: 10px;
+}
+.studio-tree-target[open] > summary::before,
+.studio-tree-type[open] > summary::before,
+.studio-tree-filter[open] > summary::before {
+    transform: rotate(90deg);
+}
+.studio-tree-target > summary:hover,
+.studio-tree-type > summary:hover,
+.studio-tree-filter > summary:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.studio-tree-target > summary { font-weight: 600; font-size: 13px; }
+.studio-tree-type > summary,
+.studio-tree-filter > summary { padding-left: 18px; }
+.studio-tree-filter > summary { padding-left: 32px; }
+
+.studio-tree-label { flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-tree-count {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-muted);
+    border-radius: 999px;
+    padding: 1px 7px;
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+}
+.studio-tree-filter-name { flex: 1; }
+
+/* Per-type colour tag inside the tree summary. Matches the
+   AUTORUN sequence-card pill convention so the eye picks the
+   same colour cue across both panels. */
+.studio-tree-typetag {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.studio-tt-light  { background: rgba(76, 175, 80, 0.18); color: #a5e1a8; }
+.studio-tt-bias   { background: rgba(33, 150, 243, 0.18); color: #9fcdf6; }
+.studio-tt-flat   { background: rgba(255, 167, 38, 0.18); color: #ffcc80; }
+.studio-tt-dark   { background: rgba(229, 57, 53, 0.18); color: #ef9a9a; }
+.studio-tt-master { background: rgba(156, 39, 176, 0.18); color: #ce93d8; }
+.studio-tt-other  { background: rgba(255, 255, 255, 0.08); color: var(--text-muted); }
+
+/* Leaf row (a single frame). active = currently in the right
+   preview pane (single). selected = part of the multi-select
+   batch (an item can be both — that's the typical case when
+   the user clicks ONE thing). */
+.studio-tree-frame {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 3px 6px 3px 48px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+.studio-tree-frame:hover { background: rgba(255, 255, 255, 0.04); }
+.studio-tree-frame.selected {
+    background: rgba(33, 150, 243, 0.12);
+    color: var(--text-primary);
+}
+.studio-tree-frame.active {
+    background: rgba(33, 150, 243, 0.25);
+    color: var(--text-primary);
+    border-left: 2px solid var(--accent);
+    padding-left: 46px;
+}
+.studio-tree-frame-name { flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-tree-frame-meta { color: var(--text-muted); font-size: 10px; flex-shrink: 0; }
+
+/* Right preview pane */
+.studio-preview-empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 32px;
+}
+.studio-preview-empty p { margin: 6px 0; }
+.studio-preview-empty .hint { font-size: 11px; }
+.studio-preview-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    gap: 12px;
+}
+.studio-preview-image {
+    flex: 1;
+    min-height: 0;
+    background: #000;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    cursor: zoom-in;
+}
+.studio-preview-image img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+.studio-preview-meta {
+    flex: 0 0 auto;
+    padding: 8px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+.studio-preview-meta h3 {
+    margin: 0 0 8px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.studio-preview-dl {
+    margin: 0 0 10px;
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 2px 12px;
+    font-size: 11px;
+}
+.studio-preview-dl dt { color: var(--text-muted); }
+.studio-preview-dl dd { margin: 0; color: var(--text-primary); }
+.studio-preview-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* Mobile: stack vertically. Threshold matches .live-pane etc. */
+@media (max-width: 900px) {
+    .studio-layout { flex-direction: column; }
+    .studio-tree-col {
+        flex: 0 0 auto;
+        max-height: 40vh;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+    }
 }
 .studio-filters {
     display: flex;

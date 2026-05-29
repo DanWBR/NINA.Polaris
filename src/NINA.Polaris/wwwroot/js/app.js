@@ -812,6 +812,13 @@ function ninaApp() {
             rescan: null,
             filter: { type: '', target: '', filter: '' },
             selectedIds: [],
+            // Tree-view companion state: the single frame currently
+            // displayed in the right-pane preview (separate from
+            // selectedIds, which is the multi-select for batch
+            // actions). previewUrl is bumped after auto-stretch
+            // resolves so the <img> swaps in one go.
+            activeFrame: null,
+            activePreviewUrl: '',
             // Viewer modal state (ST-2). When `viewer.frame` is set the
             // modal is open. Stretch params drive /api/studio/frames/:id/preview;
             // the URL is bumped through `viewer.previewUrl` after each
@@ -4794,6 +4801,96 @@ function ninaApp() {
             const idx = this.studio.selectedIds.indexOf(id);
             if (idx >= 0) this.studio.selectedIds.splice(idx, 1);
             else this.studio.selectedIds.push(id);
+        },
+
+        // ─── Studio tree-view picker ──────────────────────────────────
+        // The STUDIO panel is laid out as a 2-column workspace: a
+        // collapsible tree on the left grouping frames by Target →
+        // Type → Filter, and a single-frame preview pane on the right.
+        // These helpers wire that interaction.
+
+        // Build the tree from the flat frame list. Returns:
+        //   [{ name, count, types: [{ name, count, filters: [
+        //       { name, count, frames: [...] }
+        //   ] }] }]
+        // Frames with no target land under "Untargeted"; with no
+        // filter, under "(no filter)". Sorted alphabetically at every
+        // level so the layout is stable across re-renders.
+        studioTree() {
+            const byTarget = new Map();
+            for (const f of (this.studio.frames || [])) {
+                const tName = f.target || 'Untargeted';
+                const yName = f.imageType || 'OTHER';
+                const fName = f.filter || '(no filter)';
+                if (!byTarget.has(tName)) byTarget.set(tName, new Map());
+                const byType = byTarget.get(tName);
+                if (!byType.has(yName)) byType.set(yName, new Map());
+                const byFilter = byType.get(yName);
+                if (!byFilter.has(fName)) byFilter.set(fName, []);
+                byFilter.get(fName).push(f);
+            }
+            const sortNames = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true });
+            const tree = [];
+            for (const [tName, byType] of byTarget) {
+                const typesArr = [];
+                let tCount = 0;
+                for (const [yName, byFilter] of byType) {
+                    const filtersArr = [];
+                    let yCount = 0;
+                    for (const [fName, frames] of byFilter) {
+                        // Newest first inside a leaf so the latest
+                        // exposure of a run sits at the top.
+                        frames.sort((a, b) =>
+                            new Date(b.dateObs || 0) - new Date(a.dateObs || 0));
+                        filtersArr.push({ name: fName, count: frames.length, frames });
+                        yCount += frames.length;
+                    }
+                    filtersArr.sort(sortNames);
+                    typesArr.push({ name: yName, count: yCount, filters: filtersArr });
+                    tCount += yCount;
+                }
+                typesArr.sort(sortNames);
+                tree.push({ name: tName, count: tCount, types: typesArr });
+            }
+            tree.sort(sortNames);
+            return tree;
+        },
+
+        // Single-click on a tree leaf. Default = make this the
+        // active frame in the right preview pane AND replace the
+        // multi-selection with just this id. Ctrl/Cmd-click toggles
+        // the id in/out of the multi-selection without touching
+        // active preview (so batch picks keep building the list).
+        // Shift-click is currently treated like Ctrl-click (range
+        // select is a follow-up if anyone misses it).
+        studioPickFrame(frame, ev) {
+            const multi = ev && (ev.ctrlKey || ev.metaKey || ev.shiftKey);
+            if (multi) {
+                this.studioToggleSelect(frame.id);
+                return;
+            }
+            this.studio.selectedIds = [frame.id];
+            this.studio.activeFrame = frame;
+            this._studioLoadActivePreview();
+        },
+
+        // Resolve the active frame's auto-stretch defaults so the
+        // right-pane thumbnail uses the same values the viewer modal
+        // would. authUrl appends ?token= for the <img> tag.
+        async _studioLoadActivePreview() {
+            const f = this.studio.activeFrame;
+            if (!f) { this.studio.activePreviewUrl = ''; return; }
+            try {
+                const a = await this.apiGet(`/api/studio/frames/${f.id}/autostretch`);
+                const qs = `?black=${a.black}&mid=${a.mid}&white=${a.white}&maxDim=1024`;
+                this.studio.activePreviewUrl = this.authUrl(
+                    `/api/studio/frames/${f.id}/preview${qs}`);
+            } catch {
+                // Fall back to the 256 px thumbnail if /autostretch fails
+                // (e.g. corrupt FITS); user can still see SOMETHING.
+                this.studio.activePreviewUrl = this.authUrl(
+                    `/api/studio/frames/${f.id}/thumb`);
+            }
         },
 
         // Return absolute file paths for the currently-selected frames.

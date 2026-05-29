@@ -5674,36 +5674,110 @@
                            placeholder="Filter (e.g. L, Ha)" style="width:100px">
                 </div>
 
-                <!-- Thumbnail grid -->
-                <div class="studio-grid" x-show="studio.frames.length">
-                    <template x-for="f in studio.frames" :key="f.id">
-                        <div class="studio-card" :class="{ selected: studio.selectedIds.includes(f.id) }"
-                             @click="studioToggleSelect(f.id)"
-                             @dblclick="studioOpenViewer(f)"
-                             title="Click to select · Double-click to open viewer">
-                            <div class="studio-thumb">
-                                <!-- authUrl appends ?token= so the <img>
-                                     request authenticates even when the
-                                     polaris_session cookie is missing. -->
-                                <img :src="authUrl('/api/studio/frames/' + f.id + '/thumb')"
-                                     :alt="f.fileName" loading="lazy"
-                                     onerror="this.style.display='none'">
-                            </div>
-                            <div class="studio-card-meta">
-                                <div class="studio-card-name" x-text="f.fileName"></div>
-                                <div class="studio-card-sub">
-                                    <span x-text="f.imageType"></span>
-                                    <span x-show="f.filter" x-text="' · ' + f.filter"></span>
-                                    <span x-text="' · ' + f.exposureSec.toFixed(1) + 's'"></span>
-                                    <span x-show="f.gain > 0" x-text="' · g' + f.gain"></span>
-                                </div>
-                                <div class="studio-card-sub muted">
-                                    <span x-text="f.target || ', '"></span>
-                                    <span x-text="' · ' + (f.dateObs ? new Date(f.dateObs).toLocaleString() : '?')"></span>
-                                </div>
-                            </div>
+                <!-- Two-column workspace: collapsible tree on the
+                     left grouping frames by Target → Type → Filter,
+                     auto-stretched single-frame preview on the right.
+                     Replaces the flat thumbnail grid that scaled
+                     poorly past ~50 frames and gave the user no sense
+                     of which target/filter a frame belonged to until
+                     hovering. -->
+                <div class="studio-layout" x-show="studio.frames.length">
+                    <!-- Left: tree -->
+                    <div class="studio-tree-col">
+                        <template x-for="tgt in studioTree()" :key="tgt.name">
+                            <details class="studio-tree-target" open>
+                                <summary>
+                                    <span class="studio-tree-label" x-text="tgt.name"></span>
+                                    <span class="studio-tree-count" x-text="tgt.count"></span>
+                                </summary>
+                                <template x-for="ty in tgt.types" :key="tgt.name + '/' + ty.name">
+                                    <details class="studio-tree-type" open>
+                                        <summary>
+                                            <span class="studio-tree-typetag"
+                                                  :class="'studio-tt-' + ty.name.toLowerCase()"
+                                                  x-text="ty.name"></span>
+                                            <span class="studio-tree-count" x-text="ty.count"></span>
+                                        </summary>
+                                        <template x-for="fl in ty.filters" :key="tgt.name + '/' + ty.name + '/' + fl.name">
+                                            <details class="studio-tree-filter" open>
+                                                <summary>
+                                                    <span class="studio-tree-filter-name" x-text="fl.name"></span>
+                                                    <span class="studio-tree-count" x-text="fl.count"></span>
+                                                </summary>
+                                                <template x-for="f in fl.frames" :key="f.id">
+                                                    <div class="studio-tree-frame"
+                                                         :class="{
+                                                            active: studio.activeFrame?.id === f.id,
+                                                            selected: studio.selectedIds.includes(f.id)
+                                                         }"
+                                                         @click="studioPickFrame(f, $event)"
+                                                         @dblclick="studioOpenViewer(f)"
+                                                         :title="f.fileName + '\nClick: preview · Ctrl+Click: multi-select · Double-click: full viewer'">
+                                                        <span class="studio-tree-frame-name" x-text="f.fileName"></span>
+                                                        <span class="studio-tree-frame-meta">
+                                                            <span x-text="f.exposureSec.toFixed(1) + 's'"></span>
+                                                            <span x-show="f.gain > 0" x-text="' · g' + f.gain"></span>
+                                                        </span>
+                                                    </div>
+                                                </template>
+                                            </details>
+                                        </template>
+                                    </details>
+                                </template>
+                            </details>
+                        </template>
+                    </div>
+
+                    <!-- Right: preview of the active frame. Empty
+                         state when nothing is picked yet. -->
+                    <div class="studio-preview-col">
+                        <div class="studio-preview-empty"
+                             x-show="!studio.activeFrame">
+                            <p>Pick a frame from the tree on the left to preview it here.</p>
+                            <p class="hint">
+                                <strong>Click</strong> a file to preview ·
+                                <strong>Ctrl/Cmd+Click</strong> to add to selection ·
+                                <strong>Double-click</strong> for the full viewer.
+                            </p>
                         </div>
-                    </template>
+                        <template x-if="studio.activeFrame">
+                            <div class="studio-preview-body">
+                                <div class="studio-preview-image">
+                                    <img x-show="studio.activePreviewUrl"
+                                         :src="studio.activePreviewUrl"
+                                         :alt="studio.activeFrame.fileName"
+                                         @dblclick="studioOpenViewer(studio.activeFrame)">
+                                </div>
+                                <div class="studio-preview-meta">
+                                    <h3 x-text="studio.activeFrame.fileName"></h3>
+                                    <dl class="studio-preview-dl">
+                                        <dt>Target</dt>     <dd x-text="studio.activeFrame.target || '—'"></dd>
+                                        <dt>Type</dt>       <dd x-text="studio.activeFrame.imageType"></dd>
+                                        <dt>Filter</dt>     <dd x-text="studio.activeFrame.filter || '—'"></dd>
+                                        <dt>Exposure</dt>   <dd x-text="studio.activeFrame.exposureSec.toFixed(2) + ' s'"></dd>
+                                        <dt x-show="studio.activeFrame.gain > 0">Gain</dt>
+                                        <dd x-show="studio.activeFrame.gain > 0" x-text="studio.activeFrame.gain"></dd>
+                                        <dt x-show="studio.activeFrame.binning > 1">Binning</dt>
+                                        <dd x-show="studio.activeFrame.binning > 1"
+                                            x-text="studio.activeFrame.binning + 'x' + studio.activeFrame.binning"></dd>
+                                        <dt x-show="studio.activeFrame.dateObs">Captured</dt>
+                                        <dd x-show="studio.activeFrame.dateObs"
+                                            x-text="new Date(studio.activeFrame.dateObs).toLocaleString()"></dd>
+                                    </dl>
+                                    <div class="studio-preview-actions">
+                                        <button class="btn btn-sm btn-primary"
+                                                @click="studioOpenViewer(studio.activeFrame)">
+                                            🔍 Full viewer
+                                        </button>
+                                        <button class="btn btn-sm"
+                                                @click="studioOpenInEditor()">
+                                            🎨 Editor
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
                 </div>
 
                 <div class="weather-message" x-show="!studio.frames.length && !studio.rescan?.inProgress">
