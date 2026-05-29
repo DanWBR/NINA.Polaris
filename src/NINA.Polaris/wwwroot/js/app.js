@@ -6080,6 +6080,29 @@ function ninaApp() {
             this._editorPushHistory();
         },
 
+        // Middle-truncated path for the editor toolbar so deep
+        // upload paths (C:\...\7bffd2631c47495098227ef33a96778d\
+        // result_4200s_graxpert_bge.fits) don't push the right
+        // controls column narrower. Shows the filename + parent
+        // dir whenever we can; collapses the middle to "…" when
+        // the full string would overflow ~60 chars. Hover (title
+        // attribute on the span) still surfaces the full path.
+        editorShortPath(p) {
+            if (!p) return '';
+            if (p.length <= 60) return p;
+            // Split on either separator so Windows + POSIX both work.
+            const parts = p.split(/[\\/]/);
+            if (parts.length <= 3) return p;       // already short
+            const base = parts[parts.length - 1];
+            const parent = parts[parts.length - 2];
+            const head = parts[0];                  // C: / "" (POSIX root)
+            // Reassemble with a consistent separator — pick the
+            // one the input used so the displayed path still
+            // looks native to the user's OS.
+            const sep = p.includes('\\') ? '\\' : '/';
+            return `${head}${sep}…${sep}${parent}${sep}${base}`;
+        },
+
         // AUTOED-2: Compute reasonable Light + Color slider values from
         // the session's working buffer histogram and apply them through
         // the same setters the manual sliders use. The setters handle

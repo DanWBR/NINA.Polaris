@@ -5172,6 +5172,16 @@ label select.input-sm {
     gap: 6px;
     margin-bottom: 12px;
 }
+
+/* Path label inside the editor preview toolbar: middle-truncate
+   via editorShortPath() in JS, and CSS-clip as a safety net so
+   any path the helper missed still doesn't push the right-column
+   sliders narrower. */
+.editor-path-display {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 .editor-controls-header .btn {
     /* Content-sized; the row wraps when it runs out of room. The old
        `flex: 1` made each button equal-width — fine for 2 buttons,

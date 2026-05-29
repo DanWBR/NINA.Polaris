@@ -4174,8 +4174,17 @@
                             <span class="muted" style="font-size:10px"
                                   x-text="editorState.history.index + ' / ' + (editorState.history.stack.length - 1)"
                                   title="Current history step / total"></span>
-                            <span class="muted" style="flex:1; font-size:11px; text-align:center"
-                                  x-text="editorState.sourcePath"></span>
+                            <!-- File path: middle-truncated so long uploads
+                                 paths don't push the right controls column
+                                 narrower. min-width:0 lets the flex item
+                                 actually shrink below its content width;
+                                 without it the span would refuse to clip
+                                 and pop the layout. Hover shows the full
+                                 path via the title attribute. -->
+                            <span class="muted editor-path-display"
+                                  style="flex:1; min-width:0; font-size:11px; text-align:center"
+                                  :title="editorState.sourcePath"
+                                  x-text="editorShortPath(editorState.sourcePath)"></span>
                             <!-- Zoom controls. Reset = fit-to-window. -->
                             <button class="btn btn-sm" @click="editorZoomOut()"
                                     title="Zoom out (or Ctrl + scroll wheel)">−</button>
