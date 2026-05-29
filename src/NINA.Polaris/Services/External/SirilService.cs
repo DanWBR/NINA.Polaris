@@ -333,6 +333,11 @@ public class SirilService {
                 stderrBuf.AppendLine(e.Data);
                 // Capture last 500 chars for the job's LastError field
                 job.LastError = stderrBuf.ToString();
+                // Fold stderr into the console log too so the UI shows
+                // both streams interleaved (with a [stderr] prefix so
+                // the user can tell which is which when something
+                // goes sideways).
+                job.AppendLog("[stderr] " + e.Data);
             }
         };
 
@@ -352,6 +357,10 @@ public class SirilService {
                 }
                 var line = await proc.StandardOutput.ReadLineAsync(ct);
                 if (line == null) break;
+                // Feed both the progress parser and the console-log
+                // buffer; the UI streams the buffer via the existing
+                // /api/siril/jobs/{id} polling.
+                job.AppendLog(line);
                 ParseProgress(line, job);
             }
         }, ct);
@@ -572,4 +581,30 @@ public class SirilJob {
     public DateTime StartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
     public bool CancelRequested { get; set; }
+
+    /// <summary>Rolling buffer of stdout + stderr lines from the Siril
+    /// subprocess. Capped at <see cref="MaxLogLines"/> entries — once
+    /// full, the oldest line is dropped each time a new one arrives,
+    /// so the console-modal in the UI never has to deal with a
+    /// runaway log. Thread-safe: <see cref="AppendLog"/> takes the
+    /// list lock, the JSON serializer takes the same lock via
+    /// <see cref="SnapshotLog"/> when the endpoint serializes the
+    /// job. Don't read <see cref="LogLines"/> directly from outside
+    /// the service — call <see cref="SnapshotLog"/>.</summary>
+    public const int MaxLogLines = 500;
+    public List<string> LogLines { get; } = new();
+
+    public void AppendLog(string line) {
+        if (line == null) return;
+        lock (LogLines) {
+            LogLines.Add(line);
+            if (LogLines.Count > MaxLogLines) {
+                LogLines.RemoveRange(0, LogLines.Count - MaxLogLines);
+            }
+        }
+    }
+
+    public List<string> SnapshotLog() {
+        lock (LogLines) { return new List<string>(LogLines); }
+    }
 }

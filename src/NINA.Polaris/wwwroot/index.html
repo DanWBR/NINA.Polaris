@@ -8684,6 +8684,35 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                    x-text="'Result: ' + siril.currentJob?.resultPath"></p>
             </div>
 
+            <!-- Live Siril console. Streams stdout/stderr from the
+                 subprocess via the same /jobs/{id} polling that drives
+                 the progress bar; the endpoint accepts a sinceLine
+                 cursor so each poll only ships the tail since the
+                 last fetch. Monospace + dark background to read like
+                 a terminal. Auto-scrolls to the bottom on new lines
+                 unless the user manually scrolls up (state captured
+                 by sirilConsoleOnScroll). -->
+            <div class="siril-console"
+                 x-show="siril.currentJob || siril.consoleLines?.length">
+                <div class="siril-console-head">
+                    <span>🖥 Siril console</span>
+                    <span class="hint" x-show="siril.consoleLines?.length"
+                          x-text="siril.consoleLines.length + ' lines'"></span>
+                    <span style="flex:1"></span>
+                    <label class="hint" style="display:inline-flex;align-items:center;gap:4px">
+                        <input type="checkbox" x-model="siril.consoleFollow">
+                        Follow
+                    </label>
+                </div>
+                <pre id="sirilConsole"
+                     class="siril-console-body"
+                     @scroll="sirilConsoleOnScroll($event)"><template
+                        x-for="(line, i) in siril.consoleLines"
+                        :key="i"><span class="siril-console-line"
+                              :class="{ 'siril-console-err': line.startsWith('[stderr]') }"
+                              x-text="line + '\n'"></span></template></pre>
+            </div>
+
             <div class="siril-modal-actions">
                 <button class="btn"
                         x-show="!siril.currentJob || siril.currentJob.stage === 'done'

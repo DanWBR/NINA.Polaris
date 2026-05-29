@@ -1076,7 +1076,20 @@ function ninaApp() {
             modalBgePhase: null,     // null | { jobId, total, done, failed }
             currentJobId: null,
             currentJob: null,
-            _pollTimer: null
+            _pollTimer: null,
+            // Live console feed from the Siril subprocess. consoleLines
+            // is the accumulating tail (capped at 500 server-side, the
+            // UI grows linearly until the next job starts and resets
+            // it). _consoleSince is the cursor the next poll passes
+            // back as ?sinceLine= so each round-trip only ships new
+            // lines. consoleFollow toggles auto-scroll on append;
+            // flipped to false automatically when the user scrolls up
+            // (sirilConsoleOnScroll) so reading old output isn't
+            // interrupted, flipped back to true when they scroll to
+            // the bottom.
+            consoleLines: [],
+            _consoleSince: 0,
+            consoleFollow: true,
         },
         // GraXpert state mirrors Siril's. modalOp distinguishes which
         // of the three operations the modal is currently driving.
@@ -11569,6 +11582,11 @@ function ninaApp() {
                     })
                 });
                 this.siril.currentJobId = r.jobId;
+                // Wipe any leftover console from the previous run so
+                // the new job's first poll fills a clean buffer.
+                this.siril.consoleLines = [];
+                this.siril._consoleSince = 0;
+                this.siril.consoleFollow = true;
                 this.toast('Siril job started: ' + r.jobId, 'ok');
                 this._sirilStartPolling();
             } catch (e) {
@@ -11602,9 +11620,29 @@ function ninaApp() {
             this.siril._pollTimer = setInterval(async () => {
                 if (!this.siril.currentJobId) return;
                 try {
+                    // Pass the line cursor so the server only ships the
+                    // new tail since the last poll. First call (since=0)
+                    // returns everything buffered so far; subsequent
+                    // calls trim to the delta.
+                    const since = this.siril._consoleSince || 0;
                     const job = await this.apiGet('/api/siril/jobs/'
-                        + encodeURIComponent(this.siril.currentJobId));
+                        + encodeURIComponent(this.siril.currentJobId)
+                        + '?sinceLine=' + since);
                     this.siril.currentJob = job;
+                    if (job && Array.isArray(job.logLines) && job.logLines.length) {
+                        this.siril.consoleLines.push(...job.logLines);
+                        // Server side caps the buffer at 500 lines so
+                        // totalLines is exact; track it as the next
+                        // cursor. Falls back to local length when the
+                        // server omits totalLines for some reason.
+                        this.siril._consoleSince = typeof job.totalLines === 'number'
+                            ? job.totalLines
+                            : (this.siril._consoleSince + job.logLines.length);
+                        // Auto-scroll to the bottom unless the user
+                        // scrolled up (consoleFollow flipped off by
+                        // sirilConsoleOnScroll).
+                        if (this.siril.consoleFollow) this._sirilScrollConsoleToBottom();
+                    }
                     if (job && (job.stage === 'done' || job.stage === 'failed'
                                 || job.stage === 'cancelled')) {
                         clearInterval(this.siril._pollTimer);
@@ -11619,6 +11657,26 @@ function ninaApp() {
                     // Transient, keep polling.
                 }
             }, 1500);
+        },
+
+        _sirilScrollConsoleToBottom() {
+            // Wait for Alpine to flush the new lines into the DOM
+            // before scrolling, otherwise the scrollHeight would be
+            // measured before the append landed.
+            this.$nextTick(() => {
+                const el = document.getElementById('sirilConsole');
+                if (el) el.scrollTop = el.scrollHeight;
+            });
+        },
+
+        // Track manual scroll so auto-follow turns off when the user
+        // scrolls up to read older lines, and back on when they
+        // scroll all the way down. Threshold of 8 px so subpixel
+        // rounding from the browser doesn't flip the flag spuriously.
+        sirilConsoleOnScroll(ev) {
+            const el = ev.target;
+            const atBottom = (el.scrollHeight - el.scrollTop - el.clientHeight) < 8;
+            this.siril.consoleFollow = atBottom;
         },
 
         async sirilCancelCurrent() {

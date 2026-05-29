@@ -57,9 +57,33 @@ public static class SirilEndpoints {
             }
         });
 
-        g.MapGet("/jobs/{jobId}", (SirilService siril, string jobId) => {
+        g.MapGet("/jobs/{jobId}", (SirilService siril, string jobId,
+                                    [Microsoft.AspNetCore.Mvc.FromQuery] int? sinceLine) => {
             var job = siril.GetJob(jobId);
-            return job == null ? Results.NotFound() : Results.Ok(job);
+            if (job == null) return Results.NotFound();
+            // Lock-snapshotted copy so the JSON serializer doesn't race
+            // against the stdout reader writing new lines. sinceLine
+            // lets the UI's polling fetch only the tail since the last
+            // poll — keeps payload tiny for jobs with 500-line buffers.
+            var snap = job.SnapshotLog();
+            var since = Math.Max(0, sinceLine ?? 0);
+            // totalLines is the absolute end-of-stream index (post-
+            // truncation it equals snap.Count; the client uses it to
+            // compute the next sinceLine). When the buffer wraps past
+            // 500 we lose the head but that's fine — the UI keeps its
+            // own already-rendered lines and only appends what's new.
+            var totalLines = snap.Count;
+            var tail = since >= totalLines
+                ? Array.Empty<string>()
+                : snap.GetRange(since, totalLines - since).ToArray();
+            return Results.Ok(new {
+                job.JobId, job.ScriptName, job.ScriptPath, job.TargetName,
+                job.Stage, job.PercentDone, job.WorkDir, job.ResultPath,
+                job.LastError, job.StartedAt, job.CompletedAt,
+                job.CancelRequested,
+                logLines = tail,
+                totalLines
+            });
         });
 
         g.MapGet("/jobs", (SirilService siril) => Results.Ok(siril.ActiveJobs));

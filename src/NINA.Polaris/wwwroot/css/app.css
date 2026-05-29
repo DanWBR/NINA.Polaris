@@ -6495,6 +6495,46 @@ label select.input-sm {
     color: var(--text-muted);
     font-variant-numeric: tabular-nums;
 }
+
+/* Live Siril console — the stdout/stderr stream rendered as a
+   terminal-style block inside the run modal so the user can watch
+   the job progress instead of staring at an opaque progress bar.
+   Fixed height + internal scroll so a 500-line log doesn't push
+   the action buttons off-screen on a small viewport. */
+.siril-console {
+    margin: 12px 0 4px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    background: #050810;
+}
+.siril-console-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+.siril-console-body {
+    margin: 0;
+    padding: 8px 10px;
+    height: 220px;
+    overflow-y: auto;
+    background: #050810;
+    color: #c8d4e6;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+.siril-console-err {
+    /* stderr lines get a soft red so they pop without screaming. */
+    color: #fca5a5;
+}
 /* CROP modal picker. The <img> sizes naturally so the aspect ratio
    stays right; the overlay <div> tracks the user-drawn rectangle in
    DISPLAY pixels (cropOnPointerMove computes left/top/w/h against
