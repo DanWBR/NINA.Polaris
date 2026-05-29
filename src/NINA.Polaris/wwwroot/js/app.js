@@ -11769,7 +11769,14 @@ function ninaApp() {
         // Open the GraXpert batch modal for the operation requested
         // (BGE / Decon / Denoise). Defaults pulled from the profile
         // so the modal already has sensible values per op.
-        graxpertOpenModal(operation) {
+        //
+        // pathOverride: optional string|string[]. When the editor's
+        // controls-header buttons call this, they pass
+        // editorState.sourcePath so the modal works on the file
+        // currently being edited instead of FILES tab's selection.
+        // When omitted (FILES toolbar path), the existing
+        // files.selectedPaths flow runs.
+        graxpertOpenModal(operation, pathOverride) {
             // GX-7: open the modal if either path is viable, CLI
             // installed OR the matching ONNX model is in the registry.
             // Block only when both are unavailable.
@@ -11780,10 +11787,17 @@ function ninaApp() {
                          + 'configure Onnx:ModelsPath in Settings', 'warn');
                 return;
             }
-            // Source paths come from FILES selection (when called from
-            // the FILES toolbar). Studio + Autorun call this with
-            // explicit prefilledPaths in F7.
-            this.graxpert.modalPaths = (this.files?.selectedPaths || []).slice();
+            // Source paths come from the override when present
+            // (editor / STUDIO / autorun), otherwise fall back to
+            // the FILES tab selection. Normalise to an array so the
+            // batch loop downstream doesn't care which caller it was.
+            let paths;
+            if (pathOverride) {
+                paths = Array.isArray(pathOverride) ? pathOverride : [pathOverride];
+            } else {
+                paths = (this.files?.selectedPaths || []).slice();
+            }
+            this.graxpert.modalPaths = paths;
             this.graxpert.modalOp = operation;
             this.graxpert.modalSmoothing = this.settings.graxpertBgeSmoothing;
             this.graxpert.modalCorrection = this.settings.graxpertBgeCorrection;
