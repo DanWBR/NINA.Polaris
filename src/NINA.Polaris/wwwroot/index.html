@@ -4262,6 +4262,45 @@
                                     title="Crop a rectangle from this image (saves as _crop.fits next to it)">
                                 ✂ Crop
                             </button>
+                            <!-- AI pipeline shortcuts. Same operations
+                                 the "AI (GraXpert)" <details> section
+                                 below exposes (GX-5), pulled up to the
+                                 controls header so they're discoverable
+                                 alongside Auto / Reset / Crop instead
+                                 of being hidden in a collapsible. Calls
+                                 the in-browser ONNX path via
+                                 editorRunAi — writes a sibling FITS
+                                 (_bge / _denoise / _decon) and
+                                 auto-reopens it in the same editor
+                                 session so the user keeps editing on
+                                 the AI-cleaned pixels. Each button is
+                                 gated on its model being available in
+                                 the manifest, so a Pi without the
+                                 600 MB Decon model still sees BGE +
+                                 Denoise but Decon stays hidden. -->
+                            <button class="btn btn-sm"
+                                    x-show="onnxAvailableForOp('background-extraction')"
+                                    :disabled="editorAi.busy || !editorState.session"
+                                    @click="editorRunAi('background-extraction')"
+                                    title="Remove gradient with GraXpert background extraction (browser ONNX)">
+                                🌅 BGE
+                            </button>
+                            <button class="btn btn-sm"
+                                    x-show="onnxAvailableForOp('denoising')"
+                                    :disabled="editorAi.busy || !editorState.session"
+                                    @click="editorRunAi('denoising')"
+                                    title="Reduce noise with GraXpert denoise model">
+                                🔇 Denoise
+                            </button>
+                            <button class="btn btn-sm"
+                                    x-show="onnxAvailableForOp('deconvolution')"
+                                    :disabled="editorAi.busy || !editorState.session"
+                                    @click="editorRunAi('deconvolution')"
+                                    title="Sharpen with GraXpert deconvolution model">
+                                ✨ Decon
+                            </button>
+                            <span x-show="editorAi.busy" class="hint" style="margin-left:6px"
+                                  x-text="editorAi.phase || 'Running…'"></span>
                         </div>
 
                         <!-- LUZ / LIGHT -->
