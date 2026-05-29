@@ -1298,6 +1298,25 @@ function ninaApp() {
             setInterval(() => this.updateClock(), 1000);
             this.updateFov();
 
+            // SKY engine refresh on tab-visibility return. Browsers
+            // pause requestAnimationFrame while a tab is hidden, so
+            // the stellarium-web-engine's internal observer.utc
+            // freezes too. The periodic re-sync inside
+            // _updateSkyClock only fires every 30 s; without this
+            // listener someone coming back from a 5-minute background
+            // sees the sky 5 minutes in the past until the next tick
+            // happens to land on a % 30 == 0. Pushing observer + time
+            // on visibilitychange (visible) closes that window so the
+            // moon / planets snap to correct position immediately.
+            if (typeof document !== 'undefined') {
+                document.addEventListener('visibilitychange', () => {
+                    if (document.visibilityState === 'visible'
+                        && this._skyBridgeReady) {
+                        this._skyPushObserverAndTime();
+                    }
+                });
+            }
+
             // AUTH-3: gate the rest of init on auth. _authBoot is
             // async; it restores the saved token, queries /status,
             // and either sets needLogin/needSetup (deferring the
@@ -3843,14 +3862,25 @@ function ninaApp() {
         // wwwroot/sky/js/sky-bridge.js.
 
         initSkyViewer() {
-            // SWE-3-bugfix: d3-celestial removed. The SKY tab now hosts
-            // the stellarium-web-engine iframe (#skyFrame), which boots
-            // itself from /sky/index.html, no host-side initialisation
-            // needed here. Kept the method as a no-op so the sidebar
-            // button + Home card click handlers (tab='sky';
-            // initSkyViewer()) still call through without an undefined
-            // method error. SWE-4 will replace this with a postMessage
-            // refresh tick (e.g. push observer+time on tab activation).
+            // d3-celestial is gone (SWE-6); the SKY tab now hosts the
+            // stellarium-web-engine iframe (#skyFrame) which boots
+            // itself from /sky/index.html. What we DO need here is to
+            // push observer + time on tab activation: requestAnimationFrame
+            // is paused while the browser tab is hidden OR while the
+            // user is on another Polaris tab if the browser throttles
+            // background iframes (most do). When the user returns the
+            // engine's observer.utc is whatever stale value it had
+            // before the pause; the next periodic re-sync inside
+            // _updateSkyClock only fires every 30 s. Pushing the fresh
+            // wall clock right now makes the moon / sun / planets
+            // jump to the correct position immediately instead of
+            // looking N seconds (or N minutes) behind.
+            if (this._skyBridgeReady) {
+                this._skyPushObserverAndTime();
+            }
+            // If the bridge isn't ready yet, the ready handler at
+            // line ~4003 already calls _skyPushObserverAndTime on
+            // first ready, so we don't need to queue anything here.
         },
 
         // ---------------------------------------------------------------
