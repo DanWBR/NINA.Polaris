@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PHD2 — Remote Desktop</title>
+    <style>
+        /* The page is loaded inside an <iframe> in the GUIDE tab.
+           Flex column so the toolbar pins to the top and the
+           noVNC canvas fills the rest of the viewport. */
+        html, body {
+            margin: 0; padding: 0; height: 100%;
+            background: #0a0e16; color: #e5e7eb;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-size: 13px;
+            overflow: hidden;
+        }
+        body { display: flex; flex-direction: column; }
+        .vnc-toolbar {
+            flex: 0 0 auto;
+            display: flex; align-items: center; gap: 12px;
+            padding: 6px 12px;
+            background: rgba(15, 20, 30, 0.9);
+            border-bottom: 1px solid #1f2937;
+            font-size: 11px;
+        }
+        .vnc-toolbar .status {
+            display: inline-flex; align-items: center; gap: 6px;
+        }
+        .vnc-toolbar .dot {
+            display: inline-block; width: 8px; height: 8px;
+            border-radius: 50%; background: #6b7280;
+        }
+        .vnc-toolbar .dot.connected { background: #22c55e; }
+        .vnc-toolbar .dot.failed    { background: #ef4444; }
+        .vnc-toolbar .dot.pending   { background: #f59e0b; }
+        .vnc-toolbar .spacer { flex: 1; }
+        .vnc-toolbar .hint { color: #9ca3af; }
+        #screen {
+            flex: 1 1 auto;
+            position: relative;
+            background: #000;
+            overflow: hidden;
+        }
+        /* noVNC injects a <canvas> inside #screen; this rule keeps
+           it from overflowing the iframe and forces letterboxing
+           rather than scrollbars when the remote desktop is larger
+           than the iframe viewport. */
+        #screen canvas {
+            display: block;
+            max-width: 100%; max-height: 100%;
+        }
+        .overlay {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(0, 0, 0, 0.55);
+            color: #f3f4f6; font-size: 14px;
+            padding: 24px; text-align: center;
+        }
+        .overlay.hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="vnc-toolbar">
+        <span class="status">
+            <span id="dot" class="dot pending"></span>
+            <span id="statusText">Connecting…</span>
+        </span>
+        <span class="spacer"></span>
+        <span class="hint">
+            TightVNC will prompt for the password you set during install.
+        </span>
+    </div>
+
+    <div id="screen">
+        <div id="overlay" class="overlay hidden"></div>
+    </div>
+
+    <script type="module">
+        // noVNC is loaded as an ES module from the vendored
+        // wwwroot/js/lib/novnc/core bundle (MPL 2.0). We use only
+        // the RFB class — the project also ships an `app/ui.js`
+        // full-blown chrome, but we want a minimal viewport so the
+        // GUIDE iframe stays visually clean.
+        import RFB from '/js/lib/novnc/core/rfb.js';
+
+        const dot        = document.getElementById('dot');
+        const statusText = document.getElementById('statusText');
+        const overlay    = document.getElementById('overlay');
+
+        function setStatus(state, text) {
+            dot.className = 'dot ' + state;
+            statusText.textContent = text;
+        }
+        function showOverlay(msg) {
+            overlay.textContent = msg;
+            overlay.classList.remove('hidden');
+        }
+        function hideOverlay() {
+            overlay.classList.add('hidden');
+        }
+
+        // Build the bridge URL on the SAME origin as this page, so
+        // the parent Polaris auth (Bearer header on the iframe's
+        // initial load + the polaris_session cookie auto-attached
+        // by the browser on the WS upgrade) covers the connection.
+        // Scheme follows the parent: https:// → wss://, http:// → ws://.
+        const wsScheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl    = `${wsScheme}//${window.location.host}/phd2-vnc-ws`;
+
+        // Empty password — noVNC will prompt the user when TightVNC
+        // sends its authentication challenge. Storing the password
+        // here would defeat the user_privacy posture (the project
+        // never authorizes password-based access on the user's
+        // behalf); the prompt is a one-time per-session friction
+        // the user accepts in exchange for the embedded view.
+        const rfb = new RFB(
+            document.getElementById('screen'),
+            wsUrl,
+            { credentials: { password: '' } }
+        );
+
+        // Scale the remote framebuffer to fit the iframe viewport
+        // instead of producing scrollbars. "remote" would resize
+        // the Windows desktop itself; we want client-side scaling
+        // so the user's desktop layout stays untouched.
+        rfb.scaleViewport = true;
+        rfb.resizeSession = false;
+        rfb.background    = '#000';
+
+        rfb.addEventListener('connect', () => {
+            setStatus('connected', 'Connected');
+            hideOverlay();
+        });
+        rfb.addEventListener('disconnect', e => {
+            if (e.detail.clean) {
+                setStatus('pending', 'Disconnected');
+                showOverlay('Disconnected. Refresh this tab to reconnect.');
+            } else {
+                setStatus('failed', 'Connection lost');
+                showOverlay(
+                    'Connection to TightVNC was lost.\n' +
+                    'Open Settings → PHD2 Embedded GUI and confirm the ' +
+                    'service is running, then refresh.');
+            }
+        });
+        rfb.addEventListener('credentialsrequired', () => {
+            // Native noVNC prompt — keeps the password client-side.
+            // The user types it once per session; not stored anywhere.
+            const pw = window.prompt('TightVNC password');
+            if (pw !== null) rfb.sendCredentials({ password: pw });
+        });
+        rfb.addEventListener('securityfailure', e => {
+            setStatus('failed', 'Auth failed');
+            showOverlay('TightVNC rejected the password (reason: '
+                + (e.detail.reason || 'unknown') + '). Refresh to retry.');
+        });
+    </script>
+</body>
+</html>

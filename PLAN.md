@@ -15,7 +15,123 @@
   verbatim, only the prose around them was translated.
 -->
 
-# Current chapter: CROP — quick rectangular trim before BGE/decon/denoise
+# Current chapter: PH2VNC — embedded PHD2 GUI on Windows via TightVNC + noVNC
+
+> The GUIDE tab's "PHD2 GUI" embed was Linux-only (xpra). The user
+> runs Polaris on a Windows mini-PC too; on that host the tab just
+> displayed a "not supported" banner. xpra on Windows is a known
+> fragile path (dummy display driver issues + Python/GTK stack),
+> so instead we leveraged TightVNC's Windows service as the desktop
+> capturer and noVNC as the HTML5 client. The result: Windows
+> hosts now embed PHD2's full native GUI inside the GUIDE tab —
+> Profile Wizard, Brain dialog, Guiding Assistant, dark library,
+> the whole thing.
+
+## What shipped
+
+- **PH2VNC-1 (`Phd2VncSessionService` + tests)**
+  Windows-only sibling of `Phd2GuiSessionService`. Detects TightVNC
+  via `HKLM\SOFTWARE\TightVNC\Server` + fallback walks of
+  `Program Files\TightVNC\tvnserver.exe`. Monitors the `tvnserver`
+  Windows Service via `System.ServiceProcess.ServiceController`.
+  Probes the listening port (default 5900) every 15 s via a
+  loopback TCP connect. Start/Stop service ops require admin; if
+  Polaris isn't elevated, return a friendly "open services.msc
+  instead" error. Cross-platform compile: every Windows-only call
+  site is gated by `OperatingSystem.IsWindows()` so the platform
+  analyzer green-lights the Linux build. 5 tests pass + 4 ignored
+  on non-Windows runners (the ignored ones cover the Windows
+  registry/ServiceController paths).
+
+- **PH2VNC-2 (`/phd2-vnc-ws` WebSocket↔TCP bridge)**
+  noVNC speaks WebSocket; TightVNC speaks raw RFB over TCP.
+  Standalone noVNC setups use the `websockify` Python proxy for
+  this; we inline a ~60-line C# pump pair into `Program.cs` so
+  there's no extra process to manage. Each direction shuffles 16
+  KB chunks; cancellation links so closing either end tears down
+  both. Negotiates the `binary` subprotocol so stock noVNC
+  clients work without a custom build. AuthMiddleware gates the
+  path. 5 tests pin the rejection paths (501 / 503 / 400) against
+  a TestServer stub; the full byte round-trip is left to PH2VNC-6
+  end-to-end verification (TestHost's WebSocket pipe interacts
+  awkwardly with a real loopback TCP socket).
+
+- **PH2VNC-3 (vendor noVNC + static loader)**
+  noVNC v1.6.0 added as `external/novnc` git submodule (pinned
+  commit, MPL 2.0). The `core/` directory copied under
+  `wwwroot/js/lib/novnc/core/` with `LICENSE.txt` adjacent.
+  New `wwwroot/phd2-vnc/index.html` imports `RFB` from the bundle
+  and points it at `wss://{host}/phd2-vnc-ws`. Same-origin keeps
+  the parent Polaris auth (Bearer + `polaris_session` cookie)
+  covering the iframe. `scaleViewport=true` so the remote desktop
+  letterboxes inside the iframe instead of producing scrollbars.
+  Password prompt is the native noVNC one — Polaris never stores
+  the VNC password (privacy posture).
+
+- **PH2VNC-4 (endpoints + WS payload)**
+  `GET /api/guider/vnc-session/status`, `POST /redetect`, `POST
+  /start-service`, `POST /stop-service`. Same shape as the existing
+  `/gui-session/*` xpra ones. `StatusStreamHandler` extends the
+  `guider` block with a new `vncSession` sub-object mirroring
+  `guiSession`, so the 1 Hz WS tick keeps both panels current.
+
+- **PH2VNC-5 (OS-aware UI)**
+  The GUIDE tab's PHD2 GUI sub-tab now branches by OS instead of
+  unconditionally pointing at xpra:
+  - **macOS** (neither backend supported): single "not supported"
+    banner pointing the user at PHD2's native window.
+  - **Linux** (xpra path): the existing 4 states (32-bit ARM
+    warning, xpra not installed, session not running, iframe with
+    toolbar) — unchanged behavior.
+  - **Windows** (VNC path): 4 parallel states — TightVNC not
+    installed (with download link + Re-detect button), service
+    stopped (with Start-service + Re-detect buttons), service up
+    but not listening (config hint), and the working iframe with
+    toolbar showing version + port + Stop / Re-detect.
+
+  Alpine state mirrors the backend: `phd2VncSession` populated
+  by `loadPhd2VncStatus()` on tab enter and refreshed via the WS
+  payload's `guider.vncSession` every tick. Methods
+  `phd2VncRedetect / phd2VncStartService / phd2VncStopService`
+  match the existing `phd2GuiStart/Stop/Restart` shape.
+
+- **PH2VNC-6 (docs)**
+  New `docs/phd2-gui-windows.md` walks through TightVNC install
+  + Polaris setup + troubleshooting (where to find the registry
+  key, what "TightVNC service stopped" means, how to drop the
+  service to loopback-only, why the canvas might be black). The
+  existing `docs/phd2-gui-embedding.md` Linux doc keeps owning
+  the xpra path.
+
+## Verification
+
+- `dotnet build src/NINA.Polaris/NINA.Polaris.csproj` clean
+- `dotnet test --filter "FullyQualifiedName~Phd2Vnc"` → 10
+  passed, 4 ignored (Windows-only runtime tests)
+- Linux regression: existing `/phd2-gui/*` xpra path on the Pi 5
+  unchanged — iframe loads, sessions start/stop normally
+- Windows: needs a TightVNC install + Polaris run on a Windows
+  mini-PC to confirm the end-to-end flow. The state machine,
+  endpoints, and bridge are all unit-covered cross-platform; the
+  remaining verification is the human-driven "install TightVNC →
+  re-detect → click iframe → see desktop → maximize PHD2 → run
+  Brain dialog" smoke test in `docs/phd2-gui-windows.md`.
+
+## Licenses
+
+- **TightVNC**: GPLv2. Polaris invokes it via the Windows
+  Service Controller — no code mixing. User installs from the
+  official site (we never bundle).
+- **noVNC**: MPL 2.0. Compatible with Polaris MPL 2.0. Vendored
+  under `wwwroot/js/lib/novnc/` with the upstream `LICENSE.txt`
+  adjacent (required by MPL §3.3).
+- **System.ServiceProcess.ServiceController** + **Microsoft.Win32.Registry**:
+  added as PackageReferences. Both are Microsoft-owned, MIT-equivalent,
+  Windows-only at runtime but cross-platform at compile time.
+
+---
+
+# Previous chapter: CROP — quick rectangular trim before BGE/decon/denoise
 
 > The user normally drops their masters into GraXpert to crop off
 > the noisy stack borders before running BGE, deconvolution, or

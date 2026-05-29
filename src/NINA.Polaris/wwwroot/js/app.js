@@ -728,6 +728,13 @@ function ninaApp() {
         smartCalibrate: { slewToEquator: false },
         phd2GuiSession: null,            // { supportedOs, xpraInstalled, running, port, ... }
         phd2GuiBusy: false,
+        // PH2VNC: Windows TightVNC + noVNC bridge state, sibling of
+        // phd2GuiSession. Populated by /api/guider/vnc-session/status
+        // and refreshed every 1 Hz via the WS payload's
+        // guider.vncSession sub-block. null until the first status
+        // load so the GUIDE tab's branching uses optional-chaining.
+        phd2VncSession: null,            // { supportedOs, tightVncInstalled, serviceRunning, listening, ... }
+        phd2VncBusy: false,
 
         // WIFI-4: NetworkManagerService snapshot, updated each 1Hz WS tick.
         // null until the first payload arrives so the template gates on
@@ -13088,6 +13095,70 @@ function ninaApp() {
                 }
             });
         },
+
+        // ----- PH2VNC: Windows TightVNC + noVNC bridge lifecycle -----
+        // Sibling of phd2GuiStart/Stop/Restart above. The status
+        // payload arrives on every WS tick via guider.vncSession,
+        // so the explicit GET is only needed on first paint (when
+        // the tab loads before the first WS frame) and as a manual
+        // re-detect after the user installs/uninstalls TightVNC.
+        async loadPhd2VncStatus() {
+            try {
+                this.phd2VncSession = await this.apiGet('/api/guider/vnc-session/status');
+            } catch (e) {
+                this.phd2VncSession = { supportedOs: false, lastError: e.message };
+            }
+        },
+        async phd2VncRedetect() {
+            this.phd2VncBusy = true;
+            try {
+                await this.apiPost('/api/guider/vnc-session/redetect');
+                await this.loadPhd2VncStatus();
+                if (this.phd2VncSession?.tightVncInstalled) {
+                    this.toast('TightVNC v' + this.phd2VncSession.tightVncVersion + ' detected', 'ok');
+                } else {
+                    this.toast('TightVNC still not detected', 'warn');
+                }
+            } catch (e) {
+                this.toast('Re-detect failed: ' + e.message, 'error');
+            } finally {
+                this.phd2VncBusy = false;
+            }
+        },
+        async phd2VncStartService() {
+            this.phd2VncBusy = true;
+            try {
+                const r = await this.apiPost('/api/guider/vnc-session/start-service');
+                if (r.serviceRunning) {
+                    this.toast('TightVNC service started', 'ok');
+                } else {
+                    // Most common failure: not running elevated. Backend
+                    // returns the actionable message in r.error.
+                    this.toast(r.error || 'Failed to start TightVNC service', 'error');
+                }
+            } catch (e) {
+                this.toast('Start failed: ' + e.message, 'error');
+            } finally {
+                this.phd2VncBusy = false;
+                await this.loadPhd2VncStatus();
+            }
+        },
+        async phd2VncStopService() {
+            this.phd2VncBusy = true;
+            try {
+                const r = await this.apiPost('/api/guider/vnc-session/stop-service');
+                if (!r.serviceRunning) {
+                    this.toast('TightVNC service stopped', 'warn');
+                } else {
+                    this.toast(r.error || 'Failed to stop TightVNC service', 'error');
+                }
+            } catch (e) {
+                this.toast('Stop failed: ' + e.message, 'error');
+            } finally {
+                this.phd2VncBusy = false;
+                await this.loadPhd2VncStatus();
+            }
+        },
         async guiderStart() {
             try {
                 await this.apiPost('/api/guider/guide', {
@@ -15066,6 +15137,9 @@ function ninaApp() {
                 if (g.profileSync)  this.guider.profileSync = g.profileSync;
                 if (g.calibrateJob) this.guider.calibrateJob = g.calibrateJob;
                 if (g.guiSession)   this.phd2GuiSession = g.guiSession;
+                // PH2VNC: same shape as guiSession; UI branches by OS
+                // on these two snapshots inside the GUIDE tab.
+                if (g.vncSession)   this.phd2VncSession = g.vncSession;
             }
             if (msg.liveStack) {
                 this.liveStackEnabled = msg.liveStack.isRunning;

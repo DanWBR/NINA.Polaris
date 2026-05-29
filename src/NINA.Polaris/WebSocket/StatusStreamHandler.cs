@@ -33,6 +33,7 @@ public static class StatusStreamHandler {
         var profileSync = context.RequestServices.GetRequiredService<PHD2ProfileSyncService>();
         var phd2Calibration = context.RequestServices.GetRequiredService<PHD2CalibrationOrchestrator>();
         var phd2Gui = context.RequestServices.GetRequiredService<Phd2GuiSessionService>();
+        var phd2Vnc = context.RequestServices.GetRequiredService<Phd2VncSessionService>();
         var autoFocus = context.RequestServices.GetRequiredService<AutoFocusService>();
         var meridianFlip = context.RequestServices.GetRequiredService<MeridianFlipService>();
         var profile = context.RequestServices.GetRequiredService<ProfileService>();
@@ -98,6 +99,20 @@ public static class StatusStreamHandler {
                         port = phd2Gui.BindPort,
                         lastError = phd2Gui.LastError
                     };
+                    // PH2VNC-4: Windows-side embed status. Mirrors
+                    // guiSession's shape so the UI tab can switch
+                    // backends by OS without divergent state code.
+                    var vncSessionPayload = new {
+                        supportedOs = phd2Vnc.IsSupportedOs,
+                        unsupportedReason = phd2Vnc.UnsupportedReason,
+                        tightVncInstalled = phd2Vnc.TightVncInstalled,
+                        tightVncVersion = phd2Vnc.TightVncVersion,
+                        serviceInstalled = phd2Vnc.ServiceInstalled,
+                        serviceRunning = phd2Vnc.ServiceRunning,
+                        listening = phd2Vnc.Listening,
+                        port = phd2Vnc.Port,
+                        lastError = phd2Vnc.LastError
+                    };
 
                     // Compact guider payload: last 60 samples for inline chart
                     object? guiderPayload = null;
@@ -130,14 +145,16 @@ public static class StatusStreamHandler {
                             }),
                             profileSync = profileSyncPayload,
                             calibrateJob = calibrateJobPayload,
-                            guiSession = guiSessionPayload
+                            guiSession = guiSessionPayload,
+                            vncSession = vncSessionPayload
                         };
                     } else {
                         guiderPayload = new {
                             connected = false, appState = "Stopped",
                             profileSync = profileSyncPayload,
                             calibrateJob = calibrateJobPayload,
-                            guiSession = guiSessionPayload
+                            guiSession = guiSessionPayload,
+                            vncSession = vncSessionPayload
                         };
                     }
 

@@ -10,6 +10,11 @@
     <PackageReference Include="NUnit" Version="4.*" />
     <PackageReference Include="NUnit3TestAdapter" Version="4.*" />
     <PackageReference Include="Moq" Version="4.*" />
+    <!-- PH2VNC-2: Phd2VncBridgeTests stand up an in-process Kestrel
+         via TestServer to exercise the WS↔TCP pump pair against a
+         loopback TCP echo, without depending on TightVNC being
+         present on the test machine. -->
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.*" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\NINA.Polaris\NINA.Polaris.csproj" />

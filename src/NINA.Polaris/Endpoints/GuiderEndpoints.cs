@@ -514,6 +514,70 @@ public static class GuiderEndpoints {
             var ok = await gui.RelaunchPhd2Async();
             return Results.Ok(new { phd2Running = ok, error = ok ? null : gui.LastError });
         });
+
+        // ----- PH2VNC-4: Windows TightVNC + noVNC bridge lifecycle -----
+        // Sibling of /gui-session/* above. Same shape, different
+        // backend: xpra forwards an X display on Linux, TightVNC's
+        // Windows service captures the desktop and we bridge its
+        // RFB stream to a noVNC HTML5 client.
+
+        group.MapGet("/vnc-session/status", (Phd2VncSessionService vnc) => Results.Ok(new {
+            os = System.Runtime.InteropServices.RuntimeInformation.OSDescription,
+            supportedOs = vnc.IsSupportedOs,
+            unsupportedReason = vnc.UnsupportedReason,
+            tightVncInstalled = vnc.TightVncInstalled,
+            tightVncVersion = vnc.TightVncVersion,
+            tightVncPath = vnc.TightVncPath,
+            serviceInstalled = vnc.ServiceInstalled,
+            serviceRunning = vnc.ServiceRunning,
+            listening = vnc.Listening,
+            port = vnc.Port,
+            lastHealthCheckAt = vnc.LastHealthCheckAt,
+            lastError = vnc.LastError,
+            // Hint URL the UI iframes; lives under the Polaris
+            // listener so the AuthMiddleware (Bearer / cookie) covers
+            // it the same way it covers /phd2-gui/.
+            embedUrl = "/phd2-vnc/",
+            // Download link surfaced in the "not installed" banner.
+            // Pinned to the canonical project page so the user
+            // grabs the official MSI, not a mirror.
+            downloadUrl = "https://www.tightvnc.com/download.php"
+        }));
+
+        // Re-run detection on demand. UI fires this from the
+        // Settings card's "Re-detect" button after the user
+        // installs / uninstalls TightVNC without restarting Polaris.
+        group.MapPost("/vnc-session/redetect", async (Phd2VncSessionService vnc) => {
+            await vnc.RefreshDetectionAsync();
+            return Results.Ok(new {
+                supportedOs = vnc.IsSupportedOs,
+                tightVncInstalled = vnc.TightVncInstalled,
+                tightVncVersion = vnc.TightVncVersion,
+                serviceRunning = vnc.ServiceRunning,
+                listening = vnc.Listening,
+                lastError = vnc.LastError
+            });
+        });
+
+        group.MapPost("/vnc-session/start-service", async (Phd2VncSessionService vnc) => {
+            if (!vnc.IsSupportedOs)
+                return Results.Json(new { error = vnc.UnsupportedReason ?? "Not supported" },
+                    statusCode: 501);
+            if (!vnc.TightVncInstalled)
+                return Results.Json(new {
+                    error = "TightVNC not installed. Download from " +
+                            "https://www.tightvnc.com/download.php and run the installer."
+                }, statusCode: 501);
+            var ok = await vnc.StartServiceAsync();
+            return Results.Ok(new { serviceRunning = ok, error = ok ? null : vnc.LastError });
+        });
+
+        group.MapPost("/vnc-session/stop-service", async (Phd2VncSessionService vnc) => {
+            if (!vnc.IsSupportedOs || !vnc.TightVncInstalled)
+                return Results.Json(new { error = "Not supported" }, statusCode: 501);
+            var ok = await vnc.StopServiceAsync();
+            return Results.Ok(new { serviceRunning = !ok, error = ok ? null : vnc.LastError });
+        });
     }
 
     public record ConnectGuiderRequest(string? Host, int? Port);

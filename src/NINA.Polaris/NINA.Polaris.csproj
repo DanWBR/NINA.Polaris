@@ -102,6 +102,14 @@
          via xterm.js without needing a screen, and lets a Windows host
          SSH into a separate Linux box on the LAN. MIT-licensed. -->
     <PackageReference Include="SSH.NET" Version="2024.*" />
+    <!-- PH2VNC-1: Windows-only registry + service-control surface for
+         the TightVNC integration (Phd2VncSessionService). Both packages
+         compile cross-platform but throw PlatformNotSupportedException
+         at runtime off-Windows — the service gates every call behind
+         OperatingSystem.IsWindows() so the Linux build never reaches
+         the unsupported paths. -->
+    <PackageReference Include="Microsoft.Win32.Registry" Version="5.*" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.*" />
   </ItemGroup>
 
   <!-- Expose `internal` helpers to the test project so pure-string

@@ -404,7 +404,7 @@
                 <span class="nav-label">Sky</span>
             </button>
             <button class="nav-btn" :class="{ active: tab === 'guide' }"
-                    @click="tab = 'guide'; if (guideTab === 'gui') loadPhd2GuiStatus()"
+                    @click="tab = 'guide'; if (guideTab === 'gui') { loadPhd2GuiStatus(); loadPhd2VncStatus(); }"
                     title="Guider">
                 <svg viewBox="0 0 24 24" width="22" height="22"><polygon points="12,2 15,10 23,10 17,15 19,23 12,18 5,23 7,15 1,10 9,10" fill="none" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Guide</span>
@@ -2148,7 +2148,7 @@
                      guideTab state is on app.js (default 'gui'). -->
                 <div class="guide-tabstrip">
                     <button class="guide-tab" :class="{ active: guideTab === 'gui' }"
-                            @click="guideTab = 'gui'; loadPhd2GuiStatus()">PHD2 GUI</button>
+                            @click="guideTab = 'gui'; loadPhd2GuiStatus(); loadPhd2VncStatus()">PHD2 GUI</button>
                     <button class="guide-tab" :class="{ active: guideTab === 'control' }"
                             @click="guideTab = 'control'">Control</button>
                     <!-- Profile-sync indicator chip, lives in the strip so
@@ -2365,29 +2365,44 @@
 
                 </div><!-- /guideTab === 'control' -->
 
-                <!-- ===== TAB 2: PHD2 GUI (xpra HTML5 iframe) ===== -->
+                <!-- ===== TAB 2: PHD2 GUI ===== -->
+                <!-- Backend by OS: Linux uses xpra + HTML5 client (PH2X);
+                     Windows uses TightVNC + noVNC bridge (PH2VNC). macOS
+                     falls through to the "use native PHD2 window" banner.
+                     guiSession/vncSession come from /api/guider/*-session/
+                     status + the StatusStreamHandler 1Hz payload. -->
                 <div x-show="guideTab === 'gui'" class="phd2-gui-tab">
-                    <!-- State 1: Platform unsupported (non-Linux OR 32-bit ARM
-                         like Raspberry Pi 2/3 on 32-bit Raspbian, xpra
-                         installs from apt but session-start crashes due to
-                         dummy Xorg + GTK/Python issues on ARMv7). Backend
-                         populates UnsupportedReason with the specific blurb. -->
-                    <div x-show="phd2GuiSession && phd2GuiSession.unsupportedReason"
+                    <!-- ── Neither backend supported on this OS (macOS) ── -->
+                    <div x-show="phd2GuiSession && phd2VncSession
+                                 && !phd2GuiSession.supportedOs
+                                 && !phd2VncSession.supportedOs"
                          class="phd2-gui-banner phd2-gui-banner-info">
-                        <strong x-show="phd2GuiSession?.supportedOs === false">Not supported on this OS.</strong>
-                        <strong x-show="phd2GuiSession?.supportedOs && phd2GuiSession?.supportedArch === false">Not supported on this CPU architecture.</strong>
-                        <span x-text="phd2GuiSession?.unsupportedReason"></span>
+                        <strong>Not supported on this OS.</strong>
+                        Embedded PHD2 GUI requires either Linux + xpra or
+                        Windows + TightVNC. On this OS, open the native
+                        PHD2 window directly.
                         <p class="text-muted" style="margin-top:8px;font-size:11px">
-                            The <strong>Control</strong> tab on the left covers
-                            all JSON-RPC operations (profile switch, exposure,
-                            dec mode, guiding, dithering, smart calibrate,
-                            algorithm tuning), that surface works on every
-                            host. Only the embedded GUI window is unavailable
-                            here.
+                            The <strong>Control</strong> tab on the left
+                            covers all JSON-RPC operations (profile switch,
+                            exposure, dec mode, guiding, dithering, smart
+                            calibrate, algorithm tuning), that surface works
+                            on every host. Only the embedded GUI window is
+                            unavailable here.
                         </p>
                     </div>
+
+                    <!-- ───── LINUX / xpra path ───── -->
+                    <!-- Existing State 1: 32-bit ARM (Pi 2/3 with 32-bit
+                         Raspbian, xpra installs but session-start crashes
+                         due to dummy Xorg + GTK/Python issues on ARMv7). -->
+                    <div x-show="phd2GuiSession && phd2GuiSession.supportedOs
+                                 && !phd2GuiSession.supportedArch"
+                         class="phd2-gui-banner phd2-gui-banner-info">
+                        <strong>Not supported on this CPU architecture.</strong>
+                        <span x-text="phd2GuiSession?.unsupportedReason"></span>
+                    </div>
                     <!-- State 2: Linux + supported arch but xpra not installed -->
-                    <div x-show="phd2GuiSession && !phd2GuiSession.unsupportedReason && !phd2GuiSession.xpraInstalled"
+                    <div x-show="phd2GuiSession && phd2GuiSession.supportedOs && phd2GuiSession.supportedArch && !phd2GuiSession.xpraInstalled"
                          class="phd2-gui-banner phd2-gui-banner-warn">
                         <strong>xpra not installed.</strong>
                         Run on the Polaris host:
@@ -2397,7 +2412,7 @@
                         Assistant) so you can do everything remotely.
                     </div>
                     <!-- State 3: xpra installed but session not running -->
-                    <div x-show="phd2GuiSession && !phd2GuiSession.unsupportedReason && phd2GuiSession.xpraInstalled && !phd2GuiSession.running"
+                    <div x-show="phd2GuiSession && phd2GuiSession.supportedOs && phd2GuiSession.supportedArch && phd2GuiSession.xpraInstalled && !phd2GuiSession.running"
                          class="phd2-gui-empty">
                         <h3>PHD2 GUI session not running</h3>
                         <p>Starting takes ~5–10 seconds (spins up an Xorg-dummy
@@ -2411,7 +2426,7 @@
                            style="margin-top:8px" x-text="phd2GuiSession.lastError"></p>
                     </div>
                     <!-- State 4: Session running, iframe + toolbar -->
-                    <div x-show="phd2GuiSession && phd2GuiSession.running" class="phd2-gui-frame-wrap">
+                    <div x-show="phd2GuiSession && phd2GuiSession.supportedOs && phd2GuiSession.running" class="phd2-gui-frame-wrap">
                         <div class="phd2-gui-toolbar">
                             <span class="text-ok">✓ xpra v<span x-text="phd2GuiSession?.xpraVersion"></span></span>
                             <span class="text-muted" style="font-size:11px">
@@ -2444,6 +2459,93 @@
                             <button class="btn btn-sm btn-danger" @click="phd2GuiStop()" :disabled="phd2GuiBusy">Stop</button>
                         </div>
                         <iframe class="phd2-gui-iframe" src="/phd2-gui/"
+                                allow="fullscreen"></iframe>
+                    </div>
+
+                    <!-- ───── WINDOWS / TightVNC + noVNC path ───── -->
+                    <!-- Windows VNC State 1: TightVNC not installed -->
+                    <div x-show="phd2VncSession && phd2VncSession.supportedOs && !phd2VncSession.tightVncInstalled"
+                         class="phd2-gui-banner phd2-gui-banner-warn">
+                        <strong>TightVNC not installed.</strong>
+                        Download the Windows installer from
+                        <a :href="phd2VncSession?.downloadUrl || 'https://www.tightvnc.com/download.php'"
+                           target="_blank" rel="noopener">tightvnc.com</a>,
+                        set a password during install, then click
+                        <strong>Re-detect</strong>. The TightVNC service
+                        will host the desktop so Polaris can embed it here
+                        via noVNC.
+                        <div style="margin-top:10px">
+                            <button class="btn btn-sm" @click="phd2VncRedetect()"
+                                    :disabled="phd2VncBusy">
+                                <span x-show="!phd2VncBusy">⟳ Re-detect</span>
+                                <span x-show="phd2VncBusy">Detecting…</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Windows VNC State 2: Installed but service stopped -->
+                    <div x-show="phd2VncSession && phd2VncSession.supportedOs
+                                 && phd2VncSession.tightVncInstalled
+                                 && !phd2VncSession.serviceRunning"
+                         class="phd2-gui-empty">
+                        <h3>TightVNC service is stopped</h3>
+                        <p>The TightVNC desktop server (<code>tvnserver</code>)
+                           is installed but not running. Start it to enable
+                           the embedded view.</p>
+                        <p class="text-muted" style="font-size:11px">
+                            Polaris needs administrator privileges to control
+                            Windows services. If the button fails, start
+                            <code>tvnserver</code> manually via
+                            <code>services.msc</code>.
+                        </p>
+                        <div style="margin-top:10px;display:flex;gap:8px">
+                            <button class="btn btn-primary" @click="phd2VncStartService()"
+                                    :disabled="phd2VncBusy">
+                                <span x-show="!phd2VncBusy">▶ Start TightVNC service</span>
+                                <span x-show="phd2VncBusy">Starting…</span>
+                            </button>
+                            <button class="btn btn-sm" @click="phd2VncRedetect()"
+                                    :disabled="phd2VncBusy">⟳ Re-detect</button>
+                        </div>
+                        <p x-show="phd2VncSession?.lastError" class="text-err"
+                           style="margin-top:8px" x-text="phd2VncSession.lastError"></p>
+                    </div>
+
+                    <!-- Windows VNC State 3: Service running but port not listening -->
+                    <div x-show="phd2VncSession && phd2VncSession.supportedOs
+                                 && phd2VncSession.tightVncInstalled
+                                 && phd2VncSession.serviceRunning
+                                 && !phd2VncSession.listening"
+                         class="phd2-gui-banner phd2-gui-banner-warn">
+                        <strong>TightVNC is running but not listening on port
+                            <span x-text="phd2VncSession?.port"></span>.</strong>
+                        Open the TightVNC Service Configuration window
+                        (system tray → TightVNC icon → Configuration) and
+                        confirm "Accept incoming connections" is enabled.
+                        <div style="margin-top:10px">
+                            <button class="btn btn-sm" @click="phd2VncRedetect()"
+                                    :disabled="phd2VncBusy">⟳ Re-detect</button>
+                        </div>
+                    </div>
+
+                    <!-- Windows VNC State 4: All clear, iframe + toolbar -->
+                    <div x-show="phd2VncSession && phd2VncSession.supportedOs
+                                 && phd2VncSession.tightVncInstalled
+                                 && phd2VncSession.serviceRunning
+                                 && phd2VncSession.listening"
+                         class="phd2-gui-frame-wrap">
+                        <div class="phd2-gui-toolbar">
+                            <span class="text-ok">✓ TightVNC v<span x-text="phd2VncSession?.tightVncVersion"></span></span>
+                            <span class="text-muted" style="font-size:11px">
+                                port <span x-text="phd2VncSession?.port"></span> · noVNC
+                            </span>
+                            <span style="flex:1"></span>
+                            <button class="btn btn-sm" @click="phd2VncRedetect()" :disabled="phd2VncBusy"
+                                    title="Re-check TightVNC install + service state">⟳ Re-detect</button>
+                            <button class="btn btn-sm btn-danger" @click="phd2VncStopService()" :disabled="phd2VncBusy"
+                                    title="Stop the TightVNC Windows service (requires admin)">Stop</button>
+                        </div>
+                        <iframe class="phd2-gui-iframe" src="/phd2-vnc/"
                                 allow="fullscreen"></iframe>
                     </div>
                 </div><!-- /guideTab === 'gui' -->

@@ -29,7 +29,9 @@ namespace NINA.Polaris.Middleware;
 ///                      gates /ws. No special handshake protocol
 ///                      needed. ?token= in the URL is the fallback
 ///                      for non-cookie scenarios.)
-///   /phd2-gui/*       (reverse-proxied embedded GUI)
+///   /phd2-gui/*       (reverse-proxied embedded GUI — Linux/xpra)
+///   /phd2-vnc/*       (noVNC static client — Windows/TightVNC)
+///   /phd2-vnc-ws      (WebSocket bridge to local TightVNC TCP)
 ///   /indi-web/*       (reverse-proxied INDI Web Manager)
 ///   /sky/*            (Stellarium sub-app, includes API calls back
 ///                      to /sky/data/*)
@@ -82,6 +84,8 @@ public class AuthMiddleware {
         return path.StartsWithSegments("/api")
             || path.StartsWithSegments("/ws")
             || path.StartsWithSegments("/phd2-gui")
+            || path.StartsWithSegments("/phd2-vnc")        // noVNC static + /phd2-vnc-ws bridge
+            || path.StartsWithSegments("/phd2-vnc-ws")
             || path.StartsWithSegments("/indi-web")
             || path.StartsWithSegments("/sky");
     }
