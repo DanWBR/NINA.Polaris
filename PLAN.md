@@ -2647,6 +2647,1041 @@ Apply: out[c, i] = (in[c, i] - offset[c]) * gain[c]
 # Previous plan: Mono LRGB workflow (CC-1..7), channel combine, LRGB and PixelMath
 
 > Previous plan (GX, GraXpert ONNX in-browser) preserved below.
+
+## Context
+
+STUDIO already produces **one master per filter**
+(`integrated/{target}/L/master_L_*.fits`, same for R/G/B/Ha) via
+`BatchStackingService`. Those masters sit in the STUDIO library
+waiting for the user to "do something" with them. The only option
+today is exporting mono TIFFs per filter + finishing outside
+Polaris.
+
+Missing the **channel combine** step: take separate mono masters
+and assemble a single RGB or LRGB. PixInsight does this with
+`ChannelCombination`, `LRGBCombination`, and `PixelMath`. Without
+it, Polaris doesn't close the mono workflow end-to-end — which
+is exactly what `end-to-end-workflow.md` just promised to close.
+
+**Research** (Explore agents Phase 1):
+- **Backend ready**: `FITSReader` + `FITSWriter` already support
+  3-channel plane-sequential (NAXIS=3, NAXIS3=3) via
+  `ImageProperties.Channels`.
+- **`BatchStackingService`** is the canonical long-running job
+  template (jobId + ConcurrentDictionary<progress> + RunAsync).
+- **`BgePipeline`** in `onnx-pipelines.js` already runs RGB
+  natively (path `opts.channels === 3` does
+  resize/replicate per channel).
+- **Frontend ready**: STUDIO multi-select exists
+  (`studio.selectedIds`), selection-bar has 4 buttons + room for
+  a 5th "🎨 Combine".
+
+**Confirmed gaps**:
+1. No `ChannelCombineService` in the codebase (search for
+   "ChannelCombine|LrgbCombine|RgbCompose|PixelMath" empty).
+2. `ImageEditService.cs:129` hardcodes `channels = 1` when opening
+   FITS, silently flattening RGB combine results to mono in the
+   EDITOR.
+3. `DenoisePipeline` + `DeconPipeline` in `onnx-pipelines.js`
+   (`runPerChannel` line 904) force mono input — same problem on
+   AI cleanup post-combine.
+
+**Decisions** (AskUserQuestion in the Plan phase):
+- **v1 scope**: RGB + LRGB + PixelMath, simple expressions
+  without statements, named variables (R, G, B, L, Ha, OIII, SII,
+  free).
+- **Downstream**: fix editor + ONNX Denoise/Decon in the same
+  plan, channel combine is useless if the rest of the pipeline
+  silently flattens to mono.
+
+## Architecture
+
+### Algorithms (LRGB)
+
+**Lab Swap** (default, PixInsight-style):
+
+1. RGB → linear sRGB (gamma 2.2 inverse): `linear = pow(srgb/65535, 2.2)`
+2. linear sRGB → CIE XYZ via D65 matrix.
+3. XYZ → Lab via `f(t) = t^(1/3)` piecewise.
+4. Replace `L_lab` with the L master histogram-matched to
+   `luminance(rgb)`.
+5. Lab → XYZ → linear sRGB → RGB.
+
+**Ratio** (classical):
+
+```
+Lum_rgb = 0.2126*R + 0.7152*G + 0.0722*B    (Rec.709)
+ratio = L / max(Lum_rgb, 1)
+R' = clamp(R * ratio)
+G' = clamp(G * ratio)
+B' = clamp(B * ratio)
+```
+
+Histogram-match L's `median` and MAD to `luminance(RGB)` before
+the swap, otherwise the L overpowers the RGB.
+
+### Cross-channel registration (default ON)
+
+Per-filter masters come out of `BatchStackingService` aligned to
+the best-HFR-frame **of that job**, i.e. master_R aligned to the
+best R, master_G aligned to the best G, etc. Even in the same
+session without re-framing, this almost never produces sub-pixel
+agreement between master_L and master_R (different reference
+frames, different plate-solve, different momentary seeing).
+Result: RGB stack without registration shows colour fringes on
+stars and ghost doubles on nebulae.
+
+Mandatory v1 (toggle "Register channels" default ON; off-switch
+exists for rare cases like permanent observatory with rotator
+zeroed):
+
+```csharp
+// inside ChannelCombineService, after Load + Validate
+var detector = new StarDetector {
+    SigmaThreshold = 7.0,    // masters have high SNR, raise to avoid halos
+    MaxStarSize = 80          // lower MaxStarSize, master stars are sharper
+};
+var refIdx = mode == LrgbCompose ? indexOfL : 0;
+var refStars = detector.Detect(planes[refIdx], w, h);
+for (int i = 0; i < planes.Length; i++) {
+    if (i == refIdx) continue;
+    var stars = detector.Detect(planes[i], w, h);
+    var t = StarMatcher.Match(refStars, stars,
+        maxSearchRadius: 100);
+    if (t == null) {
+        throw new InvalidOperationException(
+            $"Could not register channel {channelNames[i]} to reference " +
+            $"{channelNames[refIdx]}: too few matched stars. " +
+            $"Detected {stars.Count} stars in this channel, " +
+            $"{refStars.Count} in reference.");
+    }
+    planes[i] = ImageResampler.ApplyTransform(planes[i], w, h, t);
+    transforms[i] = t;
+}
+```
+
+FITS headers recorded per combine output:
+- `REGISTER` = `T` or `F`
+- `REGREF` = reference channel name (e.g. `L`)
+- `REG_{ch}` = `M00,M01,M10,M11,Tx,Ty` of the applied transform.
+
+### Optional normalisation
+
+After registration, before compose: scale per-channel to a common
+median (reference = max of all medians) via linear factor. Useful
+when R/G/B were captured in different sessions with different
+backgrounds. Toggle ON by default for RGB/LRGB, OFF for PixelMath
+(user can pre-scale in the expression).
+
+### PixelMath UX
+
+Modal shows:
+
+```
+Frame variable mapping:
+  master_L_M31_120x180s.fits  →  [L]
+  master_R_M31_60x180s.fits   →  [R]
+  master_G_M31_60x180s.fits   →  [G]
+  master_B_M31_60x180s.fits   →  [B]
+  master_Ha_M31_30x300s.fits  →  [Ha]
+
+Output channels:
+  R  =  [ 0.7*R + 0.3*Ha ]
+  G  =  [ G               ]
+  B  =  [ B               ]
+  (or single field if "Mono output" toggled)
+```
+
+Client-side validation: parse each expression before submit;
+inline error ("variable 'X' undefined" / "unbalanced parenthesis").
+
+## Phases (7 commits)
+
+### CC-1: ChannelCombineService skeleton + RgbCompose + registration
+- New `ChannelCombineService.cs` job-pattern mirroring
+  `BatchStackingService`.
+- Mode `RgbCompose`: loads 3 frames via
+  `FrameLibraryService`, validates W×H identical.
+- **Cross-channel star register** (default ON):
+  `StarDetector` (`SigmaThreshold=7.0`, `MaxStarSize=80`) on each
+  plane, first selected = reference, `StarMatcher.Match` +
+  `ImageResampler.ApplyTransform` per non-ref channel. Fail loud
+  on match failure.
+- Normalise per-channel optional post-registration.
+- Final RGB plane-sequential pack + `FITSWriter` with
+  `Channels=3`.
+- Output `integrated/{target}/composed/rgb_{target}_{stamp}.fits`
+  via extension of the `ImageWriterService.BuildSubDir` switch
+  with case `"COMPOSED"`.
+- Endpoint `POST /api/studio/combine` (mode=rgb) +
+  `GET /api/studio/combine/{jobId}`.
+- Reindex via `FrameLibraryService.RescanAsync()` at job end.
+- Tests: synthetic 3 mono perfectly aligned → byte-correct RGB
+  per plane; synthetic R shifted +5px,+3px → after registration,
+  pixel-perfect aligned (RMS centroid < 0.5 px); registration OFF
+  skips the phase; mismatch dimensions → actionable error.
+
+### CC-2: LrgbCombiner (Lab + Ratio) + LrgbCompose mode
+- New `LrgbCombiner.cs` with `LabSwap` and `Ratio`.
+- Roundtrip tests RGB→Lab→RGB tolerance ±2 ADU in 16-bit.
+- Histogram-match helper (median + MAD scale).
+- `ChannelCombineService` gets `LrgbCompose` mode (4 inputs).
+- Output `lrgb_{target}_{stamp}.fits`.
+- Tests: synthetic L bright + RGB dim → output preserves colour
+  + tracks luminance.
+
+### CC-3: PixelMathEvaluator + PixelMath mode
+- New `PixelMathEvaluator.cs` with recursive-descent parser
+  AOT-friendly.
+- Compiles to `Func<Dictionary<string,float>, float>` single-pass.
+- Built-in functions: min, max, abs, pow, sqrt, exp, log, clamp.
+- Validation: undefined identifiers → exception with position.
+- `ChannelCombineService` gets `PixelMath` mode: N named inputs,
+  1 expression (mono out) or 3 (RGB out).
+- Tests: precedence (2+3*4=14), parens, function call, undefined
+  variable, identity expression produces output==input.
+
+### CC-4: Fix ImageEditService + EditPipeline RGB path
+- `ImageEditService.cs:129` reads `img.Properties.Channels`
+  instead of hardcoded 1.
+- Audit `EditPipeline.Apply` (already exists) confirming it
+  respects `Channels=3` per step (Color does HSL on RGB; Light
+  does per-pixel tonal; Detail USM per-channel; etc). Add RGB
+  tests where missing.
+- E2E smoke: editor opens RGB FITS, Color sliders functional,
+  save sidecar, reopen, preserves.
+
+### CC-5: ONNX Denoise + Decon RGB path
+- Mirror `BgePipeline.runRgb` in `onnx-pipelines.js` for
+  `DenoisePipeline` and `DeconPipeline`:
+  - If `opts.channels === 3` → split plane-sequential into 3
+    mono buffers → 3× `runPerChannel` → recombine
+    plane-sequential.
+  - Memory budget OK on iOS (FP16 path already picks backend by
+    model size).
+- JS smoke tests: mock session returning input → assert
+  recombine produces same buffer.
+
+### CC-6: UI Combine modal + selection-bar wiring
+- "🎨 Combine" button in studio selection-bar, enabled when
+  `selectedIds.length ≥ 2` and all are masters
+  (`type === 'MASTER'` via IMAGETYP).
+- Modal `studio-combine-modal` with 3 tabs (Alpine).
+- RGB tab: 3-row table (R/G/B) with `<select>` populated by
+  selectedIds, auto-pick by `frame.filter` on open.
+- LRGB tab: same + L row + radio `algorithm: lab | ratio`.
+- PixelMath tab: variable-name input per frame + N text fields
+  for expressions + "Mono output" checkbox.
+- **Register channels (recommended)** checkbox, default ON (all
+  modes). Tooltip explains when to disable.
+- Normalise checkbox (default ON for rgb/lrgb, OFF for pm).
+- Live output-path preview computed.
+- Run button → POST + poll progress + toast on done + auto-open
+  output in editor.
+
+### CC-7: Tests + docs + verify
+- `tests/NINA.Polaris.Test/ChannelCombineServiceTests.cs`
+  covering the 3 modes + edge cases (mismatch, normalise, jobId
+  polling).
+- `tests/NINA.Polaris.Test/PixelMathEvaluatorTests.cs` (~15
+  cases).
+- `tests/NINA.Polaris.Test/LrgbCombinerTests.cs` (Lab roundtrip,
+  Ratio math).
+- JS smoke test for DenoisePipeline RGB path.
+- New `docs/user-guide/lrgb-mono-workflow.md`, mono branch of
+  the end-to-end workflow: L + R + G + B + Ha + OIII capture →
+  per-filter masters → combine → AI cleanup → editor → export.
+- Update `docs/user-guide/end-to-end-workflow.md` with "Mono
+  LRGB variation" pointing at `lrgb-mono-workflow.md`.
+- Update `docs/user-guide/studio.md` with new Combine tool.
+
+## Files created
+
+- `src/NINA.Polaris/Services/Studio/ChannelCombineService.cs`
+- `src/NINA.Polaris/Services/Studio/LrgbCombiner.cs`
+- `src/NINA.Polaris/Services/Studio/PixelMathEvaluator.cs`
+- `tests/NINA.Polaris.Test/ChannelCombineServiceTests.cs`
+- `tests/NINA.Polaris.Test/PixelMathEvaluatorTests.cs`
+- `tests/NINA.Polaris.Test/LrgbCombinerTests.cs`
+- `docs/user-guide/lrgb-mono-workflow.md`
+
+## Files modified
+
+- `Endpoints/StudioEndpoints.cs` — 2 new endpoints
+- `Program.cs` — register `ChannelCombineService` singleton
+- `Services/ImageWriterService.cs` — case `"COMPOSED"` in
+  `BuildSubDir`
+- `Services/Editor/ImageEditService.cs` — fix line 129
+  (`channels = img.Properties.Channels`)
+- `Services/Editor/EditPipeline.cs` — audit RGB path (if any gap)
+- `wwwroot/js/onnx-pipelines.js` — RGB path on Denoise + Decon
+- `wwwroot/index.html` — Combine button + modal
+- `wwwroot/js/app.js` — state + `studioCombine*` methods
+- `wwwroot/css/app.css` — `.studio-combine-modal` (small)
+- `docs/user-guide/end-to-end-workflow.md` — "Mono LRGB variation"
+  section
+- `docs/user-guide/studio.md` — Combine tool doc
+- `docs/user-guide/README.md` — new link
+- `README.md` — short mention
+
+## Reused code
+
+- `Services/Studio/BatchStackingService.cs:37-276` — literal
+  template for the job pattern AND the registration pipeline
+  (lines 72-148 do exactly Star detect → Match → Resample we
+  want to replicate cross-channel).
+- `Services/Studio/MasterFrameService.cs` — pattern of combining
+  N frames per-pixel (sigma-clipped); reuse the per-pixel loop
+  structure.
+- `Services/Studio/FrameLibraryService.GetById` — load inputs.
+- `Image.Portable/ImageAnalysis/StarDetector.cs` —
+  `Detect(ushort[], w, h)` stateless, returns
+  `List<DetectedStar>` (X, Y, HFR, Peak, Flux).
+- `Image.Portable/ImageAnalysis/StarMatcher.cs` —
+  `Match(refStars, currentStars, maxSearchRadius, maxStarsToUse,
+  ransacIterations)` static, returns `AffineTransform?`.
+- `Image.Portable/ImageAnalysis/AffineTransform.cs` +
+  `ImageResampler.cs` — `ApplyTransform(ushort[] source, w, h,
+  T)` returns aligned grid.
+- `Image.Portable/FileFormat/FITS/FITSReader.cs:17-46` — already
+  reads NAXIS=3 → `Channels=3`.
+- `Image.Portable/FileFormat/FITS/FITSWriter.cs:57-80` — already
+  writes 3-channel plane-sequential.
+- `Image.Portable/ImageData/ImageProperties.cs:21` — `Channels`
+  property.
+- `Image.Portable/ImageAnalysis/ColorSpace.cs` — RGB↔HSL
+  helpers (add Lab in the same file if absent).
+- `Services/ImageWriterService.cs:250-275 BuildSubDir` — switch
+  pattern to extend with `"COMPOSED"`.
+- `Services/Editor/EditPipeline.cs` — verify RGB-aware.
+- `wwwroot/js/onnx-pipelines.js BgePipeline.runRgb` (line ~675)
+  — exact pattern to mirror in Denoise + Decon.
+- `wwwroot/js/app.js studioStartIntegrate()` — model for
+  `studioRunCombine()`.
+- HTML `studio-integrate-modal` (~line 4469) — model for
+  `studio-combine-modal`.
+- Selection-bar (~line 4258), 4 existing buttons, add 5th in the
+  same row.
+
+## Verification
+
+### Build + tests
+- `dotnet build` clean.
+- `dotnet test` 620 atuais + ~30 novos = ~650 verdes.
+
+### Mono workflow complete (Bortle 4 backyard, mono ZWO 2600MM)
+1. AUTORUN: 30× L 180 s + 15× R 180 s + 15× G 180 s + 15× B 180 s
+   + 20× Ha 300 s.
+2. STUDIO rescan, calibrate per filter, integrate per filter:
+   - `integrated/M31/L/master_L_30x180s.fits`
+   - `integrated/M31/R/master_R_15x180s.fits`
+   - `integrated/M31/G/master_G_15x180s.fits`
+   - `integrated/M31/B/master_B_15x180s.fits`
+   - `integrated/M31/Ha/master_Ha_20x300s.fits`
+3. STUDIO select 4 masters R/G/B/L (Ctrl-click), click
+   **🎨 Combine**.
+4. Modal opens on LRGB tab, auto-detect mapping by filter.
+5. Algorithm: Lab Swap (default), Register channels ON,
+   Normalise ON.
+6. Click Run, progress shows "Detecting stars in 4 channels..."
+   → "Registering R/G/B to L..." → "Combining..." → done.
+   ~25 s on Pi 5 (registration adds ~15 s vs combine alone).
+7. Output `integrated/M31/composed/lrgb_M31_*.fits` appears in
+   library, "RGB" badge visible. FITS headers `REGISTER=T`,
+   `REGREF=L`, `REG_R=...` etc.
+8. Crop 200% in PixInsight to check stars: no colour fringes
+   (registration worked). Compare with registration OFF — fringes
+   clearly visible.
+9. Click "Open in editor" from the toast, editor loads RGB FITS
+   (Color sliders active with Temp/Tint/Vibrance/Saturation/Hue
+   working), confirms CC-4 fix.
+10. EDITOR → AI section → Denoise → output FITS RGB (3-channel),
+    reopens confirming CC-5 RGB path.
+11. EDITOR → Light + Color + Effects adjust → Save edits → Export
+    JPEG quality 92.
+
+### HOO synth (DSLR Bortle 8 with only Ha + OIII)
+12. Select master_Ha + master_OIII, click Combine, PixelMath tab.
+13. Variable mapping: Ha → `Ha`, OIII → `OIII`.
+14. Output channels: R = `Ha`, G = `0.5*Ha + 0.5*OIII`,
+    B = `OIII`.
+15. Mono output OFF, Normalise OFF.
+16. Run → output RGB visible in the classic HOO narrowband colour.
+
+### Failure modes
+- Mismatch W×H between inputs → actionable error "Frame X is
+  3000×2000, expected 4000×3000 (matching first frame)", job
+  marked `failed`.
+- Registration fails (`StarMatcher.Match` returns null for some
+  channel): descriptive error with detected star counts +
+  suggestion "increase exposure for filter X, or disable Register
+  channels if you trust your pre-existing alignment". Job ends
+  `failed`.
+- PixelMath invalid expression → 400 response with line+column.
+- Editor opens RGB FITS but with channel mismatch (PixInsight
+  multi-image XISF packed) → fallback to mono with warning log
+  (existing behaviour preserved).
+
+## Notes
+
+- **LRGB workflow is the mono core**; this plan closes the
+  "promise" made in end-to-end-workflow.md about Polaris covering
+  the complete pipeline.
+- **Cross-channel star alignment is MANDATORY by default**: each
+  per-filter master comes out of `BatchStackingService` aligned
+  to its own job's reference frame, master_R is not pixel-perfect
+  with master_L. Without registration the RGB output has colour
+  fringes on stars. Polaris detects stars on each plane
+  (`SigmaThreshold=7.0`, higher than single-sub because of higher
+  SNR), runs `StarMatcher.Match` against the reference channel,
+  resamples. Toggle "Register channels" default ON, off-switch
+  exists for permanent observatories with rotator zeroed.
+- **Bit depth**: input mono is uint16, output RGB also uint16
+  plane-sequential. No visible intermediate float precision to
+  the user; internal calcs in float (Lab transform requires
+  float).
+- **PixelMath is minimal**: no statements, no temp variables, no
+  pixel-coord access (x/y). Covers 80% of cases (narrowband
+  boost, synth L, channel ratio); advanced features go to v2.
+- **Memory**: 4 masters 24Mpx mono = ~192 MB weight, RGB output
+  ~144 MB. Pi 4 with 4 GB handles it, Pi 2 with 1 GB tight.
+  Documented.
+
+## Out of scope (deferred)
+
+- Pre-baked SHO Hubble palette wizard (user can code via
+  PixelMath).
+- Star removal (StarNet++ wrap) for LRGB with starless + star
+  RGB layers.
+- Multi-frame XISF (PixInsight project) input.
+
+---
+
+# Previous plan: GraXpert ONNX in-browser (GX-1..8)
+
+> Previous plan (NET, client-side network activity indicator) preserved below.
+
+## Context
+
+GraXpert integration (FILES tab + AutoGraXpert in SequenceEngine)
+calls the `graxpert` binary as a subprocess. Three issues:
+
+1. **Host coupling**: an iPhone client sees the buttons but
+   needs the Polaris server host to have the CLI installed +
+   models downloaded on disk. Mobile-only setups (Polaris on a
+   remote PC) depend on host config.
+2. **Server CPU**: subprocess runs on the server, so on Pi 4
+   each BGE/decon/denoise op takes minutes.
+3. **Maintenance**: each GraXpert release demands updating the
+   installed CLI; Polaris knows nothing about the model versions
+   the binary uses internally.
+
+User has the GraXpert repo cloned at
+`C:\Users\danie\source\repos\DanWBR\GraXpert\` with **5 ready
+ONNX models** (~1.5 GB total):
+
+| Model | Path | Size | Input shape | Notes |
+|---|---|---|---|---|
+| BGE | `models/bge-ai-models/1.0.1/model.onnx` | 208 MB | [B,256,256,3] | Single forward pass, no tiling |
+| Denoise v2 | `models/denoise-ai-models/2.0.0/model.onnx` | 284 MB | [B,256,256,3] | Tiling 256/stride 128 |
+| Denoise v3 | `models/denoise-ai-models/3.0.2/model.onnx` | 456 MB | [B,256,256,3] | Tiling 256/stride 128, ±1 clip |
+| Decon Stars | `models/deconvolution-stars-ai-models/1.0.0/model.onnx` | 267 MB | [B,1,512,512] | Tiling 512/stride 448, aux params |
+| Decon Objects | `models/deconvolution-object-ai-models/1.0.1/model.onnx` | 267 MB | [B,1,512,512] | Same |
+
+Models are **float32 NHWC** (BGE/Denoise) or **NCHW** (Decon,
+single channel). License: **CC BY-NC-SA 4.0** (different from
+the GPL-3 code — non-commercial use).
+
+**Decisions**:
+- **OS-independent implementation**: server is just a CDN for
+  models (HTTP route serves the bytes), inference runs 100% in
+  the client browser via `onnxruntime-web`. Works on laptop,
+  Android, iOS 16.4+, any device with WebGPU OR WASM SIMD.
+- **Mode**: **auto-detect** on the WS handshake. Client reports
+  capability (`wasmReady`, version), server decides. Manual
+  override in Settings (force server / force client).
+- **Multi-client**: each client stacks independently. No
+  master/slave. Reconnect mid-session → resumes from server's
+  current frame.
+
+## Architecture
+
+```
+┌── Server (any host: Pi, mini-PC, Windows) ──────────────────────┐
+│  OnnxModelRegistry (in-memory dict)                             │
+│   ├─ Reads from Onnx:ModelsPath setting (absolute path)         │
+│   ├─ Recursive walk for model.onnx + parse path                 │
+│   │   to extract family + version                               │
+│   └─ SHA-256 hash of file (lazy, on-demand)                     │
+│                                                                  │
+│  OnnxModelEndpoints                                              │
+│   ├─ GET /api/onnx/manifest                                      │
+│   │    → { models: [{family, version, sizeBytes, hash}]}         │
+│   ├─ GET /api/onnx/model/{family}/{version}                      │
+│   │    → application/octet-stream + ETag (= hash)                │
+│   │    + Cache-Control: immutable, max-age=31536000              │
+│   │    Browser caches in IndexedDB indefinitely; ETag survives   │
+│   │    reloads + new sessions                                    │
+│   └─ POST /api/onnx/save (multipart: source=, suffix=, bytes=)   │
+│        → writes result as sibling FITS, returns path             │
+└──────────────────────────────────────────────────────────────────┘
+
+┌── Browser (any client OS) ──────────────────────────────────────┐
+│  wwwroot/js/lib/onnxruntime-web/  (vendored ~5 MB JS + WASM)    │
+│    ort.min.js + ort-wasm-simd-threaded.wasm + ort-webgpu.js     │
+│    Backends: webgpu (preferred) → wasm-simd → wasm (fallback)   │
+│                                                                  │
+│  onnx-pipelines.js  (new)                                        │
+│   ├─ OnnxRegistry.fetchManifest()                                │
+│   ├─ OnnxRegistry.load(family, version)                          │
+│   │   ↳ check IndexedDB by hash; else GET + cache + return      │
+│   │     bytes; pass to ort.InferenceSession.create()            │
+│   ├─ BgePipeline.run(pixels, w, h, channels, opts)              │
+│   ├─ DenoisePipeline.run(pixels, w, h, channels, opts)          │
+│   └─ DeconPipeline.run(pixels, w, h, channels, opts)            │
+│                                                                  │
+│  FILES tab modal + Editor "AI" section                           │
+│   ├─ Detects ORT Web ready + manifest model availability         │
+│   ├─ Dispatches via OnnxPipelines (browser inference)            │
+│   └─ Falls back to CLI subprocess if toggle/incapable            │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Pipelines (math mirrored from GraXpert Python)
+
+**BGE** (`graxpert/background_extraction.py:27-116`):
+1. Shrink to 256×240, pad to 256×256 with edge mode.
+2. Per-channel MAD normalise: `(v − median) / MAD × 0.04`, clip ±1.
+3. Mono → expand to 3 channels.
+4. `session.run({"gen_input_image": [1,256,256,3]})`.
+5. Denormalise: × MAD/0.04 + median.
+6. Gaussian blur σ=3.0, resize back to w×h.
+7. Apply sample points + RBF/spline (interpolation pure JS).
+8. Subtract OR divide from original (user mode).
+
+**Denoise** (`graxpert/denoising.py:14-160`):
+1. Tile size 256, stride 128, overlap 50%.
+2. Padding: `(window_size − stride) / 2 = 64` on every border.
+3. Per-tile MAD normalise (global subsampled median+MAD), clip ±10
+   (v2) or ±1 (v3).
+4. Batch tiles (8 per call — power-of-2, configurable).
+5. De-tile: extract `[64:64+128, 64:64+128, :]` from each tile,
+   paste on stride-aligned grid.
+6. Blend strength: `out = denoised × s + original × (1−s)`.
+
+**Decon** (`graxpert/deconvolution.py:12-177`):
+1. Tile 512, stride 448, overlap 64.
+2. Per-tile log-normalise:
+   `(log(v − min + 1e-5) − mean) / (std × 0.1)`.
+3. 2 inputs: `gen_input_image [B,1,512,512]` +
+   `params [B,2]` = `[sigma_normalised, strength × 0.95]`.
+4. Output is the residual; subtract from input.
+5. De-tile: extract `[64:64+448, ...]`, stitch.
+6. Inverse log-normalise: `exp(v × std × 0.1 + mean) + min`.
+
+### Model serving + IndexedDB cache
+
+Server:
+- Single setting `Onnx:ModelsPath` (string, default null) pointing
+  at a directory containing the models. Polaris does recursive
+  walk looking for `model.onnx` and infers `family/version` from
+  the path (compatible with GraXpert layout:
+  `{family}-ai-models/{version}/model.onnx`).
+- If setting empty OR folder absent: manifest returns empty list,
+  UI grey with banner asking to configure.
+- SHA-256 hash computed lazily + cached in memory.
+- Serves bytes with `ETag: "{hash}"` + `Cache-Control: immutable,
+  max-age=31536000` — first GET downloads, subsequent 304.
+
+Client:
+- ORT Web bootstrap lazy: only loads when user invokes a GraXpert
+  op for the first time in the session.
+- Model bytes → IndexedDB store `polaris-onnx-models`, key =
+  `{family}/{version}/{hash}`. Next sessions reuse without
+  hitting the server (even offline afterwards).
+- Hash mismatch (server updated model) → drop entry + re-download.
+
+### iOS / Android constraints
+
+- **iOS Safari ≥16.4**: WebGPU available, WASM SIMD OK. Heap
+  limit ~2 GB per origin; Denoise v3 (456 MB) loadable but
+  tight. Default v2 (284 MB) on mobile detected by user-agent;
+  user can switch to v3 in Settings.
+- **Android Chrome ≥113**: WebGPU + WASM SIMD native, heap less
+  restrictive than iOS.
+- **Bandwidth**: 1.5 GB of models on first use per client. On
+  LAN WiFi 5: ~3 minutes. On LTE: skip. Hint UI "First-time
+  download: 208 MB" on the BGE / etc button.
+
+### Editor integration (ED-* already shipped)
+
+ONNX ops need **scene-referred** (linear pre-stretch) full-bit-
+depth. Editor today works in 8-bit display-stretched. Simple v1
+solution:
+- "AI" section in the editor with 3 buttons (BGE, Denoise, Decon).
+- Each one: takes the current session via
+  `/api/editor/raw/{sessionId}` (already exists — returns the
+  8-bit working buffer), processes, OR alternatively fetches the
+  source FITS via new `/api/editor/source-raw/{sessionId}`
+  returning the ushort[] pre-stretch.
+- For v1 restricted to 8-bit (degrades a bit vs CLI but works).
+  Full-bit-depth follow-up.
+
+### CC BY-NC-SA 4.0 license
+
+- First time user clicks a GraXpert op: consent modal ("Models by
+  GraXpert dev team, CC BY-NC-SA 4.0, non-commercial use — read
+  more / I agree"). Flag saved in localStorage + on server
+  profile.
+- Settings panel shows link to licenses.
+- Polaris does NOT redistribute the models in the installer —
+  discovered only via GraXpert install OR upstream download under
+  consent.
+
+## Phases (8 commits, plus 4 follow-ups GX-9..12)
+
+### GX-1: Model serving + ORT Web vendored
+- Vendor `onnxruntime-web@1.x` in `wwwroot/js/lib/onnxruntime/`
+  (ort.min.js + ort-wasm-simd.wasm + ort-webgpu binding).
+- New `Services/Onnx/OnnxModelRegistry.cs`: recursive walk of
+  `Onnx:ModelsPath`, extracts `family/version` from path, lazy
+  SHA-256.
+- New `Endpoints/OnnxEndpoints.cs`: manifest + model bytes
+  (ETag-based conditional GET) + POST /save.
+- Settings: new `Onnx:ModelsPath` field (string?, default null) +
+  Settings UI panel shows detected models or banner to configure.
+- Smoke: set path to `C:\…\GraXpert\models` → manifest returns 5
+  models; GET `/api/onnx/model/bge/1.0.1` downloads 208 MB with
+  ETag; second GET unchanged → 304.
+
+### GX-2: BGE pipeline + FILES tab toggle
+- `wwwroot/js/onnx-pipelines.js` with `OnnxRegistry` + class
+  `BgePipeline`.
+- BGE: implement shrink + MAD normalise + inference + denormalise
+  + Gaussian smooth + sample-point RBF + subtract/divide.
+- FILES tab GraXpert modal: new toggle "Run in browser" (default
+  ON when ORT Web ready + model available).
+- Toggle ON → BgePipeline.run, result → POST `/api/onnx/save`.
+- Toggle OFF → falls through to existing GraXpertService CLI.
+- Parity test: golden FITS → CLI output vs browser output, ≤1%
+  pixel diff.
+
+### GX-3: Denoise pipeline (v2 + v3 selection)
+- `DenoisePipeline` with tiling 256/stride 128, blend
+  stride-based.
+- Manifest exposes v2 + v3, UI radio (default v2 on mobile, v3
+  on desktop detected by screen width + UA).
+- Reuses OnnxRegistry + save endpoint.
+
+### GX-4: Deconvolution (Stars + Objects)
+- `DeconPipeline` with tiling 512/stride 448, log-normalise, aux
+  params, subtract residual.
+- UI radio Stars / Objects in modal.
+- Reuses plumbing.
+
+### GX-5: Editor "AI" section
+- New collapsible "AI" on the editor's right panel (ED-4 markup).
+- 3 buttons: "Background extract" / "Denoise" / "Deconvolution".
+- Each one: opens small param dialog, calls pipeline on the
+  current session's working buffer, posts result via
+  `/api/editor/replace-working/{sessionId}` (new endpoint:
+  swaps the session's cached buffer with the new; next preview
+  reflects it).
+- Non-destructive: reopening the source removes the effect
+  (not persisted in sidecar — operation is in-session).
+
+### GX-6: License consent + first-time UX
+- Consent modal CC BY-NC-SA 4.0 on first invocation.
+- Flag persisted in localStorage + UserProfile
+  (`Onnx:LicenseAcknowledged = true`).
+- Settings panel gets "AI inference (ONNX)" section showing
+  detected models + sizes, IndexedDB cache size, "Clear cache"
+  button, license links.
+
+### GX-7: CLI hidden behind advanced toggle
+- Settings adds toggle "Use GraXpert CLI subprocess instead of
+  in-browser inference" — default OFF.
+- When OFF: GraXpert UI (FILES tab buttons + editor AI section)
+  hides CLI controls and shows the browser-pipeline.
+- When ON: existing behavior (subprocess via GraXpertService).
+- Tooltip "Advanced: useful when the browser doesn't have enough
+  GPU/RAM for the models".
+
+### GX-8: Tests + docs + parity verification
+- `OnnxModelRegistryTests.cs` — auto-discovery, manifest shape,
+  hash stability.
+- `OnnxEndpointsTests.cs` — model serve with ETag, conditional
+  GET, save endpoint.
+- Manual parity script: 3 synthetic + real frames, run CLI +
+  browser pipeline, measure pixel diff. Accept ≤1% RMSE.
+- `docs/user-guide/onnx-inference.md` — workflow + supported
+  browsers + license + mobile constraints.
+- README section "AI processing (ONNX)" + attribution.
+
+### Follow-ups GX-9..12 (subsequent commits)
+- GX-9: RGB FITS support in ONNX pipelines (3-channel paths).
+- GX-10: HTTPS self-signed for WebGPU on LAN (WebGPU requires
+  secure context).
+- GX-11: Before/after slider after GraXpert run.
+- GX-12: Port GraXpert autostretch (15% Bg, 3 sigma) as default.
+
+## Files created
+
+- `src/NINA.Polaris/Services/Onnx/OnnxModelRegistry.cs`
+- `src/NINA.Polaris/Endpoints/OnnxEndpoints.cs`
+- `src/NINA.Polaris/wwwroot/js/lib/onnxruntime/` (vendored bundle)
+- `src/NINA.Polaris/wwwroot/js/onnx-pipelines.js`
+- `tests/NINA.Polaris.Test/OnnxModelRegistryTests.cs`
+- `tests/NINA.Polaris.Test/OnnxEndpointsTests.cs`
+- `docs/user-guide/onnx-inference.md`
+
+## Files modified
+
+- `Services/ProfileService.cs` — `Onnx:ModelsPath` (string?),
+  `Onnx:LicenseAcknowledged` (bool),
+  `Onnx:DefaultDenoiseVersion` (string, default "2.0.0").
+- `Program.cs` — register `OnnxModelRegistry` +
+  `MapOnnxEndpoints()`.
+- `wwwroot/index.html` — script tag ORT Web (lazy import); new
+  "AI" section in editor; license consent modal; FILES tab modal
+  toggle "Run in browser"; Settings section "AI inference".
+- `wwwroot/js/app.js` — pipeline wiring, IndexedDB cache,
+  dispatch toggle, license modal.
+- `wwwroot/css/app.css` — small additions for license modal + AI
+  section.
+- `Endpoints/EditorEndpoints.cs` — new
+  `POST /api/editor/replace-working/{sessionId}` for GX-5 to
+  inject AI op result back into the editor session.
+- `Services/Editor/ImageEditService.cs` — method
+  `ReplaceWorkingBuffer(sessionId, bytes, w, h, channels)` called
+  by the new endpoint.
+- `README.md` — "AI processing (ONNX)" section.
+
+## Reused code
+
+- `Services/External/GraXpertService.cs` — KEEP as CLI fallback;
+  just hide by default.
+- `Services/External/BinaryLocator.cs` — pattern of cross-OS
+  auto-discovery (replicate for `OnnxModelRegistry`).
+- `Services/Editor/ImageEditService.cs` — session pattern; new
+  `ReplaceWorkingBuffer` reuses `_sessions` dict + reuses the
+  stretching done at Load.
+- `Endpoints/EditorEndpoints.cs::raw` — pattern of binary stream
+  with `X-Width/X-Height/X-Channels` headers — replicate for
+  ONNX models.
+- `wwwroot/js/app.js _editorLoadWasmBuffer` — pattern of binary
+  buffer fetch + IndexedDB cache (already implemented for ED-6
+  WASM).
+- `wwwroot/js/lib/lz4.js` — not used here, but the vendored
+  library pattern serves as reference for ORT Web vendoring.
+
+## Verification
+
+### Preconditions
+- Modern desktop browser (Chrome/Edge ≥113, Safari ≥16.4,
+  Firefox ≥118) with WebGPU OR WASM SIMD.
+- Polaris server with setting `Onnx:ModelsPath` pointing at a
+  directory containing the GraXpert models.
+
+### Smoke
+1. `dotnet build` clean + `dotnet test` green (~620 tests).
+2. `GET /api/onnx/manifest` returns 5 models with correct sizes.
+3. `GET /api/onnx/model/bge/1.0.1` downloads 208 MB once; second
+   GET returns 304 Not Modified.
+4. Open EDITOR → AI section → click "Background extract":
+   - Console: "Loading model bge/1.0.1 (208 MB)…" + spinner.
+   - After load, "Running BGE on master (3000×2000 RGB)…".
+   - ~10-30 s later (laptop with GPU) preview updates with
+     background removed.
+5. Refresh browser → AI section → BGE again:
+   - Console: "Model bge/1.0.1 hit IndexedDB cache" → load
+     < 1 s.
+6. FILES tab: select a FITS → "BGE" button → toggle "Run in
+   browser" → click Run → ~30 s later `…_bge.fits` appears in
+   the folder + visible in FrameLibrary.
+
+### Parity vs CLI
+7. Take a test FITS; run via CLI (`graxpert -cmd
+   background-extraction …`) → ref output.
+8. Same FITS via browser pipeline → diff RMSE vs ref.
+9. Accept ≤1% RMSE; document the expected difference
+   (tile-boundary blending can diverge slightly).
+
+### Mobile
+10. iPhone Safari (iOS 16.4+) → same flow as step 4:
+    - Default Denoise is v2 (auto-selected by mobile detection).
+    - BGE runs in ~60-90 s (CPU-bound on A-series), produces
+      correct output.
+11. Android Chrome → same, with WebGPU using GPU (faster).
+
+### Failure scenarios
+- **WebGPU + WASM SIMD both unavailable** (very old browser) →
+  AI section shows "Browser too old; enable CLI in Settings"
+  banner.
+- **Model not found** (empty registry) → manifest returns
+  `{models: []}`; UI hides buttons + shows banner "Configure
+  Onnx:ModelsPath in Settings or wait for download".
+- **iOS heap OOM on Denoise v3** → catch + toast "Model too
+  large for this device; switching to Denoise v2".
+- **License consent not accepted** → modal blocks the run +
+  forces decision.
+- **No internet AND model not in local cache** → manifest shows
+  "available: false" + UI grey with tooltip.
+
+## License, performance, security notes
+
+- **CC BY-NC-SA 4.0 of models**: Polaris doesn't redistribute in
+  the installer. User MUST either point at a local GraXpert
+  install OR consent to upstream download (server fetch from
+  official GraXpert release URLs). Polaris stays pure MPL 2.0.
+- **GPL-3 of GraXpert code**: no GraXpert code comes into
+  Polaris; only the `.onnx` model files (assets), which are under
+  the separate CC BY-NC-SA 4.0 license.
+- **ORT Web bundle**: ~5 MB (1 MB JS + 4 MB WASM backends). MIT
+  license. No native deps on the server (the C# server does NOT
+  need Microsoft.ML.OnnxRuntime).
+- **IndexedDB cache size**: client may have ~1.5 GB in permanent
+  cache. Browser eventually expires under disk pressure; Polaris
+  re-downloads on demand.
+- **Privacy**: zero image data leaves the client browser (all
+  inference local); models come from the Polaris server OR
+  upstream GraXpert release.
+- **Expected performance** (BGE 256×256 single pass):
+  - Laptop NVIDIA GPU + WebGPU: ~50 ms.
+  - Laptop integrated GPU + WebGPU: ~300 ms.
+  - Pi 4 browser + WASM SIMD: ~3-5 s.
+  - iPhone 14 + WebGPU: ~200 ms.
+  - Android Pixel 6 + WebGPU: ~300 ms.
+  - Denoise full master 3000×2000 (60 tiles): ~5-15 s on GPU,
+    ~30-90 s on WASM SIMD CPU.
+- **Heap**: Denoise v3 loads ~500 MB of weights; iOS tight near
+  this. Default v2 on mobile gives margin.
+
+## Out of scope (deferred)
+
+- **Server-side ONNX runtime (C# Microsoft.ML.OnnxRuntime)**:
+  interesting feature (server does inference for weak clients)
+  but duplicates code + adds native deps. Browser-only is the
+  path. If demand appears, GX-9.
+- **AutoGraXpert in browser** (auto-BGE during capture): today
+  fire-and-forget via CLI in `SequenceEngine`. For browser would
+  need hand-off via WS to a capable client + ack. Keep CLI for
+  this specific case for now.
+- **Full-bit-depth in the editor**: GX-5 v1 works in 8-bit
+  display-stretched. ushort[] pre-stretch version is follow-up.
+- **Advanced Decon parameter tuning** (PSF estimate from stars,
+  etc): Polaris exports simple sliders; advanced tuning stays in
+  GraXpert standalone.
+- **Custom AI models** (user-trained): out of scope. v1 supports
+  only the 5 official GraXpert models.
+
+---
+
+# Previous plan: Activity bar — client↔server network indicator (NET)
+
+> Previous plan (ED, Editor Lightroom-style) preserved below.
+
+## Context
+
+The activity bar at the footer (lines 5251-5304 in `index.html`)
+today shows CPU%, RAM%, host icon at right; activity chips on
+the left. Missing: data **traffic** indication — when the
+image-stream WS is gushing LZ4 frames at 5-20 MB/s, or when
+`/api/editor/raw` is downloading 50-200 MB of the master, the
+user has no visual feedback that the link is busy. When the
+preview is slow to appear, they can't tell if it's the server,
+the WiFi, or a frozen app.
+
+**Objective**: small fixed footer strip showing at a glance:
+**↓ rxKB/s** and **↑ txKB/s**, each with LED-style pulse on
+activity, beside the CPU/RAM block.
+
+**Decisions** (already implied, small feature):
+- **Metrics**: client-side. Wrap `apiFetch` + `.onmessage` of
+  the 3 WebSockets + 6 raw editor fetches to accumulate bytes.
+- **Visibility**: always visible. CPU/RAM always present; chip
+  row appears when there's an active op, empty when idle.
+- **Update cadence**: 4 Hz (250 ms) — responsive without
+  flooding the RAF queue.
+- **Units**: auto-scale (B/s / KB/s / MB/s), 1 decimal.
+- **Zero backend**: no new endpoint, no extra payload.
+
+## Architecture
+
+### Counter + rolling window (pure JS, no libs)
+
+Single state object `net: { rxBuf, txBuf, rxRate, txRate,
+rxPulse, txPulse, rxTotal, txTotal }`.
+
+`rxBuf` / `txBuf` are circular arrays of tuples
+`{ tMs, bytes }` covering the last ~3 s. Every 250 ms (timer),
+purge entries older than 3 s, sum remaining `bytes`, divide by
+window → current rate. Write to `rxRate` / `txRate`. Pulse: set
+`rxPulse=true`, `setTimeout(120 ms)` to clear.
+
+Functions:
+- `_netRx(bytes)` — called by each arrival handler.
+- `_netTx(bytes)` — called by each send wrapper.
+- `_netStartMeter()` — 250 ms timer.
+- `formatBytesPerSec(bps)` — autoscale B→KB→MB with 1 decimal.
+
+### Instrumentation points
+
+**RX (server → client)**:
+1. `/ws/status` `.onmessage` (`app.js:1392`) — small JSON but
+   continuous (1 Hz × ~2 KB). `this._netRx(event.data.length)`.
+2. `/ws/image-stream` `.onmessage` (`app.js:1453`) — binary
+   `arraybuffer`. `this._netRx(event.data.byteLength)`. Heaviest
+   path: live stack in raw mode reaches 5-20 MB/s.
+3. `/ws/terminal` `.onmessage` (`app.js:1278`) — SSH text.
+   Negligible but instrumented for consistency.
+4. **`apiFetch` wrapper** (`app.js:1088-1152`) — single point for
+   all `apiPost`/`apiGet`. Use **Performance Resource Timing**:
+   `performance.getEntriesByType('resource')` returns
+   `PerformanceResourceTiming` with `transferSize`. Drain via
+   `performance.clearResourceTimings()` after each tick.
+   Captures HTTP RX + thumbnails + sky tiles automatically.
+5. **6 raw editor fetches** — covered automatically via the
+   Performance API.
+
+**TX (client → server)**:
+1. **WS sends** — wrap each `ws.send(...)`:
+   - `/ws/status`: subscribe message on open.
+   - `/ws/image-stream`: client-stack-progress, capability.
+   - `/ws/terminal`: keystrokes.
+   Helper `_wsSendTracked(ws, payload)` does
+   `ws.send(payload)` + `this._netTx(byteLength(payload))`.
+   Refactor ~10 call sites.
+2. **`apiFetch` requests** — body length. For
+   `JSON.stringify(body)` count string length pre-send. For
+   `FormData` (multipart), sum `file.size`. Performance API does
+   NOT give upload size, so TX needs manual instrumentation.
+3. **Editor raw fetches** — count body explicitly at call sites
+   since they bypass `apiFetch`.
+
+### Performance Resource Timing for RX (design choice)
+
+Instead of cloning every response (cost of duplicating big
+buffers), use
+`performance.getEntriesByType('resource')` which returns
+`PerformanceResourceTiming` with `transferSize` (bytes-on-the-
+wire, including headers; better proxy than body size).
+Limitations:
+- `transferSize` is 0 for CORS opaque without
+  `Timing-Allow-Origin`. Polaris is same-origin → OK.
+- Browser internal buffer limited (default ~150 entries). Drain
+  with `performance.clearResourceTimings()` after each tick.
+- Doesn't cover WebSocket data (WS frames aren't
+  PerformanceResource) → WS counted manually via `.onmessage`.
+
+### UI (markup)
+
+Add before the CPU/RAM block in `.activity-bar-host`:
+
+```html
+<div class="activity-net" :title="netTooltip()">
+    <span class="activity-net-row" :class="{ 'net-pulse': net.rxPulse }">
+        <span class="activity-net-arrow">↓</span>
+        <span x-text="formatBytesPerSec(net.rxRate)"></span>
+    </span>
+    <span class="activity-net-row" :class="{ 'net-pulse': net.txPulse }">
+        <span class="activity-net-arrow">↑</span>
+        <span x-text="formatBytesPerSec(net.txRate)"></span>
+    </span>
+</div>
+```
+
+Tooltip shows session cumulative totals ("12.4 MB ↓ · 230 KB ↑").
+
+### CSS
+
+`.activity-net` — narrow column (~70-90 px), font 11 px, spacing
+similar to `.activity-host-stat`. `.activity-net-arrow` coloured
+green (rx) / blue (tx). `@keyframes net-pulse` 120 ms (brightness
++ small scale).
+
+## Phases
+
+Single commit — small feature.
+
+### NET-1: Counter + meter loop + instrumentation
+- `net` state in `app.js`.
+- Helpers `_netRx`, `_netTx`, `_netMeterTick`,
+  `formatBytesPerSec`, `netTooltip`.
+- 250 ms timer started in `init()` after WS connect.
+- 3 `.onmessage` handlers instrumented.
+- `_wsSendTracked` replacing `ws.send` on the 3 sockets.
+- `apiFetch` (line 1088) instrumented for TX (body length) and
+  invokes `_netMeterTick` at the end.
+- 6 editor raw fetch sites instrumented for TX.
+- `.activity-net` markup in footer.
+- CSS `.activity-net*` + pulse keyframe.
+- Build smoke + manual verify (DevTools network: live stack on
+  → rx rises to 5-20 MB/s; open editor → spike of 50-200 MB on
+  /raw).
+
+## Files modified
+
+- `wwwroot/js/app.js`
+- `wwwroot/index.html`
+- `wwwroot/css/app.css`
+
+No files to create. No backend changes.
+
+## Reused code
+
+- 250 ms timer pattern like `_skyTicker` in app.js.
+- `host` block in `.activity-bar-host` — clone layout.
+- `formatRam` in app.js — reference for `formatBytesPerSec`
+  (same aesthetic: number + compact unit).
+- `apiFetch` (app.js:1088-1152) — single TX chokepoint, already
+  has timeout/error handling, just adds 2 lines.
+- 3 WebSocket sites + 6 editor fetch sites already mapped.
+
+## Verification
+
+1. **Build**: `dotnet build` — no-op (no C# changes).
+2. **Smoke idle**: open browser, DevTools Network, leave still.
+   Bar should show `↓ 0.0 B/s · ↑ 0.0 B/s` (or low KB/s from the
+   1 Hz `/ws/status`).
+3. **Live stack ON**: start sequence or camera stream in raw
+   mode. Network panel confirms LZ4 frames arriving; bar shows
+   `↓ 5-20 MB/s` with continuous ↓ pulse.
+4. **Editor open**: open master FITS in editor → spike
+   `↓ 50-200 MB` during /raw download → drops to near 0 after
+   load. Brief ↓ pulse.
+5. **Editor slider drag (server mode)**: each preview render
+   generates fetch JSON (request) + JPEG (response). Small ↑
+   spike + larger ↓ spike.
+6. **Editor slider drag (WASM mode)**: zero traffic (all
+   computation local). Rate stays at 0 → confirms indicator
+   distinguishes server-mode (network) from WASM-mode (zero
+   network).
+7. **Tooltip**: hover over the net block shows cumulative
+   totals.
+8. **Session reset**: closing/reopening the browser zeroes
+   totals. (Doesn't persist — by design.)
+
+## Notes
+
+- Performance Resource Timing buffer can fill if there's lots
+  of short fetches (thumbnails).
+  `performance.clearResourceTimings()` per tick keeps it at 0.
+- Small WebSocket sends (subscribe, keystrokes) may round to
+  0.0 B/s even when active. Acceptable — goal is to visualise
+  significant traffic.
+- Pulse animation is purely visual; perf impact negligible even
+  on Pi 2.
+- If we ever want **host-wide** throughput (total link of the
+  Polaris machine, not just this session), extend
+  HostMetricsService with /proc/net/dev (Linux) / Windows perf
+  counters. Out of scope.
+
+---
+
+# Previous plan: Editor Lightroom-style at the end of the STUDIO workflow
+
+> Previous plan (SWE, Stellarium-web-engine swap) preserved below.
 > below starting at `# Previous plan: Client-side live stacking via WASM (CLST)`.
 > The entire CLST-1..8 stack is in production; this plan builds the
 > distribution and operability layer on top so a regular
