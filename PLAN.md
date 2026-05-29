@@ -3682,6 +3682,1648 @@ No files to create. No backend changes.
 # Previous plan: Editor Lightroom-style at the end of the STUDIO workflow
 
 > Previous plan (SWE, Stellarium-web-engine swap) preserved below.
+
+## Context
+
+Today STUDIO ends when the user gets an integrated master at
+`{rig}/integrated/{target}/`. After that they leave Polaris and
+open Lightroom (or similar) on a PNG/TIFF exported from
+Siril/PixInsight to do the creative post-processing: final
+stretching, curves, vibrance, saturation, sharpening, clarity,
+dehaze, vignette, noise reduction, crop/resize, final
+JPG/PNG export. This step blocks the workflow and keeps the user
+tied to another app.
+
+**Objective**: a Lightroom-mobile-style editor as a sub-tab
+inside STUDIO (and an "Open in editor" button on the FILES tab).
+Edits are **non-destructive** (Lightroom-style sidecar JSON
+`.edit.json` beside the source file). Live preview via **hybrid
+WASM + server fallback** mirroring the CLST live-stack pattern
+(capability detection on handshake, auto-switch, UI override).
+Accepts: masters from the library (FITS/XISF), arbitrary
+PNG/JPG/TIFF via the FILES tab, and direct drag-and-drop /
+upload through the tab itself.
+
+**Decisions** (with the user):
+- **Compute**: hybrid WASM (when available) + server (Skia + libs)
+  as fallback. CLST pattern.
+- **Sources**: 3 paths — Library masters, FILES tab "Open in
+  editor", direct upload / drag-and-drop.
+- **Edit model**: non-destructive. Sidecar JSON beside the file
+  preserves adjustments. Final export applies + writes to
+  `processed/{target}/edited/`.
+
+## Architecture
+
+### Layers
+
+```
+┌─ Polaris main app ───────────────────────────────────────────────┐
+│  STUDIO panel — new "Editor" sub-tab                             │
+│                                                                   │
+│  ┌──── Editor view ───────────────────────────────────────────┐  │
+│  │  • Source picker: Library card / FILES file / Upload       │  │
+│  │  • OpenSeadragon preview (vendored in B3) with             │  │
+│  │    before/after toggle by keypress or click                │  │
+│  │  • RGB histogram (Chart.js)                                │  │
+│  │  • Collapsible panels (Lightroom mobile replica):          │  │
+│  │     - Light: Exposure/Contrast/Highlights/Shadows/         │  │
+│  │       Whites/Blacks                                        │  │
+│  │     - Colour: WB (temp/tint), Vibrance/Saturation/Hue      │  │
+│  │     - Curve: spline RGB + per-channel R/G/B                │  │
+│  │     - Detail: Sharpening (amount/radius/threshold),        │  │
+│  │       Noise reduction (luminance)                          │  │
+│  │     - Effects: Texture/Clarity/Dehaze/Vignette             │  │
+│  │     - Geometry: Crop, Rotate, Resize                       │  │
+│  │  • Buttons: Reset, Apply preset, Save edits (sidecar),     │  │
+│  │    Export…                                                 │  │
+│  │  • Export modal: format JPG/PNG/TIFF · quality 0-100 ·     │  │
+│  │    resize (px or %) · output path                          │  │
+│  └────────────────────────────────────────────────────────────┘  │
+│                                                                   │
+│  Dispatch (mirrors CLST):                                         │
+│   slider input → debounce 100 ms →                                │
+│     if wasmReady && editorWasmActive:                             │
+│        Interop.ApplyEdit(json) → render to canvas                 │
+│     else:                                                         │
+│        POST /api/studio/editor/preview → <img src>                │
+└───────────────────────────────────────────────────────────────────┘
+
+┌─ NINA.Polaris.Wasm (extended — Interop.cs) ──────────────────────┐
+│  LoadEditorFrame(pixels[], w, h, bitDepth, bayer) → sessionId     │
+│  ApplyEdit(sessionId, paramsJson) → previewBytes (8-bit JPEG)     │
+│  ComputeHistogram(sessionId) → int[256*3]                         │
+│  ReleaseEditorFrame(sessionId)                                    │
+│  All use EditOperations.cs (same DLL as server, AOT-trimmed)      │
+└───────────────────────────────────────────────────────────────────┘
+
+┌─ Server ─────────────────────────────────────────────────────────┐
+│  Services/Editor/                                                 │
+│    ImageEditService.cs       — LRU cache + apply edits + preview  │
+│    EditSidecarStore.cs       — read/write {source}.edit.json      │
+│    EditOperations.cs         — canonical-order pipeline (shared   │
+│                                via NINA.Image.Portable so WASM    │
+│                                and server use same math)          │
+│  Endpoints/EditorEndpoints.cs                                     │
+│    POST /api/editor/load       {source}        → {sessionId,…}    │
+│    POST /api/editor/preview    {sessionId, edits} → JPEG bytes    │
+│    POST /api/editor/histogram  {sessionId, edits} → int[]         │
+│    POST /api/editor/export     {sessionId, edits, fmt, quality,   │
+│                                  resize, outputPath} → {path}     │
+│    GET  /api/editor/sidecar?path=…             → JSON             │
+│    PUT  /api/editor/sidecar?path=…             → ok               │
+│    POST /api/editor/upload     multipart       → temp path        │
+└───────────────────────────────────────────────────────────────────┘
+```
+
+### Canonical pipeline (order matters — server and WASM apply identical)
+
+```
+1. Decode → float[] working buffer (mono or RGB linear-light)
+2. White balance (temp/tint → RGB gain multipliers)
+3. Exposure (× 2^stops)
+4. Contrast (S-curve around 0.5)
+5. Highlights / Shadows (anchored tone curve)
+6. Whites / Blacks (point movement at extremes)
+7. Tone curve (spline LUT 256 entries — RGB master + per-channel)
+8. Vibrance / Saturation (HSL multiply; vibrance protects already-saturated pixels)
+9. Hue shift (HSL rotation)
+10. Clarity (large-radius USM + low amount on luminance)
+11. Dehaze (global contrast boost + luminance-attenuated saturation)
+12. Texture (small-radius USM + medium amount)
+13. Sharpen (small-radius USM + high amount)
+14. Noise reduction (3×3 median or bilateral on luminance)
+15. Vignette (radial multiply)
+16. Crop + Resize (bilinear or Lanczos when downsampling)
+17. Encode (Skia: JPEG quality 0-100, PNG 8-bit or 16-bit, TIFF 16-bit)
+```
+
+Skip any step where the param is at default — passes the buffer
+forward without copy.
+
+### Sidecar JSON
+
+`{source}.edit.json` beside the source. Versioned schema:
+
+```jsonc
+{
+  "version": 1,
+  "source": "M31_master.fits",
+  "savedAt": "2026-05-24T22:30:00Z",
+  "edits": {
+    "whiteBalance": { "temp": 5500, "tint": 0 },
+    "light": { "exposure": 0.2, "contrast": 0.1,
+               "highlights": -0.3, "shadows": 0.4,
+               "whites": 0.1, "blacks": -0.05 },
+    "color":  { "vibrance": 0.2, "saturation": 0.0, "hue": 0 },
+    "detail": { "sharpenAmount": 0.5, "sharpenRadius": 1.0,
+                "sharpenThreshold": 0, "noiseReduce": 0.2 },
+    "effects":{ "texture": 0.32, "clarity": 0.09,
+                "dehaze": 0.21, "vignetteAmount": 0,
+                "vignetteFeather": 50 },
+    "toneCurve": {
+      "rgb": [[0,0],[64,60],[128,140],[255,255]],
+      "r": null, "g": null, "b": null
+    },
+    "crop": null,
+    "rotate": 0
+  }
+}
+```
+
+Values 0/null = default (skip). Reopening rehydrates the sliders.
+
+### Reuse (explicit, do NOT reinvent)
+
+Everything below already exists — confirmed via exploration:
+
+- **`AutoStretch.cs`** — `ApplyManual(buf, black, mid, white)` is
+  the base for stretch / black / white points.
+- **`UnsharpMask.cs`** — sharpening, texture, clarity.
+- **`GaussianBlur.cs`** — kernel for USM.
+- **`ImageResampler.cs`** — bilinear resize.
+- **`JpegEncoder.cs`** — encode with quality.
+- **`ImageStatistics.cs`** — per-channel histogram.
+- **`BayerDebayer.cs`** — debayer for raw color sources.
+- **`FitsThumbnailer.cs`** — Skia Gray8/RGB encode pipeline.
+- **`FrameProcessingService.cs`** — LRU cache of 4 decoded frames
+  + `RenderJpegAsync` / `RenderPngAsync` / `ExportAsync`.
+- **`FrameOperationsService.cs`** — RemoveGradient polynomial,
+  NoiseReduction, Sharpen async wrappers.
+- **`NINA.Polaris.Wasm/Interop.cs`** — `[JSExport]` pattern +
+  primitive types passed at the boundary.
+- **`NINA.Polaris.Wasm.csproj`** — net10.0 / browser-wasm / AOT
+  / SIMD already configured.
+- **`wwwroot/js/wasm/main.js`** + `nina-wasm-ready` event —
+  handshake already in production.
+- **OpenSeadragon** (vendored in `wwwroot/js/lib/openseadragon/`).
+- **Chart.js** for the histogram.
+- **STUDIO viewer markup** (lines 4111-4260) to clone the
+  scaffold.
+
+### To build from scratch
+
+In `NINA.Image.Portable/ImageAnalysis/`:
+- **`ColorSpace.cs`** — RGB↔HSL, RGB↔Lab (CIE D65),
+  temperature/tint → RGB gains.
+- **`ToneCurve.cs`** — natural cubic spline interpolating control
+  points, generates LUT 256.
+- **`BilateralFilter.cs`** — optional (expensive, ~2-5× slower
+  than gaussian); used by Clarity/Dehaze.
+- **`Vignette.cs`** — radial falloff with feather.
+
+In `NINA.Polaris.Portable/Editor/` (new namespace shared between
+WASM and server):
+- **`EditParams.cs`** — record with sub-records (WhiteBalance,
+  Light, Color, Detail, Effects, ToneCurve, Crop). Immutable;
+  rehydratable via System.Text.Json.
+- **`EditPipeline.cs`** — `Apply(EditParams, float[] working) →
+  float[]`. Applies the 16 steps in order, skipping defaults.
+
+## Phases (7 commits)
+
+### ED-1: ColorSpace + ToneCurve + EditParams + EditPipeline
+- `NINA.Image.Portable/ImageAnalysis/ColorSpace.cs`:
+  - `RgbToHsl(r,g,b)` / `HslToRgb(h,s,l)` (Rec.601).
+  - `TempTintToGain(tempK, tint) → (rGain, gGain, bGain)`
+    (Bradford).
+- `NINA.Image.Portable/ImageAnalysis/ToneCurve.cs`: natural cubic
+  spline, input `Point[]` (0-255 domain), produces `byte[256]`
+  LUT.
+- `NINA.Polaris.Portable/Editor/EditParams.cs` (records).
+- `NINA.Polaris.Portable/Editor/EditPipeline.cs` —
+  `Apply(buf, w, h, channels, EditParams)`.
+- Tests: ColorSpace roundtrip RGB↔HSL preserves ±1 in 8-bit;
+  identity ToneCurve produces linear LUT; default EditParams =
+  no-op; saturation 0 = grayscale; exposure +1 = ×2 brightness.
+
+### ED-2: ImageEditService server-side
+- LRU cache of 4 decoded frames (same pattern as
+  `FrameProcessingService.cs`).
+- `LoadAsync(string path)` — opens FITS/XISF/PNG/JPG/TIFF,
+  returns session `{sessionId, w, h, channels, bitDepth}`.
+- `RenderPreviewAsync(sessionId, EditParams, maxDim, quality)` —
+  applies pipeline, downsamples to maxDim (default 1600 px for
+  snappy preview), encodes JPEG.
+- `ComputeHistogramAsync(sessionId, EditParams)` — post-pipeline,
+  256×3 RGB or 256×1 mono.
+- `ExportAsync(sessionId, EditParams, format, quality, resize,
+  outputPath)` — full-res pipeline + encode to disk; reuses
+  `ImageWriterService.BuildSubDir` for
+  `processed/{target}/edited/`.
+- Registered as singleton in `Program.cs`.
+
+### ED-3: EditSidecarStore + EditorEndpoints
+- `EditSidecarStore.cs`:
+  - `LoadAsync(sourcePath)` reads `{sourcePath}.edit.json`.
+  - `SaveAsync(sourcePath, EditParams)` atomic write (temp +
+    rename).
+  - Versioning — if `version` mismatch, migrate or ignore.
+- `EditorEndpoints.cs` with the 6 routes.
+- `POST /api/editor/upload` — multipart, saves at
+  `{AppData}/Polaris/uploads/{guid}/{filename}`, returns path;
+  housekeeping cron cleans uploads > 24 h later.
+
+### ED-4: UI scaffold (server-mode only)
+- `wwwroot/index.html`: new "Editor" sub-tab inside STUDIO
+  (alongside Library + Viewer).
+- Lightroom mobile visual replica: collapsible `<details>`
+  panels with sliders.
+- Chart.js histogram at the top.
+- OpenSeadragon mounted in the centre, source =
+  `/api/editor/preview?sessionId=…&edits=…` (cache-buster by
+  timestamp).
+- Each slider input → debounce 100 ms → POST preview → swap
+  `<img>` or OpenSeadragon source.
+- "Reset" button zeroes all sliders.
+- "Save edits" → PUT sidecar.
+- Before/after: hold space or click the "Original" button to
+  show source without edits.
+- `app.js`: state `editor: {sessionId, edits: {...}, source,
+  dirty, …}` + methods.
+
+### ED-5: Export dialog + writes
+- Modal export: format dropdown (JPEG/PNG 8-bit/PNG 16-bit/
+  TIFF 16-bit), quality slider (visible only for JPEG), resize
+  inputs (px or %), output filename preview.
+- Default output:
+  `{rig}/processed/{target}/edited/{stem}__edited_{timestamp}.{ext}`.
+- Export button → POST `/api/editor/export` → toast with path +
+  "Open in FILES" link.
+- Indexes the generated file via
+  `FrameLibraryService.RescanAsync()` (existing pattern used by
+  GraXpert).
+
+### ED-6: WASM extension + client dispatch
+- Extend `src/NINA.Polaris.Wasm/Interop.cs`:
+  - `LoadEditorFrame(int[] pixels, int w, int h, int bitDepth,
+    int channels) → string sessionId`.
+  - `ApplyEdit(string sessionId, string editsJson) → byte[]
+    jpegBytes`.
+  - `ComputeHistogram(string sessionId, string editsJson) →
+    int[]`.
+  - `ReleaseEditorFrame(string sessionId)`.
+- `EditPipeline.cs` (ED-1) is already AOT-compiled via project
+  reference — only needs to be **reached** by the new JSExports
+  so the trimmer keeps it.
+- Rebuild WASM bundle: `dotnet publish src/NINA.Polaris.Wasm
+  -p:PublishAot=true -r browser-wasm -c Release -o
+  src/NINA.Polaris/wwwroot/js/wasm`.
+- In `app.js`: new `_editorWasmActive` flag (default true if
+  `wasmReady`); UI toggle to force server.
+- Dispatch on slider handler:
+  `if (this.wasmReady && this._editorWasmActive) { call WASM,
+  get bytes, blob URL → <img> } else { POST preview }`.
+- Frame load: server decodes FITS (complicated), sends uint16
+  pixels via WS to the client, client calls `LoadEditorFrame`
+  once. Reuses existing raw LZ4 transport (`handleImageFrame`
+  raw path).
+
+### ED-7: Upload + FILES tab entrypoint + tests + docs
+- Drag-and-drop zone in editor (HTML5 DnD API).
+- "Upload from disk" button → `<input type=file>` (PNG/JPG/TIFF/
+  FITS/XISF).
+- POST multipart → `/api/editor/upload` → session.
+- In FILES tab: new "Open in editor" button for selected file
+  (creates session pointing directly at it, no copy).
+- Tests:
+  - `EditPipelineTests` end-to-end with synthetic frame (known
+    gradient), verifies each step changes output as expected.
+  - `EditSidecarStoreTests` — roundtrip + version migration.
+  - `ImageEditServiceTests` — LRU eviction + cancel handling.
+  - `EditorEndpointsTests` (integration via TestServer) —
+    load → preview → histogram → export → sidecar PUT/GET.
+- Docs: `docs/user-guide/editor.md` (workflow + shortcuts +
+  differences vs Lightroom).
+- README "Editor" section.
+- Per-project `ARCHITECTURE.md` + Mermaid update.
+
+### Follow-up: ED async slider freezes (separate commit)
+- Sliders were synchronous causing freeze during drag on big
+  masters. Refactor to async + drag-aware (skip preview while
+  mid-drag, fire on release).
+
+## Files created
+
+- `src/NINA.Image.Portable/ImageAnalysis/ColorSpace.cs`
+- `src/NINA.Image.Portable/ImageAnalysis/ToneCurve.cs`
+- `src/NINA.Image.Portable/ImageAnalysis/BilateralFilter.cs` (if
+  used for clarity)
+- `src/NINA.Image.Portable/ImageAnalysis/Vignette.cs`
+- `src/NINA.Polaris.Portable/Editor/EditParams.cs`
+- `src/NINA.Polaris.Portable/Editor/EditPipeline.cs`
+- `src/NINA.Polaris/Services/Editor/ImageEditService.cs`
+- `src/NINA.Polaris/Services/Editor/EditSidecarStore.cs`
+- `src/NINA.Polaris/Endpoints/EditorEndpoints.cs`
+- `tests/NINA.Polaris.Test/Editor/` — 4 test files
+- `docs/user-guide/editor.md`
+
+## Files modified
+
+- `src/NINA.Polaris.Wasm/Interop.cs` — 4 new `[JSExport]` editor
+  methods.
+- `src/NINA.Polaris/Program.cs` — register singletons + map
+  endpoints.
+- `src/NINA.Polaris/Services/ImageWriterService.cs` — extend
+  `BuildSubDir` with case `"EDITED"` →
+  `processed/{target}/edited/`.
+- `src/NINA.Polaris/Services/Studio/FrameLibraryService.cs` —
+  rescan after export (already a pattern from GraXpert).
+- `src/NINA.Polaris/wwwroot/index.html` — Editor sub-tab in
+  STUDIO + Editor modal/panel + Export modal.
+- `src/NINA.Polaris/wwwroot/js/app.js` — state `editor`,
+  methods.
+- `src/NINA.Polaris/wwwroot/css/app.css` — `.editor-*` styles.
+- `README.md` — Editor section.
+- ARCHITECTURE.md updates.
+
+## Verification
+
+### Build + tests
+- `dotnet build` clean.
+- `dotnet publish src/NINA.Polaris.Wasm -p:PublishAot=true
+  -r browser-wasm -c Release` rebuild artifacts in
+  `wwwroot/js/wasm/`.
+- `dotnet test` — ~510 atuais + ~25 novos = ~535 verdes.
+
+### Server-mode (no WASM)
+1. STUDIO → Library → select M31 master → "Open in editor".
+2. Editor opens, OpenSeadragon shows the auto-stretched master.
+3. Move Exposure slider +0.5 → preview updates in <500 ms
+   (server LRU cache hit after first decode).
+4. Apply S-curve → highlights/shadows respond.
+5. Vibrance +30 → colors livelier, doesn't over-saturate
+   already-saturated pixels.
+6. Sharpening amount 0.5 / radius 1.0 → stars sharper.
+7. Click "Save edits" → `M31_master.fits.edit.json` appears in
+   the directory.
+8. Refresh browser → reopens editor with the same master →
+   sliders restored to saved values.
+9. Click "Export" → modal → JPEG quality 90, resize 50% → file
+   appears at `M31/edited/M31_master__edited_*.jpg`.
+10. File shows in FILES tab (automatic rescan).
+
+### WASM mode
+11. Same flow; DevTools console shows
+    `[Polaris] Editor using WASM (v0.3)`. Slider responds in
+    <50 ms (no network roundtrip).
+12. Toggle "Force server" in Settings → next slider input goes
+    back to server.
+13. Block `_framework/dotnet.native.wasm` in DevTools network →
+    client falls back to server-mode silently.
+
+### Upload + FILES
+14. Drag-and-drop a PNG from Lightroom into the editor → upload
+    → session created → preview renders.
+15. FILES tab → right-click a TIFF → "Open in editor" → editor
+    opens with that file.
+
+### Sidecar lifecycle
+16. Edit master → Save → close → reopen → sliders restored.
+17. Edit + Export → generated file at
+    `processed/{target}/edited/` carries its own sidecar
+    (snapshot of the edits that generated it).
+18. Editor on a FITS without write permission in the directory →
+    fallback writes sidecar to
+    `{AppData}/Polaris/sidecars/{md5-of-path}.edit.json`.
+
+### Failure scenarios
+- **WASM doesn't load** → silent server-mode.
+- **Server without Skia** (build without deps) → 500 from preview
+  endpoint, UI shows "Editor unavailable" banner.
+- **Corrupted sidecar JSON** → ignore + log warning, open with
+  defaults.
+- **Huge master (8 GB)** → WASM load fails (heap limit),
+  automatically falls back to server-mode (which can do tile-by-
+  tile pipeline if needed — TODO in ED-6 v2).
+
+## Out of scope (deferred)
+
+- **Layers** (Lightroom doesn't have, but Photoshop does) —
+  huge scope.
+- **Local adjustments** (brush, gradient, radial — Lightroom has
+  but requires complex mask UI). v2 separate if demand.
+- **Shared presets / preset catalog** — user can still save
+  sidecars manually and copy between projects.
+- **Advanced crop with aspect ratio lock and freehand rotation**
+  — v1 only rectangular axis-aligned crop + 90° rotation.
+- **AI denoise (DxO PureRAW / Topaz style)** — out of scope; user
+  can use GraXpert v3 denoise (already wired) before opening the
+  editor.
+- **RAW/CR2/NEF decode** — scope restricted to FITS/XISF/PNG/JPG/
+  TIFF v1; CR2/NEF deferred (would need LibRaw bindings).
+
+## License + compatibility notes
+
+- **Skia/SkiaSharp**: Apache 2.0; already in project via
+  FitsThumbnailer.
+- **System.Text.Json**: BCL.
+- **WASM AOT**: already in production via CLST.
+- **Sidecar pattern**: Lightroom (.xmp) precedent — our format,
+  no patent.
+- **Performance**:
+  - Server preview on 6000×4000 RGB master: ~400 ms on Pi 4
+    (Skia + optimised USM).
+  - WASM same master: ~80-150 ms on modern laptop, 300-500 ms
+    on mobile.
+  - FITS decode once per session (~1-2 s for 12000×8000 master),
+    cached in RAM.
+- **Memory**: each WASM session ~200 MB for a medium master.
+  Limit of 2 simultaneous sessions on the client (UI guards
+  against opening a 3rd without closing).
+- **Sidecar disk footprint**: ~2 KB per file. Negligible.
+
+---
+
+# Previous plan: Swap d3-celestial → stellarium-web-engine (iframe sub-app)
+
+> Previous plan (PA, Polar Alignment panel) preserved below.
+
+## Context
+
+The SKY tab originally used **d3-celestial** (~3.9 MB of
+vendored assets: `celestial.min.js`, d3 v3, Hipparcos mag 6
+catalog, DSOs, Milky Way contours, etc.) to render the sky map
+with Aitoff projection + custom overlays (blue mount FOV
+rectangle, red target rectangle, drag-to-frame, click-to-pick
+coords, integration with Slew & Center). It worked but the user
+wanted to swap for **stellarium-web-engine** to get:
+
+- Real WebGL rendering (not SVG/d3), sky projected in every
+  direction, atmosphere, more sophisticated visual ecliptic,
+  Milky Way via HiPS tiles (not simple vector contours),
+  Gaia stars to mag 16 (vs Hipparcos mag 6), DSOs from SDSS/DSS
+  surveys with real images (not just names).
+- Constellation art (stick figures + names in multiple cultures).
+- Behaviour identical to Stellarium desktop — user already knows.
+
+**Decisions** (confirmed):
+
+1. **License**: stellarium-web-engine is **AGPLv3 + mandatory
+   CLA**. Polaris is MPL 2.0. To keep the boundary clear without
+   relicensing Polaris, isolate stellarium-web in a **separate
+   sub-application served in an iframe** (`/sky/index.html`).
+   UI crosses data via `postMessage`. Stellarium-web stays AGPL
+   inside the iframe, Polaris stays MPL.
+2. **HiPS data**: bundle locally — package the tile pyramids
+   (stars / DSOs / surveys / landscapes) inside the Polaris
+   publish to work offline (remote observatory). Cost ~500 MB-1 GB
+   added to installer / Docker image, accepted.
+3. **WebGL**: SKY tab becomes **desktop-browser-only**. RPi 2/3
+   still serves the files but warns "WebGL not available" if
+   anyone opens the local browser on the Pi. Realistic — no one
+   opens the Sky map in a Pi browser.
+
+## Architecture
+
+### Layers
+
+```
+┌─ Polaris main app (MPL 2.0) ─────────────────────────────┐
+│  index.html + js/app.js                                  │
+│  SKY tab: <iframe src="/sky/" id="skyFrame">             │
+│           postMessage RPC ↔                              │
+└────────────────────────┬──────────────────────────────────┘
+                         │ postMessage
+┌────────────────────────▼─────────────────────────────────┐
+│  Stellarium sub-app (AGPL boundary, served at /sky/)     │
+│  wwwroot/sky/index.html                                  │
+│    <script src="js/stellarium-web-engine.js">            │
+│    <script src="js/sky-bridge.js">                       │
+│  wwwroot/sky/js/wasm/stellarium-web-engine.{js,wasm}     │
+│  wwwroot/sky/data/skydata/                               │
+│    stars/  dso/  surveys/  landscapes/  skycultures/     │
+│    mpcorb.dat  CometEls.txt  tle_satellite.jsonl.gz      │
+└──────────────────────────────────────────────────────────┘
+```
+
+### postMessage RPC contract
+
+Messages parent → iframe:
+- `{type:'set-observer', lat, lng}` — observer location (deg).
+- `{type:'set-time', utc}` — epoch ms.
+- `{type:'look-at', raDeg, decDeg, fovDeg}` — point camera.
+- `{type:'search', query}` — search object; reply via
+  `search-result`.
+- `{type:'set-fov-overlays', mount, target}` — geojson FOV
+  rectangles (computed parent-side).
+- `{type:'set-drag-mode', mode}` — `'free'` | `'fixed-target'`.
+
+Messages iframe → parent:
+- `{type:'ready', version, webgl}` — bridge initialised.
+- `{type:'search-result', query, result}`.
+- `{type:'center', raDeg, decDeg, fovDeg}` — current map centre.
+- `{type:'map-click', raDeg, decDeg, objectName}`.
+- `{type:'webgl-unavailable'}` — UI should show fallback.
+
+`sky-bridge.js` in the sub-app:
+1. Initialises `StelWebEngine({wasmFile, canvas, onReady})`.
+2. Configures data sources via `core.stars.addDataSource(...)`
+   pointing at `./data/skydata/...` (paths relative to iframe).
+3. Listens to `window.addEventListener('message', ...)` and
+   dispatches to `stel.*` methods (observer, getObj, createObj,
+   etc.).
+4. Implements "look-at-RA/Dec" converting RA/Dec → local alt/az
+   via `stel.convertFrame` (engine has this) and setting
+   `observer.yaw + observer.pitch`.
+5. Renders FOV overlays via
+   `stel.createObj('geojson', {...})` with pre-computed
+   rectangles (parent already knows focal length + sensor +
+   rotation).
+
+### WASM build pipeline
+
+stellarium-web-engine needs Emscripten to compile. We don't
+require Emscripten installed by everyone building Polaris day-
+to-day — solution:
+
+1. **Git submodule** `external/stellarium-web-engine/` pointing
+   at a dedicated fork (commit pinned for reproducibility).
+2. **Script `scripts/build-stellarium-web.sh`** that runs
+   Emscripten via Docker (`emscripten/emsdk:3.x.x`), calls
+   `make js`, copies `build/stellarium-web-engine.{js,wasm}` to
+   `src/NINA.Polaris/wwwroot/sky/js/wasm/`. Output committed in
+   the repo — whoever builds Polaris on Windows/Linux doesn't
+   need Emscripten to run `dotnet build`.
+3. Manual refresh when upstream stellarium-web-engine updates
+   (rare — engine is stable); script-driven, not automatic.
+
+### HiPS tile bundle
+
+stellarium-web's `apps/test-skydata/` on GitHub only has
+skeleton (empty properties files). The real dataset lives at
+`https://data.stellarium.org/`. Plan:
+
+1. **Script `scripts/fetch-stellarium-skydata.sh`** downloads
+   the full test-skydata (~500 MB-1 GB) via wget/curl recursive
+   pointing at the official mirror. Runs once on the release
+   machine.
+2. `src/NINA.Polaris/wwwroot/sky/data/skydata/` directory stays
+   gitignored (so the git repo doesn't explode), but the CI/CD
+   script adds it to publish output.
+3. **Stripped-down config**: use `max_vmag = 12` (not 16) by
+   default to cut unnecessary tiles. Configurable via
+   `properties` files. Reduces bundle to ~300 MB tolerable.
+4. Polaris Docker image (`scripts/build-docker.sh`) includes
+   skydata via COPY in Dockerfile.
+
+## Phases (6 commits)
+
+### SWE-1: iframe scaffold + WebGL detection + fallback
+- Creates `wwwroot/sky/index.html` minimal: `<canvas>` + script
+  loader + WebGL detection. No stellarium-web yet — just the
+  empty iframe showing "Loading sky engine…" or "WebGL not
+  available".
+- `wwwroot/sky/js/sky-bridge.js` skeleton: listens to `message`,
+  replies `{type:'ready', webgl:true|false}`.
+- Replaces `<div id="celestial-map">` in SKY tab of
+  `index.html` with `<iframe id="skyFrame" src="/sky/"
+  sandbox="allow-scripts allow-same-origin">`.
+- `app.js`: new helper `_skySendMessage(msg)` + listener for
+  iframe messages. d3-celestial STILL loaded this commit (in
+  parallel) so nothing breaks.
+- Build clean, iframe loads placeholder + logs "[Sky] bridge
+  ready webgl=true".
+
+### SWE-2: Submodule + build script + WASM commit
+- Git submodule `external/stellarium-web-engine/` pinned to a
+  known commit.
+- `scripts/build-stellarium-web.sh`: Docker-based Emscripten
+  build, output at
+  `src/NINA.Polaris/wwwroot/sky/js/wasm/{stellarium-web-engine.js,
+  stellarium-web-engine.wasm}`.
+- Run script manually once, commit the 2 outputs (gitignored
+  sources, committed builds — pattern for expensive generated
+  binaries).
+- `wwwroot/sky/index.html` now loads
+  `stellarium-web-engine.js` + calls `StelWebEngine({...})`.
+  No data yet — engine initialises showing empty sky.
+- README + `docs/architecture-sky.md`: explain how to re-build
+  the WASM, link to AGPL license at `wwwroot/sky/LICENSE-AGPL`.
+
+### SWE-3: HiPS skydata bundle + offline-first config
+- `scripts/fetch-stellarium-skydata.sh`: downloads test-skydata
+  via wget to `src/NINA.Polaris/wwwroot/sky/data/skydata/`.
+- `.gitignore`: ignores `sky/data/skydata/` (doesn't go to git,
+  but goes to publish output via csproj `<Content Include>`).
+- `sky-bridge.js`: calls
+  `core.stars.addDataSource({url:"./data/skydata/stars"})` + DSOs
+  + surveys + landscapes + skycultures + planets surveys
+  (sso/moon, sso/sun).
+- Sky tab renders complete sky in the iframe. d3-celestial still
+  running in parallel in the same tab (kept during migration).
+- `csproj` `<Content Include="wwwroot\sky\data\skydata\**\*">`
+  for recursive publish.
+
+### SWE-4: postMessage RPC — observer + look-at + search
+- `sky-bridge.js` implements handlers for `set-observer`,
+  `set-time`, `look-at`, `search`, `get-center`.
+- `look-at` converts RA/Dec → alt/az via
+  `stel.convertFrame('CIRS', 'OBSERVED', [ra, dec, 0])`,
+  sets `observer.yaw + observer.pitch`.
+- `search` calls `stel.getObj(query)` + returns extracted
+  RA/Dec.
+- Canvas click → emits `map-click` with coords (uses
+  `stel.c2s(screenCoords)` or equivalent).
+- `app.js`: replaces calls to `Celestial.rotate(...)`,
+  `Celestial.date(...)`, `Celestial.mapProjection(...)` with
+  postMessage versions. Search box / click-to-pick / Slew &
+  Center / 30 s ticker start talking to the iframe.
+- d3-celestial still in the DOM but hidden via CSS for A/B
+  during review.
+
+### SWE-5: FOV overlays + drag-to-frame
+- `sky-bridge.js` implements `set-fov-overlays`:
+  - Mount FOV (blue): creates geojson polygon rectangle in
+    equatorial coords via
+    `stel.createObj('geojson', {data: rect})`.
+  - Target FOV (red dashed): creates geojson polygon centred on
+    current map centre.
+  - Recreates on each update (engine without in-place mutation;
+    remove old + create new, or use `setData`).
+- **Drag-to-frame ASIAIR-style**: capture iframe drag, translate
+  into yaw/pitch delta, update via
+  `set-drag-mode: fixed-target` (iframe knows it's in fixed-
+  target mode → after each drag emits `center` with new RA/Dec
+  of map centre). Parent receives + posts `set-fov-overlays`
+  with new target.
+- Click without drag: emits `map-click` with RA/Dec → parent
+  sets `skyTarget` + calls `slewAndCenter()`.
+- Mosaic grid overlay (from mosaic planner): same geojson
+  pattern.
+
+### SWE-6: Decommission d3-celestial + docs + verify
+- Remove `<script src="...celestial...">` +
+  `<link ...celestial.css>` from `index.html`.
+- Delete `wwwroot/js/lib/celestial/` entirely (~3.9 MB of saved
+  bandwidth for clients).
+- Clean up dead d3-celestial code in `app.js` (`_buildCelestial`,
+  `_initSky`'s old config block, etc.). Keep only the bridge
+  methods (`_skySendMessage`, listener, helpers).
+- Update `README.md` + `docs/user-guide/sky-explorer.md`
+  mentioning the stellarium-web engine + requirements (WebGL,
+  ~300 MB+ dataset).
+- Update per-project ARCHITECTURE.md.
+- End-to-end verification (next section).
+
+## Files created
+
+- `external/stellarium-web-engine/` (git submodule, pinned)
+- `scripts/build-stellarium-web.sh` (Docker-based Emscripten
+  compile)
+- `scripts/fetch-stellarium-skydata.sh` (HiPS tiles wget)
+- `src/NINA.Polaris/wwwroot/sky/index.html` (sub-app shell)
+- `src/NINA.Polaris/wwwroot/sky/js/sky-bridge.js` (postMessage
+  RPC)
+- `src/NINA.Polaris/wwwroot/sky/js/wasm/stellarium-web-engine.{js,wasm}`
+  (committed build outputs)
+- `src/NINA.Polaris/wwwroot/sky/data/skydata/...` (gitignored,
+  in publish output via csproj Content Include)
+- `src/NINA.Polaris/wwwroot/sky/LICENSE-AGPL.txt` (copy of
+  AGPLv3 stellarium-web-engine license — required by AGPL)
+- `docs/architecture-sky.md` (iframe + AGPL boundary +
+  postMessage contract + how to rebuild WASM)
+
+## Files modified
+
+- `src/NINA.Polaris/NINA.Polaris.csproj` — `<Content Include>`
+  for `wwwroot/sky/**/*` (recursive, including gitignored
+  skydata).
+- `src/NINA.Polaris/wwwroot/index.html` — replace
+  `<div id="celestial-map">` with `<iframe id="skyFrame"
+  src="/sky/">`, remove `<script>` + `<link>` of celestial in
+  SWE-6.
+- `src/NINA.Polaris/wwwroot/js/app.js` — replace ~20+
+  Celestial.* calls with postMessage pattern; add
+  `_skySendMessage`, message event listener, FOV geojson
+  computation helpers. In SWE-6 delete dead d3-celestial code
+  (~200 lines).
+- `.gitignore` — adds
+  `src/NINA.Polaris/wwwroot/sky/data/skydata/`.
+- `Dockerfile` — adds
+  `COPY src/NINA.Polaris/wwwroot/sky/data/`.
+- `README.md` — "Sky tab requires WebGL + ~300 MB skydata
+  bundle" section.
+- `docs/user-guide/sky-explorer.md` — overhaul describing the
+  new features (stick figures, surveys, atmosphere).
+- per-project ARCHITECTURE.md.
+
+## Files deleted (SWE-6)
+
+- `src/NINA.Polaris/wwwroot/js/lib/celestial/` (entire folder,
+  ~3.9 MB).
+- References to celestial.css / celestial.min.js in index.html.
+
+## Reused code
+
+- **Sub-app pattern** — did similar with xpra/PHD2 GUI (PH2X-6:
+  `Phd2GuiSessionService` + `<iframe>` in the GUIDE panel).
+  Same strategy: optional backend service + iframe in the UI
+  with same-origin so postMessage works without CORS.
+- **`Services/PHD2ProcessManager.cs`** — Linux/Docker subprocess
+  pattern for inspiration on `build-stellarium-web.sh`.
+- **`csproj` Content Include patterns** — already have for
+  `wwwroot/js/lib/celestial/data/*.json` (provisional). Replicate
+  with recursive for the new skydata.
+- **WebGL detection** — already done in `app.js _initWebGL()`
+  (lines 1143-...). Reuse the pattern (canvas.getContext('webgl2')
+  → fallback message).
+- **`_skyMapCenter()`** (`app.js` ~4194) — existing logic of
+  RA/Dec extraction from map centre: now becomes "parent asks
+  via postMessage `get-center` + receives `center` response
+  async". Same semantics, different transport.
+- **FOV ring computation** (`_buildFovRing` in `app.js` ~4030) —
+  math of equatorial rectangle from sensor + focal + rotation
+  remains **identical** on parent. Only the destination changes:
+  instead of feeding a d3-celestial layer, post as GeoJSON to
+  iframe.
+- **Slew & Center workflow** (`SlewCenterService.cs`) —
+  completely agnostic to renderer; only consumes final RA/Dec.
+  Zero change.
+- **stellarium-web `apps/simple-html/stellarium-web-engine.html`
+  + `tests.js`** — canonical reference for the bridge JS shape.
+
+## Verification
+
+### Preconditions
+- Modern desktop browser (Chrome/Firefox/Safari current) with
+  WebGL2.
+- ~300 MB free in client cache (skydata comes from first
+  session).
+- Polaris server linux-x64/win-x64 with publish output including
+  `wwwroot/sky/data/`.
+
+### Smoke (SWE-1..3)
+1. `dotnet build src/NINA.Polaris/NINA.Polaris.csproj` — clean.
+2. SKY tab in the browser → iframe loads → DevTools shows
+   `[Sky] bridge ready webgl=true version=x.y.z`. Sky still
+   without data in SWE-2; SWE-3 already shows stars to mag 12 +
+   complete DSOs (M31, Orion Nebula, Pleiades) + Milky Way
+   HiPS tiles.
+
+### postMessage RPC (SWE-4)
+3. Search box "M31" → iframe replies `search-result` → parent
+   centres map + shows FOV overlay. Works via postMessage, not
+   Celestial.rotate.
+4. Click directly on the map on a known star → iframe emits
+   `map-click` with coords + name → parent sets skyTarget +
+   slewAndCenter starts.
+
+### FOV overlays + drag (SWE-5)
+5. Mount connects + tracking on + slew to Polaris → blue
+   rectangle appears centred on RA mount/Dec mount, rotated by
+   the angle of the most recent plate-solve.
+6. Drag the map (fixed-target ASIAIR mode) → red target
+   rectangle stays fixed on screen centre, background slides →
+   parent receives new coords + updates skyTarget.
+7. Mosaic planner opens the panel → yellow grid appears over
+   sky, click a cell → highlight, click Confirm → sequence
+   created with those RA/Dec.
+
+### Decommission (SWE-6)
+8. After deleting d3-celestial: client bundle drops ~3.9 MB.
+   SKY tab still functional. README updated.
+
+### Failure scenarios
+- **WebGL absent** (DevTools toggle "disable WebGL") → iframe
+  posts `webgl-unavailable` → parent UI shows "Sky tab requires
+  WebGL — open Polaris from a desktop browser." Other tabs
+  work.
+- **Skydata folder absent** (Polaris running without the dataset
+  bundled — CI build case without running fetch script) → tile
+  404s in console, sky renders empty but engine doesn't crash.
+  Log message "Sky data missing — run
+  scripts/fetch-stellarium-skydata.sh".
+- **Iframe doesn't load** (CSP, sandbox) → parent timeout 5 s →
+  fallback banner "Sky engine failed to load."
+
+## License + security notes
+
+- **AGPLv3 boundary**: files under `wwwroot/sky/` (including the
+  WASM + bridge JS when it calls engine APIs) effectively fall
+  under AGPL by the "derivative work" principle. Handling:
+  - `wwwroot/sky/LICENSE-AGPL.txt` exact copy of upstream.
+  - Manual header on each file in `wwwroot/sky/` references AGPL.
+  - `wwwroot/sky/README.md` explains the license boundary.
+  - Root `README.md` of Polaris adds an "Embedded AGPL
+    component: Sky map sub-application" section linking to
+    source.
+  - **Serving the source**: AGPL requires remote users to be
+    able to obtain the source. Polaris is already open-source on
+    GitHub, so linking the repo tag (including the pinned
+    submodule commit) satisfies. Add explicit link in
+    `/sky/index.html` footer: "Source code:
+    https://github.com/DanWBR/NINA.Polaris/tree/...".
+- **Upstream CLA**: not going to contribute patches upstream in
+  this plan. If we want to eventually, sign the CLA then; until
+  then keep the fork in the submodule without touching upstream.
+- **Iframe sandbox**: `sandbox="allow-scripts
+  allow-same-origin"`. Same-origin needed for postMessage to
+  return local fetch results (sky data) without CORS. No
+  `allow-popups` / `allow-forms`.
+- **HiPS dataset origin**: stellarium-web's test-skydata is
+  AGPL in the context of the app; bundled tiles are public
+  domain / CC0 from upstream sources (Hipparcos, Gaia, etc.).
+  List attributions at `wwwroot/sky/data/skydata/ATTRIBUTION.md`.
+- **WebGL and mobile browsers**: test on iOS Safari + Chrome
+  Android. Expected to work (both support WebGL2). Performance
+  variable on low-end devices.
+
+## Known risks / out of scope
+
+- **Build pipeline**: requires Docker to run
+  `build-stellarium-web.sh`. Covers Linux + macOS. Windows
+  requires Docker Desktop. Documented.
+- **Submodule update friction**: each upstream
+  stellarium-web bump requires re-running build + committing new
+  `.js/.wasm`. Accepted — upstream stable, low frequency.
+- **API divergence**: canonical reference is
+  `apps/simple-html/tests.js` upstream. Some APIs (look-at-by-
+  RADec, hit-testing) aren't formally documented; each phase
+  may discover gotchas + require patches to `sky-bridge.js`.
+  Mitigation: start with SWE-1..3 conservative, evolve the RPC
+  contract as we implement.
+- **Slew preview inset** (lower-right canvas of the Sky tab from
+  VIDPL-10) keeps using the existing local WebGL canvas — not
+  involved in this plan. iframe occupies only the main map
+  area.
+- **Tonight tab + Sky catalog filters** (D10) keep using the
+  `SkyCatalogService` backend + separate UI; only the visual
+  rendering on the SKY tab is swapped.
+- **Stellarium remote control sync** (D11) still holds — sync
+  pushes RA/Dec to Stellarium desktop (other process), no link
+  to the embedded engine.
+
+---
+
+# Previous plan: Polar Alignment panel (TPPA + Refine)
+
+> Previous plan (SIM, built-in equipment simulator) preserved below.
+
+## Context
+
+Polaris today solves most pre-imaging (PHD2 calibration, auto-
+focus, slew & center, meridian flip, sequence, live stacking)
+but still has no polar alignment — the first thing the user does
+when setting up at night. Without it, they have to open SharpCap
+on Windows or run TPPA from NINA desktop before coming to
+Polaris. ASIAIR, KStars/Ekos, and NINA desktop all have this
+panel; missing on Polaris.
+
+**Objective**: POLAR panel on the sidebar doing TPPA (Three-
+Point Polar Alignment) end-to-end in the browser — captures 3
+frames at RA positions ~30° apart, plate-solves each, computes
+the error vector (azimuth + altitude in arcsec/arcmin), and
+draws an arrow over the live frame indicating the direction to
+nudge the tripod screws. After TPPA, a "Refine" button enters a
+capture/solve loop every ~3 s so the user can watch the error
+shrink in real time while adjusting (SharpCap-style UX).
+
+**Decisions** (with the user):
+- **TPPA + Refine in the same feature** (don't split). Refine is
+  where the UX shines — without it the user would have to run
+  full TPPA every screw turn.
+- **Both hemispheres in v1.** South serves the user (Brazil)
+  directly. Cost: ~5 lines + 1 test (polar-axis sign flips with
+  negative latitude).
+- **Auto-slew only.** Every modern mount has GoTo. Manual-slew
+  (user spins RA by hand) is a follow-up if demand appears —
+  would add a big branch to the state machine.
+
+## Architecture
+
+Pattern identical to `PHD2CalibrationOrchestrator` +
+`AutoFocusService`: a singleton with
+`StartJob/Abort/GetJob/StartRefinement/StopRefinement`, state
+machine per phase, current job broadcast via WS at 1 Hz.
+
+### TPPA algorithm (math)
+
+Each plate-solve returns the true RA/Dec of the optical axis at
+instant `t`. If the mount was perfectly aligned, rotating in
+hour angle (HA) would sweep the optical axis along a circle of
+constant Dec. A misaligned mount → the sweep is still a small
+circle on the celestial sphere, but the pole of that circle is
+the **mount's rotation axis**, not the celestial pole. The
+difference between the two poles is the polar alignment error.
+
+Pseudo-code:
+
+```
+for each point i ∈ {0, 1, 2}:
+    v_i = AltAzUnitVector(ra_i, dec_i, lst_i, siteLat)
+
+# Normal to the plane of the 3 vectors = mount axis
+n = normalize((v1 - v0) × (v2 - v0))
+
+# Convert to Alt/Az
+(altAxis, azAxis) = VectorToAltAz(n)
+
+# North: ideal pole at (Alt=lat, Az=0°)
+# South: ideal pole at (Alt=-lat, Az=180°)
+if siteLat >= 0:
+    altErr = altAxis - siteLat
+    azErr  = azAxis - 0
+else:
+    altErr = altAxis - (-siteLat)
+    azErr  = azAxis - 180
+
+return (azErr * 3600, altErr * 3600)  # arcsec
+```
+
+Reference: Challis (1879) "Lectures on Practical Astronomy" +
+modern formulation in Hook & Wallace (SOFA) for spherical-
+coordinate axis adjustment. Same math NINA desktop, KStars and
+SharpCap use internally.
+
+### Explicit reuse
+
+Everything below already mapped via exploration — no
+reinvention:
+
+- `Services/PHD2CalibrationOrchestrator.cs` — copy/paste the
+  shape (Job + CTS + ConcurrentDictionary + StartJob/Abort/
+  GetJob + RunAsync phase-loop + Fail helper).
+- `Services/PlateSolveService.cs` →
+  `SolveAsync(string fitsPath, PlateSolveOptions, ct)` returns
+  `{Success, RaHours, DecDeg, ScaleArcsecPerPixel, RotationDeg,
+  Error}`. **Takes a file path**, not IImageData — write each
+  capture to `Path.GetTempPath()` before the solve, try-finally
+  `File.Delete`.
+- `Services/ImageWriterService.cs` →
+  `SaveImage(IImageData, ...)` to write the temp FITS.
+- `Services/EquipmentManager.cs` →
+  `Telescope.SlewAsync(ra, dec, ct)`,
+  `Telescope.RightAscension / Declination / Altitude / Azimuth /
+  SideOfPier`, `Camera.CaptureAsync(seconds, opts, ct)`.
+- `Services/ProfileService.cs` → `ActiveEquipmentProfile` getter
+  + setter pattern for the PolarAlign* fields.
+- `Services/NotificationService.cs:Push(kind, text)` — toasts on
+  each phase transition (reused from auto-connect).
+- `WebSocket/StatusStreamHandler.cs` — pattern of adding a
+  sub-object to the status payload.
+- `wwwroot/js/app.js redrawOverlay() + _drawCrosshairOnOverlay`
+  pattern — clone to `_drawPolarErrorVector`.
+- `wwwroot/index.html` AutoFocus tab (682-770) — layout template
+  for the new POLAR tab.
+
+## Phases (5 commits)
+
+### PA-1: Profile fields + skeleton
+- `EquipmentProfile` gains 4 fields:
+  `PolarAlignSlewDegrees=30`,
+  `PolarAlignExposureSec=3.0`,
+  `PolarAlignSettleSeconds=2`,
+  `PolarAlignGain=100`.
+- `EquipmentEndpoints` PUT/POST handlers map the 4 new fields.
+- `Services/PolarAlignmentService.cs` created: enum
+  `PolarAlignmentPhase { Idle, Preflight, MovingToPoint1,
+  SolvingPoint1, ..., Computing, Ok, Failed, Cancelled,
+  Refining }`, record `PolarPoint(int Index, double Ra,
+  double Dec, double RotationDeg, DateTime At)`, class
+  `PolarAlignmentJob` with `Id, Phase, Points, AzErrorArcsec,
+  AltErrorArcsec, TotalErrorArcsec, LastError, Mode, Cts, Task`.
+  Constructor injects `EquipmentManager, PlateSolveService,
+  ImageWriterService, ProfileService, ILogger`. Stubs
+  `StartJob/Abort/GetJob/StartRefinement/StopRefinement` throw
+  `NotImplemented`. Registered as singleton in `Program.cs`.
+- `Endpoints/PolarAlignmentEndpoints.cs`: 5 routes
+  (`POST /api/polar/start`, `/abort`, `/refine/start`,
+  `/refine/stop`, `GET /api/polar/status`). Wired in
+  `Program.cs`.
+- **Smoke**: `GET /api/polar/status` returns
+  `{phase:'idle'}`. Build clean.
+
+### PA-2: TPPA capture/slew loop (no math yet)
+Implements `RunAsync` end-to-end except the error calculation.
+
+1. **Preflight**: validates `Telescope?.IsConnected`,
+   `Tracking=true`, `Camera?.IsConnected`. Saves the original
+   `(ra0, dec0)`.
+2. **Loop i ∈ {0, 1, 2}**:
+   - `SetPhase(MovingToPointN)`.
+   - `targetRa = ra0 + i * slewStepDegrees / 15.0` (hours).
+   - `await Telescope.SlewAsync(targetRa, dec0, ct)`.
+   - `await Task.Delay(settleSeconds * 1000, ct)`.
+   - `SetPhase(SolvingPointN)`.
+   - `var image = await Camera.CaptureAsync(exposureSec,
+     new CaptureOptions { Gain = profile.PolarAlignGain }, ct)`.
+   - `string tempPath = ImageWriterService.SaveImage(image, ...)`
+     in temp dir.
+   - `var result = await PlateSolveService.SolveAsync(tempPath,
+     new PlateSolveOptions { RaHoursHint = currentRa,
+     DecDegHint = currentDec, ScaleHintArcsecPerPixel =
+     profile.PixelScale }, ct)`.
+   - Append `PolarPoint(i, result.RaHours, result.DecDeg,
+     result.RotationDeg, DateTime.UtcNow)` to `job.Points`.
+   - `try { File.Delete(tempPath); } catch { }` (housekeeping).
+3. `SetPhase(Computing)` → (PA-3 fills here) → `SetPhase(Ok)`.
+4. **Slew back** to `(ra0, dec0)` (courtesy).
+5. **Cancel handling**: `OperationCanceledException` →
+   `SetPhase(Cancelled)`. Other exceptions → `Fail(job,
+   ex.Message)` mirroring PHD2.
+
+Adds `event Action<PolarAlignmentJob>? JobUpdated;` fired on
+each `SetPhase` and new point. `StatusStreamHandler` hooks the
+event for event-driven push (not just 1 Hz polling).
+
+Build clean. Manual test: `POST /api/polar/start` with sim, see
+phase spin via `GET /api/polar/status`. Result block still shows
+0/0/0 arcsec.
+
+### PA-3: Math + tests
+`Services/PolarAlignmentMath.cs` new:
+
+```csharp
+public static (double azErrSec, double altErrSec) ComputeError(
+    PolarPoint p1, PolarPoint p2, PolarPoint p3,
+    double siteLatDeg, double siteLongDeg);
+```
+
+Hemisphere-aware (positive lat = north, negative = south). Uses
+LST of each point (computes local sidereal time from
+DateTime UTC + longitude).
+
+`tests/NINA.Polaris.Test/PolarAlignmentServiceTests.cs`:
+- **Test 1 — perfect mount north**: synthesises 3 points of
+  perfect sweep at lat=+45°, expects residual error < 10".
+- **Test 2 — known error north**: simulates mount with
+  Az=+120", Alt=-300", recovers within ±5".
+- **Test 3 — perfect mount south**: lat=-23.5° (Brazil),
+  expects <10".
+- **Test 4 — known error south**: mount with known error in
+  southern hemisphere, recovers within ±5".
+- **Test 5 — cancel**: stub `EquipmentManager` with blocking
+  `SlewAsync`, `Abort()` → phase = `Cancelled` in <500 ms.
+- **Test 6 — plate-solve fail**: mock `PlateSolveService`
+  returns `Success=false`, phase goes to `Failed` with
+  descriptive error.
+
+Plumb `PolarAlignmentMath.ComputeError` into
+`RunAsync.Computing`. Build clean + 6 tests pass.
+
+### PA-4: WebSocket payload + frontend (static UI, no overlay)
+- `StatusStreamHandler.cs`: new `polarAlignmentPayload` block
+  mirroring `autoFocusPayload`, included in the merged status
+  object. `JobUpdated` hook forces immediate push.
+- `wwwroot/index.html`:
+  - **Sidebar**: new POLAR button between GUIDE and FOCUS. SVG
+    icon: compass/target (concentric circles + crosshair).
+  - **New tab panel** `<div x-show="tab === 'polar'">` cloned
+    from AutoFocus: header with phase pill + spinner, parameter
+    form bound to rig fields (slew deg / exposure / settle /
+    gain, POST on blur to `/api/equipment/rigs/{id}`), `Start`
+    button → `polarStart()`, progress bar "Point N/3 — phase",
+    result block `Az: {{azArcmin}}' Alt: {{altArcmin}}' Total:
+    {{totalArcmin}}'`, `Refine` button, `Stop`/`Abort` buttons.
+  - **Manage Rigs modal**: new "Polar alignment" collapsible
+    section (next to "Filter offsets") with the 4 fields.
+- `wwwroot/js/app.js`:
+  - Alpine data: `polarAlignment: {state:'idle', phase:'idle',
+    points:[], azErrorArcsec:0, altErrorArcsec:0,
+    totalErrorArcsec:0}`.
+  - WS handler: `if (msg.polarAlignment) this.polarAlignment =
+    msg.polarAlignment;`.
+  - 4 methods `polarStart/polarAbort/polarRefineStart/
+    polarRefineStop` POST-ing to the endpoints with form values.
+
+Build + manual: POLAR tab shows phases changing + final result
+(numeric). Still no arrow on canvas.
+
+### PA-5: Live error vector overlay + refinement loop
+- `Services/PolarAlignmentService.cs`: implements
+  `StartRefinement()` — separate Task + CTS, loop
+  `while (!ct.IsCancellationRequested)` capturing+solving at
+  the current position (no slew), recomputes error using the
+  3 initial points + current sample (sliding window — replaces
+  the oldest point), updates `Job.AzErrorArcsec/AltErrorArcsec`
+  each iteration, sleeps `settleSeconds` between. `StopRefinement`
+  cancels. `finally` guarantees `Phase = Idle`.
+- `wwwroot/js/app.js`: new branch
+  `_drawPolarErrorVector(ctx, w, h)` in `redrawOverlay()`:
+  - Reads
+    `this.polarAlignment.{azErrorArcsec, altErrorArcsec}` +
+    last solve's `rotationDeg`.
+  - Converts `(azErr, altErr)` → screen vector: rotates by
+    `-rotationDeg` so the arrow points in the visual direction
+    of the frame.
+  - Draws arrow from canvas centre, length
+    `min(w,h)/2 * log(1 + totalArcmin)/log(1+30)`
+    (logarithmic: 30' fills the canvas, 1' is small).
+  - **Colour by magnitude**: red >5', amber 1-5', green <1'.
+  - Label "Az: X' / Alt: Y' / Total: Z'" at canvas top.
+- **TODO** comment for meridian-aware point picker (deferred —
+  see edge cases).
+
+Build + verify end-to-end.
+
+## Files created
+
+- `src/NINA.Polaris/Services/PolarAlignmentService.cs`
+- `src/NINA.Polaris/Services/PolarAlignmentMath.cs`
+- `src/NINA.Polaris/Endpoints/PolarAlignmentEndpoints.cs`
+- `tests/NINA.Polaris.Test/PolarAlignmentServiceTests.cs`
+
+## Files modified
+
+- `src/NINA.Polaris/Services/ProfileService.cs` — 4 fields on
+  `EquipmentProfile`.
+- `src/NINA.Polaris/Endpoints/EquipmentEndpoints.cs` — maps the
+  4 new fields on PUT/POST.
+- `src/NINA.Polaris/Program.cs` — DI singleton +
+  `MapPolarAlignmentEndpoints()`.
+- `src/NINA.Polaris/WebSocket/StatusStreamHandler.cs` —
+  `polarAlignmentPayload` block + `JobUpdated` push hook.
+- `src/NINA.Polaris/wwwroot/index.html` — sidebar button, POLAR
+  tab panel, rig modal section.
+- `src/NINA.Polaris/wwwroot/js/app.js` — Alpine state, WS
+  handler, 4 methods, `_drawPolarErrorVector` branch in
+  `redrawOverlay`.
+- `src/NINA.Polaris/wwwroot/css/app.css` — small additions for
+  `.polar-result`, `.polar-error-pill`, etc.
+- `README.md` — "Polar Alignment" section.
+
+## Verification end-to-end ("Tonight's first alignment")
+
+**Sim setup (no real hardware)**:
+
+1. Enable INDI simulator stack via SETTINGS → Simulator tab.
+2. Connect Telescope Simulator + CCD Simulator via RIGS tab.
+3. Turn tracking on. Slew to a point near the pole (Dec ~70°+
+   north, or ~-70° south).
+4. **POLAR tab appears** between GUIDE and FOCUS. Click.
+5. Configure parameters (slew=30°, expose=3 s, settle=2 s,
+   gain=100).
+6. Click **Start**.
+7. Watch phase pill cycling Preflight → MovingToPoint1 →
+   SolvingPoint1 → MovingToPoint2 → ... → Computing → Ok.
+   Toast on each transition (reuses `NotificationService`).
+8. Result block shows non-zero Az/Alt arcmin (sim has ~1° offset
+   on purpose).
+9. Mount slews back to original position automatically.
+10. Click **Refine**.
+11. Captures/solves every ~3 s, **arrow appears on canvas**
+    pointing direction of error, label "Az: X' / Alt: Y' /
+    Total: Z'".
+12. Call `/api/telescope/sync` with slightly shifted RA/Dec
+    (mimics screw adjustment) → arrow shrinks + colour changes
+    red → amber → green in real-time.
+13. Click **Stop** → phase returns to Idle, refinement task
+    ends. Click **Abort** mid-slew in a fresh run → phase
+    `Cancelled` in <1 s, mount stops slewing.
+
+**Real-rig verification**:
+- Total error after a Refine session ≤ 1' on CGEM-class mount.
+- Eye-test against PHD2 drift assistant (RMS guiding pre/post-
+  align).
+
+**Southern hemisphere**:
+- Repeat steps 1-13 with lat=-23.5° (user's Brazil config).
+- Math should be equivalent — pole sign inverts but error
+  magnitude stays consistent.
+
+## Edge cases (declared, deferred)
+
+- **Meridian crossing during 30° slew**: picker should choose
+  3 points all east OR all west of meridian. If `ra0 +
+  slewStep` would cross → slew the opposite direction
+  (-slewStep). Stub `// TODO: meridian-aware point picker` in
+  `RunAsync` at PA-2, fix in a separate PA-6.
+- **Low star count (solve fail)**: retry once with
+  `exposureSec * 2`, then fail with actionable message "Plate
+  solve failed at point N — increase exposure or gain".
+  Already in PA-3.
+- **Camera rotation**: arrow uses `rotationDeg` from the most
+  recent solve; if the camera is remounted mid-session, next
+  solve corrects automatically.
+- **Refine Stop mid-solve**: outer `ct` cancels in-flight
+  `SolveAsync` and `CaptureAsync` (both accept ct). `finally`
+  guarantees `Phase = Idle`. Already in PA-5.
+- **SideOfPier flip during job**: deferred — TODO comment only.
+  Realistic? 30° slew rarely crosses, but high latitude near
+  the pole can.
+
+## Out of scope (deferred)
+
+- DARV / drift alignment (no plate solver).
+- Manual-slew TPPA (user spins RA by hand).
+- Polar scope clocking-angle assistance (shows "rotate polar
+  scope reticle to HH:MM position").
+- Permanent error log/history (e.g. records every alignment in
+  the STUDIO frame library with metadata).
+
+---
+
+# Previous plan: Built-in equipment simulator (SIM-1..8)
+
+> Previous plan (CLST, client-side live stacking via WASM)
+> preserved below.
+
+## Context
+
+To test Polaris end-to-end today, the user needs **real hardware**
+(Pi + camera + mount + cables) OR the wisdom to run INDI
+simulators manually. The simulators exist (`indi_simulator_ccd`,
+`_telescope`, `_focus`, `_wheel`, `_guide`) and the best of them,
+`indi_simulator_ccd`, **renders real stars** from the GSC catalog
+based on the simulated mount's current RA/Dec — slew to M31, see
+M31; defocus, HFR rises; dither, position changes. Perfect suite
+for testing plate-solve + alignment + live stacking + autofocus
+**without hardware**.
+
+The problem: today the user needs to open a terminal and run
+`indiserver -v indi_simulator_ccd indi_simulator_telescope ...`
+by hand. For newbies it's a barrier; for devs iterating on
+Polaris it's overhead every session.
+
+This plan adds an **integrated simulator mode**: the UI has
+"Launch simulator stack" + "Stop" buttons, optional auto-start
+on boot, install detection + download link when absent. Visual
+parity with the existing `PHD2ProcessManager`.
+
+**Decisions** (with the user):
+- **Platforms**: Linux/macOS first-class (INDI simulators via
+  `indi-bin` apt/brew) + **Windows too** (detects ASCOM CamSim/
+  TelescopeSim/FocuserSim/FilterWheelSim installs from ASCOM
+  Platform). No degradation by OS.
+- **Configurable stack**: checkbox per device type (CCD,
+  Telescope, Focuser, FilterWheel, Guider, Dome, Weather) — user
+  picks which to spawn. Sensible default: CCD + Telescope +
+  Focuser + FilterWheel.
+- **Lifecycle**: both — "Auto-start on boot" toggle + manual
+  Launch/Stop buttons. Mirrors PHD2AutoStartService +
+  PHD2ProcessManager pattern.
+
+## Architecture
+
+Three identical-in-shape layers to the PHD2 stack (referenced by
+the corresponding filename in `src/NINA.Polaris/Services/`):
+
+### 1. Per-platform process manager
+
+**`Services/Simulator/ISimulatorBackend.cs`** — thin interface:
+
+```csharp
+public interface ISimulatorBackend {
+    string Kind { get; }                                // "indi" | "ascom"
+    bool IsSupported { get; }                           // platform check
+    Task<SimulatorInstall> DetectInstallAsync(CancellationToken ct);
+    Task<bool> LaunchAsync(SimulatorLaunchRequest req, CancellationToken ct);
+    Task ShutdownAsync(CancellationToken ct);
+    Task<bool> IsRunningAsync(CancellationToken ct);
+    string DownloadInstructionsUrl { get; }
+}
+
+public record SimulatorInstall(
+    bool Installed,
+    string? Version,
+    string? Path,
+    IReadOnlyList<string> AvailableDevices,    // ["ccd","telescope","focus","wheel",...]
+    string? Error);
+
+public record SimulatorLaunchRequest(
+    IReadOnlyList<string> Devices,
+    int Port = 7624);
+```
+
+**`Services/Simulator/IndiSimulatorBackend.cs`** (Linux/macOS):
+- `DetectInstallAsync`: tries `which indiserver` + `which
+  indi_simulator_ccd`. Parses `indiserver --version` for a
+  version string. Lists which `indi_simulator_*` binaries exist
+  (varies per install).
+- `LaunchAsync`: `indiserver -v -p {port} indi_simulator_ccd
+  indi_simulator_telescope ...` as subprocess via PHD2-style
+  `Process.Start` (redirect stdout/stderr to Polaris log). Holds
+  PID in `_proc`.
+- `ShutdownAsync`: graceful via `SIGTERM`
+  (Process.CloseMainWindow on Linux ≡ SIGTERM), 3 s timeout, then
+  Kill.
+- `IsRunningAsync`: TCP probe on `127.0.0.1:{port}` with 500 ms
+  timeout (same pattern as PHD2ProcessManager).
+- `DownloadInstructionsUrl`: link to
+  `https://www.indilib.org/get-indi/download.html`.
+
+**`Services/Simulator/AscomSimulatorBackend.cs`** (Windows):
+ASCOM simulators are **GUI apps** (.exe opening a window), not
+daemons. Polaris can't silently spawn them the way it does
+indiserver. Different strategy:
+- `DetectInstallAsync`: reads ASCOM Platform's COM registry
+  checking for `ASCOM.Simulator.Camera`,
+  `ASCOM.Simulator.Telescope`, etc. present
+  (`HKLM\SOFTWARE\Classes\ASCOM.Simulator.Camera`).
+- `LaunchAsync`: does **local Alpaca discovery** (we already
+  have `Services/Alpaca/AlpacaDiscovery.cs`) — user needs to run
+  the **Alpaca Omni Simulator** (single .exe exposing all
+  ASCOM sims via Alpaca HTTP). If omni sim not running, we
+  `Process.Start("AlpacaOmniSimulator.exe")` if detected on PATH
+  or Program Files; otherwise show banner "Install + start
+  Alpaca Omni Simulator from
+  https://github.com/ASCOMInitiative/ASCOMSimulators".
+- `ShutdownAsync`: kill `AlpacaOmniSimulator.exe` process if we
+  launched it. If user opened it manually, just log "simulator
+  still running, close it manually" — we don't own the PID.
+- `IsRunningAsync`: TCP probe on `127.0.0.1:32323` (default
+  port of Alpaca Omni Sim) + quick check of
+  `/management/v1/configureddevices`.
+
+Why this Windows-specific detail matters: real cross-OS parity
+matters for CI/dev test on any OS, and Alpaca Omni Simulator is
+the only viable "single binary, daemon-mode" option on Windows.
+
+### 2. Orchestrator service
+
+**`Services/Simulator/SimulatorService.cs`** — singleton
+coordinating backends + exposing surface for endpoint/UI:
+
+```csharp
+public class SimulatorService {
+    public ISimulatorBackend ActiveBackend { get; }
+    public SimulatorInstall? LastDetect { get; }
+    public bool IsRunning { get; }
+    public IReadOnlyList<string> RunningDevices { get; }
+    public DateTime? LaunchedAt { get; }
+    public string? LastError { get; }
+
+    Task<SimulatorInstall> RefreshDetectionAsync();
+    Task<bool> LaunchAsync(IReadOnlyList<string> devices, int port);
+    Task ShutdownAsync();
+    Task<bool> ProbeRunningAsync();
+}
+```
+
+Resolves which backend to use in the constructor via
+`OperatingSystem.IsWindows()` etc. Extra backends (e.g. future
+NINA Desktop simulator headless via remote API) plug in here
+without changing the above interfaces.
+
+### 3. Auto-start service
+
+**`Services/Simulator/SimulatorAutoStartService.cs`** —
+`BackgroundService`, copies the exact pattern of
+`PHD2AutoStartService`:
+- `ExecuteAsync`: waits 3 s for app to come up, reads
+  `UserProfile.SimulatorAutoStart` + `UserProfile.SimulatorDevices`,
+  calls `SimulatorService.LaunchAsync(...)` if toggle ON and
+  detection OK.
+- Non-blocking: fire-and-forget via `Task.Run` so startup isn't
+  delayed.
+- Reacts to toggle changes? NO — only runs on boot. Changes
+  require a Polaris restart OR manual Launch button click.
+
+### 4. Persistence
+
+**`Services/ProfileService.cs`** — adds to `UserProfile`:
+```csharp
+public bool SimulatorAutoStart { get; set; } = false;
+public List<string> SimulatorDevices { get; set; }
+    = new() { "ccd", "telescope", "focus", "wheel" };
+public int SimulatorPort { get; set; } = 7624;     // INDI default
+```
+
+Settings-level (not rig), because "fake hardware" isn't
+equipment-specific — it's a dev-environment toggle.
+
+### 5. Endpoints
+
+**`Endpoints/SimulatorEndpoints.cs`** new:
+- `GET /api/simulator/status` →
+  `{kind, installed, version, devicesAvailable, isRunning,
+  runningDevices, launchedAt, lastError}`.
+- `POST /api/simulator/launch` body `{devices: string[], port:
+  int}`.
+- `POST /api/simulator/shutdown`.
+- `POST /api/simulator/detect` (force refresh detection).
+- `PUT /api/simulator/settings` body `{autoStart, devices, port}`
+  → persists to UserProfile.
+- `GET /api/simulator/settings` → returns current config.
+
+### 6. WebSocket status
+
+`WebSocket/StatusStreamHandler.cs` gets `simulator` block on the
+existing 1 Hz payload:
+```json
+"simulator": {
+  "kind": "indi", "installed": true, "version": "2.1.4",
+  "isRunning": true,
+  "runningDevices": ["ccd","telescope","focus","wheel"],
+  "launchedAt": "2026-05-23T10:30:00Z",
+  "autoStart": false
+}
+```
+
+### 7. UI
+
+**New "Simulator" panel in the SETTINGS tab** (not in RIGS —
+this is dev-mode, not equipment config). Layout:
+
+```
+┌─ Equipment simulator ──────────────────────────────────────┐
+│ Backend: INDI simulators (Linux)        [⟳ Re-detect]      │
+│ Status:  ✓ Installed v2.1.4  ·  Currently: 🟢 Running      │
+│                                                              │
+│ Devices to start:                                           │
+│   ☑ Camera (CCD)       ☑ Telescope                          │
+│   ☑ Focuser            ☑ Filter Wheel                       │
+│   ☐ Guider             ☐ Dome           ☐ Weather           │
+│                                                              │
+│ INDI port: [7624]   ☐ Auto-start when Polaris boots         │
+│                                                              │
+│ [▶ Launch simulators]    [⏹ Stop]                           │
+│                                                              │
+│ ↓ Tip: After launch, go to RIGS tab and pick "Simulator"    │
+│   in each device dropdown.                                  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+When `installed: false`, the central content swaps for a banner:
+```
+⚠ INDI simulator drivers not installed.
+   Run: sudo apt install indi-bin
+   Or: brew install indi-bin (macOS)
+   [Open INDI docs →]
+```
+
+(Windows equivalent: banner points at the Alpaca Omni Simulator
+release page on GitHub.)
+
+**Launch** button fires POST `/api/simulator/launch`, shows
+spinner until `isRunning` becomes true via WS (~1-2 s).
+
+## Phases
+
+### SIM-1: ISimulatorBackend + IndiSimulatorBackend (Linux/macOS)
+- Interface, record types, IndiSimulatorBackend implementation.
+- Process spawn + graceful shutdown + TCP probe.
+- Detection via `which` + version parse.
+- Tests: parsing version output, mock subprocess for shutdown
+  logic.
+
+### SIM-2: SimulatorService orchestrator + ProfileService fields
+- Singleton, dependency-injected, picks backend by OS.
+- New `UserProfile` fields + migration safe (defaults).
+- Tests: backend selection by OS, settings round-trip.
+
+### SIM-3: SimulatorAutoStartService
+- BackgroundService, copies PHD2AutoStartService pattern.
+- Reads profile on startup, calls LaunchAsync if autoStart=true
+  + detection OK.
+- Tests: triggers launch with correct devices; skips when
+  disabled.
+
+### SIM-4: Endpoints + WS payload
+- 5 new endpoints in SimulatorEndpoints.cs.
+- StatusStreamHandler extension with `simulator` block.
+- Smoke tests via integration (TestServer).
+
+### SIM-5: AscomSimulatorBackend (Windows)
+- Registry COM detection for ASCOM.Simulator.* keys.
+- Detect + launch Alpaca Omni Simulator binary.
+- Health probe via Alpaca management API.
+- Tests: registry parse mock, port probe.
+
+### SIM-6: UI panel in Settings tab
+- New panel following the visual pattern of other panels (PHD2).
+- Alpine state: `simulator: {kind, installed, version, isRunning,
+  devices, ...}`.
+- Methods `simulatorLaunch / simulatorShutdown / simulatorReDetect
+  / saveSimulatorSettings`.
+- CSS: reuse `.equip-card-*` classes.
+
+### SIM-7: Docs + verify
+- `docs/user-guide/simulator-mode.md` walkthrough.
+- README section "Testing without hardware".
+- Verify end-to-end (next phase because it touches real runtime).
+
+### SIM-8: Dynamic device add/remove via INDI FIFO (follow-up)
+After SIM-1..7 shipped, a follow-up added the ability to add/
+remove devices without restarting indiserver, using its FIFO
+control file. Lets the UI checkboxes act live.
+
+## Files created
+
+- `src/NINA.Polaris/Services/Simulator/ISimulatorBackend.cs`
+- `src/NINA.Polaris/Services/Simulator/IndiSimulatorBackend.cs`
+- `src/NINA.Polaris/Services/Simulator/AscomSimulatorBackend.cs`
+- `src/NINA.Polaris/Services/Simulator/SimulatorService.cs`
+- `src/NINA.Polaris/Services/Simulator/SimulatorAutoStartService.cs`
+- `src/NINA.Polaris/Endpoints/SimulatorEndpoints.cs`
+- `tests/NINA.Polaris.Test/IndiSimulatorBackendTests.cs`
+- `tests/NINA.Polaris.Test/AscomSimulatorBackendTests.cs`
+- `tests/NINA.Polaris.Test/SimulatorServiceTests.cs`
+- `docs/user-guide/simulator-mode.md`
+
+## Files modified
+
+- `src/NINA.Polaris/Services/ProfileService.cs` — 3 fields on
+  `UserProfile`.
+- `src/NINA.Polaris/Program.cs` — register `SimulatorService` +
+  backend + `SimulatorAutoStartService` (hosted), map
+  `SimulatorEndpoints`.
+- `src/NINA.Polaris/WebSocket/StatusStreamHandler.cs` —
+  `simulator` block on payload.
+- `src/NINA.Polaris/wwwroot/index.html` — new "Equipment
+  simulator" panel on Settings tab.
+- `src/NINA.Polaris/wwwroot/js/app.js` — state + methods.
+- `src/NINA.Polaris/wwwroot/css/app.css` — small tweaks if
+  necessary.
+- `docs/user-guide/README.md` — link to simulator-mode.md under
+  "For developers" section.
+- `README.md` — "Testing without hardware" section.
+
+## Reused code
+
+- **`Services/PHD2ProcessManager.cs`** — direct template for the
+  process-manager pattern: `which`-style detection, candidate
+  paths cross-platform, TCP liveness probe (500 ms timeout),
+  graceful shutdown + force-kill timeout. Copy the structure,
+  adapt the paths.
+- **`Services/PHD2AutoStartService.cs`** — direct template for
+  BackgroundService auto-start: 3 s stagger, reads profile
+  toggle, fire-and-forget launch via Task.Run.
+- **`Services/Phd2GuiSessionService.cs`** — Linux subprocess
+  launch pattern (xpra). Same spawn + log-redirect shape.
+- **`Services/Alpaca/AlpacaDiscovery.cs`** + `AlpacaClient.cs`
+  — Alpaca Omni Simulator is an Alpaca server; we already have
+  the client. `AscomSimulatorBackend.IsRunningAsync` reuses it
+  for health probe.
+- **PHD2 UI pattern in index.html** (Settings/Guide tab, status
+  badge + Launch/Stop buttons + "not detected" banner) —
+  exact copy/paste.
+- **WS status broadcast pattern** — StatusStreamHandler already
+  has a pattern for all blocks; just add another sub-object.
+- **`UserProfile.PHD2AutoStart`** — exact same toggle shape for
+  SimulatorAutoStart.
+
+## Verification end-to-end
+
+### Linux (Pi 2 or desktop)
+1. **Without `indi-bin` installed**: Settings → Simulator panel
+   shows "Not installed" banner + `sudo apt install indi-bin`
+   command.
+2. **`sudo apt install indi-bin`** → click Re-detect → status
+   becomes "✓ Installed v2.x.x", list of available devices
+   appears.
+3. **Click Launch** → spinner ~1-2 s → status becomes
+   "🟢 Running" + list of running devices.
+4. **RIGS tab** → each dropdown now shows "CCD Simulator",
+   "Telescope Simulator", etc. (because indiserver is running
+   with them).
+5. **Connect simulated camera + mount** → capture a frame →
+   see real stars from the GSC catalog (not synthetic noise).
+6. **Slew to M31** via "Go to" → next capture shows M31
+   (simulator cortex renders the pointed region).
+7. **Plate solve** the frame → ASTAP resolves correctly (real
+   sky, just rendered).
+8. **Live stack ON** → 5 frames → CLST pipeline (WASM client-
+   side if browser supports) accumulates correctly; HFR stable
+   because simulator focus is perfect.
+9. **Click Stop** → process terminates, RIGS dropdowns show
+   empty list on next refresh.
+
+### Windows (mini PC)
+1. **Without Alpaca Omni Sim**: banner points at release page.
+2. **After install + auto-detect of the .exe on PATH**: click
+   Launch → subprocess starts, status "🟢 Running".
+3. **RIGS tab** → "Alpaca" driver dropdown lists simulated
+   devices (discovered via local Alpaca discovery on port
+   32323).
+4. Rest of flow identical to Linux.
+
+### Auto-start
+- Check "Auto-start when Polaris boots" → saves.
+- Restart Polaris → simulator stack comes up ~3 s after app
+  startup (visible in log: "Simulator auto-started:
+  indi_simulator_ccd ...").
+
+### Cross-client / multi-tab
+- Open 2 browsers on the same Polaris → both see the same
+  simulator state (via WS payload). Click Launch in one →
+  the other sees status change within ~1 s.
+
+## License + compatibility notes
+
+- **INDI**: GPLv2; we run as a separate subprocess, no code
+  mixing. Polaris stays MPL 2.0.
+- **ASCOM Platform / Alpaca Omni Simulator**: MIT-equivalent
+  ASCOM license; same situation (subprocess, no linkage).
+- **Privacy**: nothing leaves the host — simulator is 100% local.
+- **Performance**: `indiserver` + 4 sim drivers ≈ 30-80 MB RAM
+  total on Pi 2. Acceptable; Polaris on Pi 2 is already tight
+  (CLST solves the image-math side).
+- **Failure mode**: if `indiserver` dies mid-session (crash),
+  the TCP probe sees and marks `isRunning: false` on the next
+  tick. User clicks Launch again. No automatic restart — keep
+  it simple; PHD2 doesn't either.
+- **Port conflict**: if the user already has `indiserver`
+  running manually on port 7624, our Launch fails (port in
+  use). Clear error in banner: "Port 7624 already in use. Stop
+  the other indiserver or change Polaris's port in Settings".
+
+---
+
+# Previous plan: Client-side live stacking via WASM (CLST)
+
+> Previous plan (LSTR, auto re-focus / re-center triggers)
 > below starting at `# Previous plan: Client-side live stacking via WASM (CLST)`.
 > The entire CLST-1..8 stack is in production; this plan builds the
 > distribution and operability layer on top so a regular
