@@ -125,6 +125,30 @@ verbatim alongside the camera-native pipeline, the embedded JPEG
 becomes the on-screen preview while the RAW waits for the Studio
 panel (or PixInsight / Siril if you'd rather process there).
 
+### Capture Button — Polaris Shutter
+
+Single ASIAIR / StellaVita-style circular shutter unifies capture
+across LIVE, PREVIEW, FOCUS Manual Assist, VIDEO Capture and
+AUTORUN. SVG progress ring around the button shows real-time
+exposure / cycle / sequence progress; inner icon morphs to STOP
+when active.
+
+Gesture model (same across every tab):
+
+- **Tap** when idle → single capture / start
+- **Long-press 600ms** when idle → enter loop mode (LIVE / PREVIEW
+  / FOCUS); same as tap on tabs that don't have a distinct loop
+  (VIDEO / AUTORUN). The ring fills during the hold for visual
+  feedback, snapping into loop mode at 600ms.
+- **Tap during capture** → abort / stop
+
+Shutter lives centered vertically + horizontally in the
+.quick-controls sidebar on the right. AUTORUN gained a new
+right sidebar (it was footer-style before) so it follows the
+same layout. Mobile (≤900px) collapses each pane to a single
+column with the shutter sidebar docked below the canvas /
+sequence list.
+
 ### Real-Time Image Streaming
 
 Dual-mode WebSocket image streaming with automatic format negotiation:

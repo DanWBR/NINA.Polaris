@@ -20,19 +20,31 @@ PREVIEW when you want to look without committing to a save.
 
 ## Buttons
 
-- **📸 Take snap**, single exposure
-- **↻ Loop**, chain snaps continuously. Each frame waits for the
-  previous to finish + render before the next starts. Effective fps
-  is bounded by exposure + transfer + render. Toggle off to stop.
-- **🎥 Stream**, server-side continuous capture. Auto-picks between:
+### Polaris Shutter (round capture button)
+
+Snap / Loop / Abort all routed through the big circular shutter
+centered in the right sidebar. Same gesture vocabulary as LIVE,
+FOCUS Manual, and VIDEO:
+
+- **Tap** when idle, single exposure. Anel preenche em tempo
+  real conforme a exposição roda; countdown numérico embaixo.
+- **Long-press** (hold ≥600ms) when idle, enters loop mode.
+  Each frame waits for the previous to finish + render before
+  the next starts; effective fps bounded by exposure + transfer
+  + render. Anel âmbar durante o hold confirma o arming.
+- **Tap during snap or loop**, aborts.
+
+### Other controls
+
+- **🎥 Stream**, server-side continuous capture, kept as its own
+  toggle below the shutter (Stream is a distinct mode, not a
+  snap or loop). Auto-picks between:
   - **Native mode** (label: "native · X.X fps") when the camera
-    supports INDI's `CCD_VIDEO_STREAM`, driver fires continuous BLOBs
-    at 10-30 fps without per-frame round-trips
+    supports INDI's `CCD_VIDEO_STREAM`, driver fires continuous
+    BLOBs at 10-30 fps without per-frame round-trips
   - **Loop mode** (label: "loop · X.X fps") fallback, tight
     server-side `CaptureAsync` loop
-  Auto-detected per camera; tooltip on the button tells you which mode
-  will run.
-- **Abort**, stops everything (loop + stream + in-flight exposure)
+  Tooltip on the button tells you which mode will run.
 - **⛶ View**, opens the full-resolution OpenSeadragon viewer for
   pan/zoom inspection
 

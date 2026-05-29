@@ -23,14 +23,26 @@ stream). When **Stack ON**, each incoming frame:
 
 Frame count + reference star count update each second.
 
-## Controls (top row)
+## Controls (sidebar)
 
-- **Capture / Loop / Stop**, same as PREVIEW; convenience to fire
-  captures without leaving the tab
+Right sidebar is split top-to-bottom: inputs (Exp / Gain / Bin /
+Filter) at top, Polaris Shutter centered in the middle, secondary
+toggles at bottom. The shutter unifies Capture / Loop / Stop into
+a single gesture button:
+
+- **Tap shutter** when idle, single capture (snap)
+- **Long-press 600ms** when idle, enter loop mode (ring fills
+  amber during the hold to confirm)
+- **Tap shutter** while exposing or looping, abort
+
+Secondary toggles + buttons:
+
 - **Stack ON / Stack**, toggle integration on/off
 - **Reset** (visible when Stack ON), discards the running stack +
   reference. Next incoming frame becomes the new reference.
 - **⛶ View**, OpenSeadragon viewer on the current stack
+- **Compute** (Auto / Server / Client), per-rig override for
+  where the per-frame math runs (server CPU vs client WASM)
 
 ## Stats bar
 

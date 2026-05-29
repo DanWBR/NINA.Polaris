@@ -149,8 +149,8 @@ Before committing to a sequence:
 
 1. **FOCUS** tab → set **Step Size** to ~20 (your focuser, your
    numbers)
-2. Click **▶ Take snap** in the PREVIEW tab → see what the field looks
-   like
+2. Tap the **round shutter** in the PREVIEW tab sidebar → see what
+   the field looks like
 3. Back to FOCUS → manually step in / out a few times watching the
    HFR value in the stats bar; when it bottoms out you're at focus
 4. (Better) Click **▶ Start AF** in the auto-focus panel → V-curve
