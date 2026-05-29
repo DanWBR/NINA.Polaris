@@ -1016,6 +1016,572 @@ Small yellow box above the live-stack canvas with three buttons:
 # Previous plan: HELP tab — in-app stepper tutorials (HELP-1..5)
 
 > Previous plan (AUTH, basic auth) preserved below.
+
+## Context
+
+Polaris has 33 Markdown docs under `docs/user-guide/` covering
+basically everything — but they live outside the app. Someone who
+just installs the `.deb` and opens `https://polaris-pi.local:5000`
+for the first time encounters 17 sidebar tabs (Home, Rigs, Sky,
+Guide, Polar, Focus, Preview, Video, Autorun, Live, Adv, Studio,
+Editor, Tonight, Weather, Files, Settings) with no in-app guidance
+on what to do first. Doc links exist in context-specific spots
+(cert install in Settings, mounts.md in RIGS, dslr-*.md via FILES)
+but don't answer the basic "how do I take my first photo?".
+
+A new HELP tab. Pattern is familiar (sidebar button + tab-panel,
+just like every other tab); `UseStaticFiles()` already serves any
+PNG dropped under `wwwroot/screenshots/`, and tutorial steps map
+~1:1 to `docs/user-guide/end-to-end-workflow.md` (English, like
+the rest of the UI). HELP is a UX layer that consumes the docs
+content and presents it step-by-step.
+
+**Decisions** (AskUserQuestion):
+- **Format**: stepper (one step per card, Prev/Next, progress
+  indicator). Full-width card with hero screenshot + short body
+  + tip + "read more in docs" link + optional "open this tab now"
+  button.
+- **Screenshots**: placeholders for now, real screenshots later.
+  Each slot becomes a `.help-screenshot-placeholder` showing the
+  exact path the operator drops the PNG at
+  (`wwwroot/screenshots/{tutorial}/{NN}-{slug}.png`); when the
+  file exists, the placeholder hides + the image appears. No
+  blocking: structure ships ready, screenshots fill in
+  organically.
+- **Scope**: 4 tutorials.
+  1. **Capture-to-export end-to-end** (~12 steps, main flow)
+  2. **First-night checklist** (~5 steps, first boot)
+  3. **Specific workflows** (LRGB mono ~5 + planetary ~4 + PCC ~3)
+  4. **Troubleshooting / FAQ** (list of common problems)
+- **Language**: English, aligned with the docs + rest of UI.
+
+## Architecture
+
+Almost everything is frontend; zero backend (docs already in repo,
+static serving already wired). Pattern cloned from the TONIGHT
+tab: button + tab-panel + Alpine state + methods.
+
+### Sidebar button
+
+End of nav stack (after Settings, position #18). Circular "?"
+SVG icon. `title="Help"`.
+
+### State + tutorial data
+
+`wwwroot/js/app.js` gets:
+
+```js
+help: {
+    // null = landing (pick a tutorial); else: 'capture'
+    //   'first-night' | 'lrgb' | 'planetary' | 'pcc' | 'troubleshoot'
+    tutorial: null,
+    step: 0,
+    landingHintDismissed: false
+}
+```
+
+Tutorial content lives in a `_helpTutorials()` method (returns
+the catalog) so the data sits next to the code rendering it — no
+separate JSON file, no fetch. Each step:
+
+```js
+{
+    title: "Slew & Center on the target",
+    tab: "sky",                // optional: "Open this tab" button
+    docLink: "sky-explorer.md",
+    screenshot: "sky/03-slew-center.png",
+    body: ["From the SKY tab, ...", "Polaris pre-fills RA/Dec ..."],
+    tip: "Pixel scale comes from the connected camera...",
+    warn: null
+}
+```
+
+Catalog size: ~35 step objects = ~300 lines of JS data inline.
+Manageable; not big enough to warrant a JSON split.
+
+### Tab markup (~120 lines)
+
+`<div x-show="tab === 'help'" class="tab-panel help-panel">` with
+two states:
+
+**Landing** (`help.tutorial === null`): 4 tutorial cards in a
+grid (capture/first-night/workflows/troubleshoot) with brief
+descriptions + step counts.
+
+**Stepper** (`help.tutorial !== null`): hero screenshot full-width,
+title, step number indicator (dots), body paragraphs, optional
+yellow callout, "📖 Read more" + "→ Open <tab>" buttons, then
+"← Previous" / "Next →" navigation. Progress saved in
+localStorage per tutorial so re-entry resumes mid-stream.
+
+### Methods
+
+- `helpOnTabEnter()` — restore tutorial + step from localStorage.
+- `helpStart(key)` / `helpExit()` / `helpNext()` / `helpPrev()`
+  / `helpJumpTo(idx)`.
+- `helpOpenTab(tabId)` — switches tabs + remembers HELP position
+  so coming back lands on the same step.
+- `helpCurrentStep()` — derived from `tutorial + step`.
+
+### Screenshot placeholder pattern
+
+Each step's `screenshot` is a relative path under
+`wwwroot/screenshots/`. Template:
+
+```html
+<div class="help-screenshot">
+    <template x-if="step.screenshot">
+        <img :src="'/screenshots/' + step.screenshot"
+             :alt="step.title"
+             @error="$el.style.display = 'none';
+                     $el.nextElementSibling.style.display = 'flex'">
+    </template>
+    <div class="help-screenshot-placeholder">
+        Screenshot pending:
+        <code>wwwroot/screenshots/<span x-text="step.screenshot"></span></code>
+    </div>
+</div>
+```
+
+`@error` hides the `<img>` + shows the placeholder when the file
+isn't there yet. Drop a PNG, hard-refresh, done.
+
+### CSS
+
+New `.help-*` block (~150 lines): landing 3-col grid card layout,
+stepper header with progress dots, step card max-width 920 px
+centered, screenshot block with placeholder variant, step body
+typography, tip + warn yellow/blue accent boxes, Prev/Next button
+row.
+
+## Phases (5 commits)
+
+### HELP-1: sidebar + tab panel shell + state plumbing
+Skeleton: button #18, `help` state + methods, localStorage
+persistence (`polaris-help-pos`), landing markup with 4 cards
+(placeholder counts), stepper shell rendering one empty step +
+Prev/Next + progress dots (no content yet).
+
+### HELP-2: Capture-to-export tutorial (12 steps)
+1. Welcome / what you'll need (no tab, no shot)
+2. Connect equipment in RIGS → `equip` → `rigs.md`
+3. Set observatory location → `settings` → `first-night.md`
+4. Polar alignment → `polar` → `polar-alignment.md`
+5. Focus → `focus` → `focus.md`
+6. Pick a target (SKY) → `sky` → `sky-explorer.md`
+7. Slew & Center → `sky` → `sky-explorer.md`
+8. Start guiding (PHD2) → `guide` → `guide-phd2.md`
+9. Build a sequence (AUTORUN) → `sequence` → `sequence.md`
+10. Watch frames stack (LIVE) → `live` → `live-stacking.md`
+11. Calibrate + integrate (STUDIO) → `studio` → `studio.md`
+12. Edit + export (EDITOR) → `editor` → `editor.md`
+
+### HELP-3: First-night checklist (5 steps)
+1. Open Polaris (browser + cert) → `installation.md`
+2. Set password (wizard) → `authentication.md`
+3. Set observatory location → `settings` → `first-night.md`
+4. Set WiFi (Hotspot ↔ Station) → `settings` → `network-mode.md`
+5. Connect first device → `equip` → `rigs.md`
+
+### HELP-4: Specific workflows (LRGB mono + planetary + PCC)
+Landing card opens a 3-card sub-grid before launching the chosen
+stepper. Tutorials: LRGB mono pipeline (~5 steps), planetary /
+lucky imaging (~4 steps), photometric color calibration (~3
+steps). ~12 step objects total under keys `lrgb` / `planetary` /
+`pcc`.
+
+### HELP-5: Troubleshooting / FAQ + docs README link
+Different shape: single screen with `<details>` accordion of ~6
+common problems (mDNS unreachable / plate-solve fails / sequence
+won't start / PHD2 won't connect / GraXpert "model not found" /
+live stack drift), each with diagnosis + fix + "see also" doc
+link. Final card: "Didn't find what you need? Full docs index"
+→ external link to `docs/user-guide/README.md` on raw GitHub.
+
+## Files created
+
+- `wwwroot/screenshots/.gitkeep` (empty marker)
+- `wwwroot/screenshots/README.md` (naming convention)
+
+## Files modified
+
+- `wwwroot/index.html` — sidebar button #18 + tab panel + landing
+  grid + stepper shell + workflows sub-picker + troubleshoot
+  accordion.
+- `wwwroot/js/app.js` — `help` state, 7 methods,
+  `_helpTutorials()` catalog (~300 lines of data).
+- `wwwroot/css/app.css` — `.help-*` block (~150 lines).
+- `README.md` — bullet under Features pointing at the HELP tab.
+
+## Reused code
+
+- All `docs/user-guide/*.md` pages — body content + "Read more"
+  link targets.
+- TONIGHT tab pattern (button + tab-panel) — template for HELP.
+- `<details>` collapsible pattern (600+ uses in index.html) —
+  direct lift for troubleshoot section.
+- `app.js` localStorage helpers — pattern for persisting
+  `polaris-help-pos`.
+- `.btn` / `.btn-primary` / `.text-muted` / `.text-warn` /
+  `.tonight-card` / `.settings-section` existing CSS.
+
+## Verification
+
+1. Sign in → sidebar shows "?" icon at the bottom labeled "Help".
+2. Click → landing with 4 cards.
+3. Click "Capture to export" → stepper at step 1 of 12.
+4. Hit Next → step 2 (RIGS) with placeholder "Screenshot pending:
+   `wwwroot/screenshots/capture/02-rigs.png`", body, "📖 Read more"
+   → `rigs.md`, "→ Open RIGS tab".
+5. Click "Open RIGS tab" → app switches to RIGS, help position
+   persisted.
+6. Click Help → returns to step 2 of capture-to-export.
+7. Drop a real PNG at the placeholder path, hard-refresh →
+   placeholder gone, image rendered.
+8. localStorage `polaris-help-pos` carries
+   `{ tutorial: "capture", step: 4 }` — refresh browser, lands on
+   same step.
+
+## Notes
+
+- **No new tests**: HELP is content + UI; AUTH-2 middleware
+  already serves `/screenshots/*` as static assets.
+- **Localization deferred**: English-only v1. A future i18n pass
+  would lift step bodies into a `help-en.js` / `help-pt.js`
+  switch.
+- **Print / PDF export deferred**.
+- **Embedded videos deferred** — text + screenshot is enough for
+  v1.
+- **Auth scope**: HELP tab gated by AUTH-2 like everything else.
+
+---
+
+# Previous plan: Basic auth for the Polaris server (AUTH-1..5)
+
+> Previous plan (MFOC, manual focus assist) preserved below.
+
+## Context
+
+The Polaris server listens on `0.0.0.0:5000` (HTTPS) with no auth.
+Anyone on the same WiFi (neighbor, guest, hospital, star party)
+can open `https://polaris-pi.local:5000` and have full control:
+stop the sequence, slew the mount, turn off the cooler, delete
+files via the FILES tab, capture frames to the operator's disk,
+etc. HTTPS protects the wire from sniffing but **does not
+authenticate clients** — it's just encryption.
+
+`Services/SelfSignedCertService` documents this explicitly
+("Polaris assumes trusted LAN"), but "trusted LAN" doesn't hold
+in several real scenarios for the target user: Pi hotspot
+(everyone who knows the `polaris1234` password), hotel/hospital
+WiFi, star parties with dozens of astrophotographers on the same
+SSID.
+
+Phase 1 + 2 research confirmed:
+- **Zero auth in the backend**: no `[Authorize]`, no middleware,
+  no token check. 33 `MapGroup("/api/...")` + 3 WebSockets
+  (`/ws/status`, `/ws/image-stream`, `/ws/terminal`) + 2
+  reverse-proxies (`/phd2-gui/*`, `/indi-web/*`) all open.
+- **Frontend has a clear chokepoint**: `apiFetch` in
+  `app.js:1425-1493` is where 95% of calls go. 29 sites use raw
+  `fetch()` and need individual fixes.
+- **WebSockets already do a first-message handshake**: they send
+  `{ type: 'client-capability', wasm, ... }` on open. Can append
+  `{ type: 'auth', token }` to the same initial message without
+  touching the URL.
+- **Relay server (`src/NINA.Relay.Server/`) has a reusable
+  shape**: `TenantRegistry.TryAuthenticate(token, ...)` + bearer
+  token + optional mTLS thumbprint. Steal the hashing/check
+  pattern (not the multi-tenant infrastructure).
+
+**Decisions** (AskUserQuestion):
+- **User model**: single shared password. No admin/viewer
+  concept; typical operator is one person. Multi-user is a
+  follow-up if demanded.
+- **First-run**: wizard forces password creation on first access.
+  No default printed in postinst — avoids leaving someone stuck
+  with a hardcoded "polaris1234".
+- **Opt-out**: toggle in Settings, default ON. Cover for the
+  field-isolated remote observatory case. Requires current
+  password to turn off.
+- **Loopback bypass**: `127.0.0.1` / `::1` skip auth. Jupyter /
+  Grafana / RStudio pattern — whoever's on the Pi is trusted.
+  Simplifies SSH tunnels + local scripts + dev.
+
+## Architecture
+
+Four backend pieces + two frontend.
+
+### `Services/Auth/AuthService.cs` (new)
+
+Singleton. Owns password hash + active session store.
+
+```csharp
+public class AuthService {
+    public bool IsConfigured { get; }
+    public bool IsEnabled { get; }
+    public int SessionTimeoutSeconds { get; }
+
+    Task<string?> SetInitialPasswordAsync(string password);
+    Task<bool> ChangePasswordAsync(string current, string newPwd);
+    Task<bool> SetEnabledAsync(string currentPassword, bool enabled);
+
+    Task<string?> LoginAsync(string password);
+    void Logout(string token);
+    bool ValidateToken(string token);
+}
+```
+
+- **Password hashing**: PBKDF2-SHA256 (100k iterations) via
+  `Microsoft.AspNetCore.Cryptography.KeyDerivation`. 16-byte
+  random salt per hash. Persists hash + salt + algorithm name
+  in the profile.
+- **Session store**: `ConcurrentDictionary<string, SessionInfo>`
+  in memory. `SessionInfo { Token, CreatedAt, LastActivityAt }`.
+  Sliding 24 h default. Sweeper background task removes expired
+  sessions every 10 min. Not persisted on disk — restart
+  invalidates all sessions (intentional: simple + reacts to
+  "forgot password → reset via SSH"). Tokens are 32 bytes random
+  base64-url (~43 chars).
+- **Constant-time string compare** for password check
+  (`CryptographicOperations.FixedTimeEquals`).
+- **Rate limit**: max 5 attempts/minute per IP on `LoginAsync`.
+  Exponential backoff up to 1 h on repeated failures. In-memory
+  dict IP → (failures, lockedUntil).
+
+### `Middleware/AuthMiddleware.cs` (new)
+
+ASP.NET middleware registered BEFORE endpoint mapping. Per
+request:
+
+```csharp
+if (!auth.IsEnabled) { await next(); return; }
+if (IsLoopback(ctx.Connection.RemoteIpAddress)) { await next(); return; }
+if (IsAuthExemptPath(ctx.Request.Path)) { await next(); return; }
+var token = ExtractToken(ctx.Request);
+if (token == null || !auth.ValidateToken(token)) {
+    ctx.Response.StatusCode = 401;
+    await ctx.Response.WriteAsJsonAsync(new {
+        error = "auth required",
+        authConfigured = auth.IsConfigured
+    });
+    return;
+}
+await next();
+```
+
+Exempt paths: `/api/auth/*`, `/api/system/version`, static assets,
+`/data/*.json`, `/`.
+
+Token extraction: `Authorization: Bearer <token>` (HTTP) > `?token=...`
+query string (img/blob srcs) > `polaris_session` cookie (iframes
+inside the app).
+
+For WebSockets: middleware lets the upgrade through, validation
+happens in the handler when the first message
+`{type:'auth',token}` arrives. Bad token → close 4401.
+
+### Cookie HttpOnly for iframes
+
+`/phd2-gui/*` and `/indi-web/*` (iframes that load HTML + make
+relative fetches) don't preserve the `Authorization` header on
+their inner requests. Login also sets cookie
+`polaris_session=<token>; HttpOnly; Secure; SameSite=Strict;
+Path=/`. Cookie dies when the browser closes (no `Max-Age`),
+mirrors the sessionStorage timing on the frontend.
+
+### `Endpoints/AuthEndpoints.cs` (new)
+
+| Method | Route | Body | Behaviour |
+|---|---|---|---|
+| GET | `/api/auth/status` | — | `{configured, enabled, authenticated}` |
+| POST | `/api/auth/setup` | `{password}` | Only when `!IsConfigured`; creates hash + returns token + sets cookie |
+| POST | `/api/auth/login` | `{password}` | `{token}` + cookie. Rate-limited. |
+| POST | `/api/auth/logout` | — | Invalidate token + clear cookie |
+| POST | `/api/auth/change-password` | `{current, new}` | Requires auth |
+| POST | `/api/auth/disable` | `{password}` | Toggle off (needs current pwd) |
+| POST | `/api/auth/enable` | `{password}` | Toggle on |
+
+### Profile fields
+
+`UserProfile` gains:
+
+```csharp
+public bool AuthEnabled { get; set; } = true;
+public string AuthPasswordHash { get; set; } = "";
+public string AuthPasswordSalt { get; set; } = "";
+public string AuthHashAlgo { get; set; } = "pbkdf2";
+public int AuthSessionTimeoutHours { get; set; } = 24;
+```
+
+Migration safe: missing fields → not configured → wizard fires
+on first access.
+
+### Frontend: login overlay + first-run wizard + `apiFetch` injection
+
+**Alpine state**:
+```js
+auth: {
+    token: '', configured: false, enabled: true,
+    needLogin: false, needSetup: false,
+    loginPassword: '', loginError: '',
+    rememberMe: false   // true → localStorage; false → sessionStorage
+}
+```
+
+**Boot order** (`init()`):
+1. Try restoring token from `sessionStorage` then `localStorage`.
+2. `GET /api/auth/status`.
+3. Branch: not-enabled → app loads normally; not-configured →
+   wizard overlay; configured + not-authenticated → login overlay;
+   authenticated → app loads.
+
+**Overlay** — new `<div id="auth-overlay">` at the top of `<body>`,
+`position: fixed; z-index: 99999; backdrop-filter: blur(8px);`.
+Shows either login form (1 password input + remember-me + Sign
+In) or first-run wizard (2 password inputs + confirm + min-8-chars
++ at-least-1-number hint).
+
+**`apiFetch` injection** (`app.js:1459`):
+```js
+if (this.auth.token) {
+    opts.headers = { ...opts.headers, 'Authorization': 'Bearer ' + this.auth.token };
+}
+```
+
+**401 handler**: when `apiFetch` receives 401, sets
+`auth.needLogin = true`, clears token, shows overlay.
+
+**Bare `fetch()` sites** (29 of them): create
+`this.authFetch(url, opts)` helper that does the same injection,
+sweep all 29 with conservative search-and-replace. File-download
+sites (editor export, FITS preview `src=`) use `?token=` query
+instead of header.
+
+**WebSocket handshake** (`app.js:~1788`): right after `onopen`,
+send `{ type: 'auth', token }` before
+`{ type: 'client-capability', ... }`. Invalid token → server
+closes 4401 → client sets `auth.needLogin = true` + reconnects
+after login.
+
+**Iframes** (`/phd2-gui/`, `/indi-web/`): cookie
+`polaris_session` is sent automatically by the browser
+(same-origin + Path=/). Zero change needed here.
+
+### Settings panel "Authentication"
+
+New section showing status (🟢 Enabled / session XXX...), Change
+password button, Sign out, "Require password to access Polaris
+from the LAN" toggle (disable confirm asks for current password),
+session timeout input.
+
+## Phases (5 commits)
+
+### AUTH-1: AuthService + endpoints + tests
+- `Services/Auth/AuthService.cs` (~250 lines).
+- `Endpoints/AuthEndpoints.cs` (7 routes).
+- `ProfileService.cs` gets 5 new fields + migration.
+- `Program.cs` registers singleton + maps endpoints.
+- Tests (~12 cases): hash roundtrip, fixed-time compare, salt
+  randomness, SetInitialPassword runs only once, ChangePassword
+  requires current pwd, LoginAsync rate-limit + lockout, session
+  sweep, constant-time check defeats timing attack (smoke).
+
+### AUTH-2: AuthMiddleware + WS handshake validation
+- `Middleware/AuthMiddleware.cs` (~120 lines), loopback +
+  exempt-paths + token extraction (header > query > cookie).
+- Registered in `Program.cs` BEFORE `UseRouting`.
+- `WebSocket/ImageStreamHandler.cs` + `StatusStreamHandler.cs`:
+  first message must be `{type:'auth',token}` when auth enabled.
+  Invalid → close 4401.
+
+### AUTH-3: Frontend login + first-run wizard + apiFetch injection
+- Auth state + boot order.
+- Overlay HTML + CSS (`.auth-overlay`, `.auth-modal`).
+- `apiFetch` header injection.
+- 401 handler triggers login.
+- WS handshake.
+- Settings "Authentication" section.
+
+### AUTH-4: Fix 29 bare fetch sites + cookie for iframes
+- `authFetch` helper.
+- Sweep `app.js` + `onnx-pipelines.js` replacing `fetch(` with
+  `this.authFetch(` or injecting `?token=` for img/blob srcs.
+- Backend login sets `polaris_session` cookie.
+- Verify PHD2-GUI / INDI-Web / Stellarium iframes load after
+  login without extra prompt.
+
+### AUTH-5: Tests + docs + verify
+- Integration tests via WebApplicationFactory: 401 without token,
+  200 with token, loopback bypass, first-run flow, WS handshake
+  reject.
+- `docs/user-guide/authentication.md` — first-run wizard, change
+  password, reset forgotten password (SSH + clear ProfileService
+  fields), disable auth for trusted LAN + warning.
+- README "Authentication" section.
+
+## Verification
+
+- Fresh install → wizard "Set a password to protect your Polaris
+  server" full-screen, no other tabs accessible.
+- Type password + confirm → POST `/api/auth/setup` → token →
+  cookie set → app appears.
+- Refresh → still authenticated.
+- Hard refresh + clear storage → login screen.
+- Second device on the LAN → login screen.
+- Wrong password 6× → 6th response says "locked, try again in N
+  minutes".
+- Settings → Authentication → Sign out → back to login.
+- Settings → Change password → confirm → all other sessions
+  invalidated → next request 401 → re-login.
+- SSH on the Pi: `curl http://localhost:5080/api/system/status`
+  no token → 200 (loopback bypass). Same `curl` to the LAN IP →
+  401.
+- DevTools: `/ws/image-stream` open sends `{type:'auth',token}`
+  before `{type:'client-capability'}`. `wscat` without handshake
+  → close 4401.
+- PHD2-GUI iframe loads (cookie propagated). INDI-Web idem.
+  Stellarium sub-app loads.
+- Settings → uncheck "Require password" + confirm with current
+  pwd → toggle off persists. Logout, close browser, reopen → app
+  loads without login.
+- Re-enable via Settings → toggle ON requires current password.
+- Forgot password: SSH `nano ~/.config/NINA.Polaris/profile.json`,
+  clear `AuthPasswordHash` + `Salt`, restart service → wizard
+  appears on next access.
+
+## Notes
+
+- **Hash strength**: PBKDF2-SHA256 100k iters OK for offline
+  attack + fast enough for Pi 2 (<1 s login). Argon2id preferable
+  but needs `Konscious.Security.Cryptography`; deferred.
+- **Token entropy**: 32 bytes random base64-url = 256 bits.
+- **CSRF**: cookie is SameSite=Strict so cross-origin requests
+  don't carry it. Bearer header always intentional. Endpoints
+  accept only JSON body (no form-urlencoded) → reduced surface.
+- **iOS Safari sessionStorage**: some devices clear sessionStorage
+  in background tabs. localStorage with "remember me" toggle
+  handles this.
+- **Logout doesn't stop sequences**: only invalidates the token.
+  Sequence/guiding/etc keep running. User can log back in + Stop
+  explicitly. Involuntary abort on logout would be worse than
+  losing the login session.
+
+## Out of scope (deferred)
+
+- Multi-user / RBAC (admin vs viewer).
+- 2FA / TOTP.
+- mTLS client cert auth.
+- OAuth / SSO / LDAP.
+- Auth audit log.
+- Password recovery via email.
+- Token TTL configurable via env var (hardcoded 24 h v1).
+
+---
+
+# Previous plan: Manual focus assist in the FOCUS tab (MFOC-1..5)
+
+> Previous plan (WIFI, Hotspot ↔ Station management) preserved below.
 > below starting at `# Previous plan: Client-side live stacking via WASM (CLST)`.
 > The entire CLST-1..8 stack is in production; this plan builds the
 > distribution and operability layer on top so a regular
