@@ -674,6 +674,13 @@
                     </div>
                 </div>
                 <div class="quick-controls">
+                    <!-- SHUT-1: sidebar reorganised into three vertical
+                         blocks. .shutter-inputs (Exp/Gain/Bin/Filter)
+                         at the top, .shutter-wrap (the round shutter
+                         button, centered) in the middle, .shutter-secondary
+                         (Stack toggle, View, Compute, callout, triggers)
+                         at the bottom. -->
+                    <div class="shutter-inputs">
                     <div class="control-row">
                         <label>Exp<input type="number" x-model.number="exposure" list="exposure-presets" step="any" min="0" class="input-sm"> s</label>
                         <label>Gain<input type="number" x-model.number="gain" step="10" min="0" class="input-sm"></label>
@@ -707,12 +714,49 @@
                             </template>
                         </select></label>
                     </div>
-                    <div class="control-row actions">
-                        <button class="btn btn-primary" @click="capture()" :disabled="capturing || !selectedCamera">
-                            <span x-text="capturing ? 'Exposing...' : 'Capture'"></span>
-                        </button>
-                        <button class="btn" @click="loopCapture()" :disabled="looping || !selectedCamera">Loop</button>
-                        <button class="btn btn-danger" @click="stopCapture()" :disabled="!looping && !capturing">Stop</button>
+                    </div><!-- /.shutter-inputs -->
+
+                    <!-- SHUT-1: Polaris Shutter. Tap = capture(), long-
+                         press = loopCapture(), tap while active = stopCapture().
+                         Visual states defined in app.css .polaris-shutter*.
+                         Ring uses SVG stroke-dasharray; dashoffset is
+                         289 * (1 - progress) — see app.js
+                         liveShutterDashoffset(). -->
+                    <div class="shutter-wrap">
+                        <div class="polaris-shutter"
+                             :class="{
+                                 'shutter-active': capturing || looping,
+                                 'shutter-arming': armingLoop
+                             }"
+                             :aria-disabled="!selectedCamera"
+                             role="button"
+                             :aria-label="capturing || looping ? 'Stop capture' : 'Capture'"
+                             @pointerdown="shutterPointerDown($event, liveShutterCtx())"
+                             @pointerup="shutterPointerUp($event, liveShutterCtx())"
+                             @pointercancel="shutterPointerCancel()"
+                             @pointerleave="shutterPointerCancel()">
+                            <svg class="shutter-svg" viewBox="0 0 100 100">
+                                <circle class="shutter-track" cx="50" cy="50" r="46"></circle>
+                                <circle class="shutter-progress" cx="50" cy="50" r="46"
+                                        :style="'stroke-dashoffset: '
+                                            + (armingLoop
+                                                ? (289 * (1 - _shutterArmProgress()))
+                                                : liveShutterDashoffset())"></circle>
+                            </svg>
+                            <span class="shutter-icon">
+                                <svg viewBox="0 0 24 24" x-show="!(capturing || looping)">
+                                    <circle cx="12" cy="12" r="7"></circle>
+                                </svg>
+                                <svg viewBox="0 0 24 24" x-show="capturing || looping">
+                                    <rect x="7" y="7" width="10" height="10" rx="1.5"></rect>
+                                </svg>
+                            </span>
+                            <span class="shutter-countdown" x-text="liveShutterCountdown()"></span>
+                        </div>
+                    </div>
+
+                    <div class="shutter-secondary">
+                    <div class="control-row">
                         <button class="btn" :class="liveStackEnabled ? 'btn-active' : ''" @click="toggleLiveStack()">
                             <span x-text="liveStackEnabled ? 'Stack ON (' + liveStackFrames + ')' : 'Stack'"></span>
                         </button>
@@ -933,6 +977,7 @@
                             </div>
                         </fieldset>
                     </details>
+                    </div><!-- /.shutter-secondary -->
                 </div>
                 </div><!-- /.live-pane -->
                 <div class="stats-bar">

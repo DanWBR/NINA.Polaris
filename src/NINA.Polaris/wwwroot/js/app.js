@@ -36,6 +36,22 @@ function ninaApp() {
         liveActive: false,
         looping: false,
         capturing: false,
+        // SHUT-1: timestamp + snapshotted exposure for the live shutter
+        // ring. capture() sets these at the start of each exposure so
+        // liveShutterCtx().progress() can compute (Date.now() - started)
+        // / exposureSec for the SVG dashoffset. nulled when idle so the
+        // ring resets to empty between exposures.
+        _captureStartedAt: null,
+        _captureExposure: 0,
+        // SHUT-1: shared shutter timer. setInterval(50ms) when ANY
+        // capture is active; ticks shutterTick to force Alpine reactivity.
+        shutterTick: 0,
+        armingLoop: false,         // true while user holds the shutter
+        _shutterRafTimer: null,
+        _shutterPressTimer: null,
+        _shutterLongPressed: false,
+        _shutterArmTimer: null,    // animates the arming ring at 60ms cadence
+        _shutterArmStartedAt: 0,
         stats: { starCount: '--', hfr: null, mean: null },
         currentTime: '--:--:--',
         cameraTemp: null,
@@ -8666,6 +8682,12 @@ function ninaApp() {
 
         async capture() {
             this.capturing = true;
+            // SHUT-1: snapshot exposure + start time for the shutter's
+            // progress ring. Snapshot so changing the exposure input
+            // mid-capture doesn't rescale the ring.
+            this._captureStartedAt = Date.now();
+            this._captureExposure = Number(this.exposure) || 0;
+            this._startShutterTick();
             try {
                 const resp = await this.apiPost('/api/camera/capture', {
                     exposure: this.exposure,
@@ -8708,7 +8730,16 @@ function ninaApp() {
                     this.toast('Capture failed: ' + e.message, 'error');
                 }
             } finally {
-                if (!this.looping) this.capturing = false;
+                if (!this.looping) {
+                    this.capturing = false;
+                    this._captureStartedAt = null;
+                } else {
+                    // Reset start-time for the next loop iteration so
+                    // the ring restarts from 0 instead of carrying over
+                    // residual elapsed from the previous frame.
+                    this._captureStartedAt = Date.now();
+                    this._captureExposure = Number(this.exposure) || 0;
+                }
             }
         },
 
@@ -8720,7 +8751,185 @@ function ninaApp() {
         async stopCapture() {
             this.looping = false;
             this.capturing = false;
+            this._captureStartedAt = null;
             try { await this.apiPost('/api/camera/abort'); } catch (e) { }
+        },
+
+        // ----- SHUT-1: shared shutter component glue -----
+
+        /// Returns true while ANY tab's capture is in flight. Used by
+        /// the periodic tick to know when to keep ticking vs stop.
+        _anyShutterActive() {
+            return this.capturing
+                || this.looping
+                || (this.preview && (this.preview.busy || this.preview.looping))
+                || (this.manualFocus && this.manualFocus.running)
+                || (this.videoRecording && this.videoRecording.recording)
+                || this.seqState === 'running';
+        },
+
+        /// Start the 50ms tick that drives the shutter ring's
+        /// smooth countdown. Idempotent — if already running, no-op.
+        /// Auto-stops itself when _anyShutterActive() drops to false.
+        _startShutterTick() {
+            if (this._shutterRafTimer) return;
+            this._shutterRafTimer = setInterval(() => {
+                if (this._anyShutterActive() || this.armingLoop) {
+                    // Cheap mutation that invalidates any computed
+                    // reading shutterTick. Wraparound at 1M avoids
+                    // any potential int-precision drift over very
+                    // long sessions (1M ticks @ 50ms = ~14h).
+                    this.shutterTick = (this.shutterTick + 1) % 1000000;
+                } else {
+                    clearInterval(this._shutterRafTimer);
+                    this._shutterRafTimer = null;
+                }
+            }, 50);
+        },
+
+        /// Compute progress (0..1) given a startedAt timestamp + total
+        /// duration in seconds. Returns 0 when startedAt is falsy.
+        /// Reads shutterTick so Alpine knows to recompute on each tick.
+        _shutterProgressFor(startedAt, durationSec) {
+            // eslint-disable-next-line no-unused-expressions
+            this.shutterTick;   // dependency for reactivity
+            if (!startedAt || !durationSec || durationSec <= 0) return 0;
+            const elapsed = (Date.now() - startedAt) / 1000;
+            return Math.max(0, Math.min(1, elapsed / durationSec));
+        },
+
+        /// Compute the dashoffset for a SHUT progress = 1 - progress
+        /// multiplied by the SVG circumference (289 for r=46).
+        _shutterDashoffsetFor(progress) {
+            return 289 * (1 - Math.max(0, Math.min(1, progress)));
+        },
+
+        /// Human-readable countdown label. Shows remaining seconds
+        /// when an exposure is active and durationSec is known.
+        /// Returns the empty string when nothing's running so the
+        /// label slot collapses.
+        _shutterCountdownFor(startedAt, durationSec) {
+            // eslint-disable-next-line no-unused-expressions
+            this.shutterTick;
+            if (!startedAt) return '';
+            if (!durationSec || durationSec <= 0) return '...';
+            const elapsed = (Date.now() - startedAt) / 1000;
+            const remaining = Math.max(0, durationSec - elapsed);
+            if (remaining < 10) return remaining.toFixed(1) + 's';
+            return Math.ceil(remaining) + 's';
+        },
+
+        // ----- Gesture state machine -----
+
+        shutterPointerDown(ev, ctx) {
+            if (!ctx) return;
+            // Mouse: only respond to primary button. Touch + pen
+            // have no button concept; pass through.
+            if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+            ev.preventDefault();
+            // Disabled shutter: no-op (matches the visual cue from
+            // aria-disabled="true").
+            if (ctx.disabled && ctx.disabled()) return;
+            // Active state ignores long-press entirely — tap = abort
+            // is the only gesture here. The release handler decides.
+            if (ctx.isActive && ctx.isActive()) return;
+            // Long-press arming starts. We use a separate animator at
+            // 60ms cadence so the ring smoothly fills during the
+            // 600ms hold and gives the user visual feedback that
+            // they're about to commit to a loop instead of a snap.
+            this._shutterLongPressed = false;
+            this.armingLoop = true;
+            this._shutterArmStartedAt = Date.now();
+            this._startShutterTick();   // also drives the arming animation
+            this._shutterPressTimer = setTimeout(() => {
+                this._shutterLongPressed = true;
+                this.armingLoop = false;
+                this._shutterArmStartedAt = 0;
+                if (ctx.onLongPress) {
+                    try { ctx.onLongPress(); }
+                    catch (e) { console.warn('shutter onLongPress threw', e); }
+                }
+            }, 600);
+        },
+
+        shutterPointerUp(ev, ctx) {
+            if (!ctx) return;
+            if (this._shutterPressTimer) {
+                clearTimeout(this._shutterPressTimer);
+                this._shutterPressTimer = null;
+            }
+            this.armingLoop = false;
+            this._shutterArmStartedAt = 0;
+            if (this._shutterLongPressed) {
+                // Long-press already fired onLongPress in the timeout.
+                // The release is a no-op; we just reset the flag.
+                this._shutterLongPressed = false;
+                return;
+            }
+            if (ctx.disabled && ctx.disabled()) return;
+            if (ctx.isActive && ctx.isActive()) {
+                if (ctx.onAbort) {
+                    try { ctx.onAbort(); }
+                    catch (e) { console.warn('shutter onAbort threw', e); }
+                }
+            } else {
+                if (ctx.onTap) {
+                    try { ctx.onTap(); }
+                    catch (e) { console.warn('shutter onTap threw', e); }
+                }
+            }
+        },
+
+        shutterPointerCancel() {
+            // Pointer left the button or got cancelled by the
+            // browser (scroll, alert dialog, etc.). Clean up the
+            // arming state so we don't fire a stale long-press.
+            if (this._shutterPressTimer) {
+                clearTimeout(this._shutterPressTimer);
+                this._shutterPressTimer = null;
+            }
+            this.armingLoop = false;
+            this._shutterLongPressed = false;
+            this._shutterArmStartedAt = 0;
+        },
+
+        /// Progress used by the ring while the user is holding to arm
+        /// a loop. Returns 0..1 across the 600ms hold window.
+        _shutterArmProgress() {
+            // eslint-disable-next-line no-unused-expressions
+            this.shutterTick;
+            if (!this.armingLoop || !this._shutterArmStartedAt) return 0;
+            const elapsed = Date.now() - this._shutterArmStartedAt;
+            return Math.max(0, Math.min(1, elapsed / 600));
+        },
+
+        // ----- Per-tab context objects -----
+
+        /// LIVE tab shutter context.
+        liveShutterCtx() {
+            return {
+                isActive: () => this.capturing || this.looping,
+                disabled: () => !this.selectedCamera,
+                onTap: () => this.capture(),
+                onLongPress: () => this.loopCapture(),
+                onAbort: () => this.stopCapture()
+            };
+        },
+
+        /// Progress for the LIVE shutter. Returns 0..1, prefers the
+        /// real capture progress; falls back to the arming-loop fill
+        /// while the user is holding.
+        liveShutterProgress() {
+            if (this.armingLoop) return this._shutterArmProgress();
+            return this._shutterProgressFor(this._captureStartedAt, this._captureExposure);
+        },
+        liveShutterDashoffset() {
+            return this._shutterDashoffsetFor(this.liveShutterProgress());
+        },
+        liveShutterCountdown() {
+            if (this.armingLoop) return 'hold for loop...';
+            if (!this.capturing && !this.looping) return '';
+            return this._shutterCountdownFor(this._captureStartedAt, this._captureExposure);
         },
 
         // --- PREVIEW tab (snap-and-look) ---
