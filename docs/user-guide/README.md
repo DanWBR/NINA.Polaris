@@ -59,6 +59,9 @@ Each tab in the sidebar has its own page. Read the ones you need:
 - **[PREVIEW](preview.md)**, snap test shots with optional save +
   continuous stream mode.
 - **[AUTORUN](autorun.md)**, simple sequence editor with end-actions.
+  Also hosts the **[Flat Wizard](flat-wizard.md)** sub-tab for
+  automated flat-field acquisition (binary-search exposure per
+  filter, trained-exposure cache, per-rig defaults).
 - **[ADV](adv-sequencer.md)**, advanced tree-based sequencer (NINA-style).
 - **[LIVE](live-stacking.md)**, real-time EAA stacking with auto
   re-focus / re-center triggers. See also

@@ -118,8 +118,20 @@ ready; toast warning surfaces it.
 on slew-back-to-target. Some mounts need an explicit pier-side
 command. File an issue with your mount model.
 
+## Flat Wizard sub-tab
+
+The tabstrip at the top of the AUTORUN panel switches between
+**Sequence** (this guide) and **Flat Wizard**. The Flat Wizard
+automates flat-field capture by binary-searching the exposure per
+filter until median ADU hits a target band, then capturing N flat
+frames at the converged exposure. Trained exposures persist
+per-(filter, binning) for fast re-runs. See
+[Flat Wizard](flat-wizard.md) for the full walkthrough.
+
 ## See also
 
+- [Flat Wizard](flat-wizard.md), the sibling sub-tab for automated
+  flat-field acquisition
 - [ADV (Advanced Sequencer)](adv-sequencer.md) for branching / triggers
 - [GUIDE → Dither](guide-phd2.md)
 - [FOCUS → AF triggers](focus.md#auto-focus-triggers-advanced)

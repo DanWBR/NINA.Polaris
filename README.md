@@ -738,11 +738,31 @@ Target list execution with automated imaging:
 
 ### Flat Wizard
 
-Automated flat-field acquisition:
+Automated flat-field acquisition with a full UI panel inside
+**AUTORUN → Flat Wizard** sub-tab (tabstrip "Sequence | Flat
+Wizard" at the top of the AUTORUN tab). See
+[docs/user-guide/flat-wizard.md](docs/user-guide/flat-wizard.md)
+for the full walkthrough.
 
 - Binary search on exposure time per filter until median ADU lands within tolerance of target (default 30000 ADU ± 5%)
 - Captures N flat frames at the converged exposure, tagged `IMAGETYP=FLAT`
 - Per-(filter, binning) trained exposures persisted to `trained-flats.json` for next session
+- Per-rig settings on `EquipmentProfile.FlatWizard` (TargetADU /
+  tolerance / frames per filter / min-max exposure / binning /
+  max iterations / panel brightness) so a cold APO at f/5 and a
+  warm SCT at f/10 each keep their own defaults
+- Pre-flight panel surfaces camera / filter wheel / flat panel
+  status. Filter chips let you pick which filters to capture
+  (in the order picked). Optional brightness slider auto-applies
+  to the connected flat panel before the wizard runs (0 = sky /
+  T-shirt flats, panel is left alone)
+- Polaris Shutter component for start / abort, real-time progress
+  ring showing `(filtersDone + frames-in-current-filter) /
+  totalFilters`, live readout of the binary search ("Searching
+  attempt 4: 2.137s → 28473 ADU") followed by capture counter
+  ("Capturing 8/20 at 2.137s")
+- Trained exposures table shows cached per-(filter, binning)
+  seeds — next run converges in 1-2 iterations instead of 5-8
 
 ### Web UI
 
