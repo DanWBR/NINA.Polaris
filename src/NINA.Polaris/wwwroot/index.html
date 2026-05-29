@@ -288,8 +288,21 @@
                     pop.style.top = (r.bottom + 2) + 'px';
                 }
             });
-            window.addEventListener('scroll', function () {
-                if (activeInput && pop && !pop.hidden) hide();
+            window.addEventListener('scroll', function (ev) {
+                if (!activeInput || !pop || pop.hidden) return;
+                // Capture-phase scroll fires for scrolling on ANY
+                // descendant of window, including the popover itself.
+                // If the user is wheel-scrolling inside the preset list
+                // (now that the list can grow beyond max-height with
+                // overflow-y), we obviously don't want to close it.
+                // Only close when something OUTSIDE the popover scrolls
+                // (a parent container that would drag the anchor input
+                // away from the popover's fixed position).
+                if (ev.target instanceof Node
+                    && (pop === ev.target || pop.contains(ev.target))) {
+                    return;
+                }
+                hide();
             }, true);
         })();
     </script>
