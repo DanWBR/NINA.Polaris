@@ -4200,6 +4200,19 @@
                                     @mouseup="editorState.showOriginal = false"
                                     @mouseleave="editorState.showOriginal = false"
                                     title="Hold to see the original (no edits applied)">👁 Compare</button>
+                            <!-- Histogram overlay toggle. The histogram
+                                 is pinned to the bottom of the preview
+                                 as a translucent strip, so toggling it
+                                 off reclaims real estate without losing
+                                 the data — flip back on with the same
+                                 button. Active state painted via the
+                                 .btn-toggle-on class hook. -->
+                            <button class="btn btn-sm"
+                                    :class="{ 'btn-toggle-on': editorState.showHistogram }"
+                                    @click="editorState.showHistogram = !editorState.showHistogram"
+                                    :title="editorState.showHistogram
+                                        ? 'Hide the histogram overlay'
+                                        : 'Show the histogram overlay'">📊 Histogram</button>
                             <button class="btn btn-sm" @click="editorClose()"
                                     title="Close editor and free the session">✕ Close</button>
                         </div>
@@ -4232,9 +4245,17 @@
                                      alt="original" draggable="false">
                             </div>
                             <div class="editor-preview-spinner" x-show="editorState.rendering">⌛</div>
+                            <!-- Histogram overlay. Pinned to the bottom
+                                 of the preview area as a translucent
+                                 strip so it covers the image only when
+                                 enabled instead of stealing a permanent
+                                 80 px row beneath. Width is fluid via
+                                 CSS; height fixed so the canvas backing
+                                 pixel resolution stays predictable. -->
+                            <canvas id="editorHistogram" class="editor-histogram"
+                                    x-show="editorState.showHistogram"
+                                    width="512" height="80"></canvas>
                         </div>
-                        <canvas id="editorHistogram" class="editor-histogram"
-                                width="512" height="80"></canvas>
                     </div>
 
                     <!-- Right rail: collapsible sliders panels (Lightroom-mobile layout) -->

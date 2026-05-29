@@ -5146,11 +5146,37 @@ label select.input-sm {
     font-size: 18px;
     opacity: 0.6;
 }
+/* Histogram overlay. Pinned absolutely to the bottom-inside of the
+   preview wrap so the image keeps the full vertical real estate
+   when the user dismisses it. Translucent backdrop so the curve
+   stays readable over a stretched master without completely
+   blacking out the pixels behind it. Wide:90% / centered keeps a
+   margin on the sides so the curve sits comfortably above the
+   pan/zoom cursor region. The width attribute on the <canvas>
+   (512) defines the backing pixel buffer for the histogram code
+   to draw into; CSS width sizes the rendered box. */
 .editor-histogram {
-    width: 100%;
+    position: absolute;
+    left: 5%;
+    right: 5%;
+    bottom: 12px;
+    width: 90%;
     height: 80px;
-    background: rgba(0, 0, 0, 0.7);
-    border-top: 1px solid var(--border);
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    pointer-events: none;       /* clicks fall through to pan/zoom */
+}
+
+/* Toolbar toggle states. .btn-toggle-on highlights the histogram
+   button (and any future toggle the same way) so the user can
+   tell at a glance whether the overlay is showing. */
+.btn-toggle-on {
+    background: rgba(33, 150, 243, 0.18);
+    border-color: var(--accent);
+    color: var(--text-primary);
 }
 
 .editor-controls-col {

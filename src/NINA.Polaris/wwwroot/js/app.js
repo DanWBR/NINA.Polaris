@@ -956,6 +956,13 @@ function ninaApp() {
             previewUrl: '',        // current edited preview blob URL
             originalUrl: '',       // unedited preview blob URL (for compare)
             showOriginal: false,
+            // Histogram overlay toggle. The histogram lives as an
+            // absolutely-positioned strip pinned to the bottom of
+            // the preview area instead of stealing a permanent
+            // 80 px stripe below it. Default ON so first-time
+            // users still see the curve; click the toolbar button
+            // to dismiss when working tight on vertical space.
+            showHistogram: true,
             exportModal: false,
             exporting: false,
             // ED-6 compute target: 'server' is the always-available
