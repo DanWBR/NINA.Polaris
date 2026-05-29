@@ -15,7 +15,350 @@
   verbatim, only the prose around them was translated.
 -->
 
-# Current plan: Expanded sky-view catalogs (CAT-1..5)
+# Current plan: Auto-edit in the editor (AUTOED-1..3)
+
+> Reading order top-to-bottom (newest first): AUTOED → CAT → FW →
+> SHUT → REFSUG → HELP → AUTH → MFOC → WIFI → CCALB → CC → GX →
+> NET → ED → SWE → PA → SIM → Pi 5 packaging → CLST → LSTR →
+> VIDEO → PHD2 deep → RIGS → PREVIEW → Activity bar →
+> Siril+GraXpert → FILES → DSLR → Gap analysis → STUDIO →
+> Weather → Tonight.
+>
+> One small UX fix shipped alongside AUTOED but didn't get its
+> own plan section: the **activity bar dock** — the bottom strip
+> used to be `position: fixed` and overlay content (the last rows
+> of Settings + the Sky controls disappeared behind it). Converted
+> `<body>` to a flex column so the activity bar sits as a regular
+> flow element below the app-layout; mobile keeps the bar floating
+> above the bottom sidebar.
+
+## Context
+
+The editor (ED-1..7) already gave the user every slider needed to
+shape a master image, but every adjustment had to start from
+zero. Coming from Lightroom, the first reflex is to hit "Auto" to
+get a sensible starting point, then refine from there. Polaris
+had only `editorReset()` (zero everything) + the GraXpert
+AutoStretch (which operates on the preview byte buffer outside
+the EditPipeline) — nothing that would set the EditPipeline
+sliders from frame statistics.
+
+Existing material this plan reused, confirmed by exploration:
+
+- **`AutoStretch.ComputeAutoStretchParams`** already computes
+  `(black, mid, white)` via histogram + median + MAD with
+  sigma-clipping (GraXpert 15% Bg / 3σ). The auto-tuner reuses the
+  same percentile / luminance ideas to figure out where the pixels
+  are concentrated.
+- **`EditPipeline.Apply`** already consumes `LightParams` (exposure
+  stops + contrast/highlights/shadows/whites/blacks in -1..+1) and
+  `ColorParams` (vibrance / saturation / hue). Each slider has a
+  well-defined behaviour + `IsDefault()` short-circuit.
+- **`editorSetLight(key, val)` / `editorSetColor(key, val)`** on
+  the frontend already trigger the preview re-render + sidecar
+  dirty flag + history snapshot. Auto only had to call these
+  setters in a loop.
+
+Decisions locked in via AskUserQuestion:
+
+- **Scope**: Light (6 sliders) + Color (Vibrance + Saturation).
+  Skip ToneCurve (complex, easy to over-process) and WB (PCC + BG
+  neutralization already cover astrophotography, gray-world would
+  fight scientific calibration).
+- **UI**: single "Auto" button at the top of the controls column
+  (above the `<details>` Light), Lightroom-mobile style.
+- **Behaviour**: updates the sliders. User sees the values, can
+  refine manually, and Save persists them in the sidecar like any
+  normal edit. Non-destructive, undoable through the history stack
+  that already exists.
+
+## Architecture
+
+Two pieces:
+
+### 1. `EditAutoTuner` (new, in NINA.Image.Portable)
+
+File: `src/NINA.Image.Portable/Editor/EditAutoTuner.cs`, ~190
+lines, pure-function. Why Portable instead of the server service:
+the EditPipeline + EditParams live in Portable, AutoStretch lives
+in ImageAnalysis (Portable too). Keeping the tuner alongside means
+a future WASM path (the editor already has WASM dispatch via ED-6)
+can call the same math without duplication.
+
+```csharp
+public static class EditAutoTuner {
+    public sealed record AutoSuggestion(LightParams Light, ColorParams? Color);
+
+    public static AutoSuggestion Compute(
+        byte[] data, int width, int height, int channels);
+}
+```
+
+Algorithm (heuristic inspired by Lightroom Classic Auto + adapted
+for the astrophotography scope):
+
+1. **Base histogram**: build a 256-bin luminance histogram in a
+   single streaming pass. For RGB (channels=3, BGR interleaved
+   matching Skia's layout) the value comes from per-pixel Rec.709
+   luminance (`0.0722*B + 0.7152*G + 0.2126*R`).
+2. **Key percentiles** via cumulative-count lookup: `p0.5` (shadow
+   clip), `p5` (deep shadows), `p50` (median), `p99.5` (highlight
+   clip). All in normalised 0..1 space.
+3. **Map to sliders**, clamped to LightParams ranges:
+   - **Exposure** (stops, [-5..+5]): nudge median toward Zone V
+     (0.18) via `log2(0.18/median)`, capped at ±1.5 stops because
+     the source is already auto-stretched upstream and a bigger
+     boost would over-cook.
+   - **Blacks** ([-1..+1]): negative when `p0.5 > 0.02` (shadows
+     stuck above pure black). Linear ramp until p0.5 hits 0.05.
+   - **Whites** ([-1..+1]): positive when `p99.5 < 0.95` (unused
+     highlight headroom). Symmetric to Blacks.
+   - **Highlights** ([-1..+1]): -0.5 when `p99.5 > 0.97` (blowing
+     out). Recovers star cores from over-exposure once Exposure
+     was boosted.
+   - **Shadows** ([-1..+1]): +0.3 when `p5 < 0.05` (deep shadows
+     lack detail). Lifts faint nebular structure without crushing
+     contrast.
+   - **Contrast** ([-1..+1]): +0.10 gentle bias matches the
+     Lightroom Auto signature. Self-suppresses to 0 when the
+     histogram already spans most of the range (p99.5 - p0.5 > 0.9).
+4. **Color** (RGB only; mono returns `null`):
+   - **Vibrance**: +0.25. Bias-protects already-saturated pixels.
+   - **Saturation**: 0. Vibrance already covers the case without
+     over-saturating nebula cores.
+
+Comments in the code spell out why each constant (Zone V, the
+0.02 / 0.05 / 0.95 / 0.97 thresholds map to percentiles where the
+slider starts having a perceptible effect without clipping). Easy
+to tune later from real-image feedback.
+
+### 2. `EditorEndpoints` gains `POST /api/editor/auto`
+
+Body: `{ sessionId }`. Response: JSON-serialised `AutoSuggestion`
+(light + color). The endpoint:
+
+1. Resolves the session via the existing
+   `ImageEditService.GetWorkingBuffer(sessionId)` — which already
+   returns `(data, w, h, channels)` for ED-6's WASM dispatch, so
+   no new accessor was needed.
+2. Calls `EditAutoTuner.Compute(...)`.
+3. Returns the suggestion as JSON; **doesn't** mutate the session
+   or the sidecar. The frontend decides whether to apply.
+
+### 3. Frontend `editorAuto()` + Auto / Reset buttons
+
+A previous Reset button already sat in the top toolbar (alongside
+Save / Export), far from the sliders. The user asked for Auto +
+Reset **side by side** near the controls. Solution: add a new
+header inside `.editor-controls-col` (the right panel that hosts
+the `<details>`), above the first `<details>` Light, with both
+buttons. The original toolbar Reset stays put for muscle memory.
+
+```html
+<div class="editor-controls-header">
+    <button class="btn btn-primary btn-sm"
+            @click="editorAuto()"
+            :disabled="editorState.autoBusy || !editorState.session">
+        ✨ Auto
+    </button>
+    <button class="btn btn-sm"
+            @click="editorReset()"
+            :disabled="!editorState.session">
+        ↺ Reset
+    </button>
+</div>
+```
+
+```js
+async editorAuto() {
+    if (!this.editorState.session) return;
+    if (this.editorState.autoBusy) return;
+    this.editorState.autoBusy = true;
+    try {
+        const resp = await this.apiPost('/api/editor/auto',
+            { sessionId: this.editorState.session });
+        if (!resp) return;
+        const r = await resp.json();
+        if (r.light) for (const [k, v] of Object.entries(r.light)) {
+            if (typeof v === 'number') this.editorSetLight(k, v);
+        }
+        if (r.color) for (const [k, v] of Object.entries(r.color)) {
+            if (typeof v === 'number') this.editorSetColor(k, v);
+        }
+        this.toast('Auto adjustments applied', 'success');
+    } catch (e) {
+        this.toast('Auto failed: ' + (e?.message || e), 'error');
+    } finally {
+        this.editorState.autoBusy = false;
+    }
+}
+```
+
+Going through the existing setters (instead of mutating
+`editorState.edits` directly) means everything already working
+keeps working: preview re-renders, sidecar dirty flag fires,
+debounced history snapshot collapses the burst into one undoable
+step. Undo restores the pre-Auto state, no new code.
+
+## Phases (3 commits)
+
+### AUTOED-1: EditAutoTuner + tests
+
+- `src/NINA.Image.Portable/Editor/EditAutoTuner.cs` (~190 lines,
+  pure-function `Compute(data, w, h, channels)`).
+- `tests/NINA.Polaris.Test/Editor/EditAutoTunerTests.cs` (10
+  cases): empty buffer, mono returns null color, RGB returns
+  color, near-target-mid leaves exposure flat, dark frame boosts
+  exposure + shadows, bright frame cuts highlights, dim frame
+  drags whites up, crushed shadows drag blacks down, RGB at mid
+  applies vibrance bias, already-wide histogram skips contrast
+  bias.
+
+### AUTOED-2: Endpoint + frontend Auto/Reset buttons
+
+- `src/NINA.Polaris/Endpoints/EditorEndpoints.cs` gains
+  `POST /auto`.
+- `wwwroot/index.html`: header with the Auto + Reset pair above
+  the `<details>` Light.
+- `wwwroot/js/app.js`: `editorAuto()` method + `editorState.autoBusy`
+  flag.
+- `wwwroot/css/app.css`: `.editor-controls-header` (flex row, gap
+  8px, equal-width buttons).
+
+### AUTOED-3: Docs + verify
+
+- `docs/user-guide/editor.md`: new "Auto adjust" section spelling
+  out which sliders Auto touches, the logic per slider, and what
+  it doesn't touch (WB + ToneCurve + Effects + Detail), with a
+  hint that Undo / Reset restore prior state.
+- `README.md`: short bullet under the EDITOR section pointing at
+  the new doc.
+- Full test suite re-run: 798 passed, 0 failed, 7 ignored
+  (the 7 are E2E tests gated on local ASTAP + APASS + fixture
+  data, expected in CI without hardware).
+
+Two test boundary issues surfaced and got fixed in a separate
+commit (`a1b0bcd`):
+
+- `EditAutoTunerTests.DarkFrame_BoostsExposureAndLiftsShadows`
+  used value 13/255 = 0.0510, right on top of `ShadowLiftThreshold`
+  (0.05). Switched to value 10 (0.039) for an unambiguous check.
+- `DsoCatalogTests.GetByNameAsync_KnownObjects` (pre-existing
+  from CAT-1..5) expected `GetByNameAsync("M31").Name == "M31"`,
+  but the DB returns the canonical NGC primary name (`NGC 224`)
+  with M31 stored in the alias list. Updated assertion to accept
+  match on `Name` OR `Aliases`.
+
+## Files created
+
+- `src/NINA.Image.Portable/Editor/EditAutoTuner.cs`
+- `tests/NINA.Polaris.Test/Editor/EditAutoTunerTests.cs`
+
+## Files modified
+
+- `src/NINA.Polaris/Endpoints/EditorEndpoints.cs` — new
+  `POST /api/editor/auto`
+- `src/NINA.Polaris/wwwroot/index.html` — Auto + Reset header in
+  `.editor-controls-col`
+- `src/NINA.Polaris/wwwroot/js/app.js` — `editorAuto()` method +
+  `editorState.autoBusy`
+- `src/NINA.Polaris/wwwroot/css/app.css` — `.editor-controls-header`
+- `docs/user-guide/editor.md` — "Auto adjust" section
+- `README.md` — short bullet under EDITOR pointing at the docs
+
+## Reuse of existing code
+
+- **`NINA.Image.Portable/ImageAnalysis/AutoStretch.cs`** —
+  reference implementation of the histogram + median + MAD
+  sigma-clipping pattern. The auto-tuner doesn't call into it
+  directly (different output shape) but borrows the percentile-via-
+  cumulative-count technique.
+- **`NINA.Image.Portable/Editor/EditParams.cs`** — `LightParams` +
+  `ColorParams` records with documented ranges and IsDefault
+  helpers. EditAutoTuner returns these directly.
+- **`NINA.Image.Portable/Editor/EditPipeline.cs`** — unchanged;
+  consumes the resulting params like any manual edit.
+- **`editorSetLight(key, val)` / `editorSetColor(key, val)`** in
+  `app.js` — Auto goes through these for free reactivity +
+  sidecar dirty + history snapshot.
+- **`editorState.edits` + history stack** — `editorReset()` and
+  Undo already restore the pre-Auto state without new code.
+- **`ImageEditService.GetWorkingBuffer(sessionId)`** — already
+  exposed for ED-6's WASM dispatch, returns `(data, w, h, channels)`.
+  Zero new accessor needed.
+
+## End-to-end verification
+
+### Build + tests
+
+- `dotnet build src/NINA.Polaris/NINA.Polaris.csproj` clean.
+- `dotnet test tests/NINA.Polaris.Test` → 798 passed, 0 failed,
+  7 ignored (the ignored ones are E2E tests gated on fixture
+  data + local solver / catalog installs).
+
+### Smoke API
+
+- `curl -X POST https://localhost:5000/api/editor/auto -d '{"sessionId":"..."}'`
+  returns `{ light: { exposure, contrast, highlights, shadows,
+  whites, blacks }, color: { vibrance, saturation, hue } }`.
+- Dark fixture: `light.exposure > 0`, `light.shadows > 0`.
+- Bright fixture: `light.highlights < 0`, `light.exposure ≈ 0`.
+- Mono fixture: `color === null`.
+
+### Smoke UI
+
+1. Open an integrated master in the editor (FILES → Open in
+   editor).
+2. "✨ Auto" button visible above the `<details>` Light.
+3. Click Auto → toast "Auto adjustments applied".
+4. Light sliders show non-zero values (visually obvious).
+5. Preview re-renders with the new exposure / contrast.
+6. Vibrance shows a positive value (RGB sources only).
+7. Tweak any slider manually after Auto → preview updates with
+   the combined value.
+8. Click "↺ Reset" next to Auto → every slider returns to zero.
+9. Auto → Save → close the editor → reopen → sliders persist
+   with the auto-computed values.
+
+## Design notes
+
+- **Why no ML**: Lightroom Sensei uses ML; PixInsight has nothing
+  equivalent. Polaris focuses on predictability — statistic-based
+  heuristics are deterministic, debuggable, and run on any
+  hardware without dependencies. ML is left as a follow-up
+  (AUTOED-4) if demand surfaces.
+- **Why -1.5 stops cap on Exposure**: most masters arrive
+  pre-stretched by the GraXpert AutoStretch upstream, so a big
+  exposure boost would over-cook. 1.5 stops is enough to fix
+  masters that came through raw.
+- **Why skip tone curve**: an auto S-curve would flatten the fine
+  gradients near the background of nebulae. Contrast + Highlights
+  + Shadows already give the same effect in a more controllable
+  way.
+- **Why skip WB**: gray-world WB assumes a normal photographic
+  scene with multiple hues; nebulae have dominant hues (Ha red,
+  OIII blue-green) and gray-world would shift the tint in the
+  wrong direction. WB belongs to PCC or BG neutralization.
+- **WASM compatibility**: `EditAutoTuner` lives in Portable. When
+  the client-side path makes sense, a single `[JSExport]` in
+  `NINA.Polaris.Wasm/Interop.cs` calling the same method is
+  enough. v1 stays server-only for simplicity.
+
+## Out of scope (deferred)
+
+- **Per-section Auto** (Auto Light / Auto Color split): user
+  picked a single button; can be extended via a `?scope=light|color|all`
+  query param if demand surfaces.
+- **Tone curve auto**: gentle S-curve; extra complexity without
+  clear payoff for astro.
+- **White balance auto**: gray-world or Retinex; see note above.
+- **AI-driven** (Lightroom Sensei equivalent): out of scope v1.
+- **Preset library** (named presets like "Astro contrast", "Soft
+  daylight"): potential follow-up.
+
+---
+
+# Previous plan: Expanded sky-view catalogs (CAT-1..5)
 
 > The full chain of plans between Pi 5 packaging and CAT is
 > preserved below, translated from the Portuguese working notes.
