@@ -57,12 +57,46 @@ public static class CameraEndpoints {
                 // don't trigger the auto-recenter reference solve".
                 // Null = legacy behaviour (feed if running).
                 var feedStack = request.FeedLiveStack ?? true;
-                if (feedStack && liveStack.IsRunning)
+                if (feedStack && liveStack.IsRunning) {
                     await liveStack.AddFrameAsync(imageData!);
-                else
-                    await relay.RelayImageAsync(imageData!);
+                } else {
+                    // stackable=false tags the WS envelope so the
+                    // client-side WASM stacker also skips this frame.
+                    // Without this the server-side guard above keeps
+                    // the in-server accumulator clean but the browser
+                    // would still bump its own stack counter on every
+                    // PREVIEW tap.
+                    await relay.RelayImageAsync(imageData!, stackable: feedStack);
+                }
 
                 var stats = imageData!.Statistics;
+                // ImageStatistics.Create only fills mean/median/MAD/etc;
+                // StarCount + HFR stay zero unless someone explicitly
+                // runs StarDetector. The live-stack path does it (via
+                // LiveStackingService), but a PREVIEW snap that bypasses
+                // the stacker would surface HFR=0 / Stars=0 in the UI
+                // even on a frame full of obvious stars. Run the
+                // detector inline so the snap response always carries
+                // the real numbers.
+                if (stats.StarCount == 0 && stats.HFR == 0) {
+                    try {
+                        var detector = new NINA.Image.ImageAnalysis.StarDetector();
+                        var detected = detector.Detect(
+                            imageData.Data,
+                            imageData.Properties.Width,
+                            imageData.Properties.Height);
+                        if (stats is NINA.Image.ImageData.ImageStatistics mutable) {
+                            mutable.StarCount = detected.Count;
+                            if (detected.Count > 0) {
+                                var sorted = detected.Select(s => s.HFR)
+                                    .OrderBy(h => h).ToList();
+                                mutable.HFR = sorted[sorted.Count / 2];
+                            }
+                        }
+                    } catch {
+                        /* defensive: leave 0/0 if the detector throws */
+                    }
+                }
                 // MFOC-1: Laplacian variance sharpness metric. Cheap
                 // 3x3 convolution over a 256 px ROI in the centre of
                 // the frame (FrameQualityAnalyzer caps the ROI to keep

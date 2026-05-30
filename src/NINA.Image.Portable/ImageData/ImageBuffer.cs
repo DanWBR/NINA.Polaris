@@ -45,7 +45,24 @@ public class ImageBuffer : IImageBuffer {
         return result;
     }
 
-    public byte[] GetStreamHeader() {
+    /// <summary>
+    /// Build the binary header that precedes the LZ4 payload on the
+    /// /ws/image-stream raw channel. Layout (little-endian):
+    ///   off 0   int Width
+    ///   off 4   int Height
+    ///   off 8   int BitDepth
+    ///   off 12  int BayerPattern (enum int)
+    ///   off 16  int Uncompressed pixel bytes
+    ///   off 20  int FrameKind (0 = stackable LIVE frame, 1 = PREVIEW
+    ///                          / one-off snap — client must skip the
+    ///                          WASM stacker for these)
+    /// The header length is sent as a uint32 BEFORE this blob (in the
+    /// relay envelope), so the client can extend / shrink the layout
+    /// in future without breaking older builds — old clients that read
+    /// fixed offsets 0..16 keep working as long as the prefix layout
+    /// is preserved.
+    /// </summary>
+    public byte[] GetStreamHeader(int kind = 0) {
         using var ms = new MemoryStream();
         using var bw = new BinaryWriter(ms);
         bw.Write(Width);
@@ -53,6 +70,7 @@ public class ImageBuffer : IImageBuffer {
         bw.Write(BitDepth);
         bw.Write((int)BayerPattern);
         bw.Write(_pixels.Length * 2); // uncompressed size in bytes
+        bw.Write(kind);
         return ms.ToArray();
     }
 

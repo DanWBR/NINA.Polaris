@@ -4024,6 +4024,11 @@ function ninaApp() {
             const bitDepth = dv.getInt32(12, true);
             const bayerPattern = dv.getInt32(16, true);
             const uncompressedSize = dv.getInt32(20, true);
+            // FrameKind, added to GetStreamHeader to flag one-off snaps
+            // (PREVIEW / FOCUS Manual). headerLen < 28 = old server
+            // build, treat as stackable for back-compat.
+            // 0 = stackable LIVE frame, 1 = preview (skip WASM stacker).
+            const frameKind = headerLen >= 28 ? dv.getInt32(24, true) : 0;
 
             // Bail on placeholder / heartbeat frames before they spam
             // the WebGL pipeline. We were seeing periodic 0x0 frames
@@ -4110,8 +4115,15 @@ function ninaApp() {
             // star matcher rejects every short-exposure planetary
             // frame, leaving the accumulator empty.
             const serverMode = this.liveStackStatus?.mode || 'full';
+            // frameKind=1 (PREVIEW snap, FOCUS Manual, etc.) means the
+            // server already decided this frame is a one-off test shot
+            // and must NOT feed the stacker. Without this gate, a tap
+            // on PREVIEW would bump the always-on stack counter and
+            // poison the running mean with a frame the user only
+            // wanted to glance at.
             if (this.wasmReady && serverMode === 'metricsonly'
                 && this.liveStackEnabled
+                && frameKind === 0
                 && globalThis.NINA?.Polaris?.Wasm?.Interop) {
                 try {
                     pixels = this._stackViaWasm(pixels, width, height);

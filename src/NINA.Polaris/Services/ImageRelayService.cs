@@ -78,7 +78,18 @@ public class ImageRelayService : IDisposable {
         }
     }
 
-    public async Task RelayImageAsync(IImageData imageData, CancellationToken ct = default) {
+    /// <summary>
+    /// Broadcast a frame to every connected /ws/image-stream client.
+    /// <paramref name="stackable"/> = false marks the envelope as a
+    /// one-off snap (PREVIEW / FOCUS Manual / etc.) so the client-side
+    /// WASM stacker can skip it — without this, every preview tap
+    /// silently bumps the always-on stack counter.
+    /// </summary>
+    public Task RelayImageAsync(IImageData imageData, CancellationToken ct = default)
+        => RelayImageAsync(imageData, stackable: true, ct);
+
+    public async Task RelayImageAsync(IImageData imageData, bool stackable, CancellationToken ct = default) {
+        var frameKind = stackable ? 0 : 1;
         var buffer = ImageBuffer.FromImageData(imageData);
         _latestImage = buffer;
         _latestJpeg = null;
@@ -98,7 +109,7 @@ public class ImageRelayService : IDisposable {
         }
 
         if (needsRaw) {
-            var header = buffer.GetStreamHeader();
+            var header = buffer.GetStreamHeader(frameKind);
             var compressed = buffer.ToLz4Compressed();
 
             _logger.LogInformation(
