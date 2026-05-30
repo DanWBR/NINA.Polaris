@@ -392,7 +392,13 @@
                 <span class="chip-icon">T</span>
                 <span x-text="cameraTemp !== null ? cameraTemp.toFixed(1) + '&deg;C' : '--'"></span>
             </span>
-            <span class="status-chip" x-show="liveStackEnabled">
+            <!-- Header status chip — same visibility rule as the
+                 activity-bar 'ls' chip: only surface when there are
+                 actually stacked frames. Without the > 0 guard the
+                 chip appeared at boot ('0 frames') because
+                 liveStackEnabled defaults true, which confused users
+                 into thinking a stack was already running. -->
+            <span class="status-chip" x-show="liveStackEnabled && liveStackFrames > 0">
                 <span class="chip-icon">S</span>
                 <span x-text="liveStackFrames + ' frames'"></span>
             </span>

@@ -4353,12 +4353,23 @@ function ninaApp() {
             // header (6 ints: width, height, bitDepth, bayerPattern,
             // uncompressedSize, kind). Old server emits 20 bytes (no
             // kind). headerLen reports the header size in bytes, so
-            // gate the kind read on headerLen >= 24, not 28 — the
-            // previous gate was off by 4 and made every frame fall
-            // back to Live, which painted PREVIEW snaps on the
-            // liveCanvas.
+            // Per ImageBuffer.GetStreamHeader (NINA.Image.Portable):
+            //   offset  0  Width             (int32)
+            //   offset  4  Height            (int32)
+            //   offset  8  BitDepth          (int32)
+            //   offset 12  BayerPattern      (int32)
+            //   offset 16  UncompressedSize  (int32)
+            //   offset 20  FrameKind         (int32)
+            // Total header = 24 bytes. FrameKind lives at OFFSET 20,
+            // not 24 — earlier comment + code claimed offset 24 which
+            // was off by 4 + read garbage from the LZ4 payload start.
+            // Garbage int32 was almost always 0, so every PREVIEW snap
+            // (kind=1) was mis-read as LIVE (kind=0) and painted onto
+            // the liveCanvas — exactly the "preview frame stuck on
+            // LIVE tab" symptom + the always-on live-stack badge.
+            //
             // 0 = Live, 1 = Preview, 2 = Focus, 3 = Video, 4 = SlewPreview.
-            const frameKind = headerLen >= 24 ? dv.getInt32(24, true) : 0;
+            const frameKind = headerLen >= 24 ? dv.getInt32(20, true) : 0;
 
             // Bail on placeholder / heartbeat frames before they spam
             // the WebGL pipeline. We were seeing periodic 0x0 frames
@@ -15280,8 +15291,15 @@ function ninaApp() {
                 out.push({ id: 'phd2-set', icon: '🌟', kind: 'info', label: 'PHD2 settling' });
             }
 
-            // Live stacking
-            if (this.liveStackEnabled) {
+            // Live stacking — only show the activity chip when frames
+            // have actually been accumulated. liveStackEnabled defaults
+            // true at boot (matches the always-on stacker behaviour),
+            // which would otherwise render a "Live stack 0f" chip
+            // immediately on page load even though the user hasn't
+            // taken any frames yet. Tying visibility to frame count
+            // means the chip only surfaces when there's real activity
+            // to report.
+            if (this.liveStackEnabled && (this.liveStackFrames || 0) > 0) {
                 out.push({
                     id: 'ls',
                     // CLST-7: show where the stacking math is running.
