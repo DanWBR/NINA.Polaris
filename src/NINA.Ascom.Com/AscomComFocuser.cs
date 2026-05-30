@@ -6,8 +6,14 @@ namespace NINA.Ascom.Com;
 
 /// <summary>
 /// ASCOM Platform Focuser (IFocuserV3) adapter exposed through
-/// <see cref="IFocuser"/>. Late-binds via dynamic COM, no compile-time
-/// reference to the ASCOM Platform.
+/// <see cref="IFocuser"/>. Late-binds via IDispatch (see
+/// <see cref="ComMember"/>) instead of C# <c>dynamic</c> because some
+/// focuser drivers don't expose every property through the DLR-friendly
+/// default dispatch interface (we hit
+/// <c>'System.__ComObject' does not contain a definition for 'Connected'</c>
+/// on a real driver). InvokeMember goes through
+/// <c>IDispatch::GetIDsOfNames</c> which the driver must support to be
+/// ASCOM-compliant.
 ///
 /// <para>Covers the surface auto-focus and the live-stack trigger
 /// orchestrator actually call: connect, Position / MaxStep, Move,
@@ -19,7 +25,7 @@ namespace NINA.Ascom.Com;
 public sealed class AscomComFocuser : IFocuser, IDisposable {
     private readonly string _progId;
     private readonly AscomComStaDispatcher _disp;
-    private dynamic? _driver;
+    private object? _driver;
     private string _deviceName = "ASCOM Focuser";
     private bool _absolute = true;
     private int _maxStep = 100000;
@@ -31,11 +37,11 @@ public sealed class AscomComFocuser : IFocuser, IDisposable {
 
     public string DeviceName => _deviceName;
     public bool IsConnected => _driver != null
-        && _disp.Invoke(() => SafeGet(() => (bool)_driver!.Connected)).Result;
-    public int Position    => Read(() => (int)_driver!.Position, 0);
+        && _disp.Invoke(() => SafeGet(() => ComMember.Get<bool>(_driver!, "Connected"))).Result;
+    public int Position    => Read(() => ComMember.Get<int>(_driver!, "Position"), 0);
     public int MaxPosition => _maxStep;
-    public double Temperature => Read(() => (double)_driver!.Temperature, double.NaN);
-    public bool IsMoving   => Read(() => (bool)_driver!.IsMoving);
+    public double Temperature => Read(() => ComMember.Get<double>(_driver!, "Temperature"), double.NaN);
+    public bool IsMoving   => Read(() => ComMember.Get<bool>(_driver!, "IsMoving"));
 
     public Task ConnectAsync(CancellationToken ct = default) => _disp.Invoke(() => {
         var t = Type.GetTypeFromProgID(_progId)
@@ -44,15 +50,16 @@ public sealed class AscomComFocuser : IFocuser, IDisposable {
         _driver = Activator.CreateInstance(t)
             ?? throw new InvalidOperationException(
                 $"ASCOM driver '{_progId}' failed to instantiate.");
-        _driver!.Connected = true;
-        try { _deviceName = (string)_driver.Name; } catch { _deviceName = _progId; }
-        _absolute = SafeGet(() => (bool)_driver.Absolute);
-        _maxStep  = SafeGet(() => (int)_driver.MaxStep, 100000);
+        ComMember.Set(_driver!, "Connected", true);
+        try { _deviceName = ComMember.Get<string>(_driver!, "Name"); }
+        catch { _deviceName = _progId; }
+        _absolute = SafeGet(() => ComMember.Get<bool>(_driver!, "Absolute"));
+        _maxStep  = SafeGet(() => ComMember.Get<int>(_driver!, "MaxStep"), 100000);
     });
 
     public Task DisconnectAsync(CancellationToken ct = default) => _disp.Invoke(() => {
         if (_driver == null) return;
-        try { _driver.Connected = false; } catch { }
+        try { ComMember.Set(_driver!, "Connected", false); } catch { }
         try { Marshal.FinalReleaseComObject(_driver); } catch { }
         _driver = null;
     });
@@ -61,7 +68,7 @@ public sealed class AscomComFocuser : IFocuser, IDisposable {
         => _disp.Invoke(() => {
             if (_driver == null) return;
             var clamped = Math.Clamp(position, 0, _maxStep);
-            _driver!.Move(clamped);
+            ComMember.Call(_driver!, "Move", clamped);
         });
 
     public Task MoveRelativeAsync(int steps, CancellationToken ct = default)
@@ -69,19 +76,20 @@ public sealed class AscomComFocuser : IFocuser, IDisposable {
             if (_driver == null) return;
             if (_absolute) {
                 // Absolute drivers want a target step, not a delta.
-                var cur = SafeGet(() => (int)_driver!.Position);
+                var cur = SafeGet(() => ComMember.Get<int>(_driver!, "Position"));
                 var clamped = Math.Clamp(cur + steps, 0, _maxStep);
-                _driver!.Move(clamped);
+                ComMember.Call(_driver!, "Move", clamped);
             } else {
                 // Relative drivers (rare these days) accept signed
                 // deltas directly.
-                _driver!.Move(steps);
+                ComMember.Call(_driver!, "Move", steps);
             }
         });
 
     public Task AbortAsync(CancellationToken ct = default) => _disp.Invoke(() => {
         if (_driver == null) return;
-        try { _driver.Halt(); } catch { /* not all drivers implement Halt */ }
+        try { ComMember.Call(_driver!, "Halt"); }
+        catch { /* not all drivers implement Halt */ }
     });
 
     public void Dispose() {

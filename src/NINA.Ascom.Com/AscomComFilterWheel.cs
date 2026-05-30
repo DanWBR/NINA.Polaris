@@ -6,8 +6,10 @@ namespace NINA.Ascom.Com;
 
 /// <summary>
 /// ASCOM Platform FilterWheel (IFilterWheelV2) adapter exposed through
-/// <see cref="IFilterWheel"/>. Late-binds via dynamic COM, no compile-
-/// time reference to the ASCOM Platform.
+/// <see cref="IFilterWheel"/>. Late-binds via IDispatch (see
+/// <see cref="ComMember"/>) — same rationale as
+/// <see cref="AscomComFocuser"/>, some drivers don't surface
+/// <c>Connected</c> on the default <c>dynamic</c> dispatch interface.
 ///
 /// <para>Position semantics: ASCOM uses -1 as the "still moving"
 /// sentinel for the Position property. We translate that to the
@@ -19,7 +21,7 @@ namespace NINA.Ascom.Com;
 public sealed class AscomComFilterWheel : IFilterWheel, IDisposable {
     private readonly string _progId;
     private readonly AscomComStaDispatcher _disp;
-    private dynamic? _driver;
+    private object? _driver;
     private string _deviceName = "ASCOM Filter Wheel";
     private string[] _names = Array.Empty<string>();
     private int _lastPosition;
@@ -31,13 +33,13 @@ public sealed class AscomComFilterWheel : IFilterWheel, IDisposable {
 
     public string DeviceName => _deviceName;
     public bool IsConnected => _driver != null
-        && _disp.Invoke(() => SafeGet(() => (bool)_driver!.Connected)).Result;
+        && _disp.Invoke(() => SafeGet(() => ComMember.Get<bool>(_driver!, "Connected"))).Result;
 
     public int Position {
         get {
-            var raw = Read(() => (int)(short)_driver!.Position, -1);
-            // -1 = still settling per the spec. Surface the last known
-            // settled position so polling clients don't get a flap.
+            // Position is VT_I2 (short) per the ASCOM spec; ComMember
+            // converts to int. -1 sentinel means "still settling".
+            var raw = Read(() => ComMember.Get<int>(_driver!, "Position"), -1);
             if (raw < 0) return _lastPosition;
             _lastPosition = raw;
             return raw;
@@ -45,7 +47,7 @@ public sealed class AscomComFilterWheel : IFilterWheel, IDisposable {
     }
 
     public bool IsMoving =>
-        Read(() => (int)(short)_driver!.Position, -1) < 0;
+        Read(() => ComMember.Get<int>(_driver!, "Position"), -1) < 0;
 
     public string[] FilterNames => _names;
     public int FilterCount => _names.Length;
@@ -63,25 +65,26 @@ public sealed class AscomComFilterWheel : IFilterWheel, IDisposable {
         _driver = Activator.CreateInstance(t)
             ?? throw new InvalidOperationException(
                 $"ASCOM driver '{_progId}' failed to instantiate.");
-        _driver!.Connected = true;
-        try { _deviceName = (string)_driver.Name; } catch { _deviceName = _progId; }
-        // Names is an ASCOM SAFEARRAY of strings, the dynamic dispatch
-        // gives us an object that's actually a string[] underneath.
+        ComMember.Set(_driver!, "Connected", true);
+        try { _deviceName = ComMember.Get<string>(_driver!, "Name"); }
+        catch { _deviceName = _progId; }
+        // Names is an ASCOM SAFEARRAY of strings; IDispatch hands it
+        // back as a System.Array of strings underneath.
         try {
-            var arr = (Array)_driver.Names;
+            var arr = (Array)ComMember.Get<object>(_driver!, "Names");
             _names = new string[arr.Length];
             for (int i = 0; i < arr.Length; i++)
                 _names[i] = arr.GetValue(i)?.ToString() ?? $"Slot {i + 1}";
         } catch {
             _names = Array.Empty<string>();
         }
-        _lastPosition = SafeGet(() => (int)(short)_driver.Position, 0);
+        _lastPosition = SafeGet(() => ComMember.Get<int>(_driver!, "Position"), 0);
         if (_lastPosition < 0) _lastPosition = 0;
     });
 
     public Task DisconnectAsync(CancellationToken ct = default) => _disp.Invoke(() => {
         if (_driver == null) return;
-        try { _driver.Connected = false; } catch { }
+        try { ComMember.Set(_driver!, "Connected", false); } catch { }
         try { Marshal.FinalReleaseComObject(_driver); } catch { }
         _driver = null;
     });
@@ -90,7 +93,9 @@ public sealed class AscomComFilterWheel : IFilterWheel, IDisposable {
         => _disp.Invoke(() => {
             if (_driver == null) return;
             var slot = Math.Clamp(position, 0, Math.Max(0, _names.Length - 1));
-            _driver!.Position = (short)slot;
+            // ASCOM expects a VT_I2 — pass it as short so IDispatch
+            // doesn't reject the call with DISP_E_BADVARTYPE.
+            ComMember.Set(_driver!, "Position", (short)slot);
         });
 
     public Task SetFilterByNameAsync(string filterName, CancellationToken ct = default) {
