@@ -4970,6 +4970,31 @@ function ninaApp() {
                     && Number.isFinite(this.mount.ra)
                     && Number.isFinite(this.mount.dec)) {
                     this._skyLookAt(this.mount.ra, this.mount.dec, 15);
+                } else if (!this._skyDefaultLookAtDone) {
+                    // No mount connected — aim at the celestial pole of
+                    // the observer's hemisphere. Engine's default points
+                    // at RA=0/Dec=0 which on a southern site puts the
+                    // camera looking north at high altitude, with the
+                    // wrong polar axis visible. User in the SH expects
+                    // the south pole (Octans) on first open so they can
+                    // start planning without panning manually.
+                    //
+                    // Dec ±89 (not ±90) avoids the gimbal singularity at
+                    // the exact pole; RA=0 is arbitrary at that
+                    // declination. Default FOV stays unset so the
+                    // engine keeps whatever the user's last zoom level
+                    // was, or its built-in default on first boot.
+                    //
+                    // Guard `_skyDefaultLookAtDone` so the second and
+                    // third resync ticks (800ms + 2200ms) don't yank
+                    // the camera back if the user has already panned
+                    // somewhere else in the meantime.
+                    const lat = this.settings?.latitude;
+                    if (typeof lat === 'number' && isFinite(lat)) {
+                        const poleDec = lat >= 0 ? 89 : -89;
+                        this._skyLookAt(0, poleDec);
+                        this._skyDefaultLookAtDone = true;
+                    }
                 }
                 this._pushSkyFovOverlays();
             }, delayMs);
