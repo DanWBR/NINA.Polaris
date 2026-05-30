@@ -1,3 +1,5 @@
+using NINA.Image.Interfaces;
+
 namespace NINA.Polaris.Services.Alpaca;
 
 /// <summary>
@@ -9,22 +11,134 @@ namespace NINA.Polaris.Services.Alpaca;
 /// </summary>
 
 // ---- Focuser ----------------------------------------------------------------
-public class AlpacaFocuser {
+/// <summary>
+/// Alpaca/ASCOM Focuser v3 client exposed through <see cref="IFocuser"/> so
+/// EquipmentManager, AutoFocusService and the live-stack trigger orchestrator
+/// can drive an Alpaca focuser the same way they drive INDI / direct-COM
+/// focusers. The legacy Get*/Set*/MoveAsync surface stays in place because
+/// <see cref="NINA.Polaris.Endpoints.AlpacaEndpoints"/> still hits it for
+/// the JSON probe endpoints.
+/// </summary>
+public class AlpacaFocuser : IFocuser {
     private readonly AlpacaClient _c;
+    private string _deviceName = "Alpaca Focuser";
+    private bool _absolute = true;
+    private int _maxStep = 100000;
+    private int _maxIncrement = 100000;
+
     public AlpacaFocuser(string host, int port, int n = 0) { _c = new(host, port, "focuser", n); }
 
+    /// <summary>Parse a "host:port:deviceNumber" descriptor (matches the
+    /// shape <see cref="AlpacaDiscovery"/> hands back to the equipment
+    /// picker) into a constructed wrapper. Defaults the device number to
+    /// 0 when the third segment is missing.</summary>
+    public static AlpacaFocuser FromDeviceId(string deviceId) {
+        var parts = (deviceId ?? "").Split(':');
+        if (parts.Length < 2)
+            throw new ArgumentException($"Alpaca device id '{deviceId}' must be host:port[:deviceNumber].",
+                nameof(deviceId));
+        var host = parts[0];
+        var port = int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
+        var dev = parts.Length >= 3 && int.TryParse(parts[2],
+            System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : 0;
+        return new AlpacaFocuser(host, port, dev);
+    }
+
+    // ---- legacy direct surface (kept for existing JSON endpoints) ----
     public Task<bool> GetConnectedAsync(CancellationToken ct = default) => Safe(_c.GetAsync<bool>("connected", ct));
     public Task SetConnectedAsync(bool v, CancellationToken ct = default) =>
         _c.PutAsync("connected", new() { ["Connected"] = v ? "true" : "false" }, ct);
     public Task<string?> GetNameAsync(CancellationToken ct = default) => _c.GetAsync<string>("name", ct);
     public Task<int> GetPositionAsync(CancellationToken ct = default) => Safe(_c.GetAsync<int>("position", ct));
     public Task<int> GetMaxStepAsync(CancellationToken ct = default) => Safe(_c.GetAsync<int>("maxstep", ct));
+    public Task<int> GetMaxIncrementAsync(CancellationToken ct = default) => Safe(_c.GetAsync<int>("maxincrement", ct));
+    public Task<double> GetStepSizeAsync(CancellationToken ct = default) => Safe(_c.GetAsync<double>("stepsize", ct));
     public Task<bool> GetIsMovingAsync(CancellationToken ct = default) => Safe(_c.GetAsync<bool>("ismoving", ct));
     public Task<double> GetTemperatureAsync(CancellationToken ct = default) => Safe(_c.GetAsync<double>("temperature", ct));
     public Task<bool> GetAbsoluteAsync(CancellationToken ct = default) => Safe(_c.GetAsync<bool>("absolute", ct));
+    public Task<bool> GetTempCompAsync(CancellationToken ct = default) => Safe(_c.GetAsync<bool>("tempcomp", ct));
+    public Task<bool> GetTempCompAvailableAsync(CancellationToken ct = default) => Safe(_c.GetAsync<bool>("tempcompavailable", ct));
+    public Task SetTempCompAsync(bool v, CancellationToken ct = default) =>
+        _c.PutAsync("tempcomp", new() { ["TempComp"] = v ? "true" : "false" }, ct);
     public Task MoveAsync(int position, CancellationToken ct = default) =>
         _c.PutAsync("move", new() { ["Position"] = position.ToString() }, ct);
     public Task HaltAsync(CancellationToken ct = default) => _c.PutAsync("halt", null, ct);
+
+    // ---- IFocuser surface ----
+    public string DeviceName => _deviceName;
+    public bool IsConnected   => GetConnectedAsync().GetAwaiter().GetResult();
+    public int Position       => GetPositionAsync().GetAwaiter().GetResult();
+    public int MaxPosition    => _maxStep;
+    /// <summary>Onboard probe in degrees C; NaN when the focuser doesn't
+    /// publish a reading. The Alpaca <c>temperature</c> endpoint errors
+    /// out on driverless focusers, which our <c>Safe</c> wrapper coerces
+    /// to 0 -- so we re-issue the unsafe call here and translate failure
+    /// to NaN as the IFocuser contract requires.</summary>
+    public double Temperature {
+        get {
+            try { return _c.GetAsync<double>("temperature").GetAwaiter().GetResult(); }
+            catch { return double.NaN; }
+        }
+    }
+    public bool IsMoving => GetIsMovingAsync().GetAwaiter().GetResult();
+
+    public async Task ConnectAsync(CancellationToken ct = default) {
+        await SetConnectedAsync(true, ct);
+        // Cache the slow-changing capability values so MaxPosition /
+        // DeviceName reads don't issue an HTTP request per access.
+        try { _deviceName = (await GetNameAsync(ct)) ?? "Alpaca Focuser"; } catch { }
+        _absolute     = await GetAbsoluteAsync(ct);
+        _maxStep      = await GetMaxStepAsync(ct);
+        _maxIncrement = await GetMaxIncrementAsync(ct);
+        if (_maxStep <= 0) _maxStep = 100000;
+        if (_maxIncrement <= 0) _maxIncrement = _maxStep;
+    }
+
+    public Task DisconnectAsync(CancellationToken ct = default) => SetConnectedAsync(false, ct);
+
+    public async Task MoveAbsoluteAsync(int position, CancellationToken ct = default) {
+        var clamped = Math.Clamp(position, 0, _maxStep);
+        await MoveAsync(clamped, ct);
+        await PollUntilSettledAsync(ct);
+    }
+
+    public async Task MoveRelativeAsync(int steps, CancellationToken ct = default) {
+        if (_absolute) {
+            // Absolute drivers take a target step. Read the current
+            // position fresh -- relying on a cached value can race with
+            // a concurrent move issued through the JSON endpoints.
+            var cur = await GetPositionAsync(ct);
+            var target = Math.Clamp(cur + steps, 0, _maxStep);
+            await MoveAsync(target, ct);
+        } else {
+            // Relative-only drivers (rare) accept signed deltas.
+            // ASCOM doesn't define a Move that takes a delta directly,
+            // so we still use the Position parameter as a delta -- the
+            // Alpaca server forwards it to the driver verbatim.
+            await MoveAsync(steps, ct);
+        }
+        await PollUntilSettledAsync(ct);
+    }
+
+    public Task AbortAsync(CancellationToken ct = default) => HaltAsync(ct);
+
+    /// <summary>Poll <c>ismoving</c> at 250 ms cadence until the focuser
+    /// reports it has settled. On cancellation we issue a Halt to stop
+    /// the motor before propagating the OCE -- callers that abort an
+    /// auto-focus sweep should not be left with a focuser still slewing
+    /// in the background.</summary>
+    private async Task PollUntilSettledAsync(CancellationToken ct) {
+        try {
+            while (!ct.IsCancellationRequested) {
+                await Task.Delay(250, ct);
+                if (!await GetIsMovingAsync(ct)) return;
+            }
+        } catch (OperationCanceledException) {
+            try { await HaltAsync(CancellationToken.None); } catch { }
+            throw;
+        }
+    }
 
     private static async Task<bool> Safe(Task<bool> t)     { try { return await t; }   catch { return false; } }
     private static async Task<int> Safe(Task<int> t)       { try { return await t; }   catch { return 0; } }
@@ -35,22 +149,116 @@ public class AlpacaFocuser {
 }
 
 // ---- FilterWheel ------------------------------------------------------------
-public class AlpacaFilterWheel {
+/// <summary>
+/// Alpaca/ASCOM FilterWheel v2 client exposed through <see cref="IFilterWheel"/>.
+/// ASCOM's <c>position</c> returns -1 while the wheel is settling; we
+/// surface that as <see cref="IsMoving"/> = true and translate -1 to the
+/// last known stable slot for the <see cref="Position"/> getter so the
+/// sequencer never sees a transient negative value.
+/// </summary>
+public class AlpacaFilterWheel : IFilterWheel {
     private readonly AlpacaClient _c;
+    private string _deviceName = "Alpaca Filter Wheel";
+    private string[] _names = Array.Empty<string>();
+    private int _lastPosition;
+
     public AlpacaFilterWheel(string host, int port, int n = 0) { _c = new(host, port, "filterwheel", n); }
 
+    /// <summary>See <see cref="AlpacaFocuser.FromDeviceId"/>.</summary>
+    public static AlpacaFilterWheel FromDeviceId(string deviceId) {
+        var parts = (deviceId ?? "").Split(':');
+        if (parts.Length < 2)
+            throw new ArgumentException($"Alpaca device id '{deviceId}' must be host:port[:deviceNumber].",
+                nameof(deviceId));
+        var host = parts[0];
+        var port = int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
+        var dev = parts.Length >= 3 && int.TryParse(parts[2],
+            System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : 0;
+        return new AlpacaFilterWheel(host, port, dev);
+    }
+
+    // ---- legacy direct surface (kept for existing JSON endpoints) ----
     public Task<bool> GetConnectedAsync(CancellationToken ct = default) => Safe(_c.GetAsync<bool>("connected", ct));
     public Task SetConnectedAsync(bool v, CancellationToken ct = default) =>
         _c.PutAsync("connected", new() { ["Connected"] = v ? "true" : "false" }, ct);
     public Task<string?> GetNameAsync(CancellationToken ct = default) => _c.GetAsync<string>("name", ct);
     /// <summary>Currently selected filter slot, 0-based; -1 = moving.</summary>
     public Task<int> GetPositionAsync(CancellationToken ct = default) => Safe(_c.GetAsync<int>("position", ct));
-    public Task SetPositionAsync(int slot, CancellationToken ct = default) =>
-        _c.PutAsync("position", new() { ["Position"] = slot.ToString() }, ct);
     public Task<List<string>?> GetNamesAsync(CancellationToken ct = default) =>
         Safe(_c.GetAsync<List<string>>("names", ct));
     public Task<List<int>?> GetFocusOffsetsAsync(CancellationToken ct = default) =>
         Safe(_c.GetAsync<List<int>>("focusoffsets", ct));
+
+    // ---- IFilterWheel surface ----
+    public string DeviceName => _deviceName;
+    public bool IsConnected  => GetConnectedAsync().GetAwaiter().GetResult();
+
+    public int Position {
+        get {
+            var raw = GetPositionAsync().GetAwaiter().GetResult();
+            if (raw < 0) return _lastPosition;
+            _lastPosition = raw;
+            return raw;
+        }
+    }
+
+    public bool IsMoving => GetPositionAsync().GetAwaiter().GetResult() < 0;
+
+    public string[] FilterNames => _names;
+    public int FilterCount      => _names.Length;
+    public string CurrentFilterName {
+        get {
+            var p = Position;
+            return (p >= 0 && p < _names.Length) ? _names[p] : "";
+        }
+    }
+
+    public async Task ConnectAsync(CancellationToken ct = default) {
+        await SetConnectedAsync(true, ct);
+        try { _deviceName = (await GetNameAsync(ct)) ?? "Alpaca Filter Wheel"; } catch { }
+        var names = await GetNamesAsync(ct);
+        _names = names?.ToArray() ?? Array.Empty<string>();
+        var pos = await GetPositionAsync(ct);
+        _lastPosition = pos < 0 ? 0 : pos;
+    }
+
+    public Task DisconnectAsync(CancellationToken ct = default) => SetConnectedAsync(false, ct);
+
+    /// <summary>Switch the wheel to <paramref name="position"/>, then
+    /// poll until <c>position</c> reports the target slot (i.e. no
+    /// longer the -1 "moving" sentinel and equal to what we asked for).
+    /// A 30s upper bound matches every other backend's settle budget
+    /// and protects against an Alpaca server that loses the request.</summary>
+    public async Task SetPositionAsync(int position, CancellationToken ct = default) {
+        var slot = _names.Length > 0
+            ? Math.Clamp(position, 0, _names.Length - 1)
+            : Math.Max(0, position);
+        await _c.PutAsync("position",
+            new() { ["Position"] = slot.ToString(System.Globalization.CultureInfo.InvariantCulture) }, ct);
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (DateTime.UtcNow < deadline) {
+            ct.ThrowIfCancellationRequested();
+            await Task.Delay(250, ct);
+            var cur = await GetPositionAsync(ct);
+            if (cur != -1 && cur == slot) {
+                _lastPosition = cur;
+                return;
+            }
+        }
+        throw new TimeoutException($"Alpaca filter wheel did not reach slot {slot} within 30s.");
+    }
+
+    public Task SetFilterByNameAsync(string filterName, CancellationToken ct = default) {
+        if (string.IsNullOrEmpty(filterName)) return Task.CompletedTask;
+        var idx = Array.FindIndex(_names, n =>
+            string.Equals(n, filterName, StringComparison.OrdinalIgnoreCase));
+        if (idx < 0)
+            throw new ArgumentException(
+                $"Filter '{filterName}' not found in wheel (have: {string.Join(", ", _names)}).",
+                nameof(filterName));
+        return SetPositionAsync(idx, ct);
+    }
 
     private static async Task<bool> Safe(Task<bool> t)     { try { return await t; }   catch { return false; } }
     private static async Task<int> Safe(Task<int> t)       { try { return await t; }   catch { return 0; } }

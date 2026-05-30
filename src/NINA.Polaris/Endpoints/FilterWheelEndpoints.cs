@@ -63,15 +63,23 @@ public static class FilterWheelEndpoints {
                 return Results.Ok(equip.GetAscomDrivers(
                     NINA.Ascom.Com.AscomComRegistry.DeviceType.FilterWheel));
             }
+            if (d == "alpaca") {
+                return Results.Ok(equip.GetDiscoveredFilterWheelsFor("alpaca"));
+            }
             return Results.Ok(equip.GetDeviceNames()
                 .Select(n => new DiscoveredCamera(n, n, n))
                 .ToList());
         });
 
         group.MapGet("/drivers", (EquipmentManager equip) => {
+            var alpacaCount = equip.GetDiscoveredFilterWheelsFor("alpaca").Count;
             var list = new List<CameraDriverInfo> {
                 new("indi", "INDI", Available: true,
                     Description: "Any filter wheel the running INDI server exposes."),
+                new("alpaca", "Alpaca (ASCOM)", Available: alpacaCount > 0,
+                    Description: alpacaCount > 0
+                        ? $"ASCOM-over-HTTP filter wheels. {alpacaCount} discovered."
+                        : "Run Alpaca Discover in RIGS first to populate this list."),
             };
             if (OperatingSystem.IsWindows()) {
                 var n = equip.GetAscomDrivers(

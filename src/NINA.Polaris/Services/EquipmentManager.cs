@@ -1,12 +1,14 @@
 using NINA.Image.Interfaces;
 using NINA.INDI.Client;
 using NINA.INDI.Devices;
+using NINA.Polaris.Services.Alpaca;
 
 namespace NINA.Polaris.Services;
 
 public class EquipmentManager : IDisposable {
     private readonly IndiClient _indiClient;
     private readonly ILogger<EquipmentManager> _logger;
+    private readonly AlpacaDiscoveryCache _alpacaCache;
 
     /// <summary>Currently-selected camera, regardless of backend.
     /// Concrete implementations are <see cref="IndiCamera"/> for
@@ -45,9 +47,11 @@ public class EquipmentManager : IDisposable {
     public IndiDome? Dome { get; private set; }
     public IndiWeather? Weather { get; private set; }
 
-    public EquipmentManager(IndiClient indiClient, ILogger<EquipmentManager> logger) {
+    public EquipmentManager(IndiClient indiClient, ILogger<EquipmentManager> logger,
+                            AlpacaDiscoveryCache alpacaCache) {
         _indiClient = indiClient;
         _logger = logger;
+        _alpacaCache = alpacaCache;
         _indiClient.DeviceFound += OnDeviceFound;
     }
 
@@ -72,10 +76,10 @@ public class EquipmentManager : IDisposable {
             "nikon-sdk"   => CreateNikonCamera(deviceId),
             "sony-sdk"    => new NINA.Camera.SonySdk.SonySdkCamera(deviceId),
             "ascom-com"   => CreateAscomCamera(deviceId),
-            // Alpaca lands in a follow-up commit.
+            "alpaca"      => AlpacaCamera.FromDeviceId(deviceId),
             _ => throw new NotSupportedException(
                 $"Camera driver '{driver}' is not implemented yet. " +
-                "Use 'indi' (or install the matching vendor SDK)."),
+                "Use 'indi', 'alpaca', or install the matching vendor SDK."),
         };
         CameraDriver = driver;
         _logger.LogInformation("Camera selected: driver={Driver}, id={DeviceId}",
@@ -118,11 +122,14 @@ public class EquipmentManager : IDisposable {
     /// includes <c>indi</c>; vendor SDK drivers are listed only when
     /// the matching native dependency is present on the current OS.</summary>
     public IReadOnlyList<CameraDriverInfo> GetAvailableCameraDrivers() {
+        var alpacaCount = _alpacaCache.ByType("Camera").Count;
         var list = new List<CameraDriverInfo> {
             new("indi", "INDI", Available: true,
                 Description: "Standard astronomy cameras via INDI server."),
-            new("alpaca", "Alpaca (ASCOM)", Available: false,
-                Description: "ASCOM-over-HTTP cameras. Wiring pending."),
+            new("alpaca", "Alpaca (ASCOM)", Available: alpacaCount > 0,
+                Description: alpacaCount > 0
+                    ? $"ASCOM-over-HTTP cameras. {alpacaCount} discovered."
+                    : "Run Alpaca Discover in RIGS first to populate this list."),
         };
         if (OperatingSystem.IsWindows()) {
             // Direct ASCOM Platform COM-interop. Available iff the
@@ -203,6 +210,68 @@ public class EquipmentManager : IDisposable {
                 .Select(d => new DiscoveredCamera(d.ProgId, d.Description, d.ProgId))
                 .ToList();
         }
+        if (driver == "alpaca") {
+            // Pulls from the cache populated by /api/alpaca/discover.
+            // DeviceId is canonical host:port:devnum so SelectCamera(driver,
+            // deviceId) can reconstruct an AlpacaCamera without re-discovering.
+            return _alpacaCache.ByType("Camera")
+                .Select(d => new DiscoveredCamera(d.DeviceId, d.DeviceName, d.ServerName))
+                .ToList();
+        }
+        return Array.Empty<DiscoveredCamera>();
+    }
+
+    /// <summary>Mirror of <see cref="GetDiscoveredCamerasFor"/> for the
+    /// mount / telescope dropdown. Same Alpaca cache fed by
+    /// /api/alpaca/discover; INDI returns the INDI device list filtered
+    /// by interface type would be ideal but the existing endpoints don't
+    /// do that yet, so for now INDI/synscan/lx200 paths short-circuit to
+    /// empty and the user types the device id manually.</summary>
+    public IReadOnlyList<DiscoveredCamera> GetDiscoveredTelescopesFor(string driver) {
+        driver = (driver ?? "").Trim().ToLowerInvariant();
+        if (driver == "alpaca") {
+            return _alpacaCache.ByType("Telescope")
+                .Select(d => new DiscoveredCamera(d.DeviceId, d.DeviceName, d.ServerName))
+                .ToList();
+        }
+        if (driver == "ascom-com" && OperatingSystem.IsWindows()) {
+            return EnumerateAscomDrivers(
+                    NINA.Ascom.Com.AscomComRegistry.DeviceType.Telescope)
+                .Select(d => new DiscoveredCamera(d.ProgId, d.Description, d.ProgId))
+                .ToList();
+        }
+        return Array.Empty<DiscoveredCamera>();
+    }
+
+    public IReadOnlyList<DiscoveredCamera> GetDiscoveredFocusersFor(string driver) {
+        driver = (driver ?? "").Trim().ToLowerInvariant();
+        if (driver == "alpaca") {
+            return _alpacaCache.ByType("Focuser")
+                .Select(d => new DiscoveredCamera(d.DeviceId, d.DeviceName, d.ServerName))
+                .ToList();
+        }
+        if (driver == "ascom-com" && OperatingSystem.IsWindows()) {
+            return EnumerateAscomDrivers(
+                    NINA.Ascom.Com.AscomComRegistry.DeviceType.Focuser)
+                .Select(d => new DiscoveredCamera(d.ProgId, d.Description, d.ProgId))
+                .ToList();
+        }
+        return Array.Empty<DiscoveredCamera>();
+    }
+
+    public IReadOnlyList<DiscoveredCamera> GetDiscoveredFilterWheelsFor(string driver) {
+        driver = (driver ?? "").Trim().ToLowerInvariant();
+        if (driver == "alpaca") {
+            return _alpacaCache.ByType("FilterWheel")
+                .Select(d => new DiscoveredCamera(d.DeviceId, d.DeviceName, d.ServerName))
+                .ToList();
+        }
+        if (driver == "ascom-com" && OperatingSystem.IsWindows()) {
+            return EnumerateAscomDrivers(
+                    NINA.Ascom.Com.AscomComRegistry.DeviceType.FilterWheel)
+                .Select(d => new DiscoveredCamera(d.ProgId, d.Description, d.ProgId))
+                .ToList();
+        }
         return Array.Empty<DiscoveredCamera>();
     }
 
@@ -252,12 +321,12 @@ public class EquipmentManager : IDisposable {
             "indi" => new IndiTelescope(_indiClient, deviceId),
             "synscan-wifi" => new NINA.Mount.SynScanWifi.SynScanWifiTelescope(deviceId),
             "ascom-com" => CreateAscomTelescope(deviceId),
-            // NexStar TCP + LX200 TCP + Alpaca still pending, see
+            "alpaca" => AlpacaTelescope.FromDeviceId(deviceId),
+            // NexStar TCP + LX200 TCP still pending, see
             // docs/mounts-wifi.md for the backlog.
             _ => throw new NotSupportedException(
                 $"Mount driver '{driver}' is not implemented yet. " +
-                "Use 'indi', 'synscan-wifi', or 'ascom-com' (the rest are " +
-                "still pending, see docs/mounts-wifi.md)."),
+                "Use 'indi', 'alpaca', 'synscan-wifi', or 'ascom-com'."),
         };
         TelescopeDriver = driver;
         _logger.LogInformation("Telescope selected: driver={Driver}, id={DeviceId}",
@@ -275,8 +344,11 @@ public class EquipmentManager : IDisposable {
         var list = new List<CameraDriverInfo> {
             new("indi", "INDI", Available: true,
                 Description: "Any mount the running INDI server exposes, covers most WiFi mounts via indi_skywatcherAltAzMount / indi_celestron_aux / indi_ioptron_v3 / indi_lx200gps."),
-            new("alpaca", "Alpaca (ASCOM)", Available: false,
-                Description: "ASCOM-over-HTTP mounts. Wiring pending."),
+            new("alpaca", "Alpaca (ASCOM)",
+                Available: _alpacaCache.ByType("Telescope").Count > 0,
+                Description: _alpacaCache.ByType("Telescope").Count > 0
+                    ? $"ASCOM-over-HTTP mounts. {_alpacaCache.ByType("Telescope").Count} discovered."
+                    : "Run Alpaca Discover in RIGS first to populate this list."),
             new("synscan-wifi", "Sky-Watcher SynScan (Wi-Fi UDP)", Available: true,
                 Description: "Direct UDP to AZ-GTi / EQ6-R Pro / EQ8-R Pro / AllView / GoTo Dob (port 11880). Likely also drives ZWO AM5N / AM7 in SynScan-compat mode. Device id format: host[:port], defaults to 192.168.4.1:11880 (factory AP)."),
             new("nexstar-wifi", "Celestron NexStar (Wi-Fi TCP)", Available: false,
@@ -330,8 +402,10 @@ public class EquipmentManager : IDisposable {
         Focuser = driver switch {
             "indi" => new IndiFocuser(_indiClient, deviceId),
             "ascom-com" => CreateAscomFocuser(deviceId),
+            "alpaca" => AlpacaFocuser.FromDeviceId(deviceId),
             _ => throw new NotSupportedException(
-                $"Focuser driver '{driver}' is not implemented yet."),
+                $"Focuser driver '{driver}' is not implemented yet. " +
+                "Use 'indi', 'alpaca', or 'ascom-com'."),
         };
         FocuserDriver = driver;
         _logger.LogInformation("Focuser selected: driver={Driver}, id={DeviceId}",
@@ -353,8 +427,10 @@ public class EquipmentManager : IDisposable {
         FilterWheel = driver switch {
             "indi" => new IndiFilterWheel(_indiClient, deviceId),
             "ascom-com" => CreateAscomFilterWheel(deviceId),
+            "alpaca" => AlpacaFilterWheel.FromDeviceId(deviceId),
             _ => throw new NotSupportedException(
-                $"Filter wheel driver '{driver}' is not implemented yet."),
+                $"Filter wheel driver '{driver}' is not implemented yet. " +
+                "Use 'indi', 'alpaca', or 'ascom-com'."),
         };
         FilterWheelDriver = driver;
         _logger.LogInformation("Filter wheel selected: driver={Driver}, id={DeviceId}",

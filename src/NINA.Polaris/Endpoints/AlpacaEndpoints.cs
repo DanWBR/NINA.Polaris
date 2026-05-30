@@ -7,18 +7,71 @@ public static class AlpacaEndpoints {
         var group = app.MapGroup("/api/alpaca");
 
         // ---- Discovery ----
-        group.MapGet("/discover", async (AlpacaDiscovery disc, int? timeoutMs) => {
+        group.MapGet("/discover", async (AlpacaDiscovery disc, AlpacaDiscoveryCache cache,
+                                          int? timeoutMs, bool? autoConnect) => {
             var to = TimeSpan.FromMilliseconds(Math.Clamp(timeoutMs ?? 3000, 200, 15000));
             var servers = await disc.DiscoverServersAsync(to);
+
+            // Flatten + cache so EquipmentManager can offer Alpaca devices
+            // in the per-card driver dropdowns without re-broadcasting.
+            var flat = new List<AlpacaDiscoveredDevice>();
+            foreach (var s in servers) {
+                foreach (var d in s.Devices ?? new()) {
+                    flat.Add(new AlpacaDiscoveredDevice(
+                        Host: s.Host,
+                        Port: s.Port,
+                        ServerName: s.ServerName ?? "",
+                        DeviceType: d.DeviceType,
+                        DeviceName: d.DeviceName,
+                        DeviceNumber: d.DeviceNumber,
+                        UniqueId: d.UniqueID
+                    ));
+                }
+            }
+            cache.Replace(flat);
+
+            // Default autoConnect=true (the user explicitly asked for it):
+            // PUT connected=true on every discovered device so they're warm
+            // by the time the user picks one in a card dropdown. Each call
+            // is independent + idempotent, run in parallel with a small
+            // cap so we don't hammer a server that lists 10 devices. Errors
+            // are logged + reported but don't block discovery.
+            var autoConnected = new List<object>();
+            if (autoConnect != false) {
+                var tasks = flat.Select(async d => {
+                    try {
+                        var http = new AlpacaClient(d.Host, d.Port,
+                            d.DeviceType.ToLowerInvariant(), d.DeviceNumber);
+                        await http.PutAsync("connected",
+                            new Dictionary<string, string> { ["Connected"] = "true" });
+                        return new { device = d, ok = true, error = (string?)null };
+                    } catch (Exception ex) {
+                        return new { device = d, ok = false, error = (string?)ex.Message };
+                    }
+                });
+                var results = await Task.WhenAll(tasks);
+                foreach (var r in results) {
+                    autoConnected.Add(new {
+                        host = r.device.Host, port = r.device.Port,
+                        deviceType = r.device.DeviceType,
+                        deviceNumber = r.device.DeviceNumber,
+                        deviceName = r.device.DeviceName,
+                        ok = r.ok, error = r.error
+                    });
+                }
+            }
+
             // Project to camelCase so the frontend can read .devices[].deviceName /
             // .deviceType. AlpacaConfiguredDevice carries [JsonPropertyName] PascalCase
             // attributes (needed to PARSE the response from the Alpaca server upstream
-            // — Alpaca spec is PascalCase), so without this projection the SAME
+            // -- Alpaca spec is PascalCase), so without this projection the SAME
             // attributes flip ASP.NET's output to PascalCase too and the UI's
             // d.deviceName binding lands on undefined. Same projection in /devices
             // below; keep them in sync.
             return Results.Ok(new {
                 count = servers.Count,
+                totalDevices = flat.Count,
+                autoConnected,
                 servers = servers.Select(s => new {
                     host = s.Host,
                     port = s.Port,
@@ -32,6 +85,28 @@ public static class AlpacaEndpoints {
                         uniqueID = d.UniqueID
                     })
                 })
+            });
+        });
+
+        // ---- Cached discovered devices, by type ----
+        // Frontend pulls this when the user picks "Alpaca" in a card's
+        // driver dropdown to populate the device-select. Fresh per Discover
+        // click; empty after server restart until next Discover.
+        group.MapGet("/cached/{deviceType}", (AlpacaDiscoveryCache cache, string deviceType) => {
+            var devices = cache.ByType(deviceType).Select(d => new {
+                host = d.Host,
+                port = d.Port,
+                serverName = d.ServerName,
+                deviceType = d.DeviceType,
+                deviceName = d.DeviceName,
+                deviceNumber = d.DeviceNumber,
+                deviceId = d.DeviceId,
+                uniqueId = d.UniqueId
+            });
+            return Results.Ok(new {
+                deviceType,
+                updatedAt = cache.UpdatedAt,
+                devices
             });
         });
 
@@ -101,22 +176,27 @@ public static class AlpacaEndpoints {
         });
 
         // ---- Camera info probe ----
+        // Uses AlpacaClient directly (lightweight, no per-property cache
+        // setup that the full ICamera adapter does at Connect time) -- this
+        // endpoint is meant for the "browse before pairing" UI flow where
+        // we don't want side effects of toggling Connected.
         group.MapGet("/camera/info", async (string host, int port, int? device) => {
-            var cam = new AlpacaCamera(host, port, device ?? 0);
+            var c = new AlpacaClient(host, port, "camera", device ?? 0);
+            async Task<T> Safe<T>(string a, T fb) { try { return await c.GetAsync<T>(a) ?? fb; } catch { return fb; } }
             try {
                 return Results.Ok(new {
-                    name = await cam.GetNameAsync(),
-                    description = await cam.GetDescriptionAsync(),
-                    connected = await cam.GetConnectedAsync(),
-                    width = await cam.GetCameraXSizeAsync(),
-                    height = await cam.GetCameraYSizeAsync(),
-                    pixelSizeX = await cam.GetPixelSizeXAsync(),
-                    pixelSizeY = await cam.GetPixelSizeYAsync(),
-                    coolerOn = await cam.GetCoolerOnAsync(),
-                    ccdTemp = await cam.GetCcdTemperatureAsync(),
-                    setTemp = await cam.GetSetCcdTemperatureAsync(),
-                    binX = await cam.GetBinXAsync(),
-                    maxBinX = await cam.GetMaxBinXAsync()
+                    name = await Safe<string>("name", ""),
+                    description = await Safe<string>("description", ""),
+                    connected = await Safe<bool>("connected", false),
+                    width = await Safe<int>("cameraxsize", 0),
+                    height = await Safe<int>("cameraysize", 0),
+                    pixelSizeX = await Safe<double>("pixelsizex", 0d),
+                    pixelSizeY = await Safe<double>("pixelsizey", 0d),
+                    coolerOn = await Safe<bool>("cooleron", false),
+                    ccdTemp = await Safe<double>("ccdtemperature", 0d),
+                    setTemp = await Safe<double>("setccdtemperature", 0d),
+                    binX = await Safe<int>("binx", 1),
+                    maxBinX = await Safe<int>("maxbinx", 1)
                 });
             } catch (Exception ex) {
                 return Results.Problem($"Alpaca camera query failed: {ex.Message}");
@@ -124,10 +204,12 @@ public static class AlpacaEndpoints {
         });
 
         group.MapPost("/camera/connect", async (string host, int port, int? device, bool connect) => {
-            var cam = new AlpacaCamera(host, port, device ?? 0);
+            var c = new AlpacaClient(host, port, "camera", device ?? 0);
             try {
-                await cam.SetConnectedAsync(connect);
-                return Results.Ok(new { connected = await cam.GetConnectedAsync() });
+                await c.PutAsync("connected",
+                    new Dictionary<string, string> { ["Connected"] = connect ? "true" : "false" });
+                var nowConnected = await c.GetAsync<bool>("connected");
+                return Results.Ok(new { connected = nowConnected });
             } catch (Exception ex) {
                 return Results.Problem($"Alpaca camera connect failed: {ex.Message}");
             }

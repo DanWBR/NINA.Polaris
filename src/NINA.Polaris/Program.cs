@@ -175,6 +175,7 @@ builder.Services.AddSingleton<PolarAlignmentService>();
 // helpers, no state, fine as a singleton.
 builder.Services.AddSingleton<PolarTppaTargetService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Alpaca.AlpacaDiscovery>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Alpaca.AlpacaDiscoveryCache>();
 builder.Services.AddSingleton<StellariumClient>();
 builder.Services.AddSingleton<AltitudeService>();
 builder.Services.AddSingleton<GeocodingService>();

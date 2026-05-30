@@ -71,6 +71,9 @@ public static class FocuserEndpoints {
                 return Results.Ok(equip.GetAscomDrivers(
                     NINA.Ascom.Com.AscomComRegistry.DeviceType.Focuser));
             }
+            if (d == "alpaca") {
+                return Results.Ok(equip.GetDiscoveredFocusersFor("alpaca"));
+            }
             return Results.Ok(equip.GetDeviceNames()
                 .Select(n => new DiscoveredCamera(n, n, n))
                 .ToList());
@@ -80,9 +83,14 @@ public static class FocuserEndpoints {
         // so the frontend driver-source dropdown can render the same
         // way for every device type.
         group.MapGet("/drivers", (EquipmentManager equip) => {
+            var alpacaCount = equip.GetDiscoveredFocusersFor("alpaca").Count;
             var list = new List<CameraDriverInfo> {
                 new("indi", "INDI", Available: true,
                     Description: "Any focuser the running INDI server exposes."),
+                new("alpaca", "Alpaca (ASCOM)", Available: alpacaCount > 0,
+                    Description: alpacaCount > 0
+                        ? $"ASCOM-over-HTTP focusers. {alpacaCount} discovered."
+                        : "Run Alpaca Discover in RIGS first to populate this list."),
             };
             if (OperatingSystem.IsWindows()) {
                 var n = equip.GetAscomDrivers(

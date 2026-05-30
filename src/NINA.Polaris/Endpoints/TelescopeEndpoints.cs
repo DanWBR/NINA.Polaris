@@ -130,6 +130,9 @@ public static class TelescopeEndpoints {
                 return Results.Ok(equip.GetAscomDrivers(
                     NINA.Ascom.Com.AscomComRegistry.DeviceType.Telescope));
             }
+            if (d == "alpaca") {
+                return Results.Ok(equip.GetDiscoveredTelescopesFor("alpaca"));
+            }
             if (d == "indi") {
                 return Results.Ok(equip.GetDeviceNames()
                     .Select(n => new DiscoveredCamera(n, n, n))
