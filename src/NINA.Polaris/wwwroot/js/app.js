@@ -4048,11 +4048,17 @@ function ninaApp() {
             const bitDepth = dv.getInt32(12, true);
             const bayerPattern = dv.getInt32(16, true);
             const uncompressedSize = dv.getInt32(20, true);
-            // FrameKind, added to GetStreamHeader to flag one-off snaps
-            // (PREVIEW / FOCUS Manual). headerLen < 28 = old server
-            // build, treat as stackable for back-compat.
-            // 0 = stackable LIVE frame, 1 = preview (skip WASM stacker).
-            const frameKind = headerLen >= 28 ? dv.getInt32(24, true) : 0;
+            // FrameKind, added to GetStreamHeader to flag the panel
+            // a frame belongs to. The new server emits a 24-byte
+            // header (6 ints: width, height, bitDepth, bayerPattern,
+            // uncompressedSize, kind). Old server emits 20 bytes (no
+            // kind). headerLen reports the header size in bytes, so
+            // gate the kind read on headerLen >= 24, not 28 — the
+            // previous gate was off by 4 and made every frame fall
+            // back to Live, which painted PREVIEW snaps on the
+            // liveCanvas.
+            // 0 = Live, 1 = Preview, 2 = Focus, 3 = Video, 4 = SlewPreview.
+            const frameKind = headerLen >= 24 ? dv.getInt32(24, true) : 0;
 
             // Bail on placeholder / heartbeat frames before they spam
             // the WebGL pipeline. We were seeing periodic 0x0 frames
