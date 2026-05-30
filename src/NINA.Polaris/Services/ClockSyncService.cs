@@ -66,19 +66,45 @@ public class ClockSyncService {
         try {
             // Two-step: NTP can hold the clock, so disable it first if
             // running. Best-effort, ignore failure (most field Pis are
-            // offline and never had NTP active).
+            // offline and never had NTP active). 3s timeout: timedatectl
+            // either responds fast OR is blocked on PolicyKit, in which
+            // case waiting longer just keeps the browser fetch hanging.
             await RunAsync("timedatectl", "set-ntp false", ct,
-                ignoreExit: true, timeoutMs: 5_000);
+                ignoreExit: true, timeoutMs: 3_000);
+            // 5s timeout on set-time. PolicyKit grants (or denies) the
+            // action immediately when our rule matches; anything slower
+            // than this means the rule isn't installed and a polkit auth
+            // agent is waiting for a password we can't provide. Better
+            // to fail fast with a clear message than have the browser
+            // timeout with a generic 'Network error'.
             var setResult = await RunAsync("timedatectl",
-                $"set-time \"{stamp}\"", ct, timeoutMs: 10_000);
+                $"set-time \"{stamp}\"", ct, timeoutMs: 5_000);
             if (setResult.ExitCode != 0) {
                 _logger.LogWarning("timedatectl set-time failed: {Err}",
                     setResult.Stderr);
+                // Detect the canonical polkit denial messages so the toast
+                // can point the user at the missing rule file instead of
+                // dumping the raw 'Failed to set time: ...' line.
+                var stderr = setResult.Stderr?.Trim() ?? "";
+                var likelyPolkit =
+                    stderr.Contains("Not authorized", StringComparison.OrdinalIgnoreCase)
+                    || stderr.Contains("authentication", StringComparison.OrdinalIgnoreCase)
+                    || stderr.Contains("polkit", StringComparison.OrdinalIgnoreCase)
+                    || stderr.Contains("interactive", StringComparison.OrdinalIgnoreCase);
+                if (likelyPolkit) {
+                    return ClockSyncResult.Fail(
+                        "Permission denied by PolicyKit. Install the "
+                        + "Polaris polkit rule: copy "
+                        + "/etc/polkit-1/rules.d/50-polaris-clock.rules "
+                        + "from the Polaris .deb (or run "
+                        + "'sudo apt install --reinstall polaris'). Detail: "
+                        + (string.IsNullOrEmpty(stderr) ? "(no stderr)" : stderr));
+                }
                 return ClockSyncResult.Fail(
                     "timedatectl set-time failed: "
-                    + (string.IsNullOrWhiteSpace(setResult.Stderr)
+                    + (string.IsNullOrEmpty(stderr)
                         ? "unknown error (check polkit rule)"
-                        : setResult.Stderr.Trim()));
+                        : stderr));
             }
             // Confirm the change took. Round-trip skew should now be
             // tiny (sub-second + whatever drift happened during the

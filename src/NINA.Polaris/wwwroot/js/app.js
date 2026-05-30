@@ -2900,9 +2900,15 @@ function ninaApp() {
             this.clockSync.busy = true;
             this.clockSync.lastError = null;
             try {
+                // Bumped to 20s explicitly: backend timedatectl can take
+                // 5s + 5s in the worst case (set-ntp + set-time both
+                // hitting their max). Default apiFetch timeout of 15s
+                // races with that and surfaces as 'Request timed out'
+                // -> 'Network error' in the catch even when the
+                // backend would have responded with the real reason.
                 const r = await this.apiPost('/api/system/clock/sync', {
                     clientUtc: new Date().toISOString()
-                });
+                }, { timeout: 20000 });
                 const j = await r.json();
                 if (j.ok) {
                     this.clockSync.lastSyncAt = new Date();
@@ -2914,9 +2920,25 @@ function ninaApp() {
                     this.toast(this.clockSync.lastError, 'error');
                 }
             } catch (e) {
-                let msg = 'Network error';
+                // Three distinct failure modes to surface clearly:
+                //   1) ApiError(status, body) — server responded with a
+                //      4xx/5xx and a JSON body containing { error: "..." }
+                //   2) "Request timed out" — apiFetch aborted (backend
+                //      hung longer than 20s, likely polkit waiting on an
+                //      auth agent we can't provide)
+                //   3) Other (offline / TLS / CORS) -> fallback message
+                let msg;
                 if (e && e.body) {
-                    try { msg = JSON.parse(e.body).error || msg; } catch {}
+                    try { msg = JSON.parse(e.body).error; } catch {}
+                }
+                if (!msg && e && e.message && e.message.includes('timed out')) {
+                    msg = 'Server did not respond in 20s. Most likely the '
+                        + "polkit rule isn't installed -- check the Pi log "
+                        + 'for "Not authorized" from timedatectl, or '
+                        + 'reinstall the .deb package.';
+                }
+                if (!msg) {
+                    msg = (e && e.message) || 'Network error';
                 }
                 this.clockSync.lastError = msg;
                 this.toast('Clock sync failed: ' + msg, 'error');
