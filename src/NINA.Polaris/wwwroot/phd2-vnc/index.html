@@ -114,10 +114,22 @@
         // never authorizes password-based access on the user's
         // behalf); the prompt is a one-time per-session friction
         // the user accepts in exchange for the embedded view.
+        //
+        // wsProtocols: ['binary'] is harmless on modern noVNC (1.0+)
+        // which works without explicit negotiation, but some
+        // intermediate proxies / older websockify-compat tooling
+        // refuse to forward bytes until "binary" is in the
+        // Sec-WebSocket-Protocol header. Listing it explicitly
+        // makes the bridge robust across both modes — the Polaris
+        // server-side accepts the "binary" protocol if asked and
+        // ignores it if not.
         const rfb = new RFB(
             document.getElementById('screen'),
             wsUrl,
-            { credentials: { password: '' } }
+            {
+                credentials: { password: '' },
+                wsProtocols: ['binary']
+            }
         );
 
         // Scale the remote framebuffer to fit the iframe viewport
@@ -138,12 +150,36 @@
                 showOverlay('Disconnected. Refresh this tab to reconnect.');
             } else {
                 setStatus('failed', 'Connection lost');
+                // Include any detail noVNC gave us so 'Connection lost'
+                // stops looking like a black-box failure. e.detail.reason
+                // and .code are set by RFB when the WS or RFB handshake
+                // breaks down; surface them so the user (or a forum
+                // thread) can map the symptom to a root cause.
+                const reason = (e.detail && e.detail.reason) ? e.detail.reason : '';
+                const code   = (e.detail && e.detail.code)   ? e.detail.code   : '';
                 showOverlay(
                     'Connection to TightVNC was lost.\n' +
+                    (reason || code ? '(reason: ' + (reason || '?')
+                        + (code ? ', code ' + code : '') + ')\n' : '') +
                     'Open Settings → PHD2 Embedded GUI and confirm the ' +
                     'service is running, then refresh.');
             }
         });
+        // Surface bridge HTTP errors (501 / 503 / auth) that arrive
+        // as a failed WebSocket upgrade. Without this, a stopped
+        // TightVNC service produced 'Connecting…' forever because
+        // noVNC's RFB doesn't always fire 'disconnect' on a WS that
+        // never opened.
+        const wsCheck = new WebSocket(wsUrl);
+        wsCheck.onopen = () => wsCheck.close();
+        wsCheck.onerror = () => {
+            setStatus('failed', 'Bridge unreachable');
+            showOverlay(
+                'The /phd2-vnc-ws WebSocket bridge refused the connection.\n' +
+                'Most common causes: TightVNC service is stopped (start it in '
+                + 'Settings → PHD2 Embedded GUI), TightVNC is bound to a non-loopback '
+                + 'interface only, or auth failed (re-login in Polaris).');
+        };
         rfb.addEventListener('credentialsrequired', () => {
             // Native noVNC prompt — keeps the password client-side.
             // The user types it once per session; not stored anywhere.

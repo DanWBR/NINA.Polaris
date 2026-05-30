@@ -486,7 +486,9 @@ app.Map("/phd2-gui/{**rest}", async (HttpContext ctx, Phd2GuiSessionService gui)
 // can reach the VNC server, even when TightVNC itself is bound to
 // all interfaces (the docs walk the user through restricting that
 // too, but the auth layer is the actual security boundary).
-app.Map("/phd2-vnc-ws", async (HttpContext ctx, Phd2VncSessionService vnc) => {
+app.Map("/phd2-vnc-ws", async (HttpContext ctx, Phd2VncSessionService vnc,
+                                ILoggerFactory loggers) => {
+    var log = loggers.CreateLogger("Phd2VncBridge");
     if (!vnc.IsSupportedOs || !vnc.TightVncInstalled) {
         ctx.Response.StatusCode = 501;
         await ctx.Response.WriteAsJsonAsync(new {
@@ -508,19 +510,33 @@ app.Map("/phd2-vnc-ws", async (HttpContext ctx, Phd2VncSessionService vnc) => {
         return;
     }
 
+    // Negotiate subprotocol. Modern noVNC (1.0+) doesn't request any
+    // subprotocol — empty WebSocketRequestedProtocols, SubProtocol
+    // stays null, and the connection is binary by default which is
+    // what RFB needs. Older noVNC + websockify-compat clients ask
+    // for "binary" explicitly; honour that so the wire stays
+    // compatible across versions.
+    string? chosenProto = null;
+    if (ctx.WebSockets.WebSocketRequestedProtocols.Contains("binary"))
+        chosenProto = "binary";
     using var ws = await ctx.WebSockets.AcceptWebSocketAsync(new WebSocketAcceptContext {
-        // noVNC negotiates the "binary" subprotocol so the browser
-        // sends/receives ArrayBuffer frames directly. Accepting it
-        // here keeps the wire compatible with stock noVNC clients
-        // without a custom build.
-        SubProtocol = ctx.WebSockets.WebSocketRequestedProtocols.Contains("binary")
-            ? "binary"
-            : null
+        SubProtocol = chosenProto
     });
+    log.LogInformation("PHD2 VNC bridge: WS accepted (subProto={Proto}), connecting to 127.0.0.1:{Port}",
+        chosenProto ?? "(none)", vnc.Port);
+
     using var tcp = new System.Net.Sockets.TcpClient();
     try {
         await tcp.ConnectAsync(System.Net.IPAddress.Loopback, vnc.Port, ctx.RequestAborted);
+        // Disable Nagle on the TCP side. RFB is latency-sensitive
+        // (mouse moves + tiny pointer-events traffic) and Nagle
+        // batches small writes for ~40ms, which on top of WS framing
+        // overhead made the cursor lag visibly + occasionally caused
+        // the RFB handshake to stall when initial bytes got held
+        // in the kernel buffer waiting for batching.
+        tcp.NoDelay = true;
     } catch (Exception ex) {
+        log.LogWarning(ex, "PHD2 VNC bridge: TCP connect to TightVNC failed");
         // Service was running at probe time but we can't connect now,
         // race condition (user stopped TightVNC between probe and
         // WS upgrade). Close the WS with a code the client can read.
@@ -535,36 +551,57 @@ app.Map("/phd2-vnc-ws", async (HttpContext ctx, Phd2VncSessionService vnc) => {
     // CancellationTokenSource so neither leaks.
     using var pumpCts = System.Threading.CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
     var ct = pumpCts.Token;
+    long bytesWs2Tcp = 0, bytesTcp2Ws = 0;
 
     async Task PumpWsToTcp() {
         var buf = new byte[16 * 1024];
         try {
             while (!ct.IsCancellationRequested) {
                 var r = await ws.ReceiveAsync(buf, ct);
-                if (r.MessageType == System.Net.WebSockets.WebSocketMessageType.Close) break;
+                if (r.MessageType == System.Net.WebSockets.WebSocketMessageType.Close) {
+                    log.LogDebug("PHD2 VNC bridge: client sent Close frame, tearing down");
+                    break;
+                }
                 if (r.Count == 0) continue;
                 await stream.WriteAsync(buf.AsMemory(0, r.Count), ct);
+                bytesWs2Tcp += r.Count;
             }
-        } catch { /* socket closed on the other side, fall through to cancel */ }
+        } catch (OperationCanceledException) { /* normal teardown */ }
+        catch (Exception ex) {
+            // Was silent before — meant "TightVNC dropped us" looked
+            // identical to "browser closed tab". Logged at Debug so
+            // it doesn't spam Warning on every normal disconnect but
+            // a tail -f when troubleshooting catches it.
+            log.LogDebug(ex, "PHD2 VNC bridge: WS→TCP pump terminated by exception");
+        }
     }
     async Task PumpTcpToWs() {
         var buf = new byte[16 * 1024];
         try {
             while (!ct.IsCancellationRequested) {
                 var n = await stream.ReadAsync(buf, ct);
-                if (n == 0) break;
+                if (n == 0) {
+                    log.LogDebug("PHD2 VNC bridge: TightVNC closed TCP, tearing down");
+                    break;
+                }
                 await ws.SendAsync(buf.AsMemory(0, n),
                     System.Net.WebSockets.WebSocketMessageType.Binary,
                     endOfMessage: true, ct);
+                bytesTcp2Ws += n;
             }
-        } catch { /* same */ }
+        } catch (OperationCanceledException) { /* normal teardown */ }
+        catch (Exception ex) {
+            log.LogDebug(ex, "PHD2 VNC bridge: TCP→WS pump terminated by exception");
+        }
     }
 
     var ws2tcp = PumpWsToTcp();
     var tcp2ws = PumpTcpToWs();
-    await Task.WhenAny(ws2tcp, tcp2ws);
+    var winner = await Task.WhenAny(ws2tcp, tcp2ws);
     pumpCts.Cancel();
     try { await Task.WhenAll(ws2tcp, tcp2ws); } catch { }
+    log.LogInformation("PHD2 VNC bridge: session closed (ws→tcp={Tx}B, tcp→ws={Rx}B, first-done={Side})",
+        bytesWs2Tcp, bytesTcp2Ws, winner == ws2tcp ? "ws" : "tcp");
 });
 
 // ----- INDI-WEB-2: /indi-web/* reverse-proxy → indi-web (Bottle webapp) -----
