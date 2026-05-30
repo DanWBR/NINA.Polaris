@@ -80,16 +80,23 @@ public class ImageRelayService : IDisposable {
 
     /// <summary>
     /// Broadcast a frame to every connected /ws/image-stream client.
-    /// <paramref name="stackable"/> = false marks the envelope as a
-    /// one-off snap (PREVIEW / FOCUS Manual / etc.) so the client-side
-    /// WASM stacker can skip it — without this, every preview tap
-    /// silently bumps the always-on stack counter.
+    /// The default kind is <see cref="FrameKind.Live"/> — backwards
+    /// compatible with every caller that doesn't say otherwise.
     /// </summary>
     public Task RelayImageAsync(IImageData imageData, CancellationToken ct = default)
-        => RelayImageAsync(imageData, stackable: true, ct);
+        => RelayImageAsync(imageData, FrameKind.Live, ct);
 
-    public async Task RelayImageAsync(IImageData imageData, bool stackable, CancellationToken ct = default) {
-        var frameKind = stackable ? 0 : 1;
+    /// <summary>
+    /// Legacy bool overload kept so we don't have to touch every
+    /// caller in one pass. <paramref name="stackable"/>=false maps to
+    /// <see cref="FrameKind.Preview"/>, the closest equivalent of the
+    /// old "this is a one-off snap" intent.
+    /// </summary>
+    public Task RelayImageAsync(IImageData imageData, bool stackable, CancellationToken ct = default)
+        => RelayImageAsync(imageData, stackable ? FrameKind.Live : FrameKind.Preview, ct);
+
+    public async Task RelayImageAsync(IImageData imageData, FrameKind kind, CancellationToken ct = default) {
+        var frameKind = (int)kind;
         var buffer = ImageBuffer.FromImageData(imageData);
         _latestImage = buffer;
         _latestJpeg = null;

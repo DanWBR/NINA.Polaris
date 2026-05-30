@@ -60,13 +60,13 @@ public static class CameraEndpoints {
                 if (feedStack && liveStack.IsRunning) {
                     await liveStack.AddFrameAsync(imageData!);
                 } else {
-                    // stackable=false tags the WS envelope so the
-                    // client-side WASM stacker also skips this frame.
-                    // Without this the server-side guard above keeps
-                    // the in-server accumulator clean but the browser
-                    // would still bump its own stack counter on every
-                    // PREVIEW tap.
-                    await relay.RelayImageAsync(imageData!, stackable: feedStack);
+                    // Route the broadcast to the correct panel via the
+                    // FrameKind tag in the stream header. PREVIEW snaps
+                    // land only on previewCanvas, FOCUS-Manual on
+                    // focusCanvas, etc. Without this every snap
+                    // overwrites every visible canvas on the page.
+                    var kind = ParseFrameKind(request.Kind);
+                    await relay.RelayImageAsync(imageData!, kind);
                 }
 
                 var stats = imageData!.Statistics;
@@ -341,7 +341,21 @@ public static class CameraEndpoints {
         //         stacking we now default to, a tap on PREVIEW would
         //         silently push a junk frame into the live stack and
         //         fire the auto-recenter plate solve.
-        bool? FeedLiveStack = null);
+        bool? FeedLiveStack = null,
+        // Which panel originated the request. Encoded in the WS frame
+        // header as FrameKind so the browser routes the bitmap to that
+        // panel's canvas only. Values: "live" (default), "preview",
+        // "focus", "video", "slew-preview". Anything else → "live".
+        string? Kind = null);
+
+    private static FrameKind ParseFrameKind(string? raw) => raw?.ToLowerInvariant() switch {
+        "preview"      => FrameKind.Preview,
+        "focus"        => FrameKind.Focus,
+        "manual-focus" => FrameKind.Focus,
+        "video"        => FrameKind.Video,
+        "slew-preview" => FrameKind.SlewPreview,
+        _              => FrameKind.Live
+    };
     public record CoolerRequest(bool Enabled, double? TargetTemperature = null);
 
     /// <summary>White-balance body. Range is driver-specific, ZWO/QHY

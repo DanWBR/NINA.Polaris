@@ -3328,16 +3328,16 @@ function ninaApp() {
         // previewCanvas / videoCaptureCanvas got nothing. Render
         // straight into each known canvas instead, sizing from its
         // OWN visible parent.
-        _renderJpegFrame(arrayBuffer) {
+        _renderJpegFrame(arrayBuffer, frameKind = 0) {
             const blob = new Blob([arrayBuffer], { type: 'image/jpeg' });
             const url = URL.createObjectURL(blob);
 
             const img = new Image();
             img.onload = () => {
-                const targets = ['liveCanvas', 'previewCanvas',
-                                 'focusCanvas', 'videoCaptureCanvas',
-                                 'slewPreviewCanvas',
-                                 'manualFocusCanvas'];
+                // JPEG mode has no header to carry the FrameKind, so
+                // the caller passes it through from the WS dispatch
+                // when known. Default to Live for legacy callers.
+                const targets = this._canvasIdsForFrameKind(frameKind);
                 let drewAny = false;
                 for (const id of targets) {
                     const canvas = document.getElementById(id);
@@ -3374,12 +3374,16 @@ function ninaApp() {
             img.src = url;
         },
 
-        // Copy whatever is currently on liveCanvas to every secondary
-        // canvas that wants a copy of the latest frame (PREVIEW tab,
-        // FOCUS tab auto-focus preview). Cheap, single drawImage per
-        // destination. Called at the end of every successful render
-        // path so all tabs always show the most recent frame.
-        _mirrorLiveToPreviewCanvas() {
+        // LEGACY: used to copy liveCanvas to every other panel's
+        // canvas at the end of each render so all tabs showed the
+        // same image. With the FrameKind-aware fanout that defeats
+        // the per-panel isolation (a PREVIEW snap would land on
+        // previewCanvas → this mirror would immediately overwrite it
+        // back to whatever liveCanvas was showing). Now a no-op kept
+        // only because a handful of call sites still invoke it. Safe
+        // to delete the call sites in a future cleanup.
+        _mirrorLiveToPreviewCanvas() { return; },
+        _mirrorLiveToPreviewCanvas_legacy() {
             const src = document.getElementById('liveCanvas');
             if (!src) return;
             if (src.width === 0 || src.height === 0) return;
@@ -3521,13 +3525,22 @@ function ninaApp() {
 
         _initWebGL() {
             if (this._gl) return true;
-            const canvas = document.getElementById('liveCanvas');
-            if (!canvas) return false;
-            // preserveDrawingBuffer:true is required so we can drawImage(liveCanvas, ...)
+            // Offscreen canvas so the WebGL output isn't tied to one
+            // visible panel. liveCanvas, previewCanvas, videoCanvas
+            // etc. are pure 2D display targets; the GPU writes here
+            // once and the fan-out helper drawImage-blits to whichever
+            // canvas the current FrameKind owns. Detached from DOM so
+            // it has a stable backing store regardless of which tab
+            // is mounted/hidden.
+            const canvas = document.createElement('canvas');
+            canvas.width = 1;
+            canvas.height = 1;
+            this._glCanvas = canvas;
+            // preserveDrawingBuffer:true is required so we can drawImage(this offscreen, ...)
             // onto secondary canvases AFTER WebGL rendered. Without it the
             // browser is allowed to clear the buffer between the gl.drawArrays
             // call and the fan-out drawImage, leaving the colour-debayered
-            // bitmap as fully transparent on PREVIEW / VIDEO targets.
+            // bitmap as fully transparent on the display targets.
             const gl = canvas.getContext('webgl2', {
                 antialias: false,
                 premultipliedAlpha: false,
@@ -3684,10 +3697,20 @@ function ninaApp() {
             return true;
         },
 
-        _tryRenderWebGL(pixels, width, height, bitDepth, bayerPattern, shadow, scaleFactor, midtone) {
+        _tryRenderWebGL(pixels, width, height, bitDepth, bayerPattern, shadow, scaleFactor, midtone, frameKind = 0) {
             if (!this._initWebGL()) return false;
             const gl = this._gl;
-            const canvas = document.getElementById('liveCanvas');
+            // GPU surface is an OFFSCREEN canvas, not the LIVE display.
+            // _initWebGL() creates it once and attaches the WebGL2
+            // context to it. Rendering used to target liveCanvas
+            // directly, which meant a PREVIEW snap (kind=1) painted
+            // over the live-stack accumulator's display canvas — the
+            // user would see preview content on the LIVE tab after
+            // a single tap on PREVIEW. With the offscreen separation
+            // we render once, then drawImage out to whichever canvas
+            // the FrameKind targets, leaving liveCanvas untouched
+            // unless the frame is actually a Live one.
+            const canvas = this._glCanvas;
             if (!canvas) return false;
 
             // Always render at SOURCE resolution into liveCanvas regardless
@@ -3765,11 +3788,12 @@ function ninaApp() {
                     + ' · srcTex=' + width + 'x' + height + ' · glError=0x' + err.toString(16));
             }
 
-            // GPU bitmap is ready in liveCanvas. Fan it out (with proper
-            // scale-to-container) onto every visible canvas so the user
-            // sees the colour-debayered + stretched result on whatever
-            // tab they're on, not just LIVE.
-            this._fanOutFrameToCanvases(canvas, canvas.width, canvas.height);
+            // GPU bitmap is ready in the offscreen canvas. Fan it out
+            // ONLY to canvases that belong to this frame's panel
+            // (kind=0 Live → liveCanvas, kind=1 Preview → previewCanvas,
+            // etc.). Without this kind gate every WebGL frame would
+            // bleed into every other panel.
+            this._fanOutFrameToCanvases(canvas, canvas.width, canvas.height, frameKind);
             this.redrawOverlay();
             return true;
         },
@@ -4142,7 +4166,7 @@ function ninaApp() {
 
             // Try WebGL2 path first (GPU does debayer + stretch in microseconds)
             if (this._tryRenderWebGL(pixels, width, height, bitDepth,
-                    bayerPattern, shadow, scaleFactor, midtone)) {
+                    bayerPattern, shadow, scaleFactor, midtone, frameKind)) {
                 return;
             }
 
@@ -4171,7 +4195,7 @@ function ninaApp() {
             }
             oCtx.putImageData(imgData, 0, 0);
 
-            this._fanOutFrameToCanvases(offscreen, width, height);
+            this._fanOutFrameToCanvases(offscreen, width, height, frameKind);
             this.redrawOverlay();
         },
 
@@ -4181,10 +4205,25 @@ function ninaApp() {
         // parent. Skips canvases whose parent is collapsed (display:
         // none on a hidden tab), the next tab switch will pick up the
         // bitmap via the existing mirror call.
-        _fanOutFrameToCanvases(src, srcW, srcH) {
-            const targets = ['liveCanvas', 'previewCanvas', 'focusCanvas',
-                             'videoCaptureCanvas', 'slewPreviewCanvas',
-                             'manualFocusCanvas'];
+        // Map a server-tagged FrameKind to the canvas IDs that panel
+        // owns. Keeps streams isolated — a PREVIEW snap no longer
+        // overwrites the LIVE canvas, an autofocus exposure doesn't
+        // bleed into VIDEO, etc. Live (default / unknown) keeps the
+        // legacy single liveCanvas target; everything else is panel-
+        // scoped.
+        _canvasIdsForFrameKind(kind) {
+            switch (kind | 0) {
+                case 1:  return ['previewCanvas'];                          // Preview
+                case 2:  return ['focusCanvas', 'manualFocusCanvas'];       // Focus
+                case 3:  return ['videoCaptureCanvas'];                     // Video
+                case 4:  return ['slewPreviewCanvas'];                      // SlewPreview
+                case 0:
+                default: return ['liveCanvas'];                             // Live
+            }
+        },
+
+        _fanOutFrameToCanvases(src, srcW, srcH, frameKind = 0) {
+            const targets = this._canvasIdsForFrameKind(frameKind);
             const skipLive = (src && src.id === 'liveCanvas');   // src IS liveCanvas → don't blit-to-self
             // Diagnostic accumulator, one log entry per fan-out the
             // first time, then once per 60 fan-outs (so a video stream
@@ -10177,7 +10216,12 @@ function ninaApp() {
                     // always-on stacker counts these frames + fires
                     // the LSTR auto-recenter plate solve on the
                     // first preview snap of every session.
-                    feedLiveStack: false
+                    feedLiveStack: false,
+                    // kind=preview routes the broadcast frame to
+                    // previewCanvas only, leaving the LIVE canvas
+                    // untouched. Without this every preview tap
+                    // overwrites the live-stack accumulator's display.
+                    kind: 'preview'
                 }, {
                     timeout: Math.max(15000, (this.preview.exposure + 30) * 1000)
                 });
@@ -10991,7 +11035,10 @@ function ninaApp() {
                     binning: 1,
                     saveToDisk: false,
                     // Manual focus assist is test shots, not science.
-                    feedLiveStack: false
+                    feedLiveStack: false,
+                    // kind=focus routes the frame to the FOCUS tab
+                    // canvases only (focusCanvas + manualFocusCanvas).
+                    kind: 'focus'
                 });
                 const r = await resp.json();
                 if (r.status !== 'complete') {

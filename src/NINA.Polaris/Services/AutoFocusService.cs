@@ -114,7 +114,7 @@ public class AutoFocusService {
                 // Push each AF frame through the image relay so the
                 // Focus tab preview canvas (and the Live canvas) can
                 // render the sweep frames as the user watches the run.
-                try { await _relay.RelayImageAsync(image, ct); }
+                try { await _relay.RelayImageAsync(image, FrameKind.Focus, ct); }
                 catch (Exception ex) { _logger.LogDebug(ex, "AF frame relay failed (non-fatal)"); }
                 var hfr = MeasureHFR(image, request.MinStars);
 
@@ -168,7 +168,7 @@ public class AutoFocusService {
             int? finalStars = null;
             if (request.TakeConfirmationFrame) {
                 var image = await camera.CaptureAsync(request.ExposureSeconds, ct);
-                try { await _relay.RelayImageAsync(image, ct); }
+                try { await _relay.RelayImageAsync(image, FrameKind.Focus, ct); }
                 catch (Exception ex) { _logger.LogDebug(ex, "AF confirmation frame relay failed (non-fatal)"); }
                 var hfr = MeasureHFR(image, request.MinStars);
                 finalHfr = hfr.medianHfr;

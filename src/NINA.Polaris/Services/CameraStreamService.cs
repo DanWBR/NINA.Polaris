@@ -203,7 +203,12 @@ public class CameraStreamService : IDisposable {
             // Fire-and-forget relay, ImageRelayService handles its own
             // queue + back-pressure (adaptive bandwidth + per-client
             // streak detection already in place).
-            _ = _relay.RelayImageAsync(frame);
+            // Tag as Video so the client routes the frame to
+            // videoCaptureCanvas only — without this, every video
+            // stream frame would also paint over the LIVE / PREVIEW /
+            // FOCUS canvases on whichever tab the user happens to
+            // have open.
+            _ = _relay.RelayImageAsync(frame, FrameKind.Video);
         } catch (Exception ex) {
             _logger.LogDebug(ex, "Relay of stream frame failed");
         }
