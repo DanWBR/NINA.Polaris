@@ -84,6 +84,23 @@ public static class LiveStackEndpoints {
         group.MapGet("/refocus-suggestion/status",
             (RefocusSuggestionService suggest) => Results.Ok(suggest.CurrentStatus));
 
+        // Toggle per-frame disk persistence. Updates both the runtime
+        // flag on the service (takes effect on the very next frame)
+        // and the active rig's LiveStackSaveFramesToDisk field (so
+        // the choice survives Polaris restarts). Per-rig because
+        // EAA-only rigs typically stay off, observatory rigs stay on.
+        group.MapPut("/save-frames", (SaveFramesRequest req,
+                                       LiveStackingService stack,
+                                       ProfileService profiles) => {
+            stack.SaveFramesToDisk = req.Enabled;
+            var rig = profiles.ActiveEquipmentProfile;
+            if (rig != null) {
+                profiles.UpdateEquipmentProfile(rig.Id,
+                    r => r.LiveStackSaveFramesToDisk = req.Enabled);
+            }
+            return Results.Ok(new { saved = true, enabled = req.Enabled });
+        });
+
         // ----- CLST-6: persist a client-stacked result as FITS -----
         //
         // When live-stacking happens in the browser (server is in
@@ -161,4 +178,8 @@ public static class LiveStackEndpoints {
     /// resetBaseline defaults to true (the common case: user just
     /// refocused, take the new HFR as the reference).</summary>
     public record DismissRefocusSuggestionRequest(bool ResetBaseline = true);
+
+    /// <summary>Body of PUT /api/livestack/save-frames. Mirrors the
+    /// LIVE tab checkbox.</summary>
+    public record SaveFramesRequest(bool Enabled);
 }

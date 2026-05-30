@@ -256,7 +256,9 @@ public class ProfileService {
                 Binning = src.FlatWizard.Binning,
                 MaxSearchIterations = src.FlatWizard.MaxSearchIterations,
                 PanelBrightness = src.FlatWizard.PanelBrightness
-            }
+            },
+            LiveStackComputeMode = src.LiveStackComputeMode,
+            LiveStackSaveFramesToDisk = src.LiveStackSaveFramesToDisk
         };
         _activeProfile.EquipmentProfiles.Add(copy);
         Save();
@@ -656,6 +658,17 @@ public class EquipmentProfile {
     /// Stored per-rig because the trade-off depends on the host:
     /// Pi 2/3 → client; Pi 5 / mini-PC → either works.</summary>
     public string LiveStackComputeMode { get; set; } = "auto";
+
+    /// <summary>When true, each raw frame fed to
+    /// <c>LiveStackingService.AddFrameAsync</c> is also persisted to
+    /// disk as a regular LIGHT (lands in the same per-target /
+    /// per-filter / per-session layout as a sequence capture). Off by
+    /// default, EAA sessions are usually about the integrated preview
+    /// and the user explicitly opts in when they want a science-grade
+    /// archive alongside the live view. Per-rig because the choice
+    /// often depends on the rig's purpose (visual EAA grab-and-go vs.
+    /// permanent observatory).</summary>
+    public bool LiveStackSaveFramesToDisk { get; set; }
 
     /// <summary>Last-used VIDEO tab ROI / FOV (subframe). Persisted so
     /// the next session restores the same crop without the user re-

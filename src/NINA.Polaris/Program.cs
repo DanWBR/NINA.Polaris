@@ -280,6 +280,24 @@ app.Services.GetRequiredService<RefocusSuggestionService>();
     }
     relay.WasmCapableCountChanged += _ => EvaluateMode("client-handshake");
     profiles.EquipmentProfileActivated += _ => EvaluateMode("rig-switch");
+
+    // Per-rig save-frames-to-disk toggle. The runtime flag on
+    // LiveStackingService is the source of truth at frame-receive
+    // time, the profile field is the persistence layer. Sync the
+    // runtime flag now (so the boot rig wins) and on every rig
+    // switch (so the new rig's policy applies immediately without
+    // a Polaris restart).
+    void ApplySaveFramesPolicy(string trigger) {
+        var enabled = profiles.ActiveEquipmentProfile?.LiveStackSaveFramesToDisk ?? false;
+        if (liveStack.SaveFramesToDisk != enabled) {
+            liveStack.SaveFramesToDisk = enabled;
+            liveStackLogger.LogInformation(
+                "Live stack SaveFramesToDisk -> {Enabled} (trigger={Trigger})",
+                enabled, trigger);
+        }
+    }
+    ApplySaveFramesPolicy("startup");
+    profiles.EquipmentProfileActivated += _ => ApplySaveFramesPolicy("rig-switch");
 }
 
 // SWE-3-bugfix: strip CSP for /sky/* responses. The ASP.NET dev-time

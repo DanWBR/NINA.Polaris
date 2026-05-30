@@ -42,6 +42,11 @@ public enum StackMode {
 
 public class LiveStackingService {
     private readonly ImageRelayService _relay;
+    // Optional: null in unit tests that don't exercise SaveFramesToDisk.
+    // Production DI always supplies it because both singletons are
+    // registered in Program.cs and the service constructor resolves
+    // strictly via the registered graph.
+    private readonly ImageWriterService? _writer;
     private readonly ILogger<LiveStackingService> _logger;
     private readonly StarDetector _detector = new() { MaxStars = 200 };
     private readonly object _lock = new();
@@ -51,8 +56,27 @@ public class LiveStackingService {
     private int _width;
     private int _height;
     private int _frameCount;
+    private int _framesSavedToDisk;
     private List<DetectedStar>? _referenceStars;
     private bool _isRunning;
+
+    /// <summary>When true, every raw frame received via
+    /// <see cref="AddFrameAsync"/> is also persisted to disk via
+    /// <see cref="ImageWriterService.SaveImage"/> with imageType
+    /// "LIGHT", landing in {rig}/lights/{target}/{filter}/{date}
+    /// like a regular sequence capture. Off by default — live
+    /// stacking is normally about the integrated preview, not
+    /// archived per-frame data. UI toggles via
+    /// PUT /api/livestack/save-frames; persisted to the user
+    /// profile so the choice survives Polaris restarts.</summary>
+    public bool SaveFramesToDisk { get; set; }
+
+    /// <summary>Counter of frames actually written to disk during
+    /// the current live-stack session. Resets along with
+    /// <see cref="FrameCount"/> in <see cref="Reset"/>. Exposed on
+    /// the status payload so the UI can show "12 saved" next to
+    /// the toggle as live confirmation that the writes are landing.</summary>
+    public int FramesSavedToDisk => _framesSavedToDisk;
 
     // Frame-integrated subscribers (LSTR-1). Append-only list guarded
     // by _handlersLock for snapshotting; handlers awaited sequentially
@@ -74,8 +98,11 @@ public class LiveStackingService {
     /// the active rig hasn't forced server-side.</summary>
     public StackMode Mode { get; set; } = StackMode.Full;
 
-    public LiveStackingService(ImageRelayService relay, ILogger<LiveStackingService> logger) {
+    public LiveStackingService(ImageRelayService relay,
+                                ILogger<LiveStackingService> logger,
+                                ImageWriterService? writer = null) {
         _relay = relay;
+        _writer = writer;
         _logger = logger;
     }
 
@@ -103,6 +130,7 @@ public class LiveStackingService {
             _countBuffer = null;
             _referenceStars = null;
             _frameCount = 0;
+            _framesSavedToDisk = 0;
             _width = 0;
             _height = 0;
             _isRunning = false;
@@ -125,6 +153,29 @@ public class LiveStackingService {
 
     public async Task AddFrameAsync(IImageData imageData, CancellationToken ct = default) {
         if (!_isRunning) return;
+
+        // Optional per-frame disk persistence. Off by default so EAA
+        // sessions don't litter the lights folder. When the toggle is
+        // on we route the frame through ImageWriterService with
+        // imageType "LIGHT", landing it in the same per-rig /
+        // per-target / per-filter / per-session layout as a sequence
+        // capture. We do this BEFORE the stacking math runs so the
+        // bookkeeping cost is borne even if alignment / accumulation
+        // later short-circuits (e.g. star-matcher failure on this
+        // frame should not lose the raw data the user asked us to keep).
+        if (SaveFramesToDisk && _writer != null) {
+            try {
+                var savedPath = _writer.SaveImage(imageData, imageType: "LIGHT");
+                if (savedPath != null) {
+                    Interlocked.Increment(ref _framesSavedToDisk);
+                    _logger.LogDebug("Live stack: saved frame to {Path}", savedPath);
+                }
+            } catch (Exception ex) {
+                // Don't poison the stack pipeline because of a disk
+                // hiccup. Log and continue; the next frame will retry.
+                _logger.LogWarning(ex, "Live stack: failed to save frame to disk");
+            }
+        }
 
         var props = imageData.Properties;
         var data = imageData.Data;
@@ -266,7 +317,9 @@ public class LiveStackingService {
             Width = _width,
             Height = _height,
             ReferenceStarCount = _referenceStars?.Count ?? 0,
-            Mode = Mode.ToString().ToLowerInvariant()
+            Mode = Mode.ToString().ToLowerInvariant(),
+            SaveFramesToDisk = SaveFramesToDisk,
+            FramesSavedToDisk = _framesSavedToDisk
         };
     }
 
@@ -281,5 +334,14 @@ public class LiveStackingService {
         /// gating (only meaningful when a WASM client is actually
         /// doing the accumulation).</summary>
         public string Mode { get; set; } = "full";
+        /// <summary>Mirrors <see cref="LiveStackingService.SaveFramesToDisk"/>
+        /// so the UI checkbox reflects the live state across
+        /// browser tabs (it is also persisted to the user profile
+        /// in <see cref="LiveStackEndpoints"/>).</summary>
+        public bool SaveFramesToDisk { get; set; }
+        /// <summary>How many raw frames landed in lights/ during the
+        /// current session. Shown next to the toggle as live
+        /// confirmation that the writes are actually working.</summary>
+        public int FramesSavedToDisk { get; set; }
     }
 }

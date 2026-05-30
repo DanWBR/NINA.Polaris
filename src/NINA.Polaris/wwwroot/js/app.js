@@ -66,6 +66,12 @@ function ninaApp() {
         // "server" / "client" = force. Hydrated from active rig +
         // persisted via PUT /api/equipment/rigs/{id}.
         liveStackComputeMode: 'auto',
+        // Per-frame disk persistence toggle. Mirrors the LIVE tab
+        // checkbox. PUT /api/livestack/save-frames updates both the
+        // running service flag and the active rig's
+        // LiveStackSaveFramesToDisk profile field, so the choice
+        // survives a Polaris restart + rig switch.
+        liveStackSaveFrames: false,
 
         // LSTR-5: live-stack auto-refocus + auto-recenter triggers.
         // Mirror of EquipmentProfile.LiveStackTriggers, hydrated from
@@ -3655,6 +3661,33 @@ function ninaApp() {
                 rig.liveStackComputeMode = this.liveStackComputeMode;
                 this.toast(`Live-stack compute: ${this.liveStackComputeMode}`, 'ok');
             } catch (e) {
+                this.toast('Save failed: ' + (e.message || e), 'error');
+            }
+        },
+
+        // LIVE tab "Save each frame" toggle. Hits the dedicated
+        // endpoint which writes both the runtime flag (LiveStackingService.
+        // SaveFramesToDisk, takes effect on the next AddFrameAsync call)
+        // and the active rig's persisted LiveStackSaveFramesToDisk
+        // field so the choice survives a restart. We also mirror it
+        // onto the local rig object so an immediate rig switch +
+        // switch-back reflects correctly without a profile re-fetch.
+        async saveLiveStackSaveFrames() {
+            try {
+                await this.apiPost('/api/livestack/save-frames', null, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: this.liveStackSaveFrames })
+                });
+                const rig = this.rigs.find(r => r.id === this.activeRigId);
+                if (rig) rig.liveStackSaveFramesToDisk = this.liveStackSaveFrames;
+                this.toast(this.liveStackSaveFrames
+                    ? 'Saving each live-stack frame to disk'
+                    : 'Live-stack frames no longer saved', 'ok');
+            } catch (e) {
+                // Revert the checkbox if the server rejected it so the
+                // UI doesn't lie about the actual state.
+                this.liveStackSaveFrames = !this.liveStackSaveFrames;
                 this.toast('Save failed: ' + (e.message || e), 'error');
             }
         },
@@ -8638,6 +8671,9 @@ function ninaApp() {
             // CLST-7: per-rig compute target override. Defaults to
             // "auto" for old rigs without the field.
             this.liveStackComputeMode = rig.liveStackComputeMode || 'auto';
+            // Per-rig save-each-frame toggle. Defaults off when the
+            // field is missing (older profile, EAA-style rig).
+            this.liveStackSaveFrames = !!rig.liveStackSaveFramesToDisk;
             // VIDEO tab FOV / ROI hydration. Restore the last-picked
             // crop so opening VIDEO after a reload lands on the same
             // box around the planet, instead of forcing the user to

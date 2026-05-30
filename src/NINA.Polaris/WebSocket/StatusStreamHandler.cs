@@ -233,6 +233,12 @@ public static class StatusStreamHandler {
                             // raw frames the server relays ARE the accumulated
                             // stack and re-stacking would compound.
                             mode = liveStack.GetStatus().Mode,
+                            // Per-frame-to-disk toggle + count of frames
+                            // actually written this session. Drives the
+                            // LIVE tab checkbox state + the "(N saved)"
+                            // counter rendered next to it.
+                            saveFramesToDisk = liveStack.SaveFramesToDisk,
+                            framesSavedToDisk = liveStack.FramesSavedToDisk,
                             triggers = liveStackTriggers.CurrentStatus,
                             // REFSUG-1: trend-based advisory. Always
                             // emitted so the UI can decide whether to

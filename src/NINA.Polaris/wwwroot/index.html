@@ -791,6 +791,24 @@
                                 <option value="client">🌐 Client (WASM)</option>
                             </select>
                         </label>
+                        <!-- Per-frame disk persistence. When on, each raw
+                             frame fed to the live stacker is also saved
+                             into lights/{target}/{filter}/{date}/ as a
+                             normal LIGHT (same layout a sequence capture
+                             would use). Off by default — EAA viewers
+                             usually only care about the integrated
+                             preview, not an archive. The counter shows
+                             how many frames landed in this session. -->
+                        <label class="livestack-save-frames-label"
+                               title="Save every incoming frame to disk during live stacking (in addition to the integrated preview). Useful when you want a science-grade archive of the session. Off by default — turn on if you plan to re-stack or calibrate later.">
+                            <input type="checkbox"
+                                   x-model="liveStackSaveFrames"
+                                   @change="saveLiveStackSaveFrames()">
+                            💾 Save each frame
+                            <span class="text-muted"
+                                  x-show="liveStackStatus?.framesSavedToDisk"
+                                  x-text="'(' + liveStackStatus.framesSavedToDisk + ' saved)'"></span>
+                        </label>
                     </div>
 
                     <!-- REFSUG-3: refocus-suggestion callout. Visible only
