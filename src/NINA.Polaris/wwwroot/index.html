@@ -4090,6 +4090,19 @@
                     </div>
                 </div>
                 <div class="sky-toolbar">
+                    <!-- Quick jumps to the two planning tabs the user
+                         typically hits before scouting on the sky map.
+                         Same one-click pattern as the sidebar buttons
+                         (tab switch + loader kick) so a user who's
+                         already in SKY doesn't have to ping-pong via
+                         the sidebar to check what's worth shooting
+                         tonight or whether the weather agrees. -->
+                    <button class="btn btn-sm"
+                            @click="tab = 'tonight'; loadTonightsBest()"
+                            title="Tonight's Best — ranked list of DSOs/planets/moon worth observing this session">⭐ Tonight</button>
+                    <button class="btn btn-sm"
+                            @click="tab = 'weather'; loadWeatherForecast()"
+                            title="Weather forecast — 3-day cloud / seeing / transparency outlook">☁ Weather</button>
                     <input type="text" class="search-input" placeholder="Search object (M31, NGC 7000, Orion...)"
                            x-model="skySearch" @keyup.enter="searchSky()" @input="skyShowResults = false">
                     <button class="btn btn-sm" @click="searchSky()">Search</button>
