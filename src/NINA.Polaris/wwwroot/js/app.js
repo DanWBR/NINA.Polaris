@@ -1347,6 +1347,12 @@ function ninaApp() {
 
         // Star annotation + visual overlays
         showStarOverlay: false,
+        // LIVE tab image-history + HFR chart are now a semi-transparent
+        // overlay over the stacked image. Default hidden so the focus
+        // stays on the master being built. User toggles via the
+        // history button in .preview-overlay-controls; preference
+        // persisted in localStorage so it survives reloads.
+        liveOverlayVisible: false,
         showCrosshair: true,
         showGrid: false,
         showPixelReadout: false,

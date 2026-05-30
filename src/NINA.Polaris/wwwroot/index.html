@@ -661,6 +661,14 @@
                         <button class="btn btn-sm" @click="showPixelReadout = !showPixelReadout"
                                 :class="showPixelReadout ? 'btn-active' : ''"
                                 title="Toggle pixel value readout on hover">⊞</button>
+                        <!-- History / HFR chart toggle. The image-history
+                             strip + HFR chart now float over the stacked
+                             image as a semi-transparent panel instead of
+                             chopping the canvas in half. Default off so
+                             the stacked image gets the full pane. -->
+                        <button class="btn btn-sm" @click="liveOverlayVisible = !liveOverlayVisible"
+                                :class="liveOverlayVisible ? 'btn-active' : ''"
+                                title="Toggle image history + HFR chart overlay">⊟</button>
                     </div>
                     <div class="preview-overlay-info" x-show="showPixelReadout && hoverPixel">
                         <span>x=<strong x-text="hoverPixel?.x"></strong></span>
@@ -671,6 +679,43 @@
                         <span x-show="hoverPixel?.rgb">
                             <span x-text="hoverPixel?.rgb"></span>
                         </span>
+                    </div>
+
+                    <!-- LIVE history / HFR overlay. Floats over the
+                         stacked image (bottom, semi-transparent) so
+                         the user can glance at recent frames + the
+                         HFR trend without giving up canvas real
+                         estate. Hidden by default; toggled via the ⊟
+                         button in preview-overlay-controls above. -->
+                    <div class="live-history-overlay"
+                         x-show="liveOverlayVisible && imageHistory.length > 0"
+                         x-cloak>
+                        <div class="live-history-overlay-header">
+                            <span>Image history (<span x-text="imageHistory.length"></span>)</span>
+                            <button class="btn btn-sm" @click="clearImageHistory()">Clear</button>
+                            <button class="btn btn-sm" @click="liveOverlayVisible = false"
+                                    title="Hide overlay">✕</button>
+                        </div>
+                        <div class="live-history-overlay-thumbs">
+                            <template x-for="(img, i) in imageHistory.slice(0, 20)" :key="img.id || i">
+                                <div class="history-thumb" @click="openHistoryItem(img)"
+                                     :title="img.time + ' · ' + img.exposure + 's · G' + img.gain">
+                                    <img :src="img.thumb || ''" :alt="img.time" x-show="img.thumb"
+                                         loading="lazy">
+                                    <div class="history-thumb-meta">
+                                        <span x-text="img.time"></span>
+                                        <span x-show="img.hfr !== '--'">HFR <span x-text="img.hfr"></span></span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                        <div class="live-history-overlay-chart"
+                             x-show="imageHistory.length >= 2">
+                            <div class="live-history-overlay-chart-label">HFR &amp; star count</div>
+                            <div class="chart-container chart-container-sm">
+                                <canvas x-ref="hfrChart" id="hfrChart"></canvas>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="quick-controls">
@@ -1110,46 +1155,11 @@
                     </div>
                 </div>
 
-                <!-- Image History gallery (thumbnails + collapsible details) -->
-                <div class="image-history" x-show="imageHistory.length > 0">
-                    <div class="history-header" @click="$refs.historyList.classList.toggle('collapsed')">
-                        Image History (<span x-text="imageHistory.length"></span>)
-                        <button class="btn btn-sm" @click.stop="clearImageHistory()"
-                                style="margin-left: auto;">Clear</button>
-                    </div>
-                    <div class="history-thumbs">
-                        <template x-for="(img, i) in imageHistory.slice(0, 20)" :key="img.id || i">
-                            <div class="history-thumb" @click="openHistoryItem(img)" :title="img.time + ' • ' + img.exposure + 's • G' + img.gain">
-                                <img :src="img.thumb || ''" :alt="img.time" x-show="img.thumb"
-                                     loading="lazy">
-                                <div class="history-thumb-meta">
-                                    <span x-text="img.time"></span>
-                                    <span x-show="img.hfr !== '--'">HFR <span x-text="img.hfr"></span></span>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                    <div class="history-list" x-ref="historyList">
-                        <template x-for="(img, i) in imageHistory.slice(0, 10)" :key="img.id || i">
-                            <div class="history-item">
-                                <span class="history-time" x-text="img.time"></span>
-                                <span x-text="img.exposure + 's'"></span>
-                                <span x-text="'G' + img.gain"></span>
-                                <span x-show="img.filter" x-text="img.filter"></span>
-                                <span>Stars: <strong x-text="img.stars"></strong></span>
-                                <span>HFR: <strong x-text="img.hfr"></strong></span>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-
-                <!-- HFR History chart -->
-                <div class="image-history" x-show="imageHistory.length >= 2">
-                    <div class="history-header">HFR &amp; Star Count History</div>
-                    <div class="chart-container chart-container-sm">
-                        <canvas x-ref="hfrChart" id="hfrChart"></canvas>
-                    </div>
-                </div>
+                <!-- Image History + HFR chart moved into the
+                     .live-history-overlay floating panel inside
+                     .preview-area above. The bottom-of-tab gallery
+                     was eating half the viewport even when the user
+                     just wanted to watch the stacked image grow. -->
             </div>
 
             <!-- POLAR ALIGNMENT (TPPA) -->

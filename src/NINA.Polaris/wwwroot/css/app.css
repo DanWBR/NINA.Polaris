@@ -955,6 +955,91 @@ body {
     justify-content: center;
 }
 
+/* LIVE tab floating overlay for image history + HFR chart. Sits at
+   the bottom of .preview-area as a semi-transparent panel so the
+   stacked image keeps the full viewport. Toggled by the ⊟ button
+   in .preview-overlay-controls. */
+.live-history-overlay {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    z-index: 4;                       /* above canvas, below controls */
+    background: rgba(5, 8, 20, 0.72);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: var(--text-primary);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 42vh;                 /* never eat more than ~half */
+}
+.live-history-overlay-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+}
+.live-history-overlay-header > span:first-child { margin-right: auto; }
+.live-history-overlay-header .btn {
+    padding: 3px 8px;
+    font-size: 11px;
+    min-height: 0;
+}
+.live-history-overlay-thumbs {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 4px;
+}
+.live-history-overlay-thumbs .history-thumb {
+    flex: 0 0 88px;
+    height: 64px;
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.05);
+}
+.live-history-overlay-thumbs .history-thumb img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.live-history-overlay-thumbs .history-thumb-meta {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    color: var(--text-primary);
+    font-size: 9px;
+    padding: 1px 4px;
+    display: flex;
+    justify-content: space-between;
+}
+.live-history-overlay-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.live-history-overlay-chart-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+}
+.live-history-overlay-chart .chart-container {
+    height: 80px;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 4px;
+    padding: 4px;
+}
+
 .preview-overlay-info {
     position: absolute;
     bottom: 8px;
