@@ -3545,18 +3545,44 @@ function ninaApp() {
                     this.stretchMid || 0.25));
                 return { shadow, scaleFactor: 1.0 / (white - shadow), midtone };
             }
-            // Subsample for speed, exclude saturated 0 / max so a
-            // big black border (subframe, un-touched live-stack
-            // accumulator cells) doesn't drag the median to 0.
+            // Find the OBSERVED max in the subsample. The
+            // saturation threshold for histogram exclusion is the
+            // lower of maxVal and observedMax — drivers that pack
+            // an N-bit sensor into a 16-bit buffer often cap below
+            // 65535 (a ZWO 10-bit sensor shifted into the high 6
+            // bits saturates at 65472, not 65535). Excluding only
+            // pixels at the theoretical max would leave the actual
+            // saturated wall in the sample, collapse the median +
+            // MAD onto that wall, force shadow ≈ saturation, and
+            // render the whole overexposed frame as BLACK (the
+            // counterintuitive bug we just fixed).
             const step = Math.max(1, Math.floor(pixels.length / 200000));
+            let observedMax = 0;
+            for (let i = 0; i < pixels.length; i += step) {
+                const v = pixels[i];
+                if (v > observedMax) observedMax = v;
+            }
+            const satThreshold = (observedMax > 0 && observedMax < maxVal)
+                ? observedMax : maxVal;
+            // Second pass: collect non-saturated samples.
             const sampleArr = [];
             for (let i = 0; i < pixels.length; i += step) {
                 const v = pixels[i];
-                if (v === 0 || v >= maxVal) continue;
+                if (v === 0 || v >= satThreshold) continue;
                 sampleArr.push(v);
             }
             if (sampleArr.length === 0) {
-                return { shadow: 0, scaleFactor: 1.0 / maxVal, midtone: 0.15 };
+                // Uniformly saturated / overexposed frame. Set the
+                // scale factor so the observed max maps to 1.0,
+                // midtone identity (0.5) — result is a near-white
+                // canvas, intuitive for "blown out exposure" instead
+                // of the old "everything's black" behaviour.
+                const whiteVal = observedMax > 0 ? observedMax : maxVal;
+                return {
+                    shadow: 0,
+                    scaleFactor: 1.0 / whiteVal,
+                    midtone: 0.5
+                };
             }
             const sorted = Float32Array.from(sampleArr).sort();
             const median = sorted[Math.floor(sorted.length * 0.5)];

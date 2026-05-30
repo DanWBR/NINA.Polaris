@@ -89,18 +89,51 @@ public static class AutoStretch {
         int maxVal16  = (1 << bitDepth) - 1;
         ushort topVal = (ushort)Math.Min(maxVal16, 65535);
 
+        // First pass: find the actual maximum value present in the
+        // image. The "saturation" threshold for histogram exclusion
+        // is the LOWER of the bit-depth theoretical max and the
+        // observed max. Why: drivers that pack an N-bit sensor into
+        // a 16-bit buffer often cap below 65535 (a 10-bit ZWO sensor
+        // shifted into the high 6 bits saturates at 65472, a 14-bit
+        // CMOS at 65520, etc). The old code only excluded pixels
+        // at EXACTLY 65535, so a saturated overexposed frame had
+        // its actual saturation point (e.g. 65472) included in the
+        // sample, made the median sit on the saturation wall,
+        // forced shadow ≈ saturation and MAD ≈ 0, and the entire
+        // image got mapped to BLACK — counterintuitive: the user
+        // sees darkness where they expect "blown out white".
+        ushort observedMax = 0;
+        int limit = Math.Min(data.Length, pixelCount);
+        for (int i = 0; i < limit; i++) {
+            if (data[i] > observedMax) observedMax = data[i];
+        }
+        ushort satThreshold = (observedMax > 0 && observedMax < topVal)
+            ? observedMax : topVal;
+
         // Histogram + median, restricted to NON-saturated samples
-        // (drop 0 and the bit-depth max). Black borders from a
-        // crop / dead pixel rows shouldn't bias the background.
+        // (drop 0 and anything at the OBSERVED saturation point).
+        // Black borders from a crop / dead pixel rows shouldn't
+        // bias the background; nor should saturated highlights.
         var histogram = new int[65536];
         long sampleCount = 0;
-        for (int i = 0; i < data.Length && i < pixelCount; i++) {
+        for (int i = 0; i < limit; i++) {
             ushort v = data[i];
-            if (v == 0 || v >= topVal) continue;
+            if (v == 0 || v >= satThreshold) continue;
             histogram[v]++;
             sampleCount++;
         }
-        if (sampleCount == 0) return new StretchParams(0, 0.5, 1);
+        if (sampleCount == 0) {
+            // Uniformly saturated (or uniformly zero) image. Set
+            // white = the observed brightness so overexposed frames
+            // render WHITE (intuitive) instead of falling to the
+            // shader's default which would map every pixel through
+            // the (1, 0.5, 1) identity and underexpose the visible
+            // result when satThreshold < maxVal.
+            double white = observedMax > 0
+                ? Math.Clamp((double)observedMax / topVal, 0.001, 1.0)
+                : 1.0;
+            return new StretchParams(0, 0.5, white);
+        }
 
         long half = sampleCount / 2;
         long cumulative = 0;
@@ -113,11 +146,13 @@ public static class AutoStretch {
             }
         }
 
-        // MAD over the same restricted sample.
+        // MAD over the SAME restricted sample (matching the
+        // satThreshold above — using topVal here would re-include
+        // saturated pixels and pull MAD toward zero).
         var devHistogram = new int[65536];
-        for (int i = 0; i < data.Length && i < pixelCount; i++) {
+        for (int i = 0; i < limit; i++) {
             ushort v = data[i];
-            if (v == 0 || v >= topVal) continue;
+            if (v == 0 || v >= satThreshold) continue;
             int dev = (int)Math.Abs(v - median);
             if (dev < 65536) devHistogram[dev]++;
         }
