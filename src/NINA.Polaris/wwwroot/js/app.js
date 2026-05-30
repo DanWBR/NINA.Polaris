@@ -13650,21 +13650,56 @@ function ninaApp() {
         },
 
         async searchSky() {
-            if (!this.skySearch.trim()) return;
+            const q = this.skySearch.trim();
+            if (!q) return;
             try {
                 const data = await this.apiGet(
-                    `/api/sky/catalog/search?query=${encodeURIComponent(this.skySearch)}`);
+                    `/api/sky/catalog/search?query=${encodeURIComponent(q)}`);
                 this.skyResults = data.results || [];
                 if (this.skyResults.length === 1) {
                     this.selectSkyTarget(this.skyResults[0]);
                     this.skyShowResults = false;
-                } else if (this.skyResults.length > 1) {
-                    this.skyShowResults = true;
-                } else {
-                    this.skyTarget = null;
-                    this.skyShowResults = false;
-                    this.toast('No objects found for "' + this.skySearch + '"', 'warn');
+                    return;
                 }
+                if (this.skyResults.length > 1) {
+                    this.skyShowResults = true;
+                    return;
+                }
+
+                // Catalog miss. Our DSO DB only knows deep-sky objects
+                // (Messier / NGC / IC / Arp / Sh2 / HCG / Abell). The
+                // engine knows everything else the user is likely to
+                // type — Moon, Sun, planets, satellites, bright stars
+                // (Vega, Sirius), comets it has in its bundle. Ask it
+                // and project the hit onto the same shape we pass to
+                // selectSkyTarget so the rest of the pipeline (info
+                // card, smooth pan, Slew & Center button) stays
+                // identical.
+                let engineHit = null;
+                try {
+                    engineHit = await this._skySearch(q);
+                } catch (_) { /* bridge missing / iframe not ready */ }
+                if (engineHit
+                    && Number.isFinite(engineHit.raDeg)
+                    && Number.isFinite(engineHit.decDeg)) {
+                    const ra = engineHit.raDeg / 15;     // engine gives degrees
+                    this.selectSkyTarget({
+                        name: engineHit.name || q,
+                        ra: ra,
+                        dec: engineHit.decDeg,
+                        magnitude: typeof engineHit.magnitude === 'number'
+                            ? engineHit.magnitude : null,
+                        type: null,
+                        commonName: null,
+                        aliases: []
+                    });
+                    this.skyShowResults = false;
+                    return;
+                }
+
+                this.skyTarget = null;
+                this.skyShowResults = false;
+                this.toast('No objects found for "' + q + '"', 'warn');
             } catch (e) {
                 this.toast('Sky search failed', 'error');
             }
