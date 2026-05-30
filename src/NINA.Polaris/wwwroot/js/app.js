@@ -1389,6 +1389,19 @@ function ninaApp() {
         _lastRawFrame: null,  // cache: { pixels, width, height, bitDepth, bayerPattern }
         showStretchPanel: false,
 
+        // Client-side white-balance (display tint applied in the WebGL
+        // shader AFTER stretch). Shared across LIVE, PREVIEW, FOCUS,
+        // VIDEO so changing it anywhere updates the preview everywhere.
+        // Defaults 1.7 / 1.5 approximate daylight WB on raw OSC data;
+        // wb.auto = true makes the next-frame handler recompute via
+        // gray-world from the actual pixels. NOT the same as the
+        // hardware-side video.wbR / video.wbB which write WB_R/WB_B
+        // to the camera driver (different OSCs expose those very
+        // differently — display tint always works).
+        wb: { r: 1.7, b: 1.5, auto: false },
+        _wbLastAutoAt: 0,
+        showWbPanel: false,
+
         // Temperature history (sensor temp samples for chart)
         tempHistory: [],     // [{t: msEpoch, temp: °C, power: %}]
         _tempLastSample: 0,
@@ -1568,6 +1581,11 @@ function ninaApp() {
             // moments later, by the time the first frames flow the
             // tick loop is running and the rolling window absorbs them.
             this._netStartMeter();
+
+            // Restore client-side WB settings (display tint applied
+            // by the WebGL shader). Defaults preserved on missing /
+            // malformed localStorage.
+            this.loadWb();
 
             // ALPACA: fire-and-forget LAN discovery so a user who
             // already has ASCOM Remote Server / Alpaca Omni
@@ -3642,6 +3660,141 @@ function ninaApp() {
                 f.bayerPattern, shadow, scaleFactor, midtone);
         },
 
+        // Re-render the cached frame with whatever wb / stretch state
+        // is current. Used by the WB sliders + auto-WB so a control
+        // change updates the canvas immediately without waiting for
+        // the next capture. Same plumbing as applyManualStretch.
+        applyWb() { this.applyManualStretch(); },
+
+        // Gray-world auto white-balance from the current raw frame.
+        // Walks the Bayer mosaic, sums R / G / B contributions, sets
+        // wb.r = mean(G) / mean(R) and wb.b = mean(G) / mean(B) so
+        // the channel means equalise. Sub-sampled (every 16 px) so
+        // it runs in ~5ms even on a 24 MP master. Returns true on
+        // success, false when the algorithm couldn't compute (mono
+        // sensor, all-zero frame, etc — leaves wb untouched).
+        _computeAutoWB(pixels, width, height, bayerPattern) {
+            // Mono sensors (BayerPattern = None / 0) don't have R/G/B
+            // separation to balance. Same for malformed inputs.
+            if (!bayerPattern || bayerPattern < 1 || bayerPattern > 4) return false;
+            if (!pixels || width < 4 || height < 4) return false;
+
+            let sumR = 0, sumG = 0, sumB = 0;
+            let nR = 0, nG = 0, nB = 0;
+            // Walk 2x2 super-pixels with stride. stride=8 gives one
+            // sample per 16×16 pixel patch — enough to converge on
+            // gray-world without iterating every pixel.
+            const stride = 8;
+            for (let y = 0; y + 1 < height; y += 2 * stride) {
+                for (let x = 0; x + 1 < width; x += 2 * stride) {
+                    const p00 = pixels[y * width + x];
+                    const p10 = pixels[y * width + x + 1];
+                    const p01 = pixels[(y + 1) * width + x];
+                    const p11 = pixels[(y + 1) * width + x + 1];
+                    // Skip pure-black super-pixels (subframe edges,
+                    // unfilled live-stack accumulator cells). Without
+                    // this a frame with a big dark border would drag
+                    // every channel mean toward zero and explode the
+                    // gain ratios.
+                    if (p00 === 0 && p10 === 0 && p01 === 0 && p11 === 0) continue;
+                    switch (bayerPattern) {
+                        case 1: // RGGB
+                            sumR += p00; nR++;
+                            sumG += p10 + p01; nG += 2;
+                            sumB += p11; nB++;
+                            break;
+                        case 2: // BGGR
+                            sumB += p00; nB++;
+                            sumG += p10 + p01; nG += 2;
+                            sumR += p11; nR++;
+                            break;
+                        case 3: // GBRG
+                            sumG += p00 + p11; nG += 2;
+                            sumB += p10; nB++;
+                            sumR += p01; nR++;
+                            break;
+                        case 4: // GRBG
+                            sumG += p00 + p11; nG += 2;
+                            sumR += p10; nR++;
+                            sumB += p01; nB++;
+                            break;
+                    }
+                }
+            }
+            if (nR === 0 || nG === 0 || nB === 0) return false;
+            const meanR = sumR / nR;
+            const meanG = sumG / nG;
+            const meanB = sumB / nB;
+            // Guard against division explosion on (nearly) black
+            // channels. Below ~10 ADU is noise floor; computing a
+            // gain from that produces unhelpful 200× numbers.
+            if (meanR < 10 || meanB < 10 || meanG < 10) return false;
+            // Clamp the gain to a sane operating window. 0.3..3.0
+            // covers every realistic OSC daylight + nightscape;
+            // anything outside is probably bogus.
+            const newR = Math.min(3.0, Math.max(0.3, meanG / meanR));
+            const newB = Math.min(3.0, Math.max(0.3, meanG / meanB));
+            this.wb.r = newR;
+            this.wb.b = newB;
+            return true;
+        },
+
+        // Manual "Auto WB now" button handler. Recomputes against the
+        // last raw frame + immediately re-renders so the user sees
+        // the result without waiting for the next capture.
+        autoWbNow() {
+            const f = this._lastRawFrame;
+            if (!f) {
+                this.toast('No frame yet — take a snap first.', 'warn');
+                return;
+            }
+            const ok = this._computeAutoWB(f.pixels, f.width, f.height, f.bayerPattern);
+            if (ok) {
+                this.applyWb();
+                this.persistWb();
+                this.toast('White balance: R=' + this.wb.r.toFixed(2)
+                    + ', B=' + this.wb.b.toFixed(2), 'ok');
+            } else {
+                this.toast('Could not compute auto WB (mono sensor or '
+                    + 'empty frame).', 'warn');
+            }
+        },
+
+        // Reset display WB to the neutral defaults that work for most
+        // daylight OSC captures (1.7 / 1.5 — calibrated against
+        // ZWO / QHY OSC sensors with no IR cut on a typical scope).
+        resetWb() {
+            this.wb.r = 1.7;
+            this.wb.b = 1.5;
+            this.wb.auto = false;
+            this.applyWb();
+            this.persistWb();
+        },
+
+        // Persist wb to localStorage so the setting survives reloads.
+        // Storage key matches the other UI settings.
+        persistWb() {
+            try {
+                localStorage.setItem('polaris-wb', JSON.stringify({
+                    r: this.wb.r, b: this.wb.b, auto: !!this.wb.auto
+                }));
+            } catch { /* private mode / quota */ }
+        },
+
+        // Load saved WB from localStorage. Called from _initCore on
+        // boot so user choices stick. Defaults preserved on missing /
+        // malformed storage.
+        loadWb() {
+            try {
+                const raw = localStorage.getItem('polaris-wb');
+                if (!raw) return;
+                const j = JSON.parse(raw);
+                if (typeof j.r === 'number' && j.r > 0) this.wb.r = j.r;
+                if (typeof j.b === 'number' && j.b > 0) this.wb.b = j.b;
+                if (typeof j.auto === 'boolean') this.wb.auto = j.auto;
+            } catch { /* malformed; leave defaults */ }
+        },
+
         // ----- WebGL renderer (debayer + MTF stretch on GPU) -----
         // State held on the Alpine instance so it survives across frames.
         // _gl, _glProgram, _glLocs, _glTexture, _glCanvas
@@ -3903,8 +4056,14 @@ function ninaApp() {
             // in PREVIEW). Server-side WB writes via /api/camera/
             // white-balance still happen too, these multipliers
             // stack on top for client-side preview correction.
-            gl.uniform1f(this._glLocs.wbR, this.previewWbR ?? 1.7);
-            gl.uniform1f(this._glLocs.wbB, this.previewWbB ?? 1.5);
+            // Shared WB state (this.wb.{r,b}). previewWbR / previewWbB
+            // were the legacy fallback names — kept here as a final
+            // safety net so any legacy debug poke from the console
+            // still works, but the canonical source is wb.{r,b}.
+            gl.uniform1f(this._glLocs.wbR,
+                this.wb?.r ?? this.previewWbR ?? 1.7);
+            gl.uniform1f(this._glLocs.wbB,
+                this.wb?.b ?? this.previewWbB ?? 1.5);
 
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
@@ -4307,6 +4466,21 @@ function ninaApp() {
             // stretch slider changes re-render against the latest
             // accumulator without waiting for the next capture.
             this._lastRawFrame = { pixels, width, height, bitDepth, bayerPattern, maxVal };
+
+            // Auto WB: when enabled, recompute gain ratios from the
+            // current frame at most every ~2s so we don't burn CPU
+            // re-balancing every video frame. The shader picks up the
+            // updated wb.r / wb.b the next time uniforms are set,
+            // which happens immediately below in _tryRenderWebGL.
+            if (this.wb?.auto && bayerPattern) {
+                const tNow = performance.now();
+                if (!this._wbLastAutoAt || tNow - this._wbLastAutoAt > 2000) {
+                    this._wbLastAutoAt = tNow;
+                    if (this._computeAutoWB(pixels, width, height, bayerPattern)) {
+                        this.persistWb();
+                    }
+                }
+            }
 
             const { shadow, scaleFactor, midtone } =
                 this._computeStretchParams(pixels, maxVal);
