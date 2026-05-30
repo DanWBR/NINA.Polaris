@@ -55,14 +55,23 @@ public sealed class AscomComStaDispatcher : IDisposable {
         // signal readiness before the first dequeue so awaiters on
         // ReadyAsync don't race the first queued work.
         _ready.TrySetResult();
-        foreach (var action in _queue.GetConsumingEnumerable()) {
-            try { action(); }
-            catch {
-                // Per-call exceptions are propagated through the
-                // per-call TaskCompletionSource by Invoke* helpers,
-                // anything that escapes here is bookkeeping noise we
-                // swallow to keep the pump alive.
+        try {
+            foreach (var action in _queue.GetConsumingEnumerable()) {
+                try { action(); }
+                catch {
+                    // Per-call exceptions are propagated through the
+                    // per-call TaskCompletionSource by Invoke* helpers,
+                    // anything that escapes here is bookkeeping noise we
+                    // swallow to keep the pump alive.
+                }
             }
+        } catch (ObjectDisposedException) {
+            // Race-safe shutdown signal: Dispose() can race the pump's
+            // internal TryTake call (the foreach lowers to a
+            // TryTakeWithNoTimeValidation that can throw if the
+            // BlockingCollection is disposed mid-take). Treat the
+            // exception as the legitimate "queue is gone, exit"
+            // signal — the pump is shutting down either way.
         }
     }
 
@@ -95,12 +104,21 @@ public sealed class AscomComStaDispatcher : IDisposable {
     public void Dispose() {
         if (_disposed) return;
         _disposed = true;
-        _queue.CompleteAdding();
+        // CompleteAdding lets the pump's foreach exit cleanly: the
+        // next TryTake sees IsAddingCompleted + empty, MoveNext
+        // returns false, foreach exits, thread terminates.
+        try { _queue.CompleteAdding(); } catch { }
         // Best-effort join so the COM teardown on the STA thread
         // (driver Disconnect + ReleaseComObject) actually runs before
         // the process moves on. 2 s ceiling, hung drivers shouldn't
         // wedge shutdown.
         try { _thread.Join(TimeSpan.FromSeconds(2)); } catch { }
-        _queue.Dispose();
+        // Deliberately NOT calling _queue.Dispose() here.
+        // BlockingCollection.Dispose races with any pump iteration
+        // that's currently inside its internal TryTake (the foreach
+        // body in Pump), producing ObjectDisposedException on the
+        // pump thread. CompleteAdding + Join is enough to drain the
+        // queue cleanly; the BlockingCollection itself becomes GC-
+        // unreachable as soon as this dispatcher is collected.
     }
 }
