@@ -3462,6 +3462,23 @@ function ninaApp() {
             // singularity at x = m / (2m-1).
             midtone = Math.min(0.999, Math.max(0.001, midtone));
 
+            // Throttled diagnostic — last-resort debugging when the
+            // canvas comes out black or the displayed image looks off.
+            // Logs once every ~2s so live-stacking doesn't spam.
+            const nowMs = performance.now();
+            if (!this._stretchLogAt || nowMs - this._stretchLogAt > 2000) {
+                this._stretchLogAt = nowMs;
+                const minV = sorted[0];
+                const maxV = sorted[sorted.length - 1];
+                console.log('[Polaris stretch]',
+                    `samples=${sorted.length}`,
+                    `min=${minV} max=${maxV}`,
+                    `median=${median.toFixed(0)} MAD=${mad.toFixed(0)}`,
+                    `shadow=${shadow.toFixed(0)}`,
+                    `xMed=${xMed.toFixed(4)}`,
+                    `midtone=${midtone.toFixed(4)}`);
+            }
+
             return {
                 shadow,
                 scaleFactor: maxVal > shadow ? 1.0 / (maxVal - shadow) : 1.0,
