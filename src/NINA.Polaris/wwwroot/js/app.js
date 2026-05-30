@@ -3392,23 +3392,81 @@ function ninaApp() {
             }
         },
 
-        // Compute shadow/scale either from manual sliders or auto-stretch (median+MAD)
+        // PixInsight MTF (used by both _computeStretchParams and
+        // the WebGL shader). f(x;m) = (m-1)x / ((2m-1)x - m).
+        // Properties: f(0;m)=0, f(1;m)=1, f(m;m)=0.5.
+        _mtf(x, m) {
+            if (x <= 0) return 0;
+            if (x >= 1) return 1;
+            if (m <= 0) return 1;
+            if (m >= 1) return 0;
+            return ((m - 1) * x) / ((2 * m - 1) * x - m);
+        },
+
+        // Compute shadow / scale / midtone for the WebGL stretch.
+        //
+        // Returns three values consumed by the fragment shader:
+        //   shadow      — black point, in raw ADU. Pixels below
+        //                 this get clipped to 0.
+        //   scaleFactor — 1 / (white - shadow). Maps the [shadow,
+        //                 white] window onto [0, 1] for the MTF.
+        //   midtone     — MTF parameter, 0..1. m=0.5 is identity;
+        //                 smaller stretches shadows (typical DSO).
+        //
+        // The previous version computed only shadow + scaleFactor
+        // and let the shader run its own MTF against a hardcoded
+        // 0.25 default. Combined with a broken MTF formula in the
+        // shader, the visible result was a near-linear stretch:
+        // the median sat at ~30% gray and faint structure stayed
+        // washed out. Now we port the same GraXpert "15% Bg, 3σ"
+        // preset the server-side AutoStretch.cs uses, so live-stack
+        // previews look like the FILES / STUDIO thumbnails.
         _computeStretchParams(pixels, maxVal) {
             if (!this.stretchAuto) {
                 const shadow = this.stretchBlack * maxVal;
                 const white = Math.max(shadow + 1, this.stretchWhite * maxVal);
-                return { shadow, scaleFactor: 1.0 / (white - shadow) };
+                const midtone = Math.min(0.999, Math.max(0.001,
+                    this.stretchMid || 0.25));
+                return { shadow, scaleFactor: 1.0 / (white - shadow), midtone };
             }
-            // Subsample for speed
+            // Subsample for speed, exclude saturated 0 / max so a
+            // big black border (subframe, un-touched live-stack
+            // accumulator cells) doesn't drag the median to 0.
             const step = Math.max(1, Math.floor(pixels.length / 200000));
-            const sample = new Float32Array(Math.floor(pixels.length / step));
-            for (let i = 0, j = 0; j < sample.length; i += step, j++) sample[j] = pixels[i];
-            const sorted = sample.slice().sort();
+            const sampleArr = [];
+            for (let i = 0; i < pixels.length; i += step) {
+                const v = pixels[i];
+                if (v === 0 || v >= maxVal) continue;
+                sampleArr.push(v);
+            }
+            if (sampleArr.length === 0) {
+                return { shadow: 0, scaleFactor: 1.0 / maxVal, midtone: 0.15 };
+            }
+            const sorted = Float32Array.from(sampleArr).sort();
             const median = sorted[Math.floor(sorted.length * 0.5)];
-            const deviations = Float32Array.from(sorted, v => Math.abs(v - median)).sort();
-            const mad = deviations[Math.floor(deviations.length * 0.5)] * 1.4826;
-            const shadow = Math.max(0, median - 2.8 * mad);
-            return { shadow, scaleFactor: maxVal > shadow ? 1.0 / (maxVal - shadow) : 1.0 };
+            const devs = Float32Array.from(sorted, v => Math.abs(v - median)).sort();
+            const mad = devs[Math.floor(devs.length * 0.5)];
+
+            const shadow = Math.max(0, median - 3.0 * mad);
+            // GraXpert: midtone = MTF(x_med, target_bg) where
+            // x_med = (median - shadow) / (maxVal - shadow).
+            // Setting target_bg = 0.15 lands the median at 15%
+            // gray in the output — matches the AutoStretch.cs +
+            // GraXpert default that the editor / thumbnails use.
+            const targetBg = 0.15;
+            const denom = Math.max(1, maxVal - shadow);
+            const xMed = Math.max(0, (median - shadow) / denom);
+            let midtone = this._mtf(xMed, targetBg);
+            // Clamp tightly so the shader can't divide-by-zero
+            // when the midtone falls exactly on the (m-1)x - m
+            // singularity at x = m / (2m-1).
+            midtone = Math.min(0.999, Math.max(0.001, midtone));
+
+            return {
+                shadow,
+                scaleFactor: maxVal > shadow ? 1.0 / (maxVal - shadow) : 1.0,
+                midtone
+            };
         },
 
         // Re-render the cached last frame with current stretch settings.
@@ -3416,8 +3474,10 @@ function ninaApp() {
         applyManualStretch() {
             const f = this._lastRawFrame;
             if (!f) return;
-            const { shadow, scaleFactor } = this._computeStretchParams(f.pixels, f.maxVal);
-            this._tryRenderWebGL(f.pixels, f.width, f.height, f.bitDepth, f.bayerPattern, shadow, scaleFactor);
+            const { shadow, scaleFactor, midtone } =
+                this._computeStretchParams(f.pixels, f.maxVal);
+            this._tryRenderWebGL(f.pixels, f.width, f.height, f.bitDepth,
+                f.bayerPattern, shadow, scaleFactor, midtone);
         },
 
         // ----- WebGL renderer (debayer + MTF stretch on GPU) -----
@@ -3494,8 +3554,18 @@ function ninaApp() {
                 float stretch(float v) {
                     float n = max(0.0, (v - u_shadow) * u_scale);
                     n = clamp(n, 0.0, 1.0);
-                    // MTF: y = (m*x) / ((2m - 1)*x - m + 1) for m∈(0,1)
-                    return (u_mtf * n) / ((u_mtf - 1.0) * n - u_mtf + 1.0 + 1e-12);
+                    // PixInsight MTF: y = (m-1)*x / ((2m-1)*x - m)
+                    // Properties: f(0;m)=0, f(1;m)=1, f(m;m)=0.5.
+                    // m=0.5 is identity; m<0.5 stretches shadows
+                    // (typical DSO preset is m≈0.15..0.30).
+                    //
+                    // Previous shader used (m*x) / ((m-1)x - m + 1)
+                    // which is a different (broken) parameterisation,
+                    // f(0.5; 0.5) came out as 1.0 instead of 0.5, so
+                    // the midtone was effectively ignored and the
+                    // image looked dim + pale.
+                    float denom = (2.0 * u_mtf - 1.0) * n - u_mtf;
+                    return ((u_mtf - 1.0) * n) / (denom - 1e-12);
                 }
 
                 void main() {
@@ -3579,7 +3649,7 @@ function ninaApp() {
             return true;
         },
 
-        _tryRenderWebGL(pixels, width, height, bitDepth, bayerPattern, shadow, scaleFactor) {
+        _tryRenderWebGL(pixels, width, height, bitDepth, bayerPattern, shadow, scaleFactor, midtone) {
             if (!this._initWebGL()) return false;
             const gl = this._gl;
             const canvas = document.getElementById('liveCanvas');
@@ -3626,7 +3696,16 @@ function ninaApp() {
             gl.uniform2f(this._glLocs.texSize, width, height);
             gl.uniform1f(this._glLocs.shadow, shadow);
             gl.uniform1f(this._glLocs.scale, scaleFactor);
-            gl.uniform1f(this._glLocs.mtf, this.stretchMid || 0.25);
+            // Midtone parameter for the PixInsight MTF in the
+            // fragment shader. Caller supplies it (auto-stretch
+            // path computes from median+MAD using GraXpert's
+            // "15% Bg" preset; manual path uses the user slider).
+            // Fall back to 0.25 if the caller didn't pass one,
+            // keeps any legacy call sites safe.
+            const mtfParam = (typeof midtone === 'number' && isFinite(midtone))
+                ? Math.min(0.999, Math.max(0.001, midtone))
+                : Math.min(0.999, Math.max(0.001, this.stretchMid || 0.25));
+            gl.uniform1f(this._glLocs.mtf, mtfParam);
             gl.uniform1i(this._glLocs.bayer, bayerPattern | 0);
             // Per-channel WB gain. Defaults give a roughly neutral
             // daylight look on raw OSC data; users can tune via the
@@ -4008,10 +4087,12 @@ function ninaApp() {
             // accumulator without waiting for the next capture.
             this._lastRawFrame = { pixels, width, height, bitDepth, bayerPattern, maxVal };
 
-            const { shadow, scaleFactor } = this._computeStretchParams(pixels, maxVal);
+            const { shadow, scaleFactor, midtone } =
+                this._computeStretchParams(pixels, maxVal);
 
             // Try WebGL2 path first (GPU does debayer + stretch in microseconds)
-            if (this._tryRenderWebGL(pixels, width, height, bitDepth, bayerPattern, shadow, scaleFactor)) {
+            if (this._tryRenderWebGL(pixels, width, height, bitDepth,
+                    bayerPattern, shadow, scaleFactor, midtone)) {
                 return;
             }
 
