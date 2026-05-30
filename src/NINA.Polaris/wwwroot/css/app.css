@@ -1892,6 +1892,130 @@ label select.input-sm {
     .files-left, .files-right { flex: 1 1 auto; }
 }
 
+/* UNIF-2: Stack workspace slot cards. Lives inside .files-right-
+   pane.stack-pane. Each slot is a <details> so the user can
+   collapse the big lights list when they're working on darks.
+   Item rows show only the basename (path goes to the title
+   attribute for hover) -- absolute paths blow up the card width. */
+.stack-pane { display: flex; flex-direction: column; }
+.stack-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.stack-title {
+    margin: 0;
+    flex: 1;
+    color: var(--text-primary);
+    font-size: 15px;
+    font-weight: 600;
+}
+.stack-slot {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 10px;
+    padding: 10px 12px;
+}
+.stack-slot[open] { padding-bottom: 12px; }
+.stack-slot-head {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    user-select: none;
+}
+.stack-slot-head::-webkit-details-marker { display: none; }
+.stack-slot-head::before {
+    content: '▸';
+    color: var(--text-muted);
+    font-size: 10px;
+    transition: transform 0.15s;
+}
+.stack-slot[open] .stack-slot-head::before {
+    transform: rotate(90deg);
+}
+.stack-slot-label {
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: 13px;
+}
+.stack-slot-count {
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+}
+.stack-slot-hint {
+    flex: 1;
+    color: var(--text-muted);
+    font-size: 11px;
+    text-align: right;
+}
+.stack-slot-actions {
+    display: flex;
+    gap: 6px;
+    margin: 8px 0;
+}
+.stack-slot-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 180px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-secondary);
+}
+.stack-slot-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    font-size: 12px;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border);
+}
+.stack-slot-item:last-child { border-bottom: none; }
+.stack-slot-name {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+}
+.stack-slot-remove {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0 4px;
+    border-radius: 3px;
+}
+.stack-slot-remove:hover {
+    color: var(--text-warn, #ef4444);
+    background: rgba(239, 68, 68, 0.1);
+}
+.stack-slot-empty {
+    color: var(--text-muted);
+    font-size: 12px;
+    font-style: italic;
+    margin: 6px 0 0;
+}
+.stack-actions-placeholder {
+    margin-top: 16px;
+    padding: 12px;
+    background: var(--bg-primary);
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    text-align: center;
+}
+
 /* Address row: roots dropdown + breadcrumbs + hidden toggle. */
 .files-addr {
     display: flex;

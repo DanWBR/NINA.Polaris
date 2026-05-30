@@ -7426,13 +7426,76 @@
                      the OpenSeadragon viewer + sliders moved over
                      from the legacy EDITOR tab. -->
                 <aside class="files-right">
-                    <div x-show="filesSubTab === 'stack'" class="files-right-pane">
-                        <div class="files-right-placeholder">
-                            <h3>Stack workspace</h3>
+                    <!-- UNIF-2: Stack workspace. Four slot cards
+                         (lights/darks/flats/biases) populated by
+                         the "+ Adicionar selecao" button -- it pulls
+                         from files.selectedPaths, filters non-FITS,
+                         dedupes, and clears the browser selection
+                         for visual feedback. Lists scroll inside the
+                         card so long sessions stay manageable.
+                         UNIF-3 will fill in the Actions toolbar with
+                         Master/Calibrate/Integrate/Combine/ColorCal/
+                         Siril wiring. -->
+                    <div x-show="filesSubTab === 'stack'" class="files-right-pane stack-pane">
+                        <div class="stack-header">
+                            <h3 class="stack-title">Stack workspace</h3>
+                            <button class="btn btn-sm"
+                                    @click="stackClearAll()"
+                                    :disabled="stackSlotDefs.every(d => stack[d.key].length === 0)
+                                              && stack.masterDarks.length === 0
+                                              && stack.masterFlats.length === 0
+                                              && stack.masterBiases.length === 0">
+                                Clear all
+                            </button>
+                        </div>
+
+                        <template x-for="def in stackSlotDefs" :key="def.key">
+                            <details class="stack-slot" open>
+                                <summary class="stack-slot-head">
+                                    <span class="stack-slot-label" x-text="def.label"></span>
+                                    <span class="stack-slot-count"
+                                          x-text="'(' + stack[def.key].length + ')'"></span>
+                                    <span class="stack-slot-hint" x-text="def.hint"></span>
+                                </summary>
+                                <div class="stack-slot-actions">
+                                    <button class="btn btn-sm btn-primary"
+                                            @click="stackAddToSlot(def.key)"
+                                            :disabled="files.selectedPaths.length === 0"
+                                            :title="files.selectedPaths.length === 0
+                                                ? 'Selecione FITS no navegador primeiro'
+                                                : 'Adicionar ' + files.selectedPaths.length + ' selecionado(s) a ' + def.label">
+                                        + Adicionar selecao
+                                    </button>
+                                    <button class="btn btn-sm"
+                                            @click="stackClearSlot(def.key)"
+                                            :disabled="stack[def.key].length === 0">
+                                        Clear
+                                    </button>
+                                </div>
+                                <ul class="stack-slot-list" x-show="stack[def.key].length > 0">
+                                    <template x-for="path in stack[def.key]" :key="path">
+                                        <li class="stack-slot-item" :title="path">
+                                            <span class="stack-slot-name"
+                                                  x-text="stackBasename(path)"></span>
+                                            <button class="stack-slot-remove"
+                                                    @click="stackRemoveFromSlot(def.key, path)"
+                                                    title="Remover do slot">×</button>
+                                        </li>
+                                    </template>
+                                </ul>
+                                <p class="stack-slot-empty"
+                                   x-show="stack[def.key].length === 0">
+                                    Selecione frames no navegador a esquerda
+                                    e clique "+ Adicionar selecao".
+                                </p>
+                            </details>
+                        </template>
+
+                        <div class="stack-actions-placeholder">
                             <p class="text-muted">
-                                Select frames in the browser then assign
-                                them to Lights / Darks / Flats / Biases
-                                slots. Filled in by UNIF-2.
+                                Actions toolbar (Master / Calibrate /
+                                Integrate / Combine / ColorCal /
+                                Siril) chega em UNIF-3.
                             </p>
                         </div>
                     </div>
@@ -9847,7 +9910,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          development that this is a per-commit nuisance, but the cost
          of users running stale JS for hours (with FrameKind routing
          bugs ending up on the wrong canvas) is higher. -->
-    <script src="/js/app.js?v=20260530-unif1"></script>
+    <script src="/js/app.js?v=20260530-unif2"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

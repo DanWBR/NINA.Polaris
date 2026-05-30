@@ -1145,6 +1145,140 @@ function ninaApp() {
             catch (e) { /* private mode / quota */ }
         },
 
+        // UNIF-2: Stack workspace state. Four user-classified slots
+        // (lights/darks/flats/biases) hold absolute paths added via
+        // the "+ Adicionar selecao" button on each card. Three
+        // optional master-frame slots let users plug an existing
+        // master_dark/flat/bias into Calibrate without having to
+        // recreate it. activeJob mirrors the polling pattern of the
+        // old STUDIO jobs panel (job id + progress %).
+        //
+        // Persisted as a whole object in localStorage so a refresh
+        // or server restart doesn't wipe the user's day of curating.
+        // Migration safe: missing keys read as []; unexpected types
+        // get coerced to [] on load.
+        stack: (() => {
+            const empty = {
+                lights: [], darks: [], flats: [], biases: [],
+                masterDarks: [], masterFlats: [], masterBiases: [],
+                activeJob: null
+            };
+            try {
+                if (typeof localStorage === 'undefined') return empty;
+                const raw = localStorage.getItem('polaris-stack-slots');
+                if (!raw) return empty;
+                const parsed = JSON.parse(raw);
+                for (const k of Object.keys(empty)) {
+                    if (k === 'activeJob') continue;
+                    if (!Array.isArray(parsed[k])) parsed[k] = [];
+                }
+                parsed.activeJob = null;   // job state is session-scoped
+                return parsed;
+            } catch (e) { return empty; }
+        })(),
+
+        // Slot metadata used by both the Add buttons and the slot
+        // cards. Keeping the labels Portuguese-first because that's
+        // where the rest of the UI lives ("Lights" stays English
+        // since that's the astrophotography term users recognise).
+        stackSlotDefs: [
+            { key: 'lights', label: 'Lights', hint: 'Frames de captura (alvo)' },
+            { key: 'darks',  label: 'Darks',  hint: 'Calibracao termica (mesma exp + gain dos lights)' },
+            { key: 'flats',  label: 'Flats',  hint: 'Calibracao optica (vignetting + poeira)' },
+            { key: 'biases', label: 'Biases', hint: 'Calibracao de read noise (exposicao minima)' }
+        ],
+
+        _stackPersist() {
+            try {
+                if (typeof localStorage === 'undefined') return;
+                const snap = {
+                    lights: this.stack.lights,
+                    darks: this.stack.darks,
+                    flats: this.stack.flats,
+                    biases: this.stack.biases,
+                    masterDarks: this.stack.masterDarks,
+                    masterFlats: this.stack.masterFlats,
+                    masterBiases: this.stack.masterBiases
+                };
+                localStorage.setItem('polaris-stack-slots', JSON.stringify(snap));
+            } catch (e) { /* quota / private mode */ }
+        },
+
+        // Only FITS / XISF-like files belong in stacking slots. Reject
+        // dirs + non-image extensions silently when the user multi-
+        // selects a mixed bag and clicks Add.
+        _stackIsStackable(path) {
+            if (!path) return false;
+            const lower = path.toLowerCase();
+            return lower.endsWith('.fits') || lower.endsWith('.fit')
+                || lower.endsWith('.fts') || lower.endsWith('.xisf');
+        },
+
+        // Push current browser selection into a slot (with dedupe),
+        // clear the browser selection so the user gets visual
+        // feedback that the assignment happened, persist, toast a
+        // summary. Rejects when no .fits/.fit/.xisf in the selection.
+        stackAddToSlot(slotKey) {
+            if (!Array.isArray(this.stack[slotKey])) return;
+            const selected = (this.files.selectedPaths || [])
+                .filter(p => this._stackIsStackable(p));
+            if (selected.length === 0) {
+                this.toast('Selecione FITS no navegador antes de adicionar', 'warn');
+                return;
+            }
+            const before = this.stack[slotKey].length;
+            const merged = [...this.stack[slotKey]];
+            const seen = new Set(merged);
+            for (const p of selected) {
+                if (!seen.has(p)) { merged.push(p); seen.add(p); }
+            }
+            const added = merged.length - before;
+            const dupes = selected.length - added;
+            this.stack[slotKey] = merged;
+            this._stackPersist();
+            this.files.selectedPaths = [];
+            const slotDef = this.stackSlotDefs.find(s => s.key === slotKey);
+            const label = slotDef ? slotDef.label : slotKey;
+            const msg = `${added} adicionado(s) a ${label}`
+                + (dupes > 0 ? ` (${dupes} ja estava(m) no slot)` : '');
+            this.toast(msg, added > 0 ? 'ok' : 'info', 2400);
+        },
+
+        stackRemoveFromSlot(slotKey, path) {
+            if (!Array.isArray(this.stack[slotKey])) return;
+            this.stack[slotKey] = this.stack[slotKey].filter(p => p !== path);
+            this._stackPersist();
+        },
+
+        stackClearSlot(slotKey) {
+            if (!Array.isArray(this.stack[slotKey])) return;
+            if (this.stack[slotKey].length === 0) return;
+            if (!confirm(`Limpar slot ${slotKey} (${this.stack[slotKey].length} arquivos)?`)) return;
+            this.stack[slotKey] = [];
+            this._stackPersist();
+        },
+
+        stackClearAll() {
+            const total = this.stackSlotDefs.reduce(
+                (s, def) => s + this.stack[def.key].length, 0);
+            if (total === 0) return;
+            if (!confirm(`Limpar TODOS os slots (${total} arquivos)?`)) return;
+            for (const def of this.stackSlotDefs) this.stack[def.key] = [];
+            this.stack.masterDarks = [];
+            this.stack.masterFlats = [];
+            this.stack.masterBiases = [];
+            this._stackPersist();
+            this.toast('Slots limpos', 'ok');
+        },
+
+        // Pretty short name from an absolute path (just the filename).
+        // Used by the slot cards to keep the list scannable.
+        stackBasename(path) {
+            if (!path) return '';
+            const i = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+            return i >= 0 ? path.slice(i + 1) : path;
+        },
+
         // External tools (Siril + GraXpert). status is the snapshot
         // from /api/{tool}/status; scripts is the script catalogue.
         // jobs (later) will hold active Siril/GraXpert job summaries.
