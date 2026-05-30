@@ -925,18 +925,28 @@ body {
 }
 .polaris-shutter .shutter-countdown {
     position: absolute;
-    bottom: -22px;
+    /* Pushed down a hair more so the bigger text still clears the
+       shutter ring without overlapping the SVG progress arc. */
+    bottom: -28px;
     left: 50%;
     transform: translateX(-50%);
-    font-size: 12px;
+    /* Bumped from 12px → 17px. User reported the previous size was
+       hard to read at a glance during long exposures — the counter
+       is the primary 'how much time left' signal so it should pop. */
+    font-size: 17px;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
     color: var(--text-secondary);
     white-space: nowrap;
     pointer-events: none;
+    /* Subtle glow so the larger number stays legible over any
+       canvas-bleed background (PREVIEW / FOCUS panels render close
+       to the shutter sidebar on tight mobile layouts). */
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 .polaris-shutter.shutter-active .shutter-countdown {
     color: #fca5a5;
-    font-weight: 600;
+    font-weight: 700;
 }
 
 /* Indeterminate spinner for cases where there is no known total
