@@ -7200,10 +7200,30 @@
             <div x-show="tab === 'files'" class="tab-panel files-panel">
                 <div class="panel-header">
                     Files
+                    <!-- UNIF-1: sub-tab pills. Stack = old STUDIO
+                         workflow (slot-based stacking), Edit = old
+                         EDITOR workflow (single-FITS sliders). The
+                         file browser to the left is shared between
+                         both -- it's the source of files for either
+                         workspace. -->
+                    <span class="files-subtabs">
+                        <button class="files-subtab-pill"
+                                :class="{ active: filesSubTab === 'stack' }"
+                                @click="setFilesSubTab('stack')">Stack</button>
+                        <button class="files-subtab-pill"
+                                :class="{ active: filesSubTab === 'edit' }"
+                                @click="setFilesSubTab('edit')">Edit</button>
+                    </span>
+                    <span style="flex:1"></span>
                     <span class="status-indicator-sm"
                           :class="files.loading ? 'warn' : (files.error ? 'error' : 'ok')"
                           x-text="files.loading ? 'loading…' : (files.error || files.cwd || 'no path')"></span>
                 </div>
+
+                <!-- UNIF-1: 2-col split. Left holds the shared file
+                     browser, right swaps content by filesSubTab. -->
+                <div class="files-pane-split">
+                <div class="files-left">
 
                 <!-- Address bar: roots dropdown + path crumbs + reload -->
                 <div class="files-addr">
@@ -7398,6 +7418,36 @@
                         ⭐ Studio root: <code x-text="settings.imageOutputDir"></code>
                     </span>
                 </div>
+
+                </div><!-- /.files-left -->
+
+                <!-- UNIF-1: right pane. UNIF-2 fills Stack with slot
+                     cards + action toolbar; UNIF-5 fills Edit with
+                     the OpenSeadragon viewer + sliders moved over
+                     from the legacy EDITOR tab. -->
+                <aside class="files-right">
+                    <div x-show="filesSubTab === 'stack'" class="files-right-pane">
+                        <div class="files-right-placeholder">
+                            <h3>Stack workspace</h3>
+                            <p class="text-muted">
+                                Select frames in the browser then assign
+                                them to Lights / Darks / Flats / Biases
+                                slots. Filled in by UNIF-2.
+                            </p>
+                        </div>
+                    </div>
+                    <div x-show="filesSubTab === 'edit'" class="files-right-pane">
+                        <div class="files-right-placeholder">
+                            <h3>Edit workspace</h3>
+                            <p class="text-muted">
+                                Single-FITS non-destructive editor.
+                                Filled in by UNIF-5.
+                            </p>
+                        </div>
+                    </div>
+                </aside>
+
+                </div><!-- /.files-pane-split -->
             </div>
 
             <!-- Files: text preview modal -->
@@ -9797,7 +9847,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          development that this is a per-commit nuisance, but the cost
          of users running stale JS for hours (with FrameKind routing
          bugs ending up on the wrong canvas) is higher. -->
-    <script src="/js/app.js?v=20260530-rerenderkind"></script>
+    <script src="/js/app.js?v=20260530-unif1"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

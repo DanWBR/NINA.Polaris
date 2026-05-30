@@ -1810,6 +1810,88 @@ label select.input-sm {
     overflow: hidden;
 }
 
+/* UNIF-1: sub-tab pills sit inline in the panel header,
+   immediately after the "Files" label. Pill styling mirrors the
+   existing .video-tabstrip pattern used by the AUTORUN tab so the
+   whole app keeps one tabstrip vocabulary. Active pill gets the
+   accent fill + text bump; idle pills stay subtle so they don't
+   compete with the panel title. */
+.files-subtabs {
+    display: inline-flex;
+    gap: 4px;
+    margin-left: 14px;
+}
+.files-subtab-pill {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.files-subtab-pill:hover {
+    color: var(--text-primary);
+    border-color: var(--text-muted);
+}
+.files-subtab-pill.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+
+/* UNIF-1: 2-col split. Browser left fixed flex-basis, right pane
+   grows to fill remaining space. Mobile (<900 px) stacks into a
+   single column with the right pane below. Workspace panes inside
+   .files-right swap via x-show on filesSubTab. */
+.files-pane-split {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: row;
+    min-height: 0;
+    gap: 12px;
+    padding: 0 12px 12px;
+    overflow: hidden;
+}
+.files-left {
+    flex: 1 1 480px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+.files-right {
+    flex: 1 1 420px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.files-right-pane {
+    flex: 1 1 auto;
+    overflow: auto;
+    padding: 16px;
+}
+.files-right-placeholder {
+    color: var(--text-secondary);
+    text-align: center;
+    margin-top: 60px;
+}
+.files-right-placeholder h3 {
+    color: var(--text-primary);
+    margin: 0 0 8px;
+}
+@media (max-width: 900px) {
+    .files-pane-split { flex-direction: column; }
+    .files-left, .files-right { flex: 1 1 auto; }
+}
+
 /* Address row: roots dropdown + breadcrumbs + hidden toggle. */
 .files-addr {
     display: flex;

@@ -1124,6 +1124,27 @@ function ninaApp() {
         },
         _filesLastShiftIndex: -1,    // anchor for shift-click range selection
 
+        // UNIF-1: FILES panel sub-tab. The merged tab contains two
+        // workspaces that share the browser to the left:
+        //   'stack' -- the old STUDIO workflow: classify selected
+        //              files into lights/darks/flats/biases slots,
+        //              then trigger Master/Calibrate/Integrate/...
+        //   'edit'  -- the old EDITOR workflow: load a single FITS
+        //              into OpenSeadragon + sliders.
+        // Persisted to localStorage so the user returns to the
+        // last-used workspace on reload.
+        filesSubTab: (typeof localStorage !== 'undefined'
+            && (localStorage.getItem('polaris-files-subtab') === 'edit'
+                || localStorage.getItem('polaris-files-subtab') === 'stack'))
+            ? localStorage.getItem('polaris-files-subtab')
+            : 'stack',
+        setFilesSubTab(name) {
+            if (name !== 'stack' && name !== 'edit') return;
+            this.filesSubTab = name;
+            try { localStorage.setItem('polaris-files-subtab', name); }
+            catch (e) { /* private mode / quota */ }
+        },
+
         // External tools (Siril + GraXpert). status is the snapshot
         // from /api/{tool}/status; scripts is the script catalogue.
         // jobs (later) will hold active Siril/GraXpert job summaries.
