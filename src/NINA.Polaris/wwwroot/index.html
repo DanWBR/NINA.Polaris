@@ -474,7 +474,13 @@
             <!-- Editor: Lightroom-style non-destructive editor for masters,
                  raster files, and uploads. Lives next to STUDIO because
                  it's the natural last step of the post-processing flow. -->
-            <button class="nav-btn" :class="{ active: tab === 'editor' }" @click="tab = 'editor'; editorTabOpened()" title="Editor (Lightroom-style)">
+            <!-- UNIF-5: Editor moved into FILES > Edit sub-tab.
+                 Sidebar button now redirects there so the legacy
+                 keyboard / muscle memory still works. UNIF-6 will
+                 remove this button entirely. -->
+            <button class="nav-btn" :class="{ active: tab === 'files' && filesSubTab === 'edit' }"
+                    @click="tab = 'files'; setFilesSubTab('edit'); editorTabOpened()"
+                    title="Editor (now lives in FILES > Edit)">
                 <svg viewBox="0 0 24 24" width="22" height="22">
                     <path d="M4 16l8-8 4 4-8 8H4v-4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
                     <path d="M14 6l3-3 4 4-3 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
@@ -4525,373 +4531,11 @@
                  The preview <img> is bound to a Blob URL built from
                  the latest /api/editor/preview response so slider drags
                  update without flicker. -->
+            <!-- UNIF-5: editor markup moved to FILES > Edit sub-tab.
+                 EDITOR sidebar button now redirects there. UNIF-6
+                 will remove this empty panel + the sidebar button. -->
             <div x-show="tab === 'editor'" class="tab-panel editor-panel">
-                <div class="panel-header">
-                    Editor
-                    <span class="status-indicator-sm"
-                          :class="editorState.session ? 'ok' : 'idle'"
-                          x-text="editorState.session ? 'session active' : 'no file open'"></span>
-                    <span class="muted" style="font-size:11px;margin-left:auto"
-                          x-show="editorState.session"
-                          x-text="editorState.width + '×' + editorState.height + ' · ' + (editorState.channels === 3 ? 'RGB' : 'mono')"></span>
-                    <!-- ED-6 compute mode pill. Shows which side is
-                         doing the math, with a click-to-toggle. Server
-                         is the safe fallback (~500ms preview); WASM
-                         removes the network roundtrip and brings slider
-                         latency down to single-digit frames. -->
-                    <button class="btn btn-sm editor-mode-pill"
-                            :class="editorState.computeMode === 'wasm' ? 'editor-mode-wasm' : 'editor-mode-server'"
-                            @click="editorToggleComputeMode()"
-                            :disabled="!wasmReady"
-                            :title="wasmReady
-                                    ? 'Click to switch between server-side and client-side (WASM) compute'
-                                    : 'WASM bundle not ready, server-mode only'"
-                            x-text="editorState.computeMode === 'wasm' ? '⚡ WASM' : '🖥 Server'"></button>
-                    <button class="btn btn-sm" @click="editorReset()" :disabled="!editorState.session"
-                            title="Reset all sliders to defaults">↺ Reset</button>
-                    <button class="btn btn-sm" @click="editorSaveSidecar()" :disabled="!editorState.session || !editorState.dirty"
-                            title="Save current edits to .edit.json sidecar">💾 Save edits</button>
-                    <button class="btn btn-sm btn-primary" @click="editorOpenExportModal()" :disabled="!editorState.session"
-                            title="Export the final image">↓ Export…</button>
-                </div>
-
-                <!-- Source picker, only visible when no session yet -->
-                <div class="editor-source-picker" x-show="!editorState.session">
-                    <div class="editor-source-card editor-source-dropzone"
-                         @dragover.prevent
-                         @drop.prevent="editorHandleDrop($event)"
-                         @click="$refs.editorFileInput.click()">
-                        <h3>Open file</h3>
-                        <p class="hint">Drag a FITS / XISF / PNG / JPG / TIFF here,
-                           or click to pick from your computer.</p>
-                        <input type="file" x-ref="editorFileInput"
-                               accept=".fits,.fit,.fts,.xisf,.png,.jpg,.jpeg,.tif,.tiff"
-                               style="display:none"
-                               @change="editorHandleUpload($event.target.files[0])">
-                    </div>
-                    <div class="editor-source-card">
-                        <h3>From server path</h3>
-                        <p class="hint">Type or paste the absolute path of a file
-                           already on the Polaris host.</p>
-                        <div class="editor-path-row">
-                            <input type="text" class="input-md" x-model="editorState.pathInput"
-                                   placeholder="/home/dan/astro/M31_master.fits"
-                                   @keyup.enter="editorLoad(editorState.pathInput)">
-                            <button class="btn btn-sm btn-primary"
-                                    @click="editorLoad(editorState.pathInput)"
-                                    :disabled="!editorState.pathInput || editorState.loading">Open</button>
-                        </div>
-                    </div>
-                    <div class="editor-source-card">
-                        <h3>From Studio Library</h3>
-                        <p class="hint">Jump to STUDIO, pick a master, then click
-                           "Open in editor" on its preview.</p>
-                        <button class="btn btn-sm" @click="tab = 'studio'; loadStudio()">→ Go to Studio</button>
-                    </div>
-                </div>
-                <div class="editor-load-error" x-show="editorState.error" x-text="editorState.error"></div>
-
-                <!-- Active editing surface -->
-                <div class="editor-workspace" x-show="editorState.session">
-                    <!-- Left rail: preview + histogram -->
-                    <div class="editor-preview-col">
-                        <div class="editor-preview-toolbar">
-                            <!-- Undo / redo: walks the history stack of
-                                 edit snapshots maintained by app.js. Each
-                                 idle-stop on a slider drag (500ms after
-                                 last input) pushes one entry, so a
-                                 continuous slider movement is one undoable
-                                 step instead of dozens. -->
-                            <button class="btn btn-sm"
-                                    @click="editorUndo()"
-                                    :disabled="!editorCanUndo()"
-                                    title="Undo (Ctrl+Z)">↶</button>
-                            <button class="btn btn-sm"
-                                    @click="editorRedo()"
-                                    :disabled="!editorCanRedo()"
-                                    title="Redo (Ctrl+Shift+Z / Ctrl+Y)">↷</button>
-                            <span class="muted" style="font-size:10px"
-                                  x-text="editorState.history.index + ' / ' + (editorState.history.stack.length - 1)"
-                                  title="Current history step / total"></span>
-                            <!-- File path: middle-truncated so long uploads
-                                 paths don't push the right controls column
-                                 narrower. min-width:0 lets the flex item
-                                 actually shrink below its content width;
-                                 without it the span would refuse to clip
-                                 and pop the layout. Hover shows the full
-                                 path via the title attribute. -->
-                            <span class="muted editor-path-display"
-                                  style="flex:1; min-width:0; font-size:11px; text-align:center"
-                                  :title="editorState.sourcePath"
-                                  x-text="editorShortPath(editorState.sourcePath)"></span>
-                            <!-- Zoom controls. Reset = fit-to-window. -->
-                            <button class="btn btn-sm" @click="editorZoomOut()"
-                                    title="Zoom out (or Ctrl + scroll wheel)">−</button>
-                            <button class="btn btn-sm"
-                                    @click="editorZoomReset()"
-                                    :title="'Fit to window (' + Math.round(editorState.zoom * 100) + '% now)'"
-                                    x-text="Math.round(editorState.zoom * 100) + '%'"
-                                    style="min-width:52px"></button>
-                            <button class="btn btn-sm" @click="editorZoomIn()"
-                                    title="Zoom in">+</button>
-                            <button class="btn btn-sm"
-                                    @mousedown="editorState.showOriginal = true"
-                                    @mouseup="editorState.showOriginal = false"
-                                    @mouseleave="editorState.showOriginal = false"
-                                    title="Hold to see the original (no edits applied)">👁 Compare</button>
-                            <!-- Histogram overlay toggle. The histogram
-                                 is pinned to the bottom of the preview
-                                 as a translucent strip, so toggling it
-                                 off reclaims real estate without losing
-                                 the data — flip back on with the same
-                                 button. Active state painted via the
-                                 .btn-toggle-on class hook. -->
-                            <button class="btn btn-sm"
-                                    :class="{ 'btn-toggle-on': editorState.showHistogram }"
-                                    @click="editorState.showHistogram = !editorState.showHistogram"
-                                    :title="editorState.showHistogram
-                                        ? 'Hide the histogram overlay'
-                                        : 'Show the histogram overlay'">📊 Histogram</button>
-                            <button class="btn btn-sm" @click="editorClose()"
-                                    title="Close editor and free the session">✕ Close</button>
-                        </div>
-                        <div class="editor-preview-wrap"
-                             @wheel.prevent="editorOnWheel($event)"
-                             @mousedown="editorOnPanStart($event)"
-                             @mousemove="editorOnPanMove($event)"
-                             @mouseup="editorOnPanEnd($event)"
-                             @mouseleave="editorOnPanEnd($event)"
-                             @dblclick="editorZoomReset()"
-                             :style="'cursor:' + (editorState.zoom > 1 ? (editorState.panning ? 'grabbing' : 'grab') : 'default')">
-                            <!-- Inner transform layer. CSS transform avoids
-                                 reflow on every wheel tick and works
-                                 identically for <img> and <canvas>. -->
-                            <div class="editor-preview-stage"
-                                 :style="'transform: translate(' + editorState.panX + 'px,' + editorState.panY + 'px) scale(' + editorState.zoom + ')'">
-                                <!-- Server-mode: <img> bound to a JPEG blob URL. -->
-                                <img class="editor-preview-img" :src="editorState.previewUrl"
-                                     x-show="editorState.computeMode !== 'wasm' && editorState.previewUrl && !editorState.showOriginal"
-                                     alt="preview" draggable="false">
-                                <!-- WASM-mode: canvas, raw bytes from
-                                     Interop.EditorApplyEdit drawn via
-                                     putImageData. Avoids a JPEG encode in
-                                     WASM (no Skia there) + skips lossy
-                                     compression. -->
-                                <canvas id="editorWasmCanvas" class="editor-preview-img"
-                                        x-show="editorState.computeMode === 'wasm' && !editorState.showOriginal"></canvas>
-                                <img class="editor-preview-img" :src="editorState.originalUrl"
-                                     x-show="editorState.showOriginal && editorState.originalUrl"
-                                     alt="original" draggable="false">
-                            </div>
-                            <div class="editor-preview-spinner" x-show="editorState.rendering">⌛</div>
-                            <!-- Histogram overlay. Pinned to the bottom
-                                 of the preview area as a translucent
-                                 strip so it covers the image only when
-                                 enabled instead of stealing a permanent
-                                 80 px row beneath. Width is fluid via
-                                 CSS; height fixed so the canvas backing
-                                 pixel resolution stays predictable. -->
-                            <canvas id="editorHistogram" class="editor-histogram"
-                                    x-show="editorState.showHistogram"
-                                    width="512" height="80"></canvas>
-                        </div>
-                    </div>
-
-                    <!-- Right rail: collapsible sliders panels (Lightroom-mobile layout) -->
-                    <div class="editor-controls-col">
-
-                        <!-- AUTOED-2: Auto / Reset pair, parked at the top of the
-                             sliders column so the two most-used decisions
-                             ("give me a starting point" / "wipe everything")
-                             sit right next to the controls they affect. The
-                             toolbar Reset further up still works for muscle
-                             memory; this one is the discoverable spot. -->
-                        <div class="editor-controls-header">
-                            <button class="btn btn-primary btn-sm"
-                                    @click="editorAuto()"
-                                    :disabled="editorState.autoBusy || !editorState.session"
-                                    title="Compute reasonable Light + Color values from the frame statistics">
-                                <span x-show="!editorState.autoBusy">✨ Auto</span>
-                                <span x-show="editorState.autoBusy">Computing…</span>
-                            </button>
-                            <button class="btn btn-sm"
-                                    @click="editorReset()"
-                                    :disabled="!editorState.session"
-                                    title="Reset all sliders to defaults (zero edits)">
-                                ↺ Reset
-                            </button>
-                            <!-- CROP — same modal as the FILES toolbar.
-                                 Pre-processing pass before BGE/decon/
-                                 denoise; produces a sibling _crop.fits.
-                                 User reopens that crop file in the
-                                 editor to keep going. -->
-                            <button class="btn btn-sm"
-                                    @click="cropOpenForFile(editorState.sourcePath)"
-                                    :disabled="!editorState.session || !editorState.sourcePath"
-                                    title="Crop a rectangle from this image (saves as _crop.fits next to it)">
-                                ✂ Crop
-                            </button>
-                            <!-- AI pipeline shortcuts. Open the same
-                                 GraXpert modal the FILES toolbar opens,
-                                 prefilled with the editor's current
-                                 source path. The modal exposes the full
-                                 options surface (CLI vs browser path
-                                 toggle, per-op strength + PSF + denoise
-                                 model version, save-background, decon
-                                 target) so the editor entry point is
-                                 the same controllable workflow instead
-                                 of a fire-and-forget run. Visible only
-                                 when EITHER the CLI is installed OR the
-                                 matching ONNX model is in the manifest,
-                                 same gating as the FILES toolbar. -->
-                            <button class="btn btn-sm"
-                                    x-show="graxpert.status?.available
-                                           || onnxAvailableForOp('background-extraction')"
-                                    :disabled="!editorState.session || !editorState.sourcePath"
-                                    @click="graxpertOpenModal('background-extraction', editorState.sourcePath)"
-                                    title="Remove gradient with GraXpert (opens the modal)">
-                                🌅 BGE
-                            </button>
-                            <button class="btn btn-sm"
-                                    x-show="graxpert.status?.supportsDenoising
-                                           || onnxAvailableForOp('denoising')"
-                                    :disabled="!editorState.session || !editorState.sourcePath"
-                                    @click="graxpertOpenModal('denoising', editorState.sourcePath)"
-                                    title="Reduce noise with GraXpert (opens the modal)">
-                                🔇 Denoise
-                            </button>
-                            <button class="btn btn-sm"
-                                    x-show="graxpert.status?.supportsDeconvolution
-                                           || onnxAvailableForOp('deconvolution')"
-                                    :disabled="!editorState.session || !editorState.sourcePath"
-                                    @click="graxpertOpenModal('deconvolution', editorState.sourcePath)"
-                                    title="Sharpen with GraXpert (opens the modal)">
-                                ✨ Decon
-                            </button>
-                        </div>
-
-                        <!-- LUZ / LIGHT -->
-                        <details class="editor-section" open>
-                            <summary>Light</summary>
-                            <template x-for="s in editorLightSliders" :key="s.key">
-                                <label class="editor-slider-row">
-                                    <span class="editor-slider-label" x-text="s.label"></span>
-                                    <input type="range" :min="s.min" :max="s.max" :step="s.step"
-                                           :value="editorState.edits.light?.[s.key] ?? 0"
-                                           @input="editorSetLight(s.key, +$event.target.value)">
-                                    <span class="editor-slider-value"
-                                          x-text="(editorState.edits.light?.[s.key] ?? 0).toFixed(s.dp || 2)"></span>
-                                </label>
-                            </template>
-                        </details>
-
-                        <!-- COR / COLOR -->
-                        <details class="editor-section" open>
-                            <summary>Color</summary>
-                            <label class="editor-slider-row">
-                                <span class="editor-slider-label">Temp</span>
-                                <input type="range" min="2000" max="15000" step="50"
-                                       :value="editorState.edits.whiteBalance?.tempK ?? 6500"
-                                       @input="editorSetWB('tempK', +$event.target.value)">
-                                <span class="editor-slider-value"
-                                      x-text="(editorState.edits.whiteBalance?.tempK ?? 6500) + ' K'"></span>
-                            </label>
-                            <label class="editor-slider-row">
-                                <span class="editor-slider-label">Tint</span>
-                                <input type="range" min="-1" max="1" step="0.01"
-                                       :value="editorState.edits.whiteBalance?.tint ?? 0"
-                                       @input="editorSetWB('tint', +$event.target.value)">
-                                <span class="editor-slider-value"
-                                      x-text="(editorState.edits.whiteBalance?.tint ?? 0).toFixed(2)"></span>
-                            </label>
-                            <template x-for="s in editorColorSliders" :key="s.key">
-                                <label class="editor-slider-row">
-                                    <span class="editor-slider-label" x-text="s.label"></span>
-                                    <input type="range" :min="s.min" :max="s.max" :step="s.step"
-                                           :value="editorState.edits.color?.[s.key] ?? 0"
-                                           @input="editorSetColor(s.key, +$event.target.value)">
-                                    <span class="editor-slider-value"
-                                          x-text="(editorState.edits.color?.[s.key] ?? 0).toFixed(s.dp || 2)"></span>
-                                </label>
-                            </template>
-                        </details>
-
-                        <!-- EFEITOS / EFFECTS -->
-                        <details class="editor-section">
-                            <summary>Effects</summary>
-                            <template x-for="s in editorEffectsSliders" :key="s.key">
-                                <label class="editor-slider-row">
-                                    <span class="editor-slider-label" x-text="s.label"></span>
-                                    <input type="range" :min="s.min" :max="s.max" :step="s.step"
-                                           :value="editorState.edits.effects?.[s.key] ?? 0"
-                                           @input="editorSetEffects(s.key, +$event.target.value)">
-                                    <span class="editor-slider-value"
-                                          x-text="(editorState.edits.effects?.[s.key] ?? 0).toFixed(s.dp || 2)"></span>
-                                </label>
-                            </template>
-                        </details>
-
-                        <!-- DETALHE / DETAIL -->
-                        <details class="editor-section">
-                            <summary>Detail</summary>
-                            <template x-for="s in editorDetailSliders" :key="s.key">
-                                <label class="editor-slider-row">
-                                    <span class="editor-slider-label" x-text="s.label"></span>
-                                    <input type="range" :min="s.min" :max="s.max" :step="s.step"
-                                           :value="editorState.edits.detail?.[s.key] ?? (s.default ?? 0)"
-                                           @input="editorSetDetail(s.key, +$event.target.value)">
-                                    <span class="editor-slider-value"
-                                          x-text="(editorState.edits.detail?.[s.key] ?? (s.default ?? 0)).toFixed(s.dp || 2)"></span>
-                                </label>
-                            </template>
-                        </details>
-
-                        <!-- GX-5: AI section. Each button processes the
-                             editor's current source FITS via the matching
-                             ONNX pipeline, writes a sibling FITS, and
-                             auto-loads it into the same editor session
-                             (so the user can keep editing on the AI-cleaned
-                             pixels). Non-destructive: the original source
-                             FITS stays on disk. -->
-                        <details class="editor-section"
-                                 x-show="onnxAvailableForOp('background-extraction')
-                                       || onnxAvailableForOp('denoising')
-                                       || onnxAvailableForOp('deconvolution')">
-                            <summary>AI (GraXpert)</summary>
-                            <div class="editor-ai-buttons">
-                                <button class="btn btn-sm"
-                                        x-show="onnxAvailableForOp('background-extraction')"
-                                        :disabled="editorAi.busy"
-                                        @click="editorRunAi('background-extraction')"
-                                        title="Background extraction, removes gradients">
-                                    🌅 Background
-                                </button>
-                                <button class="btn btn-sm"
-                                        x-show="onnxAvailableForOp('denoising')"
-                                        :disabled="editorAi.busy"
-                                        @click="editorRunAi('denoising')"
-                                        title="Denoise, neural noise reduction">
-                                    🔇 Denoise
-                                </button>
-                                <button class="btn btn-sm"
-                                        x-show="onnxAvailableForOp('deconvolution')"
-                                        :disabled="editorAi.busy"
-                                        @click="editorRunAi('deconvolution')"
-                                        title="Deconvolution, sharpen stars / objects">
-                                    ✨ Deconvolve
-                                </button>
-                            </div>
-                            <p class="hint" x-show="editorAi.busy"
-                               style="margin-top:6px"
-                               x-text="editorAi.phase"></p>
-                            <p class="hint" style="margin-top:6px">
-                                Output saved as a sibling FITS + auto-opened
-                                in this editor. Original source file is not
-                                modified.
-                            </p>
-                        </details>
-                    </div>
-                </div>
+                <div class="panel-header">Editor moved to FILES > Edit sub-tab.</div>
             </div>
 
             <!-- Export modal, quality + format + resize. ED-5.
@@ -7500,13 +7144,379 @@
                         </div>
                     </div>
                     <div x-show="filesSubTab === 'edit'" class="files-right-pane">
-                        <div class="files-right-placeholder">
-                            <h3>Edit workspace</h3>
-                            <p class="text-muted">
-                                Single-FITS non-destructive editor.
-                                Filled in by UNIF-5.
-                            </p>
+                    <!-- UNIF-5: editor markup moved here from the legacy
+                         tab === editor panel. Same Alpine state (editorState),
+                         same handlers (editorLoad/editorSave/etc) -- only the
+                         DOM location changes. Browser-left selection +
+                         toolbar Open in Editor button hands the path off via
+                         filesOpenInEditor() which now sets filesSubTab to edit
+                         instead of switching the top-level tab. -->
+                <div class="panel-header">
+                    Editor
+                    <span class="status-indicator-sm"
+                          :class="editorState.session ? 'ok' : 'idle'"
+                          x-text="editorState.session ? 'session active' : 'no file open'"></span>
+                    <span class="muted" style="font-size:11px;margin-left:auto"
+                          x-show="editorState.session"
+                          x-text="editorState.width + '×' + editorState.height + ' · ' + (editorState.channels === 3 ? 'RGB' : 'mono')"></span>
+                    <!-- ED-6 compute mode pill. Shows which side is
+                         doing the math, with a click-to-toggle. Server
+                         is the safe fallback (~500ms preview); WASM
+                         removes the network roundtrip and brings slider
+                         latency down to single-digit frames. -->
+                    <button class="btn btn-sm editor-mode-pill"
+                            :class="editorState.computeMode === 'wasm' ? 'editor-mode-wasm' : 'editor-mode-server'"
+                            @click="editorToggleComputeMode()"
+                            :disabled="!wasmReady"
+                            :title="wasmReady
+                                    ? 'Click to switch between server-side and client-side (WASM) compute'
+                                    : 'WASM bundle not ready, server-mode only'"
+                            x-text="editorState.computeMode === 'wasm' ? '⚡ WASM' : '🖥 Server'"></button>
+                    <button class="btn btn-sm" @click="editorReset()" :disabled="!editorState.session"
+                            title="Reset all sliders to defaults">↺ Reset</button>
+                    <button class="btn btn-sm" @click="editorSaveSidecar()" :disabled="!editorState.session || !editorState.dirty"
+                            title="Save current edits to .edit.json sidecar">💾 Save edits</button>
+                    <button class="btn btn-sm btn-primary" @click="editorOpenExportModal()" :disabled="!editorState.session"
+                            title="Export the final image">↓ Export…</button>
+                </div>
+
+                <!-- Source picker, only visible when no session yet -->
+                <div class="editor-source-picker" x-show="!editorState.session">
+                    <div class="editor-source-card editor-source-dropzone"
+                         @dragover.prevent
+                         @drop.prevent="editorHandleDrop($event)"
+                         @click="$refs.editorFileInput.click()">
+                        <h3>Open file</h3>
+                        <p class="hint">Drag a FITS / XISF / PNG / JPG / TIFF here,
+                           or click to pick from your computer.</p>
+                        <input type="file" x-ref="editorFileInput"
+                               accept=".fits,.fit,.fts,.xisf,.png,.jpg,.jpeg,.tif,.tiff"
+                               style="display:none"
+                               @change="editorHandleUpload($event.target.files[0])">
+                    </div>
+                    <div class="editor-source-card">
+                        <h3>From server path</h3>
+                        <p class="hint">Type or paste the absolute path of a file
+                           already on the Polaris host.</p>
+                        <div class="editor-path-row">
+                            <input type="text" class="input-md" x-model="editorState.pathInput"
+                                   placeholder="/home/dan/astro/M31_master.fits"
+                                   @keyup.enter="editorLoad(editorState.pathInput)">
+                            <button class="btn btn-sm btn-primary"
+                                    @click="editorLoad(editorState.pathInput)"
+                                    :disabled="!editorState.pathInput || editorState.loading">Open</button>
                         </div>
+                    </div>
+                    <div class="editor-source-card">
+                        <h3>From Studio Library</h3>
+                        <p class="hint">Jump to STUDIO, pick a master, then click
+                           "Open in editor" on its preview.</p>
+                        <button class="btn btn-sm" @click="tab = 'studio'; loadStudio()">→ Go to Studio</button>
+                    </div>
+                </div>
+                <div class="editor-load-error" x-show="editorState.error" x-text="editorState.error"></div>
+
+                <!-- Active editing surface -->
+                <div class="editor-workspace" x-show="editorState.session">
+                    <!-- Left rail: preview + histogram -->
+                    <div class="editor-preview-col">
+                        <div class="editor-preview-toolbar">
+                            <!-- Undo / redo: walks the history stack of
+                                 edit snapshots maintained by app.js. Each
+                                 idle-stop on a slider drag (500ms after
+                                 last input) pushes one entry, so a
+                                 continuous slider movement is one undoable
+                                 step instead of dozens. -->
+                            <button class="btn btn-sm"
+                                    @click="editorUndo()"
+                                    :disabled="!editorCanUndo()"
+                                    title="Undo (Ctrl+Z)">↶</button>
+                            <button class="btn btn-sm"
+                                    @click="editorRedo()"
+                                    :disabled="!editorCanRedo()"
+                                    title="Redo (Ctrl+Shift+Z / Ctrl+Y)">↷</button>
+                            <span class="muted" style="font-size:10px"
+                                  x-text="editorState.history.index + ' / ' + (editorState.history.stack.length - 1)"
+                                  title="Current history step / total"></span>
+                            <!-- File path: middle-truncated so long uploads
+                                 paths don't push the right controls column
+                                 narrower. min-width:0 lets the flex item
+                                 actually shrink below its content width;
+                                 without it the span would refuse to clip
+                                 and pop the layout. Hover shows the full
+                                 path via the title attribute. -->
+                            <span class="muted editor-path-display"
+                                  style="flex:1; min-width:0; font-size:11px; text-align:center"
+                                  :title="editorState.sourcePath"
+                                  x-text="editorShortPath(editorState.sourcePath)"></span>
+                            <!-- Zoom controls. Reset = fit-to-window. -->
+                            <button class="btn btn-sm" @click="editorZoomOut()"
+                                    title="Zoom out (or Ctrl + scroll wheel)">−</button>
+                            <button class="btn btn-sm"
+                                    @click="editorZoomReset()"
+                                    :title="'Fit to window (' + Math.round(editorState.zoom * 100) + '% now)'"
+                                    x-text="Math.round(editorState.zoom * 100) + '%'"
+                                    style="min-width:52px"></button>
+                            <button class="btn btn-sm" @click="editorZoomIn()"
+                                    title="Zoom in">+</button>
+                            <button class="btn btn-sm"
+                                    @mousedown="editorState.showOriginal = true"
+                                    @mouseup="editorState.showOriginal = false"
+                                    @mouseleave="editorState.showOriginal = false"
+                                    title="Hold to see the original (no edits applied)">👁 Compare</button>
+                            <!-- Histogram overlay toggle. The histogram
+                                 is pinned to the bottom of the preview
+                                 as a translucent strip, so toggling it
+                                 off reclaims real estate without losing
+                                 the data — flip back on with the same
+                                 button. Active state painted via the
+                                 .btn-toggle-on class hook. -->
+                            <button class="btn btn-sm"
+                                    :class="{ 'btn-toggle-on': editorState.showHistogram }"
+                                    @click="editorState.showHistogram = !editorState.showHistogram"
+                                    :title="editorState.showHistogram
+                                        ? 'Hide the histogram overlay'
+                                        : 'Show the histogram overlay'">📊 Histogram</button>
+                            <button class="btn btn-sm" @click="editorClose()"
+                                    title="Close editor and free the session">✕ Close</button>
+                        </div>
+                        <div class="editor-preview-wrap"
+                             @wheel.prevent="editorOnWheel($event)"
+                             @mousedown="editorOnPanStart($event)"
+                             @mousemove="editorOnPanMove($event)"
+                             @mouseup="editorOnPanEnd($event)"
+                             @mouseleave="editorOnPanEnd($event)"
+                             @dblclick="editorZoomReset()"
+                             :style="'cursor:' + (editorState.zoom > 1 ? (editorState.panning ? 'grabbing' : 'grab') : 'default')">
+                            <!-- Inner transform layer. CSS transform avoids
+                                 reflow on every wheel tick and works
+                                 identically for <img> and <canvas>. -->
+                            <div class="editor-preview-stage"
+                                 :style="'transform: translate(' + editorState.panX + 'px,' + editorState.panY + 'px) scale(' + editorState.zoom + ')'">
+                                <!-- Server-mode: <img> bound to a JPEG blob URL. -->
+                                <img class="editor-preview-img" :src="editorState.previewUrl"
+                                     x-show="editorState.computeMode !== 'wasm' && editorState.previewUrl && !editorState.showOriginal"
+                                     alt="preview" draggable="false">
+                                <!-- WASM-mode: canvas, raw bytes from
+                                     Interop.EditorApplyEdit drawn via
+                                     putImageData. Avoids a JPEG encode in
+                                     WASM (no Skia there) + skips lossy
+                                     compression. -->
+                                <canvas id="editorWasmCanvas" class="editor-preview-img"
+                                        x-show="editorState.computeMode === 'wasm' && !editorState.showOriginal"></canvas>
+                                <img class="editor-preview-img" :src="editorState.originalUrl"
+                                     x-show="editorState.showOriginal && editorState.originalUrl"
+                                     alt="original" draggable="false">
+                            </div>
+                            <div class="editor-preview-spinner" x-show="editorState.rendering">⌛</div>
+                            <!-- Histogram overlay. Pinned to the bottom
+                                 of the preview area as a translucent
+                                 strip so it covers the image only when
+                                 enabled instead of stealing a permanent
+                                 80 px row beneath. Width is fluid via
+                                 CSS; height fixed so the canvas backing
+                                 pixel resolution stays predictable. -->
+                            <canvas id="editorHistogram" class="editor-histogram"
+                                    x-show="editorState.showHistogram"
+                                    width="512" height="80"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Right rail: collapsible sliders panels (Lightroom-mobile layout) -->
+                    <div class="editor-controls-col">
+
+                        <!-- AUTOED-2: Auto / Reset pair, parked at the top of the
+                             sliders column so the two most-used decisions
+                             ("give me a starting point" / "wipe everything")
+                             sit right next to the controls they affect. The
+                             toolbar Reset further up still works for muscle
+                             memory; this one is the discoverable spot. -->
+                        <div class="editor-controls-header">
+                            <button class="btn btn-primary btn-sm"
+                                    @click="editorAuto()"
+                                    :disabled="editorState.autoBusy || !editorState.session"
+                                    title="Compute reasonable Light + Color values from the frame statistics">
+                                <span x-show="!editorState.autoBusy">✨ Auto</span>
+                                <span x-show="editorState.autoBusy">Computing…</span>
+                            </button>
+                            <button class="btn btn-sm"
+                                    @click="editorReset()"
+                                    :disabled="!editorState.session"
+                                    title="Reset all sliders to defaults (zero edits)">
+                                ↺ Reset
+                            </button>
+                            <!-- CROP — same modal as the FILES toolbar.
+                                 Pre-processing pass before BGE/decon/
+                                 denoise; produces a sibling _crop.fits.
+                                 User reopens that crop file in the
+                                 editor to keep going. -->
+                            <button class="btn btn-sm"
+                                    @click="cropOpenForFile(editorState.sourcePath)"
+                                    :disabled="!editorState.session || !editorState.sourcePath"
+                                    title="Crop a rectangle from this image (saves as _crop.fits next to it)">
+                                ✂ Crop
+                            </button>
+                            <!-- AI pipeline shortcuts. Open the same
+                                 GraXpert modal the FILES toolbar opens,
+                                 prefilled with the editor's current
+                                 source path. The modal exposes the full
+                                 options surface (CLI vs browser path
+                                 toggle, per-op strength + PSF + denoise
+                                 model version, save-background, decon
+                                 target) so the editor entry point is
+                                 the same controllable workflow instead
+                                 of a fire-and-forget run. Visible only
+                                 when EITHER the CLI is installed OR the
+                                 matching ONNX model is in the manifest,
+                                 same gating as the FILES toolbar. -->
+                            <button class="btn btn-sm"
+                                    x-show="graxpert.status?.available
+                                           || onnxAvailableForOp('background-extraction')"
+                                    :disabled="!editorState.session || !editorState.sourcePath"
+                                    @click="graxpertOpenModal('background-extraction', editorState.sourcePath)"
+                                    title="Remove gradient with GraXpert (opens the modal)">
+                                🌅 BGE
+                            </button>
+                            <button class="btn btn-sm"
+                                    x-show="graxpert.status?.supportsDenoising
+                                           || onnxAvailableForOp('denoising')"
+                                    :disabled="!editorState.session || !editorState.sourcePath"
+                                    @click="graxpertOpenModal('denoising', editorState.sourcePath)"
+                                    title="Reduce noise with GraXpert (opens the modal)">
+                                🔇 Denoise
+                            </button>
+                            <button class="btn btn-sm"
+                                    x-show="graxpert.status?.supportsDeconvolution
+                                           || onnxAvailableForOp('deconvolution')"
+                                    :disabled="!editorState.session || !editorState.sourcePath"
+                                    @click="graxpertOpenModal('deconvolution', editorState.sourcePath)"
+                                    title="Sharpen with GraXpert (opens the modal)">
+                                ✨ Decon
+                            </button>
+                        </div>
+
+                        <!-- LUZ / LIGHT -->
+                        <details class="editor-section" open>
+                            <summary>Light</summary>
+                            <template x-for="s in editorLightSliders" :key="s.key">
+                                <label class="editor-slider-row">
+                                    <span class="editor-slider-label" x-text="s.label"></span>
+                                    <input type="range" :min="s.min" :max="s.max" :step="s.step"
+                                           :value="editorState.edits.light?.[s.key] ?? 0"
+                                           @input="editorSetLight(s.key, +$event.target.value)">
+                                    <span class="editor-slider-value"
+                                          x-text="(editorState.edits.light?.[s.key] ?? 0).toFixed(s.dp || 2)"></span>
+                                </label>
+                            </template>
+                        </details>
+
+                        <!-- COR / COLOR -->
+                        <details class="editor-section" open>
+                            <summary>Color</summary>
+                            <label class="editor-slider-row">
+                                <span class="editor-slider-label">Temp</span>
+                                <input type="range" min="2000" max="15000" step="50"
+                                       :value="editorState.edits.whiteBalance?.tempK ?? 6500"
+                                       @input="editorSetWB('tempK', +$event.target.value)">
+                                <span class="editor-slider-value"
+                                      x-text="(editorState.edits.whiteBalance?.tempK ?? 6500) + ' K'"></span>
+                            </label>
+                            <label class="editor-slider-row">
+                                <span class="editor-slider-label">Tint</span>
+                                <input type="range" min="-1" max="1" step="0.01"
+                                       :value="editorState.edits.whiteBalance?.tint ?? 0"
+                                       @input="editorSetWB('tint', +$event.target.value)">
+                                <span class="editor-slider-value"
+                                      x-text="(editorState.edits.whiteBalance?.tint ?? 0).toFixed(2)"></span>
+                            </label>
+                            <template x-for="s in editorColorSliders" :key="s.key">
+                                <label class="editor-slider-row">
+                                    <span class="editor-slider-label" x-text="s.label"></span>
+                                    <input type="range" :min="s.min" :max="s.max" :step="s.step"
+                                           :value="editorState.edits.color?.[s.key] ?? 0"
+                                           @input="editorSetColor(s.key, +$event.target.value)">
+                                    <span class="editor-slider-value"
+                                          x-text="(editorState.edits.color?.[s.key] ?? 0).toFixed(s.dp || 2)"></span>
+                                </label>
+                            </template>
+                        </details>
+
+                        <!-- EFEITOS / EFFECTS -->
+                        <details class="editor-section">
+                            <summary>Effects</summary>
+                            <template x-for="s in editorEffectsSliders" :key="s.key">
+                                <label class="editor-slider-row">
+                                    <span class="editor-slider-label" x-text="s.label"></span>
+                                    <input type="range" :min="s.min" :max="s.max" :step="s.step"
+                                           :value="editorState.edits.effects?.[s.key] ?? 0"
+                                           @input="editorSetEffects(s.key, +$event.target.value)">
+                                    <span class="editor-slider-value"
+                                          x-text="(editorState.edits.effects?.[s.key] ?? 0).toFixed(s.dp || 2)"></span>
+                                </label>
+                            </template>
+                        </details>
+
+                        <!-- DETALHE / DETAIL -->
+                        <details class="editor-section">
+                            <summary>Detail</summary>
+                            <template x-for="s in editorDetailSliders" :key="s.key">
+                                <label class="editor-slider-row">
+                                    <span class="editor-slider-label" x-text="s.label"></span>
+                                    <input type="range" :min="s.min" :max="s.max" :step="s.step"
+                                           :value="editorState.edits.detail?.[s.key] ?? (s.default ?? 0)"
+                                           @input="editorSetDetail(s.key, +$event.target.value)">
+                                    <span class="editor-slider-value"
+                                          x-text="(editorState.edits.detail?.[s.key] ?? (s.default ?? 0)).toFixed(s.dp || 2)"></span>
+                                </label>
+                            </template>
+                        </details>
+
+                        <!-- GX-5: AI section. Each button processes the
+                             editor's current source FITS via the matching
+                             ONNX pipeline, writes a sibling FITS, and
+                             auto-loads it into the same editor session
+                             (so the user can keep editing on the AI-cleaned
+                             pixels). Non-destructive: the original source
+                             FITS stays on disk. -->
+                        <details class="editor-section"
+                                 x-show="onnxAvailableForOp('background-extraction')
+                                       || onnxAvailableForOp('denoising')
+                                       || onnxAvailableForOp('deconvolution')">
+                            <summary>AI (GraXpert)</summary>
+                            <div class="editor-ai-buttons">
+                                <button class="btn btn-sm"
+                                        x-show="onnxAvailableForOp('background-extraction')"
+                                        :disabled="editorAi.busy"
+                                        @click="editorRunAi('background-extraction')"
+                                        title="Background extraction, removes gradients">
+                                    🌅 Background
+                                </button>
+                                <button class="btn btn-sm"
+                                        x-show="onnxAvailableForOp('denoising')"
+                                        :disabled="editorAi.busy"
+                                        @click="editorRunAi('denoising')"
+                                        title="Denoise, neural noise reduction">
+                                    🔇 Denoise
+                                </button>
+                                <button class="btn btn-sm"
+                                        x-show="onnxAvailableForOp('deconvolution')"
+                                        :disabled="editorAi.busy"
+                                        @click="editorRunAi('deconvolution')"
+                                        title="Deconvolution, sharpen stars / objects">
+                                    ✨ Deconvolve
+                                </button>
+                            </div>
+                            <p class="hint" x-show="editorAi.busy"
+                               style="margin-top:6px"
+                               x-text="editorAi.phase"></p>
+                            <p class="hint" style="margin-top:6px">
+                                Output saved as a sibling FITS + auto-opened
+                                in this editor. Original source file is not
+                                modified.
+                            </p>
+                        </details>
+                    </div>
+                </div>
                     </div>
                 </aside>
 
@@ -9910,7 +9920,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          development that this is a per-commit nuisance, but the cost
          of users running stale JS for hours (with FrameKind routing
          bugs ending up on the wrong canvas) is higher. -->
-    <script src="/js/app.js?v=20260530-unif2"></script>
+    <script src="/js/app.js?v=20260530-unif5"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

@@ -8217,9 +8217,12 @@ function ninaApp() {
         async filesOpenInEditor() {
             if (this.files.selectedPaths.length !== 1) return;
             const path = this.files.selectedPaths[0];
-            this.tab = 'editor';
-            // wait for the tab to mount (editorState bindings need to
-            // exist before editorLoad runs), one tick is plenty.
+            // UNIF-5: editor markup now lives inside the FILES tab as
+            // a sub-tab (filesSubTab='edit'), not its own top-level
+            // tab. We're already on FILES (the button only renders
+            // there) so just flip the sub-tab and let the editor
+            // panel render in the right pane.
+            this.setFilesSubTab('edit');
             await this.$nextTick();
             await this.editorLoad(path);
         },
