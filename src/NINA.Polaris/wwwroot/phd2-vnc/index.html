@@ -165,21 +165,15 @@
                     'service is running, then refresh.');
             }
         });
-        // Surface bridge HTTP errors (501 / 503 / auth) that arrive
-        // as a failed WebSocket upgrade. Without this, a stopped
-        // TightVNC service produced 'Connecting…' forever because
-        // noVNC's RFB doesn't always fire 'disconnect' on a WS that
-        // never opened.
-        const wsCheck = new WebSocket(wsUrl);
-        wsCheck.onopen = () => wsCheck.close();
-        wsCheck.onerror = () => {
-            setStatus('failed', 'Bridge unreachable');
-            showOverlay(
-                'The /phd2-vnc-ws WebSocket bridge refused the connection.\n' +
-                'Most common causes: TightVNC service is stopped (start it in '
-                + 'Settings → PHD2 Embedded GUI), TightVNC is bound to a non-loopback '
-                + 'interface only, or auth failed (re-login in Polaris).');
-        };
+        // (Removed: standalone wsCheck probe that opened a second WS
+        // just to detect 501/503 bridge errors. Worked once the pako
+        // vendor dir was in place — but TightVNC only accepts ONE
+        // viewer connection at a time, and the probe's open+close
+        // raced with RFB's real connection, making TightVNC kick the
+        // real one as 'second client'. The 'Connection lost' overlay
+        // above + the server-side log added in commit 3ddf184 now
+        // cover the diagnostic surface without competing for the
+        // single viewer slot.)
         rfb.addEventListener('credentialsrequired', () => {
             // Native noVNC prompt — keeps the password client-side.
             // The user types it once per session; not stored anywhere.
