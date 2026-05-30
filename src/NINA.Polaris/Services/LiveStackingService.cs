@@ -16,7 +16,9 @@ public record LiveStackFrameInfo(
     IImageData Frame,      // the raw frame integrated (not the running stack)
     double MedianHfr,      // median HFR of stars detected in this frame
     int StarCount,
-    DateTime At);
+    DateTime At,
+    double FrameSnr = 0,       // background SNR of the incoming frame
+    double CumulativeSnr = 0); // SNR of the running-mean accumulator
 
 /// <summary>
 /// Where the per-frame stacking math runs.
@@ -123,6 +125,22 @@ public class LiveStackingService {
     public int Height => _height;
     public double LastFrameMedianHfr { get; private set; }
     public int LastFrameStarCount { get; private set; }
+    // SNR-4: background SNR per-frame + cumulative-stack. CumulativeSnr
+    // is the headline number in the LIVE-tab "stack quality" widget —
+    // it's the SNR of the running-mean accumulator, growing ~√N as
+    // frames stack.
+    public double LastFrameSnr { get; private set; }
+    public double CumulativeSnr { get; private set; }
+    /// <summary>Rolling history of (frameCount, cumulativeSnr) used
+    /// by <see cref="SnrEtaCalculator"/> to fit the √N model + ETA.
+    /// Capped at 50 entries — beyond that the fit is dominated by
+    /// recent samples anyway and we'd just be paying memory for
+    /// nothing.</summary>
+    public IReadOnlyList<(int frame, double snr)> SnrHistory => _snrHistory;
+    private readonly List<(int frame, double snr)> _snrHistory = new(50);
+    /// <summary>Cached last ETA result. Recomputed each AddFrame so
+    /// the WS broadcaster can serve it without re-fitting.</summary>
+    public SnrEtaCalculator.EtaResult? LastEta { get; private set; }
 
     /// <summary>Where the per-frame math runs. Default <see cref="StackMode.Full"/>.
     /// Switched to <see cref="StackMode.MetricsOnly"/> by the WASM
@@ -132,10 +150,31 @@ public class LiveStackingService {
 
     public LiveStackingService(ImageRelayService relay,
                                 ILogger<LiveStackingService> logger,
-                                ImageWriterService? writer = null) {
+                                ImageWriterService? writer = null,
+                                ProfileService? profiles = null) {
         _relay = relay;
         _writer = writer;
         _logger = logger;
+        // SNR-3: keep TargetSnr aligned with the active rig until the
+        // user explicitly overrides via /api/livestack/target-snr.
+        // ProfileService is optional in the ctor so the existing test
+        // doubles (which instantiate without DI) keep working.
+        if (profiles != null) {
+            TargetSnr = profiles.ActiveEquipmentProfile?.TargetSnr;
+            profiles.EquipmentProfileActivated += rig => {
+                // Refresh only if no override is in place — the user's
+                // session-level number sticks until they clear it.
+                if (_targetSnrOverride == null) TargetSnr = rig?.TargetSnr;
+            };
+        }
+    }
+    private double? _targetSnrOverride;
+    /// <summary>Called by the /api/livestack/target-snr endpoint to
+    /// distinguish a session override from a rig-default refresh.</summary>
+    public void SetTargetSnrOverride(double? value) {
+        _targetSnrOverride = value;
+        TargetSnr = value;
+        RecomputeEta();
     }
 
     /// <summary>Subscribe to per-frame integration events. Handlers
@@ -173,6 +212,10 @@ public class LiveStackingService {
             _startedAt = null;
             LastFrameMedianHfr = 0;
             LastFrameStarCount = 0;
+            LastFrameSnr = 0;
+            CumulativeSnr = 0;
+            _snrHistory.Clear();
+            LastEta = null;
             _logger.LogInformation("Live stacking reset");
         }
     }
@@ -336,8 +379,27 @@ public class LiveStackingService {
         LastFrameMedianHfr = medianHfr;
         LastFrameStarCount = stars.Count;
 
-        _logger.LogInformation("Live stack: frame {N} added, {Stars} stars (HFR={Hfr:F2}), mode={Mode}",
-            _frameCount, stars.Count, medianHfr, mode);
+        // SNR-4: per-frame + cumulative background SNR.
+        // - LastFrameSnr is the snap-quality of the incoming frame.
+        //   Cheap (one extra pixel pass that piggy-backs on the same
+        //   median/MAD we already need for the stretch path).
+        // - CumulativeSnr is the SNR of the running-mean accumulator.
+        //   In Full mode we compute it from _accumulator; in
+        //   MetricsOnly mode the WASM client tells us via
+        //   InjectCumulativeSnr() below (no buffer here to inspect).
+        try {
+            LastFrameSnr = ComputeFrameSnr(imageData.Data);
+            if (mode == StackMode.Full) {
+                CumulativeSnr = ComputeCumulativeSnrFromAccumulator();
+            }
+            RecordSnrSample(_frameCount, CumulativeSnr);
+            RecomputeEta();
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "Live stack: SNR computation failed (non-fatal)");
+        }
+
+        _logger.LogInformation("Live stack: frame {N} added, {Stars} stars (HFR={Hfr:F2}, snr={Snr:F1} cum={Cum:F1}), mode={Mode}",
+            _frameCount, stars.Count, medianHfr, LastFrameSnr, CumulativeSnr, mode);
 
         // Snapshot handlers + await sequentially. Any handler that
         // throws is logged + swallowed, one bad subscriber can't
@@ -346,7 +408,8 @@ public class LiveStackingService {
         LiveStackFrameHandler[] handlers;
         lock (_handlersLock) handlers = _frameHandlers.ToArray();
         if (handlers.Length > 0) {
-            var info = new LiveStackFrameInfo(_frameCount, imageData, medianHfr, stars.Count, DateTime.UtcNow);
+            var info = new LiveStackFrameInfo(_frameCount, imageData, medianHfr, stars.Count, DateTime.UtcNow,
+                FrameSnr: LastFrameSnr, CumulativeSnr: CumulativeSnr);
             foreach (var h in handlers) {
                 try { await h(info); }
                 catch (Exception ex) {
@@ -354,6 +417,118 @@ public class LiveStackingService {
                 }
             }
         }
+    }
+
+    // ===== SNR-4 helpers =========================================
+    //
+    // TargetSnr + ExposureSecondsHint are caller-set knobs (the LIVE
+    // tab pushes them via /api/livestack/target-snr + the capture
+    // endpoint hands us the last exposure). Both nullable: when null
+    // the ETA computation returns null and the UI shows "—".
+
+    /// <summary>Target SNR for the ETA widget. Frontend sets via the
+    /// LIVE tab's override input (which itself defaults to the
+    /// active rig's TargetSnr profile field). Null = no target →
+    /// no ETA computed.</summary>
+    public double? TargetSnr { get; set; }
+
+    /// <summary>Average exposure time of recent frames, seconds.
+    /// Used by ETA to convert frames-remaining into time-remaining.
+    /// Capture endpoints push the last exposure here so the ETA
+    /// reflects the actual sub length being shot.</summary>
+    public double AverageExposureSec { get; set; } = 1.0;
+
+    /// <summary>MetricsOnly mode bridge: the WASM client side
+    /// computes cumulativeSnr on its accumulator and posts it back
+    /// via the existing 'client-stack-progress' WS message. The
+    /// ImageStreamHandler consumes the message and forwards via
+    /// this method so the WS broadcast + ETA work the same as in
+    /// Full mode. Frame-side per-frame snr also flows here so the
+    /// LIVE / PREVIEW UIs render consistent numbers.</summary>
+    public void InjectClientStackMetrics(int frameCount, double frameSnr, double cumulativeSnr) {
+        if (Mode != StackMode.MetricsOnly) return;
+        // Defensive: only update when the WASM client's frameCount is
+        // not behind ours (it lags by ≤1 due to async dispatch). A
+        // stale message shouldn't rewrite history.
+        if (frameCount < _frameCount - 1) return;
+        if (double.IsFinite(frameSnr) && frameSnr >= 0) LastFrameSnr = frameSnr;
+        if (double.IsFinite(cumulativeSnr) && cumulativeSnr >= 0) {
+            CumulativeSnr = cumulativeSnr;
+            RecordSnrSample(frameCount, cumulativeSnr);
+            RecomputeEta();
+        }
+    }
+
+    private double ComputeFrameSnr(ushort[] data) {
+        // Quick passes for median + MAD. ImageStatistics.Create does
+        // the same work but allocates an ImageStatistics object and
+        // a 65536-int histogram twice — for the live stack we run
+        // per-frame so we keep it lean: a single histogram + the
+        // existing helper to extract median, then a second use of
+        // the same histogram for MAD. The 65536 int histogram is ~0.25
+        // MB which is fine.
+        if (data == null || data.Length == 0) return 0;
+        var hist = new int[65536];
+        for (int i = 0; i < data.Length; i++) hist[data[i]]++;
+        long half = data.Length / 2;
+        long cum = 0;
+        int median = 0;
+        for (int i = 0; i < hist.Length; i++) {
+            cum += hist[i];
+            if (cum > half) { median = i; break; }
+        }
+        // MAD via a second histogram of |v − median|.
+        var devHist = new int[65536];
+        for (int i = 0; i < data.Length; i++) {
+            int d = Math.Abs(data[i] - median);
+            if (d < devHist.Length) devHist[d]++;
+        }
+        cum = 0;
+        int mad = 0;
+        for (int i = 0; i < devHist.Length; i++) {
+            cum += devHist[i];
+            if (cum > half) { mad = i; break; }
+        }
+        return ImageStatistics.ComputeBackgroundSnr(data, median, mad);
+    }
+
+    private double ComputeCumulativeSnrFromAccumulator() {
+        // Reconstruct the current running-mean stack on the fly from
+        // _stackBuffer / _countBuffer (same math as GetStackedResult
+        // but inlined so we don't allocate an extra ushort[]). For
+        // small / medium frames this is ~40 ms on a Pi 4 — runs
+        // once per integration which is well within budget.
+        lock (_lock) {
+            if (_stackBuffer == null || _countBuffer == null) return 0;
+            var n = _stackBuffer.Length;
+            // Build the stacked ushort[] view, then drop it into the
+            // same background SNR computation we use per-frame so the
+            // two numbers are directly comparable.
+            var stacked = new ushort[n];
+            for (int i = 0; i < n; i++) {
+                if (_countBuffer[i] > 0)
+                    stacked[i] = (ushort)Math.Clamp(_stackBuffer[i] / _countBuffer[i], 0, 65535);
+            }
+            return ComputeFrameSnr(stacked);
+        }
+    }
+
+    private void RecordSnrSample(int frame, double snr) {
+        if (frame <= 0 || !double.IsFinite(snr) || snr < 0) return;
+        // Deduplicate identical frame numbers (defensive — shouldn't
+        // happen but a duplicate WS message from the WASM client
+        // could in theory arrive).
+        if (_snrHistory.Count > 0 && _snrHistory[_snrHistory.Count - 1].frame == frame) {
+            _snrHistory[_snrHistory.Count - 1] = (frame, snr);
+            return;
+        }
+        _snrHistory.Add((frame, snr));
+        if (_snrHistory.Count > 50) _snrHistory.RemoveAt(0);
+    }
+
+    private void RecomputeEta() {
+        if (!TargetSnr.HasValue) { LastEta = null; return; }
+        LastEta = SnrEtaCalculator.Estimate(_snrHistory, TargetSnr.Value, AverageExposureSec);
     }
 
     public ushort[] GetStackedResult() {
@@ -383,7 +558,16 @@ public class LiveStackingService {
             MaxDurationSeconds = MaxDurationSeconds,
             StartedAt = _startedAt,
             ElapsedSeconds = ElapsedSeconds,
-            DurationCapReached = DurationCapReached
+            DurationCapReached = DurationCapReached,
+            // SNR-4 surface for the WS broadcaster. EtaSeconds /
+            // EtaFrames are null when SnrEtaCalculator returned null
+            // (low confidence / no target set / target already met).
+            LastFrameSnr = LastFrameSnr,
+            CumulativeSnr = CumulativeSnr,
+            TargetSnr = TargetSnr,
+            EtaFrames = LastEta?.RemainingFrames,
+            EtaSeconds = LastEta?.RemainingSeconds,
+            EtaConfidence = LastEta?.Confidence
         };
     }
 
@@ -421,5 +605,14 @@ public class LiveStackingService {
         /// crossed it. UI surfaces a "Stack complete" badge and
         /// stops the spinning indicator.</summary>
         public bool DurationCapReached { get; set; }
+        // SNR-4: SNR + ETA payload. nullable on ETA fields because
+        // SnrEtaCalculator returns null when the fit confidence is
+        // below threshold or the target isn't configured.
+        public double LastFrameSnr { get; set; }
+        public double CumulativeSnr { get; set; }
+        public double? TargetSnr { get; set; }
+        public int? EtaFrames { get; set; }
+        public double? EtaSeconds { get; set; }
+        public double? EtaConfidence { get; set; }
     }
 }

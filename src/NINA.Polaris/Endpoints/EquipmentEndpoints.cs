@@ -161,6 +161,15 @@ public static class EquipmentEndpoints {
                 if (update.LastVideoRoiSize.HasValue) r.LastVideoRoiSize = Math.Max(0, update.LastVideoRoiSize.Value);
                 if (!string.IsNullOrWhiteSpace(update.LastVideoRoiAspect))
                     r.LastVideoRoiAspect = update.LastVideoRoiAspect;
+                // SNR-3: target signal-to-noise ratio for the LIVE
+                // tab's ETA-to-target widget. nullable so a PUT that
+                // doesn't include it (older client / form not yet
+                // edited) doesn't clobber an existing target. Clamp
+                // to 0..500 so a typo doesn't break the ETA math.
+                if (update.TargetSnr.HasValue) {
+                    var t = update.TargetSnr.Value;
+                    r.TargetSnr = t > 0 && t <= 500 ? t : (double?)null;
+                }
             });
             return ok ? Results.Ok(new { message = "Rig updated" })
                       : Results.NotFound(new { error = "Rig not found" });

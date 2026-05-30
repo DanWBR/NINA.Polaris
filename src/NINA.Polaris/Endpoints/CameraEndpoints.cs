@@ -58,6 +58,11 @@ public static class CameraEndpoints {
                 // Null = legacy behaviour (feed if running).
                 var feedStack = request.FeedLiveStack ?? true;
                 if (feedStack && liveStack.IsRunning) {
+                    // SNR: keep the ETA's frame-to-time conversion
+                    // honest by feeding the actual exposure (which
+                    // can vary mid-session, e.g. user switches from
+                    // 60 s to 120 s subs without resetting the stack).
+                    if (request.Exposure > 0) liveStack.AverageExposureSec = request.Exposure;
                     await liveStack.AddFrameAsync(imageData!);
                 } else {
                     // Route the broadcast to the correct panel via the
@@ -123,6 +128,10 @@ public static class CameraEndpoints {
                         stdev = stats.StDev,
                         starCount = stats.StarCount,
                         hfr = stats.HFR,
+                        // Background SNR populated by ImageStatistics.Create
+                        // in the same pass that fills mean/median/MAD.
+                        // Surfaces in PREVIEW + LIVE + AUTORUN displays.
+                        snr = stats.SNR,
                         laplacianVar = laplacianVar,
                         min = stats.Min,
                         max = stats.Max

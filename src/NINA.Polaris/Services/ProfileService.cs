@@ -260,7 +260,8 @@ public class ProfileService {
             },
             LiveStackComputeMode = src.LiveStackComputeMode,
             LiveStackSaveFramesToDisk = src.LiveStackSaveFramesToDisk,
-            LiveStackMaxDurationSeconds = src.LiveStackMaxDurationSeconds
+            LiveStackMaxDurationSeconds = src.LiveStackMaxDurationSeconds,
+            TargetSnr = src.TargetSnr
         };
         _activeProfile.EquipmentProfiles.Add(copy);
         Save();
@@ -686,6 +687,16 @@ public class EquipmentProfile {
     /// short-stacks vs. deep-sky long-stacks) keep their own
     /// preferred duration.</summary>
     public int LiveStackMaxDurationSeconds { get; set; }
+
+    /// <summary>SNR-3: target signal-to-noise ratio used by the LIVE
+    /// tab's "ETA to target SNR" widget to estimate remaining stack
+    /// time. Per-rig so a planetary close-up (low target, fast) and a
+    /// deep-sky long-stack (high target, slow) each keep their own
+    /// number. null = no target configured, ETA widget shows "set
+    /// target" prompt. The LIVE tab can override this for a single
+    /// session without persisting (liveStack.targetSnrOverride on the
+    /// frontend); when null the override falls back to this value.</summary>
+    public double? TargetSnr { get; set; }
 
     /// <summary>Last-used VIDEO tab ROI / FOV (subframe). Persisted so
     /// the next session restores the same crop without the user re-

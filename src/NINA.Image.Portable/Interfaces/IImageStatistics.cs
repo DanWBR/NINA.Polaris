@@ -11,4 +11,9 @@ public interface IImageStatistics {
     int Max { get; }
     long StarCount { get; }
     double HFR { get; }
+    /// <summary>Background signal-to-noise ratio, computed in the
+    /// same pixel pass as Mean/Median/MAD. See
+    /// <see cref="NINA.Image.ImageData.ImageStatistics.ComputeBackgroundSnr"/>
+    /// for the formula.</summary>
+    double SNR { get; }
 }

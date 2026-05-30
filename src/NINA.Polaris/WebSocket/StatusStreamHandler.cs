@@ -247,6 +247,21 @@ public static class StatusStreamHandler {
                             startedAt = liveStack.StartedAt,
                             elapsedSeconds = liveStack.ElapsedSeconds,
                             durationCapReached = liveStack.DurationCapReached,
+                            // SNR-2: signal-to-noise + ETA payload.
+                            // lastFrameSnr is the snap quality of the
+                            // most-recent integrated frame; cumulativeSnr
+                            // is the SNR of the running-mean accumulator
+                            // (grows ~√N). targetSnr / etaFrames /
+                            // etaSeconds drive the LIVE-tab "stack
+                            // quality" widget. etaConfidence (R² of the
+                            // log-log fit) is null when the ETA is
+                            // null — UI shows "—" instead.
+                            lastFrameSnr = liveStack.LastFrameSnr,
+                            cumulativeSnr = liveStack.CumulativeSnr,
+                            targetSnr = liveStack.TargetSnr,
+                            etaFrames = liveStack.LastEta?.RemainingFrames,
+                            etaSeconds = liveStack.LastEta?.RemainingSeconds,
+                            etaConfidence = liveStack.LastEta?.Confidence,
                             triggers = liveStackTriggers.CurrentStatus,
                             // REFSUG-1: trend-based advisory. Always
                             // emitted so the UI can decide whether to

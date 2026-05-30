@@ -101,6 +101,30 @@ public static class LiveStackEndpoints {
             return Results.Ok(new { saved = true, enabled = req.Enabled });
         });
 
+        // SNR-3: session-only target SNR override. The active rig's
+        // TargetSnr is the persisted default; the LIVE tab can push
+        // a different number here for one session without touching
+        // the profile. POST { targetSnr: null } clears the override
+        // so the rig's value takes over again.
+        group.MapPut("/target-snr", (TargetSnrRequest req, LiveStackingService stack,
+                                      ProfileService profiles) => {
+            // Same range guard as the per-rig PUT in EquipmentEndpoints:
+            // accept 0 < x ≤ 500, anything else → clear.
+            double? clamped = null;
+            if (req.TargetSnr.HasValue) {
+                var t = req.TargetSnr.Value;
+                if (t > 0 && t <= 500) clamped = t;
+            }
+            // Effective target: explicit override wins, otherwise fall
+            // back to active rig.TargetSnr.
+            stack.SetTargetSnrOverride(clamped ?? profiles.ActiveEquipmentProfile?.TargetSnr);
+            return Results.Ok(new {
+                saved = true,
+                override_ = clamped,
+                effective = stack.TargetSnr
+            });
+        });
+
         // Auto-pause duration cap, seconds. 0 = unlimited (default).
         // Negative values are clamped to 0. Same persistence pattern
         // as /save-frames — runtime + profile in one call.
@@ -219,4 +243,9 @@ public static class LiveStackEndpoints {
     /// unlimited. The LIVE tab posts the user's "stack for N
     /// minutes" input here, converted to seconds.</summary>
     public record MaxDurationRequest(int Seconds);
+
+    /// <summary>Body of PUT /api/livestack/target-snr. null clears
+    /// the session-level override so the active rig's TargetSnr
+    /// takes effect again.</summary>
+    public record TargetSnrRequest(double? TargetSnr);
 }
