@@ -10,7 +10,29 @@ public static class AlpacaEndpoints {
         group.MapGet("/discover", async (AlpacaDiscovery disc, int? timeoutMs) => {
             var to = TimeSpan.FromMilliseconds(Math.Clamp(timeoutMs ?? 3000, 200, 15000));
             var servers = await disc.DiscoverServersAsync(to);
-            return Results.Ok(new { count = servers.Count, servers });
+            // Project to camelCase so the frontend can read .devices[].deviceName /
+            // .deviceType. AlpacaConfiguredDevice carries [JsonPropertyName] PascalCase
+            // attributes (needed to PARSE the response from the Alpaca server upstream
+            // — Alpaca spec is PascalCase), so without this projection the SAME
+            // attributes flip ASP.NET's output to PascalCase too and the UI's
+            // d.deviceName binding lands on undefined. Same projection in /devices
+            // below; keep them in sync.
+            return Results.Ok(new {
+                count = servers.Count,
+                servers = servers.Select(s => new {
+                    host = s.Host,
+                    port = s.Port,
+                    serverName = s.ServerName,
+                    manufacturer = s.Manufacturer,
+                    manufacturerVersion = s.ManufacturerVersion,
+                    devices = (s.Devices ?? new()).Select(d => new {
+                        deviceName = d.DeviceName,
+                        deviceType = d.DeviceType,
+                        deviceNumber = d.DeviceNumber,
+                        uniqueID = d.UniqueID
+                    })
+                })
+            });
         });
 
         // ---- Manual server query (skip discovery, useful behind NAT / for tests) ----
@@ -44,9 +66,15 @@ public static class AlpacaEndpoints {
             var url = $"http://{host}:{port}/management/v1/configureddevices";
             try {
                 var resp = await http.GetFromJsonAsync<AlpacaResponse<List<AlpacaConfiguredDevice>>>(url);
+                // Project to camelCase keys (see /discover for the why).
                 return Results.Ok(new {
                     host, port,
-                    devices = resp?.Value ?? new List<AlpacaConfiguredDevice>()
+                    devices = (resp?.Value ?? new()).Select(d => new {
+                        deviceName = d.DeviceName,
+                        deviceType = d.DeviceType,
+                        deviceNumber = d.DeviceNumber,
+                        uniqueID = d.UniqueID
+                    })
                 });
             } catch (HttpRequestException ex) {
                 // Connection refused / DNS / timeout — server not reachable.
