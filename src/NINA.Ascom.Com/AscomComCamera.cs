@@ -3,6 +3,7 @@ using System.Runtime.Versioning;
 using NINA.Core.Enum;
 using NINA.Image.ImageData;
 using NINA.Image.Interfaces;
+using SensorTypeEnum = NINA.Core.Enum.SensorType;
 
 namespace NINA.Ascom.Com;
 
@@ -43,6 +44,14 @@ public sealed class AscomComCamera : ICamera, IDisposable {
     private int _bitDepth = 16;
     private bool _canCool, _canBin, _canAbort, _canRoi, _hasGain;
     private int _gainMin, _gainMax;
+    // OSC / Bayer mosaic metadata cached at Connect time. ASCOM's
+    // SensorType property reports the matrix layout (RGGB/BGGR/etc);
+    // we project that onto Polaris's BayerPatternEnum + SensorType so
+    // the downstream WebGL debayer shader knows to demosaic. Without
+    // these the preview rendered the raw Bayer pattern as grayscale
+    // — visible to the user as a high-frequency checkerboard.
+    private SensorTypeEnum _sensorType = SensorTypeEnum.Monochrome;
+    private BayerPatternEnum _bayerPattern = BayerPatternEnum.None;
 
     public AscomComCamera(string progId) {
         _progId = progId ?? throw new ArgumentNullException(nameof(progId));
@@ -157,6 +166,36 @@ public sealed class AscomComCamera : ICamera, IDisposable {
             _gainMax = (int)(short)_driver.GainMax;
             _hasGain = _gainMax > _gainMin;
         } catch { _hasGain = false; }
+        // ICameraV3.SensorType — int enum, values mirror our
+        // SensorTypeEnum (0=Monochrome, 1=Color, 2=RGGB, 3=CMYG,
+        // 4=CMYG2, 5=LRGB, 6=BGGR, 7=GBRG, 8=GRBG). Mono cameras +
+        // drivers that don't implement the property fall to
+        // Monochrome / no Bayer (safe default — debayer skipped).
+        // ZWO's ASCOM driver for the ASI715MC reports 2 (RGGB) here.
+        var ascomSensor = SafeGet<int>(() => (int)_driver.SensorType, 0);
+        _sensorType = ascomSensor switch {
+            1 => SensorTypeEnum.Color,
+            2 => SensorTypeEnum.RGGB,
+            3 => SensorTypeEnum.CMYG,
+            4 => SensorTypeEnum.CMYG2,
+            5 => SensorTypeEnum.LRGB,
+            6 => SensorTypeEnum.BGGR,
+            7 => SensorTypeEnum.GBRG,
+            8 => SensorTypeEnum.GRBG,
+            _ => SensorTypeEnum.Monochrome,
+        };
+        _bayerPattern = _sensorType switch {
+            SensorTypeEnum.RGGB => BayerPatternEnum.RGGB,
+            SensorTypeEnum.BGGR => BayerPatternEnum.BGGR,
+            SensorTypeEnum.GBRG => BayerPatternEnum.GBRG,
+            SensorTypeEnum.GRBG => BayerPatternEnum.GRBG,
+            // SensorTypeEnum.Color = generic OSC without a specific
+            // matrix advertised. Most colour-CMOS ASCOM drivers do
+            // advertise RGGB explicitly, so this fallback only fires
+            // for older / quirkier drivers — leave debayer off and
+            // let the user set the pattern in the rig profile.
+            _ => BayerPatternEnum.None,
+        };
     });
 
     public Task DisconnectAsync(CancellationToken ct = default) => _disp.Invoke(() => {
@@ -254,14 +293,25 @@ public sealed class AscomComCamera : ICamera, IDisposable {
         var props = new ImageProperties {
             Width = width,
             Height = height,
-            BitDepth = _bitDepth
+            BitDepth = _bitDepth,
+            // CRITICAL for OSC sensors like the ZWO ASI715MC: without
+            // these two fields populated, the downstream pipeline
+            // (WebGL debayer shader in the browser, FITSWriter
+            // BAYERPAT header, ImageStatistics R/G/B split) treats
+            // the frame as grayscale and the preview renders the raw
+            // Bayer mosaic as a checkerboard pattern instead of a
+            // colour image.
+            IsBayered = _bayerPattern != BayerPatternEnum.None,
+            BayerPattern = _bayerPattern
         };
         var meta = new ImageMetaData {
             Camera = new ImageMetaData.CameraInfo {
                 Name = _deviceName,
                 PixelSizeX = _pixelSizeX,
                 PixelSizeY = _pixelSizeY,
-                Gain = _hasGain ? Gain : 0
+                Gain = _hasGain ? Gain : 0,
+                SensorType = _sensorType,
+                BayerPattern = _bayerPattern
             },
             Exposure = new ImageMetaData.ExposureInfo {
                 ExposureTime = exposureSeconds,
