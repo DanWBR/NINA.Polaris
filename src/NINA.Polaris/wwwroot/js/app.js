@@ -3701,16 +3701,25 @@ function ninaApp() {
                     else if (u_bayer == 2) { b = p00; g = 0.5 * (p10 + p01); r = p11; }   // BGGR
                     else if (u_bayer == 3) { g = 0.5 * (p00 + p11); b = p10; r = p01; }   // GBRG
                     else /* 4 GRBG */      { g = 0.5 * (p00 + p11); r = p10; b = p01; }
-                    // Apply per-channel white balance to compensate for
-                    // OSC Bayer 2:1:1 G:R:B sensitivity. Without this
-                    // the image comes out heavily green-tinted (every
-                    // 2x2 cell averages two green sites against one
-                    // red and one blue). Defaults 1.7/1.5 approximate
-                    // daylight WB for typical CMOS OSC sensors (ZWO
-                    // ASI224/ASI462/ASI715, QHY5III678C, etc.). Apply
-                    // before stretch so the WB-amplified bright pixels
-                    // can still saturate cleanly.
-                    fragColor = vec4(stretch(r * u_wbR), stretch(g), stretch(b * u_wbB), 1.0);
+                    // Stretch FIRST, then apply per-channel white
+                    // balance. Earlier this multiplied R and B by 1.7
+                    // / 1.5 before stretch, which on a near-uniform
+                    // bias / dark frame (all pixels at the noise floor
+                    // ~ADU 1024) pushed R and B above the auto-stretch
+                    // shadow point while G stayed at it -- result was
+                    // pure magenta noise instead of grey noise. By
+                    // stretching first we let the auto-stretch see the
+                    // raw signal and only colour-balance the normalised
+                    // output, which clamps cleanly to [0, 1]. Defaults
+                    // 1.7 / 1.5 still approximate daylight WB for OSC
+                    // sensors (ZWO ASI224/462/715, QHY5III678C, etc.)
+                    // when there IS real signal above the noise floor.
+                    float sr = stretch(r);
+                    float sg = stretch(g);
+                    float sb = stretch(b);
+                    fragColor = vec4(clamp(sr * u_wbR, 0.0, 1.0),
+                                     sg,
+                                     clamp(sb * u_wbB, 0.0, 1.0), 1.0);
                 }`;
 
             const compile = (type, src) => {
