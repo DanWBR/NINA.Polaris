@@ -3218,8 +3218,31 @@
                             <span class="equip-status-dot" :class="focusConnected ? 'connected' : 'disconnected'"></span>
                         </div>
                         <div class="equip-card-body">
+                            <!-- Driver picker. Hidden when only INDI is
+                                 advertised (e.g. on Linux), so the card
+                                 looks unchanged to existing users. -->
+                            <div class="equip-driver-row" x-show="focuserDrivers.length > 1">
+                                <label class="equip-driver-label">Driver</label>
+                                <select class="equip-select equip-driver-select"
+                                        x-model="focuserDriver"
+                                        @change="focuserVendorDevices = []; equipFocuserChoice = ''">
+                                    <template x-for="d in focuserDrivers" :key="d.id">
+                                        <option :value="d.id" :disabled="!d.available"
+                                                x-text="d.name + (d.available ? '' : ' (not installed)')"></option>
+                                    </template>
+                                </select>
+                            </div>
+
+                            <div class="equip-install-banner"
+                                 x-show="focuserDriverInfo && !focuserDriverInfo.available"
+                                 x-cloak>
+                                <span x-text="focuserDriverInfo?.name + ' driver not available on this host.'"></span>
+                            </div>
+
                             <div class="equip-select-row">
+                                <!-- INDI path -->
                                 <select class="equip-select"
+                                        x-show="focuserDriver === 'indi'"
                                         @change="equipFocuserChoice = $event.target.value">
                                     <option value="">Select device</option>
                                     <template x-for="dev in devices" :key="'foc-'+dev.name">
@@ -3228,6 +3251,40 @@
                                                 x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
                                     </template>
                                 </select>
+
+                                <!-- ASCOM path: dropdown populated by Detect -->
+                                <select class="equip-select" x-model="equipFocuserChoice"
+                                        x-show="focuserDriver !== 'indi'">
+                                    <option value="">
+                                        <template x-if="focuserVendorDevices.length === 0">
+                                            <span>-- Click Detect to scan --</span>
+                                        </template>
+                                        <template x-if="focuserVendorDevices.length > 0">
+                                            <span>Select focuser</span>
+                                        </template>
+                                    </option>
+                                    <template x-for="f in focuserVendorDevices" :key="f.id">
+                                        <option :value="f.id" x-text="f.model + ' (' + f.detail + ')'"></option>
+                                    </template>
+                                </select>
+
+                                <button class="btn btn-sm" @click="detectVendorFocusers()"
+                                        x-show="focuserDriver !== 'indi'"
+                                        :disabled="focuserDiscovering || !focuserDriverInfo?.available"
+                                        title="Re-scan for installed ASCOM focuser drivers">
+                                    <span x-show="!focuserDiscovering">🔍 Detect</span>
+                                    <span x-show="focuserDiscovering">…</span>
+                                </button>
+
+                                <button class="btn btn-sm"
+                                        x-show="focuserDriver === 'ascom-com' && equipFocuserChoice"
+                                        @click="openAscomSetup(equipFocuserChoice)"
+                                        :disabled="ascomSetupBusy"
+                                        title="Open the driver's setup dialog">
+                                    <span x-show="!ascomSetupBusy">⚙ Setup</span>
+                                    <span x-show="ascomSetupBusy">…</span>
+                                </button>
+
                                 <label class="equip-toggle"
                                        :aria-disabled="(!focusConnected && !equipFocuserChoice).toString()"
                                        :title="focusConnected ? 'Disconnect focuser' : 'Connect focuser'">
@@ -3258,8 +3315,27 @@
                             <span class="equip-status-dot" :class="filterWheel.connected ? 'connected' : 'disconnected'"></span>
                         </div>
                         <div class="equip-card-body">
+                            <div class="equip-driver-row" x-show="filterWheelDrivers.length > 1">
+                                <label class="equip-driver-label">Driver</label>
+                                <select class="equip-select equip-driver-select"
+                                        x-model="filterWheelDriver"
+                                        @change="filterWheelVendorDevices = []; equipFilterChoice = ''">
+                                    <template x-for="d in filterWheelDrivers" :key="d.id">
+                                        <option :value="d.id" :disabled="!d.available"
+                                                x-text="d.name + (d.available ? '' : ' (not installed)')"></option>
+                                    </template>
+                                </select>
+                            </div>
+
+                            <div class="equip-install-banner"
+                                 x-show="filterWheelDriverInfo && !filterWheelDriverInfo.available"
+                                 x-cloak>
+                                <span x-text="filterWheelDriverInfo?.name + ' driver not available on this host.'"></span>
+                            </div>
+
                             <div class="equip-select-row">
                                 <select class="equip-select"
+                                        x-show="filterWheelDriver === 'indi'"
                                         @change="equipFilterChoice = $event.target.value">
                                     <option value="">Select device</option>
                                     <template x-for="dev in devices" :key="'fw-'+dev.name">
@@ -3268,6 +3344,39 @@
                                                 x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
                                     </template>
                                 </select>
+
+                                <select class="equip-select" x-model="equipFilterChoice"
+                                        x-show="filterWheelDriver !== 'indi'">
+                                    <option value="">
+                                        <template x-if="filterWheelVendorDevices.length === 0">
+                                            <span>-- Click Detect to scan --</span>
+                                        </template>
+                                        <template x-if="filterWheelVendorDevices.length > 0">
+                                            <span>Select filter wheel</span>
+                                        </template>
+                                    </option>
+                                    <template x-for="f in filterWheelVendorDevices" :key="f.id">
+                                        <option :value="f.id" x-text="f.model + ' (' + f.detail + ')'"></option>
+                                    </template>
+                                </select>
+
+                                <button class="btn btn-sm" @click="detectVendorFilterWheels()"
+                                        x-show="filterWheelDriver !== 'indi'"
+                                        :disabled="filterWheelDiscovering || !filterWheelDriverInfo?.available"
+                                        title="Re-scan for installed ASCOM filter-wheel drivers">
+                                    <span x-show="!filterWheelDiscovering">🔍 Detect</span>
+                                    <span x-show="filterWheelDiscovering">…</span>
+                                </button>
+
+                                <button class="btn btn-sm"
+                                        x-show="filterWheelDriver === 'ascom-com' && equipFilterChoice"
+                                        @click="openAscomSetup(equipFilterChoice)"
+                                        :disabled="ascomSetupBusy"
+                                        title="Open the driver's setup dialog">
+                                    <span x-show="!ascomSetupBusy">⚙ Setup</span>
+                                    <span x-show="ascomSetupBusy">…</span>
+                                </button>
+
                                 <label class="equip-toggle"
                                        :aria-disabled="(!filterWheel.connected && !equipFilterChoice).toString()"
                                        :title="filterWheel.connected ? 'Disconnect filter wheel' : 'Connect filter wheel'">

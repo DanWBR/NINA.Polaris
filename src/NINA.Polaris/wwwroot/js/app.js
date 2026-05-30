@@ -516,6 +516,22 @@ function ninaApp() {
         // cameraVendorDevices.
         mountVendorDevices: [],
         mountDiscovering: false,
+
+        // Focuser + filter-wheel driver state. Same shape as camera /
+        // mount, drives the ?driver= query string on /select. INDI
+        // dropdown reads from the live indiserver device list; ASCOM
+        // dropdown reads from the local Windows ASCOM registry via
+        // /api/focuser/discover?driver=ascom-com. Hidden when only
+        // INDI is available (e.g. Linux server).
+        focuserDriver: 'indi',
+        focuserDrivers: [],
+        focuserVendorDevices: [],
+        focuserDiscovering: false,
+        filterWheelDriver: 'indi',
+        filterWheelDrivers: [],
+        filterWheelVendorDevices: [],
+        filterWheelDiscovering: false,
+
         // ASCOM SetupDialog modal state. True while the driver's
         // setup form is open; disables the Setup button to prevent
         // a second concurrent dialog (drivers usually crash on that).
@@ -1688,6 +1704,8 @@ function ninaApp() {
             this.loadLiveStackTriggers();
             this.loadCameraDrivers();
             this.loadMountDrivers();
+            this.loadFocuserDrivers();
+            this.loadFilterWheelDrivers();
             this.restoreMountPanel();
             this.restoreCameraPanel();
             window.addEventListener('resize', () => {
@@ -8899,7 +8917,9 @@ function ninaApp() {
             // name advertised by the indiserver.
             this.mountDriver = rig.telescopeDriver || 'indi';
             this.equipFocuserChoice = rig.focuser || '';
+            this.focuserDriver = rig.focuserDriver || 'indi';
             this.equipFilterChoice = rig.filterWheel || '';
+            this.filterWheelDriver = rig.filterWheelDriver || 'indi';
             this.equipRotatorChoice = rig.rotator || '';
             this.equipFlatChoice = rig.flatDevice || '';
             this.equipDomeChoice = rig.dome || '';
@@ -9267,7 +9287,9 @@ function ninaApp() {
                 telescope: this.equipMountChoice || rig.telescope,
                 telescopeDriver: this.mountDriver || rig.telescopeDriver || 'indi',
                 focuser: this.equipFocuserChoice || rig.focuser,
+                focuserDriver: this.focuserDriver || rig.focuserDriver || 'indi',
                 filterWheel: this.equipFilterChoice || rig.filterWheel,
+                filterWheelDriver: this.filterWheelDriver || rig.filterWheelDriver || 'indi',
                 rotator: this.equipRotatorChoice || rig.rotator,
                 flatDevice: this.equipFlatChoice || rig.flatDevice,
                 dome: this.equipDomeChoice || rig.dome,
@@ -13092,7 +13114,14 @@ function ninaApp() {
         async equipConnectFocuser() {
             if (!this.equipFocuserChoice) return;
             try {
-                await this.apiPost(`/api/focuser/select/${encodeURIComponent(this.equipFocuserChoice)}`);
+                // Same ?driver= dispatch the camera / mount selects use.
+                // INDI is the default — older clients that never picked a
+                // driver still work, and the ASCOM picker on Windows is
+                // honoured.
+                const qs = this.focuserDriver && this.focuserDriver !== 'indi'
+                    ? `?driver=${encodeURIComponent(this.focuserDriver)}` : '';
+                await this.apiPost(
+                    `/api/focuser/select/${encodeURIComponent(this.equipFocuserChoice)}${qs}`);
                 await this.apiPost('/api/focuser/connect');
                 this.selectedFocuser = this.equipFocuserChoice;
                 this.focusConnected = true;
@@ -13118,7 +13147,10 @@ function ninaApp() {
         async equipConnectFilter() {
             if (!this.equipFilterChoice) return;
             try {
-                await this.apiPost(`/api/filterwheel/select/${encodeURIComponent(this.equipFilterChoice)}`);
+                const qs = this.filterWheelDriver && this.filterWheelDriver !== 'indi'
+                    ? `?driver=${encodeURIComponent(this.filterWheelDriver)}` : '';
+                await this.apiPost(
+                    `/api/filterwheel/select/${encodeURIComponent(this.equipFilterChoice)}${qs}`);
                 await this.apiPost('/api/filterwheel/connect');
                 this.selectedFilterWheel = this.equipFilterChoice;
                 this.filterWheel.connected = true;
@@ -13126,6 +13158,71 @@ function ninaApp() {
             } catch (e) {
                 this.toast('Filter wheel connection failed: ' + e.message, 'error');
             }
+        },
+
+        // ASCOM-4 follow-up: parallel of loadCameraDrivers /
+        // loadMountDrivers for focuser + filter wheel. Same payload
+        // shape (CameraDriverInfo on the wire), same fallback list
+        // when the endpoint isn't reachable yet (offline page reload).
+        async loadFocuserDrivers() {
+            try {
+                this.focuserDrivers = await this.apiGet('/api/focuser/drivers');
+            } catch (e) {
+                this.focuserDrivers = [{
+                    id: 'indi', name: 'INDI', available: true,
+                    description: 'Any focuser the running INDI server exposes.'
+                }];
+            }
+        },
+        async loadFilterWheelDrivers() {
+            try {
+                this.filterWheelDrivers = await this.apiGet('/api/filterwheel/drivers');
+            } catch (e) {
+                this.filterWheelDrivers = [{
+                    id: 'indi', name: 'INDI', available: true,
+                    description: 'Any filter wheel the running INDI server exposes.'
+                }];
+            }
+        },
+        // Vendor-side discovery (ASCOM registry). Same call shape as
+        // detectVendorCameras. Skip the IndiClient-driven dropdown.
+        async detectVendorFocusers() {
+            this.focuserDiscovering = true;
+            try {
+                const list = await this.apiGet(
+                    `/api/focuser/discover?driver=${encodeURIComponent(this.focuserDriver)}`);
+                this.focuserVendorDevices = list || [];
+                if (this.focuserVendorDevices.length === 0) {
+                    this.toast('No focusers detected for ' + this.focuserDriver, 'warn');
+                }
+            } catch (e) {
+                this.toast('Detect failed: ' + (e.message || ''), 'error');
+                this.focuserVendorDevices = [];
+            } finally {
+                this.focuserDiscovering = false;
+            }
+        },
+        async detectVendorFilterWheels() {
+            this.filterWheelDiscovering = true;
+            try {
+                const list = await this.apiGet(
+                    `/api/filterwheel/discover?driver=${encodeURIComponent(this.filterWheelDriver)}`);
+                this.filterWheelVendorDevices = list || [];
+                if (this.filterWheelVendorDevices.length === 0) {
+                    this.toast('No filter wheels detected for ' + this.filterWheelDriver, 'warn');
+                }
+            } catch (e) {
+                this.toast('Detect failed: ' + (e.message || ''), 'error');
+                this.filterWheelVendorDevices = [];
+            } finally {
+                this.filterWheelDiscovering = false;
+            }
+        },
+        get focuserDriverInfo() {
+            return this.focuserDrivers.find(d => d.id === this.focuserDriver) || null;
+        },
+        get filterWheelDriverInfo() {
+            return this.filterWheelDrivers.find(d => d.id === this.filterWheelDriver) || null;
         },
 
         async equipDisconnectFilter() {
