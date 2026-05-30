@@ -315,6 +315,20 @@ function ninaApp() {
         uiZoom: 1.0,
         uiZoomDraft: 1.0,
 
+        // FONT-1: app-wide font picker. Values match the
+        // [data-font="..."] selectors in app.css that override
+        // --font-body / --font-mono. 'inter' is the historical
+        // default (vendored InterVariable in css/fonts/);
+        // 'atkinson' targets retired-user readability via the
+        // Braille Institute's Atkinson Hyperlegible (unique
+        // letter shapes so B/8, l/1/I never confuse); 'plex' is
+        // IBM Plex Sans + Plex Mono for a corporate-tech vibe;
+        // 'system' falls back to the OS UI font. The setter is
+        // an attribute on <html> rather than a class, so the
+        // initial load can apply via inline script before the
+        // CSS even parses (avoids FOUT).
+        uiFont: 'inter',
+
         // SWE-5: object-info card overlay on the sky map. Populated
         // when the bridge emits a map-click with a rich object payload
         // (the user clicked on a recognised star/DSO/planet rather
@@ -1659,6 +1673,16 @@ function ninaApp() {
                 : this._defaultUiZoom();
             this.uiZoomDraft = this.uiZoom;
             this.applyUiZoom();
+
+            // FONT-1: restore font choice. Use the inline boot
+            // attribute that index.html stamps before Alpine
+            // initialises (avoids FOUT). Otherwise default to
+            // 'inter' which is what the codebase shipped with.
+            const fontSaved = localStorage.getItem('nina-ui-font');
+            this.uiFont = fontSaved && ['inter','atkinson','plex','system'].includes(fontSaved)
+                ? fontSaved
+                : 'inter';
+            this.applyUiFont();
 
             // Re-render the cached frame whenever the user switches
             // tabs. Fixes the classic "last snap painted on PREVIEW,
@@ -3118,6 +3142,24 @@ function ninaApp() {
             document.body.style.zoom = String(z);
             try { localStorage.setItem('nina-ui-zoom', String(z)); }
             catch (_) { /* private mode etc. */ }
+        },
+
+        // FONT-1: write [data-font] on <html> + persist. The CSS
+        // selectors in app.css pick up the attribute and swap
+        // --font-body / --font-mono; the change is instant — no
+        // reflow more expensive than a font swap, and no need to
+        // re-render any canvas since canvases don't use document
+        // CSS. 'inter' clears the attribute (default state) so
+        // the bare :root vars apply.
+        applyUiFont() {
+            const allowed = ['inter', 'atkinson', 'plex', 'system'];
+            const v = allowed.includes(this.uiFont) ? this.uiFont : 'inter';
+            this.uiFont = v;
+            try {
+                if (v === 'inter') document.documentElement.removeAttribute('data-font');
+                else document.documentElement.setAttribute('data-font', v);
+                localStorage.setItem('nina-ui-font', v);
+            } catch (_) { /* private mode etc. */ }
         },
 
         // Drop the user's explicit pick and fall back to whatever the
