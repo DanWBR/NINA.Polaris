@@ -4391,6 +4391,27 @@ function ninaApp() {
             this._skySendMessage({ type: 'set-time', utc: Date.now() });
         },
 
+        // Forced re-sync helper. Re-pushes observer + UTC and, if the
+        // mount is connected, re-issues the initial look-at. Used by
+        // the bridge 'ready' handler at +800ms and +2200ms because the
+        // first push can land before the engine's HiPS / skydata
+        // pipeline is ready to honour it — symptom is "sky doesn't
+        // show the right place on first refresh". Idempotent: if
+        // everything already converged, all three calls are no-ops
+        // from the engine's perspective.
+        _skyForcedResync(delayMs) {
+            setTimeout(() => {
+                if (!this._skyBridgeReady) return;
+                this._skyPushObserverAndTime();
+                if (this.mount?.connected
+                    && Number.isFinite(this.mount.ra)
+                    && Number.isFinite(this.mount.dec)) {
+                    this._skyLookAt(this.mount.ra, this.mount.dec, 15);
+                }
+                this._pushSkyFovOverlays();
+            }, delayMs);
+        },
+
         // SWE: push the DSS background visibility to the bridge. Called
         // on the SKY toolbar checkbox change AND right after 'ready'
         // (so the persisted localStorage choice is honoured on reload
@@ -4545,6 +4566,22 @@ function ninaApp() {
                             }
                         });
                         this._pushSkyFovOverlays();
+                        // Forced re-sync after the engine has had time to
+                        // settle its data-source pipeline. The first
+                        // pushObserverAndTime + lookAt races against
+                        // HiPS tile + skydata loading, so on first
+                        // refresh the engine sometimes renders with a
+                        // stale observer (Geneva 2009) or skips the
+                        // initial pan entirely — the symptom the user
+                        // sees is "sky doesn't load the right place on
+                        // first refresh". Two extra pushes at +800ms
+                        // and +2200ms cover both fast and slow loads
+                        // (Pi 5 ~600ms ready; Pi 2/3 + cold cache up
+                        // to ~2s). Cheap: each is 3-4 postMessage
+                        // calls, and the engine ignores no-op observer
+                        // updates.
+                        this._skyForcedResync(800);
+                        this._skyForcedResync(2200);
                         break;
                     case 'webgl-unavailable':
                         this._skyWebGLAvailable = false;
