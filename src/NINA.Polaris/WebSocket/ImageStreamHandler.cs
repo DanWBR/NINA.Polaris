@@ -16,6 +16,7 @@ public static class ImageStreamHandler {
         }
 
         var relay = context.RequestServices.GetRequiredService<ImageRelayService>();
+        var liveStack = context.RequestServices.GetRequiredService<LiveStackingService>();
         var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
 
         using var ws = await context.WebSockets.AcceptWebSocketAsync(new WebSocketAcceptContext {
@@ -49,7 +50,7 @@ public static class ImageStreamHandler {
                     // Handle text messages for mode switching
                     if (result.MessageType == WebSocketMessageType.Text && result.Count > 0) {
                         var text = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                        HandleClientMessage(relay, clientId, text, logger);
+                        HandleClientMessage(relay, liveStack, clientId, text, logger);
                     }
                 } catch (OperationCanceledException) {
                     logger.LogDebug("Image stream client {Id} timed out", clientId);
@@ -64,7 +65,7 @@ public static class ImageStreamHandler {
         }
     }
 
-    private static void HandleClientMessage(ImageRelayService relay, string clientId, string text, ILogger logger) {
+    private static void HandleClientMessage(ImageRelayService relay, LiveStackingService liveStack, string clientId, string text, ILogger logger) {
         try {
             using var doc = JsonDocument.Parse(text);
             var root = doc.RootElement;
@@ -94,17 +95,32 @@ public static class ImageStreamHandler {
                         break;
 
                     case "client-stack-progress":
-                        // Logged at debug for now, the trigger
-                        // orchestrator still uses the server-side
-                        // StarDetector's metrics (which run in
-                        // MetricsOnly mode too) so we don't need to
-                        // wire these through. Useful for diagnosing
-                        // server-vs-client output divergence.
+                        // Logged at debug for HFR/star count (still
+                        // computed by the server-side StarDetector in
+                        // MetricsOnly mode, so no need to wire them).
+                        // SNR-5: the SNR fields ARE wired to
+                        // LiveStackingService.InjectClientStackMetrics
+                        // because the server has no accumulator in
+                        // MetricsOnly mode and so can't recompute
+                        // cumulativeSnr itself. Same call feeds the
+                        // ETA calculator + WS status payload.
                         if (root.TryGetProperty("frameCount", out var fc)
                             && root.TryGetProperty("hfr", out var hfr)
                             && root.TryGetProperty("starCount", out var sc)) {
                             logger.LogDebug("Client {Id} integrated frame {N}: HFR={Hfr:F2} stars={Stars}",
                                 clientId, fc.GetInt32(), hfr.GetDouble(), sc.GetInt32());
+                        }
+                        if (root.TryGetProperty("frameCount", out var fcSnr)
+                            && root.TryGetProperty("frameSnr", out var fsnr)
+                            && root.TryGetProperty("cumulativeSnr", out var csnr)) {
+                            try {
+                                liveStack.InjectClientStackMetrics(
+                                    fcSnr.GetInt32(),
+                                    fsnr.GetDouble(),
+                                    csnr.GetDouble());
+                            } catch (Exception ex) {
+                                logger.LogDebug(ex, "Client {Id} SNR inject failed", clientId);
+                            }
                         }
                         break;
                 }

@@ -66,7 +66,7 @@ public static partial class Interop {
     /// works. Bump the suffix on protocol-breaking changes so a
     /// stale cached bundle is detectable.</summary>
     [JSExport]
-    public static string Ping() => "pong v0.4 (CLST-3 stacker + ED-6 editor + JsonContext)";
+    public static string Ping() => "pong v0.5 (CLST-3 stacker + ED-6 editor + JsonContext + SNR-5)";
 
     /// <summary>Reset accumulator buffers + reference frame. Called
     /// by the page's "Reset" button + automatically on page load
@@ -81,7 +81,7 @@ public static partial class Interop {
         _frameCount = 0;
     }
 
-    /// <summary>Ingest one raw uint16 frame. Returns a 5-int packed
+    /// <summary>Ingest one raw uint16 frame. Returns a 7-int packed
     /// metrics tuple that the page un-packs and forwards to the
     /// server's trigger orchestrator:
     /// <list type="bullet">
@@ -89,11 +89,15 @@ public static partial class Interop {
     ///   <item>[1] medianHfr * 100 (fixed-point, divide by 100 in JS)</item>
     ///   <item>[2] starCount</item>
     ///   <item>[3] alignmentOk (0 / 1), always 1 on frame 1 (reference)</item>
-    ///   <item>[4] reserved (transform.Tx * 100 in future work)</item>
+    ///   <item>[4] reserved (transform.Tx * 100)</item>
+    ///   <item>[5] lastFrameSnr * 100 (this frame's background SNR)</item>
+    ///   <item>[6] cumulativeSnr * 100 (running-mean stack's SNR)</item>
     /// </list>
     /// The packed-int return avoids the per-call marshalling overhead
     /// a struct or string-JSON return would impose; saves ~50us per
-    /// frame which adds up at 1 fps × hours.
+    /// frame which adds up at 1 fps × hours. SNRs are returned ×100
+    /// (fixed-point with 2 decimal places of precision; SNR rarely
+    /// exceeds 200 so int range is plenty).
     /// </summary>
     [JSExport]
     public static int[] AddFrame(int[] pixelsInt32, int width, int height) {
@@ -124,12 +128,12 @@ public static partial class Interop {
             if (width != _width || height != _height) {
                 // Frame size mismatch, bail without bumping count. JS
                 // sees frameCount==previous and can log a warning.
-                return [_frameCount, 0, stars.Count, 0, 0];
+                return [_frameCount, 0, stars.Count, 0, 0, 0, 0];
             }
             var transform = StarMatcher.Match(_referenceStars!, stars);
             if (transform == null) {
                 alignmentOk = 0;
-                return [_frameCount, 0, stars.Count, 0, 0];
+                return [_frameCount, 0, stars.Count, 0, 0, 0, 0];
             }
             alignedData = ImageResampler.ApplyTransform(pixels, _width, _height, transform);
             reserved = (int)(transform.Tx * 100);
@@ -152,7 +156,32 @@ public static partial class Interop {
             if (hfrs.Count > 0) medianHfr = hfrs[hfrs.Count / 2];
         }
 
-        return [_frameCount, (int)(medianHfr * 100), stars.Count, alignmentOk, reserved];
+        // SNR-5: per-frame SNR on the raw incoming pixels (NOT the
+        // aligned/resampled buffer — alignment fills out-of-bounds with
+        // zero, which would skew the background population). Cumulative
+        // SNR on the running-mean of the accumulator, computed lazily
+        // (one snapshot ushort[] alloc per frame, acceptable at 1 fps).
+        double lastFrameSnr = ImageStatistics.ComputeBackgroundSnrFromData(pixels);
+        double cumulativeSnr = 0;
+        if (_stackBuffer != null && _countBuffer != null && _frameCount > 0) {
+            var snapshot = new ushort[_stackBuffer.Length];
+            for (int i = 0; i < _stackBuffer.Length; i++) {
+                if (_countBuffer[i] > 0) {
+                    snapshot[i] = (ushort)Math.Clamp(_stackBuffer[i] / _countBuffer[i], 0, 65535);
+                }
+            }
+            cumulativeSnr = ImageStatistics.ComputeBackgroundSnrFromData(snapshot);
+        }
+
+        return [
+            _frameCount,
+            (int)(medianHfr * 100),
+            stars.Count,
+            alignmentOk,
+            reserved,
+            (int)(lastFrameSnr * 100),
+            (int)(cumulativeSnr * 100)
+        ];
     }
 
     /// <summary>Get the running-mean accumulated stack as ushort

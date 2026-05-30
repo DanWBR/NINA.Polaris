@@ -49,7 +49,61 @@ Secondary toggles + buttons:
 - **Stars**, count in latest frame
 - **HFR**, median HFR of latest frame (lower = sharper)
 - **Mean / Median / StDev / Min / Max**, pixel stats of the stack
+- **SNR**, background signal-to-noise ratio of the cumulative stack (or
+  of the latest single frame when no stack is running). Higher = cleaner.
 - **HFR + Star count history chart**, last N frames trend
+
+## SNR and ETA to target
+
+Polaris computes a **background SNR** on every frame and on the
+running-mean stack as it accumulates:
+
+```
+SNR = ( mean(signal) − mean(background) ) / σ(background)
+```
+
+Pixels above `median + 5·MAD` count as "signal" (stars + extended
+target); pixels in `median ± 1·MAD` count as "background" (≈50% central
+of the histogram, robust to outliers). Saturated pixels and zeros are
+excluded so hot pixels and resampled-frame borders don't bias the
+numerator. Same math runs whether the server is doing the stacking or
+the WASM client.
+
+Set a **target SNR** per rig in RIGS → Manage rigs (or override for the
+current session via the small input in the LIVE overlay's "Stack
+quality" widget). When set, the overlay shows three big numbers + an
+input:
+
+- **SNR**, the cumulative stack's SNR right now
+- **Frames**, how many integrated into the stack so far
+- **ETA**, estimated time to reach the target SNR, e.g. *"~12 min to SNR 50"*
+- **Target** input, edit the target SNR live (debounced PUT)
+
+The ETA fits a log-log line through your last samples (the SNR of a
+clean stack grows as √N, slope=0.5 on log-log) and solves for the
+frame-count that hits the target. When the fit is weak (R² < 0.6,
+fewer than 3 samples, slope going the wrong way, or extrapolated frames
+beyond the 1000-frame cap), the ETA shows `—` instead of inventing a
+number. Once you reach the target, `✓ done` replaces the ETA.
+
+### Reading SNR over time
+
+The chart under the overlay shows **SNR cumulative** on the left axis
+(cyan) and **HFR** on the right (amber). A healthy session shows SNR
+climbing along the √N curve and HFR roughly flat. If HFR starts climbing
+without SNR keeping up, focus is drifting and you should refocus (or
+let Auto re-focus do it). If SNR plateaus while HFR is fine, clouds or
+sky glow rolled in.
+
+### Where SNR comes from in each mode
+
+- **Server full mode**, the server's `LiveStackingService` computes SNR
+  on the accumulator buffer after each integration; UI updates via the
+  1 Hz status payload.
+- **Client (WASM) mode**, the WASM stacker computes SNR on the running
+  mean and posts it back via `client-stack-progress`. The server's
+  `InjectClientStackMetrics` feeds the same ETA calculator + WS payload
+  so the UI behaves identically.
 
 ## Auto re-focus / re-center
 

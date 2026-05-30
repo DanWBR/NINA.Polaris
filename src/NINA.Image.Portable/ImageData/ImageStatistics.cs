@@ -79,6 +79,22 @@ public class ImageStatistics : IImageStatistics {
     }
 
     /// <summary>
+    /// Convenience overload for callers that have just the pixel data
+    /// (e.g. the WASM client-side stacker which never wraps the buffer
+    /// in IImageData). Computes median + MAD internally via the same
+    /// histogram passes that <see cref="Create"/> uses, then delegates
+    /// to the main <see cref="ComputeBackgroundSnr(ushort[], double, double)"/>
+    /// overload. Two 65536-int histograms allocated, ~0.5 MB transient,
+    /// negligible for the per-frame live-stack path.
+    /// </summary>
+    public static double ComputeBackgroundSnrFromData(ushort[] data) {
+        if (data == null || data.Length == 0) return 0;
+        var median = ComputeMedianViaHistogram(data);
+        var mad = ComputeMAD(data, median);
+        return ComputeBackgroundSnr(data, median, mad);
+    }
+
+    /// <summary>
     /// Background SNR. Two-pass single-iteration: pass 1 classifies
     /// pixels + accumulates background mean/M2 (Welford's algorithm
     /// for numerically stable stdev) and signal sum/count. SNR =

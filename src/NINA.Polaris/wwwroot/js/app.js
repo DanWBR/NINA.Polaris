@@ -4008,18 +4008,27 @@ function ninaApp() {
             }
 
             const metrics = interop.AddFrame(asInt32, width, height);
-            const [frameCount, hfrX100, starCount, alignmentOk, _reserved] = metrics;
+            // SNR-5: packed return is now int[7]; slots 5 + 6 carry
+            // per-frame SNR and cumulative SNR × 100 so the server's
+            // LiveStackingService can populate LastFrameSnr /
+            // CumulativeSnr / ETA in MetricsOnly (WASM) mode too.
+            const [frameCount, hfrX100, starCount, alignmentOk, _reserved,
+                   frameSnrX100, cumSnrX100] = metrics;
 
             // Send the metrics back to the server so the trigger
             // orchestrator (LiveStackTriggersService) sees the same
-            // numbers it'd get from server-side StarDetector.
+            // numbers it'd get from server-side StarDetector, and the
+            // SNR fields feed the LIVE overlay + ETA widget without
+            // the server having to re-process the accumulator itself.
             if (this.imageWs && this.imageWs.readyState === WebSocket.OPEN) {
                 this._wsSendTracked(this.imageWs, JSON.stringify({
                     type: 'client-stack-progress',
                     frameCount,
                     hfr: hfrX100 / 100,
                     starCount,
-                    alignmentOk: !!alignmentOk
+                    alignmentOk: !!alignmentOk,
+                    frameSnr: frameSnrX100 / 100,
+                    cumulativeSnr: cumSnrX100 / 100
                 }));
             }
 

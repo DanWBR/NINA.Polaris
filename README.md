@@ -212,6 +212,19 @@ consecutive frames; "I refocused" button manually resets the
 baseline. No profile fields, detection is fully automatic. See
 [`docs/user-guide/live-stacking.md`](docs/user-guide/live-stacking.md).
 
+**SNR + ETA to target** (SNR): background SNR
+`(mean(signal) − mean(background)) / σ(background)` computed on every
+frame and on the cumulative stack. Per-rig **Target SNR** (with a
+session-level override in the LIVE overlay) plus a log-log √N fit drive
+the **ETA widget** at the top of the LIVE history panel: SNR atual ·
+Frames · "~12 min to SNR 50". SNR also shows up in the PREVIEW + LIVE
+bottom bars and on each history thumbnail; the chart pairs cumulative
+SNR (cyan) with HFR (amber) so you can see signal building while focus
+holds. R² < 0.6 / weak slope / out-of-reach targets all surface as
+`—` instead of fantasy numbers, and the WASM client-side stacker
+forwards the same SNR fields so MetricsOnly mode behaves identically
+to server-full mode.
+
 ### Plate Solving & Centering
 
 Strategy-based plate-solving dispatcher with four interchangeable backends and
