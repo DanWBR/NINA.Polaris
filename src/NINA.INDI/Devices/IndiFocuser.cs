@@ -2,7 +2,7 @@ using NINA.INDI.Client;
 
 namespace NINA.INDI.Devices;
 
-public class IndiFocuser {
+public class IndiFocuser : NINA.Image.Interfaces.IFocuser {
     private readonly IndiClient _client;
 
     public string DeviceName { get; }

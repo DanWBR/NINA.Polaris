@@ -2,7 +2,7 @@ using NINA.INDI.Client;
 
 namespace NINA.INDI.Devices;
 
-public class IndiFilterWheel {
+public class IndiFilterWheel : NINA.Image.Interfaces.IFilterWheel {
     private readonly IndiClient _client;
 
     public string DeviceName { get; }
