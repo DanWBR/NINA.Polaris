@@ -317,17 +317,18 @@ function ninaApp() {
 
         // FONT-1: app-wide font picker. Values match the
         // [data-font="..."] selectors in app.css that override
-        // --font-body / --font-mono. 'inter' is the historical
-        // default (vendored InterVariable in css/fonts/);
-        // 'atkinson' targets retired-user readability via the
-        // Braille Institute's Atkinson Hyperlegible (unique
-        // letter shapes so B/8, l/1/I never confuse); 'plex' is
-        // IBM Plex Sans + Plex Mono for a corporate-tech vibe;
+        // --font-body / --font-mono. 'atkinson' is the default
+        // (Braille Institute's Atkinson Hyperlegible — unique
+        // letter shapes so B/8, l/1/I, 0/O never confuse, best
+        // for the older / low-vision operators Polaris targets);
+        // 'inter' is the previous default kept as a clean modern
+        // alternative (vendored InterVariable in css/fonts/);
+        // 'plex' is IBM Plex Sans for a corporate-tech vibe;
         // 'system' falls back to the OS UI font. The setter is
         // an attribute on <html> rather than a class, so the
         // initial load can apply via inline script before the
         // CSS even parses (avoids FOUT).
-        uiFont: 'inter',
+        uiFont: 'atkinson',
 
         // SWE-5: object-info card overlay on the sky map. Populated
         // when the bridge emits a map-click with a rich object payload
@@ -1677,11 +1678,11 @@ function ninaApp() {
             // FONT-1: restore font choice. Use the inline boot
             // attribute that index.html stamps before Alpine
             // initialises (avoids FOUT). Otherwise default to
-            // 'inter' which is what the codebase shipped with.
+            // 'atkinson' (best readability for the target operator).
             const fontSaved = localStorage.getItem('nina-ui-font');
             this.uiFont = fontSaved && ['inter','atkinson','plex','system'].includes(fontSaved)
                 ? fontSaved
-                : 'inter';
+                : 'atkinson';
             this.applyUiFont();
 
             // Re-render the cached frame whenever the user switches
@@ -3149,14 +3150,14 @@ function ninaApp() {
         // --font-body / --font-mono; the change is instant — no
         // reflow more expensive than a font swap, and no need to
         // re-render any canvas since canvases don't use document
-        // CSS. 'inter' clears the attribute (default state) so
+        // CSS. 'atkinson' clears the attribute (default state) so
         // the bare :root vars apply.
         applyUiFont() {
             const allowed = ['inter', 'atkinson', 'plex', 'system'];
-            const v = allowed.includes(this.uiFont) ? this.uiFont : 'inter';
+            const v = allowed.includes(this.uiFont) ? this.uiFont : 'atkinson';
             this.uiFont = v;
             try {
-                if (v === 'inter') document.documentElement.removeAttribute('data-font');
+                if (v === 'atkinson') document.documentElement.removeAttribute('data-font');
                 else document.documentElement.setAttribute('data-font', v);
                 localStorage.setItem('nina-ui-font', v);
             } catch (_) { /* private mode etc. */ }

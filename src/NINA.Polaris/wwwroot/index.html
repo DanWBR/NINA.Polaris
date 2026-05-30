@@ -34,7 +34,11 @@
          via @font-face in app.css. No external CDN call needed,
          keeps the UI typeface intact on observatory hosts that
          have no internet. -->
-    <link rel="preload" href="/css/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin>
+    <!-- FONT-1: preload the default body font (Atkinson Hyperlegible
+         Regular) so first paint doesn't fall back to system-ui while
+         the @font-face fetches. Bold and the other font families load
+         on demand. -->
+    <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="/css/app.css">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
@@ -45,15 +49,17 @@
     <link rel="stylesheet" href="/js/lib/xterm/xterm.css">
 
     <!-- FONT-1: stamp the saved font choice on <html> BEFORE the body
-         renders so the user doesn't see the default Inter flash and
-         then re-paint as Atkinson / Plex (FOUT). app.js's init() later
-         restores the same value into Alpine state so the picker shows
-         the right option, this just makes the first paint correct. -->
+         renders so the user doesn't see the default (Atkinson) flash
+         and then re-paint as Inter / Plex (FOUT). app.js's init()
+         later restores the same value into Alpine state so the picker
+         shows the right option, this just makes the first paint
+         correct. 'atkinson' is the default (clears the attribute);
+         the other values write [data-font]. -->
     <script>
         (function () {
             try {
                 var f = localStorage.getItem('nina-ui-font');
-                if (f && f !== 'inter' && ['atkinson','plex','system'].indexOf(f) >= 0) {
+                if (f && f !== 'atkinson' && ['inter','plex','system'].indexOf(f) >= 0) {
                     document.documentElement.setAttribute('data-font', f);
                 }
             } catch (_) { /* private mode / disabled storage */ }
@@ -7315,8 +7321,8 @@
                     <label style="display:flex; align-items:center; gap:12px; max-width:560px; margin-top:16px">
                         <span style="min-width:90px">Font</span>
                         <select x-model="uiFont" @change="applyUiFont()" style="flex:1">
-                            <option value="inter">Inter (default) — clean modern UI</option>
-                            <option value="atkinson">Atkinson Hyperlegible — best readability</option>
+                            <option value="atkinson">Atkinson Hyperlegible (default) — best readability</option>
+                            <option value="inter">Inter — clean modern UI</option>
                             <option value="plex">IBM Plex Sans — tech / corporate</option>
                             <option value="system">System default</option>
                         </select>
