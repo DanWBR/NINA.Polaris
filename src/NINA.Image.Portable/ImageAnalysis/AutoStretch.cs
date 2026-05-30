@@ -100,21 +100,25 @@ public static class AutoStretch {
         // and the whole frame gets mapped to BLACK.
         //
         // Heuristic: only treat observedMax as the saturation point
-        // when it's high enough to look like a real wall (>= 90% of
-        // topVal). For normal scenes with an observedMax well below
-        // topVal (a dim DSO peaking at 20000, a bright object at
-        // 50000), the bright pixels are legitimate signal — NOT a
-        // saturation wall — and excluding them would narrow the
-        // sample distribution, raise the computed shadow, and crush
-        // mid-tones to black. The previous version of this fix
-        // applied the observedMax threshold unconditionally and hit
-        // exactly that regression on high-contrast preview frames.
+        // when it's basically at the top of the bit-depth range
+        // (>= 99% of topVal). Saturated wall cases are very narrow:
+        // 10-bit-in-16-bit ZWO sensors land at 65472/65535 = 99.9%,
+        // 14-bit-in-16-bit CMOS at 65520 = 99.97%. ANY scene where
+        // observedMax is below 99% means the brightest pixel is
+        // legitimate signal that hasn't hit the sensor's full-well,
+        // and excluding those pixels would narrow the sample, raise
+        // the shadow point, and crush mid-tones to black —
+        // visually shrinking the visible content. The first version
+        // of this fix used 0.9 which was too loose: a bright daytime
+        // preview with the object peaking around 60000 (91.5%)
+        // triggered it and crushed the object's dim borders to
+        // black, making the user see the image as "smaller".
         ushort observedMax = 0;
         int limit = Math.Min(data.Length, pixelCount);
         for (int i = 0; i < limit; i++) {
             if (data[i] > observedMax) observedMax = data[i];
         }
-        ushort wallThreshold = (ushort)(topVal * 0.9);
+        ushort wallThreshold = (ushort)(topVal * 0.99);
         ushort satThreshold = (observedMax >= wallThreshold && observedMax < topVal)
             ? observedMax : topVal;
 

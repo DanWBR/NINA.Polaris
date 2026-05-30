@@ -3550,22 +3550,21 @@ function ninaApp() {
             // a 16-bit buffer often cap below the theoretical max
             // (ZWO 10-bit shifted into the high 6 bits saturates
             // at 65472, not 65535). When the observed peak looks
-            // like a real saturation wall (>= 90% of maxVal) we
-            // use it as the threshold — otherwise the bright
-            // pixels are legitimate signal (e.g. a bright object
-            // peaking at 50000 in a contrasty scene) and excluding
-            // them would narrow the sample distribution, raise the
-            // computed shadow, and crush mid-tones to black. The
-            // previous form of this fix applied the observedMax
-            // threshold unconditionally and visibly shrank the
-            // displayed scene on high-contrast preview frames.
+            // like a saturation wall (>= 99% of maxVal) we use it
+            // as the threshold. ANY scene where observedMax is
+            // below 99% means the brightest pixel is legitimate
+            // signal that hasn't hit full-well, and excluding it
+            // would narrow the sample, raise shadow, and crush
+            // mid-tones to black — the user perceived this as
+            // "the image got smaller" after the 0.9 version of
+            // this heuristic mis-fired on a bright daytime preview.
             const step = Math.max(1, Math.floor(pixels.length / 200000));
             let observedMax = 0;
             for (let i = 0; i < pixels.length; i += step) {
                 const v = pixels[i];
                 if (v > observedMax) observedMax = v;
             }
-            const wallThreshold = Math.floor(maxVal * 0.9);
+            const wallThreshold = Math.floor(maxVal * 0.99);
             const satThreshold = (observedMax >= wallThreshold && observedMax < maxVal)
                 ? observedMax : maxVal;
             // Second pass: collect non-saturated samples.

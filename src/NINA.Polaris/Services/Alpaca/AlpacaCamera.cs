@@ -153,6 +153,40 @@ public sealed class AlpacaCamera : ICamera, IDisposable {
         _pixelSizeY = await SafeGetAsync(() => _client.GetAsync<double>("pixelsizey", ct), 0d);
         _sensorType = await SafeGetAsync(() => _client.GetAsync<int>("sensortype", ct), 0);
 
+        // Reset ROI to the full sensor. The ASCOM Remote Server (or
+        // Alpaca Omni Simulator) hosts the same ICameraV3 driver as
+        // the COM-direct path, but its StartX/StartY/NumX/NumY state
+        // is sticky across connections — if a previous Alpaca client
+        // ever subframed the sensor (or the server started with a
+        // non-full-frame default), every subsequent capture comes
+        // back smaller than MaxX × MaxY. The user noticed this as
+        // "the preview is smaller via Alpaca than via ASCOM direct,
+        // even though it's the same camera" — COM-direct doesn't
+        // hit it because the ZWO driver appears to reset the ROI on
+        // a fresh Activator.CreateInstance, while the long-lived
+        // Alpaca server keeps the driver instance pinned. Explicit
+        // writes here cost four extra HTTP calls per Connect (~80ms
+        // on LAN) and are best-effort: any write failure leaves the
+        // driver-side defaults in place, which is no worse than the
+        // pre-fix behaviour.
+        if (_maxX > 0 && _maxY > 0) {
+            try {
+                await _client.PutAsync("startx",
+                    new Dictionary<string, string> { ["StartX"] = "0" }, ct);
+                await _client.PutAsync("starty",
+                    new Dictionary<string, string> { ["StartY"] = "0" }, ct);
+                await _client.PutAsync("numx",
+                    new Dictionary<string, string> {
+                        ["NumX"] = _maxX.ToString(CultureInfo.InvariantCulture)
+                    }, ct);
+                await _client.PutAsync("numy",
+                    new Dictionary<string, string> {
+                        ["NumY"] = _maxY.ToString(CultureInfo.InvariantCulture)
+                    }, ct);
+            } catch { /* best-effort; some drivers reject ROI writes
+                          on cameras that don't expose subframing */ }
+        }
+
         var maxAdu = await SafeGetAsync(() => _client.GetAsync<long>("maxadu", ct), 65535L);
         _bitDepth = maxAdu switch {
             > 65535 => 32, > 16383 => 16, > 4095 => 14, > 1023 => 12, _ => 10
