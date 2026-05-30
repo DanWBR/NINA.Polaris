@@ -51,6 +51,9 @@ Each tab in the sidebar has its own page. Read the ones you need:
 - **[RIGS](rigs.md)**, multi-rig equipment management. INDI/Alpaca/vendor
   drivers, per-role cards (Main Telescope, Camera, Mount, Focuser, Filter
   Wheel, Guidescope, Guide Camera, Rotator, Flat Panel, Dome, Weather).
+- **[ASCOM (direct COM)](ascom-com.md)**, Windows-only path to talk to
+  ASCOM Platform drivers directly without going through ASCOM Remote
+  or the Alpaca Omni Simulator.
 - **[GUIDE (PHD2)](guide-phd2.md)**, full PHD2 integration. Connection
   + management + smart calibration + algorithm presets + embedded xpra
   GUI (Linux only).

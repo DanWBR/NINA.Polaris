@@ -36,11 +36,18 @@ machines that have never installed the Platform.
 
 ## Out of scope (for now)
 
-- Telescope / Focuser / FilterWheel adapters (next phases ASCOM-2)
-- Wiring into `EquipmentManager` + endpoints (ASCOM-3)
-- RIGS UI driver picker (ASCOM-4)
-- Tests + docs + end-to-end verify (ASCOM-5)
-- ASCOM Chooser dialog (optional convenience for v2)
+- ASCOM Chooser dialog (we use registry walk + per-driver SetupDialog
+  instead — the Chooser brings nothing the user can't get from the
+  RIGS driver dropdown).
+- Rotator / Dome / FlatPanel / ObservingConditions / Switch adapters.
+  Registry enumeration already covers them, but no concrete
+  `IRotator`/`IDome` adapter classes yet — when the user wires up
+  one of these, add a matching class in the same shape as the
+  existing four.
+- Focuser + FilterWheel UI driver picker. Backend (ASCOM-3) routes
+  `?driver=ascom-com` correctly via /api/focuser /api/filterwheel,
+  but the RIGS UI cards still default to the INDI device dropdown.
+  Follow-up.
 
 ## Threading model
 
