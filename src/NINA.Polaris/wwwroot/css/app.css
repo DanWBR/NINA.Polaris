@@ -390,7 +390,11 @@ body {
 .brand {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    /* Tightened from 8px so the icon, N.I.N.A. and POLARIS sit as a
+       single compact wordmark. With the inner letter-spacing also
+       reduced (.brand-name / .brand-tag), 5px is enough to keep the
+       two words distinct without the previous airy mark. */
+    gap: 5px;
     text-decoration: none;
     color: inherit;
     padding: 2px 4px;
@@ -423,7 +427,11 @@ body {
 .brand-name {
     font-weight: 800;
     font-size: 17px;
-    letter-spacing: 2.5px;
+    /* Tighter letter-spacing (was 2.5px) so the wordmark reads as
+       one compact unit instead of  N . I . N . A .  spread across
+       the header. 0.5px keeps the all-caps still visually
+       distinct from prose without the airy gap. */
+    letter-spacing: 0.5px;
     line-height: 1;
     /* Brand gradient: deep-night blue -> icy cyan -> stellar white.
        Inspired by the colour temperature of O/B-class stars + dark
@@ -441,7 +449,9 @@ body {
        one continuous mark, not name+subtitle. */
     font-weight: 800;
     font-size: 17px;
-    letter-spacing: 2.5px;
+    /* Same tightened tracking as .brand-name — keeps POLARIS as a
+       solid block instead of  P O L A R I S  spread out. */
+    letter-spacing: 0.5px;
     line-height: 1;
     /* Brand gradient: deep-night blue -> icy cyan -> stellar white.
        Inspired by the colour temperature of O/B-class stars + dark
@@ -3491,13 +3501,17 @@ label select.input-sm {
 }
 .home-eyebrow .brand-name {
     font-size: 22px;
-    letter-spacing: 3px;
+    /* Mirror the tightened header tracking — slightly looser than
+       the header because the hero is bigger and benefits from a
+       touch more breathing room, but still well below the old 3px
+       that made the wordmark feel stretched. */
+    letter-spacing: 1px;
 }
 .home-eyebrow .brand-tag {
     /* Hero scale, match N.I.N.A. so POLARIS reads as the same word
        not a sub-name. */
     font-size: 22px;
-    letter-spacing: 3px;
+    letter-spacing: 1px;
 }
 .home-eyebrow .brand-version {
     font-size: 11px;
