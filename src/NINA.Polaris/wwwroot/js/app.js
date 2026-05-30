@@ -3945,19 +3945,22 @@ function ninaApp() {
 
             // (Re-)initialise the accumulator whenever the incoming
             // frame's dimensions don't match what's already cached.
-            // Without this guard, a snap captured at a different
+            // The WASM Interop has no separate Initialize() — AddFrame
+            // itself auto-bootstraps the buffers on the first frame
+            // (frameCount==0), so all we need to do here is Reset()
+            // to drop the previous-resolution buffers + reference
+            // stars. Without this, a snap captured at a different
             // resolution than the previous video stream would land in
-            // an AddFrame that silently rejects and a GetStackedResult
-            // that returns a zero-length or wrong-sized array, the
-            // outer renderer then loops zero times and paints black.
+            // an AddFrame that silently rejects (frame-size mismatch
+            // branch) and the renderer would loop on a stale buffer.
             const expectedLen = width * height;
             if (this._wasmInitDims?.w !== width
                 || this._wasmInitDims?.h !== height) {
                 try {
-                    interop.Initialize(width, height, 0);
+                    interop.Reset();
                     this._wasmInitDims = { w: width, h: height };
                 } catch (e) {
-                    console.warn('[Polaris] WASM Initialize failed:', e);
+                    console.warn('[Polaris] WASM Reset failed:', e);
                     return pixels;   // bail to raw frame
                 }
             }
@@ -9800,11 +9803,17 @@ function ninaApp() {
         // ----- Per-tab context objects -----
 
         /// LIVE tab shutter context.
+        /// Tap on LIVE means "start continuous capture + stacking".
+        /// Old behaviour was tap=single, long-press=loop, but with the
+        /// always-on stacker the natural intent of a LIVE tap is
+        /// "begin a session" not "give me exactly one frame". Long-
+        /// press still kicks the loop explicitly for the user who
+        /// builds muscle memory across tabs. Tap-while-active aborts.
         liveShutterCtx() {
             return {
                 isActive: () => this.capturing || this.looping,
                 disabled: () => !this.selectedCamera,
-                onTap: () => this.capture(),
+                onTap: () => this.loopCapture(),
                 onLongPress: () => this.loopCapture(),
                 onAbort: () => this.stopCapture()
             };

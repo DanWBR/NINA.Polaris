@@ -232,7 +232,17 @@ public sealed class AscomComCamera : ICamera, IDisposable {
                     px[y * width + x] = (ushort)v;
                 }
             }
-            try { Marshal.ReleaseComObject(raw); } catch { }
+            // ICameraV3.ImageArray returns either a System.__ComObject
+            // (out-of-proc driver, SAFEARRAY marshalled across the COM
+            // boundary) OR a plain managed Array (in-proc managed
+            // driver, e.g. ASCOM.Simulator.Camera since it ships as a
+            // .NET assembly that lives inside our process — the
+            // SAFEARRAY never gets RCW-wrapped). Marshal.ReleaseComObject
+            // throws ArgumentException on the second case. Guard with
+            // Marshal.IsComObject so the managed-array path is a no-op.
+            if (Marshal.IsComObject(raw)) {
+                try { Marshal.ReleaseComObject(raw); } catch { }
+            }
 
             var props = new ImageProperties {
                 Width = width,
