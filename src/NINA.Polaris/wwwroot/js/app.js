@@ -1569,6 +1569,14 @@ function ninaApp() {
             // tick loop is running and the rolling window absorbs them.
             this._netStartMeter();
 
+            // ALPACA: fire-and-forget LAN discovery so a user who
+            // already has ASCOM Remote Server / Alpaca Omni
+            // Simulator running gets devices auto-connected without
+            // needing to open RIGS → ASCOM/Alpaca → Discover. Silent
+            // on empty results so the toast pump stays quiet for
+            // users who don't have any Alpaca server.
+            this.autoDiscoverAlpaca();
+
             // iOS / ASIAIR vertical drum pickers. Same auto-mount
             // pattern as the range-slider augmentation below: walk
             // the DOM for [data-wheel-picker], turn each one into
@@ -16641,7 +16649,16 @@ function ninaApp() {
         // ============================================================
         //                 Alpaca / ASCOM Remote
         // ============================================================
-        async discoverAlpaca() {
+        async discoverAlpaca(opts = {}) {
+            // `silent: true` suppresses the no-results warn + the
+            // per-device error toasts. Used by the boot-time auto-
+            // discovery (_initCore → autoDiscoverAlpaca) where an
+            // empty result is the normal case on machines without
+            // an ASCOM Remote Server running — toasting a warning
+            // there would be noise. Manual button click stays loud
+            // so the user gets feedback for what they explicitly
+            // asked for.
+            const silent = opts.silent === true;
             this.alpaca.discovering = true;
             try {
                 // Backend handles discovery + auto-connect of every device
@@ -16660,16 +16677,23 @@ function ninaApp() {
                 this.alpaca.autoConnected = r.autoConnected || [];
 
                 if (this.alpaca.servers.length === 0) {
-                    this.toast('No Alpaca servers found. Try manual entry or check that ASCOM Remote Server is running.', 'warn');
+                    if (!silent) {
+                        this.toast('No Alpaca servers found. Try manual entry or check that ASCOM Remote Server is running.', 'warn');
+                    }
                 } else {
                     const ok = this.alpaca.autoConnected.filter(d => d.ok).length;
                     const fail = this.alpaca.autoConnected.length - ok;
                     if (fail === 0) {
+                        // Always toast on success — even auto-discovery,
+                        // since "your equipment just came online" is
+                        // info worth surfacing.
                         this.toast(`${ok} Alpaca device(s) connected. Pick them in the cards under "Alpaca" driver.`, 'ok');
                     } else {
                         this.toast(`${ok} connected, ${fail} failed. See RIGS tab for details.`, 'warn');
-                        for (const d of this.alpaca.autoConnected.filter(x => !x.ok)) {
-                            this.toast(`${d.deviceType}: ${d.error || 'connect failed'}`, 'error');
+                        if (!silent) {
+                            for (const d of this.alpaca.autoConnected.filter(x => !x.ok)) {
+                                this.toast(`${d.deviceType}: ${d.error || 'connect failed'}`, 'error');
+                            }
                         }
                     }
                 }
@@ -16683,10 +16707,31 @@ function ninaApp() {
                     this.filterWheelDrivers = await this.apiGet('/api/filterwheel/drivers');
                 } catch (_) { /* best-effort; the next tab open will repopulate */ }
             } catch (e) {
-                this.toast('Alpaca discovery failed: ' + e.message, 'error');
+                if (!silent) {
+                    this.toast('Alpaca discovery failed: ' + e.message, 'error');
+                } else {
+                    console.warn('[Polaris] auto Alpaca discovery failed:', e.message);
+                }
             } finally {
                 this.alpaca.discovering = false;
             }
+        },
+
+        // Boot-time auto-discovery. Fires from _initCore so the user
+        // doesn't need to open the RIGS tab + click Discover to bring
+        // an already-running Alpaca server online. Silent mode: no
+        // warn toast when there's nothing on the LAN (that's the
+        // normal case for users on pure-INDI setups), but a success
+        // toast still surfaces when devices DO connect so they know
+        // their rig is online. Deferred ~1.5 s so the WS handshake
+        // + auth complete first.
+        autoDiscoverAlpaca() {
+            if (this._alpacaAutoTried) return;
+            this._alpacaAutoTried = true;
+            setTimeout(() => {
+                this.discoverAlpaca({ silent: true })
+                    .catch(e => console.warn('[Polaris] auto Alpaca discovery rejected:', e));
+            }, 1500);
         },
 
         async alpacaQueryServer(srv) {
