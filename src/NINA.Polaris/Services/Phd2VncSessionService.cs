@@ -198,8 +198,17 @@ public class Phd2VncSessionService : BackgroundService {
     /// but locked-down corporate / domain machines may deny read on
     /// SOFTWARE entries; treating that as "not installed" lets the
     /// detection fall through cleanly to the Program Files probe.
+    /// <para>[DebuggerNonUserCode] tells Visual Studio / Rider to
+    /// treat this helper as library code so the SecurityException
+    /// raised inside <c>OpenSubKey</c> does NOT trigger a first-
+    /// chance debugger break under "Just My Code". Without the
+    /// attribute the catch still runs in release and the user just
+    /// sees clean fallback behaviour — but during development VS
+    /// pops the "Exception thrown" balloon every single time the
+    /// Settings panel reads PHD2 VNC state, which is noise.</para>
     /// </summary>
     [SupportedOSPlatform("windows")]
+    [System.Diagnostics.DebuggerNonUserCode]
     private static RegistryKey? SafeOpenHklm(string subkey) {
         try { return Registry.LocalMachine.OpenSubKey(subkey); }
         catch (System.Security.SecurityException) { return null; }
