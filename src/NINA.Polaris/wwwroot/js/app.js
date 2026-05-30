@@ -13690,53 +13690,70 @@ function ninaApp() {
             const q = this.skySearch.trim();
             if (!q) return;
             try {
-                const data = await this.apiGet(
-                    `/api/sky/catalog/search?query=${encodeURIComponent(q)}`);
-                this.skyResults = data.results || [];
-                if (this.skyResults.length === 1) {
-                    this.selectSkyTarget(this.skyResults[0]);
-                    this.skyShowResults = false;
-                    return;
-                }
-                if (this.skyResults.length > 1) {
-                    this.skyShowResults = true;
-                    return;
-                }
+                // Always query BOTH sources in parallel and merge. The
+                // DSO catalog only knows deep-sky objects (Messier /
+                // NGC / IC / Arp / Sh2 / HCG / Abell). The engine
+                // knows everything else the user is likely to type —
+                // Sun, Moon, planets, satellites, bright stars (Vega,
+                // Sirius), bundled comets. Querying both matters when
+                // a query hits BOTH (e.g. "Sun" matches Sunflower
+                // Galaxy NGC 5055 / M63 in the catalog AND the actual
+                // Sun in the engine — user wants the engine hit
+                // surfaced, not just the galaxies).
+                const [catalogData, engineHit] = await Promise.all([
+                    this.apiGet(
+                        `/api/sky/catalog/search?query=${encodeURIComponent(q)}`)
+                        .catch(() => ({ results: [] })),
+                    this._skySearch(q).catch(() => null)
+                ]);
 
-                // Catalog miss. Our DSO DB only knows deep-sky objects
-                // (Messier / NGC / IC / Arp / Sh2 / HCG / Abell). The
-                // engine knows everything else the user is likely to
-                // type — Moon, Sun, planets, satellites, bright stars
-                // (Vega, Sirius), comets it has in its bundle. Ask it
-                // and project the hit onto the same shape we pass to
-                // selectSkyTarget so the rest of the pipeline (info
-                // card, smooth pan, Slew & Center button) stays
-                // identical.
-                let engineHit = null;
-                try {
-                    engineHit = await this._skySearch(q);
-                } catch (_) { /* bridge missing / iframe not ready */ }
+                const catalogResults = catalogData.results || [];
+
+                // Project engine hit (if any) onto the same shape as
+                // catalog rows so the result list renders uniformly.
+                let engineRow = null;
                 if (engineHit
                     && Number.isFinite(engineHit.raDeg)
                     && Number.isFinite(engineHit.decDeg)) {
-                    const ra = engineHit.raDeg / 15;     // engine gives degrees
-                    this.selectSkyTarget({
+                    engineRow = {
                         name: engineHit.name || q,
-                        ra: ra,
+                        ra: engineHit.raDeg / 15,
                         dec: engineHit.decDeg,
                         magnitude: typeof engineHit.magnitude === 'number'
                             ? engineHit.magnitude : null,
-                        type: null,
+                        type: 'Solar system / Star',
                         commonName: null,
                         aliases: []
-                    });
+                    };
+                }
+
+                // Merge: engine first (it's typically what the user
+                // typed verbatim — "Sun" / "Moon" / "Jupiter"), then
+                // catalog. Dedupe by name (engine "Sun" vs catalog
+                // entry literally named "Sun" — unlikely but cheap to
+                // guard).
+                const merged = [];
+                if (engineRow) merged.push(engineRow);
+                for (const r of catalogResults) {
+                    if (!engineRow || (r.name || '').toLowerCase()
+                            !== (engineRow.name || '').toLowerCase()) {
+                        merged.push(r);
+                    }
+                }
+                this.skyResults = merged;
+
+                if (merged.length === 0) {
+                    this.skyTarget = null;
+                    this.skyShowResults = false;
+                    this.toast('No objects found for "' + q + '"', 'warn');
+                    return;
+                }
+                if (merged.length === 1) {
+                    this.selectSkyTarget(merged[0]);
                     this.skyShowResults = false;
                     return;
                 }
-
-                this.skyTarget = null;
-                this.skyShowResults = false;
-                this.toast('No objects found for "' + q + '"', 'warn');
+                this.skyShowResults = true;
             } catch (e) {
                 this.toast('Sky search failed', 'error');
             }
