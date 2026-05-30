@@ -14054,17 +14054,40 @@ function ninaApp() {
         // and we never re-hit the API for the same item. Silent
         // no-op when the catalog has no match — the card just
         // renders without a thumb.
+        //
+        // URL priority:
+        //   1) localUrl  — server already downloaded the JPEG and
+        //                  proxies it from /api/sky/image/file/{slug}.
+        //                  Same-origin, no CORS / mixed-content
+        //                  pitfalls; needs ?token= via authUrl()
+        //                  because the path is under /api/* (gated).
+        //   2) thumbnailUrl — direct CDN URL from Wikipedia / NASA.
+        //                     Fallback when the disk cache miss left
+        //                     localFileExt empty (offline server,
+        //                     etc). Cross-origin but img tags don't
+        //                     need auth headers for upstream loads.
+        //   3) fullUrl    — full-size variant; last resort, can be
+        //                   several MB so we try the thumbs first.
         async _loadCelestialThumb(item) {
             if (!item || !item.name) return;
             try {
                 const r = await this.apiGet(
                     '/api/sky/image?name=' + encodeURIComponent(item.name));
-                if (r && r.available && (r.thumbnailUrl || r.url)) {
-                    // Prefer the smaller thumbnail; fall back to the
-                    // full URL when the upstream only gave us one.
-                    item.thumbUrl = r.thumbnailUrl || r.url;
+                if (!r || !r.available) return;
+                if (r.localUrl) {
+                    item.thumbUrl = this.authUrl(r.localUrl);
+                } else if (r.thumbnailUrl) {
+                    item.thumbUrl = r.thumbnailUrl;
+                } else if (r.fullUrl) {
+                    item.thumbUrl = r.fullUrl;
                 }
-            } catch { /* no match / offline — render without a thumb */ }
+            } catch (e) {
+                // No match / offline — render without a thumb. Logged
+                // at debug level so devtools can show why a name the
+                // user expected didn't get a picture.
+                console.debug('[Polaris] celestial thumb lookup failed for',
+                    item.name, e);
+            }
         },
 
         // --- Sequence ---
