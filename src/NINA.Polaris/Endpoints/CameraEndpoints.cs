@@ -159,7 +159,9 @@ public static class CameraEndpoints {
                     state = "disconnected",
                     temperature = (double?)null,
                     coolerOn = false,
-                    binX = 0, binY = 0
+                    binX = 0, binY = 0,
+                    driver = (string?)null,
+                    deviceName = (string?)null
                 });
 
             return Results.Ok(new {
@@ -176,6 +178,14 @@ public static class CameraEndpoints {
                 bitDepth = equip.Camera.BitDepth,
                 whiteBalanceR = equip.Camera.WhiteBalanceR,
                 whiteBalanceB = equip.Camera.WhiteBalanceB,
+                // Report which driver + device is currently bound so the
+                // frontend can reconcile its dropdown state on page reload
+                // (the cameraDriver Alpine state defaults from the saved
+                // rig profile, but the actual EquipmentManager.Camera
+                // might already be something else from a manual switch /
+                // auto-connect that didn't persist the rig).
+                driver = equip.CameraDriver,
+                deviceName = equip.Camera.DeviceName,
                 capabilities = new {
                     cooler = equip.Camera.Capabilities.SupportsCooler,
                     binning = equip.Camera.Capabilities.SupportsBinning,

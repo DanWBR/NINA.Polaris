@@ -14115,6 +14115,21 @@ function ninaApp() {
                     if (data.temperature !== null && data.temperature !== undefined) {
                         this.cameraTemp = data.temperature;
                     }
+                    // Reconcile driver + device-selection state with what
+                    // the backend actually has connected. Without this the
+                    // RIGS Camera card reads cameraDriver from the saved
+                    // rig profile (often 'indi') even when the backend
+                    // is already running an Alpaca camera that auto-
+                    // connected after Discover -- the dropdown shows the
+                    // wrong driver + an empty device select while the
+                    // camera-info readout below it is alive and well.
+                    if (data.driver && data.driver !== this.cameraDriver) {
+                        this.cameraDriver = data.driver;
+                    }
+                    if (data.deviceName) {
+                        this.selectedCamera = data.deviceName;
+                        if (!this.equipCameraChoice) this.equipCameraChoice = data.deviceName;
+                    }
                 }
             } catch (e) { }
         },
