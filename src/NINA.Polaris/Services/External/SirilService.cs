@@ -46,6 +46,53 @@ public class SirilService {
         _profile = profile;
         _logger = logger;
         _bundledScriptsDir = new Lazy<string>(ExtractBundledScripts);
+        // Best-effort sweep of stale work directories from past runs
+        // that didn't get a chance to clean up (process killed, server
+        // crash, the user aborted a job, etc). The success path deletes
+        // its own workDir; failure/cancel paths intentionally leave them
+        // around for debugging. Without a periodic sweep those leftovers
+        // accumulate and -- worse -- leak into the STUDIO frame library
+        // via Directory.EnumerateFiles(root, "*.fits", AllDirectories).
+        // FrameLibrary now filters .polaris-tmp/ paths, but cleaning the
+        // disk is still the right thing so we don't leave GB of stale
+        // FITS sitting under AppData forever.
+        // Fire-and-forget on a thread-pool thread so we don't block DI
+        // resolution on a multi-GB rm -rf.
+        Task.Run(() => SweepStaleWorkDirs(TimeSpan.FromDays(7)));
+    }
+
+    /// <summary>Delete .polaris-tmp/siril-* dirs older than
+    /// <paramref name="maxAge"/>. Bounded, safe, no-op if the parent
+    /// dir doesn't exist. Logs each removal for traceability.</summary>
+    private void SweepStaleWorkDirs(TimeSpan maxAge) {
+        try {
+            var outDir = (_profile.Active.ImageOutputDir ?? "").Trim();
+            if (string.IsNullOrEmpty(outDir)) {
+                outDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "NINA.Polaris");
+            }
+            var tmpRoot = Path.Combine(outDir, ".polaris-tmp");
+            if (!Directory.Exists(tmpRoot)) return;
+            var cutoff = DateTime.UtcNow - maxAge;
+            foreach (var d in Directory.EnumerateDirectories(tmpRoot, "siril-*")) {
+                try {
+                    var info = new DirectoryInfo(d);
+                    var stamp = info.LastWriteTimeUtc > info.CreationTimeUtc
+                        ? info.LastWriteTimeUtc : info.CreationTimeUtc;
+                    if (stamp < cutoff) {
+                        Directory.Delete(d, recursive: true);
+                        _logger.LogInformation(
+                            "Swept stale Siril work dir: {Path} (age {Age:F1}d)",
+                            d, (DateTime.UtcNow - stamp).TotalDays);
+                    }
+                } catch (Exception inner) {
+                    _logger.LogDebug(inner, "Could not sweep {Path}", d);
+                }
+            }
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "Siril work-dir sweep failed");
+        }
     }
 
     public string? BinaryPath => Locate();

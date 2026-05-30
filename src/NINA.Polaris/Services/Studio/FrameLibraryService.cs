@@ -152,9 +152,22 @@ public class FrameLibraryService {
             // desktop app + Siril output by default; many cameras /
             // scripts also use it). FITSReader does not care about the
             // extension, the format is identified from the header.
-            var files = Directory.EnumerateFiles(root, "*.fits", SearchOption.AllDirectories)
-                .Concat(Directory.EnumerateFiles(root, "*.fit", SearchOption.AllDirectories))
-                .ToList();
+            //
+            // Excludes work directories that should never surface in the
+            // STUDIO browser:
+            //   .polaris-tmp/   -- SirilService work area (lights/ + darks/
+            //                      + flats/ subfolders for the running
+            //                      script); a failed / aborted Siril run
+            //                      can leave dozens of intermediate FITS
+            //                      (e.g. rgb_*_bgneu.fits siblings from a
+            //                      BG-neutralisation step) lying around.
+            //   any dotfile dir -- defensive: '.git', '.cache', etc.
+            //
+            // We can't pass SearchOption.AllDirectories with an exclusion
+            // filter directly, so enumerate explicitly + filter the path.
+            var allFiles = Directory.EnumerateFiles(root, "*.fits", SearchOption.AllDirectories)
+                .Concat(Directory.EnumerateFiles(root, "*.fit", SearchOption.AllDirectories));
+            var files = allFiles.Where(p => !IsInWorkDirectory(p, root)).ToList();
             Rescan = new RescanProgress(true, 0, files.Count, null);
 
             using var c = new SqliteConnection(ConnString);
@@ -193,6 +206,26 @@ public class FrameLibraryService {
         } catch (Exception ex) {
             _logger.LogError(ex, "Rescan failed");
             Rescan = new RescanProgress(false, Rescan.Done, Rescan.Total, ex.Message);
+        }
+    }
+
+    /// <summary>True when <paramref name="path"/> sits inside a work
+    /// directory under <paramref name="root"/> that the STUDIO browser
+    /// should ignore. Catches the SirilService temp area
+    /// (.polaris-tmp/) plus any other dot-prefixed directory (defensive
+    /// against .git / .cache / etc. living near the image root).</summary>
+    private static bool IsInWorkDirectory(string path, string root) {
+        try {
+            var rel = Path.GetRelativePath(root, path);
+            // Split on both separator styles so this works on Windows
+            // and Linux uniformly. Skip the file name (last segment).
+            var parts = rel.Split(new[] { '/', '\\' });
+            for (int i = 0; i < parts.Length - 1; i++) {
+                if (parts[i].StartsWith('.')) return true;
+            }
+            return false;
+        } catch {
+            return false;
         }
     }
 
