@@ -1039,13 +1039,21 @@ body {
 
 /* Inputs */
 .input-sm {
-    /* Bumped 60→80 px so 3-digit values (gain 600, settle 30 s) and
-       the native spinner arrows don't clip the typed text. */
-    width: 80px;
-    /* Tap-friendly height aligned with the Flat Wizard form: ~38 px
-       tall (9 px vertical padding + 14 px font + 2 px border)
-       gives a comfortable touch target on phones / tablets without
-       feeling oversized on desktop. */
+    /* field-sizing: content grows the input with its value on Chromium-
+       based browsers (Edge / Chrome 123+ / Opera). Firefox / Safari
+       fall back to the static width below. min-width keeps it usable
+       when empty + max-width prevents a long target name from blowing
+       out the row layout. Previously a fixed width: 80px crammed even
+       "-10" + the native number-spinner arrows so 3-digit cooler
+       targets rendered as "-1(" because the trailing digit fell behind
+       the spinner.
+       Tap-friendly height: ~38 px (9 px vertical padding + 14 px font
+       + 2 px border) — comfortable on phones / tablets without feeling
+       oversized on desktop. */
+    width: 96px;
+    min-width: 72px;
+    max-width: 220px;
+    field-sizing: content;
     padding: 9px 10px;
     min-height: 38px;
     box-sizing: border-box;
@@ -1070,7 +1078,10 @@ input[data-exposure-presets] {
 }
 
 .input-md {
-    width: 120px;
+    width: 140px;
+    min-width: 100px;
+    max-width: 320px;
+    field-sizing: content;
     /* Match .input-sm's tap-friendly height + font (see comment above). */
     padding: 9px 10px;
     min-height: 38px;
