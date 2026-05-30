@@ -827,8 +827,11 @@ function ninaApp() {
         equipSource: 'indi',
         alpaca: {
             discovering: false,
-            servers: [],        // [{ host, port, serverName, manufacturer, serverVersion, devices: [...] }]
-            connected: {},      // key: host:port:type:num → true
+            servers: [],          // [{ host, port, serverName, manufacturer, serverVersion, devices: [...] }]
+            connected: {},        // key: host:port:type:num → true (legacy manual-flow flag)
+            totalDevices: 0,      // count after last Discover (across all servers)
+            autoConnected: [],    // [{ host, port, deviceType, deviceNumber, deviceName, ok, error }]
+            showDetails: false,   // expand the per-server device table for debugging
             manualHost: '',
             manualPort: 11111
         },
@@ -16578,20 +16581,44 @@ function ninaApp() {
         async discoverAlpaca() {
             this.alpaca.discovering = true;
             try {
-                const r = await this.apiGet('/api/alpaca/discover?timeoutMs=3000');
+                // Backend handles discovery + auto-connect of every device
+                // in one round-trip. autoConnect=true is the default, set
+                // false only if a future "browse without pairing" mode is
+                // needed. Response carries autoConnected[] so we can
+                // toast per-device success/failure if anything went sideways.
+                const r = await this.apiGet('/api/alpaca/discover?timeoutMs=3000&autoConnect=true');
                 this.alpaca.servers = (r.servers || []).map(s => ({
                     host: s.host, port: s.port,
                     serverName: s.serverName, manufacturer: s.manufacturer,
                     manufacturerVersion: s.manufacturerVersion,
                     devices: s.devices || null, _probe: null
                 }));
+                this.alpaca.totalDevices = r.totalDevices || 0;
+                this.alpaca.autoConnected = r.autoConnected || [];
+
                 if (this.alpaca.servers.length === 0) {
                     this.toast('No Alpaca servers found. Try manual entry or check that ASCOM Remote Server is running.', 'warn');
                 } else {
-                    this.toast(`Found ${this.alpaca.servers.length} Alpaca server(s)`, 'ok');
-                    // Auto-enumerate devices on each discovered server
-                    for (const srv of this.alpaca.servers) await this.alpacaQueryServer(srv);
+                    const ok = this.alpaca.autoConnected.filter(d => d.ok).length;
+                    const fail = this.alpaca.autoConnected.length - ok;
+                    if (fail === 0) {
+                        this.toast(`${ok} Alpaca device(s) connected. Pick them in the cards under "Alpaca" driver.`, 'ok');
+                    } else {
+                        this.toast(`${ok} connected, ${fail} failed. See RIGS tab for details.`, 'warn');
+                        for (const d of this.alpaca.autoConnected.filter(x => !x.ok)) {
+                            this.toast(`${d.deviceType}: ${d.error || 'connect failed'}`, 'error');
+                        }
+                    }
                 }
+
+                // Refresh every per-card driver dropdown so the new "Alpaca"
+                // entries appear without the user having to reload the tab.
+                try {
+                    this.cameraDrivers = await this.apiGet('/api/camera/drivers');
+                    this.mountDrivers = await this.apiGet('/api/telescope/drivers');
+                    this.focuserDrivers = await this.apiGet('/api/focuser/drivers');
+                    this.filterWheelDrivers = await this.apiGet('/api/filterwheel/drivers');
+                } catch (_) { /* best-effort; the next tab open will repopulate */ }
             } catch (e) {
                 this.toast('Alpaca discovery failed: ' + e.message, 'error');
             } finally {

@@ -2764,10 +2764,20 @@
                     </div>
 
                     <!-- Alpaca panel -->
+                    <!-- alpaca.showDetails = false by default after Discover:
+                         the user explicitly asked for "no panel" -- Discover
+                         auto-connects + the actual device picking lives in
+                         the Camera/Mount/Focuser/FilterWheel cards' Alpaca
+                         driver dropdown. Power-users can still expand the
+                         detailed server list if they need to debug a
+                         missing device. -->
                     <div x-show="equipSource === 'alpaca'" style="margin-top:12px">
                         <p>
                             Discover Alpaca / ASCOM Remote devices on this LAN.
-                            On Windows, install
+                            Polaris auto-connects every discovered device,
+                            then you select them in each card below (Camera,
+                            Mount, Focuser, Filter Wheel) under the "Alpaca"
+                            driver. On Windows, install
                             <a href="https://ascom-standards.org/Downloads/Index.htm" target="_blank" rel="noopener">ASCOM Platform 6.6+</a>
                             and the
                             <a href="https://github.com/ASCOMInitiative/ASCOMRemote/releases" target="_blank" rel="noopener">ASCOM Remote Server</a>,
@@ -2775,15 +2785,43 @@
                         </p>
                         <div class="control-row actions" style="margin-top:8px">
                             <button class="btn btn-primary" @click="discoverAlpaca()" :disabled="alpaca.discovering">
-                                <span x-show="!alpaca.discovering">🔍 Discover</span>
+                                <span x-show="!alpaca.discovering">🔍 Discover &amp; connect</span>
                                 <span x-show="alpaca.discovering">Scanning…</span>
                             </button>
-                            <span class="muted" x-show="alpaca.servers.length > 0"
-                                  x-text="alpaca.servers.length + ' server(s) found'"></span>
+                            <span class="muted" x-show="alpaca.servers.length > 0">
+                                <span x-text="alpaca.servers.length + ' server(s), '"></span>
+                                <span x-text="alpaca.totalDevices + ' device(s) auto-connected'"></span>
+                            </span>
+                            <button class="btn btn-sm" x-show="alpaca.servers.length > 0"
+                                    @click="alpaca.showDetails = !alpaca.showDetails"
+                                    style="margin-left:auto"
+                                    x-text="alpaca.showDetails ? 'Hide details' : 'Show details'"></button>
+                        </div>
+
+                        <!-- Auto-connect summary chip row: one chip per
+                             device, colour-coded by ok/error. Always visible
+                             after Discover; lets the user confirm the
+                             expected ASI Camera / Mount / etc. all came up
+                             without expanding the detailed panel. -->
+                        <div x-show="alpaca.autoConnected.length > 0"
+                             style="margin-top:10px; display:flex; flex-wrap:wrap; gap:6px">
+                            <template x-for="d in alpaca.autoConnected"
+                                      :key="d.host + ':' + d.port + ':' + d.deviceType + ':' + d.deviceNumber">
+                                <span class="status-indicator"
+                                      :class="d.ok ? 'connected' : 'error'"
+                                      :title="d.ok ? ('Connected · ' + d.host + ':' + d.port + ' #' + d.deviceNumber)
+                                                    : ('Failed: ' + (d.error || 'unknown error'))">
+                                    <span x-text="d.ok ? '✓' : '✗'"></span>
+                                    <span x-text="d.deviceType"></span>
+                                    <span x-show="d.deviceName" class="muted"
+                                          x-text="'· ' + d.deviceName"></span>
+                                </span>
+                            </template>
                         </div>
 
                         <!-- Manual entry fallback (server behind NAT, port-forwarded, etc.) -->
-                        <div class="control-row" style="margin-top:10px;align-items:end">
+                        <div x-show="alpaca.showDetails || alpaca.servers.length === 0"
+                             class="control-row" style="margin-top:10px;align-items:end">
                             <label>Manual host<input type="text" x-model="alpaca.manualHost" placeholder="192.168.1.50" class="input-md"></label>
                             <label>Port<input type="number" x-model.number="alpaca.manualPort" placeholder="11111" class="input-sm"></label>
                             <button class="btn btn-sm" @click="alpacaQueryManual()"
@@ -2791,7 +2829,8 @@
                         </div>
 
                         <!-- Server list with devices -->
-                        <div x-show="alpaca.servers.length > 0" style="margin-top:14px;display:flex;flex-direction:column;gap:10px">
+                        <div x-show="alpaca.showDetails && alpaca.servers.length > 0"
+                             style="margin-top:14px;display:flex;flex-direction:column;gap:10px">
                             <template x-for="srv in alpaca.servers" :key="srv.host + ':' + srv.port">
                                 <div class="equip-card">
                                     <div class="equip-card-header">
