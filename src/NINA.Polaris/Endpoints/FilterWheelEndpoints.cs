@@ -46,9 +46,43 @@ public static class FilterWheelEndpoints {
             }
         });
 
-        group.MapPost("/select/{deviceName}", (string deviceName, EquipmentManager equip) => {
-            equip.SelectFilterWheel(deviceName);
-            return Results.Ok(new { device = deviceName });
+        group.MapPost("/select/{deviceName}", (string deviceName, EquipmentManager equip, string? driver) => {
+            try {
+                equip.SelectFilterWheel(driver ?? "indi", deviceName);
+                return Results.Ok(new { device = deviceName, driver = driver ?? "indi" });
+            } catch (NotSupportedException ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        // Per-driver filter-wheel discovery + driver catalogue.
+        // Same shape as the focuser endpoints.
+        group.MapGet("/discover", (EquipmentManager equip, string? driver) => {
+            var d = (driver ?? "indi").Trim().ToLowerInvariant();
+            if (d == "ascom-com") {
+                return Results.Ok(equip.GetAscomDrivers(
+                    NINA.Ascom.Com.AscomComRegistry.DeviceType.FilterWheel));
+            }
+            return Results.Ok(equip.GetDeviceNames()
+                .Select(n => new DiscoveredCamera(n, n, n))
+                .ToList());
+        });
+
+        group.MapGet("/drivers", (EquipmentManager equip) => {
+            var list = new List<CameraDriverInfo> {
+                new("indi", "INDI", Available: true,
+                    Description: "Any filter wheel the running INDI server exposes."),
+            };
+            if (OperatingSystem.IsWindows()) {
+                var n = equip.GetAscomDrivers(
+                    NINA.Ascom.Com.AscomComRegistry.DeviceType.FilterWheel).Count;
+                list.Add(new("ascom-com", "ASCOM (COM, direct)",
+                    Available: n > 0,
+                    Description: n > 0
+                        ? $"Direct COM-interop. {n} driver(s) registered."
+                        : "Install the ASCOM Platform + a filter-wheel driver."));
+            }
+            return Results.Ok(list);
         });
 
         group.MapPost("/connect", async (EquipmentManager equip) => {

@@ -350,7 +350,10 @@ public class AutoFocusService {
 
 internal static class IndiFocuserExtensions {
     // Tiny helper to make the read site explicit; never throws.
-    public static int Focuser_ReadCurrentSafely(this NINA.INDI.Devices.IndiFocuser f) {
+    // Widened from IndiFocuser to IFocuser so AscomComFocuser and any
+    // future backend get the same safe-read behaviour without the
+    // call site caring about the concrete type.
+    public static int Focuser_ReadCurrentSafely(this NINA.Image.Interfaces.IFocuser f) {
         try { return f.Position; } catch { return 0; }
     }
 }

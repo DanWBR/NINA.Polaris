@@ -50,9 +50,50 @@ public static class FocuserEndpoints {
             return Results.Ok(new { status = "stopped" });
         });
 
-        group.MapPost("/select/{deviceName}", (EquipmentManager equip, string deviceName) => {
-            equip.SelectFocuser(deviceName);
-            return Results.Ok(new { selected = deviceName });
+        group.MapPost("/select/{deviceName}", (EquipmentManager equip, string deviceName, string? driver) => {
+            // ?driver=indi (default) | ascom-com. Legacy clients omit
+            // it and get INDI for backwards compatibility.
+            try {
+                equip.SelectFocuser(driver ?? "indi", deviceName);
+                return Results.Ok(new { selected = deviceName, driver = driver ?? "indi" });
+            } catch (NotSupportedException ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        // Per-driver focuser discovery. INDI = device-name list from
+        // the active connection. ASCOM = registered ProgIDs from the
+        // local Windows registry. Empty on platforms / drivers that
+        // can't enumerate.
+        group.MapGet("/discover", (EquipmentManager equip, string? driver) => {
+            var d = (driver ?? "indi").Trim().ToLowerInvariant();
+            if (d == "ascom-com") {
+                return Results.Ok(equip.GetAscomDrivers(
+                    NINA.Ascom.Com.AscomComRegistry.DeviceType.Focuser));
+            }
+            return Results.Ok(equip.GetDeviceNames()
+                .Select(n => new DiscoveredCamera(n, n, n))
+                .ToList());
+        });
+
+        // Focuser driver catalogue. Mirrors /api/camera/drivers shape
+        // so the frontend driver-source dropdown can render the same
+        // way for every device type.
+        group.MapGet("/drivers", (EquipmentManager equip) => {
+            var list = new List<CameraDriverInfo> {
+                new("indi", "INDI", Available: true,
+                    Description: "Any focuser the running INDI server exposes."),
+            };
+            if (OperatingSystem.IsWindows()) {
+                var n = equip.GetAscomDrivers(
+                    NINA.Ascom.Com.AscomComRegistry.DeviceType.Focuser).Count;
+                list.Add(new("ascom-com", "ASCOM (COM, direct)",
+                    Available: n > 0,
+                    Description: n > 0
+                        ? $"Direct COM-interop. {n} driver(s) registered."
+                        : "Install the ASCOM Platform + a focuser driver."));
+            }
+            return Results.Ok(list);
         });
 
         group.MapPost("/connect", async (EquipmentManager equip) => {

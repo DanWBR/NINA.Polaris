@@ -199,8 +199,9 @@ public class ProfileService {
             Name = newName,
             Camera = src.Camera, CameraDriver = src.CameraDriver,
             Telescope = src.Telescope, TelescopeDriver = src.TelescopeDriver,
-            Focuser = src.Focuser,
-            FilterWheel = src.FilterWheel, Rotator = src.Rotator,
+            Focuser = src.Focuser, FocuserDriver = src.FocuserDriver,
+            FilterWheel = src.FilterWheel, FilterWheelDriver = src.FilterWheelDriver,
+            Rotator = src.Rotator,
             FlatDevice = src.FlatDevice, Dome = src.Dome, Weather = src.Weather,
             CoolerTargetTemperature = src.CoolerTargetTemperature,
             DefaultGain = src.DefaultGain, DefaultOffset = src.DefaultOffset,
@@ -493,7 +494,16 @@ public class EquipmentProfile {
     /// planned). Defaults to <c>indi</c> for backward compatibility.</summary>
     public string TelescopeDriver { get; set; } = "indi";
     public string? Focuser { get; set; }
+    /// <summary>Focuser backend kind. One of: <c>indi</c> (default,
+    /// every focuser the running indiserver exposes), <c>ascom-com</c>
+    /// (Windows-only, direct ASCOM Platform COM-interop).
+    /// Defaults to <c>indi</c> for backward compatibility with
+    /// profiles created before this field existed.</summary>
+    public string FocuserDriver { get; set; } = "indi";
     public string? FilterWheel { get; set; }
+    /// <summary>Filter-wheel backend kind. Same enum as
+    /// <see cref="FocuserDriver"/>.</summary>
+    public string FilterWheelDriver { get; set; } = "indi";
     public string? Rotator { get; set; }
     public string? FlatDevice { get; set; }
     public string? Dome { get; set; }

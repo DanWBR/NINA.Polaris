@@ -119,6 +119,25 @@ public static class TelescopeEndpoints {
         group.MapGet("/drivers", (EquipmentManager equip)
             => Results.Ok(equip.GetAvailableMountDrivers()));
 
+        // Per-driver telescope discovery. INDI uses device names from
+        // the active connection; ASCOM uses registered ProgIDs from
+        // the local Windows registry. SynScan-WiFi is host:port-based
+        // (no enumeration possible), so it returns empty here — the
+        // user types the address directly.
+        group.MapGet("/discover", (EquipmentManager equip, string? driver) => {
+            var d = (driver ?? "indi").Trim().ToLowerInvariant();
+            if (d == "ascom-com") {
+                return Results.Ok(equip.GetAscomDrivers(
+                    NINA.Ascom.Com.AscomComRegistry.DeviceType.Telescope));
+            }
+            if (d == "indi") {
+                return Results.Ok(equip.GetDeviceNames()
+                    .Select(n => new DiscoveredCamera(n, n, n))
+                    .ToList());
+            }
+            return Results.Ok(Array.Empty<DiscoveredCamera>());
+        });
+
         group.MapPost("/connect", async (EquipmentManager equip) => {
             if (equip.Telescope == null)
                 return Results.BadRequest(new { error = "No telescope selected" });

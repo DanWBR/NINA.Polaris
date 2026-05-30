@@ -31,8 +31,15 @@ public class EquipmentManager : IDisposable {
     /// Mirrors <c>EquipmentProfile.TelescopeDriver</c>. Null when no
     /// mount is selected.</summary>
     public string? TelescopeDriver { get; private set; }
-    public IndiFocuser? Focuser { get; private set; }
-    public IndiFilterWheel? FilterWheel { get; private set; }
+    public IFocuser? Focuser { get; private set; }
+    /// <summary>Driver kind currently bound to <see cref="Focuser"/>.
+    /// "indi" (default) or "ascom-com" (Windows-only ASCOM Platform).
+    /// Mirrors <c>EquipmentProfile.FocuserDriver</c>.</summary>
+    public string? FocuserDriver { get; private set; }
+    public IFilterWheel? FilterWheel { get; private set; }
+    /// <summary>Driver kind currently bound to <see cref="FilterWheel"/>.
+    /// Mirrors <c>EquipmentProfile.FilterWheelDriver</c>.</summary>
+    public string? FilterWheelDriver { get; private set; }
     public IndiRotator? Rotator { get; private set; }
     public IndiFlatDevice? FlatDevice { get; private set; }
     public IndiDome? Dome { get; private set; }
@@ -64,6 +71,7 @@ public class EquipmentManager : IDisposable {
             "canon-edsdk" => CreateCanonCamera(deviceId),
             "nikon-sdk"   => CreateNikonCamera(deviceId),
             "sony-sdk"    => new NINA.Camera.SonySdk.SonySdkCamera(deviceId),
+            "ascom-com"   => CreateAscomCamera(deviceId),
             // Alpaca lands in a follow-up commit.
             _ => throw new NotSupportedException(
                 $"Camera driver '{driver}' is not implemented yet. " +
@@ -93,6 +101,19 @@ public class EquipmentManager : IDisposable {
         return new NINA.Camera.NikonSdk.NikonSdkCamera(deviceId);
     }
 
+    /// <summary>ASCOM Camera (ICameraV3) over native COM. Windows-only,
+    /// requires the ASCOM Platform installed on the host. Lets Polaris
+    /// reach ASCOM hardware without routing through ASCOM Remote or
+    /// the Alpaca Omni Simulator.</summary>
+    private static ICamera CreateAscomCamera(string progId) {
+        if (!OperatingSystem.IsWindows()) {
+            throw new NotSupportedException(
+                "ASCOM COM drivers only run on Windows. On Linux / macOS, " +
+                "use 'indi' or 'alpaca' instead.");
+        }
+        return new NINA.Ascom.Com.AscomComCamera(progId);
+    }
+
     /// <summary>List of camera driver kinds the host can offer. Always
     /// includes <c>indi</c>; vendor SDK drivers are listed only when
     /// the matching native dependency is present on the current OS.</summary>
@@ -104,6 +125,17 @@ public class EquipmentManager : IDisposable {
                 Description: "ASCOM-over-HTTP cameras. Wiring pending."),
         };
         if (OperatingSystem.IsWindows()) {
+            // Direct ASCOM Platform COM-interop. Available iff the
+            // ASCOM Platform is installed AND at least one Camera
+            // driver is registered. No native dependency to download
+            // beyond ASCOM Platform itself.
+            var ascomCount = ProbeAscomDriverCount(
+                NINA.Ascom.Com.AscomComRegistry.DeviceType.Camera);
+            list.Add(new("ascom-com", "ASCOM (COM, direct)",
+                Available: ascomCount > 0,
+                Description: ascomCount > 0
+                    ? $"Direct COM-interop, no ASCOM Remote in the way. {ascomCount} driver(s) registered."
+                    : "Install the ASCOM Platform + a camera driver from https://ascom-standards.org/"));
             // Canon EDSDK + Nikon MAID/Imaging SDKs are Windows-only.
             // Probe each so the UI can show a green check when the
             // native DLLs are reachable on the search path or a
@@ -165,8 +197,28 @@ public class EquipmentManager : IDisposable {
                 return Array.Empty<DiscoveredCamera>();
             }
         }
+        if (driver == "ascom-com" && OperatingSystem.IsWindows()) {
+            return EnumerateAscomDrivers(
+                    NINA.Ascom.Com.AscomComRegistry.DeviceType.Camera)
+                .Select(d => new DiscoveredCamera(d.ProgId, d.Description, d.ProgId))
+                .ToList();
+        }
         return Array.Empty<DiscoveredCamera>();
     }
+
+    /// <summary>Count of registered ASCOM drivers for a given device
+    /// type. Used by the driver-catalogue endpoints to decide whether
+    /// to advertise the "ascom-com" entry as available. Returns 0 on
+    /// non-Windows hosts.</summary>
+    private static int ProbeAscomDriverCount(NINA.Ascom.Com.AscomComRegistry.DeviceType type) {
+        if (!OperatingSystem.IsWindows()) return 0;
+        try { return EnumerateAscomDrivers(type).Count; } catch { return 0; }
+    }
+
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static IReadOnlyList<NINA.Ascom.Com.AscomComRegistry.AscomDriver>
+        EnumerateAscomDrivers(NINA.Ascom.Com.AscomComRegistry.DeviceType type)
+        => NINA.Ascom.Com.AscomComRegistry.Enumerate(type);
 
     /// <summary>Windows-only inner helper so the platform analyzer
     /// is satisfied, the OS guard in the caller is implicit here via
@@ -199,12 +251,13 @@ public class EquipmentManager : IDisposable {
         Telescope = driver switch {
             "indi" => new IndiTelescope(_indiClient, deviceId),
             "synscan-wifi" => new NINA.Mount.SynScanWifi.SynScanWifiTelescope(deviceId),
+            "ascom-com" => CreateAscomTelescope(deviceId),
             // NexStar TCP + LX200 TCP + Alpaca still pending, see
             // docs/mounts-wifi.md for the backlog.
             _ => throw new NotSupportedException(
                 $"Mount driver '{driver}' is not implemented yet. " +
-                "Use 'indi' or 'synscan-wifi' (the rest are still pending, " +
-                "see docs/mounts-wifi.md)."),
+                "Use 'indi', 'synscan-wifi', or 'ascom-com' (the rest are " +
+                "still pending, see docs/mounts-wifi.md)."),
         };
         TelescopeDriver = driver;
         _logger.LogInformation("Telescope selected: driver={Driver}, id={DeviceId}",
@@ -219,7 +272,7 @@ public class EquipmentManager : IDisposable {
         // Reusing CameraDriverInfo here, the shape is identical
         // (id / name / available / description) and a separate
         // record would just be ceremony.
-        return new List<CameraDriverInfo> {
+        var list = new List<CameraDriverInfo> {
             new("indi", "INDI", Available: true,
                 Description: "Any mount the running INDI server exposes, covers most WiFi mounts via indi_skywatcherAltAzMount / indi_celestron_aux / indi_ioptron_v3 / indi_lx200gps."),
             new("alpaca", "Alpaca (ASCOM)", Available: false,
@@ -231,18 +284,88 @@ public class EquipmentManager : IDisposable {
             new("lx200-tcp", "Meade / LX200 (TCP)", Available: false,
                 Description: "Direct TCP wrapping the LX200 serial protocol. Driver pending, see docs/mounts-wifi.md."),
         };
+        if (OperatingSystem.IsWindows()) {
+            var n = ProbeAscomDriverCount(NINA.Ascom.Com.AscomComRegistry.DeviceType.Telescope);
+            list.Add(new("ascom-com", "ASCOM (COM, direct)",
+                Available: n > 0,
+                Description: n > 0
+                    ? $"Direct COM-interop, no ASCOM Remote in the way. {n} driver(s) registered."
+                    : "Install the ASCOM Platform + a telescope driver from https://ascom-standards.org/"));
+        }
+        return list;
     }
 
-    public IndiFocuser SelectFocuser(string deviceName) {
-        Focuser = new IndiFocuser(_indiClient, deviceName);
-        _logger.LogInformation("Focuser selected: {Name}", deviceName);
+    /// <summary>List of registered ASCOM drivers for a device type.
+    /// Used by the per-driver discovery endpoints. Empty on non-
+    /// Windows hosts.</summary>
+    public IReadOnlyList<DiscoveredCamera> GetAscomDrivers(
+            NINA.Ascom.Com.AscomComRegistry.DeviceType type) {
+        if (!OperatingSystem.IsWindows()) return Array.Empty<DiscoveredCamera>();
+        try {
+            return EnumerateAscomDrivers(type)
+                .Select(d => new DiscoveredCamera(d.ProgId, d.Description, d.ProgId))
+                .ToList();
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "ASCOM {Type} discovery failed", type);
+            return Array.Empty<DiscoveredCamera>();
+        }
+    }
+
+    private static ITelescope CreateAscomTelescope(string progId) {
+        if (!OperatingSystem.IsWindows()) {
+            throw new NotSupportedException(
+                "ASCOM COM drivers only run on Windows.");
+        }
+        return new NINA.Ascom.Com.AscomComTelescope(progId);
+    }
+
+    /// <summary>Legacy entry-point, assumes the INDI driver. Kept for
+    /// backwards compatibility with the existing
+    /// <c>POST /api/focuser/select/{deviceName}</c> route.</summary>
+    public IFocuser SelectFocuser(string deviceName)
+        => SelectFocuser("indi", deviceName);
+
+    public IFocuser SelectFocuser(string driver, string deviceId) {
+        driver = (driver ?? "indi").Trim().ToLowerInvariant();
+        Focuser = driver switch {
+            "indi" => new IndiFocuser(_indiClient, deviceId),
+            "ascom-com" => CreateAscomFocuser(deviceId),
+            _ => throw new NotSupportedException(
+                $"Focuser driver '{driver}' is not implemented yet."),
+        };
+        FocuserDriver = driver;
+        _logger.LogInformation("Focuser selected: driver={Driver}, id={DeviceId}",
+            driver, deviceId);
         return Focuser;
     }
 
-    public IndiFilterWheel SelectFilterWheel(string deviceName) {
-        FilterWheel = new IndiFilterWheel(_indiClient, deviceName);
-        _logger.LogInformation("Filter wheel selected: {Name}", deviceName);
+    private static IFocuser CreateAscomFocuser(string progId) {
+        if (!OperatingSystem.IsWindows())
+            throw new NotSupportedException("ASCOM COM drivers only run on Windows.");
+        return new NINA.Ascom.Com.AscomComFocuser(progId);
+    }
+
+    public IFilterWheel SelectFilterWheel(string deviceName)
+        => SelectFilterWheel("indi", deviceName);
+
+    public IFilterWheel SelectFilterWheel(string driver, string deviceId) {
+        driver = (driver ?? "indi").Trim().ToLowerInvariant();
+        FilterWheel = driver switch {
+            "indi" => new IndiFilterWheel(_indiClient, deviceId),
+            "ascom-com" => CreateAscomFilterWheel(deviceId),
+            _ => throw new NotSupportedException(
+                $"Filter wheel driver '{driver}' is not implemented yet."),
+        };
+        FilterWheelDriver = driver;
+        _logger.LogInformation("Filter wheel selected: driver={Driver}, id={DeviceId}",
+            driver, deviceId);
         return FilterWheel;
+    }
+
+    private static IFilterWheel CreateAscomFilterWheel(string progId) {
+        if (!OperatingSystem.IsWindows())
+            throw new NotSupportedException("ASCOM COM drivers only run on Windows.");
+        return new NINA.Ascom.Com.AscomComFilterWheel(progId);
     }
 
     public IndiRotator SelectRotator(string deviceName) {
