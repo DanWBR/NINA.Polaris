@@ -135,8 +135,16 @@ public class Phd2VncSessionService : BackgroundService {
         // (64-bit) and registers the install path. Same pattern works
         // for 32-bit installer via the Wow6432Node redirect — Registry
         // class handles the view automatically.
-        using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\TightVNC\Server")
-                     ?? Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Wow6432Node\TightVNC\Server");
+        //
+        // SafeOpenHklm catches SecurityException / UnauthorizedAccessException
+        // when the polaris user can't read the key (locked-down domain
+        // box, AppLocker policy, running under a low-privilege service
+        // account). Without it the outer RefreshDetectionAsync catch
+        // still runs but the debugger flags it as a first-chance
+        // exception every time the user opens Settings, which is
+        // noisy in logs and confusing during debugging.
+        using var key = SafeOpenHklm(@"SOFTWARE\TightVNC\Server")
+                     ?? SafeOpenHklm(@"SOFTWARE\Wow6432Node\TightVNC\Server");
         if (key == null) {
             TightVncInstalled = false;
             TightVncPath = null;
@@ -183,6 +191,20 @@ public class Phd2VncSessionService : BackgroundService {
         TightVncInstalled = true;
         _logger.LogInformation("Phd2VncSessionService: detected TightVNC v{Ver} at {Path}",
             TightVncVersion, TightVncPath);
+    }
+
+    /// <summary>Open an HKLM subkey returning null on missing OR on
+    /// access-denied. Standard user accounts can read most of HKLM
+    /// but locked-down corporate / domain machines may deny read on
+    /// SOFTWARE entries; treating that as "not installed" lets the
+    /// detection fall through cleanly to the Program Files probe.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    private static RegistryKey? SafeOpenHklm(string subkey) {
+        try { return Registry.LocalMachine.OpenSubKey(subkey); }
+        catch (System.Security.SecurityException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
+        catch (IOException) { return null; }
     }
 
     [SupportedOSPlatform("windows")]
