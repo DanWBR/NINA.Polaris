@@ -3417,10 +3417,14 @@ function ninaApp() {
                     if (payloadOffset + 2 <= view.length
                         && view[payloadOffset] === 0xFF
                         && view[payloadOffset + 1] === 0xD8) {
-                        // Headered JPEG match. Extract FrameKind from
-                        // header offset 20 (same layout raw uses).
+                        // Headered JPEG match. FrameKind lives at
+                        // header offset 20 = arrayBuffer offset 24
+                        // (4B length prefix shifts every header field
+                        // by +4). See the long comment in
+                        // _renderRawFrame for the offset-24 vs -20
+                        // confusion that hid this bug for a release.
                         headeredJpegKind = headerLen0 >= 24
-                            ? dv0.getInt32(20, true) : 0;
+                            ? dv0.getInt32(24, true) : 0;
                         headeredJpegBytes = arrayBuffer.slice(payloadOffset);
                     }
                 }
@@ -4389,28 +4393,35 @@ function ninaApp() {
             const bitDepth = dv.getInt32(12, true);
             const bayerPattern = dv.getInt32(16, true);
             const uncompressedSize = dv.getInt32(20, true);
-            // FrameKind, added to GetStreamHeader to flag the panel
-            // a frame belongs to. The new server emits a 24-byte
-            // header (6 ints: width, height, bitDepth, bayerPattern,
-            // uncompressedSize, kind). Old server emits 20 bytes (no
-            // kind). headerLen reports the header size in bytes, so
-            // Per ImageBuffer.GetStreamHeader (NINA.Image.Portable):
-            //   offset  0  Width             (int32)
-            //   offset  4  Height            (int32)
-            //   offset  8  BitDepth          (int32)
-            //   offset 12  BayerPattern      (int32)
-            //   offset 16  UncompressedSize  (int32)
-            //   offset 20  FrameKind         (int32)
-            // Total header = 24 bytes. FrameKind lives at OFFSET 20,
-            // not 24 — earlier comment + code claimed offset 24 which
-            // was off by 4 + read garbage from the LZ4 payload start.
-            // Garbage int32 was almost always 0, so every PREVIEW snap
-            // (kind=1) was mis-read as LIVE (kind=0) and painted onto
-            // the liveCanvas — exactly the "preview frame stuck on
-            // LIVE tab" symptom + the always-on live-stack badge.
+            // FrameKind. The HEADER (the 24-byte block emitted by
+            // ImageBuffer.GetStreamHeader) lays its 6 int32 fields
+            // at relative offsets 0/4/8/12/16/20. BUT the WIRE
+            // payload received here is [4B headerLen][24B header]
+            // [LZ4 payload], so every header field lives at
+            // arrayBuffer offset (4 + header_offset). FrameKind's
+            // header offset is 20 -> arrayBuffer offset is 24.
             //
+            // Two earlier attempts got this wrong:
+            //  - Original code read at arrayBuffer offset 24 with
+            //    the comment 'header offset 24', which IS correct
+            //    by accident (the arrayBuffer offset, not the
+            //    header offset).
+            //  - A subsequent 'fix' moved the read to arrayBuffer
+            //    offset 20, claiming the header layout puts kind
+            //    there. Header offset 20 is right -- but arrayBuffer
+            //    offset 20 is the UncompressedSize field! Result:
+            //    frameKind always equalled uncompressedSize (a huge
+            //    number that switch-case fell through to default),
+            //    so every PREVIEW snap landed on liveCanvas.
+            //    Symptom: 'o frame do preview esta aparecendo no
+            //    live stack e nao no preview'.
+            //
+            // Correct read: arrayBuffer offset 24, gated on the
+            // full 24-byte header being present (headerLen >= 24).
+            // Need byteLength >= 28 to safely read those 4 bytes.
             // 0 = Live, 1 = Preview, 2 = Focus, 3 = Video, 4 = SlewPreview.
-            const frameKind = headerLen >= 24 ? dv.getInt32(20, true) : 0;
+            const frameKind = (headerLen >= 24 && arrayBuffer.byteLength >= 28)
+                ? dv.getInt32(24, true) : 0;
 
             // Bail on placeholder / heartbeat frames before they spam
             // the WebGL pipeline. We were seeing periodic 0x0 frames
