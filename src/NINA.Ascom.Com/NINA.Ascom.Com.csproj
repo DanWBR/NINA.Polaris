@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- net10.0 (not net10.0-windows) so the managed assembly itself
+         compiles on Linux/macOS CI; the actual COM call sites are all
+         guarded by OperatingSystem.IsWindows() in EquipmentManager
+         and any attempt to instantiate AscomComCamera on Linux throws
+         at construction time, never inside the COM layer. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>NINA.Ascom.Com</RootNamespace>
+    <AssemblyName>NINA.Ascom.Com</AssemblyName>
+    <!-- ASCOM Platform is COM + Windows-only. Mark the assembly
+         accordingly so callers on Linux / macOS get a clear
+         analyzer warning if they accidentally pull this in.
+         The actual ProjectReference from NINA.Polaris is wrapped
+         in a Windows-only Condition so non-Windows publish
+         outputs skip it entirely. -->
+    <SupportedOSPlatform>windows</SupportedOSPlatform>
+    <!-- dynamic dispatch (Type.GetTypeFromProgID + late-bound
+         property/method calls) drives the whole adapter. -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NINA.Core.Portable\NINA.Core.Portable.csproj" />
+    <ProjectReference Include="..\NINA.Image.Portable\NINA.Image.Portable.csproj" />
+    <!-- dynamic keyword requires Microsoft.CSharp at runtime -->
+    <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
+    <!-- Registry walk for the driver enumeration. -->
+    <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
+  </ItemGroup>
+
+</Project>

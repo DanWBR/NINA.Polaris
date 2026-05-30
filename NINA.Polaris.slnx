@@ -8,6 +8,7 @@
     <Project Path="src/NINA.Polaris.Wasm/NINA.Polaris.Wasm.csproj" />
     <Project Path="src/NINA.Image.Portable/NINA.Image.Portable.csproj" />
     <Project Path="src/NINA.INDI/NINA.INDI.csproj" />
+    <Project Path="src/NINA.Ascom.Com/NINA.Ascom.Com.csproj" />
     <Project Path="src/NINA.Relay.Protocol/NINA.Relay.Protocol.csproj" />
     <Project Path="src/NINA.Relay.Server/NINA.Relay.Server.csproj" />
   </Folder>

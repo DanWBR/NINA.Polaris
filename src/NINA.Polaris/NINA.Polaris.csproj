@@ -82,6 +82,11 @@
     <ProjectReference Include="..\NINA.Camera.SonySdk\NINA.Camera.SonySdk.csproj" />
     <!-- Direct-WiFi mount drivers. Pure managed code, cross-platform. -->
     <ProjectReference Include="..\NINA.Mount.SynScanWifi\NINA.Mount.SynScanWifi.csproj" />
+    <!-- ASCOM Platform COM-interop adapter (Windows-only at runtime,
+         guarded by OperatingSystem.IsWindows() in EquipmentManager).
+         The managed assembly itself compiles on every platform so
+         the publish output stays uniform. -->
+    <ProjectReference Include="..\NINA.Ascom.Com\NINA.Ascom.Com.csproj" />
   </ItemGroup>
 
   <ItemGroup>
