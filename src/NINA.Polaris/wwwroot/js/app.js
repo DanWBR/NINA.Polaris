@@ -498,6 +498,15 @@ function ninaApp() {
         // "host:port" depending on driver.
         mountDriver: 'indi',
         mountDrivers: [],
+        // Per-driver telescope discovery, populated by Detect when
+        // mountDriver === 'ascom-com'. Same shape as
+        // cameraVendorDevices.
+        mountVendorDevices: [],
+        mountDiscovering: false,
+        // ASCOM SetupDialog modal state. True while the driver's
+        // setup form is open; disables the Setup button to prevent
+        // a second concurrent dialog (drivers usually crash on that).
+        ascomSetupBusy: false,
 
         // PREVIEW tab, snap test shots. Defaults match what a
         // typical "is this thing focused / framed?" check would use:
@@ -11435,6 +11444,46 @@ function ninaApp() {
                     id: 'indi', name: 'INDI', available: true,
                     description: 'Standard astronomy cameras via INDI server.'
                 }];
+            }
+        },
+
+        // "Detect" button handler for ASCOM-COM telescope drivers.
+        // INDI mounts are picked from the live indiserver device list;
+        // direct WiFi drivers (synscan-wifi) take a host:port and
+        // need no discovery. Only ASCOM enumerates via the registry.
+        async detectVendorMounts() {
+            this.mountDiscovering = true;
+            try {
+                const list = await this.apiGet(
+                    `/api/telescope/discover?driver=${encodeURIComponent(this.mountDriver)}`);
+                this.mountVendorDevices = list || [];
+                if (this.mountVendorDevices.length === 0) {
+                    this.toast('No ASCOM telescope drivers registered on this host', 'warn');
+                }
+            } catch (e) {
+                this.toast('Mount detect failed: ' + (e.message || ''), 'error');
+            } finally {
+                this.mountDiscovering = false;
+            }
+        },
+
+        // ASCOM SetupDialog. Spawns the driver's modal setup form on
+        // a dedicated STA thread server-side. The request blocks
+        // until the user dismisses the dialog, so we set
+        // ascomSetupBusy=true to disable the button and avoid a
+        // concurrent open (most drivers crash on that). Toast shows
+        // success / hint on failure (typical failure is "no
+        // interactive desktop" when Polaris runs as a service).
+        async openAscomSetup(progId) {
+            if (!progId) return;
+            this.ascomSetupBusy = true;
+            try {
+                await this.apiPost(`/api/ascom/setup/${encodeURIComponent(progId)}`);
+                this.toast('Setup dialog closed for ' + progId, 'ok');
+            } catch (e) {
+                this.toast('ASCOM setup failed: ' + (e.message || ''), 'error');
+            } finally {
+                this.ascomSetupBusy = false;
             }
         },
 

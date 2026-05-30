@@ -607,6 +607,10 @@ app.MapVideoEndpoints();
 app.MapTelescopeEndpoints();
 app.MapFocuserEndpoints();
 app.MapFilterWheelEndpoints();
+// ASCOM Platform-specific (SetupDialog, platform-presence probe).
+// Per-device select/connect/discover are already handled by the
+// per-device endpoint groups above with ?driver=ascom-com.
+app.MapAscomEndpoints();
 app.MapRotatorEndpoints();
 app.MapFlatDeviceEndpoints();
 app.MapDomeEndpoints();
