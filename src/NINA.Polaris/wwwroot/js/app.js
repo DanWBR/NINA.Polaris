@@ -3695,14 +3695,20 @@ function ninaApp() {
         },
 
         // Re-render the cached last frame with current stretch settings.
-        // Called when sliders move.
+        // Called when sliders move + on tab/videoTab change via $watch.
         applyManualStretch() {
             const f = this._lastRawFrame;
             if (!f) return;
             const { shadow, scaleFactor, midtone } =
                 this._computeStretchParams(f.pixels, f.maxVal);
+            // Pass the original frameKind so the re-render lands on
+            // the SAME canvas the frame first painted into. Default
+            // kind=0 here would silently shove PREVIEW snaps onto
+            // liveCanvas on every $watch('tab') tick, which was the
+            // 'snap appears in LIVE too' regression after the kind
+            // routing fix.
             this._tryRenderWebGL(f.pixels, f.width, f.height, f.bitDepth,
-                f.bayerPattern, shadow, scaleFactor, midtone);
+                f.bayerPattern, shadow, scaleFactor, midtone, f.frameKind || 0);
         },
 
         // Re-render the cached frame with whatever wb / stretch state
@@ -4528,7 +4534,14 @@ function ninaApp() {
             // Cache the (possibly WASM-accumulated) frame so manual-
             // stretch slider changes re-render against the latest
             // accumulator without waiting for the next capture.
-            this._lastRawFrame = { pixels, width, height, bitDepth, bayerPattern, maxVal };
+            //
+            // Keep frameKind in the cache. Without it, applyManualStretch
+            // re-renders the cached frame with kind=0 (default arg) ->
+            // the bitmap blits onto liveCanvas. Symptom: tap a PREVIEW
+            // snap, switch tabs (triggers $watch('tab') -> applyManualStretch),
+            // and the preview frame leaks onto the LIVE canvas because
+            // the re-render forgot which panel originally owned it.
+            this._lastRawFrame = { pixels, width, height, bitDepth, bayerPattern, maxVal, frameKind };
 
             // Auto WB: when enabled, recompute gain ratios from the
             // current frame at most every ~2s so we don't burn CPU
