@@ -1816,31 +1816,64 @@ label select.input-sm {
    whole app keeps one tabstrip vocabulary. Active pill gets the
    accent fill + text bump; idle pills stay subtle so they don't
    compete with the panel title. */
-.files-subtabs {
-    display: inline-flex;
-    gap: 4px;
-    margin-left: 14px;
+/* The old .files-subtabs Stack/Edit pills are gone: Stack is
+   always visible on the right side of the FILES tab, Edit opens
+   in a fullscreen overlay modal. The pill CSS used to live here. */
+
+/* Fullscreen overlay editor modal. The whole Lightroom-style
+   editor (OpenSeadragon viewer + sliders + AI section + export
+   dialog) renders inside .files-editor-modal-panel; the
+   surrounding .files-editor-modal handles backdrop + z-index.
+   z-index 1000 keeps it above the activity bar (z-index 50) and
+   any tab-level chrome but still below toasts (4000). */
+.files-editor-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
 }
-.files-subtab-pill {
-    appearance: none;
+.files-editor-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+}
+.files-editor-modal-panel {
+    position: relative;
+    margin: 24px;
+    flex: 1 1 auto;
+    background: var(--bg-primary);
     border: 1px solid var(--border);
-    background: transparent;
-    color: var(--text-secondary);
-    padding: 4px 12px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    border-radius: 10px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+    overflow: auto;
+    padding: 16px 20px 20px;
 }
-.files-subtab-pill:hover {
+.files-editor-modal-close {
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--bg-secondary);
     color: var(--text-primary);
-    border-color: var(--text-muted);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
-.files-subtab-pill.active {
-    background: var(--accent);
-    color: #fff;
+.files-editor-modal-close:hover {
+    background: var(--bg-tertiary, var(--bg-secondary));
     border-color: var(--accent);
+}
+@media (max-width: 900px) {
+    .files-editor-modal-panel { margin: 0; border-radius: 0; }
 }
 
 /* UNIF-1: 2-col split. Browser left fixed flex-basis, right pane

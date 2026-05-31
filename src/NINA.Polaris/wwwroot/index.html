@@ -5757,20 +5757,13 @@
             <div x-show="tab === 'files'" class="tab-panel files-panel">
                 <div class="panel-header">
                     Files
-                    <!-- UNIF-1: sub-tab pills. Stack = old STUDIO
-                         workflow (slot-based stacking), Edit = old
-                         EDITOR workflow (single-FITS sliders). The
-                         file browser to the left is shared between
-                         both -- it's the source of files for either
-                         workspace. -->
-                    <span class="files-subtabs">
-                        <button class="files-subtab-pill"
-                                :class="{ active: filesSubTab === 'stack' }"
-                                @click="setFilesSubTab('stack')">Stack</button>
-                        <button class="files-subtab-pill"
-                                :class="{ active: filesSubTab === 'edit' }"
-                                @click="setFilesSubTab('edit')">Edit</button>
-                    </span>
+                    <!-- Stack panel is now always visible on the right
+                         side of the FILES tab. The Lightroom-style
+                         editor opens as an overlay modal on demand
+                         (via the Edit button in the toolbar or
+                         filesOpenInEditor()). The old Stack/Edit pills
+                         became redundant once we made the right pane
+                         single-purpose. -->
                     <span style="flex:1"></span>
                     <span class="status-indicator-sm"
                           :class="files.loading ? 'warn' : (files.error ? 'error' : 'ok')"
@@ -6097,7 +6090,7 @@
                          UNIF-3 will fill in the Actions toolbar with
                          Master/Calibrate/Integrate/Combine/ColorCal/
                          Siril wiring. -->
-                    <div x-show="filesSubTab === 'stack'" class="files-right-pane stack-pane">
+                    <div class="files-right-pane stack-pane">
                         <div class="stack-header">
                             <h3 class="stack-title">Stack workspace</h3>
                             <button class="btn btn-sm"
@@ -6227,14 +6220,24 @@
                             </div>
                         </div>
                     </div>
-                    <div x-show="filesSubTab === 'edit'" class="files-right-pane">
-                    <!-- UNIF-5: editor markup moved here from the legacy
-                         tab === editor panel. Same Alpine state (editorState),
-                         same handlers (editorLoad/editorSave/etc) -- only the
-                         DOM location changes. Browser-left selection +
-                         toolbar Open in Editor button hands the path off via
-                         filesOpenInEditor() which now sets filesSubTab to edit
-                         instead of switching the top-level tab. -->
+                    <!-- Lightroom-style editor as a fullscreen overlay
+                         modal. Opens on demand via filesOpenInEditor()
+                         (which sets editorState.modalOpen) or the Edit
+                         button in the toolbar. ESC + the X button +
+                         clicking the backdrop all close it. The OpenSea-
+                         dragon viewer + the entire editor-grid lives
+                         inside, so the editing surface gets the full
+                         viewport instead of half the FILES tab. -->
+                    <div class="files-editor-modal"
+                         x-show="editorState.modalOpen" x-cloak
+                         @keydown.escape.window="editorCloseModal()">
+                        <div class="files-editor-modal-backdrop"
+                             @click="editorCloseModal()"></div>
+                        <div class="files-editor-modal-panel">
+                        <button class="files-editor-modal-close"
+                                @click="editorCloseModal()"
+                                title="Close editor (ESC)"
+                                aria-label="Close editor">×</button>
                 <div class="panel-header">
                     Editor
                     <span class="status-indicator-sm"
@@ -6293,15 +6296,17 @@
                     </div>
                     <div class="editor-source-card">
                         <h3>From Files browser</h3>
-                        <!-- UNIF-6: Studio is gone; pick from the FILES
-                             browser (left pane). Single-select a FITS
-                             then click the Edit toolbar button. The
-                             Stack sub-tab is the new location for the
-                             stacking workflow. -->
+                        <!-- The editor is now a modal opened on demand.
+                             If the user opened it with nothing selected,
+                             this empty-state nudges them to pick a file
+                             and close the overlay. The Stack workspace
+                             is always visible on the right side of the
+                             FILES tab, so there's no "go to Stack"
+                             redirect anymore. -->
                         <p class="hint">Browse to a master on the left,
                            select it, then click the "Edit" button in
                            the browser toolbar.</p>
-                        <button class="btn btn-sm" @click="setFilesSubTab('stack')">→ Stack workspace</button>
+                        <button class="btn btn-sm" @click="editorCloseModal()">← Close editor</button>
                     </div>
                 </div>
                 <div class="editor-load-error" x-show="editorState.error" x-text="editorState.error"></div>
@@ -6607,7 +6612,8 @@
                         </details>
                     </div>
                 </div>
-                    </div>
+                    </div><!-- /.files-editor-modal-panel -->
+                    </div><!-- /.files-editor-modal -->
                 </aside>
 
                 </div><!-- /.files-pane-split -->
@@ -9010,7 +9016,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          development that this is a per-commit nuisance, but the cost
          of users running stale JS for hours (with FrameKind routing
          bugs ending up on the wrong canvas) is higher. -->
-    <script src="/js/app.js?v=20260530-filesicons"></script>
+    <script src="/js/app.js?v=20260530-editormodal"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

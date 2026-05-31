@@ -1007,6 +1007,11 @@ function ninaApp() {
         // drags). Debounce timer keeps preview requests at ~10/s max
         // regardless of how fast the slider fires "input" events.
         editorState: {
+            // Modal visibility. The Lightroom-style editor lives as a
+            // fullscreen overlay opened on demand (Edit toolbar button
+            // in FILES, or filesOpenInEditor()). The Stack workspace
+            // on the right side of the FILES tab stays fixed under it.
+            modalOpen: false,
             session:  null,        // sessionId from /api/editor/load
             sourcePath: '',
             width:    0,
@@ -1146,16 +1151,28 @@ function ninaApp() {
         //              into OpenSeadragon + sliders.
         // Persisted to localStorage so the user returns to the
         // last-used workspace on reload.
-        filesSubTab: (typeof localStorage !== 'undefined'
-            && (localStorage.getItem('polaris-files-subtab') === 'edit'
-                || localStorage.getItem('polaris-files-subtab') === 'stack'))
-            ? localStorage.getItem('polaris-files-subtab')
-            : 'stack',
+        // Stack workspace is now always visible on the right side of
+        // the FILES tab; the editor lives in a fullscreen overlay
+        // modal opened on demand. filesSubTab stays around for
+        // backward compatibility with any legacy bindings, but the
+        // setter just redirects 'edit' to opening the modal.
+        filesSubTab: 'stack',
         setFilesSubTab(name) {
-            if (name !== 'stack' && name !== 'edit') return;
-            this.filesSubTab = name;
-            try { localStorage.setItem('polaris-files-subtab', name); }
-            catch (e) { /* private mode / quota */ }
+            if (name === 'edit') {
+                this.editorOpenModal();
+            } else if (name === 'stack') {
+                this.editorCloseModal();
+            }
+        },
+        editorOpenModal() {
+            this.editorState.modalOpen = true;
+            // Lock background scroll so the underlying FILES tab
+            // doesn't drift while the user is in the editor.
+            try { document.body.style.overflow = 'hidden'; } catch (e) {}
+        },
+        editorCloseModal() {
+            this.editorState.modalOpen = false;
+            try { document.body.style.overflow = ''; } catch (e) {}
         },
 
         // UNIF-2: Stack workspace state. Four user-classified slots
