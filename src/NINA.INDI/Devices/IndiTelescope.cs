@@ -17,13 +17,32 @@ public class IndiTelescope : ITelescope {
         => _client.IsConnected
            && _client.GetSwitch(DeviceName, "CONNECTION", "CONNECT");
 
-    /// <summary>INDI mounts come in all shapes. Default to the
-    /// GEM capability profile, for the common WiFi alt-az bodies
-    /// (AZ-GTi, NexStar SE) the pier-side indicator simply stays
-    /// "unknown" and the UI tolerates it. A future refinement can
-    /// inspect the INDI driver name and switch to <see cref="MountCapabilities.AltAz"/>
-    /// when it's clearly an alt-az.</summary>
-    public MountCapabilities Capabilities => MountCapabilities.GermanEquatorial;
+    /// <summary>Live capability advertisement based on what the
+    /// driver actually exposes in the property table. Probes are
+    /// cheap (per-device dict lookups against the snapshot) and
+    /// re-evaluated each access so a hot-plug rig swap reflects
+    /// immediately in the UI gating.
+    ///
+    /// Critical for strain-wave mounts like the ZWO AM3 which DON'T
+    /// expose TELESCOPE_HOME (they use the Park position as "home"
+    /// instead). Without this probe the static preset claimed
+    /// SupportsFindHome=true and the UI showed a Home button that
+    /// silently 501'd, leaving the user confused about why nothing
+    /// happened. Park / Sync / Tracking / PierSide / ManualJog stay
+    /// optimistic-true because every reasonable INDI mount driver
+    /// supports them (and the UI tolerates the rare driver that
+    /// doesn't via the same 501 toast).</summary>
+    public MountCapabilities Capabilities => new(
+        SupportsPark:            _client.GetProperty(DeviceName, "TELESCOPE_PARK") != null,
+        SupportsTrackingToggle:  _client.GetProperty(DeviceName, "TELESCOPE_TRACK_STATE") != null,
+        SupportsSync:            _client.GetProperty(DeviceName, "ON_COORD_SET") != null,
+        SupportsPierSide:        _client.GetProperty(DeviceName, "TELESCOPE_PIER_SIDE") != null,
+        SupportsManualJog:       _client.GetProperty(DeviceName, "TELESCOPE_MOTION_NS") != null
+                                 && _client.GetProperty(DeviceName, "TELESCOPE_MOTION_WE") != null,
+        SupportsFindHome:        _client.GetProperty(DeviceName, "TELESCOPE_HOME") != null,
+        SupportsSetSiteLocation: _client.GetProperty(DeviceName, "GEOGRAPHIC_COORD") != null,
+        SupportsSetSiteTime:     _client.GetProperty(DeviceName, "TIME_UTC") != null,
+        SupportsTrackingModes:   _client.GetProperty(DeviceName, "TELESCOPE_TRACK_MODE") != null);
 
     public double RightAscension => _client.GetNumber(DeviceName, "EQUATORIAL_EOD_COORD", "RA");
     public double Declination => _client.GetNumber(DeviceName, "EQUATORIAL_EOD_COORD", "DEC");
@@ -250,27 +269,73 @@ public class IndiTelescope : ITelescope {
     }
 
     public async Task MoveNorthAsync(CancellationToken ct = default) {
+        await EnsureSlewRateAsync(ct);
         await _client.SetSwitchAsync(DeviceName, "TELESCOPE_MOTION_NS",
             new Dictionary<string, bool> { ["MOTION_NORTH"] = true, ["MOTION_SOUTH"] = false }, ct);
     }
 
     public async Task MoveSouthAsync(CancellationToken ct = default) {
+        await EnsureSlewRateAsync(ct);
         await _client.SetSwitchAsync(DeviceName, "TELESCOPE_MOTION_NS",
             new Dictionary<string, bool> { ["MOTION_NORTH"] = false, ["MOTION_SOUTH"] = true }, ct);
     }
 
     public async Task MoveEastAsync(CancellationToken ct = default) {
+        await EnsureSlewRateAsync(ct);
         await _client.SetSwitchAsync(DeviceName, "TELESCOPE_MOTION_WE",
             new Dictionary<string, bool> { ["MOTION_WEST"] = false, ["MOTION_EAST"] = true }, ct);
     }
 
     public async Task MoveWestAsync(CancellationToken ct = default) {
+        await EnsureSlewRateAsync(ct);
         await _client.SetSwitchAsync(DeviceName, "TELESCOPE_MOTION_WE",
             new Dictionary<string, bool> { ["MOTION_WEST"] = true, ["MOTION_EAST"] = false }, ct);
     }
 
     public async Task StopMotionAsync(CancellationToken ct = default) {
         await AbortSlewAsync(ct);
+    }
+
+    /// <summary>Pick a sensible <c>TELESCOPE_SLEW_RATE</c> element
+    /// before every TELESCOPE_MOTION_* write. Many INDI mount
+    /// drivers -- ZWO AM3 in particular -- silently ignore manual
+    /// jog commands when no slew rate has been selected since the
+    /// driver booted. The spec defines four standard elements
+    /// (SLEW_GUIDE / SLEW_CENTERING / SLEW_FIND / SLEW_MAX); we
+    /// pick whichever is already active first (operator's choice
+    /// wins), then prefer SLEW_FIND (mid-speed, good for framing
+    /// nudges -- not so slow that the user gives up, not so fast
+    /// it overshoots), then SLEW_CENTERING, then SLEW_MAX, then
+    /// whatever the driver actually advertises. The write is
+    /// idempotent: if the right element is already lit nothing
+    /// changes on the wire.</summary>
+    private async Task EnsureSlewRateAsync(CancellationToken ct) {
+        var rate = _client.GetProperty(DeviceName, "TELESCOPE_SLEW_RATE")
+            as Protocol.IndiSwitchProperty;
+        // Not every driver exposes a slew-rate switch (some
+        // hard-code a single rate). When absent, just send the
+        // motion command and let the driver use its default.
+        if (rate == null || rate.Values.Count == 0) return;
+
+        // Operator-already-picked-a-rate path: respect their
+        // choice, do nothing.
+        if (rate.Values.Any(kv => kv.Value)) return;
+
+        // Pick a default. Iterate the preference list in order
+        // and use the first element the driver actually advertises.
+        var preferences = new[] {
+            "SLEW_FIND", "SLEW_CENTERING", "SLEW_MAX", "SLEW_GUIDE"
+        };
+        string? chosen = null;
+        foreach (var pref in preferences) {
+            var match = rate.Values.Keys.FirstOrDefault(
+                k => string.Equals(k, pref, StringComparison.OrdinalIgnoreCase));
+            if (match != null) { chosen = match; break; }
+        }
+        chosen ??= rate.Values.Keys.First();   // last resort: first advertised
+
+        var payload = rate.Values.Keys.ToDictionary(k => k, k => k == chosen);
+        await _client.SetSwitchAsync(DeviceName, "TELESCOPE_SLEW_RATE", payload, ct);
     }
 
     /// <summary>Push UTC + offset into the mount via the INDI standard
