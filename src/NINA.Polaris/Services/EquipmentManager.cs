@@ -528,7 +528,8 @@ public class EquipmentManager : IDisposable {
                     sync = caps.SupportsSync,
                     pierSide = caps.SupportsPierSide,
                     manualJog = caps.SupportsManualJog,
-                    findHome = caps.SupportsFindHome
+                    findHome = caps.SupportsFindHome,
+                    setSiteLocation = caps.SupportsSetSiteLocation
                 }
             };
         }

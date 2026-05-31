@@ -3435,6 +3435,12 @@
                                             title="Send the mount to its mechanical home position (CW down, RA/Dec hard stops). Confirm before clicking.">
                                         Home
                                     </button>
+                                    <button class="btn btn-sm" @click="telescopeSyncLocation()"
+                                            :disabled="!mount.connected"
+                                            x-show="mount.capabilities?.setSiteLocation"
+                                            title="Push the observatory coordinates from Settings into the mount. Without this, every GoTo lands off-target because the mount uses its own internal site config for alt/az conversions.">
+                                        Sync Location
+                                    </button>
                                 </div>
                             </div>
                         </div>

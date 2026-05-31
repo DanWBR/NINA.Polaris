@@ -195,6 +195,30 @@ public sealed class AlpacaTelescope : ITelescope, IDisposable {
     public Task FindHomeAsync(CancellationToken ct = default) =>
         _client.PutAsync("findhome", null, ct);
 
+    /// <summary>Push observer position via the three ASCOM Alpaca
+    /// site-* PUT properties. Longitude convention differs from INDI:
+    /// ASCOM uses degrees east in -180..+180, so western hemisphere
+    /// stays negative (no wrap). Latitude in degrees (-90..+90),
+    /// elevation in metres above sea level. The three PUTs are issued
+    /// in sequence; a driver that rejects one (e.g. read-only
+    /// elevation on some Celestron Alpaca implementations) still
+    /// gets the other two written, then the failure surfaces.</summary>
+    public async Task SetSiteLocationAsync(double latitudeDeg, double longitudeDeg,
+            double elevationMetres, CancellationToken ct = default) {
+        await _client.PutAsync("sitelatitude",
+            new Dictionary<string, string> {
+                ["SiteLatitude"] = latitudeDeg.ToString(CultureInfo.InvariantCulture)
+            }, ct);
+        await _client.PutAsync("sitelongitude",
+            new Dictionary<string, string> {
+                ["SiteLongitude"] = longitudeDeg.ToString(CultureInfo.InvariantCulture)
+            }, ct);
+        await _client.PutAsync("siteelevation",
+            new Dictionary<string, string> {
+                ["SiteElevation"] = elevationMetres.ToString(CultureInfo.InvariantCulture)
+            }, ct);
+    }
+
     public Task SetTrackingAsync(bool enabled, CancellationToken ct = default) =>
         _client.PutAsync("tracking",
             new Dictionary<string, string> { ["Tracking"] = enabled ? "true" : "false" }, ct);

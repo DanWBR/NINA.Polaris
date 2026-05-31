@@ -123,6 +123,36 @@ public class IndiTelescope : ITelescope {
             }, ct);
     }
 
+    /// <summary>Push the observer's geographic coordinates into the
+    /// mount via the INDI standard <c>GEOGRAPHIC_COORD</c> number
+    /// vector. The spec says <c>LONG</c> is degrees east in 0..360,
+    /// so a western hemisphere longitude (-37° for Brazil) becomes
+    /// 360 - 37 = 323°. Latitudes pass through unchanged. Elevation
+    /// is metres above sea level.
+    ///
+    /// Why this matters: the mount uses its internal lat/long for
+    /// every RA/Dec → alt/az conversion (slew calc, horizon limit,
+    /// LST). A wrong site location causes systematic GoTo errors
+    /// that look like alignment drift but are actually a coordinate
+    /// bias. Polaris already knows the observatory position from
+    /// the profile; pushing it once after connect saves the user
+    /// from poking the mount's hand controller menus.</summary>
+    public async Task SetSiteLocationAsync(double latitudeDeg, double longitudeDeg,
+            double elevationMetres, CancellationToken ct = default) {
+        // Normalise longitude to the INDI 0..360 east convention.
+        // Western hemisphere (negative) wraps to the equivalent
+        // positive value. Eastern positive values pass through;
+        // 0..360 inputs from a different convention also work.
+        var lonNorm = longitudeDeg % 360.0;
+        if (lonNorm < 0) lonNorm += 360.0;
+        await _client.SetNumberAsync(DeviceName, "GEOGRAPHIC_COORD",
+            new Dictionary<string, double> {
+                ["LAT"]  = latitudeDeg,
+                ["LONG"] = lonNorm,
+                ["ELEV"] = elevationMetres
+            }, ct);
+    }
+
     public async Task UnparkAsync(CancellationToken ct = default) {
         await _client.SetSwitchAsync(DeviceName, "TELESCOPE_PARK",
             new Dictionary<string, bool> { ["PARK"] = false, ["UNPARK"] = true }, ct);

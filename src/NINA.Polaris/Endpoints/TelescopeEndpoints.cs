@@ -84,6 +84,40 @@ public static class TelescopeEndpoints {
             }
         });
 
+        // Push the observatory coordinates currently stored in the
+        // active profile into the mount. Body is optional: callers
+        // can override with explicit lat/long/elev (used by the
+        // automated tests + planned "set from GPS" flow); when
+        // omitted, falls back to profile values. Returns the values
+        // actually sent so the frontend can show "Latitude -5.18,
+        // Longitude -37.36 pushed".
+        group.MapPost("/sync-location", async (EquipmentManager equip,
+                                                ProfileService profiles,
+                                                SyncLocationRequest? body) => {
+            if (equip.Telescope == null)
+                return Results.BadRequest(new { error = "No telescope selected" });
+            var p = profiles.Active;
+            // null body / partially-null body falls through to profile
+            // values. The OR-zero guard for latitude is intentional:
+            // 0° latitude is the equator (Quito, Singapore, Macapá)
+            // which is a valid observatory location, so we ONLY pull
+            // from profile when the request field was actually omitted.
+            var lat = body?.Latitude ?? p.Latitude;
+            var lon = body?.Longitude ?? p.Longitude;
+            var elev = body?.Elevation ?? p.Altitude;
+            try {
+                await equip.Telescope.SetSiteLocationAsync(lat, lon, elev);
+                return Results.Ok(new {
+                    status = "synced",
+                    latitude = lat, longitude = lon, elevation = elev
+                });
+            } catch (NotSupportedException ex) {
+                return Results.Json(new { error = ex.Message }, statusCode: 501);
+            } catch (Exception ex) {
+                return Results.Json(new { error = ex.Message }, statusCode: 500);
+            }
+        });
+
         group.MapPost("/tracking", async (EquipmentManager equip, TrackingRequest request) => {
             if (equip.Telescope == null)
                 return Results.BadRequest(new { error = "No telescope selected" });
@@ -178,4 +212,9 @@ public static class TelescopeEndpoints {
 
     public record SlewRequest(double Ra, double Dec);
     public record TrackingRequest(bool Enabled);
+    /// <summary>Optional override for POST /sync-location. All three
+    /// fields are nullable so a null body OR an empty {} OR a partial
+    /// {Elevation: 1200} body all work, falling back to the active
+    /// profile for the missing values.</summary>
+    public record SyncLocationRequest(double? Latitude, double? Longitude, double? Elevation);
 }

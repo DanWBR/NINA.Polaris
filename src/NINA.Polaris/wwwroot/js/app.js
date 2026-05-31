@@ -122,7 +122,8 @@ function ninaApp() {
             // Home, pier side indicator) so AltAz / non-GEM mounts
             // don't show buttons that would 501 if clicked.
             capabilities: { park: true, trackingToggle: true, sync: true,
-                            pierSide: true, manualJog: true, findHome: false }
+                            pierSide: true, manualJog: true, findHome: false,
+                            setSiteLocation: false }
         },
 
         // Floating mount control inside the Sky tab. Position lives
@@ -13015,6 +13016,32 @@ function ninaApp() {
                 this.toast('Mount moving to home', 'info');
             } catch (e) {
                 this.toast('Find Home failed: ' + (e?.message || e), 'error');
+            }
+        },
+
+        // MOUNT-LOC: push the observer coords from the active profile
+        // into the mount via INDI GEOGRAPHIC_COORD / Alpaca site-*
+        // properties. Sends nothing in the body so the server falls
+        // through to profile.Latitude / Longitude / Altitude -- the
+        // values the user already set up in SETTINGS. Without doing
+        // this once after the mount connects, every GoTo will land
+        // off-target because the mount's internal alt/az math uses
+        // its own site config, not Polaris's.
+        async telescopeSyncLocation() {
+            try {
+                const r = await this.apiPost('/api/telescope/sync-location');
+                if (r && r.status === 'synced') {
+                    this.toast(
+                        'Location synced: ' +
+                        (r.latitude?.toFixed(4) ?? '?') + '°, ' +
+                        (r.longitude?.toFixed(4) ?? '?') + '°, ' +
+                        (r.elevation ?? 0) + ' m',
+                        'ok');
+                } else {
+                    this.toast('Location sync responded with no confirmation', 'warn');
+                }
+            } catch (e) {
+                this.toast('Sync location failed: ' + (e?.message || e), 'error');
             }
         },
 

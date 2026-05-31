@@ -94,6 +94,23 @@ public interface ITelescope {
     /// the button.</summary>
     Task FindHomeAsync(CancellationToken ct = default) =>
         throw new NotSupportedException("FindHome not supported by this mount driver");
+
+    /// <summary>Push the observer's geographic position into the mount.
+    /// Critical for GoTo accuracy: every mount internally converts
+    /// RA/Dec → alt/az using its own configured lat/long, so a wrong
+    /// site location causes systematic slew errors that look like
+    /// alignment drift but are actually coordinate-system bias.
+    ///
+    /// Latitude in degrees (+N / -S), longitude in degrees
+    /// (+E / -W per IAU; INDI uses 0..360 but accepts negatives),
+    /// elevation in metres above sea level. Default impl throws so
+    /// backends opt in by overriding; UI checks
+    /// <see cref="MountCapabilities.SupportsSetSiteLocation"/> before
+    /// showing the button.</summary>
+    Task SetSiteLocationAsync(double latitudeDeg, double longitudeDeg,
+            double elevationMetres, CancellationToken ct = default) =>
+        throw new NotSupportedException(
+            "SetSiteLocation not supported by this mount driver");
 }
 
 /// <summary>Optional-feature flags. Used by the UI to decide which
@@ -104,7 +121,8 @@ public record MountCapabilities(
     bool SupportsSync,
     bool SupportsPierSide,
     bool SupportsManualJog,
-    bool SupportsFindHome = false) {
+    bool SupportsFindHome = false,
+    bool SupportsSetSiteLocation = false) {
     /// <summary>Typical equatorial GEM profile (INDI / ASCOM / direct
     /// WiFi serial-protocol mounts), everything available.
     /// FindHome defaults true here -- most GEM mounts expose it via
@@ -114,7 +132,7 @@ public record MountCapabilities(
     public static readonly MountCapabilities GermanEquatorial = new(
         SupportsPark: true, SupportsTrackingToggle: true,
         SupportsSync: true, SupportsPierSide: true, SupportsManualJog: true,
-        SupportsFindHome: true);
+        SupportsFindHome: true, SupportsSetSiteLocation: true);
 
     /// <summary>Typical alt-az / fork profile (Sky-Watcher AZ-GTi,
     /// Celestron NexStar SE, iOptron MiniTower). No pier side; the
@@ -122,5 +140,5 @@ public record MountCapabilities(
     public static readonly MountCapabilities AltAz = new(
         SupportsPark: true, SupportsTrackingToggle: true,
         SupportsSync: true, SupportsPierSide: false, SupportsManualJog: true,
-        SupportsFindHome: true);
+        SupportsFindHome: true, SupportsSetSiteLocation: true);
 }
