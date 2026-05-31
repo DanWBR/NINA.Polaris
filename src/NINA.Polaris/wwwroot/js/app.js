@@ -1258,6 +1258,153 @@ function ninaApp() {
             this._stackPersist();
         },
 
+        // UNIF-3b: action handlers. Each posts paths from the relevant
+        // slot to /api/studio/* and polls the job status until done.
+        // Parameters are collected via prompt() to keep this commit
+        // small -- proper modals come back in a follow-up. Tracks the
+        // active job in stack.activeJob so the UI shows progress.
+
+        async _stackPollJob(endpoint, jobId, label) {
+            this.stack.activeJob = { label, jobId, stage: 'queued',
+                                     done: 0, total: 0 };
+            const start = Date.now();
+            for (;;) {
+                await new Promise(r => setTimeout(r, 800));
+                let status;
+                try {
+                    status = await this.apiGet(endpoint + jobId
+                        + (endpoint.endsWith('/integrate/') || endpoint.endsWith('/calibrate/')
+                            || endpoint.endsWith('/masters/') ? '/status' : ''));
+                } catch (e) {
+                    this.stack.activeJob = null;
+                    this.toast(label + ' status fetch failed: ' + e.message, 'error');
+                    return null;
+                }
+                this.stack.activeJob = {
+                    label, jobId,
+                    stage: status.stage || 'running',
+                    done: status.done ?? 0,
+                    total: status.total ?? 0
+                };
+                if (status.stage === 'done' || status.stage === 'error'
+                    || status.inProgress === false) {
+                    this.stack.activeJob = null;
+                    if (status.stage === 'error' || status.error) {
+                        this.toast(label + ' failed: ' + (status.error || 'unknown'), 'error');
+                        return null;
+                    }
+                    const secs = Math.round((Date.now() - start) / 1000);
+                    this.toast(label + ' done in ' + secs + 's', 'ok');
+                    return status;
+                }
+                if (Date.now() - start > 30 * 60 * 1000) {
+                    this.stack.activeJob = null;
+                    this.toast(label + ' timed out after 30 min', 'error');
+                    return null;
+                }
+            }
+        },
+
+        async stackRunMaster(kind) {
+            // kind ∈ 'dark' | 'flat' | 'bias'
+            const slot = kind === 'dark' ? 'darks' : kind === 'flat' ? 'flats' : 'biases';
+            const paths = this.stack[slot];
+            if (paths.length < 2) {
+                this.toast('Need at least 2 ' + slot + ' to make a master', 'warn');
+                return;
+            }
+            const methodIn = prompt(
+                'Integration method (Mean / Median / SigmaClippedMean):',
+                'SigmaClippedMean');
+            if (!methodIn) return;
+            const type = kind.charAt(0).toUpperCase() + kind.slice(1);
+            let resp;
+            try {
+                resp = await this.apiPost('/api/studio/masters', {
+                    framePaths: paths, type, method: methodIn.trim()
+                });
+            } catch (e) {
+                this.toast('Master ' + kind + ' submit failed: ' + e.message, 'error');
+                return;
+            }
+            const body = await resp.json();
+            if (!body.jobId) {
+                this.toast('Master ' + kind + ' rejected: '
+                    + (body.error || 'unknown'), 'error');
+                return;
+            }
+            await this._stackPollJob('/api/studio/masters/', body.jobId,
+                'Master ' + kind);
+        },
+
+        async stackRunCalibrate() {
+            if (this.stack.lights.length === 0) {
+                this.toast('Add lights first', 'warn');
+                return;
+            }
+            // If the user populated master slots, use their pinned
+            // pick; otherwise let the backend auto-match by gain +
+            // exposure + filter from the FrameLibrary index.
+            const dPath = this.stack.masterDarks[0] || null;
+            const fPath = this.stack.masterFlats[0] || null;
+            const bPath = this.stack.masterBiases[0] || null;
+            const msg = 'Calibrate ' + this.stack.lights.length + ' lights?'
+                + '\n\nMaster overrides:'
+                + '\n  Dark:  ' + (dPath ? this.stackBasename(dPath) : '(auto-match)')
+                + '\n  Flat:  ' + (fPath ? this.stackBasename(fPath) : '(auto-match)')
+                + '\n  Bias:  ' + (bPath ? this.stackBasename(bPath) : '(auto-match)');
+            if (!confirm(msg)) return;
+            let resp;
+            try {
+                resp = await this.apiPost('/api/studio/calibrate', {
+                    lightPaths: this.stack.lights,
+                    masterDarkPath: dPath,
+                    masterFlatPath: fPath,
+                    masterBiasPath: bPath
+                });
+            } catch (e) {
+                this.toast('Calibrate submit failed: ' + e.message, 'error');
+                return;
+            }
+            const body = await resp.json();
+            if (!body.jobId) {
+                this.toast('Calibrate rejected: ' + (body.error || 'unknown'), 'error');
+                return;
+            }
+            await this._stackPollJob('/api/studio/calibrate/', body.jobId,
+                'Calibrate');
+        },
+
+        async stackRunIntegrate() {
+            if (this.stack.lights.length < 2) {
+                this.toast('Need at least 2 lights to integrate', 'warn');
+                return;
+            }
+            const methodIn = prompt(
+                'Integration method (Mean / Median / SigmaClippedMean):',
+                'SigmaClippedMean');
+            if (!methodIn) return;
+            if (!confirm('Integrate ' + this.stack.lights.length
+                + ' lights with method ' + methodIn.trim() + '?')) return;
+            let resp;
+            try {
+                resp = await this.apiPost('/api/studio/integrate', {
+                    framePaths: this.stack.lights,
+                    method: methodIn.trim()
+                });
+            } catch (e) {
+                this.toast('Integrate submit failed: ' + e.message, 'error');
+                return;
+            }
+            const body = await resp.json();
+            if (!body.jobId) {
+                this.toast('Integrate rejected: ' + (body.error || 'unknown'), 'error');
+                return;
+            }
+            await this._stackPollJob('/api/studio/integrate/', body.jobId,
+                'Integrate');
+        },
+
         stackClearAll() {
             const total = this.stackSlotDefs.reduce(
                 (s, def) => s + this.stack[def.key].length, 0);

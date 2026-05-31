@@ -6048,12 +6048,62 @@
                             </details>
                         </template>
 
-                        <div class="stack-actions-placeholder">
-                            <p class="text-muted">
-                                Actions toolbar (Master / Calibrate /
-                                Integrate / Combine / ColorCal /
-                                Siril) chega em UNIF-3.
+                        <!-- UNIF-3b: action toolbar. Each button posts
+                             paths from the corresponding slot to the
+                             matching backend service. Parameters are
+                             collected via prompt() for now -- it's an
+                             ugly UX but it works on every browser, no
+                             modal infra needed, and keeps this commit
+                             small. UNIF-3c (or a follow-up) brings the
+                             proper modals back. activeJob tracking
+                             gives the user progress feedback via toast
+                             ticks. -->
+                        <div class="stack-actions">
+                            <div class="stack-actions-row">
+                                <button class="btn btn-sm"
+                                        @click="stackRunMaster('dark')"
+                                        :disabled="stack.darks.length < 2 || !!stack.activeJob"
+                                        :title="'Stack ' + stack.darks.length + ' darks into a master_dark.fits'">
+                                    Master Dark
+                                </button>
+                                <button class="btn btn-sm"
+                                        @click="stackRunMaster('flat')"
+                                        :disabled="stack.flats.length < 2 || !!stack.activeJob">
+                                    Master Flat
+                                </button>
+                                <button class="btn btn-sm"
+                                        @click="stackRunMaster('bias')"
+                                        :disabled="stack.biases.length < 2 || !!stack.activeJob">
+                                    Master Bias
+                                </button>
+                            </div>
+                            <div class="stack-actions-row">
+                                <button class="btn btn-sm btn-primary"
+                                        @click="stackRunCalibrate()"
+                                        :disabled="stack.lights.length === 0 || !!stack.activeJob"
+                                        title="Calibrate lights using master darks/flats/biases (auto-matched via FrameLibrary unless slots filled)">
+                                    Calibrate Lights
+                                </button>
+                                <button class="btn btn-sm btn-primary"
+                                        @click="stackRunIntegrate()"
+                                        :disabled="stack.lights.length < 2 || !!stack.activeJob"
+                                        title="Align + stack lights into a master_light.fits">
+                                    Integrate
+                                </button>
+                            </div>
+                            <p class="hint text-muted" style="margin-top:6px">
+                                Channel Combine + Color Calibration chegam
+                                em sub-fases futuras (UNIF-3c). Use a
+                                rota antiga via curl ou Siril externo
+                                ate la se precisar.
                             </p>
+                            <div class="stack-job-status" x-show="stack.activeJob" x-cloak>
+                                <strong x-text="stack.activeJob?.label || 'Running…'"></strong>
+                                <span x-text="stack.activeJob?.stage || ''"></span>
+                                <span class="text-muted"
+                                      x-show="stack.activeJob?.done != null && stack.activeJob?.total"
+                                      x-text="'(' + stack.activeJob.done + '/' + stack.activeJob.total + ')'"></span>
+                            </div>
                         </div>
                     </div>
                     <div x-show="filesSubTab === 'edit'" class="files-right-pane">
@@ -8839,7 +8889,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          development that this is a per-commit nuisance, but the cost
          of users running stale JS for hours (with FrameKind routing
          bugs ending up on the wrong canvas) is higher. -->
-    <script src="/js/app.js?v=20260530-unif6"></script>
+    <script src="/js/app.js?v=20260530-unif3b"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

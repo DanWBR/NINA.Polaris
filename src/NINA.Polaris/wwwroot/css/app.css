@@ -2015,6 +2015,34 @@ label select.input-sm {
     border-radius: 6px;
     text-align: center;
 }
+/* UNIF-3b: real action toolbar. Two rows of buttons (master row +
+   pipeline row) followed by a status line that appears while a
+   job is running. Buttons wrap on narrow viewports. */
+.stack-actions {
+    margin-top: 14px;
+    padding: 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+.stack-actions-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+.stack-job-status {
+    margin-top: 10px;
+    padding: 8px 10px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--text-primary);
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+}
 
 /* Address row: roots dropdown + breadcrumbs + hidden toggle. */
 .files-addr {
