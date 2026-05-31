@@ -63,6 +63,47 @@ public class IndiClient : IDisposable {
         _parser.PropertyUpdated += OnPropertyUpdated;
         _parser.PropertyDeleted += OnPropertyDeleted;
         _parser.MessageReceived += (dev, msg) => MessageReceived?.Invoke(dev, msg);
+
+        // Auto-CONFIG_LOAD watcher: when a device's CONNECTION switch
+        // transitions to CONNECT=On, dispatch CONFIG_LOAD ~1.5s later so
+        // the driver has time to advertise CONFIG_PROCESS. Replays the
+        // settings the user persisted on previous sessions (slew rate,
+        // tracking mode, gain, etc) without per-device endpoint patching.
+        PropertyChanged += OnPropertyChangedForConfigAutoLoad;
+    }
+
+    private readonly ConcurrentDictionary<string, bool> _lastConnectionState = new();
+
+    private void OnPropertyChangedForConfigAutoLoad(string device, IndiProperty prop) {
+        if (!string.Equals(prop.Name, "CONNECTION", StringComparison.OrdinalIgnoreCase))
+            return;
+        if (prop is not IndiSwitchProperty sw) return;
+        if (!sw.Values.TryGetValue("CONNECT", out var nowConnected)) return;
+
+        var wasConnected = _lastConnectionState.GetValueOrDefault(device, false);
+        _lastConnectionState[device] = nowConnected;
+
+        if (nowConnected && !wasConnected) {
+            // Fire-and-forget delayed CONFIG_LOAD. Best-effort -- if the
+            // device doesn't have CONFIG_PROCESS the helper returns false
+            // silently. 1500ms gives the driver time to define all of
+            // its properties; tighter than that and CONFIG_PROCESS may
+            // still be absent when we try.
+            _ = Task.Run(async () => {
+                try {
+                    await Task.Delay(1500);
+                    var loaded = await LoadDeviceConfigAsync(device);
+                    if (loaded) {
+                        DiagLogger.LogInformation(
+                            "INDI CONFIG_LOAD auto-dispatched for '{Device}' on connect",
+                            device);
+                    }
+                } catch (Exception ex) {
+                    DiagLogger.LogDebug(ex,
+                        "INDI auto-CONFIG_LOAD failed for '{Device}'", device);
+                }
+            });
+        }
     }
 
     public async Task ConnectAsync(CancellationToken ct = default) {
@@ -228,6 +269,95 @@ public class IndiClient : IDisposable {
         LogIndiWrite("newTextVector", device, property,
             string.Join(", ", values.Select(kv => kv.Key + "=\"" + kv.Value + "\"")));
         await SendAsync(IndiXmlWriter.NewTextVector(device, property, values), ct);
+    }
+
+    // ====================================================================
+    // CONFIG_PROCESS — INDI's standard "save / load / default" mechanism.
+    // Every well-behaved INDI driver advertises a CONFIG_PROCESS switch
+    // vector with elements CONFIG_LOAD, CONFIG_SAVE, CONFIG_DEFAULT (and
+    // sometimes CONFIG_PURGE). Driving these lets Polaris persist
+    // per-driver settings across reconnects WITHOUT having to track every
+    // individual property ourselves — saved state lives in
+    // ~/.indi/{driver}_config.xml under the indiserver process owner.
+    //
+    // Used by:
+    //   - device ConnectAsync paths (auto-LOAD after a successful CONNECT
+    //     so the user's tweaks survive reconnects and indiserver restarts)
+    //   - IndiPropertiesEndpoints set handler (debounced SAVE after any
+    //     property write so changes the user makes via the panel persist)
+    //   - manual Save/Load/Default endpoints + UI buttons
+    // ====================================================================
+
+    /// <summary>Per-device debounce timers for CONFIG_SAVE. Keyed by
+    /// device name. A new ScheduleConfigSaveDebounced call resets the
+    /// timer so a flurry of property edits coalesces into a single
+    /// SAVE write at the end. Tunable via ConfigSaveDebounce below.</summary>
+    private readonly ConcurrentDictionary<string, Timer> _configSaveTimers = new();
+    public TimeSpan ConfigSaveDebounce { get; set; } = TimeSpan.FromSeconds(3);
+
+    /// <summary>Send CONFIG_PROCESS=CONFIG_LOAD to the device. Returns
+    /// false (without throwing) when the device doesn't advertise the
+    /// property — some minimal drivers omit it, and we don't want a
+    /// connect path to fail because of that.</summary>
+    public async Task<bool> LoadDeviceConfigAsync(string device, CancellationToken ct = default) {
+        return await SetConfigProcessAsync(device, "CONFIG_LOAD", ct);
+    }
+
+    /// <summary>Send CONFIG_PROCESS=CONFIG_SAVE. Same graceful-skip
+    /// behavior as LoadDeviceConfigAsync.</summary>
+    public async Task<bool> SaveDeviceConfigAsync(string device, CancellationToken ct = default) {
+        return await SetConfigProcessAsync(device, "CONFIG_SAVE", ct);
+    }
+
+    /// <summary>Send CONFIG_PROCESS=CONFIG_DEFAULT (revert to driver
+    /// defaults). Operator-initiated only — never called automatically.</summary>
+    public async Task<bool> ResetDeviceConfigAsync(string device, CancellationToken ct = default) {
+        return await SetConfigProcessAsync(device, "CONFIG_DEFAULT", ct);
+    }
+
+    private async Task<bool> SetConfigProcessAsync(string device, string element, CancellationToken ct) {
+        var prop = GetProperty(device, "CONFIG_PROCESS") as IndiSwitchProperty;
+        if (prop == null || prop.Values.Count == 0) {
+            DiagLogger.LogDebug(
+                "INDI CONFIG_PROCESS skipped for '{Device}': property not advertised by driver",
+                device);
+            return false;
+        }
+        // OneOfMany switch — build payload with only the requested
+        // element ON, every other element explicitly OFF.
+        var payload = prop.Values.Keys.ToDictionary(
+            k => k,
+            k => string.Equals(k, element, StringComparison.OrdinalIgnoreCase));
+        if (!payload.ContainsValue(true)) {
+            DiagLogger.LogWarning(
+                "INDI CONFIG_PROCESS '{Element}' not in '{Device}' element list ({Have})",
+                element, device, string.Join(", ", prop.Values.Keys));
+            return false;
+        }
+        await SetSwitchAsync(device, "CONFIG_PROCESS", payload, ct);
+        return true;
+    }
+
+    /// <summary>Queue a debounced CONFIG_SAVE for the device. Resets the
+    /// timer on every call so rapid edits collapse into one write. Safe
+    /// to call from any code path that mutates a property — including
+    /// from inside SetSwitchAsync/SetNumberAsync handlers — because the
+    /// actual save runs on a background thread with its own scope.</summary>
+    public void ScheduleConfigSaveDebounced(string device) {
+        if (string.IsNullOrEmpty(device)) return;
+        // Defensive: never debounce a save triggered by CONFIG_PROCESS
+        // itself, would recurse forever.
+        var newTimer = new Timer(async _ => {
+            try {
+                await SaveDeviceConfigAsync(device);
+            } catch (Exception ex) {
+                DiagLogger.LogDebug(ex, "INDI CONFIG_SAVE failed for '{Device}'", device);
+            }
+        }, null, ConfigSaveDebounce, Timeout.InfiniteTimeSpan);
+        if (_configSaveTimers.TryRemove(device, out var old)) {
+            old.Dispose();
+        }
+        _configSaveTimers[device] = newTimer;
     }
 
     /// <summary>Shared logging path so every INDI write surfaces in the

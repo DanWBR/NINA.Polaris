@@ -117,7 +117,51 @@ public static class IndiPropertiesEndpoints {
             } catch (Exception ex) {
                 return Results.Json(new { error = ex.Message }, statusCode: 500);
             }
+
+            // Debounced CONFIG_SAVE so the driver persists this change to
+            // ~/.indi/{driver}_config.xml and the next reconnect picks it
+            // back up. Skipped for CONFIG_PROCESS itself to avoid an
+            // obvious recursion loop. Multiple edits within
+            // IndiClient.ConfigSaveDebounce (3s) coalesce into one save.
+            if (!string.Equals(req.Property, "CONFIG_PROCESS", StringComparison.OrdinalIgnoreCase)) {
+                indi.ScheduleConfigSaveDebounced(req.Device);
+            }
             return Results.Ok(new { ok = true });
+        });
+
+        // Manual Save / Load / Default endpoints so the operator can drive
+        // the device's config from the UI explicitly. Auto-save covers
+        // 95% of cases but having explicit buttons helps when the driver
+        // doesn't accept the debounced save (rare) or the operator wants
+        // to revert to defaults / force a reload from disk.
+        g.MapPost("/config/save", async (IndiClient indi, string device, CancellationToken ct) => {
+            if (string.IsNullOrWhiteSpace(device))
+                return Results.BadRequest(new { error = "device query param required" });
+            var ok = await indi.SaveDeviceConfigAsync(device, ct);
+            return Results.Ok(new {
+                ok,
+                message = ok ? "save dispatched" : "device does not advertise CONFIG_PROCESS"
+            });
+        });
+
+        g.MapPost("/config/load", async (IndiClient indi, string device, CancellationToken ct) => {
+            if (string.IsNullOrWhiteSpace(device))
+                return Results.BadRequest(new { error = "device query param required" });
+            var ok = await indi.LoadDeviceConfigAsync(device, ct);
+            return Results.Ok(new {
+                ok,
+                message = ok ? "load dispatched" : "device does not advertise CONFIG_PROCESS"
+            });
+        });
+
+        g.MapPost("/config/default", async (IndiClient indi, string device, CancellationToken ct) => {
+            if (string.IsNullOrWhiteSpace(device))
+                return Results.BadRequest(new { error = "device query param required" });
+            var ok = await indi.ResetDeviceConfigAsync(device, ct);
+            return Results.Ok(new {
+                ok,
+                message = ok ? "default-load dispatched" : "device does not advertise CONFIG_PROCESS"
+            });
         });
     }
 
