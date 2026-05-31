@@ -5030,32 +5030,40 @@
                     </div>
                 </div>
 
-                <!-- Re-open pill when the panel was dismissed but the
-                     mount is still connected. Sits bottom-right of the
-                     Sky tab so it doesn't fight the toolbar. -->
+                <!-- Mount toggle pill -- always visible while a
+                     telescope is connected so the operator always
+                     has a guaranteed way to show/hide the mount
+                     popup. .active class gives visual feedback
+                     for the current state. Toggle semantics, like
+                     the Camera pill below. -->
                 <button class="mount-float-reopen"
-                        x-show="mount.connected && !mountPanel.visible"
+                        :class="{ 'active': mountPanel.visible }"
+                        x-show="mount.connected"
                         x-cloak
-                        @click="mountPanel.visible = true; persistMountPanel()"
-                        title="Show mount control">
+                        @click="mountPanel.visible = !mountPanel.visible; persistMountPanel()"
+                        :title="mountPanel.visible ? 'Hide mount control' : 'Show mount control'">
                     <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
                         <path d="M12 2L2 22h20L12 2z" fill="none" stroke="currentColor" stroke-width="2"/>
                     </svg>
                     Mount
                 </button>
 
-                <!-- Re-open pill for the live camera preview inset.
-                     Same glassy pill style as the Mount one, stacked
-                     above it. Shown whenever a slew preview is
-                     actively streaming but the user has hidden the
-                     window (via the inset's × button). Lets them
-                     bring the window back without waiting for the
-                     next slew. -->
+                <!-- Camera toggle pill -- ALWAYS visible while a slew
+                     preview stream is active, so the operator always
+                     has a guaranteed way to show/hide the camera
+                     popup even if the popup's own X / click-to-hide
+                     surface gets blocked by a stacking-context bug.
+                     Click toggles visibility. The .active class
+                     mirrors the popup's visibility so the pill gives
+                     visual feedback ("camera on" vs "camera hidden").
+                     Mirrors the Mount pill's pattern but with toggle
+                     semantics instead of show-only. -->
                 <button class="camera-float-reopen"
-                        x-show="slewPreview?.active && !slewPreviewVisible"
+                        :class="{ 'active': slewPreviewVisible }"
+                        x-show="slewPreview?.active"
                         x-cloak
-                        @click="slewPreviewVisible = true; persistSlewPreviewToggle()"
-                        title="Show live camera preview">
+                        @click="slewPreviewVisible = !slewPreviewVisible; persistSlewPreviewToggle()"
+                        :title="slewPreviewVisible ? 'Hide live camera preview' : 'Show live camera preview'">
                     <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
                         <path d="M4 7h3l2-2h6l2 2h3v12H4z" fill="none"
                               stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>

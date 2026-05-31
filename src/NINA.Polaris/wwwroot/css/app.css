@@ -1919,6 +1919,18 @@ label select.input-sm {
     background: var(--accent);
     color: #fff;
 }
+/* Active state -- the corresponding popup IS open. Filled blue +
+   subtle inset shadow signals "this is currently showing". Pill
+   stays a toggle, not a hide-only button. Applies to both pills
+   since they share the same toggle semantics now. */
+.mount-float-reopen.active,
+.camera-float-reopen.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4),
+                inset 0 1px 2px rgba(0, 0, 0, 0.25);
+}
 
 /* Live-camera floating panel, clone of .mount-float-panel so the
    two windows read as a matched draggable set. Slightly wider to
