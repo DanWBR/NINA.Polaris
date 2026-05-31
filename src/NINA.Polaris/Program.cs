@@ -404,7 +404,43 @@ contentTypes.Mappings[".gz"] = "application/octet-stream";
 // `properties` files inside /sky/data/skydata/.
 contentTypes.Mappings[".eph"] = "application/octet-stream";
 app.UseStaticFiles(new StaticFileOptions {
-    ContentTypeProvider = contentTypes
+    ContentTypeProvider = contentTypes,
+    // Force the browser to revalidate every cached asset on every
+    // page load via If-None-Match (ETag) instead of relying on
+    // its heuristic freshness lifetime. Without this, ASP.NET's
+    // default static-file middleware sets no Cache-Control header
+    // at all, and the browser's heuristic cache can hold onto a
+    // stale index.html / app.js for hours after a deploy -- the
+    // operator updates the .deb, refreshes, and still sees the
+    // old UI because nothing told the browser to check.
+    //
+    // "no-cache" is a misnomer: it does NOT prevent caching. It
+    // means "cache freely, but ALWAYS revalidate with the server
+    // (sending If-None-Match) before serving the cached copy".
+    // Server responds 304 Not Modified if the ETag still matches
+    // (cheap, ~20-byte response) so the bandwidth cost is
+    // negligible and the user always sees the freshest deployed
+    // code.
+    //
+    // The /sky/data/ skydata HiPS tiles and the vendored libs
+    // under /js/lib/ are big AND essentially immutable -- we
+    // exempt those paths with a longer cache so we don't hit the
+    // server for hundreds of revalidations per page load. They
+    // get a 7-day max-age which is plenty short for the rare
+    // upstream update + a hard refresh to recover from.
+    OnPrepareResponse = ctx => {
+        var path = ctx.Context.Request.Path.Value ?? "";
+        var headers = ctx.Context.Response.Headers;
+        if (path.StartsWith("/sky/data/", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/js/lib/", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/css/lib/", StringComparison.OrdinalIgnoreCase)
+            || path.Contains("/wasm/", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/catalogs/", StringComparison.OrdinalIgnoreCase)) {
+            headers["Cache-Control"] = "public, max-age=604800";  // 7 days
+        } else {
+            headers["Cache-Control"] = "no-cache, must-revalidate";
+        }
+    }
 });
 
 // SWE-3-bugfix continued: second pass scoped to the Stellarium
