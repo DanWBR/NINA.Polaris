@@ -15,7 +15,96 @@
   verbatim, only the prose around them was translated.
 -->
 
-# Current chapter: INDI telescope-interface spec compliance audit
+# Current chapter: INDI focuser + filter-wheel spec compliance audit
+
+> User followed up the telescope audit with the same exercise for
+> https://docs.indilib.org/interfaces/focuser.html and
+> https://docs.indilib.org/interfaces/filter-wheel-interface.html
+> Three real gaps on the focuser, two on the filter wheel.
+
+## What shipped
+
+### FOCUSER-SPEC: SYNC + REVERSE + BACKLASH
+
+INDI's focuser surface offers a dozen properties. We had ABS +
+MAX + ABORT + TEMPERATURE, intentionally skipped SPEED / TIMER /
+REL_FOCUS_POSITION / FOCUS_MOTION (the DC-focuser legacy stuff
+-- we always do absolute moves), but three useful ones were
+missing:
+
+- **FOCUS_SYNC** -- redefine current physical position as a
+  given step value WITHOUT moving the motor. Used after manual
+  drawtube reseating or counter-loss recovery. New
+  `IFocuser.SyncAsync(position)`.
+- **FOCUS_REVERSE_MOTION** (OneOfMany ENABLED/DISABLED) -- flip
+  the inward/outward convention. Needed when the focuser is
+  mounted backwards relative to the optical train and the V-curve
+  comes out on the wrong axis. New `IFocuser.SetReverseAsync(bool)`.
+- **FOCUS_BACKLASH_TOGGLE + FOCUS_BACKLASH_STEPS** -- driver-side
+  backlash compensation. Critical for AutoFocus accuracy on cheap
+  Crayfords with 30-50 step gear lash. New
+  `IFocuser.SetBacklashAsync(enabled, steps)`.
+
+New `FocuserCapabilities` record (SupportsSync / SupportsReverse
+/ SupportsBacklash / SupportsTemperature) broadcast every 1 Hz
+in `focuser.capabilities` so the frontend hides the buttons
+backends don't support. **`IndiFocuser`** probes the live
+property table per access -- if `FOCUS_SYNC` isn't published the
+driver doesn't honour sync regardless of what its INFO XML
+claims. **`AlpacaFocuser`** inherits the default `NotSupportedException`
+throws (ASCOM IFocuserV3 doesn't define Sync, Reverse, or
+Backlash on the focuser surface; rotators have Reverse but
+focusers don't).
+
+New endpoints:
+- `POST /api/focuser/sync { Position }`
+- `POST /api/focuser/reverse { Reversed }`
+- `POST /api/focuser/backlash { Enabled, Steps }`
+
+All three surface `NotSupportedException` as 501 with the actual
+driver-side reason ("Focuser X does not expose FOCUS_SYNC --
+driver doesn't support sync") so the UI toast tells the user
+something useful.
+
+### FILTERWHEEL-SPEC: FILTER_NAME push + sort-bug fix
+
+Two issues:
+
+- **Lexicographic sort bug** -- `IndiFilterWheel.FilterNames`
+  ordered the FILTER_NAME elements with `OrderBy(kv.Key)`. For
+  wheels with >9 slots this produced `FILTER_SLOT_NAME_1, _10,
+  _2, _3, ..., _9` -- the dropdown showed filter 10 in slot 2's
+  position. Fixed with a numeric-suffix extractor that pulls the
+  trailing integer from each element id. Falls back to
+  `int.MaxValue` for non-conformant ids so they sink to the end
+  rather than corrupting the conformant ordering.
+- **No name push** -- the spec says FILTER_NAME is a writable
+  text vector but we only READ it. New
+  `IFilterWheel.SetFilterNamesAsync(string[])` lets Polaris
+  rename slots into the driver so the names persist across
+  reconnects. INDI implements it; Alpaca/ASCOM don't (the
+  ASCOM filter-wheel surface doesn't expose name editing
+  through the driver), so AlpacaFilterWheel inherits the
+  default-throw.
+
+New `FilterWheelCapabilities { SupportsEditNames }` broadcast
+every 1 Hz so the "Edit names" UI surface is gated per driver.
+New `PUT /api/filterwheel/names { Names: string[] }` endpoint
+validates the length matches the wheel's slot count.
+
+## What's still pending (next session)
+
+- Frontend UI surfaces for the five new endpoints: a Sync button
+  + position input in the Focuser card, a Reverse toggle in the
+  Focuser settings, a Backlash editor (enable + steps), and an
+  inline "Edit filter names" form in the FilterWheel card.
+- Live re-detect of capabilities when a hot-plug rig swap
+  switches drivers mid-session (today the WS payload reflects
+  it but the Alpine state may cache stale values).
+
+---
+
+# Previous chapter: INDI telescope-interface spec compliance audit
 
 > User pointed at https://docs.indilib.org/interfaces/telescope-interface.html
 > and asked whether the existing INDI mount driver implements the

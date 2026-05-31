@@ -154,4 +154,94 @@ public class IndiFocuser : NINA.Image.Interfaces.IFocuser {
         await _client.SetSwitchAsync(DeviceName, "FOCUS_ABORT_MOTION",
             new Dictionary<string, bool> { ["ABORT"] = true }, ct);
     }
+
+    /// <summary>Capability advertisement based on what the driver
+    /// actually exposes. Probes the live property table -- if
+    /// <c>FOCUS_SYNC</c> isn't published the driver doesn't honour
+    /// sync, regardless of what its INFO XML claims. Computed each
+    /// access (cheap dictionary lookups against the per-device
+    /// snapshot) so a hot-plug rig swap reflects immediately.</summary>
+    public NINA.Image.Interfaces.FocuserCapabilities Capabilities
+        => new(
+            SupportsSync:        _client.GetProperty(DeviceName, "FOCUS_SYNC") != null,
+            SupportsReverse:     _client.GetProperty(DeviceName, "FOCUS_REVERSE_MOTION") != null,
+            SupportsBacklash:    _client.GetProperty(DeviceName, "FOCUS_BACKLASH_TOGGLE") != null,
+            SupportsTemperature: _client.GetProperty(DeviceName, "FOCUS_TEMPERATURE") != null);
+
+    /// <summary>Redefine current focuser position as <paramref name="position"/>
+    /// via the INDI standard <c>FOCUS_SYNC</c> number vector. Useful
+    /// after the operator manually moves the drawtube with the motor
+    /// disengaged, or after recovering from a counter-loss event.
+    /// Does NOT physically move the focuser -- only updates the
+    /// driver's internal step counter.</summary>
+    public async Task SyncAsync(int position, CancellationToken ct = default) {
+        if (_client.GetProperty(DeviceName, "FOCUS_SYNC") == null) {
+            throw new NotSupportedException(
+                $"Focuser '{DeviceName}' does not expose FOCUS_SYNC -- driver doesn't support sync.");
+        }
+        var max = MaxPosition;
+        var target = max > 0 ? Math.Clamp(position, 0, max) : Math.Max(0, position);
+        _logger.LogInformation(
+            "IndiFocuser '{Device}' FOCUS_SYNC FOCUS_SYNC_VALUE={Target}",
+            DeviceName, target);
+        await _client.SetNumberAsync(DeviceName, "FOCUS_SYNC",
+            new Dictionary<string, double> { ["FOCUS_SYNC_VALUE"] = target }, ct);
+    }
+
+    /// <summary>Flip the motor-direction convention via INDI standard
+    /// <c>FOCUS_REVERSE_MOTION</c> (OneOfMany switch with elements
+    /// <c>ENABLED</c> / <c>DISABLED</c>). When enabled, the driver
+    /// inverts every subsequent ABS / REL move so that "increase step
+    /// count" actually retracts the drawtube. Persists in the driver
+    /// config -- one-time setup, not toggled per move.</summary>
+    public async Task SetReverseAsync(bool reversed, CancellationToken ct = default) {
+        if (_client.GetProperty(DeviceName, "FOCUS_REVERSE_MOTION") == null) {
+            throw new NotSupportedException(
+                $"Focuser '{DeviceName}' does not expose FOCUS_REVERSE_MOTION -- driver doesn't support direction reverse.");
+        }
+        _logger.LogInformation(
+            "IndiFocuser '{Device}' FOCUS_REVERSE_MOTION {State}",
+            DeviceName, reversed ? "ENABLED" : "DISABLED");
+        await _client.SetSwitchAsync(DeviceName, "FOCUS_REVERSE_MOTION",
+            new Dictionary<string, bool> {
+                ["INDI_ENABLED"]  = reversed,
+                ["INDI_DISABLED"] = !reversed
+            }, ct);
+    }
+
+    /// <summary>Configure driver-side backlash compensation via the
+    /// INDI standard <c>FOCUS_BACKLASH_TOGGLE</c> + <c>FOCUS_BACKLASH_STEPS</c>
+    /// pair. Driver overshoots the target by <paramref name="steps"/>
+    /// in the opposite direction then reverses to land on it,
+    /// removing gear-train slack. Most stock 1.25" Crayfords carry
+    /// 30-50 steps of lash; the AutoFocus orchestrator wants this
+    /// enabled to avoid double-counting steps on the return leg of
+    /// the V-curve.</summary>
+    public async Task SetBacklashAsync(bool enabled, int steps,
+            CancellationToken ct = default) {
+        if (_client.GetProperty(DeviceName, "FOCUS_BACKLASH_TOGGLE") == null) {
+            throw new NotSupportedException(
+                $"Focuser '{DeviceName}' does not expose FOCUS_BACKLASH_TOGGLE -- driver doesn't support backlash compensation.");
+        }
+        // Set the step count first so toggling ON doesn't briefly
+        // apply a stale (likely zero) compensation. Drivers buffer
+        // both writes and apply on the next move regardless of order,
+        // but the explicit ordering is defensive against the rare
+        // driver that applies the toggle immediately.
+        if (steps > 0 && _client.GetProperty(DeviceName, "FOCUS_BACKLASH_STEPS") != null) {
+            _logger.LogInformation(
+                "IndiFocuser '{Device}' FOCUS_BACKLASH_STEPS FOCUS_BACKLASH_VALUE={Steps}",
+                DeviceName, steps);
+            await _client.SetNumberAsync(DeviceName, "FOCUS_BACKLASH_STEPS",
+                new Dictionary<string, double> { ["FOCUS_BACKLASH_VALUE"] = steps }, ct);
+        }
+        _logger.LogInformation(
+            "IndiFocuser '{Device}' FOCUS_BACKLASH_TOGGLE {State}",
+            DeviceName, enabled ? "ENABLED" : "DISABLED");
+        await _client.SetSwitchAsync(DeviceName, "FOCUS_BACKLASH_TOGGLE",
+            new Dictionary<string, bool> {
+                ["INDI_ENABLED"]  = enabled,
+                ["INDI_DISABLED"] = !enabled
+            }, ct);
+    }
 }

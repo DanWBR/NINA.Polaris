@@ -28,9 +28,66 @@ public interface IFocuser {
     double Temperature { get; }
     bool IsMoving { get; }
 
+    /// <summary>Which optional features the backend honours. The
+    /// auto-focus orchestrator and Focuser card use this to decide
+    /// whether to render the Sync / Reverse / Backlash controls --
+    /// no point offering "Reverse direction" on a driver that doesn't
+    /// implement <c>FOCUS_REVERSE_MOTION</c>.</summary>
+    FocuserCapabilities Capabilities => FocuserCapabilities.Default;
+
     Task ConnectAsync(CancellationToken ct = default);
     Task DisconnectAsync(CancellationToken ct = default);
     Task MoveAbsoluteAsync(int position, CancellationToken ct = default);
     Task MoveRelativeAsync(int steps, CancellationToken ct = default);
     Task AbortAsync(CancellationToken ct = default);
+
+    /// <summary>Tell the driver to redefine the focuser's current
+    /// physical position AS the given absolute step value -- INDI
+    /// <c>FOCUS_SYNC</c>. Used after manually reseating the focuser,
+    /// or after a position-count drift bug, to realign the software
+    /// counter with the mechanical truth. Throws by default; backends
+    /// opt in. UI gates the button on <see cref="Capabilities"/>
+    /// <c>.SupportsSync</c>.</summary>
+    Task SyncAsync(int position, CancellationToken ct = default) =>
+        throw new NotSupportedException(
+            "Sync not supported by this focuser driver");
+
+    /// <summary>Reverse the motor direction convention -- INDI
+    /// <c>FOCUS_REVERSE_MOTION</c>. Needed when the focuser is
+    /// mounted backwards relative to the optical train and "inward"
+    /// in software actually moves the drawtube outward. Without this,
+    /// auto-focus V-curves come out on the wrong axis. Throws by
+    /// default.</summary>
+    Task SetReverseAsync(bool reversed, CancellationToken ct = default) =>
+        throw new NotSupportedException(
+            "Direction reverse not supported by this focuser driver");
+
+    /// <summary>Enable + configure driver-side backlash compensation
+    /// -- INDI <c>FOCUS_BACKLASH_TOGGLE</c> + <c>FOCUS_BACKLASH_STEPS</c>.
+    /// When enabled, the driver overshoots the target by N steps in
+    /// the opposite direction, then reverses to land on it, taking the
+    /// slack out of the gear train. Critical for accurate auto-focus
+    /// on cheap focusers (gear lash up to 30-50 steps is common on
+    /// stock 1.25" Crayfords). <paramref name="steps"/> is honoured
+    /// when <paramref name="enabled"/> is true; otherwise ignored.
+    /// Throws by default.</summary>
+    Task SetBacklashAsync(bool enabled, int steps,
+            CancellationToken ct = default) =>
+        throw new NotSupportedException(
+            "Backlash compensation not supported by this focuser driver");
+}
+
+/// <summary>Optional-feature flags for <see cref="IFocuser"/>. UI
+/// gates the matching controls; backends without a capability simply
+/// hide the button instead of letting it throw at click time.</summary>
+public record FocuserCapabilities(
+    bool SupportsSync = false,
+    bool SupportsReverse = false,
+    bool SupportsBacklash = false,
+    bool SupportsTemperature = false) {
+    /// <summary>Conservative defaults -- nothing optional supported.
+    /// Matches the historical IFocuser shape so existing backends
+    /// that don't override <see cref="IFocuser.Capabilities"/> stay
+    /// behaving identically.</summary>
+    public static readonly FocuserCapabilities Default = new();
 }

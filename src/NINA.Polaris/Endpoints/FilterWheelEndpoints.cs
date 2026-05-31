@@ -10,14 +10,44 @@ public static class FilterWheelEndpoints {
             if (equip.FilterWheel == null)
                 return Results.Ok(new { connected = false });
 
+            var caps = equip.FilterWheel.Capabilities;
             return Results.Ok(new {
                 connected = true,
                 name = equip.FilterWheel.DeviceName,
                 position = equip.FilterWheel.Position,
                 currentFilter = equip.FilterWheel.CurrentFilterName,
                 filters = equip.FilterWheel.FilterNames,
-                moving = equip.FilterWheel.IsMoving
+                moving = equip.FilterWheel.IsMoving,
+                capabilities = new {
+                    editNames = caps.SupportsEditNames
+                }
             });
+        });
+
+        // INDI FILTER_NAME push: rename slots from Polaris into the
+        // driver so they persist across restarts. ASCOM/Alpaca
+        // wheels don't expose this through the driver surface, so
+        // they 501 -- the frontend hides the "Edit names" button
+        // for non-INDI wheels based on the capabilities flag.
+        group.MapPut("/names", async (EquipmentManager equip, FilterNamesRequest request) => {
+            if (equip.FilterWheel == null)
+                return Results.BadRequest(new { error = "No filter wheel selected" });
+            if (request?.Names == null)
+                return Results.BadRequest(new { error = "names[] required" });
+            try {
+                await equip.FilterWheel.SetFilterNamesAsync(request.Names);
+                return Results.Ok(new {
+                    status = "set",
+                    count = request.Names.Length,
+                    names = equip.FilterWheel.FilterNames
+                });
+            } catch (NotSupportedException ex) {
+                return Results.Json(new { error = ex.Message }, statusCode: 501);
+            } catch (ArgumentException ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            } catch (Exception ex) {
+                return Results.Json(new { error = ex.Message }, statusCode: 500);
+            }
         });
 
         group.MapPost("/position/{slot:int}", async (int slot, EquipmentManager equip) => {
@@ -132,7 +162,11 @@ public static class FilterWheelEndpoints {
         });
     }
 
-    /// <summary>Poll <see cref="IFilterWheel.IsMoving"/> until the
+    /// <summary>Body for PUT /names. Required field; Names.Length
+    /// must equal the wheel's slot count (validated server-side).</summary>
+    public record FilterNamesRequest(string[] Names);
+
+    /// <summary>Poll <see cref="NINA.Image.Interfaces.IFilterWheel.IsMoving"/> until the
     /// wheel reports settled at the expected slot (or close enough --
     /// some drivers report Position before clearing IsMoving by a few
     /// hundred ms). 50 ms cadence balances responsiveness vs. CPU on

@@ -537,24 +537,41 @@ public class EquipmentManager : IDisposable {
         }
 
         if (Focuser != null) {
+            // Capabilities gate per-control UI affordances (Sync /
+            // Reverse / Backlash buttons in the Focuser card). Sent
+            // every tick so a rig swap with a different driver
+            // reflects immediately.
+            var fcaps = Focuser.Capabilities;
             status["focuser"] = new {
                 name = Focuser.DeviceName,
                 connected = Focuser.IsConnected,
                 position = Focuser.Position,
                 temperature = Safe(Focuser.Temperature),
                 maxPosition = Focuser.MaxPosition,
-                moving = Focuser.IsMoving
+                moving = Focuser.IsMoving,
+                capabilities = new {
+                    sync        = fcaps.SupportsSync,
+                    reverse     = fcaps.SupportsReverse,
+                    backlash    = fcaps.SupportsBacklash,
+                    temperature = fcaps.SupportsTemperature
+                }
             };
         }
 
         if (FilterWheel != null) {
+            // Capabilities -> drives whether "Edit filter names"
+            // surface is rendered (INDI: yes, Alpaca/ASCOM: no).
+            var fwcaps = FilterWheel.Capabilities;
             status["filterWheel"] = new {
                 name = FilterWheel.DeviceName,
                 connected = FilterWheel.IsConnected,
                 position = FilterWheel.Position,
                 currentFilter = FilterWheel.CurrentFilterName,
                 filters = FilterWheel.FilterNames,
-                moving = FilterWheel.IsMoving
+                moving = FilterWheel.IsMoving,
+                capabilities = new {
+                    editNames = fwcaps.SupportsEditNames
+                }
             };
         }
 
