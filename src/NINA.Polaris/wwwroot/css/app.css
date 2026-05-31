@@ -1825,23 +1825,28 @@ label select.input-sm {
 /* Close X moved out of the draggable header to dodge the
    header's @mousedown handler stealing the click. Positioned
    absolute relative to .mount-float-panel (which is position:
-   fixed -> establishes the containing block). z-index 1 keeps
-   it above the body canvas. touch-action: manipulation removes
-   the iOS double-tap delay so a single tap closes immediately. */
+   fixed -> establishes the containing block). High z-index +
+   explicit pointer-events: auto guarantees the click reaches
+   the button no matter what panel content might overlap.
+   touch-action: manipulation removes the iOS double-tap delay
+   so a single tap closes immediately. */
 .mount-float-close {
     position: absolute;
     top: 4px;
     right: 6px;
-    z-index: 1;
-    background: transparent;
-    border: 0;
-    color: var(--text-secondary);
+    z-index: 100;
+    pointer-events: auto;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
     font-size: 18px;
     line-height: 1;
     cursor: pointer;
     padding: 2px 8px;
     border-radius: 4px;
     touch-action: manipulation;
+    min-width: 28px;
+    min-height: 28px;
 }
 .mount-float-close:hover {
     background: var(--bg-primary);
@@ -1956,23 +1961,24 @@ label select.input-sm {
     font-size: 11px;
     margin-left: 4px;
 }
-/* Mirror of .mount-float-close -- absolute-positioned outside
-   the draggable header so the close click can't be eaten by the
-   header's @mousedown drag handler. */
+/* Mirror of .mount-float-close -- same defensive defaults. */
 .cam-float-close {
     position: absolute;
     top: 4px;
     right: 6px;
-    z-index: 1;
-    background: transparent;
-    border: 0;
-    color: var(--text-secondary);
+    z-index: 100;
+    pointer-events: auto;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
     font-size: 18px;
     line-height: 1;
     cursor: pointer;
     padding: 2px 8px;
     border-radius: 4px;
     touch-action: manipulation;
+    min-width: 28px;
+    min-height: 28px;
 }
 .cam-float-close:hover {
     background: var(--bg-primary);

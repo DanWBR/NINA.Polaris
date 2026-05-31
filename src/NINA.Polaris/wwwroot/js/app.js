@@ -2376,6 +2376,12 @@ function ninaApp() {
                 this._clampMountPanel();
                 this._clampCameraPanel();
             });
+            // Universal ESC-key escape hatch for the floating Mount +
+            // Camera panels, since the X buttons have a history of
+            // getting stuck behind their headers' drag handlers in
+            // specific tab / state combinations. Single Esc keypress
+            // closes whichever is open.
+            window.addEventListener('keydown', (ev) => this._floatPanelEscapeClose(ev));
             this.fetchPhd2ProcessStatus();
             this.fetchPhd2InstallInfo();
         },
@@ -12234,6 +12240,31 @@ function ninaApp() {
                 localStorage.setItem('slewPreviewVisible',
                     this.slewPreviewVisible ? '1' : '0');
             } catch { /* non-fatal */ }
+        },
+
+        // ESC-key safety net: closes any open floating panel
+        // (Mount + Camera) regardless of what's happening with the
+        // X buttons. Wired in init() via a global keydown listener.
+        // Operator confirmed both X buttons can get stuck in some
+        // states (likely a stale event handler from a hot-swap of
+        // the markup); ESC is the universal escape hatch that
+        // always works.
+        _floatPanelEscapeClose(ev) {
+            if (ev.key !== 'Escape' && ev.key !== 'Esc') return;
+            let closed = false;
+            if (this.mountPanel?.visible) {
+                this.mountPanel.visible = false;
+                try { this.persistMountPanel(); } catch {}
+                closed = true;
+            }
+            if (this.slewPreviewVisible) {
+                this.slewPreviewVisible = false;
+                try { this.persistSlewPreviewToggle(); } catch {}
+                closed = true;
+            }
+            // Diagnostic so the operator can see in DevTools that the
+            // ESC handler fired even if the X buttons don't react.
+            if (closed) console.log('[Polaris] ESC closed floating panels');
         },
 
         // Keep the panel header on-screen when the window resizes or
