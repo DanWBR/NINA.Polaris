@@ -9727,38 +9727,39 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <button class="btn btn-sm btn-danger" @click="logClear()">Clear</button>
                 <button class="btn btn-sm" @click="logClose()">✕ Close</button>
             </div>
-            <!-- Larger font (16px) + tighter line-height (1.25) + minimal
-                 row padding (0 -- separator alone gives visual break) so
-                 the operator gets maximum entries on screen without
-                 reading-strain. Newest-first ordering comes from
-                 logFiltered() doing a .slice().reverse() on output.
-                 Wider scrollbar (.log-panel-body::-webkit-scrollbar)
-                 declared in app.css makes touch-scrolling on the Pi
-                 tablet usable. -->
-            <div class="log-panel-body" style="flex:1; overflow:auto; font-family:var(--font-mono, monospace);
-                        font-size:16px; line-height:1.25; padding:6px 14px;">
+            <!-- Compact log rows. Earlier version used white-space:pre-wrap
+                 which preserved HTML source whitespace BETWEEN the spans
+                 (each <span> on its own indented source line became a
+                 newline in the rendered output), creating huge left-
+                 margin gaps. Fix: collect everything into one computed
+                 string via x-text on a single element, so HTML source
+                 indentation doesn't leak through and there's nothing to
+                 align. Font dropped back to 13px after the 16px experiment
+                 felt too large. -->
+            <div class="log-panel-body" style="flex:1; overflow-y:scroll; font-family:var(--font-mono, monospace);
+                        font-size:13px; line-height:1.3; padding:4px 10px;">
                 <template x-for="e in logFiltered()" :key="e.id">
                     <div :class="'log-row log-' + e.level"
-                         style="white-space:pre-wrap; word-break:break-word;
-                                padding:0; border-bottom:1px solid rgba(255,255,255,0.04);">
-                        <span x-text="(e.at || '').replace('T',' ').slice(0,23)"
-                              style="opacity:0.6;"></span>
-                        <span :style="
-                            e.level === 'error' || e.level === 'critical' ? 'color:#f87171; font-weight:600;' :
-                            e.level === 'warn'  ? 'color:#fcd34d;' :
-                            e.level === 'info'  ? 'color:#93c5fd;' :
-                            'color:#9ca3af;'"
-                            x-text="' [' + (e.level || '').toUpperCase().padEnd(5) + ']'"></span>
-                        <span style="opacity:0.7;" x-text="' [' + (e.source || '') + ']'"></span>
-                        <span x-show="e.category" style="opacity:0.5;"
-                              x-text="' ' + (e.category || '')"></span>
-                        <span x-text="' ' + (e.message || '')"></span>
-                        <span x-show="e.exceptionType" style="color:#fb7185;"
-                              x-text="' ' + e.exceptionType + ': ' + (e.exceptionMsg || '')"></span>
+                         style="padding:1px 0; border-bottom:1px solid rgba(255,255,255,0.04);">
+                        <!-- Single-line summary. Splitting from the stack
+                             trace below so x-text on this div doesn't
+                             nuke the <pre> sibling. -->
+                        <div :style="
+                                'white-space:pre-wrap; word-break:break-word; ' +
+                                (e.level === 'error' || e.level === 'critical' ? 'color:#f87171;' :
+                                 e.level === 'warn'  ? 'color:#fcd34d;' :
+                                 e.level === 'info'  ? 'color:#cbd5e1;' :
+                                 'color:#9ca3af;')"
+                             x-text="((e.at || '').replace('T',' ').slice(11,23)) +
+                                     ' [' + (e.level || '').toUpperCase().slice(0,4) + ']' +
+                                     ' ' + (e.source || '') +
+                                     (e.category ? ' ' + e.category : '') +
+                                     ' ' + (e.message || '') +
+                                     (e.exceptionType ? ' :: ' + e.exceptionType + ': ' + (e.exceptionMsg || '') : '')"></div>
                         <pre x-show="e.stackTrace"
-                             style="margin:2px 0 2px 24px; padding:6px 10px;
+                             style="margin:2px 0 2px 12px; padding:4px 8px;
                                     background:rgba(0,0,0,0.3); color:#fda4af;
-                                    font-size:14px; line-height:1.3;
+                                    font-size:12px; line-height:1.3;
                                     border-left:2px solid #fb7185;
                                     overflow-x:auto;"
                              x-text="e.stackTrace"></pre>

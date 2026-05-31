@@ -9460,25 +9460,28 @@ label select.input-sm {
 }
 .flatwiz-trained-table tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
 
-/* Debug log panel scrollbar -- bumped from default ~8px to 16px so
-   touch-scrolling on the Pi tablet is comfortable. Webkit-only
-   (Chrome/Edge/Safari on iOS+Android) -- Firefox uses default. */
+/* Debug log panel scrollbar -- bumped to 20px wide. !important
+   because the earlier 16px rule wasn't taking on the operator's
+   Pi tablet (default UA rule kept winning at the same specificity).
+   scrollbar-color/-width covers Firefox; ::-webkit-scrollbar covers
+   Chromium + Safari. Thumb made more visible (0.32 alpha + min
+   height 40px so it's grab-able even on short content). */
+.log-panel-body {
+    scrollbar-width: auto !important;
+    scrollbar-color: rgba(255, 255, 255, 0.32) rgba(255, 255, 255, 0.06) !important;
+}
 .log-panel-body::-webkit-scrollbar {
-    width: 16px;
-    height: 16px;
+    width: 20px !important;
+    height: 20px !important;
 }
 .log-panel-body::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.04);
-    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06) !important;
 }
 .log-panel-body::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.18);
-    border-radius: 8px;
-    border: 3px solid transparent;
-    background-clip: padding-box;
+    background: rgba(255, 255, 255, 0.32) !important;
+    border-radius: 4px !important;
+    min-height: 40px !important;
 }
 .log-panel-body::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.32);
-    background-clip: padding-box;
-    border: 3px solid transparent;
+    background: rgba(255, 255, 255, 0.5) !important;
 }
