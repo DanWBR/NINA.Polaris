@@ -1212,10 +1212,10 @@ function ninaApp() {
         // where the rest of the UI lives ("Lights" stays English
         // since that's the astrophotography term users recognise).
         stackSlotDefs: [
-            { key: 'lights', label: 'Lights', hint: 'Frames de captura (alvo)' },
-            { key: 'darks',  label: 'Darks',  hint: 'Calibracao termica (mesma exp + gain dos lights)' },
-            { key: 'flats',  label: 'Flats',  hint: 'Calibracao optica (vignetting + poeira)' },
-            { key: 'biases', label: 'Biases', hint: 'Calibracao de read noise (exposicao minima)' }
+            { key: 'lights', label: 'Lights', hint: 'Capture frames (target)' },
+            { key: 'darks',  label: 'Darks',  hint: 'Thermal calibration (same exp + gain as lights)' },
+            { key: 'flats',  label: 'Flats',  hint: 'Optical calibration (vignetting + dust)' },
+            { key: 'biases', label: 'Biases', hint: 'Read-noise calibration (minimum exposure)' }
         ],
 
         _stackPersist() {

@@ -475,9 +475,13 @@
                 <svg viewBox="0 0 24 24" width="22" height="22"><path d="M7 18h11a4 4 0 1 0-.7-7.95A6 6 0 0 0 6.2 12.04 4.5 4.5 0 0 0 7 18z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="6" cy="6" r="1.5" fill="currentColor"/><circle cx="19" cy="5" r="1" fill="currentColor"/></svg>
                 <span class="nav-label">Weather</span>
             </button>
-            <button class="nav-btn" :class="{ active: tab === 'files' }" @click="tab = 'files'; filesInit()" title="Files (server file explorer)">
+            <!-- Studio: server file browser + Stack workspace + Editor
+                 modal. Internally the tab token stays 'files' so
+                 persisted localStorage keys, legacy bindings, and
+                 filesInit() keep working without a migration. -->
+            <button class="nav-btn" :class="{ active: tab === 'files' }" @click="tab = 'files'; filesInit()" title="Studio (browser + stack + editor)">
                 <svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
-                <span class="nav-label">Files</span>
+                <span class="nav-label">Studio</span>
             </button>
             <button class="nav-btn" :class="{ active: tab === 'settings' }" @click="tab = 'settings'" title="Settings">
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 1v3m0 16v3m-9-11h3m16 0h3m-3.3-7.7l-2.1 2.1M6.4 17.6l-2.1 2.1m0-15.4l2.1 2.1m11.2 11.2l2.1 2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -5751,12 +5755,13 @@
                 </div>
             </div>
 
-            <!-- STUDIO, Frame browser (ST-1) -->
-
-            <!-- FILES (server-side file explorer) -->
+            <!-- STUDIO (server-side file explorer + Stack workspace
+                 + Editor modal). Tab token stays 'files' for backward
+                 compat with localStorage + legacy bindings; the
+                 user-facing label is Studio. -->
             <div x-show="tab === 'files'" class="tab-panel files-panel">
                 <div class="panel-header">
-                    Files
+                    Studio
                     <!-- Stack panel is now always visible on the right
                          side of the FILES tab. The Lightroom-style
                          editor opens as an overlay modal on demand
@@ -6116,9 +6121,9 @@
                                             @click="stackAddToSlot(def.key)"
                                             :disabled="files.selectedPaths.length === 0"
                                             :title="files.selectedPaths.length === 0
-                                                ? 'Selecione FITS no navegador primeiro'
-                                                : 'Adicionar ' + files.selectedPaths.length + ' selecionado(s) a ' + def.label">
-                                        + Adicionar selecao
+                                                ? 'Select FITS files in the browser first'
+                                                : 'Add ' + files.selectedPaths.length + ' selected to ' + def.label">
+                                        + Add selection
                                     </button>
                                     <button class="btn btn-sm"
                                             @click="stackClearSlot(def.key)"
@@ -6133,14 +6138,14 @@
                                                   x-text="stackBasename(path)"></span>
                                             <button class="stack-slot-remove"
                                                     @click="stackRemoveFromSlot(def.key, path)"
-                                                    title="Remover do slot">×</button>
+                                                    title="Remove from slot">×</button>
                                         </li>
                                     </template>
                                 </ul>
                                 <p class="stack-slot-empty"
                                    x-show="stack[def.key].length === 0">
-                                    Selecione frames no navegador a esquerda
-                                    e clique "+ Adicionar selecao".
+                                    Select frames in the browser on the
+                                    left and click "+ Add selection".
                                 </p>
                             </details>
                         </template>
@@ -7113,7 +7118,7 @@
                     <p class="hint" style="margin-top:4px">
                         Pick or change the capture root from the
                         <a href="#" @click.prevent="tab='files'; filesInit()"
-                           style="color:var(--accent);text-decoration:underline">Files tab</a>:
+                           style="color:var(--accent);text-decoration:underline">Studio tab</a>:
                         navigate to the folder, then click <em>Set as Studio root</em>.
                         Files are organised under
                         <code>{rig}/lights · calibration · calibrated · integrated · processed/...</code>
@@ -9016,7 +9021,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          development that this is a per-commit nuisance, but the cost
          of users running stale JS for hours (with FrameKind routing
          bugs ending up on the wrong canvas) is higher. -->
-    <script src="/js/app.js?v=20260530-editormodal"></script>
+    <script src="/js/app.js?v=20260530-studio"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
