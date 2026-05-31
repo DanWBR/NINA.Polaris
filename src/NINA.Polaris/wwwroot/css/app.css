@@ -1984,6 +1984,18 @@ label select.input-sm {
     background: var(--bg-primary);
     color: var(--text-primary);
 }
+/* Panel-level click-to-dismiss surface. Pointer hint so the user
+   sees that the whole popup is interactive and dismissible — even
+   when the X button in the corner is somehow blocked by some
+   stacking-context regression. Belt-and-suspenders with the X. */
+.cam-float-clickable {
+    cursor: pointer;
+}
+.cam-float-clickable .cam-float-header {
+    /* Header stays draggable -- cursor: move overrides the panel's
+       cursor: pointer so the affordance is correct. */
+    cursor: move;
+}
 .cam-float-body {
     padding: 8px;
     /* Hold the canvas in a 16:9 box so it doesn't collapse to 0 height

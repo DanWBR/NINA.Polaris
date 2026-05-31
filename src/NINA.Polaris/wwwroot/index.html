@@ -4519,11 +4519,29 @@
                      still drives the underlying camera stream
                      (auto-on during slews when nothing else owns
                      the camera); slewPreviewVisible gates show/hide. -->
-                <div class="cam-float-panel"
+                <!-- The whole panel is click-to-dismiss because it's a
+                     PASSIVE preview (no controls inside the body).
+                     Three previous attempts at fixing the close button
+                     left the operator unable to hide it; making the
+                     entire surface a close target removes any
+                     z-index / pointer-events / iframe-stacking issue
+                     for good. The header still drags (mousedown grabs
+                     it), the canvas inside doesn't need clicks, so
+                     promoting the panel-level click to "hide" is
+                     safe and obvious. -->
+                <div class="cam-float-panel cam-float-clickable"
                      x-show="slewPreview?.active && slewPreviewVisible"
                      x-cloak
-                     :style="`left: ${cameraPanel.x}px; top: ${cameraPanel.y}px;`">
+                     :style="`left: ${cameraPanel.x}px; top: ${cameraPanel.y}px;`"
+                     @click="console.log('[Polaris] camera panel clicked -> hide'); slewPreviewVisible = false; persistSlewPreviewToggle()"
+                     title="Click anywhere to hide">
+                    <!-- @click.stop: clicking the header is meant to be a
+                         drag-grip, not a dismiss. Stops the click from
+                         bubbling up to the panel-level "click anywhere
+                         to hide" handler so dragging doesn't also
+                         dismiss the popup. -->
                     <div class="cam-float-header"
+                         @click.stop
                          @mousedown="cameraPanelDragStart($event)"
                          @touchstart="cameraPanelDragStart($event)">
                         <span class="cam-float-title">
@@ -4546,12 +4564,13 @@
                          .stop on every pointer event is redundant
                          now (no parent has a drag handler) but kept
                          as belt-and-suspenders. -->
+                    <!-- X button kept for affordance / discoverability;
+                         duplicates the panel-level click but with a
+                         logged label so the operator can see in DevTools
+                         which path actually fired the close. -->
                     <button class="cam-float-close"
-                            @pointerdown.stop
-                            @mousedown.stop
-                            @touchstart.stop
-                            @click.stop.prevent="slewPreviewVisible = false; persistSlewPreviewToggle()"
-                            title="Hide">×</button>
+                            @click.stop.prevent="console.log('[Polaris] cam X clicked'); slewPreviewVisible = false; persistSlewPreviewToggle()"
+                            title="Hide (or tap anywhere on the panel)">×</button>
                     <div class="cam-float-body">
                         <canvas id="slewPreviewCanvas" class="slew-preview-canvas"></canvas>
                     </div>
