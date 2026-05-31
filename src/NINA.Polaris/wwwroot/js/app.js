@@ -13336,9 +13336,16 @@ function ninaApp() {
                          'The mount will park first (slewing to its park position) ' +
                          'then unpark and slew to home. Make sure the full slew ' +
                          'path is clear of obstructions.')) return;
-            this.toast('Reset & Home: park -> unpark -> home (up to 60s)...', 'info');
+            this.toast('Reset & Home: park -> unpark -> home (up to 90s)...', 'info');
             try {
-                const resp = await this.apiPost('/api/telescope/find-home-reset');
+                // 90s client-side timeout: backend allows 30s for park
+                // to settle + 30s for unpark + actual home slew time.
+                // Default apiFetch timeout (15s) was firing AbortError
+                // mid-sequence while the mount was still parking, which
+                // left the backend chugging away successfully while the
+                // user saw a misleading "Request timed out" toast.
+                const resp = await this.apiPost('/api/telescope/find-home-reset',
+                    null, { timeout: 90000 });
                 const body = await resp.json().catch(() => ({}));
                 if (body?.status === 'homing') {
                     this.toast('Mount homing after reset sequence', 'ok');
