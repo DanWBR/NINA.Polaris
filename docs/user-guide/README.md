@@ -111,6 +111,9 @@ Each tab in the sidebar has its own page. Read the ones you need:
   rules, hardware sizing.
 - **[Troubleshooting](troubleshooting.md)**, common problems + fixes.
 - **[FAQ](faq.md)**, questions that come up a lot.
+- **[Debug logging](debug-logging.md)**, the LOG badge + panel:
+  collect every server log, HTTP request, toast and browser
+  exception in one place, export as JSONL to attach to bug reports.
 
 ## For developers
 

@@ -7380,6 +7380,23 @@
                     </p>
                 </div>
 
+                <!-- DBGLOG-9: opt-in disk persistence for the debug log
+                     buffer. Off by default to avoid SD-card wear on the
+                     Pi; turn on when you're chasing a bug that needs
+                     hours-old context to reproduce. -->
+                <div class="settings-section">
+                    <h3><span class="settings-card-icon">📝</span>Debug logging</h3>
+                    <label class="checkbox-label"
+                        title="When ON, every log entry is also written to {LocalAppData}/NINA.Polaris/logs/ as JSONL. Files older than 7 days are cleaned up automatically.">
+                        <input type="checkbox" x-model="settings.logToDisk" @change="saveSettingsToServer()">
+                        Persist debug log to disk (7-day retention)
+                    </label>
+                    <p class="hint" style="margin-top:6px">
+                        Default OFF. The in-memory log (visible via the LOG badge in the header) survives until the server restarts.<br>
+                        Turn this on when you want logs to survive a reboot of the mini-PC or Raspberry Pi, e.g. while diagnosing an intermittent issue overnight.
+                    </p>
+                </div>
+
                 <!-- External post-processing tools (Siril + GraXpert).
                      Both run as external binaries; auto-detected on
                      startup, configurable via override paths. Spans

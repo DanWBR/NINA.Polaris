@@ -462,6 +462,22 @@ public class UserProfile {
     /// the UI lands on first.
     /// </summary>
     public bool PreferAdvancedSequencer { get; set; } = false;
+
+    /// <summary>
+    /// DBGLOG-9: opt-in disk persistence for the debug log. When
+    /// false (default), the LogService ring buffer is the only home
+    /// for entries — a server restart discards everything. When
+    /// true, LogRotatorService subscribes to the Appended event and
+    /// flushes batched entries to
+    /// {LocalAppData}/NINA.Polaris/logs/polaris-yyyy-MM-dd.jsonl,
+    /// with files older than 7 days swept hourly.
+    ///
+    /// Default OFF because the in-memory buffer covers ~95% of
+    /// field bug-hunting (operator hits an issue, immediately
+    /// exports the buffer, attaches to the report) and disk writes
+    /// have a measurable cost on the SD card in the Pi.
+    /// </summary>
+    public bool LogToDisk { get; set; } = false;
 }
 
 /// <summary>

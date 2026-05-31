@@ -25,7 +25,7 @@
 > client exception) gets dropped into one ring buffer the user
 > can export with a single click and attach to a bug report.
 
-## What shipped (DBGLOG-1..8)
+## What shipped (DBGLOG-1..10, full plan closed)
 
 - **`LogService`** singleton: 5000-entry `ConcurrentQueue<LogEntry>`
   with `Interlocked.Increment`-assigned monotonic Id, sensitivity
@@ -69,15 +69,29 @@
   coloured by level with collapsible stack traces for exception
   entries.
 
-## Deferred to follow-up
+## Disk persistence + docs (DBGLOG-9, DBGLOG-10)
 
-- **DBGLOG-9** opt-in disk persistence (`UserProfile.LogToDisk`
-  + `LogRotatorService` writing JSONL to
-  `{LocalAppData}/NINA.Polaris/logs/` with 7-day retention).
-  Decided to ship the in-memory ring buffer first because that
-  covers ~95% of field bug-hunting: user reports a problem,
-  immediately exports the buffer, attaches to the report.
-- **DBGLOG-10** docs page + smoke verification checklist.
+- **`LogRotatorService`** (`BackgroundService`) subscribes to
+  `LogService.Appended` and flushes pending entries every 2 s to
+  `{LocalAppData}/NINA.Polaris/logs/polaris-yyyy-MM-dd.jsonl`
+  (UTF-8, one JSON per line). When the toggle is OFF the queue
+  drains on each tick without writing, so flipping ON/OFF in
+  Settings takes effect immediately without a restart. Hourly
+  retention sweep deletes files older than 7 days. Errors go to
+  `Console.Error` (NOT through ILogger -- would recurse via the
+  LogBufferLoggerProvider back into LogService and re-fire the
+  Appended event).
+- **`UserProfile.LogToDisk`** field (default `false`) round-trips
+  through `SystemEndpoints` PUT/GET and is hydrated into the
+  Settings UI toggle. Off by default because the in-memory ring
+  buffer covers ~95% of field bug-hunting and disk writes have a
+  measurable cost on Pi SD cards.
+- **`docs/user-guide/debug-logging.md`** walkthrough: what the
+  badge colours mean, how to filter the panel, how to export JSONL
+  for a bug report, when to enable disk persistence, what the
+  sensitivity filter strips before any entry is enqueued.
+- **README.md** "Debug logging" section under Features with a
+  short overview + link to the user guide.
 
 ## Verification
 

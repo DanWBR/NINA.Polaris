@@ -409,6 +409,11 @@ function ninaApp() {
             stellariumHost: 'localhost',
             stellariumPort: 8090,
             preferAdvancedSequencer: false,
+            // DBGLOG-9: when ON, LogRotatorService flushes every log
+            // entry to a JSONL file under {LocalAppData}/NINA.Polaris/logs/.
+            // Default OFF; the in-memory ring buffer is enough for most
+            // bug-hunting and saves SD-card write cycles on the Pi.
+            logToDisk: false,
             // Boot-time auto-connect, INDI + Alpaca discovery +
             // active-rig device bind. Pushed by HardwareAutoConnectService.
             autoConnectOnStartup: false,
@@ -5512,6 +5517,11 @@ function ninaApp() {
                     this.settings.imageNamePattern = data.imageNamePattern || '';
                     this.settings.preferAdvancedSequencer = !!data.preferAdvancedSequencer;
                     this.settings.autoConnectOnStartup = !!data.autoConnectOnStartup;
+                    // DBGLOG-9: hydrate the persist-to-disk toggle.
+                    this.settings.logToDisk = !!data.logToDisk;
+                    // Mirror to the logs sub-object so the panel can
+                    // surface the current state (informational only).
+                    if (this.logs) this.logs.persistToDisk = !!data.logToDisk;
                     this.settings.sirilPath = data.sirilPath || '';
                     this.settings.sirilScriptsDir = data.sirilScriptsDir || '';
                     this.settings.graxpertPath = data.graxpertPath || '';
@@ -10741,6 +10751,8 @@ function ninaApp() {
                         imageNamePattern: this.settings.imageNamePattern,
                         preferAdvancedSequencer: this.settings.preferAdvancedSequencer,
                         autoConnectOnStartup: this.settings.autoConnectOnStartup,
+                        // DBGLOG-9: opt-in disk persistence.
+                        logToDisk: this.settings.logToDisk,
                         sirilPath: this.settings.sirilPath,
                         sirilScriptsDir: this.settings.sirilScriptsDir,
                         graxpertPath: this.settings.graxpertPath,

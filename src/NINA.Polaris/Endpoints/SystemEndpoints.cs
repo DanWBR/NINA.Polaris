@@ -167,6 +167,8 @@ public static class SystemEndpoints {
                 p.ImageNamePattern = update.ImageNamePattern;
                 p.ImageFormat = update.ImageFormat;
                 p.PreferAdvancedSequencer = update.PreferAdvancedSequencer;
+                // DBGLOG-9: opt-in disk persistence for the debug log.
+                p.LogToDisk = update.LogToDisk;
                 // External-tool path overrides. Empty/null = auto-detect.
                 p.SirilPath = update.SirilPath;
                 p.SirilScriptsDir = update.SirilScriptsDir;
@@ -263,7 +265,9 @@ public static class SystemEndpoints {
                 imageFormat = p.ImageFormat,
                 plateSolver = "ASTAP",
                 indiHost = p.IndiHost,
-                indiPort = p.IndiPort
+                indiPort = p.IndiPort,
+                // DBGLOG-9: surface the toggle so the Settings UI hydrates correctly.
+                logToDisk = p.LogToDisk
             });
         });
     }

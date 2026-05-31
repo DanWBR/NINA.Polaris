@@ -87,6 +87,10 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Logging.LogService>();
 builder.Logging.Services.AddSingleton<Microsoft.Extensions.Logging.ILoggerProvider>(sp =>
     new NINA.Polaris.Services.Logging.LogBufferLoggerProvider(
         sp.GetRequiredService<NINA.Polaris.Services.Logging.LogService>()));
+// DBGLOG-9: opt-in disk persistence. Always registered as hosted; the
+// service checks profile.LogToDisk per tick so toggling Settings takes
+// effect without a restart.
+builder.Services.AddHostedService<NINA.Polaris.Services.Logging.LogRotatorService>();
 builder.Services.AddSingleton<ImageRelayService>();
 builder.Services.AddSingleton<CameraStreamService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Planetary.VideoRecordingService>();

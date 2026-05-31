@@ -1039,6 +1039,25 @@ checkbox.
 See [docs/user-guide/authentication.md](docs/user-guide/authentication.md)
 for the full walkthrough.
 
+### Debug logging
+
+Every server log, HTTP request, browser exception and toast lands
+in a single in-memory ring buffer (5000 entries). The **LOG**
+badge in the header turns amber on unread warnings and red on
+unread errors; clicking opens a fullscreen panel with filters by
+level / source / search, exportable as JSONL or TXT to attach to
+bug reports. Sensitivity filter strips passwords, tokens, Bearer
+headers, and session cookies before any entry hits the buffer.
+
+Opt-in disk persistence (Settings → Debug logging) flushes
+batched entries to JSONL files under `{LocalAppData}/NINA.Polaris/logs/`
+with 7-day retention -- useful for chasing intermittent issues
+across server restarts.
+
+See [docs/user-guide/debug-logging.md](docs/user-guide/debug-logging.md)
+for screenshots, the exact export format, and how to attach a log
+file to a bug report.
+
 ### Network Resilience
 
 Built for unreliable field WiFi:
