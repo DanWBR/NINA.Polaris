@@ -15,7 +15,81 @@
   verbatim, only the prose around them was translated.
 -->
 
-# Current chapter: DBGLOG -- unified debug log with badge + panel
+# Current chapter: INDIPROP -- native INDI property browser
+
+> User's Raspberry Pi distribution (Pi OS / Debian Bookworm) no
+> longer ships the standalone `indi_control_panel` Qt binary that
+> the embedded-GUI tab in RIGS depended on: libindi 2.x dropped
+> it from `indi-bin`, and the user's distro doesn't have the
+> `mutlaqja/ppa` repo or even `software-properties-common`
+> available to add it. The old "indi_control_panel missing"
+> banner had no escape hatch on these systems.
+
+## What shipped (INDIPROP-1, INDIPROP-2)
+
+A 100% in-process replacement for the Qt tool, built entirely on
+top of the existing `IndiClient.Devices` dictionary + the three
+`SetNumberAsync` / `SetSwitchAsync` / `SetTextAsync` helpers that
+were already wired through `IndiClient`.
+
+- **Backend `IndiPropertiesEndpoints`** (~200 lines):
+  - `GET /api/indi/properties[?device=X]` serialises the full
+    device → group → property tree with type-discriminated DTOs
+    that mirror the 5 INDI property classes (Text, Number,
+    Switch, Light, Blob) 1:1.
+  - `POST /api/indi/properties/set` takes a body shaped
+    `{device, property, type, numbers|switches|texts}` and
+    dispatches to the right `SetXxxAsync`. Validates that the
+    property exists on the device, the type matches, and the
+    permission isn't ReadOnly before sending the INDI XML.
+  - BLOB properties surface as placeholders in the panel since
+    their binary payloads (FITS / JPEG) already have a dedicated
+    delivery path through `ImageRelayService`.
+
+- **Frontend native tree UI** in the existing INDI Control Panel
+  sub-tab of RIGS (replaces the xpra-hosted iframe):
+  - Top strip: device count pill + device picker dropdown +
+    free-text filter + auto-refresh checkbox (2 s cadence, only
+    while the sub-tab is visible) + manual ⟳ refresh.
+  - One card per device, properties grouped by INDI group in
+    collapsible accordions.
+  - Per-property editor by type:
+    * **Number**: per-element number input with min/max/step from
+      the INDI schema, "Set" button per element.
+    * **Switch**: radio buttons for OneOfMany / AtMostOne, check-
+      boxes for AnyOfMany. The frontend builds the right
+      switch-vector payload (OneOfMany clears siblings) so the
+      indiserver state always matches what the UI shows.
+    * **Text**: per-element text input + "Set" button.
+    * **Light**: read-only colour-coded dots.
+    * **Blob**: placeholder noting binary payload routing.
+  - Per-element `_draft` field survives auto-refresh merges, so
+    typing into a number/text input doesn't get clobbered by the
+    next 2 s tick.
+  - State pill colour per property: green for `ok`, amber for
+    `busy`, red for `alert`, grey for `idle`.
+
+## Why this approach over fixing the binary install
+
+- Works on **any** OS / distro without `apt`, `ppa`, or any
+  external Qt install.
+- Works via **Relay over the internet** (xpra over Relay was
+  always going to be flaky).
+- Works on **mobile** (Qt-in-xpra on a phone was painful).
+- Uses the same auth + WS infrastructure as everything else.
+- Zero new dependencies. Reuses the IndiClient that's already
+  parsing the INDI XML stream for live device updates.
+
+## Verification
+
+- `dotnet build src/NINA.Polaris/NINA.Polaris.csproj` clean (0
+  errors, only pre-existing warnings).
+- Manual smoke deferred to user: F5 in the browser, RIGS tab →
+  INDI Control Panel sub-tab → property tree should populate.
+
+---
+
+# Previous chapter: DBGLOG -- unified debug log with badge + panel
 
 > Field bug reports from the operator's Raspberry Pi were costing
 > a full round-trip every time: ask for INDI panel screenshot,

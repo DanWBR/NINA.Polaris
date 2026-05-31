@@ -749,6 +749,10 @@ _ = Task.Run(async () => {
 // Live stacking + INDI
 app.MapLiveStackEndpoints();
 app.MapIndiEndpoints();
+// INDIPROP-1: in-process INDI property browser (native replacement
+// for the standalone indi_control_panel Qt binary that's no longer
+// packaged on recent Raspberry Pi OS releases).
+app.MapIndiPropertiesEndpoints();
 
 // WebSocket streams
 app.Map("/ws/image-stream", ImageStreamHandler.Handle);

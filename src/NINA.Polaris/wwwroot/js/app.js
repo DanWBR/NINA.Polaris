@@ -779,6 +779,29 @@ function ninaApp() {
         indiCp: { status: null, busy: false, launched: false,
                   iframeSrc: '/phd2-gui/' },
 
+        // INDIPROP-2: native in-process property browser. Replaces the
+        // xpra-hosted indi_control_panel Qt tool with a 100% browser-
+        // side editor over the IndiClient.Devices snapshot exposed by
+        // /api/indi/properties. State:
+        //   devices         current snapshot from GET /api/indi/properties
+        //   selectedDevice  optional filter, "" = show all
+        //   search          free-text filter applied to name+label
+        //   collapsedGroups dict of "device/group" → true when collapsed
+        //   autoRefresh     when true, schedules a 2s tick (only while
+        //                   the indi-cp sub-tab is visible)
+        //   busy            in-flight GET; suppresses overlapping fetches
+        //   lastError       last /set rejection (400/403/500)
+        indiProps: {
+            devices: [],
+            selectedDevice: '',
+            search: '',
+            collapsedGroups: {},
+            autoRefresh: true,
+            busy: false,
+            lastError: ''
+        },
+        _indiPropsTimer: null,
+
         // Rotator
         rotator: { connected: false, name: '', position: null, moving: false, reversed: false },
 
@@ -16717,6 +16740,193 @@ function ninaApp() {
             if (!s.installed) return '(install with pip)';
             if (s.running) return '✓ running · ' + (s.version || 'v?');
             return 'stopped';
+        },
+
+        // INDIPROP-2: native INDI property browser.
+        // ---------------------------------------------------
+        // Loads the full device → group → property snapshot from
+        // /api/indi/properties, replacing existing devices in-place
+        // so per-element _draft inputs survive the re-render (when
+        // the user is mid-edit on element X we don't want to overwrite
+        // their unsaved value with the freshly-fetched one).
+        async indiPropsLoad() {
+            if (this.indiProps.busy) return;
+            this.indiProps.busy = true;
+            try {
+                const r = await this.apiGet('/api/indi/properties/');
+                this.indiProps.devices = this._indiPropsMerge(
+                    this.indiProps.devices, r?.devices || []);
+                this.indiProps.lastError = '';
+            } catch (e) {
+                this.indiProps.lastError = 'load failed: ' + (e.message || e);
+            } finally {
+                this.indiProps.busy = false;
+                this.indiPropsScheduleRefresh();
+            }
+        },
+
+        // Schedule the next auto-refresh tick, but only when:
+        //   - autoRefresh is on, AND
+        //   - the RIGS tab is open AND the indi-cp sub-tab is the
+        //     one currently selected (no point polling while the
+        //     panel isn't visible — saves the Pi a tiny bit of CPU
+        //     + saves the user from running into the WS payload
+        //     races caused by overlapping fetches).
+        // 2 s cadence matches the typical INDI device update rate
+        // without flooding mobile devices.
+        indiPropsScheduleRefresh() {
+            if (this._indiPropsTimer) {
+                clearTimeout(this._indiPropsTimer);
+                this._indiPropsTimer = null;
+            }
+            if (!this.indiProps.autoRefresh) return;
+            if (this.tab !== 'equip' || this.equipTab !== 'indi-cp') return;
+            this._indiPropsTimer = setTimeout(() => this.indiPropsLoad(), 2000);
+        },
+
+        // In-place merge so element-level _draft fields (the unsaved
+        // value the user has typed into a number/text input) survive
+        // a refresh. Only the *display* value comes from the server
+        // -- the _draft is initialised once via x-init and then owned
+        // by the input until the user clicks Set.
+        _indiPropsMerge(prev, next) {
+            const prevByDevice = {};
+            for (const d of (prev || [])) prevByDevice[d.name] = d;
+            for (const d of next) {
+                const prevDev = prevByDevice[d.name];
+                if (!prevDev) continue;
+                const prevPropByName = {};
+                for (const p of (prevDev.properties || [])) prevPropByName[p.name] = p;
+                for (const p of (d.properties || [])) {
+                    const prevProp = prevPropByName[p.name];
+                    if (!prevProp || !prevProp.elements) continue;
+                    const prevElByName = {};
+                    for (const el of prevProp.elements) prevElByName[el.name] = el;
+                    for (const el of (p.elements || [])) {
+                        const prevEl = prevElByName[el.name];
+                        if (prevEl && prevEl._draft !== undefined) {
+                            el._draft = prevEl._draft;
+                        }
+                    }
+                }
+            }
+            return next;
+        },
+
+        // Optional filters applied client-side. Always cheap because
+        // the snapshot is small (< 1 MB even for a fully-loaded rig).
+        indiPropsFilteredDevices() {
+            const sel = this.indiProps.selectedDevice;
+            const needle = (this.indiProps.search || '').trim().toLowerCase();
+            let out = this.indiProps.devices;
+            if (sel) out = out.filter(d => d.name === sel);
+            if (needle) {
+                out = out.map(d => ({
+                    ...d,
+                    properties: (d.properties || []).filter(p =>
+                        (p.name || '').toLowerCase().includes(needle) ||
+                        (p.label || '').toLowerCase().includes(needle) ||
+                        (p.group || '').toLowerCase().includes(needle) ||
+                        (p.elements || []).some(el =>
+                            (el.name || '').toLowerCase().includes(needle) ||
+                            (el.label || '').toLowerCase().includes(needle))
+                    )
+                })).filter(d => d.properties.length > 0);
+            }
+            return out;
+        },
+
+        indiPropsGroupKeys(dev) {
+            // Stable, alphabetical group order so users can build muscle
+            // memory ("Main is always first, then Site, then Options...").
+            const groups = new Set();
+            for (const p of (dev.properties || [])) groups.add(p.group || 'Main');
+            return Array.from(groups).sort();
+        },
+
+        indiPropsByGroup(dev, group) {
+            return (dev.properties || []).filter(p =>
+                (p.group || 'Main') === group);
+        },
+
+        indiPropsToggleGroup(key) {
+            // Mutate the object so Alpine's reactivity picks it up
+            // (assigning to a key on an existing object via direct
+            // property write requires a re-create to trigger).
+            this.indiProps.collapsedGroups = {
+                ...this.indiProps.collapsedGroups,
+                [key]: !this.indiProps.collapsedGroups[key]
+            };
+        },
+
+        // --- Setters per type. All three POST to the same endpoint
+        //     with a type-discriminated body so the server can
+        //     dispatch to IndiClient.SetNumberAsync / SetSwitchAsync
+        //     / SetTextAsync without us shipping the INDI XML protocol
+        //     to the browser.
+
+        async indiPropsSetNumber(device, prop, el) {
+            try {
+                await this.apiFetch('/api/indi/properties/set', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        device, property: prop.name, type: 'number',
+                        numbers: { [el.name]: Number(el._draft) }
+                    })
+                });
+                this.indiProps.lastError = '';
+                this.toast(`${prop.label || prop.name}.${el.name} = ${el._draft}`, 'ok');
+                this.indiPropsLoad();
+            } catch (e) {
+                this.indiProps.lastError = 'set failed: ' + (e.message || e);
+            }
+        },
+
+        // Switch: rule decides whether we mutate one element (OneOfMany /
+        // AtMostOne, send only the toggled one ON) or N elements
+        // (AnyOfMany: send just the toggled element's new state, INDI
+        // will leave the rest alone). For OneOfMany we explicitly clear
+        // sibling switches so the indiserver state matches the radio.
+        async indiPropsSetSwitch(device, prop, el, ev) {
+            const checked = ev?.target?.checked;
+            const sw = {};
+            if (prop.rule === 'oneOfMany' || prop.rule === 'atMostOne') {
+                for (const sib of prop.elements) sw[sib.name] = (sib.name === el.name);
+            } else {
+                sw[el.name] = !!checked;
+            }
+            try {
+                await this.apiFetch('/api/indi/properties/set', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        device, property: prop.name, type: 'switch', switches: sw
+                    })
+                });
+                this.indiProps.lastError = '';
+                this.indiPropsLoad();
+            } catch (e) {
+                this.indiProps.lastError = 'set failed: ' + (e.message || e);
+            }
+        },
+
+        async indiPropsSetText(device, prop, el) {
+            try {
+                await this.apiFetch('/api/indi/properties/set', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        device, property: prop.name, type: 'text',
+                        texts: { [el.name]: String(el._draft ?? '') }
+                    })
+                });
+                this.indiProps.lastError = '';
+                this.toast(`${prop.label || prop.name}.${el.name} updated`, 'ok');
+                this.indiPropsLoad();
+            } catch (e) {
+                this.indiProps.lastError = 'set failed: ' + (e.message || e);
+            }
         },
 
         // SIM-8: device checkbox toggle handler. Two cases:

@@ -2816,7 +2816,7 @@
                     <button class="video-tab" :class="{ active: equipTab === 'indi-web' }"
                             @click="equipTab = 'indi-web'; indiWebStatusRefresh()">INDI Drivers</button>
                     <button class="video-tab" :class="{ active: equipTab === 'indi-cp' }"
-                            @click="equipTab = 'indi-cp'; indiCpStatusRefresh()">INDI Control Panel</button>
+                            @click="equipTab = 'indi-cp'; indiPropsLoad()">INDI Control Panel</button>
                 </div>
 
                 <!-- ===== Equipment subtab ===== -->
@@ -4064,133 +4064,216 @@
                 </div><!-- /.indi-web subtab -->
 
                 <!-- ===== INDI Control Panel subtab ===== -->
-                <!-- Rich per-device INDI properties editor (the standalone
-                     indi_control_panel Qt binary from indi-bin). Reuses
-                     the xpra display already owned by Phd2GuiSessionService,
-                     so the same /phd2-gui/ iframe shows both PHD2's
-                     window and the INDI Control Panel window after
-                     launch. Linux + xpra + indi-bin are required; banners
-                     surface whichever piece is missing. -->
-                <div x-show="equipTab === 'indi-cp'" class="indi-web-subtab">
-                    <div class="indi-web-wrap" style="padding:10px 0;">
+                <!-- INDIPROP-2: native in-process property browser. Replaces
+                     the old xpra-hosted indi_control_panel Qt binary which
+                     was unavailable on recent Raspberry Pi OS releases
+                     (libindi 2.x dropped it from indi-bin). Builds on the
+                     IndiClient.Devices dictionary that's already populated
+                     in real time, so the UI just renders + edits the
+                     existing state. Works on any OS, any distro, via Relay,
+                     mobile-friendly. -->
+                <div x-show="equipTab === 'indi-cp'" class="indi-props-subtab"
+                     style="padding:10px 0;">
 
-                        <!-- Status strip + launch button -->
-                        <div class="control-row" style="margin-bottom:8px;align-items:center;gap:10px;">
-                            <span class="status-pill"
-                                  :class="indiCpStatusClass()"
-                                  x-text="indiCpStatusLabel()"></span>
-                            <span class="text-muted" style="font-size:11px;"
-                                  x-show="indiCp.status?.xpraVersion"
-                                  x-text="'xpra v' + indiCp.status.xpraVersion"></span>
-                            <span style="flex:1;"></span>
-                            <span class="text-muted" style="font-size:11px;"
-                                  x-show="indiCp.status?.sessionRunning
-                                       && indiCp.status?.indiControlPanelInstalled">
-                                Click Launch to open the INDI Control Panel inside the embedded GUI
-                            </span>
-                            <button class="btn btn-sm btn-primary" @click="indiCpLaunch()"
-                                    :disabled="indiCp.busy
-                                            || !indiCp.status?.sessionRunning
-                                            || !indiCp.status?.indiControlPanelInstalled">
-                                ▶ Launch
-                            </button>
-                            <button class="btn btn-sm" @click="indiCpStatusRefresh()"
-                                    :disabled="indiCp.busy">
-                                ⟳
-                            </button>
-                        </div>
-
-                        <!-- Unsupported OS banner (Windows / macOS) -->
-                        <div class="text-warn"
-                             style="padding:12px;background:rgba(245,158,11,0.08);
-                                    border:1px solid rgba(245,158,11,0.3);
-                                    border-radius:6px;font-size:13px;"
-                             x-show="indiCp.status &amp;&amp; !indiCp.status.supportedOs">
-                            <strong>Not available on this OS.</strong>
-                            <div style="margin-top:4px;color:var(--text-muted);"
-                                 x-text="indiCp.status?.unsupportedReason"></div>
-                        </div>
-
-                        <!-- xpra missing -->
-                        <div style="padding:12px;background:rgba(91,141,255,0.08);
-                                    border:1px solid rgba(91,141,255,0.3);
-                                    border-radius:6px;font-size:13px;"
-                             x-show="indiCp.status?.supportedOs &amp;&amp; !indiCp.status?.xpraInstalled">
-                            <strong>xpra not detected.</strong>
-                            <div style="margin-top:6px;color:var(--text-muted);">
-                                The INDI Control Panel runs inside an xpra session
-                                hosted by Polaris (same one that powers the PHD2 GUI
-                                embed). Install xpra on the Polaris host:
-                            </div>
-                            <pre style="background:rgba(0,0,0,0.4);padding:8px;border-radius:4px;
-                                        margin-top:6px;font-size:12px;overflow-x:auto;"
->sudo apt install xpra xserver-xorg-video-dummy</pre>
-                        </div>
-
-                        <!-- indi_control_panel binary missing -->
-                        <div style="padding:12px;background:rgba(91,141,255,0.08);
-                                    border:1px solid rgba(91,141,255,0.3);
-                                    border-radius:6px;font-size:13px;"
-                             x-show="indiCp.status?.supportedOs
-                                  &amp;&amp; indiCp.status?.xpraInstalled
-                                  &amp;&amp; !indiCp.status?.indiControlPanelInstalled">
-                            <strong>indi_control_panel not detected.</strong>
-                            <div style="margin-top:6px;color:var(--text-muted);">
-                                The standalone Qt binary ships in the
-                                <code>indi-bin</code> package:
-                            </div>
-                            <pre style="background:rgba(0,0,0,0.4);padding:8px;border-radius:4px;
-                                        margin-top:6px;font-size:12px;overflow-x:auto;"
->sudo apt install indi-bin</pre>
-                            <div style="color:var(--text-muted);">
-                                Click ⟳ after install.
-                            </div>
-                        </div>
-
-                        <!-- xpra session not started: redirect to GUIDE
-                             tab where the user already manages the
-                             embedded GUI lifecycle. Avoids duplicating
-                             the start button (and its lifecycle quirks)
-                             here. -->
-                        <div style="padding:12px;background:rgba(91,141,255,0.08);
-                                    border:1px solid rgba(91,141,255,0.3);
-                                    border-radius:6px;font-size:13px;"
-                             x-show="indiCp.status?.supportedOs
-                                  &amp;&amp; indiCp.status?.xpraInstalled
-                                  &amp;&amp; indiCp.status?.indiControlPanelInstalled
-                                  &amp;&amp; !indiCp.status?.sessionRunning">
-                            <strong>Embedded GUI session not running.</strong>
-                            <div style="margin-top:6px;color:var(--text-muted);">
-                                Open the
-                                <a href="#" @click.prevent="tab='guide'"
-                                   style="color:var(--accent);text-decoration:underline">GUIDE tab</a>,
-                                switch to the "PHD2 GUI" sub-tab, and click Start
-                                session. Once the xpra display is up, come back
-                                here and hit Launch.
-                            </div>
-                        </div>
-
-                        <!-- Iframe (only mounted once the session is up
-                             AND launch has been issued at least once;
-                             before that the iframe would just show the
-                             PHD2 window with no INDI CP). Tall (75vh)
-                             so the device tree fits without internal
-                             scrollbars fighting the outer modal-ish
-                             layout. -->
-                        <iframe x-show="indiCp.status?.sessionRunning &amp;&amp; indiCp.launched"
-                                :src="indiCp.iframeSrc"
-                                style="width:100%;height:75vh;min-height:500px;
-                                       border:1px solid var(--border);
-                                       border-radius:6px;background:#0a0e16;"
-                                sandbox="allow-scripts allow-same-origin allow-forms"
-                                title="INDI Control Panel (xpra)"></iframe>
-
-                        <!-- Error surface for the LAST launch op -->
-                        <div class="text-error" style="font-size:12px;margin-top:6px;"
-                             x-show="indiCp.status?.lastError"
-                             x-text="'⚠ ' + indiCp.status?.lastError"></div>
+                    <!-- Top strip: connection state + device picker +
+                         polling toggle + manual refresh. -->
+                    <div class="control-row"
+                         style="margin-bottom:10px;align-items:center;gap:10px;flex-wrap:wrap;">
+                        <span class="status-pill"
+                              :class="indiProps.devices.length > 0 ? 'status-ok' : 'status-warn'"
+                              x-text="indiProps.devices.length + ' device' + (indiProps.devices.length === 1 ? '' : 's')"></span>
+                        <label style="font-size:12px;color:var(--text-muted);">Device:</label>
+                        <select class="input-sm" x-model="indiProps.selectedDevice"
+                                @change="indiProps.collapsedGroups = {}">
+                            <option value="">— All —</option>
+                            <template x-for="d in indiProps.devices" :key="d.name">
+                                <option :value="d.name" x-text="d.name"></option>
+                            </template>
+                        </select>
+                        <input type="text" class="input-sm" style="flex:1;min-width:160px;"
+                               placeholder="Filter by property / group / element…"
+                               x-model="indiProps.search">
+                        <label class="checkbox-label" style="font-size:12px;">
+                            <input type="checkbox" x-model="indiProps.autoRefresh"
+                                   @change="indiPropsScheduleRefresh()">
+                            Auto-refresh
+                        </label>
+                        <button class="btn btn-sm" @click="indiPropsLoad()"
+                                :disabled="indiProps.busy">⟳ Refresh</button>
                     </div>
-                </div><!-- /.indi-cp subtab -->
+
+                    <!-- INDI not connected at all -->
+                    <div x-show="!indiConnected"
+                         style="padding:14px;background:rgba(245,158,11,0.08);
+                                border:1px solid rgba(245,158,11,0.3);
+                                border-radius:6px;font-size:13px;">
+                        <strong>INDI not connected.</strong>
+                        <div style="margin-top:4px;color:var(--text-muted);">
+                            Connect to indiserver via the Equipment sub-tab first.
+                            Property browser shows up here as soon as devices come online.
+                        </div>
+                    </div>
+
+                    <!-- Connected but no devices announced yet -->
+                    <div x-show="indiConnected &amp;&amp; indiProps.devices.length === 0
+                                &amp;&amp; !indiProps.busy"
+                         style="padding:14px;background:rgba(91,141,255,0.08);
+                                border:1px solid rgba(91,141,255,0.3);
+                                border-radius:6px;font-size:13px;">
+                        <strong>No devices reported yet.</strong>
+                        <div style="margin-top:4px;color:var(--text-muted);">
+                            indiserver is connected but hasn't broadcast any device
+                            properties. Start a driver in the INDI Drivers tab, or
+                            wait a few seconds and hit ⟳ Refresh.
+                        </div>
+                    </div>
+
+                    <!-- Property tree, one card per device, properties
+                         grouped by INDI group. Same visual language as
+                         the Equipment cards. -->
+                    <template x-for="dev in indiPropsFilteredDevices()" :key="dev.name">
+                        <div style="margin-bottom:14px;border:1px solid var(--border);
+                                    border-radius:8px;overflow:hidden;
+                                    background:rgba(255,255,255,0.02);">
+                            <div style="padding:8px 12px;background:rgba(91,141,255,0.08);
+                                        font-weight:600;font-size:13px;
+                                        border-bottom:1px solid var(--border);">
+                                🔌 <span x-text="dev.name"></span>
+                                <span class="text-muted" style="font-weight:400;font-size:11px;margin-left:8px;"
+                                      x-text="'(' + dev.propertyCount + ' properties)'"></span>
+                            </div>
+                            <template x-for="groupKey in indiPropsGroupKeys(dev)" :key="groupKey">
+                                <div style="border-bottom:1px solid rgba(255,255,255,0.04);">
+                                    <div @click="indiPropsToggleGroup(dev.name + '/' + groupKey)"
+                                         style="padding:6px 12px;cursor:pointer;
+                                                font-size:12px;font-weight:600;
+                                                color:var(--text-secondary);
+                                                background:rgba(255,255,255,0.02);
+                                                user-select:none;">
+                                        <span x-text="indiProps.collapsedGroups[dev.name + '/' + groupKey] ? '▶' : '▼'"></span>
+                                        <span x-text="groupKey"></span>
+                                    </div>
+                                    <div x-show="!indiProps.collapsedGroups[dev.name + '/' + groupKey]"
+                                         style="padding:6px 12px 10px 12px;">
+                                        <template x-for="p in indiPropsByGroup(dev, groupKey)" :key="p.name">
+                                            <div style="margin-bottom:10px;padding-bottom:8px;
+                                                        border-bottom:1px dashed rgba(255,255,255,0.05);">
+                                                <!-- Property header: label + state dot + permission badge -->
+                                                <div style="display:flex;align-items:center;gap:6px;
+                                                            margin-bottom:4px;font-size:12px;">
+                                                    <span :style="
+                                                        p.state === 'ok'    ? 'color:#86efac;' :
+                                                        p.state === 'busy'  ? 'color:#fcd34d;' :
+                                                        p.state === 'alert' ? 'color:#f87171;' :
+                                                        'color:#9ca3af;'"
+                                                        x-text="'●'"></span>
+                                                    <strong x-text="p.label || p.name"></strong>
+                                                    <span class="text-muted" style="font-size:10px;"
+                                                          x-text="p.name + ' · ' + p.type + ' · ' + p.permission"></span>
+                                                </div>
+                                                <!-- Number editor -->
+                                                <template x-if="p.type === 'number'">
+                                                    <div style="display:grid;grid-template-columns:auto 1fr auto;
+                                                                gap:6px 10px;align-items:center;font-size:12px;">
+                                                        <template x-for="el in p.elements" :key="el.name">
+                                                            <template x-if="true">
+                                                                <div style="display:contents;">
+                                                                    <span style="color:var(--text-muted);"
+                                                                          x-text="el.label || el.name"></span>
+                                                                    <input type="number"
+                                                                           :step="el.step || 'any'"
+                                                                           :min="el.min"
+                                                                           :max="el.max"
+                                                                           :disabled="p.permission === 'ro'"
+                                                                           x-model.number="el._draft"
+                                                                           x-init="el._draft = el.value"
+                                                                           style="width:100%;font-variant-numeric:tabular-nums;">
+                                                                    <button class="btn btn-sm"
+                                                                            x-show="p.permission !== 'ro'"
+                                                                            @click="indiPropsSetNumber(dev.name, p, el)">
+                                                                        Set
+                                                                    </button>
+                                                                </div>
+                                                            </template>
+                                                        </template>
+                                                    </div>
+                                                </template>
+                                                <!-- Switch editor: radio for OneOfMany/AtMostOne, checkbox for AnyOfMany -->
+                                                <template x-if="p.type === 'switch'">
+                                                    <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;">
+                                                        <template x-for="el in p.elements" :key="el.name">
+                                                            <label style="display:inline-flex;align-items:center;gap:5px;">
+                                                                <input :type="p.rule === 'anyOfMany' ? 'checkbox' : 'radio'"
+                                                                       :name="dev.name + '/' + p.name"
+                                                                       :checked="el.value"
+                                                                       :disabled="p.permission === 'ro'"
+                                                                       @change="indiPropsSetSwitch(dev.name, p, el, $event)">
+                                                                <span x-text="el.label || el.name"></span>
+                                                            </label>
+                                                        </template>
+                                                    </div>
+                                                </template>
+                                                <!-- Text editor -->
+                                                <template x-if="p.type === 'text'">
+                                                    <div style="display:grid;grid-template-columns:auto 1fr auto;
+                                                                gap:6px 10px;align-items:center;font-size:12px;">
+                                                        <template x-for="el in p.elements" :key="el.name">
+                                                            <template x-if="true">
+                                                                <div style="display:contents;">
+                                                                    <span style="color:var(--text-muted);"
+                                                                          x-text="el.label || el.name"></span>
+                                                                    <input type="text"
+                                                                           :disabled="p.permission === 'ro'"
+                                                                           x-model="el._draft"
+                                                                           x-init="el._draft = el.value"
+                                                                           style="width:100%;">
+                                                                    <button class="btn btn-sm"
+                                                                            x-show="p.permission !== 'ro'"
+                                                                            @click="indiPropsSetText(dev.name, p, el)">
+                                                                        Set
+                                                                    </button>
+                                                                </div>
+                                                            </template>
+                                                        </template>
+                                                    </div>
+                                                </template>
+                                                <!-- Light indicator (read-only by spec) -->
+                                                <template x-if="p.type === 'light'">
+                                                    <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;">
+                                                        <template x-for="el in p.elements" :key="el.name">
+                                                            <span>
+                                                                <span :style="
+                                                                    el.value === 'ok'    ? 'color:#86efac;' :
+                                                                    el.value === 'busy'  ? 'color:#fcd34d;' :
+                                                                    el.value === 'alert' ? 'color:#f87171;' :
+                                                                    'color:#9ca3af;'"
+                                                                    x-text="'●'"></span>
+                                                                <span style="color:var(--text-muted);margin-left:4px;"
+                                                                      x-text="el.label || el.name"></span>
+                                                            </span>
+                                                        </template>
+                                                    </div>
+                                                </template>
+                                                <!-- BLOB placeholder -->
+                                                <template x-if="p.type === 'blob'">
+                                                    <div style="font-size:11px;color:var(--text-muted);">
+                                                        Binary payload (FITS / JPEG) — delivered via the image
+                                                        stream, not edited here.
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+
+                    <!-- Last error from a /set call -->
+                    <div class="text-error" style="font-size:12px;margin-top:6px;"
+                         x-show="indiProps.lastError"
+                         x-text="'⚠ ' + indiProps.lastError"></div>
+                </div><!-- /.indi-props-subtab -->
 
                 <!-- Refresh/Disconnect moved to the compact connection
                      strip at the top of the panel, no separate footer
