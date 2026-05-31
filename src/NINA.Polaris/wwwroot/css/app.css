@@ -1440,6 +1440,141 @@ label select.input-sm {
     color: var(--text-primary);
 }
 
+/* INDIPROP-2: native INDI property browser styling. Multi-column
+   responsive grid of device cards, themed inputs that match the
+   rest of the app (instead of browser defaults). Auto-fills 2 or
+   3 columns depending on viewport width. */
+.indi-props-subtab .indi-props-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+    gap: 14px;
+}
+.indi-props-subtab .indi-device-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.02);
+    display: flex;
+    flex-direction: column;
+}
+.indi-props-subtab .indi-device-card-header {
+    padding: 8px 12px;
+    background: rgba(91, 141, 255, 0.08);
+    font-weight: 600;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.indi-props-subtab .indi-device-card-body {
+    flex: 1;
+    overflow-y: auto;
+    /* Cap the per-card body height so a verbose device (50+ properties)
+       doesn't stretch the card to the page bottom; user scrolls
+       within the card. 600px ≈ 12 properties visible at once. */
+    max-height: 600px;
+}
+.indi-props-subtab .indi-group {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.indi-props-subtab .indi-group-header {
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.02);
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.indi-props-subtab .indi-group-body {
+    padding: 6px 12px 10px 12px;
+}
+.indi-props-subtab .indi-prop {
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
+}
+.indi-props-subtab .indi-prop:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+.indi-props-subtab .indi-prop-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    font-size: 12px;
+}
+.indi-props-subtab .indi-prop-meta {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+.indi-props-subtab .indi-prop-rows {
+    /* element label | input | Set button. The 1fr column shrinks first
+       under tight widths so the label stays readable. */
+    display: grid;
+    grid-template-columns: minmax(70px, auto) 1fr auto;
+    gap: 4px 8px;
+    align-items: center;
+    font-size: 12px;
+}
+.indi-props-subtab .indi-elem-label {
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* Inputs honour the global .input-sm theming (dark bg, accent
+   focus ring). Override the width/min-width that .input-sm bakes
+   in for the standalone use-case -- inside a grid cell we want
+   the input to fill its column. */
+.indi-props-subtab .indi-input {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    font-variant-numeric: tabular-nums;
+}
+.indi-props-subtab .indi-input:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+.indi-props-subtab .indi-switch-row {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    font-size: 12px;
+}
+.indi-props-subtab .indi-switch-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+}
+.indi-props-subtab .indi-state-dot {
+    font-size: 14px;
+    line-height: 1;
+}
+.indi-props-subtab .indi-state-ok    { color: #86efac; }
+.indi-props-subtab .indi-state-busy  { color: #fcd34d; }
+.indi-props-subtab .indi-state-alert { color: #f87171; }
+.indi-props-subtab .indi-state-idle  { color: #9ca3af; }
+
+/* Mobile: drop to a single column, expand card body to full
+   viewport height because side-scroll is awful on a phone. */
+@media (max-width: 640px) {
+    .indi-props-subtab .indi-props-grid {
+        grid-template-columns: 1fr;
+    }
+    .indi-props-subtab .indi-device-card-body {
+        max-height: none;
+    }
+}
+
 /* DBGLOG-6: log badge in the status bar. Always present, swaps colour
    on unread error/warning counts so the operator notices trouble
    without staring at the panel. */

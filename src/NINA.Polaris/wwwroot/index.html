@@ -4143,143 +4143,135 @@
                     <!-- Property tree, one card per device, properties
                          grouped by INDI group. Same visual language as
                          the Equipment cards. -->
-                    <template x-for="dev in indiPropsFilteredDevices()" :key="dev.name">
-                        <div style="margin-bottom:14px;border:1px solid var(--border);
-                                    border-radius:8px;overflow:hidden;
-                                    background:rgba(255,255,255,0.02);">
-                            <div style="padding:8px 12px;background:rgba(91,141,255,0.08);
-                                        font-weight:600;font-size:13px;
-                                        border-bottom:1px solid var(--border);">
-                                🔌 <span x-text="dev.name"></span>
-                                <span class="text-muted" style="font-weight:400;font-size:11px;margin-left:8px;"
-                                      x-text="'(' + dev.propertyCount + ' properties)'"></span>
-                            </div>
-                            <template x-for="groupKey in indiPropsGroupKeys(dev)" :key="groupKey">
-                                <div style="border-bottom:1px solid rgba(255,255,255,0.04);">
-                                    <div @click="indiPropsToggleGroup(dev.name + '/' + groupKey)"
-                                         style="padding:6px 12px;cursor:pointer;
-                                                font-size:12px;font-weight:600;
-                                                color:var(--text-secondary);
-                                                background:rgba(255,255,255,0.02);
-                                                user-select:none;">
-                                        <span x-text="indiProps.collapsedGroups[dev.name + '/' + groupKey] ? '▶' : '▼'"></span>
-                                        <span x-text="groupKey"></span>
-                                    </div>
-                                    <div x-show="!indiProps.collapsedGroups[dev.name + '/' + groupKey]"
-                                         style="padding:6px 12px 10px 12px;">
-                                        <template x-for="p in indiPropsByGroup(dev, groupKey)" :key="p.name">
-                                            <div style="margin-bottom:10px;padding-bottom:8px;
-                                                        border-bottom:1px dashed rgba(255,255,255,0.05);">
-                                                <!-- Property header: label + state dot + permission badge -->
-                                                <div style="display:flex;align-items:center;gap:6px;
-                                                            margin-bottom:4px;font-size:12px;">
-                                                    <span :style="
-                                                        p.state === 'ok'    ? 'color:#86efac;' :
-                                                        p.state === 'busy'  ? 'color:#fcd34d;' :
-                                                        p.state === 'alert' ? 'color:#f87171;' :
-                                                        'color:#9ca3af;'"
-                                                        x-text="'●'"></span>
-                                                    <strong x-text="p.label || p.name"></strong>
-                                                    <span class="text-muted" style="font-size:10px;"
-                                                          x-text="p.name + ' · ' + p.type + ' · ' + p.permission"></span>
-                                                </div>
-                                                <!-- Number editor -->
-                                                <template x-if="p.type === 'number'">
-                                                    <div style="display:grid;grid-template-columns:auto 1fr auto;
-                                                                gap:6px 10px;align-items:center;font-size:12px;">
-                                                        <template x-for="el in p.elements" :key="el.name">
-                                                            <template x-if="true">
-                                                                <div style="display:contents;">
-                                                                    <span style="color:var(--text-muted);"
-                                                                          x-text="el.label || el.name"></span>
-                                                                    <input type="number"
-                                                                           :step="el.step || 'any'"
-                                                                           :min="el.min"
-                                                                           :max="el.max"
-                                                                           :disabled="p.permission === 'ro'"
-                                                                           x-model.number="el._draft"
-                                                                           x-init="el._draft = el.value"
-                                                                           style="width:100%;font-variant-numeric:tabular-nums;">
-                                                                    <button class="btn btn-sm"
-                                                                            x-show="p.permission !== 'ro'"
-                                                                            @click="indiPropsSetNumber(dev.name, p, el)">
-                                                                        Set
-                                                                    </button>
-                                                                </div>
-                                                            </template>
+                    <div class="indi-props-grid">
+                        <template x-for="dev in indiPropsFilteredDevices()" :key="dev.name">
+                            <div class="indi-device-card">
+                                <div class="indi-device-card-header">
+                                    <span>🔌</span>
+                                    <span x-text="dev.name"></span>
+                                    <span class="text-muted" style="font-weight:400;font-size:11px;margin-left:auto;"
+                                          x-text="dev.propertyCount + ' props'"></span>
+                                </div>
+                                <div class="indi-device-card-body">
+                                    <template x-for="groupKey in indiPropsGroupKeys(dev)" :key="groupKey">
+                                        <div class="indi-group">
+                                            <div class="indi-group-header"
+                                                 @click="indiPropsToggleGroup(dev.name + '/' + groupKey)">
+                                                <span x-text="indiProps.collapsedGroups[dev.name + '/' + groupKey] ? '▶' : '▼'"></span>
+                                                <span x-text="groupKey"></span>
+                                            </div>
+                                            <div class="indi-group-body"
+                                                 x-show="!indiProps.collapsedGroups[dev.name + '/' + groupKey]">
+                                                <template x-for="p in indiPropsByGroup(dev, groupKey)" :key="p.name">
+                                                    <div class="indi-prop">
+                                                        <!-- Property header: state dot + label + meta -->
+                                                        <div class="indi-prop-header">
+                                                            <span class="indi-state-dot"
+                                                                  :class="'indi-state-' + (p.state || 'idle')"
+                                                                  >●</span>
+                                                            <strong x-text="p.label || p.name"></strong>
+                                                            <span class="indi-prop-meta"
+                                                                  x-text="p.type + ' · ' + p.permission"></span>
+                                                        </div>
+
+                                                        <!-- Number editor -->
+                                                        <template x-if="p.type === 'number'">
+                                                            <div class="indi-prop-rows">
+                                                                <template x-for="el in p.elements" :key="el.name">
+                                                                    <template x-if="true">
+                                                                        <div style="display:contents;">
+                                                                            <span class="indi-elem-label"
+                                                                                  x-text="el.label || el.name"></span>
+                                                                            <input type="number"
+                                                                                   class="input-sm indi-input"
+                                                                                   :step="el.step || 'any'"
+                                                                                   :min="el.min"
+                                                                                   :max="el.max"
+                                                                                   :disabled="p.permission === 'ro'"
+                                                                                   x-model.number="el._draft"
+                                                                                   x-init="el._draft = el.value">
+                                                                            <button class="btn btn-sm"
+                                                                                    x-show="p.permission !== 'ro'"
+                                                                                    @click="indiPropsSetNumber(dev.name, p, el)">
+                                                                                Set
+                                                                            </button>
+                                                                        </div>
+                                                                    </template>
+                                                                </template>
+                                                            </div>
                                                         </template>
-                                                    </div>
-                                                </template>
-                                                <!-- Switch editor: radio for OneOfMany/AtMostOne, checkbox for AnyOfMany -->
-                                                <template x-if="p.type === 'switch'">
-                                                    <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;">
-                                                        <template x-for="el in p.elements" :key="el.name">
-                                                            <label style="display:inline-flex;align-items:center;gap:5px;">
-                                                                <input :type="p.rule === 'anyOfMany' ? 'checkbox' : 'radio'"
-                                                                       :name="dev.name + '/' + p.name"
-                                                                       :checked="el.value"
-                                                                       :disabled="p.permission === 'ro'"
-                                                                       @change="indiPropsSetSwitch(dev.name, p, el, $event)">
-                                                                <span x-text="el.label || el.name"></span>
-                                                            </label>
+
+                                                        <!-- Switch editor: radio for OneOfMany/AtMostOne, checkbox for AnyOfMany -->
+                                                        <template x-if="p.type === 'switch'">
+                                                            <div class="indi-switch-row">
+                                                                <template x-for="el in p.elements" :key="el.name">
+                                                                    <label class="indi-switch-label">
+                                                                        <input :type="p.rule === 'anyOfMany' ? 'checkbox' : 'radio'"
+                                                                               :name="dev.name + '/' + p.name"
+                                                                               :checked="el.value"
+                                                                               :disabled="p.permission === 'ro'"
+                                                                               @change="indiPropsSetSwitch(dev.name, p, el, $event)">
+                                                                        <span x-text="el.label || el.name"></span>
+                                                                    </label>
+                                                                </template>
+                                                            </div>
                                                         </template>
-                                                    </div>
-                                                </template>
-                                                <!-- Text editor -->
-                                                <template x-if="p.type === 'text'">
-                                                    <div style="display:grid;grid-template-columns:auto 1fr auto;
-                                                                gap:6px 10px;align-items:center;font-size:12px;">
-                                                        <template x-for="el in p.elements" :key="el.name">
-                                                            <template x-if="true">
-                                                                <div style="display:contents;">
-                                                                    <span style="color:var(--text-muted);"
-                                                                          x-text="el.label || el.name"></span>
-                                                                    <input type="text"
-                                                                           :disabled="p.permission === 'ro'"
-                                                                           x-model="el._draft"
-                                                                           x-init="el._draft = el.value"
-                                                                           style="width:100%;">
-                                                                    <button class="btn btn-sm"
-                                                                            x-show="p.permission !== 'ro'"
-                                                                            @click="indiPropsSetText(dev.name, p, el)">
-                                                                        Set
-                                                                    </button>
-                                                                </div>
-                                                            </template>
+
+                                                        <!-- Text editor -->
+                                                        <template x-if="p.type === 'text'">
+                                                            <div class="indi-prop-rows">
+                                                                <template x-for="el in p.elements" :key="el.name">
+                                                                    <template x-if="true">
+                                                                        <div style="display:contents;">
+                                                                            <span class="indi-elem-label"
+                                                                                  x-text="el.label || el.name"></span>
+                                                                            <input type="text"
+                                                                                   class="input-sm indi-input"
+                                                                                   :disabled="p.permission === 'ro'"
+                                                                                   x-model="el._draft"
+                                                                                   x-init="el._draft = el.value">
+                                                                            <button class="btn btn-sm"
+                                                                                    x-show="p.permission !== 'ro'"
+                                                                                    @click="indiPropsSetText(dev.name, p, el)">
+                                                                                Set
+                                                                            </button>
+                                                                        </div>
+                                                                    </template>
+                                                                </template>
+                                                            </div>
                                                         </template>
-                                                    </div>
-                                                </template>
-                                                <!-- Light indicator (read-only by spec) -->
-                                                <template x-if="p.type === 'light'">
-                                                    <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;">
-                                                        <template x-for="el in p.elements" :key="el.name">
-                                                            <span>
-                                                                <span :style="
-                                                                    el.value === 'ok'    ? 'color:#86efac;' :
-                                                                    el.value === 'busy'  ? 'color:#fcd34d;' :
-                                                                    el.value === 'alert' ? 'color:#f87171;' :
-                                                                    'color:#9ca3af;'"
-                                                                    x-text="'●'"></span>
-                                                                <span style="color:var(--text-muted);margin-left:4px;"
-                                                                      x-text="el.label || el.name"></span>
-                                                            </span>
+
+                                                        <!-- Light indicator (read-only by spec) -->
+                                                        <template x-if="p.type === 'light'">
+                                                            <div class="indi-switch-row">
+                                                                <template x-for="el in p.elements" :key="el.name">
+                                                                    <span>
+                                                                        <span class="indi-state-dot"
+                                                                              :class="'indi-state-' + (el.value || 'idle')"
+                                                                              >●</span>
+                                                                        <span style="color:var(--text-muted);margin-left:4px;"
+                                                                              x-text="el.label || el.name"></span>
+                                                                    </span>
+                                                                </template>
+                                                            </div>
                                                         </template>
-                                                    </div>
-                                                </template>
-                                                <!-- BLOB placeholder -->
-                                                <template x-if="p.type === 'blob'">
-                                                    <div style="font-size:11px;color:var(--text-muted);">
-                                                        Binary payload (FITS / JPEG) — delivered via the image
-                                                        stream, not edited here.
+
+                                                        <!-- BLOB placeholder -->
+                                                        <template x-if="p.type === 'blob'">
+                                                            <div style="font-size:11px;color:var(--text-muted);">
+                                                                Binary payload (FITS / JPEG) — delivered via the image
+                                                                stream, not edited here.
+                                                            </div>
+                                                        </template>
                                                     </div>
                                                 </template>
                                             </div>
-                                        </template>
-                                    </div>
+                                        </div>
+                                    </template>
                                 </div>
-                            </template>
-                        </div>
-                    </template>
+                            </div>
+                        </template>
+                    </div>
 
                     <!-- Last error from a /set call -->
                     <div class="text-error" style="font-size:12px;margin-top:6px;"
