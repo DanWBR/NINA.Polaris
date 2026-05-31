@@ -15,7 +15,86 @@
   verbatim, only the prose around them was translated.
 -->
 
-# Current chapter: UNIF -- unified FILES + STUDIO + EDITOR into one tab
+# Current chapter: DBGLOG -- unified debug log with badge + panel
+
+> Field bug reports from the operator's Raspberry Pi were costing
+> a full round-trip every time: ask for INDI panel screenshot,
+> inspect DevTools console, guess, ship a fix, re-deploy, repeat.
+> The whole point of DBGLOG was to make that loop dead: every
+> meaningful event (server log, HTTP request, frontend toast,
+> client exception) gets dropped into one ring buffer the user
+> can export with a single click and attach to a bug report.
+
+## What shipped (DBGLOG-1..8)
+
+- **`LogService`** singleton: 5000-entry `ConcurrentQueue<LogEntry>`
+  with `Interlocked.Increment`-assigned monotonic Id, sensitivity
+  filter that redacts `password=` / `token=` / `Authorization
+  Bearer` / `polaris_session` before enqueue. JSONL streaming
+  export. 14 NUnit tests cover thread-safe concurrent appends,
+  head eviction past the cap, snapshot cursor windows,
+  truncated-flag, sanitisation, and event subscriber exceptions
+  not propagating to the caller.
+- **`LogBufferLoggerProvider`** + **`LogBufferLogger`**: bridge
+  every `ILogger<T>` in the app (the 35+ services that already
+  inject one) into LogService. Wired in Program.cs via
+  `builder.Logging.Services.AddSingleton<ILoggerProvider>(...)`
+  factory so it gets the singleton LogService. Drops Debug/Trace
+  to keep the buffer focused on actionable events.
+- **`RequestLoggingMiddleware`**: logs every HTTP request
+  (method, path, status, duration ms, remote IP) BEFORE
+  AuthMiddleware so 401s also surface. Skip-list covers static
+  assets + `/api/logs*` (loop-breaker — POSTing client logs
+  shouldn't itself log an HTTP entry).
+- **`LogsEndpoints`** under `/api/logs`: GET with filters
+  (since/max/level/source/search), GET `/export?format=jsonl|txt`
+  streamed via Response.Body, POST `/client` with batch
+  forwarding rate-limited to 100 entries per call, DELETE.
+- **WebSocket `debugLog` sub-object** on the 1Hz status payload
+  with per-connection cursor + 50-entry-per-tick cap +
+  truncated flag so reconnecting browsers know they missed
+  entries (and can backfill via the GET endpoint).
+- **Frontend hooks**: `apiFetch` wraps every response with
+  level-by-status logging (5xx=error, 4xx=warn, 2xx=info) plus
+  the catch branch for network failures; `toast()` mirrors every
+  notification into the log; `window.onerror` and
+  `unhandledrejection` capture exceptions with truncated stack
+  traces. Debounced batch POST to `/api/logs/client` (1s window
+  or 50 entries, whichever first).
+- **Header LOG badge**: grey when idle, amber on unread
+  warnings, red on unread errors. Click opens the fullscreen
+  panel and zeroes counters.
+- **Fullscreen log panel**: filters by level/source/search,
+  exports JSONL or TXT, clears via DELETE. Monospace rows
+  coloured by level with collapsible stack traces for exception
+  entries.
+
+## Deferred to follow-up
+
+- **DBGLOG-9** opt-in disk persistence (`UserProfile.LogToDisk`
+  + `LogRotatorService` writing JSONL to
+  `{LocalAppData}/NINA.Polaris/logs/` with 7-day retention).
+  Decided to ship the in-memory ring buffer first because that
+  covers ~95% of field bug-hunting: user reports a problem,
+  immediately exports the buffer, attaches to the report.
+- **DBGLOG-10** docs page + smoke verification checklist.
+
+## Verification
+
+- `dotnet build src/NINA.Polaris/NINA.Polaris.csproj` clean (0
+  errors, only pre-existing warnings).
+- 14 LogService tests fully written; test project compilation
+  blocked by a pre-existing `EquipmentManager.alpacaCache`
+  constructor mismatch in unrelated test files (not introduced
+  by this work).
+- Manual end-to-end: open browser, click LOG badge, panel
+  renders with HTTP entries from the current session and any
+  toasts that fired. Export JSONL downloads
+  `polaris-log-{timestamp}.jsonl`, parseable with `jq .`.
+
+---
+
+# Previous chapter: UNIF -- unified FILES + STUDIO + EDITOR into one tab
 
 > The browser had three separate tabs (FILES, STUDIO, EDITOR) that
 > all worked on the same universe -- FITS on disk -- but forced
