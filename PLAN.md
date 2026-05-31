@@ -15,7 +15,96 @@
   verbatim, only the prose around them was translated.
 -->
 
-# Current chapter: field-feedback fixes -- EAF + EFW + Mount Home
+# Current chapter: INDI telescope-interface spec compliance audit
+
+> User pointed at https://docs.indilib.org/interfaces/telescope-interface.html
+> and asked whether the existing INDI mount driver implements the
+> spec correctly. Audit identified three real gaps: TELESCOPE_HOME
+> was sending FIND=true AND GO=true simultaneously (invalid for a
+> OneOfMany switch -- some drivers silently no-op); no support for
+> TELESCOPE_TRACK_MODE (sidereal/solar/lunar selection -- required
+> by certain drivers before TRACK_ON actually engages); no support
+> for TIME_UTC (mount needs lat+lon+utc together to compute LST
+> for GoTo math).
+
+## What shipped
+
+### MOUNT-TRACKMODE: tracking-mode selection
+
+- New `TrackingMode` enum (`Sidereal | Solar | Lunar`) in
+  `NINA.Image.Interfaces` namespace alongside `ITelescope`.
+- `ITelescope.SetTrackingModeAsync(mode, ct)` with default-throw
+  `NotSupportedException` so backends opt in by overriding.
+- `MountCapabilities.SupportsTrackingModes` flag (defaulted true
+  for both GEM and AltAz presets).
+- **`IndiTelescope`** inspects the live `TELESCOPE_TRACK_MODE`
+  switch property, pre-fills all advertised elements as false,
+  lights up exactly the one matching the requested mode. Surfaces
+  driver-specific element-missing errors as actionable
+  `NotSupportedException` messages ("element 'TRACK_SOLAR' not
+  available, only [TRACK_SIDEREAL, TRACK_LUNAR]").
+- **`AlpacaTelescope`** maps to Alpaca's DriveRates enum
+  (0=Sidereal, 1=Lunar, 2=Solar -- different ordering from INDI,
+  mapped explicitly).
+- New `POST /api/telescope/tracking-mode` endpoint accepts
+  `{ mode: "sidereal" | "solar" | "lunar" }` (case-insensitive),
+  returns 501 on NotSupportedException.
+
+### MOUNT-TIME: UTC + offset push
+
+- `ITelescope.SetSiteTimeAsync(utc, offsetHoursFromUtc, ct)` with
+  default-throw.
+- `MountCapabilities.SupportsSetSiteTime` flag (true for both
+  presets).
+- **`IndiTelescope`** writes the `TIME_UTC` text vector with
+  ISO-8601 UTC timestamp + offset in hours east of UTC (e.g.
+  -3.0 for Brasilia UTC-3, +5.5 for India UTC+5:30).
+- **`AlpacaTelescope`** writes Alpaca's `utcdate` PUT with the
+  ISO-8601-with-Z format. Offset accepted for interface parity
+  with INDI but unused (Alpaca's mount surface only stores UTC).
+- New `POST /api/telescope/sync-time` endpoint, optional body
+  (when omitted, sends `DateTime.UtcNow` + host's current
+  local-time offset, the typical case after the operator clicks
+  "Sync time" post NTP/chrony).
+
+### MOUNT-HOME: TELESCOPE_HOME fix
+
+- Previously sent `FIND=true` AND `GO=true` in the same switch
+  vector. INDI spec defines TELESCOPE_HOME as a OneOfMany switch
+  with three elements (FIND = search via limit switches, SET =
+  mark current position AS home which is destructive, GO = drive
+  to stored home position) -- two-elements-true is invalid and
+  some drivers silently no-op'd.
+- Rewritten to inspect the live property, pre-fill all elements
+  false, pick the best available action (FIND preferred, GO
+  fallback, SET never picked because it would overwrite the
+  stored home with whatever garbage position the mount currently
+  has). Driver-missing-property surfaces as actionable
+  `NotSupportedException`.
+
+### EquipmentManager + WS payload
+
+- `telescope.capabilities` sub-object in the 1Hz status stream
+  gained `setSiteTime` and `trackingModes` flags so the
+  frontend can gate the matching UI controls per mount.
+
+## What's still pending (next session)
+
+- Frontend UI surfaces for the two new endpoints: tracking-mode
+  picker (radio chips: sidereal/solar/lunar) and a "Sync time"
+  button paired with the existing "Sync location" in the Mount
+  card.
+- TELESCOPE_SLEW_RATE: spec defines named slew rates
+  (SLEW_GUIDE/CENTERING/FIND/MAX) that drivers honour during
+  manual jog. Currently the jog buttons fire at the mount's
+  default rate without picking one explicitly. Adding a
+  default-rate setter before the first MoveNorth/South/East/West
+  call would give "Find" speed (sensible default for centering
+  workflows).
+
+---
+
+# Previous chapter: field-feedback fixes -- EAF + EFW + Mount Home
 
 > Bug reports from the operator's Pi after the property browser
 > shipped: ZWO EAF still disconnects mid-move occasionally; ZWO

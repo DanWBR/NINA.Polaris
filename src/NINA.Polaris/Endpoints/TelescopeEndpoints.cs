@@ -126,6 +126,69 @@ public static class TelescopeEndpoints {
             return Results.Ok(new { tracking = request.Enabled });
         });
 
+        // Push wall-clock UTC + the host's local-timezone offset into
+        // the mount via INDI TIME_UTC / Alpaca utcdate. Body is optional:
+        // when omitted, sends DateTime.UtcNow + the host's current
+        // offset (typical case: user just clicked "Sync time" after the
+        // RPi clock was set via NTP / chrony). Returns the actual values
+        // sent for UI feedback.
+        group.MapPost("/sync-time", async (EquipmentManager equip,
+                                            SyncTimeRequest? body) => {
+            if (equip.Telescope == null)
+                return Results.BadRequest(new { error = "No telescope selected" });
+            // Date.UtcNow forbidden in workflow scripts, fine here in a
+            // normal endpoint handler — request handlers ARE the place
+            // where ambient time is read.
+            var utc = body?.Utc ?? DateTime.UtcNow;
+            var offset = body?.OffsetHoursFromUtc
+                ?? TimeZoneInfo.Local.GetUtcOffset(utc).TotalHours;
+            try {
+                await equip.Telescope.SetSiteTimeAsync(utc, offset);
+                return Results.Ok(new {
+                    status = "synced",
+                    utc = utc.ToString("o"),
+                    offsetHoursFromUtc = offset
+                });
+            } catch (NotSupportedException ex) {
+                return Results.Json(new { error = ex.Message }, statusCode: 501);
+            } catch (Exception ex) {
+                return Results.Json(new { error = ex.Message }, statusCode: 500);
+            }
+        });
+
+        // Select the mount's tracking-rate model. Accepts the string
+        // "sidereal" (default for star tracking) / "solar" (Sun) /
+        // "lunar" (Moon's mean motion). Case-insensitive. Some INDI
+        // drivers REQUIRE a track mode set before TRACK_ON actually
+        // engages — without it the mount silently ignores enable, so
+        // this endpoint is also called by the connect-wizard once on
+        // first attach to force a known good baseline.
+        group.MapPost("/tracking-mode", async (EquipmentManager equip,
+                                                TrackingModeRequest request) => {
+            if (equip.Telescope == null)
+                return Results.BadRequest(new { error = "No telescope selected" });
+            var modeStr = (request.Mode ?? "sidereal").Trim().ToLowerInvariant();
+            var mode = modeStr switch {
+                "solar"    => NINA.Image.Interfaces.TrackingMode.Solar,
+                "lunar"    => NINA.Image.Interfaces.TrackingMode.Lunar,
+                "sidereal" => NINA.Image.Interfaces.TrackingMode.Sidereal,
+                _ => (NINA.Image.Interfaces.TrackingMode?)null
+            };
+            if (mode == null) {
+                return Results.BadRequest(new {
+                    error = $"Unknown tracking mode '{request.Mode}'. Use sidereal | solar | lunar."
+                });
+            }
+            try {
+                await equip.Telescope.SetTrackingModeAsync(mode.Value);
+                return Results.Ok(new { status = "set", mode = mode.Value.ToString() });
+            } catch (NotSupportedException ex) {
+                return Results.Json(new { error = ex.Message }, statusCode: 501);
+            } catch (Exception ex) {
+                return Results.Json(new { error = ex.Message }, statusCode: 500);
+            }
+        });
+
         group.MapPost("/abort", async (EquipmentManager equip) => {
             if (equip.Telescope == null)
                 return Results.BadRequest(new { error = "No telescope selected" });
@@ -217,4 +280,11 @@ public static class TelescopeEndpoints {
     /// {Elevation: 1200} body all work, falling back to the active
     /// profile for the missing values.</summary>
     public record SyncLocationRequest(double? Latitude, double? Longitude, double? Elevation);
+    /// <summary>Optional body for POST /sync-time. When fully null the
+    /// endpoint sends DateTime.UtcNow + the host's current local-time
+    /// offset; provide both fields to push an arbitrary moment.</summary>
+    public record SyncTimeRequest(DateTime? Utc, double? OffsetHoursFromUtc);
+    /// <summary>Body for POST /tracking-mode. Mode = "sidereal" |
+    /// "solar" | "lunar" (case-insensitive). Required field.</summary>
+    public record TrackingModeRequest(string Mode);
 }

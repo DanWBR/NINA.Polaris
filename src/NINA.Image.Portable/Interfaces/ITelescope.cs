@@ -111,6 +111,40 @@ public interface ITelescope {
             double elevationMetres, CancellationToken ct = default) =>
         throw new NotSupportedException(
             "SetSiteLocation not supported by this mount driver");
+
+    /// <summary>Push UTC time + offset-from-UTC into the mount.
+    /// Companion to <see cref="SetSiteLocationAsync"/>: mounts use
+    /// (lat, lon, utc) together to compute local sidereal time, which
+    /// drives every RA → alt/az conversion. A correct location with a
+    /// stale clock causes the same systematic GoTo error as a wrong
+    /// location with a correct clock — both inputs need to be right.
+    ///
+    /// utc is the wall clock in UTC; offsetHoursFromUtc is the local
+    /// timezone offset in hours east of UTC (INDI standard, e.g.
+    /// -3.0 for Brasília UTC-3, +1.0 for CET).</summary>
+    Task SetSiteTimeAsync(DateTime utc, double offsetHoursFromUtc,
+            CancellationToken ct = default) =>
+        throw new NotSupportedException(
+            "SetSiteTime not supported by this mount driver");
+
+    /// <summary>Select the tracking rate model. Sidereal follows the
+    /// stars (default), Lunar follows the Moon's mean motion, Solar
+    /// follows the Sun. Required by some INDI drivers BEFORE
+    /// <see cref="SetTrackingAsync"/> can actually engage — without
+    /// a mode selected they silently ignore TRACK_ON. Throws on
+    /// backends without the capability; UI checks
+    /// <see cref="MountCapabilities.SupportsTrackingModes"/>.</summary>
+    Task SetTrackingModeAsync(TrackingMode mode, CancellationToken ct = default) =>
+        throw new NotSupportedException(
+            "SetTrackingMode not supported by this mount driver");
+}
+
+/// <summary>Tracking rate models defined by the INDI
+/// TELESCOPE_TRACK_MODE standard property.</summary>
+public enum TrackingMode {
+    Sidereal,
+    Solar,
+    Lunar
 }
 
 /// <summary>Optional-feature flags. Used by the UI to decide which
@@ -122,7 +156,9 @@ public record MountCapabilities(
     bool SupportsPierSide,
     bool SupportsManualJog,
     bool SupportsFindHome = false,
-    bool SupportsSetSiteLocation = false) {
+    bool SupportsSetSiteLocation = false,
+    bool SupportsSetSiteTime = false,
+    bool SupportsTrackingModes = false) {
     /// <summary>Typical equatorial GEM profile (INDI / ASCOM / direct
     /// WiFi serial-protocol mounts), everything available.
     /// FindHome defaults true here -- most GEM mounts expose it via
@@ -132,7 +168,8 @@ public record MountCapabilities(
     public static readonly MountCapabilities GermanEquatorial = new(
         SupportsPark: true, SupportsTrackingToggle: true,
         SupportsSync: true, SupportsPierSide: true, SupportsManualJog: true,
-        SupportsFindHome: true, SupportsSetSiteLocation: true);
+        SupportsFindHome: true, SupportsSetSiteLocation: true,
+        SupportsSetSiteTime: true, SupportsTrackingModes: true);
 
     /// <summary>Typical alt-az / fork profile (Sky-Watcher AZ-GTi,
     /// Celestron NexStar SE, iOptron MiniTower). No pier side; the
@@ -140,5 +177,6 @@ public record MountCapabilities(
     public static readonly MountCapabilities AltAz = new(
         SupportsPark: true, SupportsTrackingToggle: true,
         SupportsSync: true, SupportsPierSide: false, SupportsManualJog: true,
-        SupportsFindHome: true, SupportsSetSiteLocation: true);
+        SupportsFindHome: true, SupportsSetSiteLocation: true,
+        SupportsSetSiteTime: true, SupportsTrackingModes: true);
 }

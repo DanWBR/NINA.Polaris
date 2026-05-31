@@ -110,17 +110,44 @@ public class IndiTelescope : ITelescope {
     }
 
     /// <summary>Drive the mount to its mechanical home. The INDI
-    /// standard property is <c>TELESCOPE_HOME</c> with a single
-    /// <c>FIND</c> switch (named that way in the INDI v1.9+ spec; some
-    /// older drivers used <c>GO</c> instead). We send both keys in the
-    /// same vector so either driver convention picks it up; harmless
-    /// when a driver only knows one of the two names.</summary>
+    /// standard <c>TELESCOPE_HOME</c> property has THREE OneOfMany
+    /// switches: <c>FIND</c> (search for home using limit switches /
+    /// encoder reset), <c>SET</c> (mark current position AS home —
+    /// destructive, never call from this flow), <c>GO</c> (drive to
+    /// stored home position).
+    ///
+    /// Earlier impl sent FIND=true AND GO=true together, which is
+    /// invalid for a OneOfMany switch and confused drivers — some
+    /// silently did nothing. Now we inspect the live property to see
+    /// which elements the driver actually advertises and pick the
+    /// best available action: FIND if present (true homing routine),
+    /// else GO (drive to saved position), never SET.</summary>
     public async Task FindHomeAsync(CancellationToken ct = default) {
-        await _client.SetSwitchAsync(DeviceName, "TELESCOPE_HOME",
-            new Dictionary<string, bool> {
-                ["FIND"] = true,
-                ["GO"] = true
-            }, ct);
+        var existing = _client.GetProperty(DeviceName, "TELESCOPE_HOME") as Protocol.IndiSwitchProperty;
+        // Drivers that don't expose TELESCOPE_HOME at all: surface as
+        // a clean NotSupportedException so the endpoint returns 501
+        // and the toast tells the user the mount can't home.
+        if (existing == null) {
+            throw new NotSupportedException(
+                $"Mount '{DeviceName}' does not expose TELESCOPE_HOME — driver doesn't support Find Home.");
+        }
+        // OneOfMany payload: pre-fill ALL elements as false, then
+        // light up exactly one. SET is intentionally never chosen
+        // here (it would overwrite the stored home with whatever
+        // garbage position the mount is currently at).
+        var payload = existing.Values.Keys.ToDictionary(k => k, _ => false);
+        string? chosen = null;
+        foreach (var preferred in new[] { "FIND", "GO" }) {
+            var match = payload.Keys.FirstOrDefault(
+                k => string.Equals(k, preferred, StringComparison.OrdinalIgnoreCase));
+            if (match != null) { chosen = match; break; }
+        }
+        if (chosen == null) {
+            throw new NotSupportedException(
+                $"Mount '{DeviceName}' TELESCOPE_HOME exposes only [{string.Join(", ", payload.Keys)}] — no FIND or GO element available.");
+        }
+        payload[chosen] = true;
+        await _client.SetSwitchAsync(DeviceName, "TELESCOPE_HOME", payload, ct);
     }
 
     /// <summary>Push the observer's geographic coordinates into the
@@ -244,5 +271,63 @@ public class IndiTelescope : ITelescope {
 
     public async Task StopMotionAsync(CancellationToken ct = default) {
         await AbortSlewAsync(ct);
+    }
+
+    /// <summary>Push UTC + offset into the mount via the INDI standard
+    /// <c>TIME_UTC</c> text property. Elements <c>UTC</c> (ISO-8601
+    /// UTC timestamp) and <c>OFFSET</c> (local timezone offset in
+    /// hours east of UTC).
+    ///
+    /// Mount uses (lat, lon, utc) together to compute local sidereal
+    /// time — without it the GoTo math goes off by ~15 arcseconds per
+    /// wall-clock second of error. Pair with SetSiteLocation after
+    /// connect.</summary>
+    public async Task SetSiteTimeAsync(DateTime utc, double offsetHoursFromUtc,
+            CancellationToken ct = default) {
+        // INDI wants ISO-8601 with no timezone marker (it's implicit
+        // UTC per the property name). The standard format used by
+        // libindi internally is yyyy-MM-ddTHH:mm:ss; we add fractional
+        // seconds since most drivers tolerate them and they help when
+        // the offset is itself a non-integer (e.g. India UTC+5:30).
+        var utcStr = utc.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss",
+            System.Globalization.CultureInfo.InvariantCulture);
+        var offsetStr = offsetHoursFromUtc.ToString("F2",
+            System.Globalization.CultureInfo.InvariantCulture);
+        await _client.SetTextAsync(DeviceName, "TIME_UTC",
+            new Dictionary<string, string> {
+                ["UTC"]    = utcStr,
+                ["OFFSET"] = offsetStr
+            }, ct);
+    }
+
+    /// <summary>Select tracking rate model via the INDI standard
+    /// <c>TELESCOPE_TRACK_MODE</c> switch (OneOfMany). Elements per
+    /// spec: <c>TRACK_SIDEREAL</c>, <c>TRACK_SOLAR</c>,
+    /// <c>TRACK_LUNAR</c>, plus an optional <c>TRACK_CUSTOM</c> that
+    /// requires a separate TELESCOPE_TRACK_RATE write. Drivers may
+    /// not implement every mode — we pre-fill ALL advertised elements
+    /// as false, then light up the one matching the user's choice.
+    /// If the chosen mode isn't on this driver, NotSupportedException
+    /// surfaces as a 501 + actionable toast.</summary>
+    public async Task SetTrackingModeAsync(NINA.Image.Interfaces.TrackingMode mode,
+            CancellationToken ct = default) {
+        var existing = _client.GetProperty(DeviceName, "TELESCOPE_TRACK_MODE") as Protocol.IndiSwitchProperty;
+        if (existing == null) {
+            throw new NotSupportedException(
+                $"Mount '{DeviceName}' does not expose TELESCOPE_TRACK_MODE — driver doesn't support tracking-mode selection.");
+        }
+        var wanted = mode switch {
+            NINA.Image.Interfaces.TrackingMode.Solar  => "TRACK_SOLAR",
+            NINA.Image.Interfaces.TrackingMode.Lunar  => "TRACK_LUNAR",
+            _                                          => "TRACK_SIDEREAL"
+        };
+        var match = existing.Values.Keys.FirstOrDefault(
+            k => string.Equals(k, wanted, StringComparison.OrdinalIgnoreCase));
+        if (match == null) {
+            throw new NotSupportedException(
+                $"Mount '{DeviceName}' TELESCOPE_TRACK_MODE has no '{wanted}' element. Available: [{string.Join(", ", existing.Values.Keys)}]");
+        }
+        var payload = existing.Values.Keys.ToDictionary(k => k, k => k == match);
+        await _client.SetSwitchAsync(DeviceName, "TELESCOPE_TRACK_MODE", payload, ct);
     }
 }

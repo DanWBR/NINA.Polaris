@@ -529,7 +529,9 @@ public class EquipmentManager : IDisposable {
                     pierSide = caps.SupportsPierSide,
                     manualJog = caps.SupportsManualJog,
                     findHome = caps.SupportsFindHome,
-                    setSiteLocation = caps.SupportsSetSiteLocation
+                    setSiteLocation = caps.SupportsSetSiteLocation,
+                    setSiteTime = caps.SupportsSetSiteTime,
+                    trackingModes = caps.SupportsTrackingModes
                 }
             };
         }

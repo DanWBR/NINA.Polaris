@@ -219,6 +219,36 @@ public sealed class AlpacaTelescope : ITelescope, IDisposable {
             }, ct);
     }
 
+    /// <summary>Push UTC date to the mount via Alpaca's <c>utcdate</c>
+    /// PUT. Alpaca expects ISO-8601 with a trailing Z. Offset is NOT
+    /// part of ASCOM's mount surface — the mount itself stores UTC
+    /// and derives local time from <see cref="SetSiteLocationAsync"/>
+    /// plus host timezone if relevant. So <paramref name="offsetHoursFromUtc"/>
+    /// is accepted for interface parity with the INDI side but ignored.</summary>
+    public Task SetSiteTimeAsync(DateTime utc, double offsetHoursFromUtc,
+            CancellationToken ct = default) =>
+        _client.PutAsync("utcdate",
+            new Dictionary<string, string> {
+                ["UTCDate"] = utc.ToUniversalTime().ToString(
+                    "yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture)
+            }, ct);
+
+    /// <summary>Alpaca tracking-rate model: <c>trackingrate</c> PUT
+    /// takes a DriveRates enum (0=Sidereal, 1=Lunar, 2=Solar, 3=King).
+    /// Mismatches with the INDI ordering, so we map explicitly.</summary>
+    public Task SetTrackingModeAsync(NINA.Image.Interfaces.TrackingMode mode,
+            CancellationToken ct = default) {
+        var rate = mode switch {
+            NINA.Image.Interfaces.TrackingMode.Solar => 2,
+            NINA.Image.Interfaces.TrackingMode.Lunar => 1,
+            _                                        => 0  // Sidereal
+        };
+        return _client.PutAsync("trackingrate",
+            new Dictionary<string, string> {
+                ["TrackingRate"] = rate.ToString(CultureInfo.InvariantCulture)
+            }, ct);
+    }
+
     public Task SetTrackingAsync(bool enabled, CancellationToken ct = default) =>
         _client.PutAsync("tracking",
             new Dictionary<string, string> { ["Tracking"] = enabled ? "true" : "false" }, ct);
