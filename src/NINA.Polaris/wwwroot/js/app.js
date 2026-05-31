@@ -116,7 +116,13 @@ function ninaApp() {
         mount: {
             ra: null, dec: null, alt: null, az: null,
             tracking: false, slewing: false, parked: false,
-            pierSide: 'unknown', connected: false
+            pierSide: 'unknown', connected: false,
+            // Capabilities flags from MountCapabilities.cs, populated
+            // each WS tick. Drives per-button visibility (Park, Find
+            // Home, pier side indicator) so AltAz / non-GEM mounts
+            // don't show buttons that would 501 if clicked.
+            capabilities: { park: true, trackingToggle: true, sync: true,
+                            pierSide: true, manualJog: true, findHome: false }
         },
 
         // Floating mount control inside the Sky tab. Position lives
@@ -12953,19 +12959,62 @@ function ninaApp() {
         },
 
         async setFilter(filterName) {
+            // Immediate ack so the user gets feedback that the click
+            // registered; the server-side wait can take a few seconds
+            // and a silent UI would feel broken.
+            this.toast('Moving to filter: ' + filterName, 'info');
             try {
-                await this.apiPost(`/api/filterwheel/filter/${encodeURIComponent(filterName)}`);
-                this.toast('Moving to filter: ' + filterName, 'info');
+                // The endpoint blocks (up to 30 s) until INDI reports
+                // the wheel settled — that's where we get the real
+                // "done" signal to surface to the user.
+                const r = await this.apiPost(
+                    `/api/filterwheel/filter/${encodeURIComponent(filterName)}`);
+                if (r?.settled) {
+                    this.toast('Filter: ' + (r.filter || filterName), 'ok');
+                } else {
+                    this.toast(
+                        'Filter wheel still moving — ' + (r?.message || 'no settle ack'),
+                        'warn');
+                }
             } catch (e) {
-                this.toast('Filter change failed: ' + e.message, 'error');
+                this.toast('Filter change failed: ' + (e?.message || e), 'error');
             }
         },
 
         async setFilterPosition(slot) {
+            this.toast('Moving to slot: ' + slot, 'info');
             try {
-                await this.apiPost(`/api/filterwheel/position/${slot}`);
+                const r = await this.apiPost(`/api/filterwheel/position/${slot}`);
+                if (r?.settled) {
+                    this.toast(
+                        'Filter wheel at slot ' + (r.position || slot)
+                            + (r.currentFilter ? ' (' + r.currentFilter + ')' : ''),
+                        'ok');
+                } else {
+                    this.toast(
+                        'Filter wheel still moving — ' + (r?.message || 'no settle ack'),
+                        'warn');
+                }
             } catch (e) {
-                this.toast('Filter change failed', 'error');
+                this.toast('Filter change failed: ' + (e?.message || e), 'error');
+            }
+        },
+
+        // MOUNT: send the telescope to its mechanical home position.
+        // Capability-gated (button only renders when the active mount
+        // reports SupportsFindHome). Confirms before firing because
+        // home moves are typically large + irreversible until the
+        // user takes another action.
+        async telescopeFindHome() {
+            if (!confirm('Send the mount to its home position?\n\n' +
+                         'The mount will slew at full speed to its mechanical ' +
+                         'home (CW down, RA/Dec hard stops). Use this only when ' +
+                         'you have clearance for the move.')) return;
+            try {
+                await this.apiPost('/api/telescope/find-home');
+                this.toast('Mount moving to home', 'info');
+            } catch (e) {
+                this.toast('Find Home failed: ' + (e?.message || e), 'error');
             }
         },
 
@@ -17409,7 +17458,12 @@ function ninaApp() {
                     alt: eq.telescope.alt, az: eq.telescope.az,
                     tracking: eq.telescope.tracking, slewing: eq.telescope.slewing,
                     parked: eq.telescope.parked, pierSide: eq.telescope.pierSide,
-                    connected: eq.telescope.connected
+                    connected: eq.telescope.connected,
+                    // MOUNT: capabilities sub-object gates per-button UI
+                    // (Park, Find Home, pier side). Fall back to current
+                    // value when the payload doesn't carry it (e.g.
+                    // alternative backend that hasn't been updated).
+                    capabilities: eq.telescope.capabilities || this.mount.capabilities
                 });
                 // Same "disconnect-doesn't-stick" guard as the camera
                 // above, the EquipmentManager keeps Telescope!=null

@@ -40,6 +40,24 @@ public class IndiFocuser : NINA.Image.Interfaces.IFocuser {
     }
 
     public async Task MoveAbsoluteAsync(int position, CancellationToken ct = default) {
+        // Pre-flight: refuse to send to a disconnected device. Some
+        // drivers (ZWO EAF) silently accept a number vector while
+        // disconnected and only error out when the next operation
+        // probes CONNECTION -- by then the UI thinks the move
+        // succeeded when it never started.
+        if (!IsConnected) {
+            throw new InvalidOperationException(
+                $"Focuser '{DeviceName}' is not connected. Connect it from the RIGS tab before moving.");
+        }
+        // Also refuse moves while a previous move is in flight. The
+        // EAF driver in particular re-interprets the second
+        // FOCUS_ABSOLUTE_POSITION write mid-flight as a relative
+        // command, which can over-shoot and trip the limit switch
+        // (visible to the user as "disconnect on move").
+        if (IsMoving) {
+            throw new InvalidOperationException(
+                $"Focuser '{DeviceName}' is already moving. Wait for the current move to settle.");
+        }
         // Clamp into the driver-reported travel range. Writing a value
         // outside [0, MaxPosition] is a frequent reason INDI focuser
         // drivers (ZWO EAF especially) flip CONNECTION.PARK off as an
@@ -51,6 +69,11 @@ public class IndiFocuser : NINA.Image.Interfaces.IFocuser {
         var max = MaxPosition;
         if (max > 0) target = Math.Clamp(target, 0, max);
         else        target = Math.Max(0, target);
+        // Short-circuit moves to the current position. Some EAF
+        // firmware revisions treat "move to where you already are"
+        // as an error condition and toggle CONNECTION off as the
+        // response. Cheap to guard, expensive to recover from.
+        if (target == Position) return;
         await _client.SetNumberAsync(DeviceName, "ABS_FOCUS_POSITION",
             new Dictionary<string, double> { ["FOCUS_ABSOLUTE_POSITION"] = target }, ct);
     }

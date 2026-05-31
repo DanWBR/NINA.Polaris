@@ -184,6 +184,17 @@ public sealed class AlpacaTelescope : ITelescope, IDisposable {
     public Task UnparkAsync(CancellationToken ct = default) =>
         _client.PutAsync("unpark", null, ct);
 
+    /// <summary>ASCOM Alpaca exposes home-find as the bare
+    /// <c>findhome</c> action with no parameters. Drivers that don't
+    /// implement it return a NotImplementedException which our
+    /// PutAsync surfaces as an HTTP error -- caller sees the same
+    /// 501-shaped response as if the capability flag had hidden the
+    /// button. Caller should check Capabilities.SupportsFindHome
+    /// first; some Alpaca drivers report CanFindHome=false even though
+    /// the endpoint exists.</summary>
+    public Task FindHomeAsync(CancellationToken ct = default) =>
+        _client.PutAsync("findhome", null, ct);
+
     public Task SetTrackingAsync(bool enabled, CancellationToken ct = default) =>
         _client.PutAsync("tracking",
             new Dictionary<string, string> { ["Tracking"] = enabled ? "true" : "false" }, ct);

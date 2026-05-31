@@ -25,9 +25,19 @@ public static class FilterWheelEndpoints {
                 return Results.BadRequest(new { error = "No filter wheel connected" });
 
             await equip.FilterWheel.SetPositionAsync(slot);
+            // Wait until the wheel actually settles on the slot (or
+            // times out at 30 s -- ZWO EFWs typically finish in 2-4 s
+            // but slower 7-pos wheels can take longer). Returns the
+            // observed final position so the UI can confirm the move
+            // landed where it asked.
+            var settled = await WaitForFilterSettleAsync(equip.FilterWheel, slot, TimeSpan.FromSeconds(30));
             return Results.Ok(new {
-                position = slot,
-                message = $"Moving to filter slot {slot}"
+                position = equip.FilterWheel.Position,
+                currentFilter = equip.FilterWheel.CurrentFilterName,
+                settled,
+                message = settled
+                    ? $"Filter wheel arrived at slot {slot}"
+                    : $"Filter wheel still moving (timeout); last reported slot {equip.FilterWheel.Position}"
             });
         });
 
@@ -37,9 +47,21 @@ public static class FilterWheelEndpoints {
 
             try {
                 await equip.FilterWheel.SetFilterByNameAsync(filterName);
+                // Block the response until the wheel reports the new
+                // filter as current (or 30 s). Without this the
+                // frontend's toast says "Moving to X" but the user
+                // never gets a confirmation that the move actually
+                // completed -- INDI's BUSY → OK state transition is
+                // the only ack we have.
+                var targetPos = equip.FilterWheel.Position;
+                var settled = await WaitForFilterSettleAsync(equip.FilterWheel, targetPos, TimeSpan.FromSeconds(30));
                 return Results.Ok(new {
-                    filter = filterName,
-                    message = $"Moving to filter '{filterName}'"
+                    filter = equip.FilterWheel.CurrentFilterName,
+                    position = equip.FilterWheel.Position,
+                    settled,
+                    message = settled
+                        ? $"Filter wheel set to '{equip.FilterWheel.CurrentFilterName}'"
+                        : $"Filter wheel still moving (timeout); current '{equip.FilterWheel.CurrentFilterName}'"
                 });
             } catch (InvalidOperationException ex) {
                 return Results.BadRequest(new { error = ex.Message });
@@ -108,5 +130,36 @@ public static class FilterWheelEndpoints {
             await equip.FilterWheel.DisconnectAsync();
             return Results.Ok(new { connected = false });
         });
+    }
+
+    /// <summary>Poll <see cref="IFilterWheel.IsMoving"/> until the
+    /// wheel reports settled at the expected slot (or close enough --
+    /// some drivers report Position before clearing IsMoving by a few
+    /// hundred ms). 50 ms cadence balances responsiveness vs. CPU on
+    /// the Pi. Returns true when settled, false on timeout.
+    ///
+    /// Without this wait the /position and /filter responses returned
+    /// immediately after SetPositionAsync queued the INDI vector, so
+    /// the frontend toasted "Moving to G" but never knew if it
+    /// finished. The blocking wait lets the UI surface success or a
+    /// timeout warning to the user without polling /status manually.</summary>
+    private static async Task<bool> WaitForFilterSettleAsync(
+            NINA.Image.Interfaces.IFilterWheel fw, int targetSlot, TimeSpan timeout) {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline) {
+            try {
+                // Settled when IsMoving cleared. Position check is an
+                // extra guard for drivers that don't drop the BUSY
+                // flag promptly -- some report state=OK on the wheel
+                // landing within a slot of the request, but the
+                // settled position only updates a tick later.
+                if (!fw.IsMoving && fw.Position == targetSlot) return true;
+            } catch {
+                // A transient read failure shouldn't break the wait;
+                // try again on the next tick.
+            }
+            await Task.Delay(50);
+        }
+        return false;
     }
 }

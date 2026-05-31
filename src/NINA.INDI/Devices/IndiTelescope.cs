@@ -109,6 +109,20 @@ public class IndiTelescope : ITelescope {
             new Dictionary<string, bool> { ["PARK"] = true, ["UNPARK"] = false }, ct);
     }
 
+    /// <summary>Drive the mount to its mechanical home. The INDI
+    /// standard property is <c>TELESCOPE_HOME</c> with a single
+    /// <c>FIND</c> switch (named that way in the INDI v1.9+ spec; some
+    /// older drivers used <c>GO</c> instead). We send both keys in the
+    /// same vector so either driver convention picks it up; harmless
+    /// when a driver only knows one of the two names.</summary>
+    public async Task FindHomeAsync(CancellationToken ct = default) {
+        await _client.SetSwitchAsync(DeviceName, "TELESCOPE_HOME",
+            new Dictionary<string, bool> {
+                ["FIND"] = true,
+                ["GO"] = true
+            }, ct);
+    }
+
     public async Task UnparkAsync(CancellationToken ct = default) {
         await _client.SetSwitchAsync(DeviceName, "TELESCOPE_PARK",
             new Dictionary<string, bool> { ["PARK"] = false, ["UNPARK"] = true }, ct);

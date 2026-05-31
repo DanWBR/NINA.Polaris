@@ -15,7 +15,70 @@
   verbatim, only the prose around them was translated.
 -->
 
-# Current chapter: INDIPROP -- native INDI property browser
+# Current chapter: field-feedback fixes -- EAF + EFW + Mount Home
+
+> Bug reports from the operator's Pi after the property browser
+> shipped: ZWO EAF still disconnects mid-move occasionally; ZWO
+> EFW changes filter without surfacing acknowledgement to the UI
+> ("did it move? did it fail?"); the Mount card had no Find Home
+> button so unattended return-to-park flows were impossible.
+
+## What shipped
+
+### MOUNT: Find Home button
+
+- New `FindHomeAsync` on `ITelescope` with default impl that
+  throws `NotSupportedException`, so backends only opt in by
+  overriding.
+- `MountCapabilities` record gains `SupportsFindHome` flag,
+  defaulted true for both GEM and AltAz presets.
+- **`IndiTelescope`** sends `TELESCOPE_HOME` switch vector with
+  both `FIND` and `GO` keys to cover the INDI v1.9+ naming + the
+  older `GO` convention.
+- **`AlpacaTelescope`** calls Alpaca `findhome`.
+- New `POST /api/telescope/find-home` endpoint surfaces
+  `NotSupportedException` as 501.
+- WS payload `equipment.telescope.capabilities` exposes the flags
+  so the UI button is hidden on backends that don't support it.
+- New `telescopeFindHome()` frontend method with confirm dialog
+  + toast feedback.
+- Home button rendered next to Park / Unpark in the Mount card,
+  capability-gated via `x-show="mount.capabilities?.findHome"`.
+
+### EFW: filter-change acknowledgement
+
+- `/api/filterwheel/position/{slot}` and
+  `/api/filterwheel/filter/{name}` now **block** (up to 30 s)
+  until INDI reports the wheel settled at the requested position
+  (`IsMoving == false && Position == target`). Returns
+  `{ settled, position, currentFilter, message }`.
+- Frontend `setFilter` / `setFilterPosition` show an immediate
+  "Moving…" toast on click, then a green "Filter: G" toast on
+  successful settle or an amber "still moving" warning on
+  timeout. The user can finally tell whether the move succeeded.
+
+### EAF: defensive guards against driver crash-on-move
+
+- `IndiFocuser.MoveAbsoluteAsync` now:
+  - throws if `!IsConnected` (was silently accepting the write,
+    which let ZWO EAF tear down CONNECTION on next probe)
+  - throws if `IsMoving` (rejecting overlapping moves that the
+    EAF firmware was misinterpreting as relative commands and
+    overshooting the limit switch)
+  - short-circuits when `target == Position` (some EAF firmware
+    revisions treat "move to where you already are" as an error
+    and disconnect themselves)
+- All three guards surface as actionable error messages the user
+  sees in the toast + the debug log.
+
+## Verification
+
+- `dotnet build` clean.
+- Manual smoke deferred to user on the Pi.
+
+---
+
+# Previous chapter: INDIPROP -- native INDI property browser
 
 > User's Raspberry Pi distribution (Pi OS / Debian Bookworm) no
 > longer ships the standalone `indi_control_panel` Qt binary that

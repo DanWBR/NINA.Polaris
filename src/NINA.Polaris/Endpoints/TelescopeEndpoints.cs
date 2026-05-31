@@ -66,6 +66,24 @@ public static class TelescopeEndpoints {
             return Results.Ok(new { status = "unparking" });
         });
 
+        // Drive the mount to its mechanical home position. Surfaces
+        // NotSupportedException as a 501 + actionable error message
+        // so the UI can toast "this mount doesn't support Find Home"
+        // instead of failing silently. Most GEM and alt-az mounts
+        // honour it via INDI TELESCOPE_HOME / Alpaca findhome.
+        group.MapPost("/find-home", async (EquipmentManager equip) => {
+            if (equip.Telescope == null)
+                return Results.BadRequest(new { error = "No telescope selected" });
+            try {
+                await equip.Telescope.FindHomeAsync();
+                return Results.Ok(new { status = "homing" });
+            } catch (NotSupportedException ex) {
+                return Results.Json(new { error = ex.Message }, statusCode: 501);
+            } catch (Exception ex) {
+                return Results.Json(new { error = ex.Message }, statusCode: 500);
+            }
+        });
+
         group.MapPost("/tracking", async (EquipmentManager equip, TrackingRequest request) => {
             if (equip.Telescope == null)
                 return Results.BadRequest(new { error = "No telescope selected" });

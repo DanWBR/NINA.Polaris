@@ -83,6 +83,17 @@ public interface ITelescope {
     Task MoveEastAsync(CancellationToken ct = default);
     Task MoveWestAsync(CancellationToken ct = default);
     Task StopMotionAsync(CancellationToken ct = default);
+
+    /// <summary>Send the mount to its mechanical home position. Most
+    /// GoTo mounts have a defined "home" pose (CW down, RA/Dec hard
+    /// stops) used for unattended power-up, dawn dew-cap close, polar
+    /// alignment routines, etc. Default impl throws so that the
+    /// endpoint surfaces a clean 501 on backends without home support
+    /// rather than silently no-op; UI checks
+    /// <see cref="MountCapabilities.SupportsFindHome"/> before showing
+    /// the button.</summary>
+    Task FindHomeAsync(CancellationToken ct = default) =>
+        throw new NotSupportedException("FindHome not supported by this mount driver");
 }
 
 /// <summary>Optional-feature flags. Used by the UI to decide which
@@ -92,17 +103,24 @@ public record MountCapabilities(
     bool SupportsTrackingToggle,
     bool SupportsSync,
     bool SupportsPierSide,
-    bool SupportsManualJog) {
+    bool SupportsManualJog,
+    bool SupportsFindHome = false) {
     /// <summary>Typical equatorial GEM profile (INDI / ASCOM / direct
-    /// WiFi serial-protocol mounts), everything available.</summary>
+    /// WiFi serial-protocol mounts), everything available.
+    /// FindHome defaults true here -- most GEM mounts expose it via
+    /// TELESCOPE_HOME (INDI) or CanFindHome (ASCOM). Backends that
+    /// can't honour it will surface 501 from the endpoint, which the
+    /// UI shows as an actionable toast.</summary>
     public static readonly MountCapabilities GermanEquatorial = new(
         SupportsPark: true, SupportsTrackingToggle: true,
-        SupportsSync: true, SupportsPierSide: true, SupportsManualJog: true);
+        SupportsSync: true, SupportsPierSide: true, SupportsManualJog: true,
+        SupportsFindHome: true);
 
     /// <summary>Typical alt-az / fork profile (Sky-Watcher AZ-GTi,
     /// Celestron NexStar SE, iOptron MiniTower). No pier side; the
     /// rest applies.</summary>
     public static readonly MountCapabilities AltAz = new(
         SupportsPark: true, SupportsTrackingToggle: true,
-        SupportsSync: true, SupportsPierSide: false, SupportsManualJog: true);
+        SupportsSync: true, SupportsPierSide: false, SupportsManualJog: true,
+        SupportsFindHome: true);
 }

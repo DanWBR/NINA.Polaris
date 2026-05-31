@@ -3429,6 +3429,12 @@
                                     <span class="text-muted" style="font-size:11px">Tracking</span>
                                     <button class="btn btn-sm" @click="parkMount()" :disabled="mount.parked">Park</button>
                                     <button class="btn btn-sm" @click="unparkMount()" :disabled="!mount.parked">Unpark</button>
+                                    <button class="btn btn-sm" @click="telescopeFindHome()"
+                                            :disabled="!mount.connected || mount.parked"
+                                            x-show="mount.capabilities?.findHome"
+                                            title="Send the mount to its mechanical home position (CW down, RA/Dec hard stops). Confirm before clicking.">
+                                        Home
+                                    </button>
                                 </div>
                             </div>
                         </div>

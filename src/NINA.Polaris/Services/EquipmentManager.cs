@@ -506,6 +506,11 @@ public class EquipmentManager : IDisposable {
         }
 
         if (Telescope != null) {
+            // Capabilities sub-object gates per-button UI affordances
+            // (Park / Find Home / pier-side indicator). Sent every
+            // tick so a hot-plug rig switch flips the buttons without
+            // a UI reload.
+            var caps = Telescope.Capabilities;
             status["telescope"] = new {
                 name = Telescope.DeviceName,
                 connected = Telescope.IsConnected,
@@ -516,7 +521,15 @@ public class EquipmentManager : IDisposable {
                 tracking = Telescope.IsTracking,
                 slewing = Telescope.IsSlewing,
                 parked = Telescope.IsParked,
-                pierSide = Telescope.SideOfPier.ToString()
+                pierSide = Telescope.SideOfPier.ToString(),
+                capabilities = new {
+                    park = caps.SupportsPark,
+                    trackingToggle = caps.SupportsTrackingToggle,
+                    sync = caps.SupportsSync,
+                    pierSide = caps.SupportsPierSide,
+                    manualJog = caps.SupportsManualJog,
+                    findHome = caps.SupportsFindHome
+                }
             };
         }
 
