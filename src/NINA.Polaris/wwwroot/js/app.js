@@ -13237,6 +13237,39 @@ function ninaApp() {
             }
         },
 
+        // Strain-wave-mount workaround. Drivers for the ZWO AM3 and
+        // similar harmonic mounts lose their internal position
+        // reference on every power cycle: a plain Find Home does
+        // nothing because the driver has no idea where "home" is
+        // relative to current encoder counts. A Park (forces the
+        // driver to adopt current position as a known state) +
+        // Unpark (releases motion) + Home (now reachable) sequence
+        // re-establishes the reference and the mount slews home as
+        // expected. Backend handler waits for each transition to
+        // settle before chaining the next step, so this call can
+        // take up to 60s end-to-end.
+        async telescopeFindHomeReset() {
+            if (!confirm('Run Park -> Unpark -> Home?\n\n' +
+                         'This is the workaround for strain-wave mounts (ZWO AM3 ' +
+                         'and similar) where plain Home does nothing after the ' +
+                         'mount has been power-cycled.\n\n' +
+                         'The mount will park first (slewing to its park position) ' +
+                         'then unpark and slew to home. Make sure the full slew ' +
+                         'path is clear of obstructions.')) return;
+            this.toast('Reset & Home: park -> unpark -> home (up to 60s)...', 'info');
+            try {
+                const resp = await this.apiPost('/api/telescope/find-home-reset');
+                const body = await resp.json().catch(() => ({}));
+                if (body?.status === 'homing') {
+                    this.toast('Mount homing after reset sequence', 'ok');
+                } else if (body?.error) {
+                    this.toast('Reset & Home: ' + body.error, 'warn');
+                }
+            } catch (e) {
+                this.toast('Reset & Home failed: ' + (e?.message || e), 'error');
+            }
+        },
+
         // MOUNT-LOC: push the observer coords from the active profile
         // into the mount via INDI GEOGRAPHIC_COORD / Alpaca site-*
         // properties. Sends nothing in the body so the server falls

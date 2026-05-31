@@ -84,6 +84,61 @@ public static class TelescopeEndpoints {
             }
         });
 
+        // Reset-then-home dance for strain-wave mounts (ZWO AM3 in
+        // particular) whose drivers lose the internal position
+        // reference on power-up. After power-on, Find Home alone
+        // does nothing -- the driver has no idea where "home" is
+        // relative to current encoder counts. Park forces it to
+        // adopt the current position as a known state, Unpark
+        // releases it, then Home computes the correct slew.
+        //
+        // For mounts that DON'T need this (most GEMs, alt-az fork
+        // mounts), the dance is harmless but slightly slow (~10-20s
+        // for the park/unpark settle waits) -- so we keep this as
+        // a separate explicit button, not as the default behaviour
+        // of /find-home.
+        group.MapPost("/find-home-reset", async (EquipmentManager equip) => {
+            if (equip.Telescope == null)
+                return Results.BadRequest(new { error = "No telescope selected" });
+            var t = equip.Telescope;
+            if (!t.Capabilities.SupportsPark) {
+                return Results.Json(new {
+                    error = "Mount doesn't support Park -- can't run the reset dance. Use plain Find Home."
+                }, statusCode: 501);
+            }
+            try {
+                // Step 1: Park. Wait until IsParked goes true or
+                // 30 s timeout. INDI's BUSY → OK state transition
+                // takes a couple seconds on most strain-wave mounts.
+                await t.ParkAsync();
+                await WaitFor(() => t.IsParked, TimeSpan.FromSeconds(30));
+                if (!t.IsParked) {
+                    return Results.Json(new {
+                        error = "Reset dance: park step timed out after 30s. Mount may be obstructed or driver unresponsive."
+                    }, statusCode: 500);
+                }
+                // Step 2: Unpark. Same wait pattern, inverted.
+                await t.UnparkAsync();
+                await WaitFor(() => !t.IsParked, TimeSpan.FromSeconds(30));
+                if (t.IsParked) {
+                    return Results.Json(new {
+                        error = "Reset dance: unpark step timed out after 30s."
+                    }, statusCode: 500);
+                }
+                // Step 3: actual Home. Now the driver knows where it
+                // is and the home target is reachable.
+                await t.FindHomeAsync();
+                return Results.Ok(new {
+                    status = "homing",
+                    sequence = "park -> unpark -> home"
+                });
+            } catch (NotSupportedException ex) {
+                return Results.Json(new { error = ex.Message }, statusCode: 501);
+            } catch (Exception ex) {
+                return Results.Json(new { error = ex.Message }, statusCode: 500);
+            }
+        });
+
         // Push the observatory coordinates currently stored in the
         // active profile into the mount. Body is optional: callers
         // can override with explicit lat/long/elev (used by the
@@ -287,4 +342,20 @@ public static class TelescopeEndpoints {
     /// <summary>Body for POST /tracking-mode. Mode = "sidereal" |
     /// "solar" | "lunar" (case-insensitive). Required field.</summary>
     public record TrackingModeRequest(string Mode);
+
+    /// <summary>Poll a predicate at 250 ms cadence until it goes
+    /// true or the timeout elapses. Used by /find-home-reset to
+    /// wait for Park/Unpark state transitions to settle before
+    /// chaining the next step -- many INDI mount drivers fire the
+    /// state change a few hundred ms after accepting the switch,
+    /// and chaining without waiting just races the driver and
+    /// produces silent no-ops.</summary>
+    private static async Task WaitFor(Func<bool> predicate, TimeSpan timeout) {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline) {
+            try { if (predicate()) return; }
+            catch { /* transient driver read failure -> retry next tick */ }
+            await Task.Delay(250);
+        }
+    }
 }

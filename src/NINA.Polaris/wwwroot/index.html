@@ -3435,6 +3435,22 @@
                                             title="Send the mount to its mechanical home position (CW down, RA/Dec hard stops). Confirm before clicking.">
                                         Home
                                     </button>
+                                    <!-- Reset-then-home: Park -> Unpark -> Home in
+                                         one click. Required for strain-wave mounts
+                                         (ZWO AM3) after power-on because their
+                                         driver loses the internal position
+                                         reference and Home alone is a no-op until
+                                         the reference is re-established by a
+                                         park/unpark transition. Only renders when
+                                         the mount supports both Home AND Park
+                                         (the dance needs both). Hidden on Alpaca
+                                         mounts that don't expose Park. -->
+                                    <button class="btn btn-sm" @click="telescopeFindHomeReset()"
+                                            :disabled="!mount.connected"
+                                            x-show="mount.capabilities?.findHome && mount.capabilities?.park"
+                                            title="Park -> Unpark -> Home. Use this if plain Home does nothing after powering the mount on (strain-wave mounts like ZWO AM3 need a park/unpark cycle to re-establish the position reference before Home works).">
+                                        Reset &amp; Home
+                                    </button>
                                     <!-- Combined site sync: pushes BOTH location
                                          (GEOGRAPHIC_COORD) AND wall-clock UTC
                                          (TIME_UTC) so the mount has all three
