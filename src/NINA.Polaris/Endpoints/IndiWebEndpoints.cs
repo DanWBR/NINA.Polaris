@@ -79,18 +79,31 @@ public static class IndiWebEndpoints {
         // support, xpra running, indi_control_panel installed.
         var cpGroup = app.MapGroup("/api/indi/cp");
 
-        cpGroup.MapGet("/status", (Phd2GuiSessionService gui) => Results.Ok(new {
-            supportedOs = gui.IsSupportedOs,
-            supportedArch = gui.IsSupportedArch,
-            xpraInstalled = gui.XpraInstalled,
-            xpraVersion = gui.XpraVersion,
-            sessionRunning = gui.SessionRunning,
-            indiControlPanelInstalled = gui.IndiControlPanelInstalled,
-            indiControlPanelPath = gui.IndiControlPanelPath,
-            embedUrl = "/phd2-gui/",
-            unsupportedReason = gui.UnsupportedReason,
-            lastError = gui.LastError,
-        }));
+        cpGroup.MapGet("/status", async (Phd2GuiSessionService gui) => {
+            // Self-healing re-detect: when indi_control_panel was not
+            // present at startup the cached state is "missing", but the
+            // user may have just run `sudo apt install indi-bin`. The
+            // "Click ↻ after install" hint in the UI now actually works
+            // because each /status call probes again (cheap: a single
+            // File.Exists fallback chain, ~µs). Only runs when current
+            // state says missing so we don't pound `which` every poll.
+            if (gui.IsSupportedOs && !gui.IndiControlPanelInstalled) {
+                try { await gui.DetectIndiControlPanelAsync(); }
+                catch { /* swallow: status must always return */ }
+            }
+            return Results.Ok(new {
+                supportedOs = gui.IsSupportedOs,
+                supportedArch = gui.IsSupportedArch,
+                xpraInstalled = gui.XpraInstalled,
+                xpraVersion = gui.XpraVersion,
+                sessionRunning = gui.SessionRunning,
+                indiControlPanelInstalled = gui.IndiControlPanelInstalled,
+                indiControlPanelPath = gui.IndiControlPanelPath,
+                embedUrl = "/phd2-gui/",
+                unsupportedReason = gui.UnsupportedReason,
+                lastError = gui.LastError,
+            });
+        });
 
         cpGroup.MapPost("/launch", async (Phd2GuiSessionService gui) => {
             if (!gui.IsSupportedOs) {

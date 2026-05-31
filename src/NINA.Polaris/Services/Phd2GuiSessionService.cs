@@ -168,19 +168,70 @@ public class Phd2GuiSessionService : BackgroundService {
             _logger.LogDebug(ex, "xpra detection failed");
             XpraInstalled = false;
         }
-        // Also probe for the standalone INDI Control Panel binary.
-        // Ships with the `indi-bin` apt package; absence is normal on
-        // hosts that only run indi-web or a non-INDI stack, so the
-        // failure is silent and the UI just hides the launch button.
+        await DetectIndiControlPanelAsync(ct);
+    }
+
+    /// <summary>
+    /// Detect the standalone INDI Control Panel binary
+    /// (<c>indi_control_panel</c>, ships with the <c>indi-bin</c> apt
+    /// package). Tries <c>which</c> first, then falls back to a small
+    /// list of well-known absolute paths so we still find the binary
+    /// when <c>which</c> isn't on PATH (some minimal Debian containers)
+    /// or when systemd hands us a stripped PATH.
+    ///
+    /// Re-callable: the status endpoint invokes this each tick when the
+    /// current state says "not installed" so installing
+    /// <c>indi-bin</c> after Polaris started is a self-healing event,
+    /// no service restart required.
+    /// </summary>
+    public async Task DetectIndiControlPanelAsync(CancellationToken ct = default) {
+        // 1) PATH lookup via `which`. Cheapest + finds non-standard
+        //    installs (Snap, /opt/...). Silent on miss because `which`
+        //    exits 1 with empty stdout when nothing matches.
         try {
             var which = await RunCommandAsync("which", "indi_control_panel", ct);
-            if (!string.IsNullOrWhiteSpace(which.stdout)) {
-                IndiControlPanelPath = which.stdout.Trim();
-                _logger.LogInformation("Phd2GuiSessionService: detected indi_control_panel at {Path}",
-                    IndiControlPanelPath);
+            var path = which.stdout?.Trim();
+            if (!string.IsNullOrWhiteSpace(path) && File.Exists(path)) {
+                if (IndiControlPanelPath != path) {
+                    IndiControlPanelPath = path;
+                    _logger.LogInformation(
+                        "Phd2GuiSessionService: detected indi_control_panel at {Path}",
+                        IndiControlPanelPath);
+                }
+                return;
             }
         } catch (Exception ex) {
-            _logger.LogDebug(ex, "indi_control_panel detection failed");
+            _logger.LogDebug(ex, "indi_control_panel detection via `which` failed");
+        }
+        // 2) Absolute-path fallback. Covers the common cases when
+        //    `which` is missing or PATH was stripped. apt installs the
+        //    binary at /usr/bin/indi_control_panel; the libindi source
+        //    install drops it in /usr/local/bin.
+        foreach (var candidate in new[] {
+                     "/usr/bin/indi_control_panel",
+                     "/usr/local/bin/indi_control_panel",
+                     "/opt/indi/bin/indi_control_panel",
+                 }) {
+            try {
+                if (File.Exists(candidate)) {
+                    if (IndiControlPanelPath != candidate) {
+                        IndiControlPanelPath = candidate;
+                        _logger.LogInformation(
+                            "Phd2GuiSessionService: detected indi_control_panel via fallback at {Path}",
+                            IndiControlPanelPath);
+                    }
+                    return;
+                }
+            } catch (Exception ex) {
+                _logger.LogDebug(ex, "fallback path check for {Path} failed", candidate);
+            }
+        }
+        // Nothing matched. Leave previous Path intact if non-null (we
+        // don't want a transient FS hiccup to flip the UI to "missing"
+        // mid-session); only set to null when it was already null.
+        if (IndiControlPanelPath != null) {
+            _logger.LogDebug("indi_control_panel no longer at {Path}, but keeping cached value",
+                IndiControlPanelPath);
         }
     }
 
