@@ -4536,12 +4536,22 @@
                             Camera
                             <span class="cam-float-sub">Slewing, live view</span>
                         </span>
-                        <button class="cam-float-close"
-                                @mousedown.stop
-                                @touchstart.stop
-                                @click.stop="slewPreviewVisible = false; persistSlewPreviewToggle()"
-                                title="Hide">×</button>
                     </div>
+                    <!-- Close button moved OUTSIDE the header so the
+                         header's @mousedown drag handler can never
+                         compete with the button's click. Positioned
+                         absolute relative to .cam-float-panel via
+                         the CSS rule on .cam-float-close so visually
+                         it still sits in the top-right corner. The
+                         .stop on every pointer event is redundant
+                         now (no parent has a drag handler) but kept
+                         as belt-and-suspenders. -->
+                    <button class="cam-float-close"
+                            @pointerdown.stop
+                            @mousedown.stop
+                            @touchstart.stop
+                            @click.stop.prevent="slewPreviewVisible = false; persistSlewPreviewToggle()"
+                            title="Hide">×</button>
                     <div class="cam-float-body">
                         <canvas id="slewPreviewCanvas" class="slew-preview-canvas"></canvas>
                     </div>
@@ -4903,12 +4913,17 @@
                             Mount
                             <span class="mount-float-sub" x-text="selectedTelescope || ''"></span>
                         </span>
-                        <button class="mount-float-close"
-                                @mousedown.stop
-                                @touchstart.stop
-                                @click.stop="mountPanel.visible = false; persistMountPanel()"
-                                title="Hide">×</button>
                     </div>
+                    <!-- Close moved outside the header so the
+                         header's @mousedown drag handler can never
+                         steal the click. CSS position:absolute keeps
+                         it visually in the top-right corner. -->
+                    <button class="mount-float-close"
+                            @pointerdown.stop
+                            @mousedown.stop
+                            @touchstart.stop
+                            @click.stop.prevent="mountPanel.visible = false; persistMountPanel()"
+                            title="Hide">×</button>
                     <div class="mount-float-body">
                         <!-- Manual jog d-pad. Hidden entirely when the
                              driver doesn't expose TELESCOPE_MOTION_NS/WE
