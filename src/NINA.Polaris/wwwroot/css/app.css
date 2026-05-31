@@ -3095,6 +3095,17 @@ label select.input-sm {
 }
 .sky-subtab-icon { line-height: 1; }
 
+/* When the sub-tab strip lives inside .tonight-panel / .weather-panel
+   it has to escape the panel's 16 px padding so it goes edge-to-edge
+   like the equivalent strip on the Sky map (which has no panel
+   padding). Negative margins eat the panel's top/left/right padding;
+   the flex gap (14-16 px) below the strip preserves breathing room
+   before the next child. */
+.tonight-panel > .sky-subtabs:first-child,
+.weather-panel > .sky-subtabs:first-child {
+    margin: -16px -16px 0;
+}
+
 .sky-toolbar {
     display: flex;
     gap: 8px;
