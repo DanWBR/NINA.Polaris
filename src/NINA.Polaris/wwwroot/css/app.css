@@ -2581,6 +2581,40 @@ label select.input-sm {
     max-width: 200px;
 }
 
+/* SLOW / FAST step inputs for the focuser stepper. Sits below the
+   directional buttons, two columns side by side. Each input is
+   narrow (steps are small integers); label sits above the input
+   so the columns stay aligned even when labels wrap. */
+.focus-step-config {
+    display: flex;
+    gap: 16px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+.focus-step-input {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--text-muted, var(--text-secondary));
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.focus-step-input input[type="number"] {
+    width: 90px;
+    padding: 4px 6px;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+    background: var(--input-bg, rgba(255, 255, 255, 0.05));
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+    border-radius: 4px;
+}
+.focus-step-input input[type="number"]:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
 /* Chart / Placeholder */
 .chart-placeholder {
     flex: 1;

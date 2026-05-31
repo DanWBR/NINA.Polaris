@@ -49,6 +49,17 @@ public class IndiFocuser : NINA.Image.Interfaces.IFocuser {
             new Dictionary<string, bool> { ["CONNECT"] = false, ["DISCONNECT"] = true }, ct);
     }
 
+    /// <summary>Maximum delta (in absolute steps) we'll send in a
+    /// single ABS_FOCUS_POSITION write. Empirically derived from
+    /// field reports: ZWO EAF firmware crashes (CCD driver disconnects
+    /// the device + INDI removes it from the device list) when asked
+    /// to move ~hundreds of steps in one shot. Splitting into chunks
+    /// of this size with brief settle waits between each chunk keeps
+    /// the driver alive even on multi-thousand-step jumps. Smaller
+    /// drivers handle larger moves fine, but 100 is a safe ceiling
+    /// for every device we've tested.</summary>
+    private const int SafeChunkSize = 100;
+
     public async Task MoveAbsoluteAsync(int position, CancellationToken ct = default) {
         // Snapshot state once so the diagnostic log + the guards
         // see the same values (Position can shift between reads when
@@ -97,6 +108,24 @@ public class IndiFocuser : NINA.Image.Interfaces.IFocuser {
             _logger.LogInformation("IndiFocuser '{Device}' already at target {Target}, skipping", DeviceName, target);
             return;
         }
+        // Decide between single-shot and chunked transport based on
+        // the move size. Chunking is the ZWO EAF workaround: large
+        // single ABS writes crash the driver, but a sequence of
+        // small writes (with settle waits between each) walks the
+        // motor to the same final position safely.
+        var delta = target - pos;
+        if (Math.Abs(delta) <= SafeChunkSize) {
+            await SendSingleAbsoluteAsync(target, ct);
+        } else {
+            await SendChunkedAbsoluteAsync(pos, target, ct);
+        }
+    }
+
+    /// <summary>Single ABS_FOCUS_POSITION write + post-write
+    /// disconnect probe. Used for small moves that fit in one
+    /// chunk; also called by SendChunkedAbsoluteAsync for each
+    /// individual chunk.</summary>
+    private async Task SendSingleAbsoluteAsync(int target, CancellationToken ct) {
         _logger.LogInformation(
             "IndiFocuser '{Device}' sending ABS_FOCUS_POSITION FOCUS_ABSOLUTE_POSITION={Target}",
             DeviceName, target);
@@ -123,6 +152,86 @@ public class IndiFocuser : NINA.Image.Interfaces.IFocuser {
         } catch (OperationCanceledException) {
             // request cancelled mid-wait; not the focuser's fault
         }
+    }
+
+    /// <summary>Walk the motor from <paramref name="startPos"/> to
+    /// <paramref name="finalTarget"/> in <see cref="SafeChunkSize"/>-step
+    /// chunks. Between each chunk: poll IsMoving until it clears
+    /// (10s ceiling per chunk), check IsConnected, abort the whole
+    /// sequence if the driver dies mid-walk. This is the workaround
+    /// for ZWO EAF crashes on large single ABS writes.
+    ///
+    /// Wall-clock cost: each chunk takes ~SafeChunkSize / step_rate
+    /// seconds to physically move, plus 250 ms poll cadence + 200 ms
+    /// inter-chunk gap. A 1000-step move on a typical EAF (500 step/s
+    /// rate) becomes 10 chunks * (~0.2s move + 0.45s overhead) ~ 6-7s
+    /// total -- visibly slower than a hypothetical single write but
+    /// the alternative is "driver crashes, motor stops mid-flight".</summary>
+    private async Task SendChunkedAbsoluteAsync(int startPos, int finalTarget, CancellationToken ct) {
+        var direction = Math.Sign(finalTarget - startPos);
+        var totalDelta = Math.Abs(finalTarget - startPos);
+        var chunks = (totalDelta + SafeChunkSize - 1) / SafeChunkSize;
+        _logger.LogInformation(
+            "IndiFocuser '{Device}' chunking move: {Start} -> {Target} ({Delta} steps in {Chunks} chunks of {ChunkSize})",
+            DeviceName, startPos, finalTarget, totalDelta, chunks, SafeChunkSize);
+
+        var current = startPos;
+        var chunkIndex = 0;
+        while (current != finalTarget) {
+            ct.ThrowIfCancellationRequested();
+            chunkIndex++;
+            var remaining = Math.Abs(finalTarget - current);
+            var chunkSize = Math.Min(remaining, SafeChunkSize);
+            var chunkTarget = current + direction * chunkSize;
+
+            _logger.LogInformation(
+                "IndiFocuser '{Device}' chunk {Index}/{Total}: {Current} -> {ChunkTarget}",
+                DeviceName, chunkIndex, chunks, current, chunkTarget);
+
+            // Send the chunk write. SendSingleAbsoluteAsync handles
+            // its own logging + post-write probe.
+            await SendSingleAbsoluteAsync(chunkTarget, ct);
+
+            // Driver crashed on this chunk -- abort the whole walk
+            // with the chunk index in the message so the operator can
+            // see how far we got before death.
+            if (!IsConnected) {
+                throw new InvalidOperationException(
+                    $"Focuser '{DeviceName}' disconnected during chunk {chunkIndex}/{chunks} " +
+                    $"(was moving {current} -> {chunkTarget}). Driver likely crashed on this size of move.");
+            }
+
+            // Wait for IsMoving to clear before issuing the next
+            // chunk. Without this we'd queue chunk N+1 while the
+            // motor is still processing chunk N, which the EAF
+            // driver mis-parses as a relative command and overshoots.
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+            while (IsMoving && DateTime.UtcNow < deadline) {
+                await Task.Delay(250, ct);
+                if (!IsConnected) {
+                    throw new InvalidOperationException(
+                        $"Focuser '{DeviceName}' disconnected while settling after chunk {chunkIndex}/{chunks}.");
+                }
+            }
+            if (IsMoving) {
+                _logger.LogWarning(
+                    "IndiFocuser '{Device}' chunk {Index} settle timeout (10s) -- aborting walk",
+                    DeviceName, chunkIndex);
+                throw new TimeoutException(
+                    $"Focuser '{DeviceName}' chunk {chunkIndex}/{chunks} didn't settle within 10s.");
+            }
+
+            // Inter-chunk pause. Gives the driver firmware a moment
+            // to flush its state machine before the next write.
+            // Without this on the EAF the second chunk sometimes gets
+            // mis-parsed even after IsMoving cleared.
+            await Task.Delay(200, ct);
+
+            current = Position;
+        }
+        _logger.LogInformation(
+            "IndiFocuser '{Device}' chunked move complete: arrived at {Position}",
+            DeviceName, Position);
     }
 
     public async Task MoveRelativeAsync(int steps, CancellationToken ct = default) {

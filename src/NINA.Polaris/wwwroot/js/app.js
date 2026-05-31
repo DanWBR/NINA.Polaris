@@ -205,6 +205,19 @@ function ninaApp() {
 
         // Focus
         focusPosition: 0,
+        // SLOW step: small, single-arrow buttons (◀ / ▶). For ZWO EAF
+        // these are the safe-no-crash steps -- empirically 1-5 steps
+        // work on all firmware revisions. Default 5.
+        focusStepSlow: 5,
+        // FAST step: large, double-arrow buttons (◀◀ / ▶▶). User can
+        // crank this up for quick coarse focus. Backend chunks any
+        // move > 100 steps into safe sub-moves with settle waits, so
+        // even a 1000-step click won't crash the driver -- just takes
+        // proportionally longer wall-clock to complete.
+        focusStepFast: 50,
+        // Legacy alias kept for code that still reads focusStep
+        // (computed getter would be cleaner but Alpine reactivity is
+        // simpler with a plain mirrored field updated on input).
         focusStep: 50,
         focusTemp: null,
         focusMoving: false,
@@ -10293,7 +10306,16 @@ function ninaApp() {
             this.equipDomeChoice = rig.dome || '';
             this.equipWeatherChoice = rig.weather || '';
             if (rig.coolerTargetTemperature != null) this.equipCoolerTarget = rig.coolerTargetTemperature;
-            if (rig.focuserStepSize) this.focusStep = rig.focuserStepSize;
+            // Hydrate FAST step from the rig profile (legacy field
+            // name kept for backwards compat). SLOW step lives in
+            // localStorage only -- per-rig persistence would need a
+            // ProfileService field which we'll add in a follow-up if
+            // operators want it per-rig.
+            if (rig.focuserStepSize) {
+                this.focusStepFast = rig.focuserStepSize;
+                this.focusStep = rig.focuserStepSize;
+            }
+            this._loadFocusStepsFromLocalStorage();
             // PA-4: hydrate polar alignment TPPA tunables from the rig.
             this._hydratePolarSettingsFromRig(rig);
             if (rig.focalLengthMm) {
@@ -12318,6 +12340,39 @@ function ninaApp() {
 
         async focusAbort() {
             try { await this.apiPost('/api/focuser/abort'); } catch (e) { }
+        },
+
+        // ─── SLOW / FAST step persistence ────────────────────────
+        // localStorage stores both step values keyed by selected
+        // focuser device name when available (so different scopes
+        // remember different sweet spots), falling back to a global
+        // key for ad-hoc connections. Triggered on @change of the
+        // number inputs so the user's tweak survives reloads.
+        saveFocusSteps() {
+            try {
+                const key = 'polaris.focusSteps:' + (this.selectedFocuser || '_default');
+                localStorage.setItem(key, JSON.stringify({
+                    slow: this.focusStepSlow,
+                    fast: this.focusStepFast
+                }));
+                // Mirror FAST into legacy focusStep field for any
+                // downstream code still reading it.
+                this.focusStep = this.focusStepFast;
+            } catch { /* private mode / quota exceeded -> silent */ }
+        },
+
+        _loadFocusStepsFromLocalStorage() {
+            try {
+                const key = 'polaris.focusSteps:' + (this.selectedFocuser || '_default');
+                const raw = localStorage.getItem(key);
+                if (!raw) return;
+                const v = JSON.parse(raw);
+                if (Number.isFinite(v?.slow) && v.slow >= 1) this.focusStepSlow = v.slow;
+                if (Number.isFinite(v?.fast) && v.fast >= 1) {
+                    this.focusStepFast = v.fast;
+                    this.focusStep = v.fast;
+                }
+            } catch { /* ignore */ }
         },
 
         // ─── FOCUSER-SPEC v2 ─────────────────────────────────────

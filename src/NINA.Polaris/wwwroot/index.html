@@ -1492,18 +1492,45 @@
                      focuser is connected so the page doesn't show
                      dead controls. -->
                 <div class="focus-controls" x-show="focusConnected">
+                    <!-- ASIAIR-style stepper: two pairs of arrow
+                         buttons (SLOW + FAST) plus the live position
+                         readout in the middle. Both step values
+                         user-editable; persisted to localStorage so
+                         the user's choice survives reloads. The FAST
+                         step is unlimited in the input -- backend
+                         chunks any move > 100 steps internally to
+                         avoid the ZWO EAF crash on large single
+                         writes. -->
                     <div class="stepper">
-                        <button class="btn btn-lg" @click="focusMove(-focusStep)" :disabled="!focusConnected">&lt;&lt;</button>
-                        <button class="btn" @click="focusMove(-1)" :disabled="!focusConnected">&lt;</button>
+                        <button class="btn btn-lg" @click="focusMove(-focusStepFast)" :disabled="!focusConnected"
+                                :title="'Move OUT by ' + focusStepFast + ' steps (FAST)'">&laquo;</button>
+                        <button class="btn" @click="focusMove(-focusStepSlow)" :disabled="!focusConnected"
+                                :title="'Move OUT by ' + focusStepSlow + ' steps (SLOW)'">&lt;</button>
                         <span class="stepper-value" x-text="focusPosition">0</span>
-                        <button class="btn" @click="focusMove(1)" :disabled="!focusConnected">&gt;</button>
-                        <button class="btn btn-lg" @click="focusMove(focusStep)" :disabled="!focusConnected">&gt;&gt;</button>
+                        <button class="btn" @click="focusMove(focusStepSlow)" :disabled="!focusConnected"
+                                :title="'Move IN by ' + focusStepSlow + ' steps (SLOW)'">&gt;</button>
+                        <button class="btn btn-lg" @click="focusMove(focusStepFast)" :disabled="!focusConnected"
+                                :title="'Move IN by ' + focusStepFast + ' steps (FAST)'">&raquo;</button>
                     </div>
-                    <label class="slider-control">
-                        Step Size
-                        <input type="range" min="1" max="500" x-model.number="focusStep">
-                        <span x-text="focusStep"></span>
-                    </label>
+                    <!-- Editable step sizes. ASIAIR uses preset
+                         dropdowns; we use number inputs because
+                         every focuser has a different sweet spot
+                         (ZWO EAF likes 5/50, FocusBoss EXT likes
+                         1/100, Pegasus FocusCube likes 10/500). -->
+                    <div class="focus-step-config">
+                        <label class="focus-step-input">
+                            <span>SLOW (steps)</span>
+                            <input type="number" min="1" max="500"
+                                   x-model.number="focusStepSlow"
+                                   @change="saveFocusSteps()">
+                        </label>
+                        <label class="focus-step-input">
+                            <span>FAST (steps)</span>
+                            <input type="number" min="1" max="10000"
+                                   x-model.number="focusStepFast"
+                                   @change="focusStep = focusStepFast; saveFocusSteps()">
+                        </label>
+                    </div>
                     <div class="focus-info">
                         <div class="info-row" x-show="focusTemp !== null">
                             <span>Temperature:</span><strong x-text="focusTemp !== null ? focusTemp.toFixed(1) + ' C' : '--'"></strong>
