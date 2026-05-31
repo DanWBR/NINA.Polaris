@@ -3435,11 +3435,33 @@
                                             title="Send the mount to its mechanical home position (CW down, RA/Dec hard stops). Confirm before clicking.">
                                         Home
                                     </button>
-                                    <button class="btn btn-sm" @click="telescopeSyncLocation()"
+                                    <!-- Combined site sync: pushes BOTH location
+                                         (GEOGRAPHIC_COORD) AND wall-clock UTC
+                                         (TIME_UTC) so the mount has all three
+                                         inputs it needs for Local Sidereal
+                                         Time. Pushing only location while UTC
+                                         is stuck at the driver's boot default
+                                         (commonly 2000-01-01) silently sends
+                                         every GoTo ~25y of sidereal drift off
+                                         target -- the bundled push prevents
+                                         that. -->
+                                    <button class="btn btn-sm" @click="telescopeSyncSite()"
                                             :disabled="!mount.connected"
-                                            x-show="mount.capabilities?.setSiteLocation"
-                                            title="Push the observatory coordinates from Settings into the mount. Without this, every GoTo lands off-target because the mount uses its own internal site config for alt/az conversions.">
-                                        Sync Location
+                                            x-show="mount.capabilities?.setSiteLocation
+                                                    || mount.capabilities?.setSiteTime"
+                                            title="Push observatory coordinates + current UTC into the mount. Without both, GoTo lands off-target because the mount uses (lat, lon, utc) together to compute Local Sidereal Time.">
+                                        Sync Site
+                                    </button>
+                                    <!-- Time-only sync for the operator that
+                                         re-synced the host clock (chrony/NTP)
+                                         and wants to forward only the time.
+                                         Renders only when the driver
+                                         advertises TIME_UTC support. -->
+                                    <button class="btn btn-sm" @click="telescopeSyncTime()"
+                                            :disabled="!mount.connected"
+                                            x-show="mount.capabilities?.setSiteTime"
+                                            title="Push the host's current UTC + local-time offset to the mount via TIME_UTC. Run this after re-syncing the host clock if you don't want to re-send location too.">
+                                        Sync Time
                                     </button>
                                 </div>
                             </div>

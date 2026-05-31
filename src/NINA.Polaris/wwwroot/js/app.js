@@ -13245,21 +13245,98 @@ function ninaApp() {
         // this once after the mount connects, every GoTo will land
         // off-target because the mount's internal alt/az math uses
         // its own site config, not Polaris's.
-        async telescopeSyncLocation() {
+        // Push the observatory coordinates AND the wall-clock UTC
+        // into the mount in one action. The mount uses (lat, lon, utc)
+        // together to compute Local Sidereal Time -- pushing one
+        // without the other is half a sync and produces silently
+        // wrong GoTos.
+        //
+        // Field-observed failure that motivated this combined action:
+        // operator clicked "Sync Location" (which only pushed lat/lon)
+        // but the INDI driver's TIME_UTC was still stuck at its boot
+        // default of "2000-01-01T00:00:00" -- so the mount computed
+        // LST for the year 2000 and every GoTo landed ~25 years of
+        // sidereal drift off target. Bundling both writes makes that
+        // failure mode impossible.
+        //
+        // Both writes are awaited independently so a driver that
+        // accepts location but rejects TIME_UTC (or vice versa)
+        // surfaces the partial-success state to the toast instead
+        // of hiding it.
+        async telescopeSyncSite() {
+            let locOk = false, timeOk = false, locMsg = '', timeMsg = '', errMsg = '';
+            // Location push first because every mount driver exposes
+            // GEOGRAPHIC_COORD; the time vector is more brittle and
+            // we want at least the location to land if time fails.
             try {
-                const r = await this.apiPost('/api/telescope/sync-location');
-                if (r && r.status === 'synced') {
-                    this.toast(
-                        'Location synced: ' +
-                        (r.latitude?.toFixed(4) ?? '?') + '°, ' +
-                        (r.longitude?.toFixed(4) ?? '?') + '°, ' +
-                        (r.elevation ?? 0) + ' m',
-                        'ok');
-                } else {
-                    this.toast('Location sync responded with no confirmation', 'warn');
+                const resp = await this.apiPost('/api/telescope/sync-location');
+                const body = await resp.json().catch(() => ({}));
+                if (body?.status === 'synced') {
+                    locOk = true;
+                    locMsg = `${body.latitude?.toFixed(4) ?? '?'}°, ${body.longitude?.toFixed(4) ?? '?'}°, ${body.elevation ?? 0} m`;
                 }
             } catch (e) {
-                this.toast('Sync location failed: ' + (e?.message || e), 'error');
+                errMsg = 'Location: ' + (e?.message || e);
+            }
+            // Time push. Body is omitted so the backend pulls
+            // DateTime.UtcNow + the host's local-time offset. The
+            // user can refine the host's clock via the existing
+            // CLOCK-1 sync-with-PC card before clicking this.
+            try {
+                const resp = await this.apiPost('/api/telescope/sync-time');
+                const body = await resp.json().catch(() => ({}));
+                if (body?.status === 'synced') {
+                    timeOk = true;
+                    timeMsg = `UTC ${(body.utc || '').replace('T', ' ').replace(/\..*$/, '')}, offset ${body.offsetHoursFromUtc ?? 0}h`;
+                }
+            } catch (e) {
+                errMsg = (errMsg ? errMsg + ' / ' : '') + 'Time: ' + (e?.message || e);
+            }
+            // Report. All-success → single ok toast. Partial →
+            // warning toast naming what worked and what didn't so
+            // the user can decide whether to retry. All-fail →
+            // error toast.
+            if (locOk && timeOk) {
+                this.toast(`Mount site synced (${locMsg} · ${timeMsg})`, 'ok');
+            } else if (locOk || timeOk) {
+                this.toast(
+                    'Partial sync: ' +
+                    (locOk ? `location OK (${locMsg})` : 'location FAILED') + ', ' +
+                    (timeOk ? `time OK (${timeMsg})` : 'time FAILED') +
+                    (errMsg ? ` -- ${errMsg}` : ''),
+                    'warn');
+            } else {
+                this.toast('Site sync failed' + (errMsg ? `: ${errMsg}` : ''), 'error');
+            }
+        },
+
+        // Back-compat alias: HTML button still calls telescopeSyncLocation,
+        // and existing operator muscle memory + any tutorial doc references
+        // it by that name. Keep the old name pointing at the new combined
+        // behaviour so the upgrade is invisible.
+        async telescopeSyncLocation() { return this.telescopeSyncSite(); },
+
+        // Push just the wall-clock UTC + host's local-time offset
+        // into the mount via TIME_UTC. Useful when the operator
+        // already synced the host clock (chrony / manual /
+        // sync-with-PC) and wants to forward only the time without
+        // re-sending the location.
+        async telescopeSyncTime() {
+            try {
+                const resp = await this.apiPost('/api/telescope/sync-time');
+                const body = await resp.json().catch(() => ({}));
+                if (body?.status === 'synced') {
+                    const utc = (body.utc || '').replace('T', ' ').replace(/\..*$/, '');
+                    this.toast(
+                        `Mount UTC set to ${utc} (offset ${body.offsetHoursFromUtc ?? 0}h)`,
+                        'ok');
+                } else if (body?.error) {
+                    this.toast('Time sync rejected: ' + body.error, 'warn');
+                } else {
+                    this.toast('Time sync responded with no confirmation', 'warn');
+                }
+            } catch (e) {
+                this.toast('Time sync failed: ' + (e?.message || e), 'error');
             }
         },
 
