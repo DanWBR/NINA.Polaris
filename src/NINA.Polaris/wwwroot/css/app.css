@@ -1843,12 +1843,33 @@ label select.input-sm {
     position: relative;
     margin: 24px;
     flex: 1 1 auto;
+    min-height: 0;            /* let the inner flex/grid bound itself
+                                 to the panel instead of overflowing */
     background: var(--bg-primary);
     border: 1px solid var(--border);
     border-radius: 10px;
     box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
-    overflow: auto;
+    /* Hidden so the .editor-workspace grid sets its own scroll
+       regions (sliders column scrolls vertically; preview column
+       handles its own zoom/pan). Without this the whole editor
+       overflowed the modal and the sliders column's natural
+       height drove a scrollbar across the entire panel. */
+    overflow: hidden;
     padding: 16px 20px 20px;
+    /* Stack the editor body vertically and let the workspace grid
+       claim the remaining height. */
+    display: flex;
+    flex-direction: column;
+}
+/* Children laid out inside .files-editor-modal-panel: the
+   panel-header + source-picker / loading state collapse to their
+   natural height; the editor-workspace grows to fill. min-height:0
+   on the workspace lets its preview column scroll its own canvas
+   and the controls column scroll its own sliders without the
+   modal panel growing past viewport. */
+.files-editor-modal-panel > .editor-workspace {
+    flex: 1 1 auto;
+    min-height: 0;
 }
 .files-editor-modal-close {
     position: absolute;
@@ -1868,6 +1889,46 @@ label select.input-sm {
     align-items: center;
     justify-content: center;
 }
+/* Loading state shown while /api/editor/load is in flight. Sits
+   between the empty source picker and the ready workspace; without
+   it the picker would render unchanged for the full duration of the
+   request and the user would think nothing was happening (or worse,
+   pick a second file). */
+.editor-loading {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--text-secondary);
+}
+.editor-loading-spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: editor-loading-spin 0.9s linear infinite;
+}
+@keyframes editor-loading-spin {
+    to { transform: rotate(360deg); }
+}
+.editor-loading-label {
+    font-size: 14px;
+    color: var(--text-primary);
+    margin: 0;
+}
+.editor-loading-path {
+    font-size: 12px;
+    font-family: var(--font-mono, monospace);
+    margin: 0;
+    max-width: 70ch;
+    overflow-wrap: anywhere;
+}
+
 .files-editor-modal-close:hover {
     background: var(--bg-tertiary, var(--bg-secondary));
     border-color: var(--accent);
@@ -3864,7 +3925,7 @@ label select.input-sm {
         rgba(5, 8, 16, 0.10) 60%,
         rgba(5, 8, 16, 0.00) 100%);
 }
-.home-hero-text { max-width: 720px; }
+.home-hero-text {  }
 .home-eyebrow {
     /* Same brand wordmark as the header, no pill chrome. Children
        (.brand-name, .brand-tag, .brand-version) inherit their look
@@ -4062,7 +4123,7 @@ label select.input-sm {
     margin-top: auto;
     position: sticky;
     bottom: 0;
-    background: rgba(0,0,0,0.5);
+    background: rgba(0,0,0,0.8);
     z-index: 5;
     padding: 14px 32px;
     border-top: 1px solid var(--border, #334155);

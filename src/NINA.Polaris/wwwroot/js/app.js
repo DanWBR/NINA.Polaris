@@ -1019,6 +1019,11 @@ function ninaApp() {
             channels: 1,
             pathInput: '',         // text in the "open by path" field
             loading:  false,
+            // Path of the file currently being fetched. Shown under
+            // the loading spinner so the user has feedback while
+            // /api/editor/load runs (FITS reads from a slow disk
+            // can take 1-3 s for a multi-hundred-MB master).
+            loadingPath: '',
             rendering: false,
             autoBusy: false,       // AUTOED-2: true while /auto is in flight
             error:    '',
@@ -7231,6 +7236,7 @@ function ninaApp() {
             if (!path) return;
             this._editorTeardownBlobs();
             this.editorState.loading = true;
+            this.editorState.loadingPath = path;
             this.editorState.error = '';
             try {
                 const r = await this.apiFetch('/api/editor/load', {
@@ -7271,6 +7277,7 @@ function ninaApp() {
                 this.editorState.session = null;
             } finally {
                 this.editorState.loading = false;
+                this.editorState.loadingPath = '';
             }
         },
 

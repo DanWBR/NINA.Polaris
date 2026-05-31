@@ -6320,8 +6320,25 @@
                             title="Export the final image">↓ Export…</button>
                 </div>
 
-                <!-- Source picker, only visible when no session yet -->
-                <div class="editor-source-picker" x-show="!editorState.session">
+                <!-- Loading state. Sits between "no session" and the
+                     ready workspace so the user gets feedback while
+                     /api/editor/load is in flight. Without this, the
+                     source picker would render under the loading
+                     request and tempt the user to pick a second file. -->
+                <div class="editor-loading" x-show="editorState.loading" x-cloak>
+                    <div class="editor-loading-spinner" aria-hidden="true"></div>
+                    <p class="editor-loading-label">Loading image...</p>
+                    <p class="editor-loading-path text-muted"
+                       x-show="editorState.loadingPath"
+                       x-text="editorShortPath(editorState.loadingPath || '')"></p>
+                </div>
+
+                <!-- Source picker, only visible when no session yet
+                     AND nothing is loading. Hidden during loads so the
+                     user can't kick off a second editor session while
+                     the first is still in flight. -->
+                <div class="editor-source-picker"
+                     x-show="!editorState.session && !editorState.loading">
                     <div class="editor-source-card editor-source-dropzone"
                          @dragover.prevent
                          @drop.prevent="editorHandleDrop($event)"
@@ -9069,7 +9086,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          development that this is a per-commit nuisance, but the cost
          of users running stale JS for hours (with FrameKind routing
          bugs ending up on the wrong canvas) is higher. -->
-    <script src="/js/app.js?v=20260530-helpupd"></script>
+    <script src="/js/app.js?v=20260530-editorfix"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
