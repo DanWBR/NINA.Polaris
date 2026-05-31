@@ -62,10 +62,36 @@ public class IndiTelescope : ITelescope {
     }
 
     public async Task SlewAsync(double ra, double dec, CancellationToken ct = default) {
-        // Set coord mode to SLEW
+        // 1. Unpark if parked. Several INDI mount drivers (ZWO AM3,
+        //    iOptron, EQMod) silently swallow EQUATORIAL_EOD_COORD
+        //    writes while TELESCOPE_PARK.PARK is on: the new target
+        //    coords are accepted into the property but no motion is
+        //    issued and no error comes back, so from the UI it looks
+        //    like "I clicked slew and nothing happened". Wait briefly
+        //    for the driver to flip the park state before writing the
+        //    coords -- otherwise the writes race the unpark and hit
+        //    a still-parked driver.
+        if (IsParked) {
+            await UnparkAsync(ct);
+            for (int i = 0; i < 30 && IsParked; i++) {
+                try { await Task.Delay(100, ct); } catch (TaskCanceledException) { break; }
+            }
+        }
+
+        // 2. Force tracking on. INDI's TELESCOPE_TRACK_STATE gates
+        //    motion on some drivers; setting it unconditionally is
+        //    cheap (no-op when already on) and removes another silent-
+        //    failure mode where the user toggled tracking off in INDI
+        //    Control Panel and then expected slew to still work.
+        await SetTrackingAsync(true, ct);
+
+        // 3. Tell the driver the next coord write is a slew-and-track,
+        //    not a sync or coord-only update. OneOfMany rule: pass
+        //    only the on-switch as true; the other two stay false.
         await _client.SetSwitchAsync(DeviceName, "ON_COORD_SET",
             new Dictionary<string, bool> { ["TRACK"] = true, ["SLEW"] = false, ["SYNC"] = false }, ct);
 
+        // 4. Issue the slew via the coord write.
         await _client.SetNumberAsync(DeviceName, "EQUATORIAL_EOD_COORD",
             new Dictionary<string, double> { ["RA"] = ra, ["DEC"] = dec }, ct);
     }
