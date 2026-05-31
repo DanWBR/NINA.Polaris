@@ -12111,6 +12111,49 @@ function ninaApp() {
             }
         },
 
+        // Press-and-hold variant for the d-pad. mountMoveStart fires
+        // on pointerdown (mouse or touch) and is paired with
+        // mountMoveStop on pointerup/leave/cancel. Holds a token so a
+        // stray Stop call without a matching Start (browser fires
+        // pointerleave before pointerdown sometimes during fast taps)
+        // is a no-op instead of an extra abort. Captures the pointer
+        // so that dragging the cursor off the button while held still
+        // counts as "still pressing" -- only an explicit release stops
+        // the motion. Matches the standard d-pad UX from ASIAIR /
+        // SharpCap / NINA Desktop.
+        _mountJogActive: null,
+        async mountMoveStart(direction, evt) {
+            if (!this.mount.connected) return;
+            // Capture the pointer so subsequent pointerup fires on
+            // the SAME button even if the user's finger / cursor
+            // drifts outside its bounds while held.
+            try {
+                if (evt?.currentTarget?.setPointerCapture && evt.pointerId != null) {
+                    evt.currentTarget.setPointerCapture(evt.pointerId);
+                }
+            } catch { /* setPointerCapture occasionally throws on rapid taps */ }
+            this._mountJogActive = direction;
+            await this.mountMove(direction);
+        },
+        async mountMoveStop() {
+            // Only stop if we actually started a jog. Without this
+            // guard a pointerleave event that fires before any
+            // matching pointerdown (e.g. browser hovering a different
+            // button during fast keyboard nav) would issue a spurious
+            // abort that could kill an in-progress GoTo slew.
+            if (this._mountJogActive == null) return;
+            this._mountJogActive = null;
+            // Use abort, which clears any active MOTION_* switch.
+            // We considered sending explicit MOTION_NORTH=false etc
+            // per spec but it requires per-direction stop endpoints;
+            // abort works on every mount driver we've tested and
+            // also recovers cleanly if the user mashed two buttons
+            // simultaneously (both motions get cancelled at once).
+            try { await this.apiPost('/api/telescope/abort'); }
+            catch (e) { /* abort failures aren't surfaced -- the next
+                           WS tick shows whether the mount stopped */ }
+        },
+
         async mountStop() {
             try {
                 await this.apiPost('/api/telescope/abort');

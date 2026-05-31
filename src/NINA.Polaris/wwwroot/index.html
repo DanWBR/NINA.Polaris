@@ -4916,13 +4916,48 @@
                              that would just 501. The STOP button stays
                              visible regardless (mounts that can slew can
                              always abort, even those without manual jog). -->
+                        <!-- Press-and-hold semantics: the INDI spec for
+                             TELESCOPE_MOTION_* says "set to true to START
+                             moving, set to false to STOP". Earlier click
+                             handlers fired only the press half, so the
+                             mount either crept for a single tick or (on
+                             the AM3 driver) did nothing visible because
+                             the motion command + the implicit "no stop
+                             ever" left the driver waiting. Pointer down
+                             fires move, pointer up/leave/cancel sends an
+                             abort which clears the motion switch and
+                             halts the mount. Works for both mouse and
+                             touch (single event API). The .prevent stops
+                             the browser from synthesising a click after
+                             touchend, which would re-fire the move and
+                             leave the mount moving after release. -->
                         <div class="dpad-container dpad-container-sm"
                              x-show="mount.capabilities?.manualJog !== false">
-                            <button class="dpad-btn dpad-n" @click="mountMove('n')" :disabled="!mount.connected">N</button>
-                            <button class="dpad-btn dpad-w" @click="mountMove('w')" :disabled="!mount.connected">W</button>
+                            <button class="dpad-btn dpad-n"
+                                    @pointerdown.prevent="mountMoveStart('n', $event)"
+                                    @pointerup.prevent="mountMoveStop()"
+                                    @pointerleave="mountMoveStop()"
+                                    @pointercancel="mountMoveStop()"
+                                    :disabled="!mount.connected">N</button>
+                            <button class="dpad-btn dpad-w"
+                                    @pointerdown.prevent="mountMoveStart('w', $event)"
+                                    @pointerup.prevent="mountMoveStop()"
+                                    @pointerleave="mountMoveStop()"
+                                    @pointercancel="mountMoveStop()"
+                                    :disabled="!mount.connected">W</button>
                             <button class="dpad-btn dpad-stop" @click="mountStop()">STOP</button>
-                            <button class="dpad-btn dpad-e" @click="mountMove('e')" :disabled="!mount.connected">E</button>
-                            <button class="dpad-btn dpad-s" @click="mountMove('s')" :disabled="!mount.connected">S</button>
+                            <button class="dpad-btn dpad-e"
+                                    @pointerdown.prevent="mountMoveStart('e', $event)"
+                                    @pointerup.prevent="mountMoveStop()"
+                                    @pointerleave="mountMoveStop()"
+                                    @pointercancel="mountMoveStop()"
+                                    :disabled="!mount.connected">E</button>
+                            <button class="dpad-btn dpad-s"
+                                    @pointerdown.prevent="mountMoveStart('s', $event)"
+                                    @pointerup.prevent="mountMoveStop()"
+                                    @pointerleave="mountMoveStop()"
+                                    @pointercancel="mountMoveStop()"
+                                    :disabled="!mount.connected">S</button>
                         </div>
                         <!-- Fallback STOP-only row when the driver doesn't
                              advertise jog. Without this the operator has
