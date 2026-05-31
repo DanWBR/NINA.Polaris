@@ -49,7 +49,19 @@ Otherwise follow top to bottom.
 | Cooling | Active fan (Pi 4 case fan or Argon ONE) | Active fan mandatory (Pi 5 throttles aggressively without one) | Long sessions get to 70 C inside cases. |
 | Storage | SanDisk Extreme Pro 64 GB+ or USB 3.0 SSD | Pi 5 NVMe HAT + NVMe SSD recommended | SD card is fine for the OS; put image output on a separate SSD via USB 3.0 or NVMe. |
 | Network | Wired Ethernet preferred | Wired Ethernet preferred | WiFi works but live stack frames are big; wired keeps the browser responsive. |
-| USB hub | Powered USB 3.0 hub if camera + mount + EFW + focuser all plug in directly | Same | Pi 5 has better per-port budget but a powered hub still helps with cooled CMOS cameras. |
+| USB hub | **Powered USB 3.0 hub is effectively mandatory** for any setup with ≥3 USB devices (camera + EFW + EAF + mount adapter is already 4) | Same | Pi 4 USB ports share ~1.2A total. Without a powered hub, long focuser moves, filter changes, and cooled-camera readouts under load will randomly crash devices off the bus (see troubleshooting.md). Pi 5 has better per-port budget but the same problem appears under heavier loads. |
+
+> ⚠️ **The under-voltage trap.** The most common "my equipment
+> randomly disconnects" issue isn't a bad cable or buggy driver
+> -- it's the Pi's USB rail sagging below 4.65V under peak load.
+> Pattern: short / idle operations work fine, long focuser moves
+> and cooled-camera readouts crash the device, sometimes removing
+> it from the INDI device list entirely. Check
+> `vcgencmd get_throttled` -- anything non-zero is the smoking
+> gun. Fix: powered USB hub for the high-current devices (EAF,
+> camera). $20 hub solves what no amount of software tweaking
+> can. Full diagnostic flow in
+> [troubleshooting.md → USB device crashes mid-operation](troubleshooting.md#usb-device-crashes-mid-operation-under-voltage).
 
 You also need: a microSD card reader on your main computer, an HDMI
 cable for first boot (or use headless setup below).

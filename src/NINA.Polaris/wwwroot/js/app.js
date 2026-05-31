@@ -736,7 +736,15 @@ function ninaApp() {
         host: {
             cpuPercent: null, memoryPercent: null,
             memoryUsedMB: 0, memoryTotalMB: 0,
-            processCpuPercent: 0, processMemoryMB: 0
+            processCpuPercent: 0, processMemoryMB: 0,
+            // Pi under-voltage flags. Both default false → chips
+            // hidden on non-Pi hosts where the probe returns nothing.
+            // underVoltageNow drives a RED chip (active power problem
+            // right now -- expect imminent USB crashes). occurred
+            // drives a quieter AMBER chip ("rail sagged at some
+            // point since boot -- consider a powered hub").
+            underVoltageNow: false,
+            underVoltageOccurred: false
         },
         sirilActiveJobs: [],
         graXpertActiveJobs: [],
@@ -16687,6 +16695,27 @@ function ninaApp() {
         // and aren't duplicated here.
         activityChips() {
             const out = [];
+
+            // Pi under-voltage. Highest priority -- this is the
+            // smoking gun for "my USB devices randomly disconnect"
+            // and the user really wants to see it surfaced. Active
+            // under-voltage = RED (USB crashes imminent). Past-only
+            // under-voltage (cleared but flagged since boot) =
+            // AMBER advice ("consider a powered hub"). The chip
+            // links to the troubleshooting doc anchor on click.
+            if (this.host.underVoltageNow) {
+                out.push({
+                    id: 'uv-now', icon: '⚡', kind: 'error',
+                    label: 'Under-voltage NOW — expect USB crashes',
+                    href: 'docs/user-guide/troubleshooting.md#usb-device-crashes-mid-operation-under-voltage'
+                });
+            } else if (this.host.underVoltageOccurred) {
+                out.push({
+                    id: 'uv-past', icon: '⚡', kind: 'warn',
+                    label: 'Pi was under-voltage since boot — use a powered USB hub',
+                    href: 'docs/user-guide/troubleshooting.md#usb-device-crashes-mid-operation-under-voltage'
+                });
+            }
 
             // Sequence (Autorun)
             if (this.seqState === 'running') {

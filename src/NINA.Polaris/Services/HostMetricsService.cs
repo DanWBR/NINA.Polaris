@@ -147,6 +147,14 @@ public class HostMetricsService : BackgroundService {
         var (diskFree, diskTotal, diskName) = TryGetDiskInfo(
             _profiles?.Active?.ImageOutputDir);
 
+        // Raspberry Pi under-voltage detection. The Pi VideoCore
+        // firmware tracks USB / Vcore voltage and reports state via
+        // /sys/class/hwmon/.../in0_lcrit_alarm (raw bit) or the
+        // higher-level vcgencmd `get_throttled` flags. We read the
+        // sysfs path because it doesn't require shelling out and is
+        // available on every Pi that booted normally.
+        var (uvNow, uvOccurred) = TryReadPiThrottleState();
+
         return new HostMetricsSnapshot {
             CpuPercent = Math.Round(util.CpuUsedPercentage, 1),
             MemoryPercent = Math.Round(usedPercent, 1),
@@ -157,8 +165,74 @@ public class HostMetricsService : BackgroundService {
             DiskFreeGB = diskTotal > 0 ? Math.Round(diskFree / 1073741824.0, 1) : 0,
             DiskTotalGB = diskTotal > 0 ? Math.Round(diskTotal / 1073741824.0, 1) : 0,
             DiskMountName = diskName,
+            UnderVoltageNow = uvNow,
+            UnderVoltageOccurred = uvOccurred,
             SampledAt = now
         };
+    }
+
+    /// <summary>
+    /// Pi-specific under-voltage probe. Reads the cached vcgencmd
+    /// get_throttled output (the firmware exposes the same flags
+    /// at /sys/devices/platform/soc/.../throttled but that path
+    /// varies across kernel versions). Returns (currentlyUnder,
+    /// happenedSinceBoot). Both false on non-Pi hardware or when
+    /// the vcgencmd binary isn't installed (default false → UI
+    /// hides the chip entirely).
+    ///
+    /// vcgencmd get_throttled returns a 20-bit flag word:
+    ///   bit 0  (0x1)     = under-voltage detected RIGHT NOW
+    ///   bit 1  (0x2)     = ARM frequency capped now
+    ///   bit 2  (0x4)     = currently throttled
+    ///   bit 3  (0x8)     = soft temp limit hit now
+    ///   bit 16 (0x10000) = under-voltage detected since boot
+    ///   bit 17 (0x20000) = ARM freq capped since boot
+    ///   bit 18 (0x40000) = throttled since boot
+    ///   bit 19 (0x80000) = soft temp limit hit since boot
+    ///
+    /// We surface bit 0 ("now") and bit 16 ("ever happened") as
+    /// the two flags. Operator who sees "ever happened" knows to
+    /// add a powered USB hub even if the rail is stable now.
+    /// </summary>
+    internal static (bool now, bool occurred) TryReadPiThrottleState() {
+        // Fast path: skip the subprocess on non-Linux entirely.
+        if (!OperatingSystem.IsLinux()) return (false, false);
+        try {
+            // Capped at 500ms so a hung vcgencmd doesn't stall the
+            // sample loop. Should typically return in single-digit ms.
+            using var p = new Process {
+                StartInfo = new ProcessStartInfo {
+                    FileName = "vcgencmd",
+                    Arguments = "get_throttled",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }
+            };
+            if (!p.Start()) return (false, false);
+            if (!p.WaitForExit(500)) {
+                try { p.Kill(); } catch { /* race */ }
+                return (false, false);
+            }
+            if (p.ExitCode != 0) return (false, false);
+            // Output: "throttled=0x50005" (or 0x0 etc.)
+            var line = p.StandardOutput.ReadToEnd().Trim();
+            var idx = line.IndexOf("0x", StringComparison.OrdinalIgnoreCase);
+            if (idx < 0) return (false, false);
+            var hex = line.Substring(idx + 2);
+            if (!uint.TryParse(hex,
+                    System.Globalization.NumberStyles.HexNumber,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var flags)) {
+                return (false, false);
+            }
+            return ((flags & 0x1u) != 0, (flags & 0x10000u) != 0);
+        } catch {
+            // vcgencmd not present (non-Pi Linux), permission denied,
+            // process spawn failure -- silently return "no signal".
+            return (false, false);
+        }
     }
 
     /// <summary>
@@ -247,6 +321,18 @@ public sealed record HostMetricsSnapshot {
     /// "/mnt/usb-ssd" on Linux). Tooltip context so the user knows which
     /// disk they are reading the free-space gauge for.</summary>
     public string DiskMountName { get; init; } = string.Empty;
+    /// <summary>True when the Pi's voltage monitor is reporting
+    /// under-voltage right now (bit 0 of vcgencmd get_throttled).
+    /// Drives a red chip on the activity bar -- ANY recurring
+    /// under-voltage is a strong predictor of imminent USB device
+    /// crashes. Always false on non-Pi hardware.</summary>
+    public bool UnderVoltageNow { get; init; }
+    /// <summary>True when under-voltage has been detected at any
+    /// point since the Pi booted (bit 16 of vcgencmd get_throttled).
+    /// Doesn't clear until reboot, so we surface it as a softer
+    /// amber chip to advise "you may need a powered USB hub or a
+    /// better PSU" even if the rail is currently stable.</summary>
+    public bool UnderVoltageOccurred { get; init; }
     public DateTime SampledAt { get; init; }
 
     /// <summary>Host hardware identification, same instance is shared
