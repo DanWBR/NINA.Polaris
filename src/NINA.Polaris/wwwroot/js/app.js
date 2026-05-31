@@ -223,6 +223,38 @@ function ninaApp() {
         focusSliderTarget: 0,
         focusSliderDirty: false,
 
+        // Spec-compliance v2: capabilities hidrated from focuser.capabilities
+        // sub-object in the WS payload. UI gates the Sync / Reverse /
+        // Backlash sections on these so users with drivers that don't
+        // expose the matching FOCUS_* properties don't see buttons
+        // that would just 501. All default to false so the controls
+        // stay hidden until the backend confirms support.
+        focuserCaps: { sync: false, reverse: false, backlash: false, temperature: false },
+        // Spec-compliance v2: collapsible settings card state. Each
+        // sub-form holds the pending values the user is editing
+        // before they hit Apply; not coupled to the live focuser
+        // position so the WS tick doesn't trash them.
+        focuserSettings: {
+            // FOCUS_SYNC: position to write when the user clicks
+            // Sync. Pre-filled with current Position when the card
+            // opens so "Sync to current" is one click.
+            syncPosition: 0,
+            // FOCUS_REVERSE_MOTION: pending toggle state. Not
+            // round-tripped from WS — the driver doesn't broadcast
+            // current reverse state, so the toggle reflects what
+            // the user has set in THIS session.
+            reversed: false,
+            // FOCUS_BACKLASH_*: pending enable + step count.
+            backlashEnabled: false,
+            backlashSteps: 0,
+            // Show/hide the disclosure section. Default collapsed
+            // because most users never touch these after setup.
+            open: false,
+            busy: false,
+            lastError: null,
+            lastMessage: null
+        },
+
         // MFOC: FOCUS tab subtab. 'assist' = manual HFR loop +
         // Bahtinov; 'vcurve' = the existing motor-driven V-curve.
         // Defaults to whichever is more useful given the current
@@ -269,9 +301,26 @@ function ninaApp() {
             position: 0,
             currentFilter: '',
             filters: [],
-            moving: false
+            moving: false,
+            // Spec-compliance v2: hidrated from filterWheel.capabilities
+            // in the WS payload. UI hides the "Edit names" affordance
+            // for wheels that don't advertise edit support (ASCOM/Alpaca,
+            // by design — names are managed externally there).
+            capabilities: { editNames: false }
         },
         selectedFilterWheel: null,
+        // Spec-compliance v2: in-place edit state for the filter
+        // name editor. Cloned from filterWheel.filters when the user
+        // clicks Edit, written back via PUT /api/filterwheel/names
+        // on Save. Decoupled from the live filterWheel.filters so a
+        // mid-edit WS push doesn't trash what the user is typing.
+        filterNamesEdit: {
+            open: false,
+            names: [],
+            busy: false,
+            lastError: null,
+            lastMessage: null
+        },
 
         // Sky
         skySearch: '',
@@ -12246,6 +12295,175 @@ function ninaApp() {
             try { await this.apiPost('/api/focuser/abort'); } catch (e) { }
         },
 
+        // ─── FOCUSER-SPEC v2 ─────────────────────────────────────
+        // Toggle the "Driver settings" disclosure card. When opening,
+        // pre-fill the Sync input with current position so "Sync to
+        // current" is one click instead of two (much more common than
+        // syncing to an arbitrary value the user remembers).
+        focuserSettingsToggle() {
+            this.focuserSettings.open = !this.focuserSettings.open;
+            if (this.focuserSettings.open) {
+                this.focuserSettings.syncPosition = this.focusPosition || 0;
+                this.focuserSettings.lastError = null;
+                this.focuserSettings.lastMessage = null;
+            }
+        },
+
+        // INDI FOCUS_SYNC: redefine current physical position as the
+        // entered step value WITHOUT moving the motor. Used to recover
+        // from counter loss or after manually reseating the drawtube.
+        async focuserSync() {
+            const pos = parseInt(this.focuserSettings.syncPosition, 10);
+            if (!Number.isFinite(pos) || pos < 0) {
+                this.toast('Sync position must be a non-negative integer', 'warn');
+                return;
+            }
+            this.focuserSettings.busy = true;
+            this.focuserSettings.lastError = null;
+            this.focuserSettings.lastMessage = null;
+            try {
+                await this.apiPost('/api/focuser/sync', { position: pos });
+                this.focuserSettings.lastMessage = `Focuser position synced to ${pos}`;
+                this.toast(this.focuserSettings.lastMessage, 'ok');
+            } catch (e) {
+                const msg = e?.message || 'Sync failed';
+                this.focuserSettings.lastError = msg;
+                this.toast('Focuser sync failed: ' + msg, 'error');
+            } finally {
+                this.focuserSettings.busy = false;
+            }
+        },
+
+        // INDI FOCUS_REVERSE_MOTION: flip in/out direction. One-time
+        // setup for focusers mounted backwards relative to the
+        // optical train. Driver remembers it across reconnects.
+        async focuserSetReverse(reversed) {
+            this.focuserSettings.busy = true;
+            this.focuserSettings.lastError = null;
+            this.focuserSettings.lastMessage = null;
+            try {
+                await this.apiPost('/api/focuser/reverse', { reversed });
+                this.focuserSettings.reversed = reversed;
+                this.focuserSettings.lastMessage =
+                    'Focuser direction ' + (reversed ? 'reversed' : 'restored to default');
+                this.toast(this.focuserSettings.lastMessage, 'ok');
+            } catch (e) {
+                const msg = e?.message || 'Reverse failed';
+                this.focuserSettings.lastError = msg;
+                this.toast('Focuser reverse failed: ' + msg, 'error');
+                // Roll back the local toggle so it doesn't visually
+                // claim success when the backend rejected the call.
+                // Alpine has already moved the model by the time we
+                // hit catch, so re-set explicitly.
+                this.focuserSettings.reversed = !reversed;
+            } finally {
+                this.focuserSettings.busy = false;
+            }
+        },
+
+        // INDI FOCUS_BACKLASH_TOGGLE + FOCUS_BACKLASH_STEPS combined.
+        // Sends both values atomically (per backend contract: steps
+        // first when enabling, then toggle). Validates the step
+        // count against a sensible upper bound -- 500 steps is more
+        // than any consumer focuser actually needs, anything beyond
+        // that is likely a typo.
+        async focuserApplyBacklash() {
+            const enabled = !!this.focuserSettings.backlashEnabled;
+            const steps = parseInt(this.focuserSettings.backlashSteps, 10) || 0;
+            if (enabled && (steps < 0 || steps > 500)) {
+                this.toast('Backlash steps must be between 0 and 500', 'warn');
+                return;
+            }
+            this.focuserSettings.busy = true;
+            this.focuserSettings.lastError = null;
+            this.focuserSettings.lastMessage = null;
+            try {
+                await this.apiPost('/api/focuser/backlash', { enabled, steps });
+                this.focuserSettings.lastMessage = enabled
+                    ? `Backlash compensation enabled (${steps} steps)`
+                    : 'Backlash compensation disabled';
+                this.toast(this.focuserSettings.lastMessage, 'ok');
+            } catch (e) {
+                const msg = e?.message || 'Backlash apply failed';
+                this.focuserSettings.lastError = msg;
+                this.toast('Backlash apply failed: ' + msg, 'error');
+            } finally {
+                this.focuserSettings.busy = false;
+            }
+        },
+
+        // ─── FILTERWHEEL-SPEC v2 ─────────────────────────────────
+        // Open the inline filter-name editor, snapshotting the
+        // current names so the user edits a local copy and we don't
+        // race with the 1Hz WS push. Disabled when wheel reports
+        // no edit support.
+        filterNamesEditOpen() {
+            if (!this.filterWheel.capabilities?.editNames) {
+                this.toast('This filter wheel driver does not support renaming slots', 'warn');
+                return;
+            }
+            this.filterNamesEdit = {
+                open: true,
+                names: [...(this.filterWheel.filters || [])],
+                busy: false,
+                lastError: null,
+                lastMessage: null
+            };
+        },
+
+        filterNamesEditCancel() {
+            this.filterNamesEdit.open = false;
+            this.filterNamesEdit.names = [];
+            this.filterNamesEdit.lastError = null;
+            this.filterNamesEdit.lastMessage = null;
+        },
+
+        // PUT /api/filterwheel/names — pushes the edited names back
+        // into the driver via INDI FILTER_NAME. Validates count
+        // client-side first (server validates too, but this gives
+        // friendlier feedback than 400 Bad Request).
+        async filterNamesEditSave() {
+            const slots = (this.filterWheel.filters || []).length;
+            if (this.filterNamesEdit.names.length !== slots) {
+                this.toast(`Filter name count mismatch (got ${this.filterNamesEdit.names.length}, expected ${slots})`,
+                    'warn');
+                return;
+            }
+            // Trim names to keep accidental whitespace out of the
+            // driver config. Empty strings are tolerated by INDI
+            // (slot stays unnamed) but we coerce to "Slot N" so the
+            // dropdown stays readable.
+            const cleaned = this.filterNamesEdit.names.map(
+                (n, i) => (n || '').trim() || `Slot ${i + 1}`);
+            this.filterNamesEdit.busy = true;
+            this.filterNamesEdit.lastError = null;
+            this.filterNamesEdit.lastMessage = null;
+            try {
+                // No dedicated apiPut helper; PUT via apiFetch with
+                // method override + JSON body. Same auth + transfer
+                // chip plumbing as apiPost.
+                const resp = await this.apiFetch('/api/filterwheel/names', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ names: cleaned })
+                });
+                const body = await resp.json().catch(() => ({}));
+                this.filterNamesEdit.lastMessage = `Saved ${cleaned.length} filter names`;
+                this.toast(this.filterNamesEdit.lastMessage, 'ok');
+                // Mirror the saved names locally so the buttons
+                // update immediately rather than waiting for the
+                // next WS tick.
+                this.filterWheel.filters = body?.names ? [...body.names] : cleaned;
+                this.filterNamesEdit.open = false;
+            } catch (e) {
+                const msg = e?.message || 'Save failed';
+                this.filterNamesEdit.lastError = msg;
+                this.toast('Filter names save failed: ' + msg, 'error');
+            } finally {
+                this.filterNamesEdit.busy = false;
+            }
+        },
+
         // ─── MFOC-1: Manual Focus Assist ─────────────────────────
         // Default tab selection when the FOCUS tab opens. If a motor
         // is connected the V-curve auto-focus is the primary workflow,
@@ -17572,6 +17790,18 @@ function ninaApp() {
                 if (!this.equipFocuserChoice && eq.focuser.name) {
                     this.equipFocuserChoice = eq.focuser.name;
                 }
+                // Capabilities (FOCUSER-SPEC v2). Older server builds
+                // without the sub-object → leave defaults (all false),
+                // so users on a mismatched build don't get controls
+                // that would 501.
+                if (eq.focuser.capabilities) {
+                    this.focuserCaps = {
+                        sync:        !!eq.focuser.capabilities.sync,
+                        reverse:     !!eq.focuser.capabilities.reverse,
+                        backlash:    !!eq.focuser.capabilities.backlash,
+                        temperature: !!eq.focuser.capabilities.temperature
+                    };
+                }
             }
             if (eq.filterWheel) {
                 const fwOnline = eq.filterWheel.connected !== false;
@@ -17580,7 +17810,14 @@ function ninaApp() {
                     position: eq.filterWheel.position,
                     currentFilter: eq.filterWheel.currentFilter,
                     filters: eq.filterWheel.filters || [],
-                    moving: eq.filterWheel.moving
+                    moving: eq.filterWheel.moving,
+                    // FILTERWHEEL-SPEC v2: editNames flag drives
+                    // whether the "Edit names" affordance renders.
+                    // Backward compat: missing capabilities object on
+                    // older server builds → keep editor hidden.
+                    capabilities: {
+                        editNames: !!eq.filterWheel.capabilities?.editNames
+                    }
                 };
                 this.selectedFilterWheel = fwOnline ? eq.filterWheel.name : null;
                 if (!this.equipFilterChoice && eq.filterWheel.name) {

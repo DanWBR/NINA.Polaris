@@ -3538,6 +3538,91 @@
                                     <span x-show="focusTemp !== null">Temp: <strong x-text="(focusTemp?.toFixed(1) || '--') + '°C'"></strong></span>
                                     <span x-show="focusMoving" class="text-warn">MOVING</span>
                                 </div>
+
+                                <!-- FOCUSER-SPEC v2: driver settings disclosure.
+                                     Only rendered when the focuser is connected AND the
+                                     driver advertises at least one of the optional
+                                     INDI properties (FOCUS_SYNC / FOCUS_REVERSE_MOTION /
+                                     FOCUS_BACKLASH_TOGGLE). Backends without any of
+                                     those see no button and zero clutter. -->
+                                <div class="equip-driver-settings"
+                                     x-show="focuserCaps.sync || focuserCaps.reverse || focuserCaps.backlash">
+                                    <button class="btn btn-sm equip-driver-settings-toggle"
+                                            @click="focuserSettingsToggle()"
+                                            :title="focuserSettings.open ? 'Hide driver settings' : 'Show driver settings (sync, reverse, backlash)'">
+                                        <span x-text="(focuserSettings.open ? '▾ Hide' : '▸ Show') + ' driver settings'"></span>
+                                    </button>
+
+                                    <div class="equip-driver-settings-body"
+                                         x-show="focuserSettings.open"
+                                         x-transition>
+
+                                        <!-- FOCUS_SYNC: redefine current position. -->
+                                        <div class="equip-driver-row" x-show="focuserCaps.sync">
+                                            <label class="equip-driver-label">Sync to position</label>
+                                            <input class="equip-input equip-input-sm" type="number" min="0"
+                                                   x-model.number="focuserSettings.syncPosition"
+                                                   :disabled="focuserSettings.busy">
+                                            <button class="btn btn-sm"
+                                                    @click="focuserSync()"
+                                                    :disabled="focuserSettings.busy"
+                                                    title="Tell the driver: current physical position IS this step value (no motor movement)">
+                                                Sync
+                                            </button>
+                                        </div>
+                                        <p class="equip-driver-hint" x-show="focuserCaps.sync">
+                                            Use after manually moving the drawtube or when the step
+                                            counter has drifted. Does not move the motor.
+                                        </p>
+
+                                        <!-- FOCUS_REVERSE_MOTION: direction flip. -->
+                                        <div class="equip-driver-row" x-show="focuserCaps.reverse">
+                                            <label class="equip-driver-label">
+                                                <input type="checkbox"
+                                                       x-model="focuserSettings.reversed"
+                                                       @change="focuserSetReverse($event.target.checked)"
+                                                       :disabled="focuserSettings.busy">
+                                                Reverse motor direction
+                                            </label>
+                                        </div>
+                                        <p class="equip-driver-hint" x-show="focuserCaps.reverse">
+                                            Enable when the focuser is mounted backwards relative to
+                                            the optical train and "inward" actually moves the drawtube
+                                            out.
+                                        </p>
+
+                                        <!-- FOCUS_BACKLASH_*: enable + step count. -->
+                                        <div class="equip-driver-row" x-show="focuserCaps.backlash">
+                                            <label class="equip-driver-label">
+                                                <input type="checkbox"
+                                                       x-model="focuserSettings.backlashEnabled"
+                                                       :disabled="focuserSettings.busy">
+                                                Backlash comp
+                                            </label>
+                                            <input class="equip-input equip-input-sm" type="number" min="0" max="500"
+                                                   x-model.number="focuserSettings.backlashSteps"
+                                                   :disabled="!focuserSettings.backlashEnabled || focuserSettings.busy"
+                                                   placeholder="steps">
+                                            <button class="btn btn-sm"
+                                                    @click="focuserApplyBacklash()"
+                                                    :disabled="focuserSettings.busy">
+                                                Apply
+                                            </button>
+                                        </div>
+                                        <p class="equip-driver-hint" x-show="focuserCaps.backlash">
+                                            Driver overshoots the target then returns by this many
+                                            steps to take the slack out of the gear train. Typical
+                                            value 20-50 for stock Crayfords.
+                                        </p>
+
+                                        <p class="equip-driver-message text-ok"
+                                           x-show="focuserSettings.lastMessage"
+                                           x-text="focuserSettings.lastMessage"></p>
+                                        <p class="equip-driver-message text-err"
+                                           x-show="focuserSettings.lastError"
+                                           x-text="focuserSettings.lastError"></p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -3634,6 +3719,59 @@
                                                 :class="f === filterWheel.currentFilter ? 'btn-active' : ''"
                                                 x-text="f"></button>
                                     </template>
+                                </div>
+
+                                <!-- FILTERWHEEL-SPEC v2: rename slots inline. Only
+                                     shown when the wheel advertises edit support (INDI:
+                                     yes via FILTER_NAME text vector; Alpaca/ASCOM: no,
+                                     they manage names externally). The editor snapshot
+                                     happens on Open so a mid-edit WS push doesn't trash
+                                     the user's typing. -->
+                                <div class="equip-driver-settings"
+                                     x-show="filterWheel.capabilities?.editNames
+                                             && filterWheel.filters.length > 0">
+                                    <button class="btn btn-sm equip-driver-settings-toggle"
+                                            @click="filterNamesEdit.open ? filterNamesEditCancel() : filterNamesEditOpen()"
+                                            x-text="(filterNamesEdit.open ? '▾ Cancel' : '✎ Edit filter names')"></button>
+
+                                    <div class="equip-driver-settings-body"
+                                         x-show="filterNamesEdit.open"
+                                         x-transition>
+                                        <p class="equip-driver-hint">
+                                            Names are stored in the INDI driver and persist across
+                                            reconnects.
+                                        </p>
+                                        <template x-for="(_, idx) in filterNamesEdit.names" :key="'fn-'+idx">
+                                            <div class="equip-driver-row">
+                                                <label class="equip-driver-label"
+                                                       x-text="'Slot ' + (idx + 1)"></label>
+                                                <input class="equip-input equip-input-sm" type="text"
+                                                       x-model="filterNamesEdit.names[idx]"
+                                                       :disabled="filterNamesEdit.busy"
+                                                       :placeholder="'Filter ' + (idx + 1)"
+                                                       maxlength="32">
+                                            </div>
+                                        </template>
+                                        <div class="equip-driver-row">
+                                            <button class="btn btn-sm btn-primary"
+                                                    @click="filterNamesEditSave()"
+                                                    :disabled="filterNamesEdit.busy">
+                                                <span x-show="!filterNamesEdit.busy">Save names</span>
+                                                <span x-show="filterNamesEdit.busy">Saving…</span>
+                                            </button>
+                                            <button class="btn btn-sm"
+                                                    @click="filterNamesEditCancel()"
+                                                    :disabled="filterNamesEdit.busy">
+                                                Cancel
+                                            </button>
+                                        </div>
+                                        <p class="equip-driver-message text-ok"
+                                           x-show="filterNamesEdit.lastMessage"
+                                           x-text="filterNamesEdit.lastMessage"></p>
+                                        <p class="equip-driver-message text-err"
+                                           x-show="filterNamesEdit.lastError"
+                                           x-text="filterNamesEdit.lastError"></p>
+                                    </div>
                                 </div>
                             </div>
                         </div>

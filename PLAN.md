@@ -94,13 +94,49 @@ validates the length matches the wheel's slot count.
 
 ## What's still pending (next session)
 
-- Frontend UI surfaces for the five new endpoints: a Sync button
-  + position input in the Focuser card, a Reverse toggle in the
-  Focuser settings, a Backlash editor (enable + steps), and an
-  inline "Edit filter names" form in the FilterWheel card.
 - Live re-detect of capabilities when a hot-plug rig swap
   switches drivers mid-session (today the WS payload reflects
   it but the Alpine state may cache stale values).
+
+## Frontend UI for the five spec endpoints (follow-up landed)
+
+The Sync / Reverse / Backlash / Edit-names UIs ship in the
+same chapter. Surfaces:
+
+- **Focuser card** -- collapsible "Driver settings" disclosure
+  visible only when `focuser.capabilities.{sync|reverse|backlash}`
+  comes back true. Each sub-section also gated independently so
+  a driver that only does FOCUS_SYNC shows just the sync row.
+  - Sync row: number input + Sync button (pre-filled with current
+    Position when the disclosure opens, so "Sync to current" is
+    one click).
+  - Reverse row: checkbox; `@change` POSTs immediately and rolls
+    back local toggle on failure so the UI doesn't lie about
+    success.
+  - Backlash row: enable checkbox + step input (0-500 clamp) +
+    Apply button.
+  - Inline status: green message on success, red on error, both
+    persist until the next action.
+- **Filter Wheel card** -- "Edit filter names" disclosure visible
+  only when `filterWheel.capabilities.editNames`. Snapshots the
+  live names on Open so mid-edit WS pushes don't trash typing,
+  pushes back via `PUT /api/filterwheel/names` on Save.
+  Pre-empties names → coerced to `Slot N` placeholders so the
+  filter buttons stay readable.
+
+State + methods added in `app.js`:
+- `focuserCaps` + `focuserSettings` (open / busy / lastError /
+  lastMessage + the three sub-form fields)
+- `filterWheel.capabilities.editNames` + `filterNamesEdit`
+- `focuserSettingsToggle`, `focuserSync`, `focuserSetReverse`,
+  `focuserApplyBacklash`
+- `filterNamesEditOpen`, `filterNamesEditCancel`,
+  `filterNamesEditSave`
+
+CSS: new `.equip-driver-settings*` + `.equip-driver-hint` +
+`.equip-input-sm` rules. Reuses the existing dashed-border
+collapsible idiom established by the algo-preset panel in the
+GUIDE tab.
 
 ---
 
