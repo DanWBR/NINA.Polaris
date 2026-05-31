@@ -1116,11 +1116,24 @@ function ninaApp() {
             entries: [],
             roots: [],
             showHidden: false,
+            // UNIF-4: opt-in FITS metadata columns in the list. Reads
+            // initial value from localStorage so a power user who
+            // always wants them on doesn't have to re-toggle each
+            // session.
+            showFitsMeta: (typeof localStorage !== 'undefined'
+                && localStorage.getItem('polaris-files-fitsmeta') === '1'),
             selectedPaths: [],
             clipboard: null,
             loading: false,
             error: '',
             preview: { open: false, path: '', name: '', kind: '', textContent: null }
+        },
+        filesPersistMetaToggle() {
+            try {
+                if (typeof localStorage === 'undefined') return;
+                localStorage.setItem('polaris-files-fitsmeta',
+                    this.files.showFitsMeta ? '1' : '0');
+            } catch (e) { /* private mode / quota */ }
         },
         _filesLastShiftIndex: -1,    // anchor for shift-click range selection
 
@@ -1403,6 +1416,109 @@ function ninaApp() {
             }
             await this._stackPollJob('/api/studio/integrate/', body.jobId,
                 'Integrate');
+        },
+
+        // UNIF-3c: Channel Combine. Treats the lights slot as a
+        // collection of per-filter mono masters. User declares the
+        // variable name (R, G, B, L, Ha, OIII, SII, etc) for each
+        // entry via prompt(); empty/cancel drops that entry.
+        // Mode pick is RGB / LRGB / PixelMath; only RGB + LRGB are
+        // wired here (PixelMath needs an expression editor).
+        async stackRunCombine() {
+            if (this.stack.lights.length < 2) {
+                this.toast('Need at least 2 per-filter masters in Lights', 'warn');
+                return;
+            }
+            const mode = (prompt(
+                'Combine mode: rgb | lrgb', 'rgb') || '').trim().toLowerCase();
+            if (mode !== 'rgb' && mode !== 'lrgb') {
+                this.toast('Cancelled (mode must be rgb or lrgb)', 'info');
+                return;
+            }
+            const need = mode === 'lrgb' ? 4 : 3;
+            if (this.stack.lights.length < need) {
+                this.toast(mode.toUpperCase() + ' needs at least ' + need
+                    + ' inputs in Lights slot', 'warn');
+                return;
+            }
+            const channelMap = [];
+            for (const p of this.stack.lights) {
+                const v = (prompt(
+                    'Variable for ' + this.stackBasename(p)
+                        + '\n(R, G, B' + (mode === 'lrgb' ? ', L' : '')
+                        + ' -- empty to skip)',
+                    '') || '').trim();
+                if (!v) continue;
+                channelMap.push({ variable: v, framePath: p });
+            }
+            const required = mode === 'lrgb' ? ['R', 'G', 'B', 'L'] : ['R', 'G', 'B'];
+            for (const r of required) {
+                if (!channelMap.some(c => c.variable.toUpperCase() === r)) {
+                    this.toast('Missing variable "' + r + '" for ' + mode.toUpperCase(), 'warn');
+                    return;
+                }
+            }
+            let lrgbAlgo = null;
+            if (mode === 'lrgb') {
+                lrgbAlgo = (prompt('LRGB algorithm: lab | ratio', 'lab')
+                    || 'lab').trim().toLowerCase();
+                if (lrgbAlgo !== 'lab' && lrgbAlgo !== 'ratio') lrgbAlgo = 'lab';
+            }
+            let resp;
+            try {
+                resp = await this.apiPost('/api/studio/combine', {
+                    mode: mode === 'rgb' ? 'rgb' : 'lrgb',
+                    channelMap,
+                    register: true,
+                    normalize: true,
+                    lrgbAlgo
+                });
+            } catch (e) {
+                this.toast('Combine submit failed: ' + e.message, 'error');
+                return;
+            }
+            const body = await resp.json();
+            if (!body.jobId) {
+                this.toast('Combine rejected: ' + (body.error || 'unknown'), 'error');
+                return;
+            }
+            // /api/studio/combine status route uses /{jobId} (no /status).
+            await this._stackPollJob('/api/studio/combine/', body.jobId,
+                'Combine ' + mode.toUpperCase());
+        },
+
+        // UNIF-3c: Color Calibration -- only BG-auto in v1. Manual
+        // and PCC need patch-picker + catalog-status UI which is
+        // bigger than the prompt() approach supports cleanly.
+        async stackRunColorCal() {
+            if (this.stack.lights.length === 0) {
+                this.toast('Add the master integrated FITS to Lights first', 'warn');
+                return;
+            }
+            const path = this.stack.lights[0];
+            if (!confirm('Background-neutralise (auto sample mode):\n\n'
+                + this.stackBasename(path)
+                + '\n\nOutput will be a sibling FITS with the _bgneu suffix.\n'
+                + '(For Manual + PCC modes, use the old endpoint via curl '
+                + 'until the richer modal lands.)')) return;
+            let resp;
+            try {
+                resp = await this.apiPost('/api/studio/colorcal', {
+                    framePath: path,
+                    mode: 'bg',
+                    bgSample: 'auto'
+                });
+            } catch (e) {
+                this.toast('ColorCal submit failed: ' + e.message, 'error');
+                return;
+            }
+            const body = await resp.json();
+            if (!body.jobId) {
+                this.toast('ColorCal rejected: ' + (body.error || 'unknown'), 'error');
+                return;
+            }
+            await this._stackPollJob('/api/studio/colorcal/', body.jobId,
+                'Color Cal (BG)');
         },
 
         stackClearAll() {
@@ -7957,7 +8073,8 @@ function ninaApp() {
             try {
                 const r = await this.apiGet('/api/files/list?path='
                     + encodeURIComponent(path)
-                    + '&hidden=' + (this.files.showHidden ? 'true' : 'false'));
+                    + '&hidden=' + (this.files.showHidden ? 'true' : 'false')
+                    + (this.files.showFitsMeta ? '&withMeta=true' : ''));
                 this.files.cwd = r.path || path;
                 this.files.entries = (r.entries || []).slice().sort(this._filesSortCmp);
                 this.files.selectedPaths = [];

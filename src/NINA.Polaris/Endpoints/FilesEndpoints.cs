@@ -24,9 +24,41 @@ public static class FilesEndpoints {
 
         g.MapGet("/roots", (FileBrowserService svc) => Results.Ok(svc.ListRoots()));
 
-        g.MapGet("/list", (FileBrowserService svc, string path, bool? hidden) => {
+        g.MapGet("/list", (FileBrowserService svc,
+                           NINA.Polaris.Services.Studio.FrameLibraryService lib,
+                           string path, bool? hidden, bool? withMeta) => {
             try {
                 var entries = svc.List(path, hidden ?? false);
+                if (withMeta == true) {
+                    // UNIF-4: decorate each entry with the FITS
+                    // metadata cached by FrameLibraryService (IMAGETYP,
+                    // FILTER, OBJECT, EXPOSURE, GAIN). The lookup is a
+                    // single SQL "WHERE path IN (...)" so a 200-file
+                    // listing stays under ~30ms even on the Pi. Files
+                    // not indexed yet (fresh captures or non-FITS)
+                    // get a null fitsMeta on their wire shape.
+                    var paths = entries
+                        .Where(e => !e.IsDirectory)
+                        .Select(e => e.FullPath)
+                        .ToList();
+                    var meta = lib.BatchLookupByPath(paths);
+                    var decorated = entries.Select(e => {
+                        var m = meta.TryGetValue(e.FullPath, out var row) ? row : null;
+                        return new {
+                            e.Name, e.FullPath, e.IsDirectory,
+                            e.SizeBytes, e.ModifiedUtc, e.Mime,
+                            e.IsHidden, e.IsReadOnly,
+                            fitsMeta = m == null ? null : new {
+                                imageType = m.ImageType,
+                                filter = m.Filter,
+                                target = m.Target,
+                                exposureSec = m.ExposureSec,
+                                gain = m.Gain
+                            }
+                        };
+                    }).ToList<object>();
+                    return Results.Ok(new { path, entries = decorated });
+                }
                 return Results.Ok(new { path, entries });
             } catch (UnauthorizedAccessException ex) {
                 return Results.Json(new { error = ex.Message },

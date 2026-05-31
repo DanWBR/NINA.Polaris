@@ -15,7 +15,119 @@
   verbatim, only the prose around them was translated.
 -->
 
-# Current chapter: PH2VNC — embedded PHD2 GUI on Windows via TightVNC + noVNC
+# Current chapter: UNIF -- unified FILES + STUDIO + EDITOR into one tab
+
+> The browser had three separate tabs (FILES, STUDIO, EDITOR) that
+> all worked on the same universe -- FITS on disk -- but forced
+> the user to bounce between them mid-workflow ("pick lights ->
+> stack -> edit master"). The unification collapses them into a
+> single FILES tab with two right-side sub-tabs (Stack and Edit)
+> while the file browser stays fixed on the left. The Stack
+> workflow uses a slot-based UX (add to lights/darks/flats/biases)
+> backed by path-based service contracts (no more frame ID
+> indirection). The Edit workflow lives in the same panel and
+> opens whatever file is selected in the browser.
+
+## What shipped
+
+- **UNIF-1 (sub-tab shell + state plumbing)**
+  Added `filesSubTab` state ('stack' | 'edit') with localStorage
+  persistence, two pill controls at the top of the FILES panel,
+  and the `.files-pane-split` 2-column wrapper. The Stack sub-tab
+  was a placeholder; the Edit sub-tab was a stub. Browser stayed
+  fixed on the left.
+
+- **UNIF-2 (slot model + Add buttons)**
+  The `stack: {...}` state object with eight slots (lights, darks,
+  flats, biases, masterDarks, masterFlats, masterBiases, activeJob)
+  + per-slot persistence to localStorage. Four slot cards in the
+  Stack sub-tab with `+ Add to Lights / Darks / Flats / Biases`
+  buttons that consume the current browser selection (filtered to
+  `.fits/.fit/.xisf`, deduped). Clear-slot and clear-all buttons.
+
+- **UNIF-3 (actions wiring + path-based endpoints, 3 sub-commits)**
+  Backend: every Studio service (`MasterFrameService`,
+  `CalibrationService`, `BatchStackingService`,
+  `ChannelCombineService`, `ColorCalibrationService`) migrated from
+  `IReadOnlyList<int> frameIds` to `IReadOnlyList<string> framePaths`.
+  Services open FITS directly by path (no `_library.GetById` lookup
+  needed). Tests updated to seed FITS on disk and assert against
+  resulting masters. Endpoints accept `framePaths` in their request
+  records.
+  Frontend: each Stack action button (Master Dark/Flat/Bias,
+  Calibrate, Integrate, Combine, ColorCal) wires to the migrated
+  endpoint with the slot paths in the body. Combine prompts for the
+  RGB/LRGB mode and per-channel variable assignment. ColorCal runs
+  BG-auto on the first lights entry.
+
+- **UNIF-4 (FITS metadata toggle in browser)**
+  Backend: `/api/files/list` accepts `withMeta=true` and projects
+  each entry with an optional `fitsMeta { imageType, filter, target,
+  exposureSec, gain }` sub-object via a new
+  `FrameLibraryService.BatchLookupByPath` batch query (single SQL,
+  sub-100 ms for hundreds of rows). Frontend: a "Show FITS metadata"
+  checkbox in the browser toolbar drives the request flag and
+  conditionally renders four extra columns
+  (`<template x-if="files.showFitsMeta">`). The toggle persists to
+  localStorage (`polaris-files-fitsmeta`).
+
+- **UNIF-5 (move EDITOR markup into the Edit sub-tab)**
+  The 368-line EDITOR tab markup migrated into the `.files-right-pane`
+  via a python script (surgical insertion preserved indentation +
+  Alpine bindings). `filesOpenInEditor()` now calls
+  `setFilesSubTab('edit')` instead of `tab = 'editor'`. Empty-state
+  link from the Editor that used to point at STUDIO now sets
+  `setFilesSubTab('stack')` instead.
+
+- **UNIF-6 (remove STUDIO + EDITOR from sidebar)**
+  Sidebar buttons for STUDIO and EDITOR removed. The 1060-line
+  STUDIO tab panel and the 3-line EDITOR stub deleted via python
+  (~1090 lines net removed). All `tab = 'studio'` / `tab = 'editor'`
+  call sites redirected to the new sub-tab flow (`tab = 'files';
+  setFilesSubTab(...)`).
+
+- **UNIF-7 (docs)**
+  `docs/user-guide/files.md` rewritten to cover the unified panel,
+  Stack workflow, Edit workflow, slot UX, FITS metadata toggle, and
+  common pitfalls. README's "Studio" section header replaced with
+  "Files panel (browser + Stack + Edit)" pointing at the new doc.
+
+## Why a single panel beats three tabs
+
+The old layout encoded an artificial separation: FILES was for
+moving files around, STUDIO was for batch jobs against the SQLite
+frame library, EDITOR was for single-frame adjustments. In
+practice the user's mental model is "I have files; sometimes I
+batch them, sometimes I open one." The unified panel matches that
+model. Side effects:
+
+- The path-based services are simpler than the id-based ones:
+  zero round-trip to look up rows, files don't need to be indexed
+  before they can be stacked, and the API surface is uniform across
+  Master / Calibrate / Integrate / Combine / ColorCal.
+- The FITS metadata toggle replaces the need to keep STUDIO open
+  just to see what type each file is.
+- localStorage persistence on the slots survives page refresh
+  and server restart, so a long stacking session doesn't lose
+  context if the browser reloads.
+- ~1090 lines of duplicate markup gone; the Edit pipeline lives
+  in one place, the browser lives in one place.
+
+## Out of scope (deferred)
+
+- Drag-and-drop slot assignment: the "+ Add" buttons cover the
+  multi-select case fine; if demand shows up, this is a
+  ~50-line addition.
+- "Smart add" that auto-classifies the selection by IMAGETYP
+  header into the right slot. Header values aren't always
+  reliable, so manual is safer for v1.
+- Per-target filtering of the browser listing using the new
+  metadata columns. Today the toggle adds columns; sorting and
+  filtering by them is a follow-up.
+
+---
+
+# Previous chapter: PH2VNC — embedded PHD2 GUI on Windows via TightVNC + noVNC
 
 > The GUIDE tab's "PHD2 GUI" embed was Linux-only (xpra). The user
 > runs Polaris on a Windows mini-PC too; on that host the tab just

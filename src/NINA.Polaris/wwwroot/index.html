@@ -5802,6 +5802,19 @@
                         <input type="checkbox" x-model="files.showHidden" @change="filesReload()">
                         Hidden
                     </label>
+                    <!-- UNIF-4: opt-in FITS metadata columns. Lookup
+                         is a single batch SQL against frames.db (no
+                         per-file header parse), so even directories
+                         with 200+ FITS stay snappy. Off by default
+                         to keep the listing minimal for non-FITS
+                         folders. -->
+                    <label class="files-hidden-toggle"
+                           title="Show IMAGETYP, FILTER, TARGET, EXPOSURE columns from the FITS header cache">
+                        <input type="checkbox"
+                               x-model="files.showFitsMeta"
+                               @change="filesPersistMetaToggle(); filesReload()">
+                        FITS metadata
+                    </label>
                     <button class="btn btn-sm" @click="filesReload()" title="Reload">⟳</button>
                 </div>
 
@@ -5920,6 +5933,20 @@
                                 <th class="files-col-size">Size</th>
                                 <th class="files-col-mod">Modified</th>
                                 <th class="files-col-type">Type</th>
+                                <!-- UNIF-4: FITS metadata columns,
+                                     only visible when toggle is on. -->
+                                <template x-if="files.showFitsMeta">
+                                    <th class="files-col-fitsmeta">IMAGETYP</th>
+                                </template>
+                                <template x-if="files.showFitsMeta">
+                                    <th class="files-col-fitsmeta">Filter</th>
+                                </template>
+                                <template x-if="files.showFitsMeta">
+                                    <th class="files-col-fitsmeta">Target</th>
+                                </template>
+                                <template x-if="files.showFitsMeta">
+                                    <th class="files-col-fitsmeta">Exp (s)</th>
+                                </template>
                             </tr>
                         </thead>
                         <tbody>
@@ -5952,10 +5979,28 @@
                                         x-text="entry.isDirectory ? ', ' : filesFormatBytes(entry.sizeBytes)"></td>
                                     <td class="files-col-mod" x-text="filesFormatDate(entry.modifiedUtc)"></td>
                                     <td class="files-col-type" x-text="filesTypeLabel(entry)"></td>
+                                    <template x-if="files.showFitsMeta">
+                                        <td class="files-col-fitsmeta"
+                                            x-text="entry.fitsMeta?.imageType || '—'"></td>
+                                    </template>
+                                    <template x-if="files.showFitsMeta">
+                                        <td class="files-col-fitsmeta"
+                                            x-text="entry.fitsMeta?.filter || '—'"></td>
+                                    </template>
+                                    <template x-if="files.showFitsMeta">
+                                        <td class="files-col-fitsmeta"
+                                            x-text="entry.fitsMeta?.target || '—'"></td>
+                                    </template>
+                                    <template x-if="files.showFitsMeta">
+                                        <td class="files-col-fitsmeta"
+                                            x-text="entry.fitsMeta?.exposureSec
+                                                    ? entry.fitsMeta.exposureSec.toFixed(0) : '—'"></td>
+                                    </template>
                                 </tr>
                             </template>
                             <tr x-show="!files.loading && files.entries.length === 0">
-                                <td colspan="5" class="files-empty">(empty folder)</td>
+                                <td :colspan="files.showFitsMeta ? 9 : 5"
+                                    class="files-empty">(empty folder)</td>
                             </tr>
                         </tbody>
                     </table>
@@ -6091,12 +6136,29 @@
                                     Integrate
                                 </button>
                             </div>
-                            <p class="hint text-muted" style="margin-top:6px">
-                                Channel Combine + Color Calibration chegam
-                                em sub-fases futuras (UNIF-3c). Use a
-                                rota antiga via curl ou Siril externo
-                                ate la se precisar.
-                            </p>
+                            <!-- UNIF-3c: Combine + ColorCal. The lights
+                                 slot doubles as the input source for
+                                 Channel Combine (treating each path as
+                                 a per-filter mono master). Variables
+                                 are collected via prompt() per path.
+                                 Color Calibration runs BG-auto mode
+                                 only on the first light slot entry --
+                                 Manual + PCC ROI pickers need richer
+                                 UI than fits in this sub-phase. -->
+                            <div class="stack-actions-row">
+                                <button class="btn btn-sm"
+                                        @click="stackRunCombine()"
+                                        :disabled="stack.lights.length < 2 || !!stack.activeJob"
+                                        title="Combine slot lights as per-filter mono masters into RGB/LRGB. You'll be prompted for the variable name (R/G/B/L) per file.">
+                                    Combine (RGB/LRGB)
+                                </button>
+                                <button class="btn btn-sm"
+                                        @click="stackRunColorCal()"
+                                        :disabled="stack.lights.length === 0 || !!stack.activeJob"
+                                        title="Background-neutralise the first light slot entry (auto sample mode). Manual + PCC need richer UI -- coming later.">
+                                    Color Cal (BG auto)
+                                </button>
+                            </div>
                             <div class="stack-job-status" x-show="stack.activeJob" x-cloak>
                                 <strong x-text="stack.activeJob?.label || 'Running…'"></strong>
                                 <span x-text="stack.activeJob?.stage || ''"></span>
@@ -8889,7 +8951,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          development that this is a per-commit nuisance, but the cost
          of users running stale JS for hours (with FrameKind routing
          bugs ending up on the wrong canvas) is higher. -->
-    <script src="/js/app.js?v=20260530-unif3b"></script>
+    <script src="/js/app.js?v=20260530-uniffinal"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

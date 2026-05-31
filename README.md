@@ -526,10 +526,30 @@ location:
   Moon + planets + comets to disk so the panel stays usable at offline
   observing sites.
 
-### Studio (post-processing)
+### Files panel (browser + Stack + Edit)
 
-Browse, calibrate, stack, debayer, clean and export the FITS files
-captured during the session, all from the same browser UI.
+The FILES tab is the unified workbench for everything that lives on
+disk. The same file browser sits on the left; the right side
+switches between two sub-tabs:
+
+- **Stack** -- batch post-processing (master frames, calibration,
+  integration, channel combine, color calibration, Siril). Slot-based
+  UX: multi-select lights in the browser, click *Add to Lights* on
+  the Stack slot card; repeat for darks / flats / biases; click the
+  action button.
+- **Edit** -- single-frame Lightroom-style editor with sliders, AI
+  cleanup (GraXpert), crop and export.
+
+A *Show FITS metadata* toggle in the browser toolbar adds Type /
+Filter / Target / Exposure columns to the listing (powered by the
+SQLite frame library cache; sub-100 ms even with hundreds of rows
+in view). The setting is remembered across sessions.
+
+See [docs/user-guide/files.md](docs/user-guide/files.md) for the
+full walkthrough.
+
+The technical details below describe the Stack pipeline that powers
+the unified panel.
 
 Files are auto-organised under `{ImageOutputDir}/{rig}/...`:
 

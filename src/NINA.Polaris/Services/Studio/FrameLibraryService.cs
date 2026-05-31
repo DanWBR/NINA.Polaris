@@ -286,6 +286,59 @@ public class FrameLibraryService {
         cmd.ExecuteNonQuery();
     }
 
+    /// <summary>UNIF-4: batch lookup by absolute path. Returns a
+    /// dictionary (case-insensitive on Windows-style paths) keyed by
+    /// the requested path; misses are simply absent. Used by the
+    /// FILES browser's optional "Show FITS metadata" toggle to
+    /// decorate the table rows without a per-file SQL roundtrip.
+    /// </summary>
+    public IReadOnlyDictionary<string, FrameRow> BatchLookupByPath(
+            IReadOnlyList<string> paths) {
+        var result = new Dictionary<string, FrameRow>(StringComparer.OrdinalIgnoreCase);
+        if (paths == null || paths.Count == 0) return result;
+        using var c = new SqliteConnection(ConnString);
+        c.Open();
+        // Chunk to keep parameter count sane on SQLite (default
+        // SQLITE_MAX_VARIABLE_NUMBER = 999). Typical directory
+        // listings are under 500 so this rarely chunks.
+        const int chunkSize = 500;
+        for (int i = 0; i < paths.Count; i += chunkSize) {
+            var chunk = paths.Skip(i).Take(chunkSize).ToList();
+            using var cmd = c.CreateCommand();
+            var paramNames = new List<string>(chunk.Count);
+            for (int k = 0; k < chunk.Count; k++) {
+                var p = "$p" + k;
+                paramNames.Add(p);
+                cmd.Parameters.AddWithValue(p, chunk[k]);
+            }
+            cmd.CommandText =
+                "SELECT id, path, file_name, image_type, filter, target, " +
+                "exposure_sec, gain, offset_val, width, height, bayer, " +
+                "date_obs, file_size FROM frames WHERE path IN (" +
+                string.Join(",", paramNames) + ")";
+            using var rdr = cmd.ExecuteReader();
+            while (rdr.Read()) {
+                var row = new FrameRow(
+                    Id:          rdr.GetInt32(0),
+                    Path:        rdr.GetString(1),
+                    FileName:    rdr.GetString(2),
+                    ImageType:   rdr.IsDBNull(3) ? "" : rdr.GetString(3),
+                    Filter:      rdr.IsDBNull(4) ? "" : rdr.GetString(4),
+                    Target:      rdr.IsDBNull(5) ? "" : rdr.GetString(5),
+                    ExposureSec: rdr.IsDBNull(6) ? 0 : rdr.GetDouble(6),
+                    Gain:        rdr.IsDBNull(7) ? 0 : rdr.GetInt32(7),
+                    Offset:      rdr.IsDBNull(8) ? 0 : rdr.GetInt32(8),
+                    Width:       rdr.IsDBNull(9) ? 0 : rdr.GetInt32(9),
+                    Height:      rdr.IsDBNull(10) ? 0 : rdr.GetInt32(10),
+                    Bayer:       rdr.IsDBNull(11) ? "" : rdr.GetString(11),
+                    DateObs:     rdr.IsDBNull(12) ? "" : rdr.GetString(12),
+                    FileSize:    rdr.IsDBNull(13) ? 0 : rdr.GetInt64(13));
+                result[row.Path] = row;
+            }
+        }
+        return result;
+    }
+
     public IReadOnlyList<FrameRow> Query(FrameQuery q) {
         using var c = new SqliteConnection(ConnString);
         c.Open();

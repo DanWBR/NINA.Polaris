@@ -2044,6 +2044,17 @@ label select.input-sm {
     align-items: baseline;
 }
 
+/* UNIF-4: FITS metadata columns. Tabular-nums on Exp keeps the
+   column tight; muted color on the values keeps them subordinate
+   to the filename column. */
+.files-col-fitsmeta {
+    padding: 4px 8px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
 /* Address row: roots dropdown + breadcrumbs + hidden toggle. */
 .files-addr {
     display: flex;
