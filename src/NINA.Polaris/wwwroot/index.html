@@ -4178,25 +4178,23 @@
                                                         <template x-if="p.type === 'number'">
                                                             <div class="indi-prop-rows">
                                                                 <template x-for="el in p.elements" :key="el.name">
-                                                                    <template x-if="true">
-                                                                        <div style="display:contents;">
-                                                                            <span class="indi-elem-label"
-                                                                                  x-text="el.label || el.name"></span>
-                                                                            <input type="number"
-                                                                                   class="input-sm indi-input"
-                                                                                   :step="el.step || 'any'"
-                                                                                   :min="el.min"
-                                                                                   :max="el.max"
-                                                                                   :disabled="p.permission === 'ro'"
-                                                                                   x-model.number="el._draft"
-                                                                                   x-init="el._draft = el.value">
-                                                                            <button class="btn btn-sm"
-                                                                                    x-show="p.permission !== 'ro'"
-                                                                                    @click="indiPropsSetNumber(dev.name, p, el)">
-                                                                                Set
-                                                                            </button>
-                                                                        </div>
-                                                                    </template>
+                                                                    <div class="indi-prop-row">
+                                                                        <span class="indi-elem-label"
+                                                                              x-text="el.label || el.name"></span>
+                                                                        <input type="number"
+                                                                               class="input-sm indi-input"
+                                                                               :step="el.step || 'any'"
+                                                                               :min="el.min"
+                                                                               :max="el.max"
+                                                                               :disabled="p.permission === 'ro'"
+                                                                               x-model.number="el._draft"
+                                                                               x-init="el._draft = el.value">
+                                                                        <button class="btn btn-sm"
+                                                                                x-show="p.permission !== 'ro'"
+                                                                                @click="indiPropsSetNumber(dev.name, p, el)">
+                                                                            Set
+                                                                        </button>
+                                                                    </div>
                                                                 </template>
                                                             </div>
                                                         </template>
@@ -4221,22 +4219,20 @@
                                                         <template x-if="p.type === 'text'">
                                                             <div class="indi-prop-rows">
                                                                 <template x-for="el in p.elements" :key="el.name">
-                                                                    <template x-if="true">
-                                                                        <div style="display:contents;">
-                                                                            <span class="indi-elem-label"
-                                                                                  x-text="el.label || el.name"></span>
-                                                                            <input type="text"
-                                                                                   class="input-sm indi-input"
-                                                                                   :disabled="p.permission === 'ro'"
-                                                                                   x-model="el._draft"
-                                                                                   x-init="el._draft = el.value">
-                                                                            <button class="btn btn-sm"
-                                                                                    x-show="p.permission !== 'ro'"
-                                                                                    @click="indiPropsSetText(dev.name, p, el)">
-                                                                                Set
-                                                                            </button>
-                                                                        </div>
-                                                                    </template>
+                                                                    <div class="indi-prop-row">
+                                                                        <span class="indi-elem-label"
+                                                                              x-text="el.label || el.name"></span>
+                                                                        <input type="text"
+                                                                               class="input-sm indi-input"
+                                                                               :disabled="p.permission === 'ro'"
+                                                                               x-model="el._draft"
+                                                                               x-init="el._draft = el.value">
+                                                                        <button class="btn btn-sm"
+                                                                                x-show="p.permission !== 'ro'"
+                                                                                @click="indiPropsSetText(dev.name, p, el)">
+                                                                            Set
+                                                                        </button>
+                                                                    </div>
                                                                 </template>
                                                             </div>
                                                         </template>

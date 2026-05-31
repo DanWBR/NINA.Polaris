@@ -1515,19 +1515,32 @@ label select.input-sm {
     color: var(--text-muted);
 }
 .indi-props-subtab .indi-prop-rows {
-    /* element label | input | Set button. The 1fr column shrinks first
-       under tight widths so the label stays readable. */
-    display: grid;
-    grid-template-columns: minmax(70px, auto) 1fr auto;
-    gap: 4px 8px;
-    align-items: center;
+    /* One element per visual row. Flex column wrapper, each element
+       is a flex row (label | input | optional Set). Was a 3-column
+       grid before — when a property had many ro elements (no Set
+       button rendered), they packed multiple elements per row
+       because the grid kept flowing children into available cells.
+       Now layout is element-count-independent. */
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
     font-size: 12px;
+}
+.indi-props-subtab .indi-prop-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 .indi-props-subtab .indi-elem-label {
     color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    /* Fixed-width label column keeps inputs aligned vertically when
+       element names have different lengths (DRIVER_NAME vs
+       DRIVER_INTERFACE). flex-shrink:0 so a long label doesn't
+       squeeze the input. */
+    flex: 0 0 140px;
 }
 /* Inputs honour the global .input-sm theming (dark bg, accent
    focus ring). Override the width/min-width that .input-sm bakes
