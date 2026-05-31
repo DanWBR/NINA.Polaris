@@ -4112,6 +4112,16 @@
                         </label>
                         <button class="btn btn-sm" @click="indiPropsLoad()"
                                 :disabled="indiProps.busy">⟳ Refresh</button>
+                        <!-- Resync clears the SERVER-SIDE Devices cache + re-asks
+                             indiserver for the current inventory. Use when you
+                             unloaded/loaded drivers in indi-web and Refresh
+                             still shows the old set (Refresh only re-reads
+                             our cache; Resync rebuilds it from scratch). -->
+                        <button class="btn btn-sm" @click="indiPropsResync()"
+                                :disabled="indiProps.busy"
+                                title="Force INDI to re-announce all devices. Use after loading/unloading drivers in indi-web.">
+                            ⟲ Resync
+                        </button>
                     </div>
 
                     <!-- INDI not connected at all -->

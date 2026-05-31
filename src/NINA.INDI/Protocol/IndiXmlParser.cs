@@ -5,7 +5,11 @@ namespace NINA.INDI.Protocol;
 public class IndiXmlParser {
     public event Action<IndiProperty>? PropertyDefined;
     public event Action<IndiProperty>? PropertyUpdated;
-    public event Action<string>? PropertyDeleted;
+    /// <summary>Fired on INDI &lt;delProperty&gt;. Arg 1 is the device
+    /// name (always present per spec). Arg 2 is the property name when
+    /// only one property of the device is being removed; null when the
+    /// whole device is shutting down.</summary>
+    public event Action<string, string?>? PropertyDeleted;
     public event Action<string, string>? MessageReceived;
 
     private readonly XmlReaderSettings _settings = new() {
@@ -58,7 +62,16 @@ public class IndiXmlParser {
                         PropertyUpdated?.Invoke(ParseBlobVector(reader, isDefine: false));
                         break;
                     case "delProperty":
-                        PropertyDeleted?.Invoke(reader.GetAttribute("name") ?? "");
+                        // Per INDI spec: delProperty has device (required)
+                        // and name (optional). When name is absent, the
+                        // ENTIRE device is being removed (driver shutdown,
+                        // unloaded from indiserver, etc.) -- not just one
+                        // property. Without the device attribute the
+                        // client previously had no way to scope the
+                        // delete and would silently no-op.
+                        PropertyDeleted?.Invoke(
+                            reader.GetAttribute("device") ?? "",
+                            reader.GetAttribute("name"));
                         break;
                     case "message":
                         MessageReceived?.Invoke(

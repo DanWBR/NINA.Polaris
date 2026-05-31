@@ -16841,6 +16841,31 @@ function ninaApp() {
             }
         },
 
+        // Force a full server-side device-cache wipe + re-issue
+        // INDI getProperties. Use after loading/unloading drivers in
+        // indi-web -- the TCP connection survives the indi-web
+        // reload, so the standard Refresh just re-reads our stale
+        // cache. Resync rebuilds the cache from scratch.
+        async indiPropsResync() {
+            if (this.indiProps.busy) return;
+            this.indiProps.busy = true;
+            try {
+                // Drop the local snapshot immediately so the UI shows
+                // the re-discovery in progress instead of the old set.
+                this.indiProps.devices = [];
+                await this.apiPost('/api/indi/properties/refresh');
+                this.toast('INDI device list resynced', 'ok');
+                // Brief wait for the new defXxxVector flood to settle
+                // before we GET the rebuilt snapshot.
+                setTimeout(() => this.indiPropsLoad(), 200);
+            } catch (e) {
+                this.indiProps.lastError = 'resync failed: ' + (e.message || e);
+                this.toast('Resync failed: ' + (e?.message || e), 'error');
+            } finally {
+                this.indiProps.busy = false;
+            }
+        },
+
         // Schedule the next auto-refresh tick, but only when:
         //   - autoRefresh is on, AND
         //   - the RIGS tab is open AND the indi-cp sub-tab is the

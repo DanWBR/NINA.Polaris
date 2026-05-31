@@ -53,6 +53,28 @@ public static class IndiPropertiesEndpoints {
         //   the device will reject)
         // - permission must be WriteOnly or ReadWrite, otherwise 403
         //   (ReadOnly properties surface in the UI as info-only)
+        // Force a full device-list resync. Useful when the user
+        // unloaded a driver from the indi-web manager or restarted
+        // indiserver -- the TCP connection may still be up so Polaris
+        // doesn't realise the inventory changed. Clears the cached
+        // snapshot + reissues getProperties.
+        g.MapPost("/refresh", async (IndiClient indi, CancellationToken ct) => {
+            if (!indi.IsConnected)
+                return Results.BadRequest(new { error = "INDI not connected" });
+            try {
+                await indi.RefreshDevicesAsync(ct);
+                // Brief wait so getProperties responses arrive before
+                // the next GET /api/indi/properties from the UI.
+                await Task.Delay(800, ct);
+                return Results.Ok(new {
+                    ok = true,
+                    deviceCount = indi.Devices.Count
+                });
+            } catch (Exception ex) {
+                return Results.Json(new { error = ex.Message }, statusCode: 500);
+            }
+        });
+
         g.MapPost("/set", async (IndiClient indi, IndiSetRequest req, CancellationToken ct) => {
             if (string.IsNullOrWhiteSpace(req.Device) || string.IsNullOrWhiteSpace(req.Property))
                 return Results.BadRequest(new { error = "device and property are required" });

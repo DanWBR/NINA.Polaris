@@ -44,6 +44,11 @@ public class IndiClient : IDisposable {
 
     public event Action<string, IndiProperty>? PropertyChanged;
     public event Action<string>? DeviceFound;
+    /// <summary>Fired when INDI reports the device shutting down via
+    /// a wholesale &lt;delProperty&gt; (no name attribute) -- typically
+    /// because the driver was unloaded from indi-web or indiserver
+    /// was restarted with a different driver set.</summary>
+    public event Action<string>? DeviceRemoved;
     public event Action<IndiBlobProperty>? BlobReceived;
     public event Action<string, string>? MessageReceived;
     public event Action? Disconnected;
@@ -90,6 +95,30 @@ public class IndiClient : IDisposable {
 
         _readTask = Task.Run(() => ReadLoopAsync(_cts.Token), _cts.Token);
 
+        // Clear stale device snapshot before issuing getProperties.
+        // Without this, an auto-reconnect (or a manual reconnect after
+        // the user restarted indiserver / unloaded drivers in indi-web)
+        // would keep the OLD device list visible forever, because new
+        // defXxxVector messages only ADD to Devices, never wipe it.
+        // The freshly-issued getProperties below repopulates with
+        // exactly what indiserver advertises right now.
+        Devices.Clear();
+
+        await SendAsync(IndiXmlWriter.GetProperties(), ct);
+    }
+
+    /// <summary>Force a full device-list resync without dropping the
+    /// TCP connection. Clears the cached Devices snapshot + reissues
+    /// <c>getProperties</c>. Use this when the user knows indiserver's
+    /// driver set changed (e.g. unloaded a driver from indi-web) but
+    /// the TCP socket is still up — the socket alone doesn't tell us
+    /// the inventory changed, and well-behaved drivers don't always
+    /// send the spec-mandated &lt;delProperty&gt; on shutdown.</summary>
+    public async Task RefreshDevicesAsync(CancellationToken ct = default) {
+        if (!IsConnected) throw new InvalidOperationException("INDI not connected");
+        var oldCount = Devices.Count;
+        Devices.Clear();
+        DiagLogger.LogInformation("INDI RefreshDevicesAsync: cleared {Count} cached devices, re-issuing getProperties", oldCount);
         await SendAsync(IndiXmlWriter.GetProperties(), ct);
     }
 
@@ -283,9 +312,26 @@ public class IndiClient : IDisposable {
         PropertyChanged?.Invoke(prop.Device, prop);
     }
 
-    private void OnPropertyDeleted(string name) {
-        foreach (var device in Devices.Values) {
-            device.TryRemove(name, out _);
+    /// <summary>Handle INDI &lt;delProperty&gt;. When <paramref name="name"/>
+    /// is null/empty the whole device is being removed (driver
+    /// unloaded). Otherwise only the named property of that specific
+    /// device is dropped. The old impl ignored the device attribute
+    /// entirely + tried to remove the same property name from every
+    /// device, which silently no-op'd for device-scoped deletes -- the
+    /// reason Polaris kept showing devices that the user had unloaded
+    /// from the indi-web manager.</summary>
+    private void OnPropertyDeleted(string device, string? name) {
+        if (string.IsNullOrEmpty(device)) return;
+        if (string.IsNullOrEmpty(name)) {
+            // Whole-device removal. Drop the entire properties map +
+            // fire DeviceRemoved so consumers (EquipmentManager,
+            // property browser) can clear any cached references.
+            if (Devices.TryRemove(device, out _)) {
+                DiagLogger.LogInformation("INDI device removed: {Device}", device);
+                DeviceRemoved?.Invoke(device);
+            }
+        } else if (Devices.TryGetValue(device, out var props)) {
+            props.TryRemove(name, out _);
         }
     }
 
