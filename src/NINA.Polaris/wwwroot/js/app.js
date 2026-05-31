@@ -6125,7 +6125,13 @@ function ninaApp() {
                 this.toast('Frame has no path on disk', 'warn');
                 return;
             }
-            this.tab = 'editor';
+            // UNIF-6: STUDIO tab is gone; this handler may still
+            // be called from leftover JS paths (master-completion
+            // hooks, etc). Route the editor open through the new
+            // FILES > Edit sub-tab instead of the deleted top-level
+            // editor tab.
+            this.tab = 'files';
+            this.setFilesSubTab('edit');
             await this.$nextTick();
             await this.editorLoad(frame.path);
         },
