@@ -4054,7 +4054,7 @@ function ninaApp() {
         // intentionally NOT reset — subsequent WS ticks will see a
         // truncated:true flag and the panel UI can show "buffer cleared".
         async logClear() {
-            if (!confirm('Apagar todas as entradas de log do servidor? Isso não pode ser desfeito.')) return;
+            if (!confirm('Clear all server log entries? This cannot be undone.')) return;
             try {
                 await this.apiFetch('/api/logs/', { method: 'DELETE' });
                 this.logs.entries = [];
