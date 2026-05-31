@@ -74,6 +74,51 @@
       "notes": "Optional reducer for the F-series quadruplets (they're self-flattening at native f, so the reducer is purely for speeding the system up)."
     },
     {
+      "brand": "Askar",
+      "model": "0.7x Reducer (FRA300)",
+      "type": "reducer",
+      "factor": 0.7,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["FRA300"],
+      "notes": "Dedicated 0.7x reducer for the 60mm FRA300 quintuplet astrograph. Drops f/5 to f/3.5 with ~210mm working focal length. Part is FRA300-specific -- the FRA400/500 and FRA600 reducers do not interchange."
+    },
+    {
+      "brand": "Askar",
+      "model": "0.7x Reducer (FRA400 / FRA500)",
+      "type": "reducer",
+      "factor": 0.7,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["FRA400", "FRA500"],
+      "notes": "Dedicated 0.7x reducer shared by the FRA400 (72mm) and FRA500 (90mm) quintuplet astrographs. Drops f/5.6 to f/3.9 -- on the FRA400 (400mm native) the working focal length becomes ~280mm; on the FRA500 (500mm) it becomes ~350mm. Part marketed as 'Askar Reducer 0.7x F4DR' or 'F5DR' depending on revision. Confirm your kit matches your OTA."
+    },
+    {
+      "brand": "Askar",
+      "model": "0.7x Reducer (FRA600)",
+      "type": "reducer",
+      "factor": 0.7,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["FRA600"],
+      "notes": "Dedicated 0.7x reducer for the 108mm FRA600 quintuplet astrograph. Drops f/5.6 to f/3.9, working focal length ~420mm. APS-C illuminated image circle. Part is FRA600-specific."
+    },
+    {
+      "brand": "Askar",
+      "model": "0.6x Full-Frame Reducer (FRA600)",
+      "type": "reducer",
+      "factor": 0.6,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["FRA600"],
+      "notes": "Full-frame compatible 0.6x reducer for the FRA600. Drops f/5.6 to ~f/3.4 with a 44mm image circle -- needed if you're imaging with a full-frame sensor (ASI6200, FF DSLRs). Larger, heavier, and pricier than the standard APS-C 0.7x reducer."
+    },
+    {
+      "brand": "Askar",
+      "model": "1.0x Field Flattener (FRA-series)",
+      "type": "reducer",
+      "factor": 1.0,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["FRA300", "FRA400", "FRA500", "FRA600"],
+      "notes": "Native 1.0x flattener for the FRA-series quintuplets -- keeps the native focal length while flattening the field across an APS-C sensor. Use when the reducer is too aggressive for the target framing."
+    },
+    {
       "brand": "Takahashi",
       "model": "0.73x Reducer (FSQ)",
       "type": "reducer",

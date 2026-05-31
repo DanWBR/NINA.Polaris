@@ -4537,6 +4537,8 @@
                             <span class="cam-float-sub">Slewing, live view</span>
                         </span>
                         <button class="cam-float-close"
+                                @mousedown.stop
+                                @touchstart.stop
                                 @click.stop="slewPreviewVisible = false; persistSlewPreviewToggle()"
                                 title="Hide">×</button>
                     </div>
@@ -4902,6 +4904,8 @@
                             <span class="mount-float-sub" x-text="selectedTelescope || ''"></span>
                         </span>
                         <button class="mount-float-close"
+                                @mousedown.stop
+                                @touchstart.stop
                                 @click.stop="mountPanel.visible = false; persistMountPanel()"
                                 title="Hide">×</button>
                     </div>
