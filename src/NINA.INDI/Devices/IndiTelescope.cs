@@ -269,27 +269,71 @@ public class IndiTelescope : ITelescope {
     }
 
     public async Task MoveNorthAsync(CancellationToken ct = default) {
+        await EnsureCoordSetTrackAsync(ct);
         await EnsureSlewRateAsync(ct);
         await _client.SetSwitchAsync(DeviceName, "TELESCOPE_MOTION_NS",
             new Dictionary<string, bool> { ["MOTION_NORTH"] = true, ["MOTION_SOUTH"] = false }, ct);
     }
 
     public async Task MoveSouthAsync(CancellationToken ct = default) {
+        await EnsureCoordSetTrackAsync(ct);
         await EnsureSlewRateAsync(ct);
         await _client.SetSwitchAsync(DeviceName, "TELESCOPE_MOTION_NS",
             new Dictionary<string, bool> { ["MOTION_NORTH"] = false, ["MOTION_SOUTH"] = true }, ct);
     }
 
     public async Task MoveEastAsync(CancellationToken ct = default) {
+        await EnsureCoordSetTrackAsync(ct);
         await EnsureSlewRateAsync(ct);
         await _client.SetSwitchAsync(DeviceName, "TELESCOPE_MOTION_WE",
             new Dictionary<string, bool> { ["MOTION_WEST"] = false, ["MOTION_EAST"] = true }, ct);
     }
 
     public async Task MoveWestAsync(CancellationToken ct = default) {
+        await EnsureCoordSetTrackAsync(ct);
         await EnsureSlewRateAsync(ct);
         await _client.SetSwitchAsync(DeviceName, "TELESCOPE_MOTION_WE",
             new Dictionary<string, bool> { ["MOTION_WEST"] = true, ["MOTION_EAST"] = false }, ct);
+    }
+
+    /// <summary>Ensure <c>ON_COORD_SET</c> is in TRACK mode before
+    /// issuing manual jog (MOTION_NS / MOTION_WE) commands.
+    ///
+    /// Critical for ZWO AM3 / AM5 (and other LX200-Autostar-based
+    /// strain-wave drivers): if ON_COORD_SET is in SLEW or SYNC mode,
+    /// the driver receives the MOTION command and enters a BUSY state
+    /// (visible as a yellow indicator in the INDI control panel) but
+    /// the mount NEVER physically moves. Setting ON_COORD_SET=TRACK
+    /// puts the driver in the state where manual jog actually engages
+    /// the motors.
+    ///
+    /// Diagnosed from ZWO bbs forum thread d/15173 and INDI mounts
+    /// forum t/11654 -- multiple AM5/AM3 users hit exactly this and
+    /// the workaround was always "set ON_COORD_SET to TRACK before
+    /// the motion command".</summary>
+    private async Task EnsureCoordSetTrackAsync(CancellationToken ct) {
+        var coord = _client.GetProperty(DeviceName, "ON_COORD_SET")
+            as Protocol.IndiSwitchProperty;
+        // Driver doesn't expose ON_COORD_SET -- non-AM5 mounts, just
+        // proceed to the motion command. Most non-LX200 drivers don't
+        // gate motion behind this property.
+        if (coord == null || coord.Values.Count == 0) return;
+
+        // Find the TRACK element (case-insensitive). Spec uses uppercase
+        // but some forks use mixed case.
+        var trackKey = coord.Values.Keys.FirstOrDefault(
+            k => string.Equals(k, "TRACK", StringComparison.OrdinalIgnoreCase));
+        if (trackKey == null) return;   // driver has no TRACK option
+
+        // Already in TRACK? Skip the write (saves ~50ms round-trip per jog).
+        if (coord.Values[trackKey]) return;
+
+        // Set TRACK true, all other elements false. ON_COORD_SET is a
+        // OneOfMany switch so writing TRACK=true implicitly clears the
+        // others, but we send all three explicitly to be safe against
+        // drivers that don't honour the OneOfMany rule properly.
+        var payload = coord.Values.Keys.ToDictionary(k => k, k => k == trackKey);
+        await _client.SetSwitchAsync(DeviceName, "ON_COORD_SET", payload, ct);
     }
 
     public async Task StopMotionAsync(CancellationToken ct = default) {
