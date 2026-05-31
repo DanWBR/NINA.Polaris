@@ -9511,9 +9511,25 @@ label select.input-sm {
     color: var(--text-primary);
 }
 
+/* Custom confirm() modal overlay -- z-index 10000 keeps it above the
+   debug-log panel (z 9000) and any other overlay. First commit shipped
+   the inline style at z 2000 which got buried behind the log, operator
+   had to close the log to find the modal. Flex centering for the card;
+   backdrop click cancels via @click.self. */
+.confirm-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
 /* Custom confirm() modal card. Sized for readability on tablet
    without overflowing on phones. Sits inside the high-z-index
-   overlay defined inline in index.html. */
+   .confirm-modal-overlay above. */
 .confirm-modal-card {
     width: min(420px, 92vw);
     background: var(--bg-secondary);

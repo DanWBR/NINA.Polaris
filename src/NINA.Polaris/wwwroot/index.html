@@ -9781,16 +9781,17 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     </div>
 
     <!-- App-wide confirmation modal -- replaces native window.confirm()
-         calls so OK/Cancel labels stay in English regardless of the
+         so OK/Cancel labels stay in English regardless of the
          browser's OS locale. Driven by the _confirmAsync() helper in
          app.js which returns a Promise. ESC = cancel, Enter = confirm
-         (wired via window keydown in app.js). z-index 2000 keeps it
-         above the log panel (1500) and activity-bar (50). -->
-    <div x-show="confirmModal.open" x-cloak
-         @click.self="_confirmCancel()"
-         style="position:fixed; inset:0; background:rgba(0,0,0,0.6);
-                backdrop-filter:blur(4px); z-index:2000;
-                display:flex; align-items:center; justify-content:center;">
+         (wired via window keydown in app.js).
+         z-index 10000 keeps it above the log panel (9000) and every
+         other floating layer in the app -- the first commit shipped
+         with z-index 2000 and the modal rendered BEHIND the log,
+         operator had to close the log just to see it. -->
+    <div class="confirm-modal-overlay"
+         x-show="confirmModal.open" x-cloak
+         @click.self="_confirmCancel()">
         <div class="confirm-modal-card">
             <h3 class="confirm-modal-title" x-text="confirmModal.title"></h3>
             <p class="confirm-modal-message" x-text="confirmModal.message"></p>
