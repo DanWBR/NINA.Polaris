@@ -11527,8 +11527,16 @@ function ninaApp() {
 
         async setCooler(enabled, temp) {
             try {
+                // Explicit null check: `temp || null` collapses 0 to
+                // null because 0 is falsy, which silently swallowed
+                // "Set target to 0 C" — the server got no target and
+                // skipped the call. Numeric coerce + check covers
+                // both string and number input (the number input
+                // field still binds via x-model.number).
+                const n = Number(temp);
+                const target = Number.isFinite(n) ? n : null;
                 await this.apiPost('/api/camera/cooler', {
-                    enabled, targetTemperature: temp || null
+                    enabled, targetTemperature: target
                 });
             } catch (e) {
                 this.toast('Cooler command failed', 'error');
