@@ -218,9 +218,17 @@ public static class SystemEndpoints {
             if (req == null || string.IsNullOrWhiteSpace(req.ClientUtc)) {
                 return Results.BadRequest(new { error = "clientUtc is required (ISO-8601)" });
             }
-            if (!DateTime.TryParse(req.ClientUtc, null,
-                    System.Globalization.DateTimeStyles.RoundtripKind
-                    | System.Globalization.DateTimeStyles.AssumeUniversal
+            // DateTimeStyles.RoundtripKind is MUTUALLY EXCLUSIVE with
+            // AssumeUniversal / AdjustToUniversal -- the runtime throws
+            // ArgumentException when you combine them. Pre-fix the
+            // call crashed every clock-sync request with a 500 because
+            // of that. Drop RoundtripKind: AssumeUniversal +
+            // AdjustToUniversal handles both ISO-8601 forms we care
+            // about (the JS toISOString() always emits a trailing Z;
+            // AssumeUniversal also covers the rare case where the
+            // client sends a timezone-less string).
+            if (!DateTime.TryParse(req.ClientUtc, System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.AssumeUniversal
                     | System.Globalization.DateTimeStyles.AdjustToUniversal,
                     out var parsed)) {
                 return Results.BadRequest(new { error = "clientUtc must be ISO-8601" });
