@@ -2892,6 +2892,22 @@ function ninaApp() {
         helpOpenTab(tabId) {
             this._helpPersist();
             this.tab = tabId;
+            // Mirror the side effects the sidebar buttons normally
+            // run on entering a tab. Without these the Sky map
+            // doesn't initialise its WebGL viewer and the Studio
+            // browser shows stale paths until the user manually
+            // navigates.
+            try {
+                if (tabId === 'sky') {
+                    this.$nextTick(() => this.initSkyViewer && this.initSkyViewer());
+                } else if (tabId === 'files') {
+                    this.filesInit && this.filesInit();
+                } else if (tabId === 'tonight') {
+                    this.loadTonightsBest && this.loadTonightsBest();
+                } else if (tabId === 'weather') {
+                    this.loadWeatherForecast && this.loadWeatherForecast();
+                }
+            } catch (e) { /* best effort -- tab still switches */ }
         },
 
         _helpPersist() {
@@ -3063,7 +3079,7 @@ function ninaApp() {
                         docLink: 'sky-explorer.md',
                         body: [
                             'SKY embeds the Stellarium Web engine: pan around, type a name in the search bar (M31, NGC 7000, etc), click the result. The FOV overlay shows what your camera will actually see overlaid on the sky.',
-                            'Use the TONIGHT tab if you want a ranked list of "best for tonight" based on altitude, twilight, moon distance, and your camera FOV instead of picking blind.'
+                            'Need help deciding what to shoot? The SKY tab has three sub-tabs at the top: Sky map, Tonight\'s Best (ranked list with altitude / twilight / moon distance / FOV fit), and Weather (3-day cloud / seeing / transparency forecast). All three live under the single SKY entry in the sidebar.'
                         ],
                         tip: 'Drag the FOV rectangle to compose framing before slewing; Polaris remembers the rotation and re-uses it for plate solve.'
                     },
@@ -3115,37 +3131,38 @@ function ninaApp() {
                     },
                     {
                         title: 'Calibrate + integrate in STUDIO',
-                        tab: 'studio',
+                        tab: 'files',
                         tabLabel: 'STUDIO',
                         screenshot: 'capture/10-studio.png',
-                        docLink: 'studio.md',
+                        docLink: 'files.md',
                         body: [
-                            'After the night is over, STUDIO is the offline pipeline: select lights, apply darks + flats + bias (or build them on the spot from raw cal frames), then integrate with sigma-clipping for a clean master.',
-                            'The frame library indexes everything under ImageOutputDir, organized by rig / target / filter / session. Multi-night M31 just means dragging both sessions into the integration job.'
-                        ]
+                            'STUDIO is the unified post-capture workspace: file browser on the left, Stack workspace pinned to the right. Browse to your captures, multi-select the lights, click "+ Add selection" on the Lights slot card; repeat for darks, flats, biases by browsing to those folders.',
+                            'Then click the action buttons under the slots in order: Master Dark / Flat / Bias to build masters from raw cal frames, Calibrate Lights to apply them, Integrate to align + stack with sigma-clipping. Multi-night targets: just add both sessions\' lights into the same slot.'
+                        ],
+                        tip: 'Turn on the "Show FITS metadata" toggle in the browser to see IMAGETYP / FILTER / TARGET / EXPOSURE columns -- makes it trivial to spot the right frames in a folder full of mixed captures.'
                     },
                     {
                         title: 'AI cleanup (optional)',
-                        tab: 'editor',
-                        tabLabel: 'EDITOR',
+                        tab: 'files',
+                        tabLabel: 'STUDIO',
                         screenshot: 'capture/11-ai.png',
                         docLink: 'onnx-inference.md',
                         body: [
-                            'EDITOR has an AI section: GraXpert BGE (gradient removal), Denoise, Decon. All three run in the browser via WebAssembly + WebGPU when supported; falls back to CLI subprocess on the server otherwise.',
-                            'Typical order: BGE first to flatten the background, Denoise to clean shadows, Decon to sharpen detail. Each operation is non-destructive and persists as a sidecar JSON next to the master.'
+                            'Pick the integrated master in the browser and click the GraXpert icons in the toolbar (BGE for gradient removal, Decon for sharpening, Denoise for noise reduction). All three run in the browser via WebAssembly + WebGPU when supported; falls back to CLI subprocess on the server otherwise.',
+                            'Typical order: BGE first to flatten the background, then optionally Denoise and Decon. Each operation writes a sibling FITS (suffixed _bge / _decon / _denoise) so you keep the original.'
                         ]
                     },
                     {
                         title: 'Edit + export',
-                        tab: 'editor',
-                        tabLabel: 'EDITOR',
+                        tab: 'files',
+                        tabLabel: 'STUDIO',
                         screenshot: 'capture/12-editor-export.png',
                         docLink: 'editor.md',
                         body: [
-                            'Tone curves, stretch (autostretch or manual), saturation, sharpening, vignette. Every adjustment is a slider, all non-destructive: the sidecar stores the recipe, the master never gets overwritten.',
-                            'When happy, Export: JPEG / PNG / 16-bit TIFF, optional downscale, optional EXIF stamp. The result lands under {rig}/processed/edited/ and shows up in the FILES tab next to everything else.'
+                            'Single-select the master and click the Edit icon in the browser toolbar. The Lightroom-style editor opens as a fullscreen modal over the Studio tab: tone curves, stretch (autostretch or manual), saturation, sharpening, vignette. Every adjustment is non-destructive; the sidecar stores the recipe, the master is never overwritten.',
+                            'When happy, hit Export inside the modal: JPEG / PNG / 16-bit TIFF, optional downscale, optional EXIF stamp. The result lands under {rig}/processed/edited/ and appears in the browser on the left next to everything else.'
                         ],
-                        tip: 'You can come back later and re-edit, the sidecar is just JSON. Sliders restore exactly where you left them.'
+                        tip: 'ESC closes the editor. Reopen the same master later and the sliders restore exactly where you left them.'
                     }
                 ],
 
@@ -3174,33 +3191,34 @@ function ninaApp() {
                     },
                     {
                         title: 'Integrate per filter',
-                        tab: 'studio',
+                        tab: 'files',
                         tabLabel: 'STUDIO',
                         screenshot: 'lrgb/03-integrate.png',
-                        docLink: 'studio.md',
+                        docLink: 'files.md',
                         body: [
-                            'STUDIO: build one master per filter. Calibrate + sigma-clip integrate L, then R, G, B (and Ha/OIII/SII if you have them). Output: 4-7 mono FITS, one per filter.'
+                            'STUDIO: build one master per filter. For each filter, browse to that filter\'s folder, add the lights to the Lights slot, hit Calibrate Lights and then Integrate. Repeat for L, R, G, B (and Ha/OIII/SII if you have them).',
+                            'Output: 4-7 mono FITS masters, one per filter, ready for channel combine.'
                         ]
                     },
                     {
                         title: 'Channel combine into RGB',
-                        tab: 'studio',
+                        tab: 'files',
                         tabLabel: 'STUDIO',
                         screenshot: 'lrgb/04-combine.png',
                         docLink: 'lrgb-mono-workflow.md',
                         body: [
-                            'STUDIO → Channel Combine: pick R + G + B masters, optional L for the luminance channel, optional pixel-math expressions for narrowband palettes (HOO, SHO, HaRGB).',
-                            'Output: a single integrated RGB master, color-calibrated and ready for the editor.'
+                            'Add the per-filter integrated masters into the Lights slot (R, G, B, optionally L). Click the Combine button: a prompt asks which file maps to which variable, and whether you want RGB or LRGB output.',
+                            'For narrowband palettes (HOO, SHO, HaRGB) use pixel-math expressions in the same modal. Output: a single integrated RGB master, ready for the editor.'
                         ]
                     },
                     {
                         title: 'Edit + export the color master',
-                        tab: 'editor',
-                        tabLabel: 'EDITOR',
+                        tab: 'files',
+                        tabLabel: 'STUDIO',
                         screenshot: 'lrgb/05-edit.png',
                         docLink: 'editor.md',
                         body: [
-                            'Same as the OSC editor flow: AI cleanup if you want it, stretch, color balance, saturation, sharpening, export. The RGB master from channel combine behaves exactly like a OSC master from this point on.'
+                            'Single-select the combined RGB master in the browser, click the Edit icon. Same flow as the OSC editor modal: AI cleanup if you want it, stretch, color balance, saturation, sharpening, export. The RGB master behaves exactly like an OSC master from this point on.'
                         ]
                     }
                 ],
@@ -3241,12 +3259,12 @@ function ninaApp() {
                     },
                     {
                         title: 'Export the planet image',
-                        tab: 'editor',
-                        tabLabel: 'EDITOR',
+                        tab: 'files',
+                        tabLabel: 'STUDIO',
                         screenshot: 'planetary/04-export.png',
                         docLink: 'editor.md',
                         body: [
-                            'The stacked planet master opens in EDITOR like any other FITS. Apply Decon for the wavelet-like sharpening planets crave, optional color saturation boost, export to PNG / TIFF.',
+                            'Open STUDIO, browse to the stacked planet master, single-select it, click the Edit icon. The editor modal opens with the master loaded. Apply Decon for the wavelet-like sharpening planets crave, optional color saturation boost, export to PNG / TIFF.',
                             'Final tweaks (false-color, derotation, animations) are usually done in WinJUPOS / RegiStax post-Polaris.'
                         ]
                     }
@@ -3265,24 +3283,24 @@ function ninaApp() {
                     },
                     {
                         title: 'Plate-solve the master',
-                        tab: 'studio',
+                        tab: 'files',
                         tabLabel: 'STUDIO',
                         screenshot: 'pcc/02-solve.png',
                         docLink: 'color-calibration.md',
                         body: [
-                            'PCC needs to know where each star in your image is on the sky. Open the integrated master in STUDIO, hit "Plate solve" (ASTAP). WCS coordinates get baked into the FITS header.',
+                            'PCC needs to know where each star in your image is on the sky. Open STUDIO, browse to the integrated master, add it to the Lights slot in the Stack workspace, then run the integration pipeline (or use an already-integrated master). The Integrate step bakes WCS coordinates into the output FITS header via ASTAP.',
                             'Without WCS the catalog match cannot run. Polaris will refuse to start PCC and tell you why.'
                         ]
                     },
                     {
                         title: 'Run PCC, apply the gains',
-                        tab: 'studio',
+                        tab: 'files',
                         tabLabel: 'STUDIO',
                         screenshot: 'pcc/03-run.png',
                         docLink: 'color-calibration.md',
                         body: [
-                            'STUDIO → Color Calibration → PCC mode. Polaris queries the APASS catalog for stars in your field, matches them with the stars it detects, fits per-channel gains that minimize the color error.',
-                            'Output: a new color-calibrated master. Open it in EDITOR for the rest of the workflow.'
+                            'Add the plate-solved master to the Lights slot, hit the Color Cal action button. Polaris queries the APASS catalog for stars in your field, matches them with the stars it detects, fits per-channel gains that minimize the color error.',
+                            'Output: a new color-calibrated master appears in the browser. Single-select it and click the Edit icon to continue in the editor modal.'
                         ],
                         warn: 'APASS bundled dataset (~80 MB) needs to be downloaded once. Run scripts/download-apass.py on the server. Polaris prints a clear error pointing at this if the DB is missing.'
                     }
