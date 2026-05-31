@@ -8488,9 +8488,13 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- GraXpert run modal, single modal handles BGE, Decon, and
          Denoise. The op chosen at open() time gates which controls
          render so the user doesn't see Decon sliders when running BGE. -->
+    <!-- Backdrop click + ESC only close the modal when nothing is
+         running. While a GraXpert run is in flight the user must
+         use the Abort button explicitly -- this avoids "I clicked
+         outside and now I don't know if it's still processing". -->
     <div class="siril-modal" x-show="graxpert.modalOpen" x-cloak
-         @click.self="graxpertCloseModal()"
-         @keydown.escape.window="graxpertCloseModal()">
+         @click.self="graxpertIsRunning() || graxpertCloseModal()"
+         @keydown.escape.window="graxpertIsRunning() || graxpertCloseModal()">
         <div class="siril-modal-frame">
             <h2>
                 <span x-show="graxpert.modalOp === 'background-extraction'">🌅 GraXpert, Remove gradient</span>
@@ -8662,16 +8666,26 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 </p>
             </div>
 
+            <!-- During a run (either browser-mode pipeline or CLI
+                 batch job) Start + Close hide and Abort takes their
+                 place. graxpertIsRunning() covers both backends so
+                 the user doesn't see the wrong button briefly while
+                 the WS catches up to the CLI job state. -->
             <div class="siril-modal-actions">
                 <button class="btn"
-                        x-show="!graxpert.currentJob || graxpert.currentJob.completedAt"
+                        x-show="!graxpertIsRunning()"
                         @click="graxpertCloseModal()">Close</button>
-                <button class="btn btn-danger"
-                        x-show="graxpert.currentJob && !graxpert.currentJob.completedAt"
-                        @click="graxpertCancelCurrent()">Cancel job</button>
                 <button class="btn btn-primary"
-                        x-show="!graxpert.currentJob"
+                        x-show="!graxpertIsRunning() && (!graxpert.currentJob || graxpert.currentJob.completedAt)"
+                        :disabled="graxpert.browserActive"
                         @click="graxpertStartRun()">Start</button>
+                <button class="btn btn-danger"
+                        x-show="graxpertIsRunning()"
+                        :disabled="graxpert.browserAbortRequested"
+                        @click="graxpertAbortRun()">
+                    <span x-show="!graxpert.browserAbortRequested">Abort</span>
+                    <span x-show="graxpert.browserAbortRequested">Aborting...</span>
+                </button>
             </div>
         </div>
     </div>
@@ -9086,7 +9100,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          development that this is a per-commit nuisance, but the cost
          of users running stale JS for hours (with FrameKind routing
          bugs ending up on the wrong canvas) is higher. -->
-    <script src="/js/app.js?v=20260530-editorfix"></script>
+    <script src="/js/app.js?v=20260530-gxabort"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

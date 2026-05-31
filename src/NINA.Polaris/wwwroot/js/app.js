@@ -1632,6 +1632,12 @@ function ninaApp() {
             // pipeline, false → existing CLI subprocess.
             modalRunInBrowser: true,
             browserActive: false,
+            // Set by graxpertAbortRun() to signal the browser-mode
+            // loop to break out at its next safe checkpoint. The
+            // pipeline.run() call itself can't be hard-killed mid-tile
+            // (WebGPU shaders run sync from JS's POV), but we can stop
+            // launching new tiles + skip subsequent files in the batch.
+            browserAbortRequested: false,
             browserDone: 0,
             browserTotal: 0,
             browserPhase: '',
@@ -13297,6 +13303,7 @@ function ninaApp() {
             this.graxpert.currentJobId = null;
             this.graxpert.currentJob = null;
             this.graxpert.browserActive = false;
+            this.graxpert.browserAbortRequested = false;
             this.graxpert.modalOpen = true;
         },
 
@@ -13732,6 +13739,7 @@ function ninaApp() {
             }
             const paths = [...this.graxpert.modalPaths];
             this.graxpert.browserActive = true;
+            this.graxpert.browserAbortRequested = false;
             this.graxpert.browserDone = 0;
             this.graxpert.browserTotal = paths.length;
             this.graxpert.browserPhase = 'preparing';
@@ -13782,6 +13790,16 @@ function ninaApp() {
                 const suffix = this.graxpertSuffix(op, runOpts);
                 const written = [];
                 for (let idx = 0; idx < paths.length; idx++) {
+                    // Abort checkpoint between files. The user clicked
+                    // Abort on the modal, so stop launching new work
+                    // -- the file already in flight finishes (no way
+                    // to hard-kill a WebGPU shader from JS), but we
+                    // skip everything remaining in the batch.
+                    if (this.graxpert.browserAbortRequested) {
+                        this.graxpert.browserPhase = 'aborted';
+                        this.toast('GraXpert aborted by user', 'warn');
+                        break;
+                    }
                     const path = paths[idx];
                     const stem = path.split(/[\\/]+/).pop();
                     this.graxpert.browserPhase = stem + ', fetching pixels';
@@ -14177,6 +14195,32 @@ function ninaApp() {
             } catch (e) {
                 this.toast('Cancel failed: ' + (e.message || ''), 'error');
             }
+        },
+
+        // Unified abort for the GraXpert modal. Routes to the CLI
+        // cancel endpoint when a server-side job is in flight, or
+        // flips the browser-loop abort flag when the in-browser
+        // pipeline is running. The modal's Abort button is wired to
+        // this so the user doesn't have to know which mode is
+        // active.
+        async graxpertAbortRun() {
+            if (this.graxpert.currentJobId) {
+                await this.graxpertCancelCurrent();
+            }
+            if (this.graxpert.browserActive) {
+                this.graxpert.browserAbortRequested = true;
+                this.graxpert.browserPhase = 'aborting...';
+                this.toast('GraXpert abort requested -- waiting for current file to finish', 'info');
+            }
+        },
+
+        // True while the GraXpert modal is busy in either backend.
+        // Drives the modal button visibility (Start + Close hidden,
+        // Abort shown) so the user can't kick off a second run or
+        // dismiss the dialog mid-execution.
+        graxpertIsRunning() {
+            return !!(this.graxpert.browserActive
+                || (this.graxpert.currentJob && !this.graxpert.currentJob.completedAt));
         },
 
         async equipDisconnectMount() {
