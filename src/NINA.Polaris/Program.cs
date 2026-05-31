@@ -249,7 +249,15 @@ builder.Services.AddSingleton(sp =>
     var config = sp.GetRequiredService<IConfiguration>();
     var host = config.GetValue("Indi:Host", "localhost")!;
     var port = config.GetValue("Indi:Port", 7624);
-    return new IndiClient(host, port);
+    var client = new IndiClient(host, port);
+    // Wire DBGLOG-2 bridge so every INDI write (newNumberVector /
+    // newSwitchVector / newTextVector) shows up in the LOG panel,
+    // and "property name doesn't exist on this device" warnings
+    // surface when the driver doesn't advertise the property we
+    // tried to write.
+    client.DiagLogger = sp.GetRequiredService<ILoggerFactory>()
+        .CreateLogger("NINA.INDI.IndiClient");
+    return client;
 });
 
 var app = builder.Build();

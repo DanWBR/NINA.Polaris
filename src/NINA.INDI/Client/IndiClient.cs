@@ -1,5 +1,8 @@
 using System.Collections.Concurrent;
 using System.Net.Sockets;
+using System.Text;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using NINA.Core.Utility;
 using NINA.INDI.Protocol;
 
@@ -14,6 +17,19 @@ public class IndiClient : IDisposable {
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     private int _reconnectAttempt;
     private bool _autoReconnect;
+
+    /// <summary>Diagnostic logger for write tracing. Defaults to
+    /// NullLogger so existing call sites that don't pass one keep
+    /// working unchanged. When set (NINA.Polaris wires it through),
+    /// every Set*Async logs the exact XML being sent — DBGLOG-2
+    /// mirrors that into the LOG panel, so the operator can see
+    /// whether an INDI write actually went out and (by comparing with
+    /// the device's PropertyChanged event right after) whether the
+    /// driver acted on it.
+    /// Named DiagLogger to avoid colliding with the existing
+    /// <c>NINA.Core.Utility.Logger</c> static class that IndiClient
+    /// already uses for connect/disconnect tracing.</summary>
+    public ILogger DiagLogger { get; set; } = NullLogger.Instance;
 
     public string Host { get; }
     public int Port { get; }
@@ -166,17 +182,53 @@ public class IndiClient : IDisposable {
 
     public async Task SetNumberAsync(string device, string property, Dictionary<string, double> values,
         CancellationToken ct = default) {
+        LogIndiWrite("newNumberVector", device, property,
+            string.Join(", ", values.Select(kv => kv.Key + "=" + kv.Value)));
         await SendAsync(IndiXmlWriter.NewNumberVector(device, property, values), ct);
     }
 
     public async Task SetSwitchAsync(string device, string property, Dictionary<string, bool> values,
         CancellationToken ct = default) {
+        LogIndiWrite("newSwitchVector", device, property,
+            string.Join(", ", values.Select(kv => kv.Key + "=" + (kv.Value ? "On" : "Off"))));
         await SendAsync(IndiXmlWriter.NewSwitchVector(device, property, values), ct);
     }
 
     public async Task SetTextAsync(string device, string property, Dictionary<string, string> values,
         CancellationToken ct = default) {
+        LogIndiWrite("newTextVector", device, property,
+            string.Join(", ", values.Select(kv => kv.Key + "=\"" + kv.Value + "\"")));
         await SendAsync(IndiXmlWriter.NewTextVector(device, property, values), ct);
+    }
+
+    /// <summary>Shared logging path so every INDI write surfaces in the
+    /// LOG panel with a uniform shape. Emits the property + element
+    /// values AND a warning when the target property doesn't exist on
+    /// the device's snapshot — the most common reason a write is
+    /// silently dropped is that the driver doesn't advertise the
+    /// property name we picked (e.g. <c>GEOGRAPHIC_COORD</c> vs. some
+    /// driver-specific alias). INDI itself never replies to writes,
+    /// so this warning is the only way to spot the mismatch without
+    /// sniffing the wire.</summary>
+    private void LogIndiWrite(string kind, string device, string property, string elementsLog) {
+        var exists = Devices.TryGetValue(device, out var props) && props.ContainsKey(property);
+        if (exists) {
+            DiagLogger.LogInformation("INDI {Kind} → device='{Device}' property='{Property}' [{Elements}]",
+                kind, device, property, elementsLog);
+        } else {
+            // Build a hint of which properties DO exist on this device so
+            // the user can find the right name. Truncate the list — chatty
+            // devices have 50+ properties.
+            var hint = props == null
+                ? "(device not announced)"
+                : string.Join(", ", props.Keys.OrderBy(k => k).Take(20))
+                  + (props.Count > 20 ? $", … ({props.Count - 20} more)" : "");
+            DiagLogger.LogWarning(
+                "INDI {Kind} → device='{Device}' property='{Property}' [{Elements}] -- " +
+                "WARNING: property NOT in device snapshot; driver will silently drop the write. " +
+                "Available properties on this device: {Hint}",
+                kind, device, property, elementsLog, hint);
+        }
     }
 
     public IndiProperty? GetProperty(string device, string name) {

@@ -124,32 +124,86 @@ public class IndiTelescope : ITelescope {
     }
 
     /// <summary>Push the observer's geographic coordinates into the
-    /// mount via the INDI standard <c>GEOGRAPHIC_COORD</c> number
-    /// vector. The spec says <c>LONG</c> is degrees east in 0..360,
-    /// so a western hemisphere longitude (-37° for Brazil) becomes
-    /// 360 - 37 = 323°. Latitudes pass through unchanged. Elevation
-    /// is metres above sea level.
+    /// mount. The INDI standard property is <c>GEOGRAPHIC_COORD</c>
+    /// with elements <c>LAT</c> / <c>LONG</c> / <c>ELEV</c>, and
+    /// longitude in the 0..360 east convention -- so western
+    /// hemisphere (-37° for Brazil) becomes 360 - 37 = 323°.
     ///
-    /// Why this matters: the mount uses its internal lat/long for
-    /// every RA/Dec → alt/az conversion (slew calc, horizon limit,
-    /// LST). A wrong site location causes systematic GoTo errors
-    /// that look like alignment drift but are actually a coordinate
-    /// bias. Polaris already knows the observatory position from
-    /// the profile; pushing it once after connect saves the user
-    /// from poking the mount's hand controller menus.</summary>
+    /// In practice several driver families don't follow the spec
+    /// strictly:
+    /// <list type="bullet">
+    /// <item>Element name <c>LONG</c> vs <c>LON</c> -- some drivers
+    ///   accept only the short form.</item>
+    /// <item>Longitude in -180..+180 east instead of 0..360 -- the
+    ///   driver silently clamps or wraps and you end up at the
+    ///   wrong place on Earth.</item>
+    /// </list>
+    /// To make Sync Location actually work everywhere, we:
+    ///   1. Read the existing GEOGRAPHIC_COORD off the device
+    ///      snapshot (populated by INDI getProperties) to learn
+    ///      which element names this driver advertises.
+    ///   2. Try to detect the longitude convention by inspecting
+    ///      the CURRENT element range -- if min/max look like
+    ///      -180..+180 we keep the user's signed value, otherwise
+    ///      wrap to 0..360.
+    ///   3. Send the write using the discovered element names.
+    /// All this is logged so the operator can see exactly what was
+    /// negotiated. If the property doesn't exist at all on this
+    /// driver, IndiClient.LogIndiWrite surfaces a WARNING with the
+    /// list of available properties so the user can find the right
+    /// one (some drivers use SITE_COORD, SITE_LOCATION, etc.).</summary>
     public async Task SetSiteLocationAsync(double latitudeDeg, double longitudeDeg,
             double elevationMetres, CancellationToken ct = default) {
-        // Normalise longitude to the INDI 0..360 east convention.
-        // Western hemisphere (negative) wraps to the equivalent
-        // positive value. Eastern positive values pass through;
-        // 0..360 inputs from a different convention also work.
-        var lonNorm = longitudeDeg % 360.0;
-        if (lonNorm < 0) lonNorm += 360.0;
+        // 1) Discover element names + longitude convention from the
+        //    currently-announced property snapshot.
+        var existing = _client.GetProperty(DeviceName, "GEOGRAPHIC_COORD") as Protocol.IndiNumberProperty;
+        string latKey = "LAT";
+        string lonKey = "LONG";
+        string elevKey = "ELEV";
+        bool useSignedLongitude = false;
+        if (existing != null) {
+            // Find the elements case-insensitively + pick the
+            // longest matching name (LONG wins over LON if both
+            // exist on the same vector, which they don't, but just
+            // in case).
+            string? FindKey(params string[] candidates) {
+                foreach (var c in candidates) {
+                    var hit = existing.Values.Keys.FirstOrDefault(
+                        k => string.Equals(k, c, StringComparison.OrdinalIgnoreCase));
+                    if (hit != null) return hit;
+                }
+                return null;
+            }
+            latKey  = FindKey("LAT", "LATITUDE")           ?? latKey;
+            lonKey  = FindKey("LONG", "LON", "LONGITUDE")  ?? lonKey;
+            elevKey = FindKey("ELEV", "ELEVATION", "HEIGHT") ?? elevKey;
+            // If the existing longitude element has a min that's
+            // negative, the driver wants signed -180..+180 east.
+            // Otherwise default to 0..360 east per the spec.
+            if (existing.Values.TryGetValue(lonKey, out var lonEl) && lonEl.Min < 0) {
+                useSignedLongitude = true;
+            }
+        }
+        // 2) Convert to the discovered convention.
+        double lonOut;
+        if (useSignedLongitude) {
+            // -180..+180: input might be a wrapped 0..360 value
+            // (e.g. 323° meaning -37°). Normalise either way.
+            lonOut = longitudeDeg;
+            while (lonOut >  180) lonOut -= 360;
+            while (lonOut < -180) lonOut += 360;
+        } else {
+            // 0..360 east: wrap negatives.
+            lonOut = longitudeDeg % 360.0;
+            if (lonOut < 0) lonOut += 360.0;
+        }
+        // 3) Send. IndiClient.LogIndiWrite handles the "property
+        //    not found" diagnostic warning for free.
         await _client.SetNumberAsync(DeviceName, "GEOGRAPHIC_COORD",
             new Dictionary<string, double> {
-                ["LAT"]  = latitudeDeg,
-                ["LONG"] = lonNorm,
-                ["ELEV"] = elevationMetres
+                [latKey]  = latitudeDeg,
+                [lonKey]  = lonOut,
+                [elevKey] = elevationMetres
             }, ct);
     }
 

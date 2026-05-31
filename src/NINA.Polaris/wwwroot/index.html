@@ -9391,7 +9391,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <button class="btn btn-sm" @click="logClose()">✕ Close</button>
             </div>
             <div class="log-panel-body" style="flex:1; overflow:auto; font-family:var(--font-mono, monospace);
-                        font-size:11px; padding:8px 12px;">
+                        font-size:14px; line-height:1.5; padding:10px 14px;">
                 <template x-for="e in logFiltered()" :key="e.id">
                     <div :class="'log-row log-' + e.level"
                          style="white-space:pre-wrap; word-break:break-word;
@@ -9411,9 +9411,10 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         <span x-show="e.exceptionType" style="color:#fb7185;"
                               x-text="' ' + e.exceptionType + ': ' + (e.exceptionMsg || '')"></span>
                         <pre x-show="e.stackTrace"
-                             style="margin:4px 0 4px 24px; padding:6px 10px;
+                             style="margin:4px 0 4px 24px; padding:8px 12px;
                                     background:rgba(0,0,0,0.3); color:#fda4af;
-                                    font-size:10px; border-left:2px solid #fb7185;
+                                    font-size:13px; line-height:1.45;
+                                    border-left:2px solid #fb7185;
                                     overflow-x:auto;"
                              x-text="e.stackTrace"></pre>
                     </div>
