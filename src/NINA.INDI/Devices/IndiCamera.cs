@@ -244,9 +244,19 @@ public class IndiCamera : ICamera {
     public Task SetIsoAsync(int iso, CancellationToken ct = default) => Task.CompletedTask;
 
     public async Task<IImageData> CaptureAsync(double exposureSeconds, CaptureOptions? opts = null, CancellationToken ct = default) {
-        _exposureTcs = new TaskCompletionSource<IImageData>();
+        // Re-assert BLOB delivery before every capture. INDI's
+        // enableBLOB rule is per-connection AND per-device; reconnects
+        // or indiserver restarts silently drop it, leaving CCD_EXPOSURE
+        // writes that complete on the driver side but never deliver a
+        // CCD1 BLOB to us -> OnBlobReceived never fires -> the TCS below
+        // hangs forever. Cheap (single small XML packet) so doing it on
+        // every capture is fine.
+        try { await _client.EnableBlobAsync(DeviceName, ct); } catch { /* best effort */ }
 
-        using var reg = ct.Register(() => _exposureTcs.TrySetCanceled());
+        _exposureTcs = new TaskCompletionSource<IImageData>();
+        var localTcs = _exposureTcs;
+
+        using var reg = ct.Register(() => localTcs.TrySetCanceled());
 
         // opts overrides honoured per-capture so the sequencer can set
         // binning + gain inline without a separate round-trip.
@@ -260,7 +270,33 @@ public class IndiCamera : ICamera {
         await _client.SetNumberAsync(DeviceName, "CCD_EXPOSURE",
             new Dictionary<string, double> { ["CCD_EXPOSURE_VALUE"] = exposureSeconds }, ct);
 
-        return await _exposureTcs.Task;
+        // Server-side deadline so a missing BLOB doesn't hang the
+        // request forever (which then drags down the next capture
+        // too, since they all share _exposureTcs). Budget = exposure
+        // + 60 s for download / parse / metadata read; the 60 s
+        // cushion is generous enough for a 50 MB ASI2600 / ASI183 BLOB
+        // over USB3 + LAN even on a Pi 4, but short enough that a
+        // stuck driver bubbles back as a clear "BLOB never arrived"
+        // toast rather than a generic client-side "Request timed out".
+        var timeoutMs = (int)Math.Min(int.MaxValue,
+            (exposureSeconds * 1000) + 60_000);
+        using var timeoutCts = new CancellationTokenSource(timeoutMs);
+        using var timeoutReg = timeoutCts.Token.Register(() => localTcs.TrySetException(
+            new TimeoutException(
+                $"INDI camera {DeviceName} did not deliver a BLOB within " +
+                $"{Math.Round((exposureSeconds + 60), 1)} s of starting the exposure. " +
+                $"Common causes: BLOB delivery disabled on the indiserver, " +
+                $"driver crashed mid-exposure, or CCD_EXPOSURE_VALUE never " +
+                $"reached the driver.")));
+
+        try {
+            return await localTcs.Task;
+        } finally {
+            // Clear the field if we're still the active TCS so the
+            // next CaptureAsync starts fresh; the new one will replace
+            // the field on entry regardless, this is belt+suspenders.
+            if (ReferenceEquals(_exposureTcs, localTcs)) _exposureTcs = null;
+        }
     }
 
     public async Task AbortExposureAsync(CancellationToken ct = default) {
