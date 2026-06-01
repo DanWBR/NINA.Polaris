@@ -15,7 +15,92 @@
   verbatim, only the prose around them was translated.
 -->
 
-# Current chapter: INDI focuser + filter-wheel spec compliance audit
+# Current chapter: Live-stack per-frame pre-processing (LSPP-1..7)
+
+> Operator asked for calibration + BGE to run on EACH live-stack
+> frame before star-detection + accumulation. Goal: live stack
+> comes out already clean of hot pixels, vignetting and sky
+> gradient instead of waiting for STUDIO post-processing.
+
+## What shipped
+
+### LSPP-1: CalibrationMath static helpers
+Extracted the per-pixel calibration loop (subtract dark/bias,
+divide normalised flat, clamp to ushort) and the master-picker
+helpers (FindNearestDark/Flat/Bias) out of CalibrationService
+into a static `CalibrationMath` class so the new per-frame
+consumer can call them against in-memory ushort[] buffers
+without going through the batch job machinery. Refactored
+`CalibrationService.CalibrateOne` to delegate -- byte-identical
+behaviour, just one source of truth now. 13 new unit tests pin
+the math.
+
+### LSPP-2: LiveStackPreProcessor service + master cache
+New singleton injected into LiveStackingService. For each frame
+it reads (gain, exposureSec, filter, binningX) metadata, looks
+up matching masters in the FrameLibrary (or the override IDs
+from settings if set), loads + caches the master buffers ONCE
+per session (~150MB peak), and calls CalibrationMath. Always
+returns a result with raw pixels on failure -- never throws.
+
+### LSPP-3: Settings + endpoint + WS payload
+- `LiveStackPreProcSettings` DTO on EquipmentProfile
+  (enable + 3 master override ids + BGE knobs)
+- GET/PUT `/api/livestack/preprocessing/settings`
+- New `liveStack.preProc` sub-object on the WS payload with
+  `calibration.{enabled, masterDarkName, framesCalibrated, ...}`
+  and `bge.{enabled, supportedThisSession, framesProcessed, ...}`
+
+### LSPP-4: LiveStackingService splice + status tracker
+`LiveStackPreProcStatus` mutable counters (calibrated /
+fallback / no-match / BGE processed / BGE fallback). Splice
+runs BEFORE StarDetector so calibrated pixels feed the
+alignment + accumulator. Fail-safe fallback to raw on any
+exception. Reset on rig switch + on LiveStackingService.Reset.
+`InjectClientStackMetrics` overloaded with optional BGE
+counters so the client-side BGE numbers mirror back to all
+connected browsers.
+
+### LSPP-5: Client-side BGE in _stackViaWasm
+Lazy-loads `OnnxRegistry.BgePipeline` (208MB model) the first
+time BGE is enabled in a session. Runs per-frame BGE before
+the WASM stacker AddFrame call. Counters piggy-back on the
+existing `client-stack-progress` WS message; server forwards
+them into PreProcStatus. Made `_stackViaWasm`/`_renderRawFrame`/
+`handleImageFrame` async since ORT inference is fundamentally
+async (the WS event handler doesn't await, harmless).
+
+### LSPP-6: UI panel in LIVE tab
+New `<details>` block under the existing trigger panel. Two
+fieldsets (Calibration / BGE) mirror the trigger pattern.
+Shows auto-matched master names, real-time counters (✓
+calibrated · ⚠ fallback · ⊘ no-match), and a "BGE requires
+client-mode stacking" banner when the active stack mode is
+server-side. Settings hydrate from GET /preprocessing/settings,
+write back via 500ms debounced PUT.
+
+### LSPP-7: Docs + README
+- New "Per-frame pre-processing (LSPP)" section in
+  `docs/user-guide/live-stacking.md` walks through both
+  features, the fail-safe semantics, the BGE client-mode
+  constraint, and the endpoint shapes.
+- WS payload sample in the same doc shows the new
+  `liveStack.preProc.{calibration,bge}` sub-objects.
+- README bullet pointing operators at the feature.
+- This PLAN.md chapter.
+
+### Out of scope (deferred)
+- Server-side ONNX BGE (would need Microsoft.ML.OnnxRuntime
+  native deps + ~150MB binary in the .deb; the WASM client
+  path covers the modern setup which is the vast majority).
+- Per-channel BGE for OSC RGB frames (current path is mono).
+- Auto-create masters in-line if none match (operator runs
+  STUDIO Master Dark/Flat/Bias first; the LIVE panel surfaces
+  a "no matching masters yet" hint when the library is empty).
+
+---
+
+# Previous chapter: INDI focuser + filter-wheel spec compliance audit
 
 > User followed up the telescope audit with the same exercise for
 > https://docs.indilib.org/interfaces/focuser.html and

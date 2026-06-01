@@ -247,6 +247,71 @@ These constants live in `Services/RefocusSuggestionService.cs` as
   The same payload also rides inside `liveStack.refocusSuggestion`
   on the WS tick.
 
+## Per-frame pre-processing (LSPP)
+
+The "Per-frame pre-processing" panel (below Auto re-focus / re-center)
+applies calibration and/or BGE to every frame **before** it is added to
+the stack. Result: the live stack comes out of the gate already free of
+hot pixels, vignetting and sky-glow gradient instead of waiting until
+you re-process the master in STUDIO.
+
+### Calibration
+
+Toggle `Apply calibration to each frame before stacking` and Polaris
+matches the active rig's master dark/flat/bias against the incoming
+frame's gain + exposure + filter. The matched master file names appear
+in the status block so you can confirm the auto-match picked what you
+expected.
+
+- Match is by (gain, exposure) for the dark, (gain, filter) for the
+  flat, gain only for the bias. Same logic as STUDIO Calibrate.
+- Masters need to exist in your FrameLibrary first -- build them in
+  STUDIO (Stack tab → Master Dark/Flat/Bias) before turning this on.
+- If no master matches, the frame is passed through raw and the
+  "no match" counter ticks. The stack continues.
+- If calibration fails (corrupt master, dimension mismatch), the
+  warning is logged, the frame goes in raw, and the "fallback" counter
+  ticks. The stack never aborts.
+
+Master buffers are cached in memory for the session (`~150MB` peak for
+one full set at 24MP). The cache resets on rig switch and on
+LiveStackingService.Reset (e.g. target switch).
+
+### BGE (background extraction)
+
+Toggle `Apply GraXpert BGE to each frame before stacking`. Runs the
+GraXpert BGE model **in the browser** via WebAssembly + WebGPU for
+every frame before stacking.
+
+- **Client-mode stacking only.** When the rig's "Compute mode" is
+  server-side, the BGE checkbox is grey and a warning banner appears.
+  Server-side ONNX would require adding native runtime deps to the
+  Pi build, which isn't worth the ~150MB binary footprint for what
+  is largely a fallback compute path. Switch the rig to client/auto
+  mode to enable BGE.
+- The 208MB BGE model is downloaded lazily the first time BGE is
+  enabled in a session -- spares bandwidth on rigs that never use it.
+- Counters mirror the calibration ones (processed / fallback / last
+  error). The browser posts them back to the server so every other
+  connected browser sees the same numbers.
+
+### Failure mode
+
+Both calibration and BGE are **fail-safe**: if anything goes wrong on
+a frame, the original raw pixels are used instead and the session
+continues. There is no "abort on calibration error" mode -- the live
+stack is designed to keep growing through hardware glitches, missing
+masters, model load races, etc. The error message lands in the LOG
+panel + the "Last error" row of the relevant fieldset.
+
+### Endpoints
+
+- `GET /api/livestack/preprocessing/settings` -- current
+  per-rig settings.
+- `PUT /api/livestack/preprocessing/settings` -- update settings.
+  Resets the master cache so the next frame re-resolves with the
+  new overrides or flags.
+
 ## WebSocket payload
 
 For automation / external dashboards, the live stack state is in the
@@ -279,6 +344,27 @@ For automation / external dashboards, the live stack state is in the
       "framesSinceBaseline": 28, "sampleCount": 28,
       "baselineStarCount": 87,
       "suggestedAt": "2026-05-22T23:05:11Z"
+    },
+    "preProc": {
+      "calibration": {
+        "enabled": true,
+        "masterDarkName": "master_dark_120s_g100_x20.fits",
+        "masterFlatName": "master_flat_L_g100_x20.fits",
+        "masterBiasName": null,
+        "framesCalibrated": 42,
+        "framesFallback": 0,
+        "framesNoMatch": 0,
+        "lastError": null
+      },
+      "bge": {
+        "enabled": true,
+        "supportedThisSession": true,
+        "framesProcessed": 42,
+        "framesFallback": 0,
+        "lastError": null,
+        "smoothing": 1.0,
+        "correction": "Subtraction"
+      }
     }
   }
 }

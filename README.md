@@ -200,6 +200,21 @@ setup keeps its own thermal + drift policy. UI is a collapsible
 `<details>` panel inside the LIVE tab below the stack controls;
 ▶ Now buttons bypass gates for manual fires.
 
+**Per-frame pre-processing** (LSPP): calibration (subtract master
+dark/bias, divide by master flat) and/or BGE (GraXpert background
+extraction) run on every incoming frame **before** it lands in the
+live-stack accumulator. Calibration auto-matches masters from the
+FrameLibrary by (gain, exposure, filter) -- counters + chosen master
+file names land in the WS payload + LIVE-tab status block. BGE runs
+client-side via the existing browser WebAssembly pipeline (the same
+one FILES and EDITOR use), so it's available only when the rig's
+stack compute mode is "client" or "auto + a WASM-capable browser
+attached"; server-mode shows a banner explaining the constraint.
+Failure is fail-safe -- any per-frame error logs a warning, the raw
+frame goes into the stack instead, the session never aborts. New
+`<details>` panel inside LIVE below the triggers block. See
+[`docs/user-guide/live-stacking.md`](docs/user-guide/live-stacking.md).
+
 **Refocus suggestion** (REFSUG): trend-based advisory chip + LIVE-tab
 callout for manual-focuser users (or motorized rigs with auto-refocus
 disabled). The detector watches per-frame HFR + star count, sets a
