@@ -206,6 +206,7 @@ public class ProfileService {
             CoolerTargetTemperature = src.CoolerTargetTemperature,
             DefaultGain = src.DefaultGain, DefaultOffset = src.DefaultOffset,
             DefaultBinning = src.DefaultBinning,
+            BayerPatternOverride = src.BayerPatternOverride,
             FocuserStepSize = src.FocuserStepSize,
             FocuserBacklashSteps = src.FocuserBacklashSteps,
             FocalLengthMm = src.FocalLengthMm,
@@ -570,6 +571,17 @@ public class EquipmentProfile {
     public int DefaultBinning { get; set; } = 1;
     public int FocuserStepSize { get; set; } = 50;
     public int FocuserBacklashSteps { get; set; }
+
+    /// <summary>FIELD-2: per-rig Bayer mosaic override. Null = honour
+    /// whatever the camera / FITS header reports (current behaviour).
+    /// One of "RGGB" / "BGGR" / "GBRG" / "GRBG" forces the corresponding
+    /// <see cref="NINA.Core.Enum.BayerPatternEnum"/> regardless of what
+    /// the driver said. Use this when the live stack comes out
+    /// monochrome or with swapped colours -- some drivers (notably the
+    /// SVBONY indi_svbony_ccd build at the time of writing) emit the
+    /// wrong BAYERPAT keyword or omit it entirely, which collapses the
+    /// stacked frame to greyscale.</summary>
+    public string? BayerPatternOverride { get; set; }
 
     // Polar alignment (TPPA) tunables. Per-rig because exposure /
     // gain that work for a fast OSC don't necessarily work for a

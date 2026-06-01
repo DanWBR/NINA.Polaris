@@ -91,6 +91,14 @@ public static class EquipmentEndpoints {
                 r.DefaultGain = update.DefaultGain;
                 r.DefaultOffset = update.DefaultOffset;
                 r.DefaultBinning = update.DefaultBinning;
+                // FIELD-2: per-rig Bayer mosaic override. Treat empty /
+                // whitespace as null ("Auto") so the UI <select> with
+                // an empty-value default round-trips cleanly. Anything
+                // else is normalised to upper-snake (RGGB/GBRG/...) and
+                // validated downstream by LiveStackingService when it
+                // tries to parse it to BayerPatternEnum.
+                r.BayerPatternOverride = string.IsNullOrWhiteSpace(update.BayerPatternOverride)
+                    ? null : update.BayerPatternOverride.Trim().ToUpperInvariant();
                 r.FocuserStepSize = update.FocuserStepSize;
                 r.FocuserBacklashSteps = update.FocuserBacklashSteps;
                 // Polar alignment (TPPA) tunables. Defensive: zero from

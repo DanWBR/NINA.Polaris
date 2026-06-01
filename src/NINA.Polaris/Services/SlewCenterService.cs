@@ -25,15 +25,18 @@ public class SlewCenterService {
     private readonly EquipmentManager _equip;
     private readonly PlateSolveService _solver;
     private readonly ProfileService _profiles;
+    private readonly CameraStreamService _stream;
     private readonly ILogger<SlewCenterService> _logger;
 
     private readonly ConcurrentDictionary<string, SlewCenterJob> _jobs = new();
 
     public SlewCenterService(EquipmentManager equip, PlateSolveService solver,
-        ProfileService profiles, ILogger<SlewCenterService> logger) {
+        ProfileService profiles, CameraStreamService stream,
+        ILogger<SlewCenterService> logger) {
         _equip = equip;
         _solver = solver;
         _profiles = profiles;
+        _stream = stream;
         _logger = logger;
     }
 
@@ -146,6 +149,33 @@ public class SlewCenterService {
                 return;
             }
 
+            // FIELD-1: snapshot + stop the video stream around the
+            // solve loop. While CCD_VIDEO_STREAM is on, IndiCamera
+            // fans BLOBs to the stream subscribers and bypasses the
+            // exposure TCS -- so the awaited CaptureAsync below would
+            // never resolve and the solve would hit the 60 s timeout.
+            // The SVBONY OSC driver hits this hardest because its
+            // streamed sub-frames don't parse as full-sensor FITS
+            // either way. Save the operator's settings so we can
+            // restart with the same exposure / gain / binning after.
+            var streamWasRunning = _stream.IsRunning;
+            StreamConfig? savedStream = null;
+            if (streamWasRunning) {
+                savedStream = new StreamConfig(
+                    ExposureSeconds: _stream.ExposureSeconds,
+                    Gain: _stream.Gain,
+                    BinX: _stream.BinX,
+                    BinY: _stream.BinY);
+                _logger.LogInformation(
+                    "Pausing camera stream (exp={Exp}s gain={Gain}) for plate solve",
+                    savedStream.ExposureSeconds, savedStream.Gain);
+                try { await _stream.StopAsync(); }
+                catch (Exception ex) {
+                    _logger.LogWarning(ex, "Failed to stop video stream before solve (continuing)");
+                }
+            }
+            try {
+
             for (int i = 0; i < maxIterations; i++) {
                 ct.ThrowIfCancellationRequested();
                 job.Iteration = i + 1;
@@ -246,6 +276,23 @@ public class SlewCenterService {
 
             job.State = SlewCenterState.Failed;
             job.Error = $"Did not converge after {maxIterations} iterations (last error: {job.ErrorArcsec:F1}\")";
+
+            } finally {
+                // FIELD-1: restart the stream with the operator's saved
+                // settings so the PREVIEW / VIDEO canvas resumes after
+                // the solve (success, fail, or convergence). Wrapped in
+                // try/catch so a stream-restart failure doesn't mask a
+                // legitimate solve result the caller is waiting on.
+                if (savedStream != null) {
+                    try {
+                        _stream.Start(savedStream);
+                        _logger.LogInformation("Resumed camera stream after plate solve");
+                    } catch (Exception ex) {
+                        _logger.LogWarning(ex,
+                            "Failed to resume video stream after solve (operator can restart manually)");
+                    }
+                }
+            }
 
         } catch (OperationCanceledException) {
             job.State = SlewCenterState.Cancelled;

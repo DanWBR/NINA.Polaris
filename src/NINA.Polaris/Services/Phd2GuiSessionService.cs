@@ -337,14 +337,20 @@ public class Phd2GuiSessionService : BackgroundService {
         }
         // Refresh Phd2Running alongside the xpra probe. Cheap, single
         // pgrep call, no need to be conditional on SessionRunning.
+        // FIELD-5: widened from `pgrep -x phd2.bin` / `pgrep -x phd2`
+        // to a regex over the full command line (`-f`). The exact-
+        // match form missed AppImage builds (process name extracts to
+        // a random tmpdir like `/tmp/.mount_phd2X/phd2`), python-
+        // launched builds (`python3 phd2.py`), and SnapStore (which
+        // wraps as `snap run phd2`). The `\bphd2(\.bin)?\b` anchor
+        // keeps unrelated processes that happen to contain "phd2" in
+        // a path (e.g. `nano /home/me/phd2-notes.txt`) from
+        // accidentally matching. The banner in the UI also ORs this
+        // with phd2.connected so a missed detection no longer
+        // silently lies to the operator anyway.
         try {
-            var res = await RunCommandAsync("pgrep", "-x phd2.bin", ct, timeoutMs: 2000);
+            var res = await RunCommandAsync("pgrep", "-f \"\\bphd2(\\.bin)?\\b\"", ct, timeoutMs: 2000);
             Phd2Running = res.exitCode == 0 && !string.IsNullOrWhiteSpace(res.stdout);
-            if (!Phd2Running) {
-                // Some distros register the binary as just 'phd2' (no .bin suffix)
-                var alt = await RunCommandAsync("pgrep", "-x phd2", ct, timeoutMs: 2000);
-                Phd2Running = alt.exitCode == 0 && !string.IsNullOrWhiteSpace(alt.stdout);
-            }
         } catch {
             Phd2Running = false;
         }

@@ -32,6 +32,22 @@ public class ImageBuffer : IImageBuffer {
             imageData.Properties.BayerPattern);
     }
 
+    /// <summary>FIELD-2: same as <see cref="FromImageData(IImageData)"/>
+    /// but lets the caller force a Bayer mosaic that overrides what the
+    /// camera / FITS header reports. Used by ImageRelayService when the
+    /// active rig has a BayerPatternOverride set, so the client-side
+    /// debayer receives the right pattern even when the driver lies.
+    /// Pass null to honour the source pattern (auto-detect).</summary>
+    public static ImageBuffer FromImageData(IImageData imageData,
+                                             BayerPatternEnum? bayerOverride) {
+        return new ImageBuffer(
+            imageData.Data,
+            imageData.Properties.Width,
+            imageData.Properties.Height,
+            imageData.Properties.BitDepth,
+            bayerOverride ?? imageData.Properties.BayerPattern);
+    }
+
     public byte[] ToLz4Compressed() {
         var sourceBytes = new byte[_pixels.Length * 2];
         Buffer.BlockCopy(_pixels, 0, sourceBytes, 0, sourceBytes.Length);

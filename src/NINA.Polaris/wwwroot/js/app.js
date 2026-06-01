@@ -2210,6 +2210,18 @@ function ninaApp() {
             this.updateClock();
             setInterval(() => this.updateClock(), 1000);
             this.updateFov();
+
+            // FIELD-6: rehydrate persisted chip dismissals. Only
+            // uv-past survives reloads (the "Pi was under-voltage
+            // since boot" advisory is informational; once acknowledged
+            // the operator doesn't need to see it every page load).
+            // uv-now is intentionally NOT persisted -- an active
+            // power problem on the next session is important to see.
+            try {
+                if (localStorage.getItem('polaris.dismissedChips.uv-past') === '1') {
+                    this.dismissedChips.add('uv-past');
+                }
+            } catch (e) { /* private mode; ignore */ }
             // DBGLOG-6: window error + unhandledrejection capture.
             // Installed once per app boot. apiFetch + toast wrappers
             // are inlined into those methods themselves (cleaner than
@@ -4266,6 +4278,46 @@ function ninaApp() {
             this.toasts = this.toasts.filter(t => t.id !== id);
         },
 
+        // FIELD-6: activity-bar chip dismissal. Session-only Set so
+        // the operator can suppress a chip after acknowledging it.
+        // The dismissed id only stays out of activityChips() while
+        // the underlying signal continues to be true; once the
+        // condition flips false then true again (see _onHostUpdate
+        // below) the id is wiped from the set so the chip re-fires
+        // on the next occurrence. uv-past additionally persists to
+        // localStorage so a returning operator who has already
+        // ordered a beefier PSU doesn't keep getting nagged about
+        // a past event across reloads.
+        dismissedChips: new Set(),
+
+        dismissChip(id) {
+            this.dismissedChips.add(id);
+            if (id === 'uv-past') {
+                try { localStorage.setItem('polaris.dismissedChips.uv-past', '1'); }
+                catch (e) { /* private mode; ignore */ }
+            }
+            // Force Alpine to re-evaluate activityChips() by reassigning
+            // the Set reference (Sets are not deeply reactive).
+            this.dismissedChips = new Set(this.dismissedChips);
+        },
+
+        // Called from the WS host update path. Re-arms a dismissed
+        // chip whenever the underlying boolean transitions false ->
+        // true; that's the trigger that means "this is a NEW event,
+        // not the same one the operator dismissed".
+        _onHostUpdate(prev, next) {
+            if (prev?.underVoltageNow === false && next?.underVoltageNow === true) {
+                this.dismissedChips.delete('uv-now');
+                this.dismissedChips = new Set(this.dismissedChips);
+            }
+            if (prev?.underVoltageOccurred === false && next?.underVoltageOccurred === true) {
+                this.dismissedChips.delete('uv-past');
+                try { localStorage.removeItem('polaris.dismissedChips.uv-past'); }
+                catch (e) { /* ignore */ }
+                this.dismissedChips = new Set(this.dismissedChips);
+            }
+        },
+
         // --- WebSocket with exponential backoff + jitter ---
 
         connectStatusWs() {
@@ -4331,28 +4383,30 @@ function ninaApp() {
 
             ws.onopen = () => {
                 this._imageWsAttempt = 0;
-                // CLST-4: if WASM is ready, ask for raw mode (uint16 +
-                // LZ4) so the client-side stacker can do its work.
-                // Otherwise stick with JPEG (universally supported,
-                // server-side stacked preview already encoded).
-                const mode = this.wasmReady ? 'raw' : 'jpeg';
-                this._wsSendTracked(ws, JSON.stringify({ mode }));
-                // Tell the server we can stack client-side. CLST-5 will
-                // act on this (flip LiveStackingService → MetricsOnly).
-                // Until CLST-5 ships the server logs + ignores it;
-                // sending now is benign.
+                // FIELD-3: streaming is RAW-only now. The JPEG WS path
+                // baked AutoStretch server-side, which silently
+                // disabled the operator's Stretch / WB controls
+                // (reported from the field). Always ask for raw; the
+                // server defaults to raw anyway, this is belt + braces.
+                this._wsSendTracked(ws, JSON.stringify({ mode: 'raw' }));
+                // Tell the server whether the client-side WASM stacker
+                // is ready (CLST-5: flips LiveStackingService to
+                // MetricsOnly when at least one capable client is
+                // attached). The mode itself is no longer gated on
+                // WASM -- the only renderer left IS the raw + WebGL
+                // path; WASM only controls whether the server keeps
+                // accumulating server-side.
                 this._wsSendTracked(ws, JSON.stringify({
                     type: 'client-capability',
                     wasm: !!this.wasmReady,
                     wasmVersion: this.wasmVersion || null
                 }));
             };
-            // Re-send capability + switch mode when WASM finishes
-            // loading after the WS opens (race common on first page
-            // load because WASM init is async).
+            // Re-send capability when WASM finishes loading after the
+            // WS opens (race common on first page load because WASM
+            // init is async). Mode message no longer needed (always raw).
             window.addEventListener('nina-wasm-ready', () => {
                 if (ws.readyState === WebSocket.OPEN) {
-                    this._wsSendTracked(ws, JSON.stringify({ mode: 'raw' }));
                     this._wsSendTracked(ws, JSON.stringify({
                         type: 'client-capability',
                         wasm: true,
@@ -10893,6 +10947,16 @@ function ninaApp() {
         removePreConnectDelay(rig, deviceName) {
             if (!rig.preConnectDelayMsByDevice) return;
             delete rig.preConnectDelayMsByDevice[deviceName];
+            this.saveRig(rig);
+        },
+
+        // FIELD-2: per-rig Bayer mosaic override. Empty string =
+        // "Auto" (honour the driver / FITS header). Anything else
+        // forces the matching BayerPatternEnum server-side. Persists
+        // through saveRig's debounce; takes effect on the next frame
+        // the relay broadcasts (no reconnect needed).
+        setBayerOverride(rig, value) {
+            rig.bayerPatternOverride = value && value.trim() ? value.trim() : null;
             this.saveRig(rig);
         },
 
@@ -17550,17 +17614,26 @@ function ninaApp() {
             // under-voltage (cleared but flagged since boot) =
             // AMBER advice ("consider a powered hub"). The chip
             // links to the troubleshooting doc anchor on click.
-            if (this.host.underVoltageNow) {
+            //
+            // FIELD-6: dismissable=true so the operator can click
+            // the × to suppress for the current session. The chip
+            // re-fires automatically on the next false->true
+            // transition (see WS host handler), so a NEW under-
+            // voltage event after the operator dismissed never
+            // gets silenced.
+            if (this.host.underVoltageNow && !this.dismissedChips.has('uv-now')) {
                 out.push({
                     id: 'uv-now', icon: '⚡', kind: 'error',
                     label: 'Under-voltage NOW — expect USB crashes',
-                    href: 'docs/user-guide/troubleshooting.md#usb-device-crashes-mid-operation-under-voltage'
+                    href: 'docs/user-guide/troubleshooting.md#usb-device-crashes-mid-operation-under-voltage',
+                    dismissable: true
                 });
-            } else if (this.host.underVoltageOccurred) {
+            } else if (this.host.underVoltageOccurred && !this.dismissedChips.has('uv-past')) {
                 out.push({
                     id: 'uv-past', icon: '⚡', kind: 'warn',
                     label: 'Pi was under-voltage since boot — use a powered USB hub',
-                    href: 'docs/user-guide/troubleshooting.md#usb-device-crashes-mid-operation-under-voltage'
+                    href: 'docs/user-guide/troubleshooting.md#usb-device-crashes-mid-operation-under-voltage',
+                    dismissable: true
                 });
             }
 
@@ -19096,7 +19169,14 @@ function ninaApp() {
             // activity bar derives its content purely from these (plus
             // the equipment + sequence state that handlers above
             // already populated).
-            if (msg.host) this.host = msg.host;
+            if (msg.host) {
+                // FIELD-6: re-arm dismissed under-voltage chips on a
+                // false -> true transition. _onHostUpdate diffs prev
+                // vs next and wipes the matching id from
+                // dismissedChips so a NEW event always re-fires.
+                this._onHostUpdate(this.host, msg.host);
+                this.host = msg.host;
+            }
             // CLOCK-3: server pushes utcNow on every tick. Compare
             // to Date.now() to compute wall-clock skew the user can
             // act on. Skew is positive when the server is AHEAD of

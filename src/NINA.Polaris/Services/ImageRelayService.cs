@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net.WebSockets;
+using NINA.Core.Enum;
 using NINA.Image.ImageData;
 using NINA.Image.Interfaces;
 
@@ -8,30 +9,30 @@ namespace NINA.Polaris.Services;
 /// <summary>
 /// Broadcasts captured frames to every connected
 /// <c>/ws/image-stream</c> client. Each client is fanned out
-/// independently, so a slow browser doesn't stall the rest. Two
-/// transport modes per client:
-/// <list type="bullet">
-/// <item><b>JPEG</b> (default), server-side stretch + encode, ~50-200 KB
-/// per frame, works on any browser.</item>
-/// <item><b>Raw</b>, uint16 pixels + LZ4-compressed bayer pattern,
-/// client-side WebGL2 stretch + debayer, ~5-15 MB per frame, requires
-/// a modern browser.</item>
-/// </list>
+/// independently, so a slow browser doesn't stall the rest.
 ///
-/// Adaptive bandwidth: when send latency for a raw-mode client exceeds
-/// <see cref="AdaptiveDowngradeLatency"/> for
-/// <see cref="AdaptiveDowngradeStreak"/> consecutive frames, that
-/// specific client is downgraded to JPEG. When latency recovers, the
-/// upgrade path runs in reverse. Disable via
-/// <see cref="AdaptiveEnabled"/>.
+/// FIELD-3: streaming is RAW-only (uint16 pixels + LZ4-compressed
+/// header carrying the Bayer pattern, ~5-15 MB per frame, decoded
+/// client-side by the WASM pipeline + WebGL2 stretch / debayer).
+/// The old JPEG WS path was deleted because it baked AutoStretch
+/// into the JPEG server-side, which silently disabled the operator's
+/// Stretch / WB controls in the browser. Adaptive bandwidth went
+/// with it -- the only downgrade target was JPEG. Slow consumers are
+/// handled by per-client SendLock back-pressure (frame skip) instead
+/// of format switch.
 ///
-/// Holds the most recent <see cref="ImageBuffer"/> + its JPEG encoding
-/// so a freshly-connected client can immediately render the last frame
-/// without waiting for the next capture.
+/// <see cref="GetLatestJpeg"/> stays for the static one-shot
+/// thumbnail endpoints (gallery preview, livestack preview) -- those
+/// want a pre-stretched JPEG and are decoupled from the live WS path.
+///
+/// Holds the most recent <see cref="ImageBuffer"/> so a freshly-
+/// connected client can immediately render the last frame without
+/// waiting for the next capture.
 /// </summary>
 public class ImageRelayService : IDisposable {
     private readonly ConcurrentDictionary<string, ClientEntry> _clients = new();
     private readonly ILogger<ImageRelayService> _logger;
+    private readonly ProfileService? _profiles;
     private ImageBuffer? _latestImage;
     private byte[]? _latestJpeg;
 
@@ -46,19 +47,40 @@ public class ImageRelayService : IDisposable {
     private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(10);
     private const int MaxConsecutiveFailures = 3;
 
-    /// <summary>Send latency above this triggers raw → JPEG downgrade.</summary>
-    public TimeSpan AdaptiveDowngradeLatency { get; set; } = TimeSpan.FromSeconds(3);
-    /// <summary>Number of consecutive slow frames before downgrading.</summary>
-    public int AdaptiveDowngradeStreak { get; set; } = 2;
-    /// <summary>Send latency below this for N frames allows JPEG → raw upgrade
-    /// (only for clients we previously downgraded).</summary>
-    public TimeSpan AdaptiveUpgradeLatency { get; set; } = TimeSpan.FromMilliseconds(600);
-    public int AdaptiveUpgradeStreak { get; set; } = 5;
-    /// <summary>Master switch, set false to pin clients to whatever mode they requested.</summary>
-    public bool AdaptiveEnabled { get; set; } = true;
-
     public ImageRelayService(ILogger<ImageRelayService> logger) {
         _logger = logger;
+    }
+
+    /// <summary>FIELD-2: DI overload that wires the active rig's
+    /// <c>BayerPatternOverride</c> into every relayed frame. Kept as a
+    /// second constructor so existing test code that builds the service
+    /// without a profile still compiles and runs. In Program.cs the
+    /// container picks this overload because the greediest matching
+    /// constructor wins.</summary>
+    public ImageRelayService(ILogger<ImageRelayService> logger,
+                              ProfileService profiles) {
+        _logger = logger;
+        _profiles = profiles;
+    }
+
+    /// <summary>Resolve the active rig's Bayer override (if any) to a
+    /// concrete enum value. Returns null when:
+    ///   - No ProfileService injected (legacy ctor path / tests)
+    ///   - No active rig
+    ///   - Override is null / empty / "Auto" (honour the source)
+    ///   - String doesn't parse to a known pattern (graceful fall
+    ///     through to the source-reported value)
+    /// </summary>
+    private BayerPatternEnum? ResolveBayerOverride() {
+        var raw = _profiles?.ActiveEquipmentProfile?.BayerPatternOverride;
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        if (string.Equals(raw, "Auto", StringComparison.OrdinalIgnoreCase)) return null;
+        if (Enum.TryParse<BayerPatternEnum>(raw, ignoreCase: true, out var parsed)
+                && parsed != BayerPatternEnum.None
+                && parsed != BayerPatternEnum.Auto) {
+            return parsed;
+        }
+        return null;
     }
 
     public void RegisterClient(string id, System.Net.WebSockets.WebSocket ws) {
@@ -97,70 +119,44 @@ public class ImageRelayService : IDisposable {
 
     public async Task RelayImageAsync(IImageData imageData, FrameKind kind, CancellationToken ct = default) {
         var frameKind = (int)kind;
-        var buffer = ImageBuffer.FromImageData(imageData);
+        // FIELD-2: apply the active rig's Bayer pattern override (if
+        // any) before we hand the buffer to the JPEG encoder / raw
+        // header writer. Drivers that emit a wrong or missing
+        // BAYERPAT keyword (notably SVBONY's indi_svbony_ccd at the
+        // time of writing) would otherwise feed mono into the
+        // client-side debayer and the live stack comes out grey. The
+        // override is the operator's "I know better than the driver"
+        // escape hatch.
+        var buffer = ImageBuffer.FromImageData(imageData, ResolveBayerOverride());
         _latestImage = buffer;
         _latestJpeg = null;
 
         if (_clients.IsEmpty) return;
 
-        // Prepare both formats lazily (only if needed)
-        byte[]? rawFrame = null;
-        byte[]? jpegFrame = null;
+        // FIELD-3: streaming is RAW-only. The JPEG WS path was
+        // deleted (it baked AutoStretch into the JPEG server-side,
+        // which silently neutered the operator's Stretch / WB
+        // sliders -- the user reported this from the field). The
+        // one-shot JPEG endpoints (/api/image/latest/preview,
+        // /api/livestack/preview) still call GetLatestJpeg() to
+        // serve gallery thumbnails, that's a different consumer
+        // that wants a static stretched image. Per-frame WS goes
+        // RAW + LZ4 + client-side WebGL stretch every time.
+        var header = buffer.GetStreamHeader(frameKind);
+        var compressed = buffer.ToLz4Compressed();
 
-        bool needsRaw = false, needsJpeg = false;
-        foreach (var (_, entry) in _clients) {
-            if (entry.Ws.State == WebSocketState.Open) {
-                if (entry.Mode == StreamMode.Raw) needsRaw = true;
-                else needsJpeg = true;
-            }
-        }
+        _logger.LogInformation(
+            "Relaying image {W}x{H} ({BitDepth}-bit): {RawMB:F1}MB raw -> {CompMB:F1}MB LZ4 ({Ratio:F1}x) to {Count} clients",
+            buffer.Width, buffer.Height, buffer.BitDepth,
+            (double)imageData.Data.Length * 2 / (1024 * 1024),
+            (double)compressed.Length / (1024 * 1024),
+            (double)imageData.Data.Length * 2 / Math.Max(compressed.Length, 1),
+            _clients.Count);
 
-        if (needsRaw) {
-            var header = buffer.GetStreamHeader(frameKind);
-            var compressed = buffer.ToLz4Compressed();
-
-            _logger.LogInformation(
-                "Relaying image {W}x{H} ({BitDepth}-bit): {RawMB:F1}MB raw -> {CompMB:F1}MB LZ4 ({Ratio:F1}x) to {Count} clients",
-                buffer.Width, buffer.Height, buffer.BitDepth,
-                (double)imageData.Data.Length * 2 / (1024 * 1024),
-                (double)compressed.Length / (1024 * 1024),
-                (double)imageData.Data.Length * 2 / Math.Max(compressed.Length, 1),
-                _clients.Count);
-
-            rawFrame = new byte[4 + header.Length + compressed.Length];
-            BitConverter.GetBytes(header.Length).CopyTo(rawFrame, 0);
-            header.CopyTo(rawFrame, 4);
-            compressed.CopyTo(rawFrame, 4 + header.Length);
-        }
-
-        if (needsJpeg) {
-            // Wrap JPEG bytes in the SAME [length-prefix + 24-byte
-            // stream header] envelope used by the raw path so the
-            // FrameKind survives the trip to the browser. Before this
-            // wrap, JPEG was sent as bare bytes -- the client had no
-            // way to know which panel the frame belonged to, every
-            // JPEG defaulted to frameKind=0 (Live) inside
-            // _renderJpegFrame, and a PREVIEW snap landed on the LIVE
-            // canvas instead of previewCanvas. Symptom reported by the
-            // user: "o frame do preview esta aparecendo no live stack
-            // e nao no preview". Raw mode already carried the kind
-            // correctly (offset 20 of the header) -- this brings JPEG
-            // mode to parity. Client detects the envelope by checking
-            // for FF D8 (JPEG SOI) at the position right after the
-            // length+header prefix; bare-FF-D8 at offset 0 is treated
-            // as legacy unwrapped JPEG for back-compat with any older
-            // client cached in someone's browser.
-            var jpegBytes = buffer.ToJpeg(85);
-            var jpegHeader = buffer.GetStreamHeader(frameKind);
-            jpegFrame = new byte[4 + jpegHeader.Length + jpegBytes.Length];
-            BitConverter.GetBytes(jpegHeader.Length).CopyTo(jpegFrame, 0);
-            jpegHeader.CopyTo(jpegFrame, 4);
-            jpegBytes.CopyTo(jpegFrame, 4 + jpegHeader.Length);
-            _logger.LogInformation(
-                "Relaying JPEG {W}x{H}: {SizeKB:F0}KB to JPEG clients (kind={Kind})",
-                buffer.Width, buffer.Height,
-                (double)jpegBytes.Length / 1024, kind);
-        }
+        var rawFrame = new byte[4 + header.Length + compressed.Length];
+        BitConverter.GetBytes(header.Length).CopyTo(rawFrame, 0);
+        header.CopyTo(rawFrame, 4);
+        compressed.CopyTo(rawFrame, 4 + header.Length);
 
         var deadClients = new List<string>();
 
@@ -170,8 +166,7 @@ public class ImageRelayService : IDisposable {
                 continue;
             }
 
-            var frame = entry.Mode == StreamMode.Raw ? rawFrame : jpegFrame;
-            if (frame == null) continue;
+            var frame = rawFrame;
 
             // Skip clients that are still sending the previous frame (backpressure)
             if (!entry.SendLock.Wait(0)) {
@@ -190,8 +185,12 @@ public class ImageRelayService : IDisposable {
                 entry.LastSendDuration = DateTime.UtcNow - sendStart;
                 entry.ConsecutiveFailures = 0;
                 entry.SkippedFrames = 0;
-
-                if (AdaptiveEnabled) ApplyAdaptiveLogic(id, entry);
+                // FIELD-3: adaptive bandwidth removed. The downgrade
+                // target was JPEG, which is the path we just deleted.
+                // Slow clients are now handled by the SendLock skip
+                // above (back-pressure) -- they drop frames instead of
+                // switching format. That's the right trade-off for
+                // RAW-only streaming.
             } catch (OperationCanceledException) when (!ct.IsCancellationRequested) {
                 entry.ConsecutiveFailures++;
                 _logger.LogWarning("Send to client {Id} timed out (failure {N}/{Max})",
@@ -245,6 +244,11 @@ public class ImageRelayService : IDisposable {
         _clients.Clear();
     }
 
+    /// <summary>FIELD-3: only <see cref="StreamMode.Raw"/> is used
+    /// on the WS path now. The enum + Jpeg value stay for binary
+    /// back-compat with any callers that haven't been re-built yet
+    /// (the legacy SetClientMode silently rejects requests for Jpeg).
+    /// </summary>
     public enum StreamMode { Raw, Jpeg }
 
     private class ClientEntry {
@@ -252,15 +256,10 @@ public class ImageRelayService : IDisposable {
         public SemaphoreSlim SendLock { get; } = new(1, 1);
         public int ConsecutiveFailures { get; set; }
         public int SkippedFrames { get; set; }
-        public StreamMode Mode { get; set; } = StreamMode.Jpeg; // Default to JPEG (works everywhere)
-
-        /// <summary>The mode the client originally asked for, never overwritten by adaptive logic.</summary>
-        public StreamMode RequestedMode { get; set; } = StreamMode.Jpeg;
-        /// <summary>True when adaptive logic forced us off the requested mode.</summary>
-        public bool AdaptiveDowngraded { get; set; }
-        /// <summary>Rolling counters used by the adaptive bandwidth heuristic.</summary>
-        public int SlowFrameStreak { get; set; }
-        public int FastFrameStreak { get; set; }
+        // FIELD-3: every client is RAW now. Field kept so the existing
+        // GetClientStats() payload stays shape-compatible.
+        public StreamMode Mode { get; set; } = StreamMode.Raw;
+        public StreamMode RequestedMode { get; set; } = StreamMode.Raw;
         public TimeSpan LastSendDuration { get; set; }
 
         // CLST-5: client-reported WASM live-stack capability. Drives
@@ -271,14 +270,18 @@ public class ImageRelayService : IDisposable {
         public ClientEntry(System.Net.WebSockets.WebSocket ws) => Ws = ws;
     }
 
+    /// <summary>FIELD-3: legacy compat shim. JPEG mode is gone, so a
+    /// Jpeg request is silently coerced to Raw with a debug log. The
+    /// method stays because ImageStreamHandler still calls it on the
+    /// handshake message.</summary>
     public void SetClientMode(string id, StreamMode mode) {
         if (_clients.TryGetValue(id, out var entry)) {
-            entry.Mode = mode;
-            entry.RequestedMode = mode;
-            entry.AdaptiveDowngraded = false;
-            entry.SlowFrameStreak = 0;
-            entry.FastFrameStreak = 0;
-            _logger.LogInformation("Client {Id} requested {Mode} stream mode", id, mode);
+            if (mode == StreamMode.Jpeg) {
+                _logger.LogDebug(
+                    "Client {Id} requested JPEG stream; coerced to Raw (JPEG WS streaming removed)", id);
+            }
+            entry.Mode = StreamMode.Raw;
+            entry.RequestedMode = StreamMode.Raw;
         }
     }
 
@@ -317,59 +320,15 @@ public class ImageRelayService : IDisposable {
         catch (Exception ex) { _logger.LogDebug(ex, "WasmCapableCountChanged handler threw"); }
     }
 
-    private void ApplyAdaptiveLogic(string id, ClientEntry entry) {
-        // Only adapt raw clients down to JPEG. Pure JPEG clients have no
-        // cheaper fallback, so do nothing for them.
-        if (entry.RequestedMode != StreamMode.Raw && !entry.AdaptiveDowngraded) {
-            entry.SlowFrameStreak = 0;
-            entry.FastFrameStreak = 0;
-            return;
-        }
-
-        var lat = entry.LastSendDuration;
-
-        if (entry.Mode == StreamMode.Raw && lat >= AdaptiveDowngradeLatency) {
-            entry.SlowFrameStreak++;
-            entry.FastFrameStreak = 0;
-            if (entry.SlowFrameStreak >= AdaptiveDowngradeStreak) {
-                entry.Mode = StreamMode.Jpeg;
-                entry.AdaptiveDowngraded = true;
-                entry.SlowFrameStreak = 0;
-                _logger.LogWarning(
-                    "Adaptive bandwidth: client {Id} raw→JPEG (last send {Ms}ms >= {Threshold}ms x{Streak})",
-                    id, lat.TotalMilliseconds, AdaptiveDowngradeLatency.TotalMilliseconds,
-                    AdaptiveDowngradeStreak);
-            }
-        } else if (entry.Mode == StreamMode.Jpeg && entry.AdaptiveDowngraded
-                   && lat <= AdaptiveUpgradeLatency) {
-            entry.FastFrameStreak++;
-            entry.SlowFrameStreak = 0;
-            if (entry.FastFrameStreak >= AdaptiveUpgradeStreak) {
-                entry.Mode = StreamMode.Raw;
-                entry.AdaptiveDowngraded = false;
-                entry.FastFrameStreak = 0;
-                _logger.LogInformation(
-                    "Adaptive bandwidth: client {Id} restored to raw (last send {Ms}ms <= {Threshold}ms x{Streak})",
-                    id, lat.TotalMilliseconds, AdaptiveUpgradeLatency.TotalMilliseconds,
-                    AdaptiveUpgradeStreak);
-            }
-        } else {
-            // Latency in the middle band, reset both streaks
-            if (entry.Mode == StreamMode.Raw) entry.SlowFrameStreak = 0;
-            if (entry.Mode == StreamMode.Jpeg) entry.FastFrameStreak = 0;
-        }
-    }
-
-    /// <summary>Diagnostics endpoint for the adaptive logic.</summary>
+    /// <summary>Diagnostics endpoint. FIELD-3: adaptive-bandwidth
+    /// counters removed; the kept fields are the ones that still
+    /// matter for slow-consumer triage (skipped frames + WS send
+    /// failures).</summary>
     public IEnumerable<object> GetClientStats() {
         return _clients.Select(kv => new {
             id = kv.Key,
-            requestedMode = kv.Value.RequestedMode.ToString(),
             currentMode = kv.Value.Mode.ToString(),
-            adaptiveDowngraded = kv.Value.AdaptiveDowngraded,
             lastSendMs = (int)kv.Value.LastSendDuration.TotalMilliseconds,
-            slowStreak = kv.Value.SlowFrameStreak,
-            fastStreak = kv.Value.FastFrameStreak,
             skipped = kv.Value.SkippedFrames,
             failures = kv.Value.ConsecutiveFailures
         });

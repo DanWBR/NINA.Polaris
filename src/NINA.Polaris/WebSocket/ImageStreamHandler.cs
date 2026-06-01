@@ -27,14 +27,19 @@ public static class ImageStreamHandler {
         relay.RegisterClient(clientId, ws);
 
         try {
-            // Send welcome message with supported modes
+            // Send welcome message. FIELD-3: streaming is RAW-only
+            // now (the JPEG WS path was deleted because it baked
+            // AutoStretch into the JPEG server-side, neutering the
+            // operator's Stretch / WB controls). Keep the `modes`
+            // array shape so older clients keep parsing the message,
+            // but advertise only "raw".
             using var welcomeCts = new CancellationTokenSource(SendTimeout);
             var welcome = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new {
                 type = "connected",
                 stream = "image",
                 clientId,
-                modes = new[] { "jpeg", "raw" },
-                defaultMode = "jpeg"
+                modes = new[] { "raw" },
+                defaultMode = "raw"
             }));
             await ws.SendAsync(welcome, WebSocketMessageType.Text, true, welcomeCts.Token);
 
@@ -71,12 +76,16 @@ public static class ImageStreamHandler {
             var root = doc.RootElement;
 
             if (root.TryGetProperty("mode", out var modeProp)) {
+                // FIELD-3: every client is forced to Raw now. We still
+                // accept the mode message so cached older clients that
+                // send {"mode":"jpeg"} on connect don't get a parse
+                // error -- relay.SetClientMode silently coerces Jpeg
+                // requests to Raw with a debug log.
                 var mode = modeProp.GetString()?.ToLowerInvariant() switch {
                     "raw" => ImageRelayService.StreamMode.Raw,
                     _ => ImageRelayService.StreamMode.Jpeg
                 };
                 relay.SetClientMode(clientId, mode);
-                logger.LogInformation("Client {Id} requested {Mode} mode", clientId, mode);
                 return;
             }
 

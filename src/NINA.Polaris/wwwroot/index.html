@@ -1856,7 +1856,10 @@
                         <div class="text-muted" style="font-size: 11px; margin: 8px 0 4px 0">
                             Sky map: target (green) vs solved (red)
                         </div>
-                        <iframe class="rudimentary-skymap" src="/sky/"
+                        <!-- FIELD-4: lazy iframe src; same fix as the
+                             main /sky/ iframe below. -->
+                        <iframe class="rudimentary-skymap"
+                                :src="auth.authenticated ? '/sky/' : 'about:blank'"
                                 referrerpolicy="no-referrer"
                                 @load="rudimentarySkyMapReady()"></iframe>
                     </div>
@@ -3284,17 +3287,38 @@
                                  banner + dedicated relaunch button so
                                  the user does not need shell access
                                  to figure out why the iframe shows a
-                                 bare desktop. -->
-                            <span x-show="phd2GuiSession?.phd2Running"
+                                 bare desktop.
+
+                                 FIELD-5: the original gate
+                                 (`phd2GuiSession.phd2Running`) only
+                                 trusted the local `pgrep -x phd2` /
+                                 `pgrep -x phd2.bin` health probe.
+                                 Distros that ship PHD2 under a
+                                 different name (AppImage extracts to
+                                 a random tmpdir, python-launched
+                                 builds, etc.) miss the exact match
+                                 and the operator sees "PHD2 not
+                                 running" forever even though PHD2
+                                 IS running and our JSON-RPC client
+                                 is connected on port 4400. The OR
+                                 with `phd2.connected` is the
+                                 authoritative second signal -- if the
+                                 client is talking PHD2 protocol, PHD2
+                                 is definitely up. -->
+                            <span x-show="phd2GuiSession?.phd2Running || phd2?.connected"
                                   class="text-ok" style="margin-left:14px">
                                 · PHD2 running
                             </span>
-                            <span x-show="phd2GuiSession && phd2GuiSession.running && !phd2GuiSession.phd2Running"
+                            <span x-show="phd2GuiSession && phd2GuiSession.running
+                                          && !phd2GuiSession.phd2Running
+                                          && !phd2?.connected"
                                   class="text-warn" style="margin-left:14px">
                                 · PHD2 not running inside session
                             </span>
                             <span style="flex:1"></span>
-                            <button x-show="phd2GuiSession && phd2GuiSession.running && !phd2GuiSession.phd2Running"
+                            <button x-show="phd2GuiSession && phd2GuiSession.running
+                                            && !phd2GuiSession.phd2Running
+                                            && !phd2?.connected"
                                     class="btn btn-sm btn-warn" @click="phd2GuiRelaunchPhd2()"
                                     :disabled="phd2GuiBusy"
                                     title="Spawn a new phd2 process inside the running xpra session">
@@ -3305,7 +3329,17 @@
                                     title="Stop + restart the xpra session (kills xpra and phd2, then spawns both fresh)">↻ Restart</button>
                             <button class="btn btn-sm btn-danger" @click="phd2GuiStop()" :disabled="phd2GuiBusy">Stop</button>
                         </div>
-                        <iframe class="phd2-gui-iframe" src="/phd2-gui/"
+                        <!-- FIELD-4: lazy iframe src. The earlier
+                             static src="/phd2-gui/" raced the
+                             polaris_session cookie write on first
+                             page load -- iframe got 401 and the
+                             operator had to F5 to recover. Gating
+                             on auth.authenticated means the GET
+                             only fires after /api/auth/status has
+                             round-tripped and proven the cookie is
+                             live in the browser. -->
+                        <iframe class="phd2-gui-iframe"
+                                :src="auth.authenticated ? '/phd2-gui/' : 'about:blank'"
                                 allow="fullscreen"></iframe>
                     </div>
 
@@ -3392,7 +3426,9 @@
                             <button class="btn btn-sm btn-danger" @click="phd2VncStopService()" :disabled="phd2VncBusy"
                                     title="Stop the TightVNC Windows service (requires admin)">Stop</button>
                         </div>
-                        <iframe class="phd2-gui-iframe" src="/phd2-vnc/"
+                        <!-- FIELD-4: see /phd2-gui/ comment above. -->
+                        <iframe class="phd2-gui-iframe"
+                                :src="auth.authenticated ? '/phd2-vnc/' : 'about:blank'"
                                 allow="fullscreen"></iframe>
                     </div>
                 </div><!-- /guideTab === 'gui' -->
@@ -4839,8 +4875,12 @@
                              upstream). Tall (75vh) since the subtab
                              gives us the whole panel to fill instead
                              of being cramped under the equipment grid. -->
+                        <!-- FIELD-4: lazy iframe src. Earlier version
+                             raced the polaris_session cookie write on
+                             first page load. See the matching comments
+                             on the PHD2 iframes in the GUIDE tab. -->
                         <iframe x-show="indiWeb.status?.running"
-                                src="/indi-web/"
+                                :src="auth.authenticated ? '/indi-web/' : 'about:blank'"
                                 style="width:100%;height:75vh;min-height:500px;
                                        border:1px solid var(--border);
                                        border-radius:6px;background:#0a0e16;"
@@ -5267,7 +5307,11 @@
                      boundary: everything inside /sky/ (engine, bridge,
                      skydata) is AGPL; the parent app stays MPL 2.0. -->
                 <div class="sky-viewer-wrap">
-                    <iframe id="skyFrame" src="/sky/"
+                    <!-- FIELD-4: lazy iframe src. Same race fix as the
+                         PHD2 / INDI Web iframes. /sky/ is gated by
+                         AuthMiddleware, so it needs the cookie too. -->
+                    <iframe id="skyFrame"
+                            :src="auth.authenticated ? '/sky/' : 'about:blank'"
                             class="sky-viewer sky-viewer-iframe"
                             style="border:0;"
                             sandbox="allow-scripts allow-same-origin"
@@ -9138,6 +9182,18 @@
                             <span :style="'width: ' + (chip.progress || 0) + '%'"></span>
                         </span>
                     </span>
+                    <!-- FIELD-6: dismiss × for chips that opt in via
+                         chip.dismissable=true (currently the Pi under-
+                         voltage chips). @click.stop keeps the dismiss
+                         click from triggering the chip's onClick href
+                         navigation. The chip re-fires automatically
+                         when the underlying signal flips false-then-
+                         true again, so the operator never loses sight
+                         of a NEW occurrence. -->
+                    <button x-show="chip.dismissable"
+                            class="activity-chip-dismiss"
+                            @click.stop="dismissChip(chip.id)"
+                            :title="'Dismiss ' + chip.label">×</button>
                 </span>
             </template>
         </div>
@@ -10342,6 +10398,39 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                     </div>
                                 </div>
                             </details>
+
+                            <!-- FIELD-2: per-rig Bayer mosaic override.
+                                 Some OSC drivers (notably the SVBONY
+                                 indi_svbony_ccd build at the time of
+                                 writing) emit the wrong BAYERPAT keyword
+                                 or omit it entirely, which collapses the
+                                 live stack to greyscale. This dropdown
+                                 forces the right mosaic regardless of
+                                 what the driver says. "Auto" = trust the
+                                 driver / FITS header (current behaviour).
+                                 Hint: if the colour looks swapped (red
+                                 leaves, blue moon), cycle through the
+                                 four CFA orderings until one looks
+                                 natural -- it's a 1-in-4 guess at worst. -->
+                            <div class="rig-bayer-override" style="margin-top:8px;display:flex;align-items:center;gap:8px;font-size:12px">
+                                <label :for="'bayer-' + r.id"
+                                       style="text-transform:uppercase;font-size:11px;color:var(--text-muted);letter-spacing:0.3px">
+                                    Bayer
+                                </label>
+                                <select :id="'bayer-' + r.id"
+                                        class="input-sm" style="width:120px"
+                                        :value="r.bayerPatternOverride || ''"
+                                        @change="setBayerOverride(r, $event.target.value)">
+                                    <option value="">Auto (driver)</option>
+                                    <option value="RGGB">RGGB</option>
+                                    <option value="BGGR">BGGR</option>
+                                    <option value="GBRG">GBRG</option>
+                                    <option value="GRBG">GRBG</option>
+                                </select>
+                                <span class="text-muted" style="font-size:11px">
+                                    Override only if the live stack comes out grey or with swapped colours.
+                                </span>
+                            </div>
                         </div>
                         <div class="rig-row-actions">
                             <button class="btn btn-sm btn-primary"
