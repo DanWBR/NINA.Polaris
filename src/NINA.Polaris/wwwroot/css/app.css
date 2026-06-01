@@ -1383,6 +1383,14 @@ label select.input-sm {
     cursor: pointer;
     transition: background var(--transition), border-color var(--transition);
     white-space: nowrap;
+    /* <a class="btn"> would otherwise inherit the browser default
+       underline + link colour — kills the button look (see the
+       TLS-A2 download links). Force-strip both at the .btn level so
+       any future link-as-button stays consistent. */
+    text-decoration: none;
+}
+.btn:hover, .btn:focus, .btn:active {
+    text-decoration: none;
 }
 
 .btn:hover {
