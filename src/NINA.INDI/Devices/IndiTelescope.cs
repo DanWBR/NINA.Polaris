@@ -70,15 +70,11 @@ public class IndiTelescope : ITelescope {
         DeviceName = deviceName;
     }
 
-    public async Task ConnectAsync(CancellationToken ct = default) {
-        await _client.SetSwitchAsync(DeviceName, "CONNECTION",
-            new Dictionary<string, bool> { ["CONNECT"] = true, ["DISCONNECT"] = false }, ct);
-    }
+    public Task ConnectAsync(CancellationToken ct = default)
+        => _client.ConnectDeviceAsync(DeviceName, ct);
 
-    public async Task DisconnectAsync(CancellationToken ct = default) {
-        await _client.SetSwitchAsync(DeviceName, "CONNECTION",
-            new Dictionary<string, bool> { ["CONNECT"] = false, ["DISCONNECT"] = true }, ct);
-    }
+    public Task DisconnectAsync(CancellationToken ct = default)
+        => _client.DisconnectDeviceAsync(DeviceName, ct);
 
     public async Task SlewAsync(double ra, double dec, CancellationToken ct = default) {
         // 1. Unpark if parked. Several INDI mount drivers (ZWO AM3,

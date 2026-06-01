@@ -35,15 +35,11 @@ public class IndiFlatDevice {
         _client.PropertyChanged += OnPropertyChanged;
     }
 
-    public async Task ConnectAsync(CancellationToken ct = default) {
-        await _client.SetSwitchAsync(DeviceName, "CONNECTION",
-            new Dictionary<string, bool> { ["CONNECT"] = true, ["DISCONNECT"] = false }, ct);
-    }
+    public Task ConnectAsync(CancellationToken ct = default)
+        => _client.ConnectDeviceAsync(DeviceName, ct);
 
-    public async Task DisconnectAsync(CancellationToken ct = default) {
-        await _client.SetSwitchAsync(DeviceName, "CONNECTION",
-            new Dictionary<string, bool> { ["CONNECT"] = false, ["DISCONNECT"] = true }, ct);
-    }
+    public Task DisconnectAsync(CancellationToken ct = default)
+        => _client.DisconnectDeviceAsync(DeviceName, ct);
 
     public async Task SetLightAsync(bool on, CancellationToken ct = default) {
         await _client.SetSwitchAsync(DeviceName, "FLAT_LIGHT_CONTROL",

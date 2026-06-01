@@ -302,6 +302,41 @@ public class IndiClient : IDisposable {
 
     public TimeSpan DefaultAckTimeout { get; set; } = TimeSpan.FromSeconds(5);
 
+    /// <summary>Connect a specific INDI device by sending the
+    /// standard <c>CONNECTION</c> switch with CONNECT=true. INDIROB-2
+    /// (from NINA PINS): before sending, check whether the driver is
+    /// already connected at the server level. Some shared drivers
+    /// (e.g. <c>indi_lx200generic</c> exposes both a telescope and a
+    /// focuser interface from a single driver) won't reply to a
+    /// redundant CONNECT, leaving us to wait 30s for an ack that
+    /// never comes. Skipping the write when the switch is already
+    /// true avoids that hang and is well-defined per the INDI spec.</summary>
+    public async Task ConnectDeviceAsync(string device, CancellationToken ct = default) {
+        if (GetSwitch(device, "CONNECTION", "CONNECT")) {
+            DiagLogger.LogInformation(
+                "INDI device '{Device}' CONNECTION.CONNECT already true — skipping redundant CONNECT (avoids 30s no-reply hang on shared drivers)",
+                device);
+            return;
+        }
+        await SetSwitchAsync(device, "CONNECTION",
+            new Dictionary<string, bool> { ["CONNECT"] = true, ["DISCONNECT"] = false }, ct);
+    }
+
+    /// <summary>Mirror of <see cref="ConnectDeviceAsync"/> for the
+    /// disconnect side. Same shared-driver caveat: if the driver is
+    /// already disconnected (or never connected), don't send a
+    /// redundant DISCONNECT that will hang.</summary>
+    public async Task DisconnectDeviceAsync(string device, CancellationToken ct = default) {
+        if (GetSwitch(device, "CONNECTION", "DISCONNECT")) {
+            DiagLogger.LogInformation(
+                "INDI device '{Device}' CONNECTION.DISCONNECT already true — skipping redundant DISCONNECT",
+                device);
+            return;
+        }
+        await SetSwitchAsync(device, "CONNECTION",
+            new Dictionary<string, bool> { ["CONNECT"] = false, ["DISCONNECT"] = true }, ct);
+    }
+
     public Task<IndiAckResult> SetNumberAsyncAck(string device, string property,
         Dictionary<string, double> values, TimeSpan? timeout = null, CancellationToken ct = default)
         => SendAndAwaitAckAsync(device, property,

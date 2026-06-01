@@ -53,15 +53,12 @@ public class IndiGuider {
     }
 
     public async Task ConnectAsync(CancellationToken ct = default) {
-        await _client.SetSwitchAsync(DeviceName, "CONNECTION",
-            new Dictionary<string, bool> { ["CONNECT"] = true, ["DISCONNECT"] = false }, ct);
+        await _client.ConnectDeviceAsync(DeviceName, ct);
         await _client.EnableBlobAsync(DeviceName, ct);
     }
 
-    public async Task DisconnectAsync(CancellationToken ct = default) {
-        await _client.SetSwitchAsync(DeviceName, "CONNECTION",
-            new Dictionary<string, bool> { ["CONNECT"] = false, ["DISCONNECT"] = true }, ct);
-    }
+    public Task DisconnectAsync(CancellationToken ct = default)
+        => _client.DisconnectDeviceAsync(DeviceName, ct);
 
     public enum GuideDirection {
         North,

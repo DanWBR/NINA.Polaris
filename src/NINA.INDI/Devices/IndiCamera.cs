@@ -199,15 +199,15 @@ public class IndiCamera : ICamera {
     }
 
     public async Task ConnectAsync(CancellationToken ct = default) {
-        await _client.SetSwitchAsync(DeviceName, "CONNECTION",
-            new Dictionary<string, bool> { ["CONNECT"] = true, ["DISCONNECT"] = false }, ct);
+        await _client.ConnectDeviceAsync(DeviceName, ct);
+        // EnableBLOB is idempotent — INDI just notes the preference for
+        // future BLOB delivery. Always re-send after connect so a
+        // restarted camera driver still streams FITS frames to us.
         await _client.EnableBlobAsync(DeviceName, ct);
     }
 
-    public async Task DisconnectAsync(CancellationToken ct = default) {
-        await _client.SetSwitchAsync(DeviceName, "CONNECTION",
-            new Dictionary<string, bool> { ["CONNECT"] = false, ["DISCONNECT"] = true }, ct);
-    }
+    public Task DisconnectAsync(CancellationToken ct = default)
+        => _client.DisconnectDeviceAsync(DeviceName, ct);
 
     public async Task SetBinningAsync(int binX, int binY, CancellationToken ct = default) {
         await _client.SetNumberAsync(DeviceName, "CCD_BINNING",

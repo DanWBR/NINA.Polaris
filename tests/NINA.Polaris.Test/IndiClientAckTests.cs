@@ -128,6 +128,52 @@ public class IndiClientAckTests {
         Assert.That(result.TimedOut, Is.True, "Mismatched echoes must not count as ack");
     }
 
+    /// <summary>INDIROB-2: ConnectDeviceAsync should short-circuit
+    /// (no socket write) when the device's CONNECTION.CONNECT switch
+    /// is already true. This protects against the 30s no-reply hang
+    /// when reconnecting to a shared INDI driver (lx200generic exposes
+    /// both telescope + focuser; CONNECTing the second role hangs
+    /// because the driver sees it's already up and never replies).
+    /// Verified by setting the switch state manually and confirming
+    /// the call completes without touching the (non-existent) socket.</summary>
+    [Test]
+    public async Task ConnectDeviceAsync_WhenAlreadyConnected_SkipsWriteAndReturns() {
+        using var client = new IndiClient();
+        // Pre-seed the device snapshot with CONNECTION.CONNECT=true.
+        SeedSwitch(client, "Mount", "CONNECTION", "CONNECT", true);
+
+        // Without the skip, SendAsync would throw "not connected" since
+        // we never opened a real socket. Completing without exception
+        // proves the skip path fired.
+        await client.ConnectDeviceAsync("Mount");
+
+        Assert.Pass("ConnectDeviceAsync returned without attempting a TCP write");
+    }
+
+    /// <summary>INDIROB-2: mirror for the disconnect side. If
+    /// CONNECTION.DISCONNECT is already true (device already
+    /// disconnected), DisconnectDeviceAsync should skip the write.</summary>
+    [Test]
+    public async Task DisconnectDeviceAsync_WhenAlreadyDisconnected_SkipsWriteAndReturns() {
+        using var client = new IndiClient();
+        SeedSwitch(client, "Mount", "CONNECTION", "DISCONNECT", true);
+        await client.DisconnectDeviceAsync("Mount");
+        Assert.Pass("DisconnectDeviceAsync returned without attempting a TCP write");
+    }
+
+    private static void SeedSwitch(IndiClient client, string device,
+            string property, string element, bool value) {
+        var prop = new IndiSwitchProperty {
+            Device = device,
+            Name = property,
+            State = IndiPropertyState.Ok,
+            Values = new Dictionary<string, bool> { [element] = value }
+        };
+        var deviceMap = client.Devices.GetOrAdd(device,
+            _ => new System.Collections.Concurrent.ConcurrentDictionary<string, IndiProperty>());
+        deviceMap[property] = prop;
+    }
+
     /// <summary>IndiClient exposes PropertyChanged as a public event;
     /// the helper subscribes to it. Tests fire it via reflection
     /// because C# only lets the declaring class invoke events

@@ -39,15 +39,11 @@ public class IndiFocuser : NINA.Image.Interfaces.IFocuser {
         _logger = logger ?? NullLogger.Instance;
     }
 
-    public async Task ConnectAsync(CancellationToken ct = default) {
-        await _client.SetSwitchAsync(DeviceName, "CONNECTION",
-            new Dictionary<string, bool> { ["CONNECT"] = true, ["DISCONNECT"] = false }, ct);
-    }
+    public Task ConnectAsync(CancellationToken ct = default)
+        => _client.ConnectDeviceAsync(DeviceName, ct);
 
-    public async Task DisconnectAsync(CancellationToken ct = default) {
-        await _client.SetSwitchAsync(DeviceName, "CONNECTION",
-            new Dictionary<string, bool> { ["CONNECT"] = false, ["DISCONNECT"] = true }, ct);
-    }
+    public Task DisconnectAsync(CancellationToken ct = default)
+        => _client.DisconnectDeviceAsync(DeviceName, ct);
 
     /// <summary>Force a DISCONNECT then CONNECT cycle on the device,
     /// with a brief settle wait. This is the software-only recovery
