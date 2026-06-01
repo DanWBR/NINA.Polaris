@@ -2530,16 +2530,16 @@
                                 :title="quickControlsCollapsed ? 'Show controls' : 'Hide controls'"
                                 x-text="quickControlsCollapsed ? '◀' : '▶'"></button>
                         <!-- ASIAIR / iOS-date-picker-style vertical drum
-                             wheels for Exposure / Gain / Focus. Each
-                             [data-wheel-picker] is mounted by
-                             _mountWheelPickers() on init + on every
-                             MutationObserver tick (so the picker survives
-                             tab switches that destroy & rebuild the
-                             markup). data-bind maps the wheel to an
-                             Alpine state field; data-scale multiplies
-                             the stored value (seconds → ms for
-                             Exposure). data-disabled gates the wheel
-                             during stream / recording / motor moves. -->
+         wheels for Exposure / Gain / Focus. Each
+         [data-wheel-picker] is mounted by
+         _mountWheelPickers() on init + on every
+         MutationObserver tick (so the picker survives
+         tab switches that destroy & rebuild the
+         markup). data-bind maps the wheel to an
+         Alpine state field; data-scale multiplies
+         the stored value (seconds → ms for
+         Exposure). data-disabled gates the wheel
+         during stream / recording / motor moves. -->
                         <div class="wheel-picker-group">
                             <div data-wheel-picker
                                  data-label="Exposure (ms)"
@@ -2552,20 +2552,20 @@
                                  data-bind="video.gain" data-scale="1"
                                  :data-disabled="cameraStream.running || videoRecording.recording"></div>
                             <!-- Wrapped in template x-if (rather than
-                                 x-show) because the WheelPicker
-                                 constructor snapshots data-max ONCE
-                                 from the DOM at mount time. With
-                                 x-show the picker would mount while
-                                 focusMaxPosition is still 0 (its
-                                 default before the WS payload lands),
-                                 cache max=0, and clamp every later
-                                 setValue() back to 0 -- which was the
-                                 "FOCUS stays at 0 forever" bug. x-if
-                                 defers the mount until focusMaxPosition
-                                 is a real number, then Alpine resolves
-                                 :data-max BEFORE the MutationObserver
-                                 sees the new <div> and our
-                                 _mountWheelPickers() runs. -->
+             x-show) because the WheelPicker
+             constructor snapshots data-max ONCE
+             from the DOM at mount time. With
+             x-show the picker would mount while
+             focusMaxPosition is still 0 (its
+             default before the WS payload lands),
+             cache max=0, and clamp every later
+             setValue() back to 0 -- which was the
+             "FOCUS stays at 0 forever" bug. x-if
+             defers the mount until focusMaxPosition
+             is a real number, then Alpine resolves
+             :data-max BEFORE the MutationObserver
+             sees the new <div> and our
+             _mountWheelPickers() runs. -->
                             <template x-if="focusConnected && focusMaxPosition > 0">
                                 <div data-wheel-picker
                                      data-label="Focus"
@@ -2579,9 +2579,9 @@
                             </template>
                         </div>
                         <!-- Tiny status bar below the wheels: shows the
-                             current numeric value of each wheel so users
-                             can read precise values without trying to
-                             eyeball the center of the drum. -->
+         current numeric value of each wheel so users
+         can read precise values without trying to
+         eyeball the center of the drum. -->
                         <div class="control-row" style="justify-content:space-between; font-size:11px; color:var(--text-muted)">
                             <span x-text="'Exp ' + Math.round((video.exposure || 0) * 1000) + ' ms'"></span>
                             <span x-text="'Gain ' + (video.gain | 0)"></span>
@@ -2590,241 +2590,12 @@
                                           + (focusMoving ? ' ⚙' : '')"></span>
                         </div>
 
-                        <!-- Mount jog cluster: ASIAIR-style recenter during
-                             planetary capture. Lives RIGHT here at the top
-                             of the sidebar (above gain/binning/FOV) because
-                             the operator's hand is on this while recording
-                             a planet drifting across the ROI -- a click
-                             at the bottom of a scrolled sidebar would
-                             cost the framing. D-pad + rate slider grouped
-                             in a thin titled block so it reads as one
-                             control surface. Hidden when no mount is
-                             connected. -->
-                        <div class="mount-jog-cluster"
-                             x-show="mount.connected">
-                            <div class="mount-jog-cluster-title">Mount jog</div>
-                            <div class="dpad-container dpad-container-sm"
-                                 x-show="mount.capabilities?.manualJog !== false">
-                                <button class="dpad-btn dpad-n"
-                                        @pointerdown.prevent="mountMoveStart('n', $event)"
-                                        @pointerup.prevent="mountMoveStop()"
-                                        @pointerleave="mountMoveStop()"
-                                        @pointercancel="mountMoveStop()">N</button>
-                                <button class="dpad-btn dpad-w"
-                                        @pointerdown.prevent="mountMoveStart('w', $event)"
-                                        @pointerup.prevent="mountMoveStop()"
-                                        @pointerleave="mountMoveStop()"
-                                        @pointercancel="mountMoveStop()">W</button>
-                                <button class="dpad-btn dpad-stop" @click="mountStop()">STOP</button>
-                                <button class="dpad-btn dpad-e"
-                                        @pointerdown.prevent="mountMoveStart('e', $event)"
-                                        @pointerup.prevent="mountMoveStop()"
-                                        @pointerleave="mountMoveStop()"
-                                        @pointercancel="mountMoveStop()">E</button>
-                                <button class="dpad-btn dpad-s"
-                                        @pointerdown.prevent="mountMoveStart('s', $event)"
-                                        @pointerup.prevent="mountMoveStop()"
-                                        @pointerleave="mountMoveStop()"
-                                        @pointercancel="mountMoveStop()">S</button>
-                            </div>
-                            <!-- Discrete slew-rate slider — driver-advertised
-                                 TELESCOPE_SLEW_RATE elements. For planetary
-                                 recentering operator typically drops to
-                                 Guide/Centering so the planet doesn't fly
-                                 out of the ROI on a single tap. Hidden when
-                                 driver has only one rate. -->
-                            <div class="mount-slew-rate"
-                                 x-show="(mount.slewRates || []).length > 1">
-                                <div class="mount-slew-rate-label">
-                                    <span>Slew rate</span>
-                                    <strong x-text="(mount.slewRates || [])
-                                        .find(r => r.active)?.label || '—'"></strong>
-                                </div>
-                                <input type="range" min="0"
-                                       :max="(mount.slewRates || []).length - 1"
-                                       step="1"
-                                       :value="Math.max(0, mountSlewRateIndex)"
-                                       @input="setMountSlewRate($event.target.value)"
-                                       list="video-slew-rate-ticks">
-                                <datalist id="video-slew-rate-ticks">
-                                    <template x-for="(r, i) in (mount.slewRates || [])" :key="r.name">
-                                        <option :value="i" :label="r.label"></option>
-                                    </template>
-                                </datalist>
-                            </div>
-
-                            <!-- KC-1: Keep Centered. Continuously detects
-                                 the brightest object on the live video
-                                 stream and pulses N/S/E/W to keep it on
-                                 frame center. Calibration on Start takes
-                                 ~4 s. Disabled when prerequisites are
-                                 missing (no stream, no tracking, parked);
-                                 the tooltip explains. Status line below
-                                 shows the live phase + offset. -->
-                            <button class="btn btn-sm keep-centered-btn"
-                                    :class="(keepCentered?.running) ? 'btn-active' : ''"
-                                    :disabled="!cameraStream.running || !mount.tracking || mount.parked || !mount.connected"
-                                    @click="toggleKeepCentered()"
-                                    title="Continuously detect the brightest target and pulse the mount to keep it centered. Use during planetary recording.">
-                                <span x-show="!keepCentered?.running">Keep centered</span>
-                                <span x-show="keepCentered?.running">Stop keep centered</span>
-                            </button>
-                            <div class="keep-centered-status"
-                                 x-show="keepCentered?.running"
-                                 x-text="keepCenteredStatusLine()"></div>
-                        </div>
-
-                        <!-- ZWO L/M/H gain shortcuts. Sits inline next to
-                             the wheel picker above (which is labeled GAIN);
-                             no redundant "Gain" sub-label needed -- the
-                             buttons themselves carry L/M/H semantics. -->
-                        <div class="control-row"
-                             x-show="zwoPresetsForActiveCamera() && !cameraStream.running && !videoRecording.recording">
-                            <span class="zwo-gain-presets" style="width:100%">
-                                <button type="button" class="zwo-gain-preset"
-                                        :data-active="video.gain === zwoPresetsForActiveCamera()?.L"
-                                        @click="applyGainPreset('video.gain', zwoPresetsForActiveCamera().L)">L</button>
-                                <button type="button" class="zwo-gain-preset"
-                                        :data-active="video.gain === zwoPresetsForActiveCamera()?.M"
-                                        @click="applyGainPreset('video.gain', zwoPresetsForActiveCamera().M)">M</button>
-                                <button type="button" class="zwo-gain-preset"
-                                        :data-active="video.gain === zwoPresetsForActiveCamera()?.H"
-                                        @click="applyGainPreset('video.gain', zwoPresetsForActiveCamera().H)">H</button>
-                            </span>
-                        </div>
-
-                        <div class="control-row">
-                            <span class="bin-presets" role="group" aria-label="Binning">
-                                <template x-for="b in ['1','2']" :key="b">
-                                    <button type="button" class="bin-preset"
-                                            :data-active="String(video.binning) === b"
-                                            :disabled="cameraStream.running || videoRecording.recording"
-                                            @click="video.binning = b"
-                                            x-text="'BIN' + b"></button>
-                                </template>
-                            </span>
-                            <label>Target name
-                                <span style="display:inline-flex; align-items:center; gap:4px">
-                                    <input type="text" x-model="video.targetName"
-                                           class="input-sm" style="width:120px"
-                                           :disabled="videoRecording.recording">
-                                    <!-- One-click "what is the mount pointing at?"
-                                         helper. Queries /api/sky/nearest-planet
-                                         with mount RA/Dec; if the nearest Moon /
-                                         planet is within 5° it fills the field.
-                                         Saves planetary-imaging operators from
-                                         typing "Jupiter" / "Saturn" every time. -->
-                                    <button type="button" class="btn btn-sm"
-                                            :disabled="videoRecording.recording || !mount?.connected"
-                                            title="Auto-detect the planet or Moon the mount is pointing at"
-                                            @click="videoAutoDetectTarget()">📡 Auto</button>
-                                </span>
-                            </label>
-                            <label>Max duration (s)
-                                <input type="number" x-model.number="video.maxDurationSec"
-                                       step="10" min="0" class="input-sm" style="width:80px"
-                                       :disabled="videoRecording.recording">
-                            </label>
-                        </div>
-
-                        <!-- FOV / ROI: crop the sensor down to a tight
-                             box centered on the planet so the SER file
-                             stays small + fps climbs (planetary capture
-                             does not need 6000x4000, ~640x480 around
-                             Jupiter is plenty). FULL clears the ROI.
-                             Hidden when the camera reports SupportsRoi
-                             false (DSLRs, most Alpaca remotes). -->
-                        <!-- FOV / ROI. Two rows of presets:
-                             - Square row: 320 / 640 / 800 / 1024 / 1280 / 1920
-                               (planetary at long focal length, where the
-                               planet disc fits a square box)
-                             - Rectangular row: 16:9 (1280×720, 1920×1080) +
-                               4:3 (640×480, 1024×768, 1600×1200) for
-                               lunar / solar / wide-field framing
-                             FULL clears the ROI. Pills larger than the
-                             sensor grey out. Hidden when the camera
-                             reports SupportsRoi=false (DSLRs, most
-                             Alpaca remotes). -->
-                        <!-- Single FOV block that flows left-right with
-                             wrap. Earlier layout split the presets into
-                             two stacked rows that both used `flex: 1`
-                             button growth, which clipped the longer
-                             rectangular labels (1024×768, 1920×1080)
-                             once 5+ pills competed for the row width.
-                             A single flex-wrap container with intrinsic-
-                             width buttons lets the operator scan FULL +
-                             squares + rectangles in one pass, and pills
-                             that don't fit drop to the next line cleanly
-                             without overlapping each other. -->
-                        <div class="fov-preset-block"
-                             x-show="cameraCaps.roi !== false">
-                            <span class="fov-preset-label">FOV</span>
-                            <div class="fov-preset-flow"
-                                 role="group" aria-label="Field of view / ROI">
-                                <button type="button" class="bin-preset"
-                                        :data-active="video.roiSize === 0"
-                                        :disabled="cameraStream.running || videoRecording.recording"
-                                        @click="videoSetRoi(0)">FULL</button>
-                                <template x-for="sz in [320, 640, 800, 1024, 1280, 1920]" :key="sz">
-                                    <button type="button" class="bin-preset"
-                                            :data-active="video.roiSize === sz && video.roiAspect === 'square'"
-                                            :disabled="cameraStream.running || videoRecording.recording
-                                                       || (cameraCaps.maxX > 0 && sz > cameraCaps.maxX)
-                                                       || (cameraCaps.maxY > 0 && sz > cameraCaps.maxY)"
-                                            @click="videoSetRoiRect(sz, sz, 'square', sz)"
-                                            x-text="sz"></button>
-                                </template>
-                                <template x-for="r in [
-                                    { w: 640,  h: 480,  label: '640×480',   aspect: '4:3'  },
-                                    { w: 1024, h: 768,  label: '1024×768',  aspect: '4:3'  },
-                                    { w: 1280, h: 720,  label: '1280×720',  aspect: '16:9' },
-                                    { w: 1600, h: 1200, label: '1600×1200', aspect: '4:3'  },
-                                    { w: 1920, h: 1080, label: '1920×1080', aspect: '16:9' }
-                                ]" :key="r.label">
-                                    <button type="button" class="bin-preset"
-                                            :data-active="video.roiW === r.w && video.roiH === r.h"
-                                            :disabled="cameraStream.running || videoRecording.recording
-                                                       || (cameraCaps.maxX > 0 && r.w > cameraCaps.maxX)
-                                                       || (cameraCaps.maxY > 0 && r.h > cameraCaps.maxY)"
-                                            @click="videoSetRoiRect(r.w, r.h, r.aspect, 0)"
-                                            x-text="r.label"></button>
-                                </template>
-                            </div>
-                            <div class="fov-preset-readout"
-                                 x-show="cameraCaps.maxX > 0 && cameraCaps.maxY > 0"
-                                 x-text="video.roiSize === 0 && video.roiW === 0
-                                     ? ('full sensor · ' + cameraCaps.maxX + ' × ' + cameraCaps.maxY)
-                                     : (video.roiW + ' × ' + video.roiH
-                                        + ' @ (' + video.roiX + ', ' + video.roiY + ')'
-                                        + ' on ' + cameraCaps.maxX + ' × ' + cameraCaps.maxY)"></div>
-                        </div>
-
-                        <!-- White-balance row, only visible for OSC color
-                             cameras that expose WB_R + WB_B (ZWO ASI224MC,
-                             QHY5III678C, etc.). Hidden on mono cams. -->
-                        <div class="control-row" x-show="cameraCaps.whiteBalance">
-                            <label style="flex:1">WB Red
-                                <input type="range" min="0" max="100" step="1"
-                                       x-model.number="video.wbR"
-                                       @change="videoSetWhiteBalance()" class="slider">
-                                <span x-text="video.wbR" class="text-muted" style="margin-left:6px"></span>
-                            </label>
-                            <label style="flex:1">WB Blue
-                                <input type="range" min="0" max="100" step="1"
-                                       x-model.number="video.wbB"
-                                       @change="videoSetWhiteBalance()" class="slider">
-                                <span x-text="video.wbB" class="text-muted" style="margin-left:6px"></span>
-                            </label>
-                            <button class="btn btn-sm" @click="videoResetWhiteBalance()"
-                                    title="Reset to neutral (50/50)">↻</button>
-                        </div>
-
                         <!-- SHUT-3: Polaris Shutter for VIDEO Record.
-                             Tap = toggle (start when idle, stop when
-                             recording). Long-press = same toggle (no
-                             distinct loop concept for video). Stream
-                             stays as its own toggle below (Record
-                             requires Stream to be running first). -->
+                            Tap = toggle (start when idle, stop when
+                            recording). Long-press = same toggle (no
+                            distinct loop concept for video). Stream
+                            stays as its own toggle below (Record
+                            requires Stream to be running first). -->
                         <div class="shutter-wrap">
                             <div class="polaris-shutter"
                                  :class="{
@@ -2875,9 +2646,269 @@
                         </div>
 
                         <div class="stats-bar" x-show="videoRecording.droppedFrames > 0">
-                            <span class="text-warn">⚠ Dropped frames: <strong x-text="videoRecording.droppedFrames"></strong>
-                                (writer can't keep up with stream cadence)</span>
+                            <span class="text-warn">
+                                ⚠ Dropped frames: <strong x-text="videoRecording.droppedFrames"></strong>
+                                (writer can't keep up with stream cadence)
+                            </span>
                         </div>
+
+                        <!-- Mount jog cluster: ASIAIR-style recenter during
+         planetary capture. Lives RIGHT here at the top
+         of the sidebar (above gain/binning/FOV) because
+         the operator's hand is on this while recording
+         a planet drifting across the ROI -- a click
+         at the bottom of a scrolled sidebar would
+         cost the framing. D-pad + rate slider grouped
+         in a thin titled block so it reads as one
+         control surface. Hidden when no mount is
+         connected. -->
+                        <div class="mount-jog-cluster"
+                             x-show="mount.connected">
+                            <div class="mount-jog-cluster-title">Mount jog</div>
+                            <div class="dpad-container dpad-container-sm"
+                                 x-show="mount.capabilities?.manualJog !== false">
+                                <button class="dpad-btn dpad-n"
+                                        @pointerdown.prevent="mountMoveStart('n', $event)"
+                                        @pointerup.prevent="mountMoveStop()"
+                                        @pointerleave="mountMoveStop()"
+                                        @pointercancel="mountMoveStop()">
+                                    N
+                                </button>
+                                <button class="dpad-btn dpad-w"
+                                        @pointerdown.prevent="mountMoveStart('w', $event)"
+                                        @pointerup.prevent="mountMoveStop()"
+                                        @pointerleave="mountMoveStop()"
+                                        @pointercancel="mountMoveStop()">
+                                    W
+                                </button>
+                                <button class="dpad-btn dpad-stop" @click="mountStop()">STOP</button>
+                                <button class="dpad-btn dpad-e"
+                                        @pointerdown.prevent="mountMoveStart('e', $event)"
+                                        @pointerup.prevent="mountMoveStop()"
+                                        @pointerleave="mountMoveStop()"
+                                        @pointercancel="mountMoveStop()">
+                                    E
+                                </button>
+                                <button class="dpad-btn dpad-s"
+                                        @pointerdown.prevent="mountMoveStart('s', $event)"
+                                        @pointerup.prevent="mountMoveStop()"
+                                        @pointerleave="mountMoveStop()"
+                                        @pointercancel="mountMoveStop()">
+                                    S
+                                </button>
+                            </div>
+                            <!-- Discrete slew-rate slider — driver-advertised
+             TELESCOPE_SLEW_RATE elements. For planetary
+             recentering operator typically drops to
+             Guide/Centering so the planet doesn't fly
+             out of the ROI on a single tap. Hidden when
+             driver has only one rate. -->
+                            <div class="mount-slew-rate"
+                                 x-show="(mount.slewRates || []).length > 1">
+                                <div class="mount-slew-rate-label">
+                                    <span>Slew rate</span>
+                                    <strong x-text="(mount.slewRates || [])
+                                            .find(r=> r.active)?.label || '—'"></strong>
+                                </div>
+                                <input type="range" min="0"
+                                       :max="(mount.slewRates || []).length - 1"
+                                       step="1"
+                                       :value="Math.max(0, mountSlewRateIndex)"
+                                       @input="setMountSlewRate($event.target.value)"
+                                       list="video-slew-rate-ticks">
+                                <datalist id="video-slew-rate-ticks">
+                                    <template x-for="(r, i) in (mount.slewRates || [])" :key="r.name">
+                                        <option :value="i" :label="r.label"></option>
+                                    </template>
+                                </datalist>
+                            </div>
+
+                            <!-- KC-1: Keep Centered. Continuously detects
+             the brightest object on the live video
+             stream and pulses N/S/E/W to keep it on
+             frame center. Calibration on Start takes
+             ~4 s. Disabled when prerequisites are
+             missing (no stream, no tracking, parked);
+             the tooltip explains. Status line below
+             shows the live phase + offset. -->
+                            <button class="btn btn-sm keep-centered-btn"
+                                    :class="(keepCentered?.running) ? 'btn-active' : ''"
+                                    :disabled="!cameraStream.running || !mount.tracking || mount.parked || !mount.connected"
+                                    @click="toggleKeepCentered()"
+                                    title="Continuously detect the brightest target and pulse the mount to keep it centered. Use during planetary recording.">
+                                <span x-show="!keepCentered?.running">Keep centered</span>
+                                <span x-show="keepCentered?.running">Stop keep centered</span>
+                            </button>
+                            <div class="keep-centered-status"
+                                 x-show="keepCentered?.running"
+                                 x-text="keepCenteredStatusLine()"></div>
+                        </div>
+
+                        <!-- ZWO L/M/H gain shortcuts. Sits inline next to
+         the wheel picker above (which is labeled GAIN);
+         no redundant "Gain" sub-label needed -- the
+         buttons themselves carry L/M/H semantics. -->
+                        <div class="control-row"
+                             x-show="zwoPresetsForActiveCamera() && !cameraStream.running && !videoRecording.recording">
+                            <span class="zwo-gain-presets" style="width:100%">
+                                <button type="button" class="zwo-gain-preset"
+                                        :data-active="video.gain === zwoPresetsForActiveCamera()?.L"
+                                        @click="applyGainPreset('video.gain', zwoPresetsForActiveCamera().L)">
+                                    L
+                                </button>
+                                <button type="button" class="zwo-gain-preset"
+                                        :data-active="video.gain === zwoPresetsForActiveCamera()?.M"
+                                        @click="applyGainPreset('video.gain', zwoPresetsForActiveCamera().M)">
+                                    M
+                                </button>
+                                <button type="button" class="zwo-gain-preset"
+                                        :data-active="video.gain === zwoPresetsForActiveCamera()?.H"
+                                        @click="applyGainPreset('video.gain', zwoPresetsForActiveCamera().H)">
+                                    H
+                                </button>
+                            </span>
+                        </div>
+
+                        <div class="control-row">
+                            <span class="bin-presets" role="group" aria-label="Binning">
+                                <template x-for="b in ['1','2']" :key="b">
+                                    <button type="button" class="bin-preset"
+                                            :data-active="String(video.binning) === b"
+                                            :disabled="cameraStream.running || videoRecording.recording"
+                                            @click="video.binning = b"
+                                            x-text="'BIN' + b"></button>
+                                </template>
+                            </span>
+                            <label>
+                                Target name
+                                <span style="display:inline-flex; align-items:center; gap:4px">
+                                    <input type="text" x-model="video.targetName"
+                                           class="input-sm" style="width:120px"
+                                           :disabled="videoRecording.recording">
+                                    <!-- One-click "what is the mount pointing at?"
+                     helper. Queries /api/sky/nearest-planet
+                     with mount RA/Dec; if the nearest Moon /
+                     planet is within 5° it fills the field.
+                     Saves planetary-imaging operators from
+                     typing "Jupiter" / "Saturn" every time. -->
+                                    <button type="button" class="btn btn-sm"
+                                            :disabled="videoRecording.recording || !mount?.connected"
+                                            title="Auto-detect the planet or Moon the mount is pointing at"
+                                            @click="videoAutoDetectTarget()">
+                                        📡 Auto
+                                    </button>
+                                </span>
+                            </label>
+                            <label>
+                                Max duration (s)
+                                <input type="number" x-model.number="video.maxDurationSec"
+                                       step="10" min="0" class="input-sm" style="width:80px"
+                                       :disabled="videoRecording.recording">
+                            </label>
+                        </div>
+
+                        <!-- FOV / ROI: crop the sensor down to a tight
+         box centered on the planet so the SER file
+         stays small + fps climbs (planetary capture
+         does not need 6000x4000, ~640x480 around
+         Jupiter is plenty). FULL clears the ROI.
+         Hidden when the camera reports SupportsRoi
+         false (DSLRs, most Alpaca remotes). -->
+                        <!-- FOV / ROI. Two rows of presets:
+         - Square row: 320 / 640 / 800 / 1024 / 1280 / 1920
+           (planetary at long focal length, where the
+           planet disc fits a square box)
+         - Rectangular row: 16:9 (1280×720, 1920×1080) +
+           4:3 (640×480, 1024×768, 1600×1200) for
+           lunar / solar / wide-field framing
+         FULL clears the ROI. Pills larger than the
+         sensor grey out. Hidden when the camera
+         reports SupportsRoi=false (DSLRs, most
+         Alpaca remotes). -->
+                        <!-- Single FOV block that flows left-right with
+         wrap. Earlier layout split the presets into
+         two stacked rows that both used `flex: 1`
+         button growth, which clipped the longer
+         rectangular labels (1024×768, 1920×1080)
+         once 5+ pills competed for the row width.
+         A single flex-wrap container with intrinsic-
+         width buttons lets the operator scan FULL +
+         squares + rectangles in one pass, and pills
+         that don't fit drop to the next line cleanly
+         without overlapping each other. -->
+                        <div class="fov-preset-block"
+                             x-show="cameraCaps.roi !== false">
+                            <span class="fov-preset-label">FOV</span>
+                            <div class="fov-preset-flow"
+                                 role="group" aria-label="Field of view / ROI">
+                                <button type="button" class="bin-preset"
+                                        :data-active="video.roiSize === 0"
+                                        :disabled="cameraStream.running || videoRecording.recording"
+                                        @click="videoSetRoi(0)">
+                                    FULL
+                                </button>
+                                <template x-for="sz in [320, 640, 800, 1024, 1280, 1920]" :key="sz">
+                                    <button type="button" class="bin-preset"
+                                            :data-active="video.roiSize === sz && video.roiAspect === 'square'"
+                                            :disabled="cameraStream.running || videoRecording.recording
+                                            || (cameraCaps.maxX>
+                                        0 && sz > cameraCaps.maxX)
+                                        || (cameraCaps.maxY > 0 && sz > cameraCaps.maxY)"
+                                        @click="videoSetRoiRect(sz, sz, 'square', sz)"
+                                        x-text="sz">
+                                    </button>
+                                </template>
+                                <template x-for="r in [
+                                    { w: 640,  h: 480,  label: '640×480',   aspect: '4:3'  },
+                                    { w: 1024, h: 768,  label: '1024×768',  aspect: '4:3'  },
+                                    { w: 1280, h: 720,  label: '1280×720',  aspect: '16:9' },
+                                    { w: 1600, h: 1200, label: '1600×1200', aspect: '4:3'  },
+                                    { w: 1920, h: 1080, label: '1920×1080', aspect: '16:9' }
+                                ]" :key="r.label">
+                                    <button type="button" class="bin-preset"
+                                            :data-active="video.roiW === r.w && video.roiH === r.h"
+                                            :disabled="cameraStream.running || videoRecording.recording
+                                            || (cameraCaps.maxX>
+                                        0 && r.w > cameraCaps.maxX)
+                                        || (cameraCaps.maxY > 0 && r.h > cameraCaps.maxY)"
+                                        @click="videoSetRoiRect(r.w, r.h, r.aspect, 0)"
+                                        x-text="r.label">
+                                    </button>
+                                </template>
+                            </div>
+                            <div class="fov-preset-readout"
+                                 x-show="cameraCaps.maxX > 0 && cameraCaps.maxY > 0"
+                                 x-text="video.roiSize === 0 && video.roiW === 0
+                                     ? ('full sensor · ' + cameraCaps.maxX + ' × ' + cameraCaps.maxY)
+                                     : (video.roiW + ' × ' + video.roiH
+                                        + ' @ (' + video.roiX + ', ' + video.roiY + ')'
+                                        + ' on ' + cameraCaps.maxX + ' × ' + cameraCaps.maxY)"></div>
+                        </div>
+
+                        <!-- White-balance row, only visible for OSC color
+         cameras that expose WB_R + WB_B (ZWO ASI224MC,
+         QHY5III678C, etc.). Hidden on mono cams. -->
+                        <div class="control-row" x-show="cameraCaps.whiteBalance">
+                            <label style="flex:1">
+                                WB Red
+                                <input type="range" min="0" max="100" step="1"
+                                       x-model.number="video.wbR"
+                                       @change="videoSetWhiteBalance()" class="slider">
+                                <span x-text="video.wbR" class="text-muted" style="margin-left:6px"></span>
+                            </label>
+                            <label style="flex:1">
+                                WB Blue
+                                <input type="range" min="0" max="100" step="1"
+                                       x-model.number="video.wbB"
+                                       @change="videoSetWhiteBalance()" class="slider">
+                                <span x-text="video.wbB" class="text-muted" style="margin-left:6px"></span>
+                            </label>
+                            <button class="btn btn-sm" @click="videoResetWhiteBalance()"
+                                    title="Reset to neutral (50/50)">
+                                ↻
+                            </button>
+                        </div>
+
                     </div>
                 </div>
 
