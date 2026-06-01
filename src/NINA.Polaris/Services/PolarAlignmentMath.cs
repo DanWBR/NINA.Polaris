@@ -83,6 +83,69 @@ public static class PolarAlignmentMath {
         return Math.Sqrt(azErrSec * azErrSec + altErrSec * altErrSec);
     }
 
+    /// <summary>
+    /// RDPA-1: single-target polar-error estimate. Used by the
+    /// "rudimentary" alignment workflow: user slews to ONE known
+    /// target, plate-solve gives the actual pointing, and we
+    /// attribute the entire alt/az offset to polar misalignment.
+    ///
+    /// Why this works iteratively even though it's an approximation:
+    ///   - Pointing error has two main sources: polar-axis
+    ///     misalignment (which is what we're trying to fix), and
+    ///     mount/optical-train pointing-model errors (cone error,
+    ///     non-orthogonality, etc.). Single frame can't separate
+    ///     them, so we lump everything into polar.
+    ///   - After 1-2 manual nudges to azimuth + altitude knobs, the
+    ///     polar component dominates the *change* between iterations.
+    ///     The pointing-model component is roughly constant and
+    ///     vanishes from the delta the user sees on the arrow.
+    ///   - This is the same approximation SharpCap's "Plate-Solve
+    ///     Polar Alignment" and KStars' single-target mode use, and
+    ///     is the algorithm the operator already runs by hand on
+    ///     the ASIAIR.
+    ///
+    /// Sign convention (matches ComputeError above so the canvas
+    /// arrow renderer doesn't need a separate code path):
+    ///   - Positive azErrSec → mount pointed east of where it should
+    ///     have, indicating the polar axis is east of true pole.
+    ///     User nudges azimuth knob WESTWARD to reduce.
+    ///   - Positive altErrSec → mount pointed above target, polar
+    ///     axis altitude too high. User nudges altitude knob DOWN.
+    /// </summary>
+    public static (double azErrSec, double altErrSec) ComputeErrorSingleTarget(
+        double targetRaHours, double targetDecDeg,
+        double solvedRaHours, double solvedDecDeg,
+        double siteLatDeg, double siteLongDeg,
+        DateTime utcNow) {
+
+        // 1. Both target and solved positions resolved to their
+        //    alt/az at the same instant. Same LST cancels out, so
+        //    the difference reflects ONLY the polar misalignment +
+        //    pointing-model error, not sidereal drift.
+        var vTarget = RaDecToAltAzVector(
+            targetRaHours, targetDecDeg, utcNow, siteLatDeg, siteLongDeg);
+        var vSolved = RaDecToAltAzVector(
+            solvedRaHours, solvedDecDeg, utcNow, siteLatDeg, siteLongDeg);
+
+        var (targetAltDeg, targetAzDeg) = AltAzFromVector(vTarget);
+        var (solvedAltDeg, solvedAzDeg) = AltAzFromVector(vSolved);
+
+        // 2. Decompose delta. Altitude is the easy axis (no
+        //    cosine factor); azimuth has to be scaled by cos(alt)
+        //    so 1" of azimuth at the zenith reads the same arcsec
+        //    magnitude as 1" near the horizon (otherwise alvos
+        //    altos reportariam erros az inflados que o usuário
+        //    não consegue ajustar fisicamente).
+        double altErrDeg = solvedAltDeg - targetAltDeg;
+        double azErrDeg = NormalizeAzDelta(solvedAzDeg - targetAzDeg);
+
+        double altErrSec = altErrDeg * 3600.0;
+        double azErrSec = azErrDeg * 3600.0
+            * Math.Cos(targetAltDeg * Math.PI / 180.0);
+
+        return (azErrSec, altErrSec);
+    }
+
     // ---------------------------------------------------------------
     // Internals
     // ---------------------------------------------------------------

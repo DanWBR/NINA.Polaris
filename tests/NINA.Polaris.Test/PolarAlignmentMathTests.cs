@@ -280,6 +280,151 @@ public class PolarAlignmentMathTests {
         return (raHours, decRad * 180.0 / Math.PI);
     }
 
+    // ---- RDPA-1: single-target polar error tests ----------------------
+
+    [Test]
+    public void ComputeErrorSingleTarget_TargetEqualsSolved_ReturnsZero() {
+        // Identity case: mount points exactly where asked. Polar error
+        // attributed by the rudimentary single-target method is 0.
+        double raH = 6.7525, decD = -16.7161;   // Sirius approx
+        var (az, alt) = PolarAlignmentMath.ComputeErrorSingleTarget(
+            raH, decD, raH, decD,
+            siteLatDeg: -5.18, siteLongDeg: -37.36,
+            utcNow: T0);
+        Assert.That(az, Is.EqualTo(0).Within(0.01));
+        Assert.That(alt, Is.EqualTo(0).Within(0.01));
+    }
+
+    [Test]
+    public void ComputeErrorSingleTarget_KnownAltShift_RecoversAltErrorOnly() {
+        // Synthesize a "solved" pointing 120 arcsec ABOVE the target in
+        // alt/az frame at the operator's site (Brazil RN). Az unchanged.
+        // Expectation: altErrSec ≈ +120, azErrSec ≈ 0.
+        double targetRa = 6.7525, targetDec = -16.7161;
+        const double siteLat = -5.18, siteLong = -37.36;
+        var v = SkyToAltAzVector(targetRa, targetDec, T0, siteLat, siteLong);
+        double targetAltDeg = Math.Asin(Math.Clamp(v.Z, -1.0, 1.0)) * 180.0 / Math.PI;
+        double targetAzRad = Math.Atan2(v.X, v.Y);
+        if (targetAzRad < 0) targetAzRad += 2 * Math.PI;
+        double targetAzDeg = targetAzRad * 180.0 / Math.PI;
+
+        double shiftedAltDeg = targetAltDeg + 120.0 / 3600.0;
+        var shiftedVec = AltAzDegToVec(shiftedAltDeg, targetAzDeg);
+        var (solvedRa, solvedDec) = AltAzVectorToRaDec(shiftedVec, T0, siteLat, siteLong);
+
+        var (azErr, altErr) = PolarAlignmentMath.ComputeErrorSingleTarget(
+            targetRa, targetDec, solvedRa, solvedDec,
+            siteLat, siteLong, T0);
+
+        Assert.That(altErr, Is.EqualTo(120).Within(0.5),
+            "alt shift should map 1:1 to altErrSec (no cosine factor)");
+        Assert.That(azErr, Is.EqualTo(0).Within(0.5),
+            "az unchanged → azErrSec ≈ 0");
+    }
+
+    [Test]
+    public void ComputeErrorSingleTarget_KnownAzShift_RecoversAzErrorWithCosineFactor() {
+        // 60 arcsec of azimuth at moderate altitude → reported azErrSec
+        // is scaled by cos(alt) so it reads "true sky arcsec" instead
+        // of "knob-degree arcsec". Operator just needs the magnitude
+        // direction; the cosine scaling matches what their eyes see.
+        double targetRa = 6.7525, targetDec = -16.7161;
+        const double siteLat = -5.18, siteLong = -37.36;
+        var v = SkyToAltAzVector(targetRa, targetDec, T0, siteLat, siteLong);
+        double targetAltDeg = Math.Asin(Math.Clamp(v.Z, -1.0, 1.0)) * 180.0 / Math.PI;
+        double targetAzRad = Math.Atan2(v.X, v.Y);
+        if (targetAzRad < 0) targetAzRad += 2 * Math.PI;
+        double targetAzDeg = targetAzRad * 180.0 / Math.PI;
+
+        double shiftedAzDeg = targetAzDeg + 60.0 / 3600.0;
+        var shiftedVec = AltAzDegToVec(targetAltDeg, shiftedAzDeg);
+        var (solvedRa, solvedDec) = AltAzVectorToRaDec(shiftedVec, T0, siteLat, siteLong);
+
+        var (azErr, altErr) = PolarAlignmentMath.ComputeErrorSingleTarget(
+            targetRa, targetDec, solvedRa, solvedDec,
+            siteLat, siteLong, T0);
+
+        double expectedAzErr = 60.0 * Math.Cos(targetAltDeg * Math.PI / 180.0);
+        Assert.That(azErr, Is.EqualTo(expectedAzErr).Within(0.5));
+        Assert.That(altErr, Is.EqualTo(0).Within(0.5));
+    }
+
+    [Test]
+    public void ComputeErrorSingleTarget_DiagonalShift_RecoversBothComponents() {
+        // Mixed shift: +80" alt and -40" az. Both components recovered
+        // independently (the math is linear at these small magnitudes).
+        double targetRa = 6.7525, targetDec = -16.7161;
+        const double siteLat = -5.18, siteLong = -37.36;
+        var v = SkyToAltAzVector(targetRa, targetDec, T0, siteLat, siteLong);
+        double targetAltDeg = Math.Asin(Math.Clamp(v.Z, -1.0, 1.0)) * 180.0 / Math.PI;
+        double targetAzRad = Math.Atan2(v.X, v.Y);
+        if (targetAzRad < 0) targetAzRad += 2 * Math.PI;
+        double targetAzDeg = targetAzRad * 180.0 / Math.PI;
+
+        double altShiftSec = 80.0, azShiftSec = -40.0;
+        var shiftedVec = AltAzDegToVec(
+            targetAltDeg + altShiftSec / 3600.0,
+            targetAzDeg + azShiftSec / 3600.0);
+        var (solvedRa, solvedDec) = AltAzVectorToRaDec(shiftedVec, T0, siteLat, siteLong);
+
+        var (azErr, altErr) = PolarAlignmentMath.ComputeErrorSingleTarget(
+            targetRa, targetDec, solvedRa, solvedDec,
+            siteLat, siteLong, T0);
+
+        double expectedAzErr = azShiftSec * Math.Cos(targetAltDeg * Math.PI / 180.0);
+        Assert.That(altErr, Is.EqualTo(altShiftSec).Within(0.5));
+        Assert.That(azErr, Is.EqualTo(expectedAzErr).Within(0.5));
+    }
+
+    [Test]
+    public void ComputeErrorSingleTarget_NorthernHemisphere_HandlesSignsCorrectly() {
+        // Run an identical mixed-shift case at a Northern site to confirm
+        // there's no hemisphere-flip in the single-target math (TPPA has
+        // one because the polar axis flips; this method doesn't need it
+        // because it works purely in topocentric alt/az).
+        double targetRa = 0.0, targetDec = 30.0;
+        const double siteLat = +45.0, siteLong = -75.0;
+        var v = SkyToAltAzVector(targetRa, targetDec, T0, siteLat, siteLong);
+        double targetAltDeg = Math.Asin(Math.Clamp(v.Z, -1.0, 1.0)) * 180.0 / Math.PI;
+        double targetAzRad = Math.Atan2(v.X, v.Y);
+        if (targetAzRad < 0) targetAzRad += 2 * Math.PI;
+        double targetAzDeg = targetAzRad * 180.0 / Math.PI;
+
+        double altShiftSec = 60.0, azShiftSec = 90.0;
+        var shiftedVec = AltAzDegToVec(
+            targetAltDeg + altShiftSec / 3600.0,
+            targetAzDeg + azShiftSec / 3600.0);
+        var (solvedRa, solvedDec) = AltAzVectorToRaDec(shiftedVec, T0, siteLat, siteLong);
+
+        var (azErr, altErr) = PolarAlignmentMath.ComputeErrorSingleTarget(
+            targetRa, targetDec, solvedRa, solvedDec,
+            siteLat, siteLong, T0);
+
+        double expectedAzErr = azShiftSec * Math.Cos(targetAltDeg * Math.PI / 180.0);
+        Assert.That(altErr, Is.EqualTo(altShiftSec).Within(0.5));
+        Assert.That(azErr, Is.EqualTo(expectedAzErr).Within(0.5));
+    }
+
+    [Test]
+    public void ComputeErrorSingleTarget_TotalErrorMatchesPythagoras() {
+        // The TotalErrorArcsec helper from TPPA should work unchanged
+        // for the rudimentary results; sanity-check on a known case.
+        var (azErr, altErr) = (45.0, 60.0);
+        var total = PolarAlignmentMath.TotalErrorArcsec(azErr, altErr);
+        Assert.That(total, Is.EqualTo(75.0).Within(0.001));
+    }
+
+    /// <summary>Convert (altDeg, azDeg) → unit vec, mirrors the inverse
+    /// of AltAzVectorToRaDec / SkyToAltAzVector's final step. Lives
+    /// only in the test file so the production code doesn't grow a
+    /// helper just for synthesising scenarios.</summary>
+    private static (double X, double Y, double Z) AltAzDegToVec(double altDeg, double azDeg) {
+        double altRad = altDeg * Math.PI / 180.0;
+        double azRad = azDeg * Math.PI / 180.0;
+        double cosAlt = Math.Cos(altRad);
+        return (cosAlt * Math.Sin(azRad), cosAlt * Math.Cos(azRad), Math.Sin(altRad));
+    }
+
     // Same LST formula as PolarAlignmentMath uses internally (Meeus 12.4).
     private static double LocalSiderealHours(DateTime utc, double longDeg) {
         double jd = utc.ToOADate() + 2415018.5;
