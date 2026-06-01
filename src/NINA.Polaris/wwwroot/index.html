@@ -10311,7 +10311,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                  e.level === 'info'  ? 'color:#cbd5e1;' :
                                  'color:#9ca3af;')"
                              x-text="((e.at || '').replace('T',' ').slice(11,23)) +
-                                     ' [' + (e.level || '').toUpperCase().slice(0,4) + ']' +
+                                     ' [' + (e.level || '').toUpperCase().padEnd(5).slice(0,5) + ']' +
                                      ' ' + (e.source || '') +
                                      (e.category ? ' ' + e.category : '') +
                                      ' ' + (e.message || '') +
