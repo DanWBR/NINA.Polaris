@@ -8222,45 +8222,12 @@
                                         style="margin-left:6px">Install instructions →</button>
                             </p>
                         </div>
-                        <!-- Collapsed cert info: shown when already on
-                             secure context. Most users will never expand it,
-                             but the fingerprint + hostname list stays one
-                             click away for the paranoid + for sharing
-                             with a second device. -->
-                        <details x-show="window.isSecureContext"
-                                 class="https-info-collapsed">
-                            <summary>
-                                🔒 <strong>Secure context active</strong>,
-                                WebGPU + multi-thread WASM available.
-                                <span class="hint" style="margin-left:6px">
-                                    Click for cert fingerprint + other endpoint URLs.
-                                </span>
-                            </summary>
-                            <p class="hint" style="margin-top:8px"
-                               x-show="httpsInfo.fingerprintSha256 || httpsInfo.fingerprint">
-                                <strong>SHA-256</strong> fingerprint:
-                                <code style="user-select:all; word-break:break-all; font-size:11px"
-                                      x-text="httpsInfo.fingerprintSha256"></code>
-                            </p>
-                            <p class="hint">Other URLs covered by the same cert
-                               (useful when adding a second device):</p>
-                            <div class="https-info-grid"
-                                 x-show="httpsInfo.exampleHttpsUrls?.length">
-                                <template x-for="url in httpsInfo.exampleHttpsUrls" :key="url">
-                                    <a class="https-link" :href="url" target="_blank"
-                                       rel="noopener" x-text="url"></a>
-                                </template>
-                            </div>
-                            <p class="hint" x-show="httpsInfo.fingerprint" style="margin-top:8px">
-                                Adding a new device that shows "Not secure"?
-                                <a class="btn btn-sm" href="/api/system/server-cert"
-                                   download="polaris-root.crt"
-                                   style="margin-left:6px">⬇ Download certificate</a>
-                                <button class="btn btn-sm"
-                                        @click="certModalOpen()"
-                                        style="margin-left:6px">Install instructions →</button>
-                            </p>
-                        </details>
+                        <!-- TLS-A2: legacy "Secure context active" card
+                             was removed here. The new "🔒 HTTPS Certificate"
+                             settings-section above replaces it with a
+                             single, more prominent panel: fingerprint,
+                             download button, per-OS install steps. -->
+
                     </div>
                 </template>
 
