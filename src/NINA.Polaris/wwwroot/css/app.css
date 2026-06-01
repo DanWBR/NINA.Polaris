@@ -2004,6 +2004,22 @@ label select.input-sm {
     padding: 10px 12px;
     align-items: flex-start;
 }
+/* Jog column inside the floating Mount panel: d-pad on top, slew-rate
+   slider stacked below it (operator request -- they want the rate
+   right under the direction buttons, not next to them). align-items:
+   center makes the intrinsic-width d-pad sit above the full-width
+   slider without manual margin math. */
+.mount-float-jog {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    min-width: 120px;
+}
+.mount-float-jog .mount-slew-rate {
+    width: 100%;
+    padding: 0;
+}
 .mount-float-actions {
     display: flex;
     flex-wrap: wrap;

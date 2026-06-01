@@ -5508,100 +5508,101 @@
                             @click.stop.prevent="mountPanel.visible = false; persistMountPanel()"
                             title="Hide">×</button>
                     <div class="mount-float-body">
-                        <!-- Manual jog d-pad. Hidden entirely when the
-                             driver doesn't expose TELESCOPE_MOTION_NS/WE
-                             so the user doesn't waste clicks on buttons
-                             that would just 501. The STOP button stays
-                             visible regardless (mounts that can slew can
-                             always abort, even those without manual jog). -->
-                        <!-- Press-and-hold semantics: the INDI spec for
-                             TELESCOPE_MOTION_* says "set to true to START
-                             moving, set to false to STOP". Earlier click
-                             handlers fired only the press half, so the
-                             mount either crept for a single tick or (on
-                             the AM3 driver) did nothing visible because
-                             the motion command + the implicit "no stop
-                             ever" left the driver waiting. Pointer down
-                             fires move, pointer up/leave/cancel sends an
-                             abort which clears the motion switch and
-                             halts the mount. Works for both mouse and
-                             touch (single event API). The .prevent stops
-                             the browser from synthesising a click after
-                             touchend, which would re-fire the move and
-                             leave the mount moving after release. -->
-                        <div class="dpad-container dpad-container-sm"
-                             x-show="mount.capabilities?.manualJog !== false">
-                            <button class="dpad-btn dpad-n"
-                                    @pointerdown.prevent="mountMoveStart('n', $event)"
-                                    @pointerup.prevent="mountMoveStop()"
-                                    @pointerleave="mountMoveStop()"
-                                    @pointercancel="mountMoveStop()"
-                                    :disabled="!mount.connected">N</button>
-                            <button class="dpad-btn dpad-w"
-                                    @pointerdown.prevent="mountMoveStart('w', $event)"
-                                    @pointerup.prevent="mountMoveStop()"
-                                    @pointerleave="mountMoveStop()"
-                                    @pointercancel="mountMoveStop()"
-                                    :disabled="!mount.connected">W</button>
-                            <button class="dpad-btn dpad-stop" @click="mountStop()">STOP</button>
-                            <button class="dpad-btn dpad-e"
-                                    @pointerdown.prevent="mountMoveStart('e', $event)"
-                                    @pointerup.prevent="mountMoveStop()"
-                                    @pointerleave="mountMoveStop()"
-                                    @pointercancel="mountMoveStop()"
-                                    :disabled="!mount.connected">E</button>
-                            <button class="dpad-btn dpad-s"
-                                    @pointerdown.prevent="mountMoveStart('s', $event)"
-                                    @pointerup.prevent="mountMoveStop()"
-                                    @pointerleave="mountMoveStop()"
-                                    @pointercancel="mountMoveStop()"
-                                    :disabled="!mount.connected">S</button>
-                        </div>
-                        <!-- Fallback STOP-only row when the driver doesn't
-                             advertise jog. Without this the operator has
-                             no way to abort an in-progress slew from the
-                             floating panel. -->
-                        <div class="dpad-container dpad-container-sm"
-                             x-show="mount.capabilities?.manualJog === false">
-                            <button class="dpad-btn dpad-stop"
-                                    style="grid-area: c;"
-                                    @click="mountStop()">STOP</button>
-                        </div>
-
-                        <!-- SLEWRATE: discrete slew-rate slider. Tick
-                             count = number of TELESCOPE_SLEW_RATE
-                             elements the driver advertises (typically
-                             4 for LX200-class: Guide / Centering / Find
-                             / Max). Hidden when the driver hard-codes
-                             a single rate (slewRates.length < 2). The
-                             label below the slider shows the currently
-                             lit element so the operator can confirm
-                             which step they're on without counting
-                             ticks. -->
-                        <div class="mount-slew-rate"
-                             x-show="(mount.slewRates || []).length > 1"
-                             style="margin-top:6px; padding:4px 6px">
-                            <div style="display:flex; justify-content:space-between;
-                                        align-items:center; font-size:10px;
-                                        text-transform:uppercase;
-                                        color:var(--text-muted)">
-                                <span>Slew rate</span>
-                                <strong style="color:var(--text-primary)"
-                                        x-text="(mount.slewRates || [])
-                                            .find(r => r.active)?.label || '—'"></strong>
+                        <!-- Jog column: d-pad on top, slew-rate slider
+                             stacked directly below so the operator can
+                             change rate without their eye jumping
+                             across the panel. The flex parent keeps
+                             this whole block left of the readouts. -->
+                        <div class="mount-float-jog">
+                            <!-- Manual jog d-pad. Hidden entirely when the
+                                 driver doesn't expose TELESCOPE_MOTION_NS/WE
+                                 so the user doesn't waste clicks on buttons
+                                 that would just 501. The STOP button stays
+                                 visible regardless (mounts that can slew can
+                                 always abort, even those without manual jog). -->
+                            <!-- Press-and-hold semantics: the INDI spec for
+                                 TELESCOPE_MOTION_* says "set to true to START
+                                 moving, set to false to STOP". Earlier click
+                                 handlers fired only the press half, so the
+                                 mount either crept for a single tick or (on
+                                 the AM3 driver) did nothing visible because
+                                 the motion command + the implicit "no stop
+                                 ever" left the driver waiting. Pointer down
+                                 fires move, pointer up/leave/cancel sends an
+                                 abort which clears the motion switch and
+                                 halts the mount. Works for both mouse and
+                                 touch (single event API). The .prevent stops
+                                 the browser from synthesising a click after
+                                 touchend, which would re-fire the move and
+                                 leave the mount moving after release. -->
+                            <div class="dpad-container dpad-container-sm"
+                                 x-show="mount.capabilities?.manualJog !== false">
+                                <button class="dpad-btn dpad-n"
+                                        @pointerdown.prevent="mountMoveStart('n', $event)"
+                                        @pointerup.prevent="mountMoveStop()"
+                                        @pointerleave="mountMoveStop()"
+                                        @pointercancel="mountMoveStop()"
+                                        :disabled="!mount.connected">N</button>
+                                <button class="dpad-btn dpad-w"
+                                        @pointerdown.prevent="mountMoveStart('w', $event)"
+                                        @pointerup.prevent="mountMoveStop()"
+                                        @pointerleave="mountMoveStop()"
+                                        @pointercancel="mountMoveStop()"
+                                        :disabled="!mount.connected">W</button>
+                                <button class="dpad-btn dpad-stop" @click="mountStop()">STOP</button>
+                                <button class="dpad-btn dpad-e"
+                                        @pointerdown.prevent="mountMoveStart('e', $event)"
+                                        @pointerup.prevent="mountMoveStop()"
+                                        @pointerleave="mountMoveStop()"
+                                        @pointercancel="mountMoveStop()"
+                                        :disabled="!mount.connected">E</button>
+                                <button class="dpad-btn dpad-s"
+                                        @pointerdown.prevent="mountMoveStart('s', $event)"
+                                        @pointerup.prevent="mountMoveStop()"
+                                        @pointerleave="mountMoveStop()"
+                                        @pointercancel="mountMoveStop()"
+                                        :disabled="!mount.connected">S</button>
                             </div>
-                            <input type="range" min="0"
-                                   :max="(mount.slewRates || []).length - 1"
-                                   step="1"
-                                   :value="Math.max(0, mountSlewRateIndex)"
-                                   @input="setMountSlewRate($event.target.value)"
-                                   list="mount-slew-rate-ticks"
-                                   style="width:100%">
-                            <datalist id="mount-slew-rate-ticks">
-                                <template x-for="(r, i) in (mount.slewRates || [])" :key="r.name">
-                                    <option :value="i" :label="r.label"></option>
-                                </template>
-                            </datalist>
+                            <!-- Fallback STOP-only row when the driver doesn't
+                                 advertise jog. Without this the operator has
+                                 no way to abort an in-progress slew from the
+                                 floating panel. -->
+                            <div class="dpad-container dpad-container-sm"
+                                 x-show="mount.capabilities?.manualJog === false">
+                                <button class="dpad-btn dpad-stop"
+                                        style="grid-area: c;"
+                                        @click="mountStop()">STOP</button>
+                            </div>
+
+                            <!-- SLEWRATE: discrete slew-rate slider. Tick
+                                 count = number of TELESCOPE_SLEW_RATE
+                                 elements the driver advertises (typically
+                                 4 for LX200-class: Guide / Centering / Find
+                                 / Max). Hidden when the driver hard-codes
+                                 a single rate (slewRates.length < 2). The
+                                 label below the slider shows the currently
+                                 lit element so the operator can confirm
+                                 which step they're on without counting
+                                 ticks. -->
+                            <div class="mount-slew-rate"
+                                 x-show="(mount.slewRates || []).length > 1">
+                                <div class="mount-slew-rate-label">
+                                    <span>Slew rate</span>
+                                    <strong x-text="(mount.slewRates || [])
+                                                .find(r => r.active)?.label || '—'"></strong>
+                                </div>
+                                <input type="range" min="0"
+                                       :max="(mount.slewRates || []).length - 1"
+                                       step="1"
+                                       :value="Math.max(0, mountSlewRateIndex)"
+                                       @input="setMountSlewRate($event.target.value)"
+                                       list="mount-slew-rate-ticks">
+                                <datalist id="mount-slew-rate-ticks">
+                                    <template x-for="(r, i) in (mount.slewRates || [])" :key="r.name">
+                                        <option :value="i" :label="r.label"></option>
+                                    </template>
+                                </datalist>
+                            </div>
                         </div>
                         <div class="mount-info mount-info-sm">
                             <div class="info-row"><span>RA:</span><strong x-text="formatRA(mount.ra)"></strong></div>
