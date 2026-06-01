@@ -2091,6 +2091,15 @@ label select.input-sm {
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: rgba(255, 255, 255, 0.02);
+    /* Flex column with horizontal centering. Without this the d-pad
+       grid (~114 px wide) would sit at the left because grid
+       containers default to block-level full-width, leaving the
+       tracks anchored at the start. align-items:center centres the
+       intrinsic-width d-pad; the full-width children (slew slider,
+       Keep Centered btn) get explicit width:100% to override. */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 .mount-jog-cluster-title {
     font-size: 10px;
@@ -2099,13 +2108,16 @@ label select.input-sm {
     letter-spacing: 0.5px;
     color: var(--text-muted);
     margin-bottom: 4px;
+    align-self: stretch;
+    text-align: center;
 }
 .mount-jog-cluster .dpad-container {
-    margin: 0 auto;
+    margin: 0;
 }
 .mount-jog-cluster .mount-slew-rate {
     margin-top: 6px;
     padding: 0;
+    width: 100%;
 }
 
 /* KC-1: Keep Centered toggle inside the mount-jog-cluster. Sits

@@ -2552,16 +2552,32 @@
                                  data-min="0" data-max="600" data-step="1"
                                  data-bind="video.gain" data-scale="1"
                                  :data-disabled="cameraStream.running || videoRecording.recording"></div>
-                            <div data-wheel-picker
-                                 x-show="focusConnected && focusMaxPosition > 0"
-                                 data-label="Focus"
-                                 data-min="0"
-                                 :data-max="focusMaxPosition"
-                                 data-step="10"
-                                 data-bind="focusSliderTarget" data-scale="1"
-                                 :data-disabled="focusMoving"
-                                 @pointerdown="focusSliderDirty = true"
-                                 @wheel-pick-end="focusMoveTo(focusSliderTarget); focusSliderDirty = false"></div>
+                            <!-- Wrapped in template x-if (rather than
+                                 x-show) because the WheelPicker
+                                 constructor snapshots data-max ONCE
+                                 from the DOM at mount time. With
+                                 x-show the picker would mount while
+                                 focusMaxPosition is still 0 (its
+                                 default before the WS payload lands),
+                                 cache max=0, and clamp every later
+                                 setValue() back to 0 -- which was the
+                                 "FOCUS stays at 0 forever" bug. x-if
+                                 defers the mount until focusMaxPosition
+                                 is a real number, then Alpine resolves
+                                 :data-max BEFORE the MutationObserver
+                                 sees the new <div> and our
+                                 _mountWheelPickers() runs. -->
+                            <template x-if="focusConnected && focusMaxPosition > 0">
+                                <div data-wheel-picker
+                                     data-label="Focus"
+                                     data-min="0"
+                                     :data-max="focusMaxPosition"
+                                     data-step="10"
+                                     data-bind="focusSliderTarget" data-scale="1"
+                                     :data-disabled="focusMoving"
+                                     @pointerdown="focusSliderDirty = true"
+                                     @wheel-pick-end="focusMoveTo(focusSliderTarget); focusSliderDirty = false"></div>
+                            </template>
                         </div>
                         <!-- Tiny status bar below the wheels: shows the
                              current numeric value of each wheel so users
