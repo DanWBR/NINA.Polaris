@@ -864,7 +864,14 @@ body {
 .live-pane > .quick-controls .control-row > label > select,
 .preview-pane > .quick-controls .control-row > label > input,
 .preview-pane > .quick-controls .control-row > label > select {
-    flex: 1;
+    /* Input/select pinned to the right half of the row. The label
+       text stays on the left edge; margin-left: auto pushes the
+       control over so it sits at 50% width on the right side of
+       the row, with any trailing unit text ("s", "min", ...)
+       flowing to its right. Compact + readable in the narrow
+       sidebar. */
+    flex: 0 0 50%;
+    margin-left: auto;
     min-width: 0;
 }
 /* Preset button bars (ZWO L/M/H gain, BIN1..4) — make every button
@@ -8532,7 +8539,8 @@ label select.input-sm {
 }
 .video-pane .quick-controls .control-row > label > input,
 .video-pane .quick-controls .control-row > label > select {
-    flex: 1;
+    flex: 0 0 50%;
+    margin-left: auto;
     min-width: 0;
 }
 .video-pane .quick-controls .control-row > .zwo-gain-presets,
