@@ -99,6 +99,18 @@ public class AuthMiddleware {
         if (path.StartsWithSegments("/api/auth")) return true;
         if (path.Equals("/api/system/version",
                 StringComparison.OrdinalIgnoreCase)) return true;
+        // TLS-A1: cert download + install instructions stay public.
+        // The whole point is letting a brand-new device (celular,
+        // tablet) grab the root cert BEFORE the user can even hit
+        // the login screen without warnings. The cert is by design
+        // public material (it's a trust anchor; verification is via
+        // the fingerprint shown in /api/tls/status which stays
+        // gated). Auth still applies to /api/tls/status and the LE
+        // config endpoints, those carry the DuckDNS token.
+        if (path.Equals("/api/tls/ca.crt",
+                StringComparison.OrdinalIgnoreCase)) return true;
+        if (path.Equals("/api/tls/install-instructions",
+                StringComparison.OrdinalIgnoreCase)) return true;
         return false;
     }
 }

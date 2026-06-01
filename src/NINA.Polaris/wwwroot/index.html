@@ -7410,6 +7410,76 @@
                      opt into a full-row span with .settings-section--wide. -->
                 <div class="settings-grid">
 
+                <!-- TLS-A2: HTTPS certificate install wizard. Shipped
+                     near the top of Settings because it's the first
+                     thing every new user hits ("why is my browser
+                     saying not secure?"). Self-signed cert is already
+                     auto-generated; this card lets the user download
+                     the root and install it so subsequent connections
+                     show the lock icon. Auto-detects current OS for
+                     the default install-instructions tab. -->
+                <div class="settings-section"
+                     x-init="tlsInit()">
+                    <h3><span class="settings-card-icon">🔒</span>HTTPS Certificate</h3>
+                    <p class="hint" style="margin-top:0">
+                        Polaris uses a self-signed certificate so the
+                        connection is encrypted on your LAN. Install the
+                        root certificate on each device once and the
+                        browser stops warning about it.
+                    </p>
+                    <div x-show="tls.loading" class="text-muted">Loading…</div>
+                    <div x-show="!tls.loading && tls.status">
+                        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px">
+                            <span class="status-pill status-pill-ok"
+                                  x-text="'Valid until ' + tlsFormatExpiry(tls.status?.selfSigned?.notAfterUtc)"></span>
+                            <span class="text-muted" style="font-size:11px">
+                                SHA-256:
+                                <code x-text="(tls.status?.selfSigned?.fingerprintSha256 || '').substring(0,16) + '…'"
+                                      :title="tls.status?.selfSigned?.fingerprintSha256"></code>
+                            </span>
+                        </div>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px">
+                            <a class="btn btn-primary" :href="tlsCertUrl('pem')"
+                               download="polaris-root.crt">
+                                📥 Download root certificate (.crt)
+                            </a>
+                            <a class="btn" :href="tlsCertUrl('der')"
+                               download="polaris-root.cer"
+                               title="Older Windows tooling sometimes prefers DER">
+                                .cer (DER)
+                            </a>
+                            <button class="btn" @click="tlsCopyFingerprint()"
+                                    title="Copy the SHA-256 fingerprint so you can verify the file you downloaded">
+                                Copy fingerprint
+                            </button>
+                        </div>
+
+                        <h4 style="margin:14px 0 6px 0; font-size:13px">
+                            Install on this device
+                        </h4>
+                        <div class="tls-os-tabs">
+                            <template x-for="g in (tls.guides || [])" :key="g.osKey">
+                                <button class="tls-os-tab"
+                                        :class="{ active: tls.activeOs === g.osKey }"
+                                        @click="tls.activeOs = g.osKey"
+                                        x-text="g.osLabel"></button>
+                            </template>
+                        </div>
+                        <template x-for="g in (tls.guides || [])" :key="g.osKey">
+                            <div x-show="tls.activeOs === g.osKey" class="tls-os-steps">
+                                <p class="text-muted" style="font-size:11px; margin:4px 0 8px 0">
+                                    Estimated time: <span x-text="g.estimatedMinutes"></span> min
+                                </p>
+                                <ol style="margin:0; padding-left:22px; line-height:1.6">
+                                    <template x-for="(step, i) in g.steps" :key="i">
+                                        <li style="margin-bottom:4px" x-text="step"></li>
+                                    </template>
+                                </ol>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
                 <!-- Appearance / interface scale. Slider writes to a
                      draft value (uiZoomDraft) while you drag, the
                      actual page zoom only updates when you click

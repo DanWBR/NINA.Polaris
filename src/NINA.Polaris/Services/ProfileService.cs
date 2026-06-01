@@ -401,6 +401,26 @@ public class UserProfile {
     public string? AstapPath { get; set; }
     public double SolveToleranceArcsec { get; set; } = 30;
 
+    // TLS-1: Let's Encrypt via DuckDNS DNS-01 challenge. Replaces the
+    // self-signed cert with a real publicly-trusted cert when the user
+    // owns (or has registered free of charge on duckdns.org) a domain
+    // that DNS-resolves to the Pi's LAN IP. Self-signed remains the
+    // fallback when LE isn't configured or its cert is missing /
+    // expired. Auto-renewal runs daily via LetsEncryptRenewalService
+    // and refreshes when the cert has less than 30 days remaining.
+    // Token + email are persisted in plain JSON because the profile
+    // file is already gated by OS file permissions; if someone gains
+    // read access to the profile they already control Polaris itself.
+    public bool LetsEncryptEnabled { get; set; } = false;
+    public string LetsEncryptDomain { get; set; } = "";       // e.g. nina-polaris.duckdns.org
+    public string DuckDnsToken { get; set; } = "";            // DuckDNS account UUID
+    public string LetsEncryptEmail { get; set; } = "";        // ACME registration + expiry warnings
+    public bool LetsEncryptUseStaging { get; set; } = false;  // true = Let's Encrypt staging CA (untrusted, no rate limits)
+    public DateTime? LetsEncryptLastRenewalUtc { get; set; }  // last successful issuance / renewal
+    public DateTime? LetsEncryptNotAfterUtc { get; set; }     // cert expiry from last successful issuance
+    public string? LetsEncryptStatus { get; set; }            // last operation outcome (Ok / Error / "in progress")
+    public string? LetsEncryptLastError { get; set; }         // last failure message (null on success)
+
     // External post-processing tools (Siril + GraXpert). Empty/null
     // means "auto-detect" via BinaryLocator; set explicitly to
     // override the default path search.

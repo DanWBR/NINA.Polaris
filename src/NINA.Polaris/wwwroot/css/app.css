@@ -9661,3 +9661,40 @@ label select.input-sm {
     border-bottom: 1px solid var(--border);
     margin-bottom: 16px !important;
 }
+
+/* TLS-A2: HTTPS cert install wizard tabs.
+   Reuses the visual language of .video-tabstrip / .guide-tabstrip
+   so the OS picker feels native to the rest of the app. */
+.tls-os-tabs {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 10px;
+}
+.tls-os-tab {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: color 120ms ease, border-color 120ms ease;
+}
+.tls-os-tab:hover { color: var(--text-primary); }
+.tls-os-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
+}
+.tls-os-steps {
+    font-size: 12px;
+    color: var(--text-primary);
+}
+.tls-os-steps code {
+    background: rgba(255,255,255,0.05);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 11px;
+}

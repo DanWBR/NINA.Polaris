@@ -247,6 +247,12 @@ builder.Services.AddSingleton<FileBrowserService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.SirilService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.GraXpertService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.CropService>();
+// TLS-2: DuckDNS HTTP client for setting TXT records during ACME
+// DNS-01 challenge. Used by LetsEncryptService (TLS-4); also exposed
+// directly via /api/tls/letsencrypt/test-dns (TLS-5) so the user
+// can sanity-check token+domain without burning a Let's Encrypt
+// rate-limit budget.
+builder.Services.AddSingleton<NINA.Polaris.Services.Tls.DuckDnsClient>();
 // Host CPU + memory sampler. AddResourceMonitoring wires the
 // platform-specific provider (Job Objects on Windows, cgroups on
 // Linux). HostMetricsService loops in the background, exposes the
@@ -778,6 +784,10 @@ app.MapMeridianFlipEndpoints();
 // disable,enable}. Mapped here; AuthMiddleware (AUTH-2) exempts the
 // whole /api/auth/* prefix so these are reachable without a token.
 app.MapAuthEndpoints();
+// TLS-1: /api/tls/{status,letsencrypt/config}. Read + persist HTTPS
+// cert config (self-signed + Let's Encrypt via DuckDNS DNS-01).
+// Issuance + renew endpoints land in TLS-5.
+app.MapTlsEndpoints();
 // DBGLOG-4: /api/logs/* (gated by AuthMiddleware along with the
 // rest of /api/*). The middleware skip-list for /api/logs* only
 // blocks the http-request-logging entry, NOT the auth gate.

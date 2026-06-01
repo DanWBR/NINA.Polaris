@@ -207,6 +207,20 @@ function ninaApp() {
             lastError: null
         },
 
+        // TLS-A2: HTTPS certificate install wizard state. Loaded by
+        // tlsInit() (called from x-init on the Settings card), so the
+        // expensive /api/tls/status + /install-instructions fetch
+        // only runs when the user actually opens that card. activeOs
+        // defaults to the auto-detected OS so iPhone users land on
+        // iPhone instructions without picking the tab.
+        tls: {
+            status: null,        // { selfSigned: {...}, letsEncrypt: {...} }
+            guides: [],          // [{ osKey, osLabel, estimatedMinutes, steps:[] }, ...]
+            activeOs: 'windows',
+            loading: false,
+            error: null
+        },
+
         // HELP-1: in-app tutorial state. tutorial null = landing
         // (4-card picker); otherwise one of 'firstNight', 'capture',
         // 'workflowsPicker', 'lrgb', 'planetary', 'pcc', 'troubleshoot'.
@@ -3601,6 +3615,82 @@ function ninaApp() {
                     }
                 ]
             };
+        },
+
+        // ---- TLS-A2: HTTPS certificate wizard helpers ------------------
+
+        // First-paint of the cert card: loads cert status + every OS's
+        // install steps + auto-detects which tab to highlight. Called
+        // from x-init on the card itself so the network calls don't
+        // run when the user never opens Settings.
+        async tlsInit() {
+            // Idempotent: once status is loaded the user can navigate
+            // away from Settings and back without re-fetching.
+            if (this.tls.status || this.tls.loading) return;
+            this.tls.loading = true;
+            try {
+                this.tls.activeOs = this._detectOs();
+                const [status, instructions] = await Promise.all([
+                    this.apiFetch('/api/tls/status').then(r => r.json()),
+                    this.apiFetch('/api/tls/install-instructions').then(r => r.json())
+                ]);
+                this.tls.status = status;
+                this.tls.guides = instructions.guides || [];
+                // Defensive: if the detected OS isn't in the guide list
+                // (shouldn't happen, but easy to mess up), fall back to
+                // the first available so the card never renders empty.
+                if (!this.tls.guides.find(g => g.osKey === this.tls.activeOs)) {
+                    this.tls.activeOs = this.tls.guides[0]?.osKey || 'windows';
+                }
+            } catch (e) {
+                this.tls.error = e?.message || 'Failed to load TLS status';
+                console.warn('[TLS] init failed', e);
+            } finally {
+                this.tls.loading = false;
+            }
+        },
+
+        // Same-origin URL so the download survives custom ports + LAN
+        // setups. format=pem|der; pem is the default both Windows and
+        // macOS dialogs accept.
+        tlsCertUrl(format) {
+            return '/api/tls/ca.crt' + (format ? '?format=' + format : '');
+        },
+
+        tlsFormatExpiry(iso) {
+            if (!iso) return '—';
+            try { return new Date(iso).toISOString().substring(0, 10); }
+            catch { return iso; }
+        },
+
+        async tlsCopyFingerprint() {
+            const fp = this.tls.status?.selfSigned?.fingerprintSha256;
+            if (!fp) return;
+            try {
+                await navigator.clipboard.writeText(fp);
+                this.toast('Fingerprint copied — verify it in your OS cert dialog before trusting', 'success');
+            } catch (e) {
+                // Some browsers gate clipboard.writeText behind https + secure
+                // context. We're served over https (self-signed) so this
+                // should work, but legacy contexts may still fail.
+                this.toast('Could not copy: ' + (e?.message || 'browser blocked'), 'error');
+            }
+        },
+
+        // Conservative UA sniff. Enough to land the user on the right
+        // tab; if we guess wrong they can pick another one. iPad on
+        // iOS 13+ reports as "Macintosh" — the touch heuristic salvages
+        // it. Order matters: check iOS before macOS.
+        _detectOs() {
+            const ua = (navigator.userAgent || '').toLowerCase();
+            const isTouch = (navigator.maxTouchPoints || 0) > 1;
+            if (/iphone|ipod/.test(ua)) return 'ios';
+            if (/ipad/.test(ua) || (/macintosh/.test(ua) && isTouch)) return 'ios';
+            if (/android/.test(ua)) return 'android';
+            if (/windows/.test(ua)) return 'windows';
+            if (/macintosh|mac os x/.test(ua)) return 'macos';
+            if (/linux/.test(ua)) return 'linux';
+            return 'windows';
         },
 
         // ---- CLOCK-3: wall-clock sync helpers --------------------------
