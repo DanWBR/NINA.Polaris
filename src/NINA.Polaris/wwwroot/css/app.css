@@ -254,7 +254,6 @@ body {
 .zwo-gain-presets {
     display: inline-flex;
     gap: 4px;
-    margin-left: 6px;
     vertical-align: middle;
 }
 .zwo-gain-preset {
@@ -2108,6 +2107,36 @@ label select.input-sm {
     margin-top: 6px;
     padding: 0;
 }
+
+/* KC-1: Keep Centered toggle inside the mount-jog-cluster. Sits
+   below the slew-rate slider. Full-width + slightly taller than the
+   d-pad buttons so the operator can hit it with a thumb on a
+   touchscreen. When active uses the .btn-active accent the rest of
+   the toolbar shares. Disabled state (no stream / no tracking /
+   parked) dims the button -- the tooltip explains why. */
+.mount-jog-cluster .keep-centered-btn {
+    width: 100%;
+    margin-top: 8px;
+    padding: 7px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+}
+.mount-jog-cluster .keep-centered-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+/* One-line status under the toggle. Muted by default; the offset
+   number is in monospace so the value doesn't jitter the layout as
+   it ticks through one/two/three-digit pixel counts. */
+.mount-jog-cluster .keep-centered-status {
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
 /* Re-open pill (bottom-right of the Sky tab) */
 .mount-float-reopen,
 .camera-float-reopen {

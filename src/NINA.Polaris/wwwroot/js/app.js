@@ -708,6 +708,18 @@ function ninaApp() {
             lastError: null
         },
 
+        // KC-1: Keep Centered (mount) control loop state. Top-level
+        // because the server broadcasts it as a sibling of cameraStream,
+        // not nested under mount.* (which is rebuilt every tick from
+        // eq.telescope and would clobber it). VIDEO Capture sidebar
+        // binds the toggle button + status line to this object.
+        keepCentered: {
+            running: false,
+            phase: 'idle',           // 'idle' | 'calibrating' | 'locked' | 'lost'
+            lastOffsetPx: null,
+            lastCorrectionMs: 0
+        },
+
         // VIDEO tab state, planetary capture (SER) + lucky-imaging stack.
         // Driven by VideoRecordingService + PlanetaryStackerService on the
         // server; the WS status feed populates videoRecording / videoStack.
@@ -12610,6 +12622,54 @@ function ninaApp() {
             }
         },
 
+        // KC-1: Keep Centered toggle (VIDEO Capture sidebar). Start
+        // throws 400 with an actionable message when prerequisites
+        // are missing (no stream, no tracking, parked), surface those
+        // verbatim as a toast so the operator knows what to fix.
+        // Stop is unconditional and idempotent.
+        async toggleKeepCentered() {
+            const running = this.keepCentered?.running;
+            const url = running
+                ? '/api/telescope/keep-centered/stop'
+                : '/api/telescope/keep-centered/start';
+            try {
+                await this.apiPost(url);
+                if (!running) {
+                    this.toast('Keep centered: calibrating mount...', 'info');
+                } else {
+                    this.toast('Keep centered: stopped', 'info');
+                }
+            } catch (e) {
+                this.toast('Keep centered ' + (running ? 'stop' : 'start')
+                    + ' failed: ' + this._mountErrorText(e), 'error');
+            }
+        },
+
+        // Friendly one-line status for the small text under the
+        // toggle button. Renders the live phase + current offset
+        // when locked, calibration progress, or "lost target" with
+        // a hint. Returns empty when keepCentered is not running so
+        // the x-show on the parent div hides the line entirely.
+        keepCenteredStatusLine() {
+            const kc = this.keepCentered;
+            if (!kc || !kc.running) return '';
+            const off = (kc.lastOffsetPx == null)
+                ? '--'
+                : ('±' + Math.round(kc.lastOffsetPx) + ' px');
+            const corr = (kc.lastCorrectionMs > 0)
+                ? (' • ' + kc.lastCorrectionMs + 'ms pulse') : '';
+            switch (kc.phase) {
+                case 'calibrating':
+                    return 'Calibrating mount (~4s)...';
+                case 'locked':
+                    return 'Locked, ' + off + corr;
+                case 'lost':
+                    return 'Lost target, retrying...';
+                default:
+                    return kc.phase || 'running';
+            }
+        },
+
         async parkMount() {
             try {
                 await this.apiPost('/api/telescope/park');
@@ -19064,6 +19124,10 @@ function ninaApp() {
                 // readable while the stream service initialises.
                 this.cameraStream = Object.assign({}, this.cameraStream, msg.cameraStream);
             }
+            // KC-1: Keep Centered loop status. Always emitted (running
+            // = false when idle) so the VIDEO sidebar button can react
+            // instantly to a Stop initiated from another tab.
+            if (msg.keepCentered) this.keepCentered = msg.keepCentered;
             if (msg.videoRecording) this.videoRecording = msg.videoRecording;
             if (msg.videoStack !== undefined) this.videoStack = msg.videoStack;  // null when idle
             if (msg.slewPreview) this.slewPreview = msg.slewPreview;

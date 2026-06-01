@@ -822,8 +822,8 @@
                          at the bottom. -->
                     <div class="shutter-inputs">
                     <div class="control-row">
-                        <label>Exp<input type="number" x-model.number="exposure" list="exposure-presets" step="any" min="0" class="input-sm"> s</label>
-                        <label>Gain<input type="number" x-model.number="gain" step="10" min="0" class="input-sm"></label>
+                        <label>Exposure (s)<input type="number" x-model.number="exposure" list="exposure-presets" step="any" min="0" class="input-sm"></label>
+                        <label>Gain<input type="number" x-model.number="gain" step="10" min="0" class="input-sm">  </label>
                         <!-- ZWO L/M/H gain presets, render only when the
                              active camera matches a known ZWO model. -->
                         <span class="zwo-gain-presets" x-show="zwoPresetsForActiveCamera()"
@@ -2647,6 +2647,26 @@
                                     </template>
                                 </datalist>
                             </div>
+
+                            <!-- KC-1: Keep Centered. Continuously detects
+                                 the brightest object on the live video
+                                 stream and pulses N/S/E/W to keep it on
+                                 frame center. Calibration on Start takes
+                                 ~4 s. Disabled when prerequisites are
+                                 missing (no stream, no tracking, parked);
+                                 the tooltip explains. Status line below
+                                 shows the live phase + offset. -->
+                            <button class="btn btn-sm keep-centered-btn"
+                                    :class="(keepCentered?.running) ? 'btn-active' : ''"
+                                    :disabled="!cameraStream.running || !mount.tracking || mount.parked || !mount.connected"
+                                    @click="toggleKeepCentered()"
+                                    title="Continuously detect the brightest target and pulse the mount to keep it centered. Use during planetary recording.">
+                                <span x-show="!keepCentered?.running">Keep centered</span>
+                                <span x-show="keepCentered?.running">Stop keep centered</span>
+                            </button>
+                            <div class="keep-centered-status"
+                                 x-show="keepCentered?.running"
+                                 x-text="keepCenteredStatusLine()"></div>
                         </div>
 
                         <!-- ZWO L/M/H gain shortcuts. Sits inline next to

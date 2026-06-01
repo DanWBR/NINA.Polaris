@@ -1,4 +1,5 @@
 using NINA.Polaris.Services;
+using NINA.Polaris.Services.Planetary;
 
 namespace NINA.Polaris.Endpoints;
 
@@ -332,6 +333,41 @@ public static class TelescopeEndpoints {
                 return Results.Json(new { error = ex.Message }, statusCode: 500);
             }
         });
+
+        // KC-1: Keep Centered loop. Toggled from the VIDEO Capture
+        // sidebar while a planetary stream is running. Start runs a
+        // ~4 s calibration (N + E pulses, measure pixel velocity)
+        // then enters a P-control loop that pulses the mount to
+        // keep the brightest object on frame center. Start refuses
+        // when prerequisites are missing (no stream, no mount,
+        // parked, not tracking) with an actionable 400 message so
+        // the operator knows what to fix.
+        group.MapPost("/keep-centered/start", async (KeepCenteredService kc,
+                                                     KeepCenteredOptions? opts,
+                                                     HttpContext ctx) => {
+            try {
+                await kc.StartAsync(opts, ctx.RequestAborted);
+                return Results.Ok(new {
+                    status = "started", phase = kc.Phase
+                });
+            } catch (InvalidOperationException ex) {
+                return Results.Json(new { error = ex.Message }, statusCode: 400);
+            } catch (Exception ex) {
+                return Results.Json(new { error = ex.Message }, statusCode: 500);
+            }
+        });
+
+        group.MapPost("/keep-centered/stop", async (KeepCenteredService kc) => {
+            await kc.StopAsync();
+            return Results.Ok(new { status = "stopped" });
+        });
+
+        group.MapGet("/keep-centered", (KeepCenteredService kc) => Results.Ok(new {
+            running = kc.IsRunning,
+            phase = kc.Phase,
+            lastOffsetPx = kc.LastOffsetPx,
+            lastCorrectionMs = kc.LastCorrectionMs
+        }));
 
         group.MapPost("/select/{deviceName}", (EquipmentManager equip, string deviceName, string? driver) => {
             // ?driver=indi (default) | synscan-wifi | nexstar-wifi |

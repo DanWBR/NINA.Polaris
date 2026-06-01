@@ -110,6 +110,10 @@ builder.Services.AddSingleton<ImageRelayService>();
 builder.Services.AddSingleton<CameraStreamService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Planetary.VideoRecordingService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Planetary.PlanetaryStackerService>();
+// KC-1: Keep Centered control loop. Toggled from the VIDEO sidebar
+// while a planetary stream is running -- pulses N/S/E/W to fight
+// drift and keep the planet on the frame center.
+builder.Services.AddSingleton<NINA.Polaris.Services.Planetary.KeepCenteredService>();
 // LSTR-3: subscribes to LiveStackingService.FrameIntegrated at construction.
 // Eagerly resolved alongside PHD2ProfileSyncService below so the
 // subscription wires at startup, not on first /api/livestack/triggers/* hit.

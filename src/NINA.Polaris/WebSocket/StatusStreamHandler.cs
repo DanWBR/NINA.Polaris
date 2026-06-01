@@ -23,6 +23,7 @@ public static class StatusStreamHandler {
         var cameraStream = context.RequestServices.GetRequiredService<CameraStreamService>();
         var videoRecording = context.RequestServices.GetRequiredService<NINA.Polaris.Services.Planetary.VideoRecordingService>();
         var videoStacker = context.RequestServices.GetRequiredService<NINA.Polaris.Services.Planetary.PlanetaryStackerService>();
+        var keepCentered = context.RequestServices.GetRequiredService<NINA.Polaris.Services.Planetary.KeepCenteredService>();
         var slewPreview = context.RequestServices.GetRequiredService<SlewPreviewService>();
         var liveStackTriggers = context.RequestServices.GetRequiredService<LiveStackTriggersService>();
         var refocusSuggest = context.RequestServices.GetRequiredService<RefocusSuggestionService>();
@@ -331,6 +332,18 @@ public static class StatusStreamHandler {
                             fps = cameraStream.Fps,
                             lastError = cameraStream.LastError,
                             supportsNative = equip.Camera?.Capabilities.SupportsVideoStream ?? false
+                        },
+                        // KC-1: Keep Centered control loop. Top-level
+                        // sibling of cameraStream so the VIDEO sidebar
+                        // toggle can read phase + offset readout every
+                        // tick without an extra REST poll. running=false
+                        // when idle; phase cycles idle->calibrating->
+                        // locked (with occasional lost in poor seeing).
+                        keepCentered = new {
+                            running = keepCentered.IsRunning,
+                            phase = keepCentered.Phase,
+                            lastOffsetPx = keepCentered.LastOffsetPx,
+                            lastCorrectionMs = keepCentered.LastCorrectionMs
                         },
                         // Planetary recording lifecycle (VIDEO tab Capture).
                         videoRecording = new {
