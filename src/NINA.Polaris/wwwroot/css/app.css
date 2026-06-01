@@ -9914,3 +9914,36 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     cursor: pointer;
     user-select: none;
 }
+
+/* Wheel-picker inline edit: number input that replaces the centre
+   item on double-click. Matches the .input-sm look so a wheel that
+   just popped its editor looks like any other text input in the panel. */
+.wheel-picker-edit {
+    background: var(--bg-input);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-size: 18px;
+    padding: 4px 8px;
+    outline: none;
+    /* Hide the spinner arrows — at 85% width they crowd the value;
+       the wheel itself is still available for click-to-step UX. */
+    -moz-appearance: textfield;
+}
+.wheel-picker-edit::-webkit-outer-spin-button,
+.wheel-picker-edit::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Subtle "double-click to type" hint on the centre item. cursor:text
+   nudges the operator that the centre is editable; the underline
+   that some browsers add for double-click selection is suppressed
+   inside the picker itself (already done via user-select earlier). */
+.wheel-picker-item--center {
+    cursor: ns-resize;   /* drag axis */
+}
+.wheel-picker-item--center:hover {
+    text-decoration: underline dotted rgba(255,255,255,0.4);
+    text-underline-offset: 4px;
+}

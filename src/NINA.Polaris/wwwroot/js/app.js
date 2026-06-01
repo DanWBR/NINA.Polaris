@@ -19656,6 +19656,14 @@ class WheelPicker {
         this.el.addEventListener('pointercancel', this._onUp.bind(this));
         this.el.addEventListener('wheel', this._onWheel.bind(this), { passive: false });
 
+        // Direct numeric edit: double-click anywhere on the wheel pops
+        // a centred <input type="number"> seeded with the current value.
+        // Enter / blur commits, Escape cancels. Quicker than dragging
+        // when the operator already knows the value they want
+        // (e.g. 'gain 200' from a ZWO doc). Works on touch too via the
+        // browser's synthetic dblclick (~300ms tap-tap window).
+        this.el.addEventListener('dblclick', this._onDoubleClick.bind(this));
+
         this._render();
     }
 
@@ -19775,6 +19783,65 @@ class WheelPicker {
         ev.preventDefault();
         const direction = ev.deltaY > 0 ? 1 : -1;
         this.setValue(this.value + direction * this.step);
+    }
+
+    _onDoubleClick(ev) {
+        if (this.el.dataset.disabled === 'true') return;
+        if (this._editing) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        // Pointerdown from the dblclick gesture already started a
+        // drag; cancel it so the wheel doesn't scroll behind the
+        // inline editor.
+        this._dragging = false;
+        this._pointerId = null;
+
+        const containerH = this.el.clientHeight || 168;
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.className = 'wheel-picker-edit';
+        input.min = String(this.min);
+        input.max = String(this.max);
+        input.step = String(this.step);
+        input.value = this._format(this.value);
+        // Absolutely positioned at the centre band so it visually
+        // replaces the highlighted item without DOM reordering.
+        input.style.position = 'absolute';
+        input.style.left = '50%';
+        input.style.top = (containerH / 2) + 'px';
+        input.style.transform = 'translate(-50%, -50%)';
+        input.style.width = '85%';
+        input.style.zIndex = '5';
+        input.style.textAlign = 'center';
+        input.style.fontWeight = '700';
+
+        this._editing = true;
+        this.el.appendChild(input);
+        // Defer focus so iOS Safari accepts the keyboard; selecting
+        // all so the operator can just type the new value over.
+        setTimeout(() => { input.focus(); input.select(); }, 0);
+
+        const cleanup = (commit) => {
+            if (!this._editing) return;
+            this._editing = false;
+            if (commit) {
+                const v = parseFloat(input.value);
+                if (Number.isFinite(v)) {
+                    this.setValue(v);   // setValue snaps + clamps + fires onChange
+                }
+            }
+            try { input.remove(); } catch {}
+        };
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter')   { e.preventDefault(); cleanup(true); }
+            else if (e.key === 'Escape') { e.preventDefault(); cleanup(false); }
+        });
+        input.addEventListener('blur', () => cleanup(true));
+        // Stop drag-related pointer events from leaking back into the
+        // wheel while the field is open.
+        input.addEventListener('pointerdown', (e) => e.stopPropagation());
+        input.addEventListener('wheel',       (e) => e.stopPropagation());
     }
 }
 window.WheelPicker = WheelPicker;
