@@ -97,7 +97,10 @@ public class CalibrationService {
                 if (flatCache.TryGetValue(key, out var cached)) return cached;
                 var flat = LoadMaster(flatPath);
                 BaseImageData? cal = calibratorPath != null ? LoadMaster(calibratorPath) : null;
-                var (norm, mean) = NormalizeFlat(flat, cal);
+                // LSPP-1: delegated to CalibrationMath.NormalizeFlat
+                // (identical implementation, just hoisted to a pure
+                // static for per-frame reuse by LiveStackPreProcessor).
+                var (norm, mean) = CalibrationMath.NormalizeFlat(flat, cal);
                 flatCache[key] = (norm, mean);
                 return (norm, mean);
             }
@@ -175,20 +178,22 @@ public class CalibrationService {
         // FrameLibrary helpers return FrameRow (with .Path); we
         // discard the row beyond .Path here so the downstream
         // pipeline stays path-only.
-        string? darkPath = req.MasterDarkPath ?? FindNearestDark(masters.Darks, exposure, gain)?.Path;
-        string? flatPath = req.MasterFlatPath ?? FindMatchingFlat(masters.Flats, filter, gain)?.Path;
+        // LSPP-1: auto-match helpers moved to CalibrationMath; behavior
+        // unchanged. Per-frame consumers reuse the same picker logic.
+        string? darkPath = req.MasterDarkPath ?? CalibrationMath.FindNearestDark(masters.Darks, exposure, gain)?.Path;
+        string? flatPath = req.MasterFlatPath ?? CalibrationMath.FindMatchingFlat(masters.Flats, filter, gain)?.Path;
         // Bias only matters if we don't have a dark, darks already
         // include the bias signal. If user explicitly passes a bias
         // path we honour it as a flat-calibrator override.
         string? biasPath = req.MasterBiasPath
-            ?? (darkPath == null ? FindMatchingBias(masters.Biases, gain)?.Path : null);
+            ?? (darkPath == null ? CalibrationMath.FindMatchingBias(masters.Biases, gain)?.Path : null);
         // Flat needs a calibration frame to subtract before normalising:
         // prefer master_dark_flat (matched on flat's exposure+gain),
         // fall back to master_bias.
         string? flatCalibrator = null;
         if (flatPath != null) {
             var flatMeta = loadMaster(flatPath).MetaData;
-            string? darkFlatPath = FindNearestDark(masters.DarkFlats,
+            string? darkFlatPath = CalibrationMath.FindNearestDark(masters.DarkFlats,
                 flatMeta.Exposure.ExposureTime, flatMeta.Camera.Gain)?.Path;
             flatCalibrator = darkFlatPath ?? biasPath ?? req.MasterBiasPath;
         }
@@ -199,32 +204,17 @@ public class CalibrationService {
                 $"exposure={exposure}s, filter='{filter}').");
         }
 
-        // ---- Pixel math (in-place on a copy) ----------------------
-        var pixels = new ushort[light.Data.Length];
-        var src = light.Data;
+        // ---- Pixel math ------------------------------------------
+        // LSPP-1: pixel loop hoisted to CalibrationMath.CalibratePixels
+        // so per-frame consumers (LiveStackPreProcessor) reuse the
+        // exact same math without going through the batch job path.
+        // Dimension validation also lives there (throws on mismatch).
         ushort[]? darkPx = darkPath != null ? loadMaster(darkPath).Data : null;
         ushort[]? biasPx = (darkPath == null && biasPath != null) ? loadMaster(biasPath).Data : null;
         (double[] norm, double mean)? flat = flatPath != null
             ? getNormFlat(flatPath, flatCalibrator)
             : null;
-
-        if (darkPx != null && darkPx.Length != pixels.Length)
-            throw new InvalidOperationException("Master dark dimensions don't match light.");
-        if (biasPx != null && biasPx.Length != pixels.Length)
-            throw new InvalidOperationException("Master bias dimensions don't match light.");
-        if (flat.HasValue && flat.Value.norm.Length != pixels.Length)
-            throw new InvalidOperationException("Master flat dimensions don't match light.");
-
-        Parallel.For(0, pixels.Length, idx => {
-            double v = src[idx];
-            if (darkPx != null) v -= darkPx[idx];
-            else if (biasPx != null) v -= biasPx[idx];
-            if (flat.HasValue) {
-                var n = flat.Value.norm[idx];
-                if (n > 1e-6) v /= n;
-            }
-            pixels[idx] = (ushort)Math.Clamp(Math.Round(v), 0, 65535);
-        });
+        var pixels = CalibrationMath.CalibratePixels(light.Data, darkPx, biasPx, flat);
 
         // ---- Write output ----------------------------------------
         var filterFolder = string.IsNullOrEmpty(filter) ? "L" : filter;
@@ -280,58 +270,10 @@ public class CalibrationService {
         return index;
     }
 
-    // UNIF-3a: return the whole FrameRow (caller grabs .Path) instead
-    // of the int? id. The internal pipeline is path-driven now.
-    private static FrameRow? FindNearestDark(IReadOnlyList<FrameRow> darks, double exposure, int gain) {
-        if (darks.Count == 0) return null;
-        FrameRow? best = null;
-        double bestDelta = double.MaxValue;
-        foreach (var d in darks) {
-            if (d.Gain != gain) continue;
-            var delta = Math.Abs(d.ExposureSec - exposure);
-            if (delta < bestDelta) { bestDelta = delta; best = d; }
-        }
-        return best;
-    }
-
-    private static FrameRow? FindMatchingFlat(IReadOnlyList<FrameRow> flats, string filter, int gain) {
-        if (flats.Count == 0) return null;
-        return flats.FirstOrDefault(f =>
-            f.Gain == gain &&
-            string.Equals(f.Filter ?? "", filter ?? "", StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static FrameRow? FindMatchingBias(IReadOnlyList<FrameRow> biases, int gain) {
-        if (biases.Count == 0) return null;
-        return biases.FirstOrDefault(b => b.Gain == gain);
-    }
-
-    /// <summary>Build the normalised flat: subtract a bias/dark-flat
-    /// calibrator if available, divide by mean. Returns a per-pixel
-    /// double[] (precision matters for the division) plus the mean
-    /// for diagnostics.</summary>
-    private static (double[] norm, double mean) NormalizeFlat(BaseImageData flat, BaseImageData? cal) {
-        var n = flat.Data.Length;
-        var corrected = new double[n];
-        double sum = 0;
-        if (cal != null && cal.Data.Length == n) {
-            for (int i = 0; i < n; i++) {
-                var v = (double)flat.Data[i] - cal.Data[i];
-                if (v < 0) v = 0;
-                corrected[i] = v;
-                sum += v;
-            }
-        } else {
-            for (int i = 0; i < n; i++) {
-                corrected[i] = flat.Data[i];
-                sum += flat.Data[i];
-            }
-        }
-        var mean = sum / n;
-        if (mean < 1) mean = 1;   // pathological flat; avoid divide-by-zero
-        for (int i = 0; i < n; i++) corrected[i] /= mean;
-        return (corrected, mean);
-    }
+    // LSPP-1: FindNearestDark / FindMatchingFlat / FindMatchingBias /
+    // NormalizeFlat moved to CalibrationMath (pure static helpers).
+    // CalibrationService now delegates so per-frame consumers
+    // (LiveStackPreProcessor) and this batch path share one impl.
 
     private static string Sanitize(string s) {
         if (string.IsNullOrWhiteSpace(s)) return "Unknown";
