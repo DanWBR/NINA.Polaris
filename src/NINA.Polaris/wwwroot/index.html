@@ -1168,6 +1168,118 @@
                             </div>
                         </fieldset>
                     </details>
+
+                    <!-- LSPP-6: per-frame pre-processing panel. Same
+                         visual rhythm as the triggers details above so
+                         the operator's eye learns one pattern. Two
+                         fieldsets: Calibration (always available) and
+                         BGE (requires client-mode stacking + WASM).
+                         Counters live in liveStackStatus.preProc and
+                         tick over the WS payload at 1Hz. -->
+                    <details class="livestack-triggers"
+                             :open="liveStackPreProc.calibrationEnabled || liveStackPreProc.bgeEnabled">
+                        <summary>⚙ Per-frame pre-processing</summary>
+
+                        <fieldset class="livestack-triggers-block">
+                            <legend>Calibration (dark / flat / bias)</legend>
+                            <div class="livestack-triggers-row">
+                                <label>
+                                    <input type="checkbox"
+                                           x-model="liveStackPreProc.calibrationEnabled"
+                                           @change="saveLiveStackPreProc()">
+                                    Apply calibration to each frame before stacking
+                                </label>
+                            </div>
+                            <div class="livestack-triggers-row text-muted"
+                                 x-show="liveStackPreProc.calibrationEnabled"
+                                 style="font-size:11px; line-height:1.4;">
+                                Auto-matched masters (gain + exposure + filter):
+                                <br>
+                                Dark: <strong x-text="liveStackStatus?.preProc?.calibration?.masterDarkName || '—'"></strong>
+                                <br>
+                                Flat: <strong x-text="liveStackStatus?.preProc?.calibration?.masterFlatName || '—'"></strong>
+                                <br>
+                                Bias: <strong x-text="liveStackStatus?.preProc?.calibration?.masterBiasName || '—'"></strong>
+                            </div>
+                            <div class="livestack-triggers-row text-muted"
+                                 x-show="liveStackPreProc.calibrationEnabled
+                                          && (liveStackStatus?.preProc?.calibration?.framesCalibrated > 0
+                                              || liveStackStatus?.preProc?.calibration?.framesFallback > 0
+                                              || liveStackStatus?.preProc?.calibration?.framesNoMatch > 0)"
+                                 style="font-size:11px;">
+                                ✓ <strong x-text="liveStackStatus?.preProc?.calibration?.framesCalibrated || 0"></strong> calibrated ·
+                                ⚠ <strong x-text="liveStackStatus?.preProc?.calibration?.framesFallback || 0"></strong> fallback ·
+                                ⊘ <strong x-text="liveStackStatus?.preProc?.calibration?.framesNoMatch || 0"></strong> no match
+                            </div>
+                            <div class="livestack-triggers-row text-err"
+                                 x-show="liveStackStatus?.preProc?.calibration?.lastError">
+                                Last error: <span x-text="liveStackStatus?.preProc?.calibration?.lastError"></span>
+                            </div>
+                            <div class="livestack-triggers-row text-muted"
+                                 x-show="liveStackPreProc.calibrationEnabled
+                                          && !liveStackStatus?.preProc?.calibration?.masterDarkName
+                                          && !liveStackStatus?.preProc?.calibration?.masterFlatName
+                                          && !liveStackStatus?.preProc?.calibration?.masterBiasName
+                                          && liveStackStatus?.frameCount > 0"
+                                 style="font-size:11px;">
+                                No matching masters found in your FrameLibrary yet.
+                                Build masters in STUDIO first (Stack tab → Master Dark/Flat/Bias).
+                            </div>
+                        </fieldset>
+
+                        <fieldset class="livestack-triggers-block">
+                            <legend>Background extraction (BGE)</legend>
+                            <div class="livestack-triggers-row text-warn"
+                                 x-show="liveStackPreProc.bgeEnabled
+                                          && !liveStackStatus?.preProc?.bge?.supportedThisSession"
+                                 style="font-size:11px;">
+                                ⓘ BGE only runs in client-mode stacking
+                                (current stack mode: server-side). Switch the
+                                rig's "Compute mode" to client/auto to enable.
+                            </div>
+                            <div class="livestack-triggers-row">
+                                <label>
+                                    <input type="checkbox"
+                                           x-model="liveStackPreProc.bgeEnabled"
+                                           @change="saveLiveStackPreProc()">
+                                    Apply GraXpert BGE to each frame before stacking
+                                </label>
+                            </div>
+                            <div class="livestack-triggers-row"
+                                 x-show="liveStackPreProc.bgeEnabled"
+                                 style="font-size:11px;">
+                                Smoothing
+                                <input type="range" min="0" max="1" step="0.05"
+                                       x-model.number="liveStackPreProc.bgeSmoothing"
+                                       @change="saveLiveStackPreProc()"
+                                       style="width:120px; vertical-align:middle;">
+                                <span x-text="liveStackPreProc.bgeSmoothing?.toFixed(2)"></span>
+                            </div>
+                            <div class="livestack-triggers-row"
+                                 x-show="liveStackPreProc.bgeEnabled"
+                                 style="font-size:11px;">
+                                Correction
+                                <select x-model="liveStackPreProc.bgeCorrection"
+                                        @change="saveLiveStackPreProc()">
+                                    <option value="Subtraction">Subtraction</option>
+                                    <option value="Division">Division</option>
+                                </select>
+                            </div>
+                            <div class="livestack-triggers-row text-muted"
+                                 x-show="liveStackPreProc.bgeEnabled
+                                          && liveStackStatus?.preProc?.bge?.supportedThisSession
+                                          && (liveStackStatus?.preProc?.bge?.framesProcessed > 0
+                                              || liveStackStatus?.preProc?.bge?.framesFallback > 0)"
+                                 style="font-size:11px;">
+                                ✨ <strong x-text="liveStackStatus?.preProc?.bge?.framesProcessed || 0"></strong> processed ·
+                                ⚠ <strong x-text="liveStackStatus?.preProc?.bge?.framesFallback || 0"></strong> fallback
+                            </div>
+                            <div class="livestack-triggers-row text-err"
+                                 x-show="liveStackStatus?.preProc?.bge?.lastError">
+                                Last error: <span x-text="liveStackStatus?.preProc?.bge?.lastError"></span>
+                            </div>
+                        </fieldset>
+                    </details>
                     </div><!-- /.shutter-secondary -->
                 </div>
                 </div><!-- /.live-pane -->

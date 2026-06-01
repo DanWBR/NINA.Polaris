@@ -110,7 +110,23 @@ function ninaApp() {
             recenterDriftArcsec: 0,
             recenterToleranceArcsec: 30
         },
-        liveStackStatus: null,    // { isRunning, frameCount, ..., triggers: {...} }
+        // LSPP-3 + LSPP-6: per-frame pre-processing settings. Local
+        // copy of the EquipmentProfile.LiveStackPreProcessing state.
+        // Hydrated on first tab open from GET /api/livestack/
+        // preprocessing/settings; written back via debounced PUT
+        // when any field changes. Status counters live on
+        // liveStackStatus.preProc.* (broadcast via WS), this object
+        // holds only the persisted settings.
+        liveStackPreProc: {
+            calibrationEnabled: false,
+            masterDarkOverrideId: null,
+            masterFlatOverrideId: null,
+            masterBiasOverrideId: null,
+            bgeEnabled: false,
+            bgeSmoothing: 1.0,
+            bgeCorrection: 'Subtraction'
+        },
+        liveStackStatus: null,    // { isRunning, frameCount, ..., triggers: {...}, preProc: {...} }
 
         // Mount
         mount: {
@@ -2378,6 +2394,7 @@ function ninaApp() {
             // the persisted values on first open instead of showing
             // defaults that then flicker to the real values.
             this.loadLiveStackTriggers();
+            this.loadLiveStackPreProc();
             this.loadCameraDrivers();
             this.loadMountDrivers();
             this.loadFocuserDrivers();
@@ -12099,6 +12116,30 @@ function ninaApp() {
                 await this.apiPost('/api/livestack/triggers/refocus-now');
                 this.toast('Refocus fired', 'info');
             } catch (e) { this.toast('Refocus failed: ' + e.message, 'error'); }
+        },
+        // LSPP-6: hydrate the per-frame pre-processing settings from
+        // the active rig + debounced save. Mirrors the triggers
+        // pattern above one-for-one.
+        async loadLiveStackPreProc() {
+            try {
+                const r = await this.apiGet('/api/livestack/preprocessing/settings');
+                if (r) Object.assign(this.liveStackPreProc, r);
+            } catch (e) { /* first load may 404 before any save -- ignore */ }
+        },
+        _liveStackPreProcSaveTimer: null,
+        saveLiveStackPreProc() {
+            if (this._liveStackPreProcSaveTimer) clearTimeout(this._liveStackPreProcSaveTimer);
+            this._liveStackPreProcSaveTimer = setTimeout(async () => {
+                try {
+                    await this.apiPost('/api/livestack/preprocessing/settings', null, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.liveStackPreProc)
+                    });
+                } catch (e) {
+                    this.toast('Save pre-processing failed: ' + e.message, 'error');
+                }
+            }, 500);
         },
         async recenterNow() {
             try {
