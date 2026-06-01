@@ -384,6 +384,63 @@ public class IndiTelescope : ITelescope {
     /// whatever the driver actually advertises. The write is
     /// idempotent: if the right element is already lit nothing
     /// changes on the wire.</summary>
+    /// <summary>Live snapshot of the driver's TELESCOPE_SLEW_RATE
+    /// switch. Returned in the same order the driver advertised the
+    /// elements — INDI drivers typically order them slow-to-fast
+    /// (SLEW_GUIDE < SLEW_CENTERING < SLEW_FIND < SLEW_MAX), which is
+    /// what a left-to-right slider expects. Empty list when the
+    /// driver doesn't expose the property (some hard-code a single
+    /// rate); UI hides the slider in that case.</summary>
+    public IReadOnlyList<SlewRateStep> GetSlewRates() {
+        var rate = _client.GetProperty(DeviceName, "TELESCOPE_SLEW_RATE")
+            as Protocol.IndiSwitchProperty;
+        if (rate == null || rate.Values.Count == 0)
+            return Array.Empty<SlewRateStep>();
+        // Element labels would be ideal but our IndiSwitchProperty
+        // doesn't carry per-element labels yet (only the vector-level
+        // Label), so use the element name itself with a friendly
+        // SLEW_FOO → "Foo" fallback.
+        return rate.Values.Select(kv => new SlewRateStep(
+            Name: kv.Key,
+            Label: PrettifySlewRateName(kv.Key),
+            Active: kv.Value)).ToList();
+    }
+
+    private static string PrettifySlewRateName(string element) {
+        // "SLEW_FIND" → "Find", "SLEW_2X" → "2x", "SLEW_MAX" → "Max"
+        var trimmed = element.StartsWith("SLEW_", StringComparison.OrdinalIgnoreCase)
+            ? element.Substring(5) : element;
+        // Title-case (Find / Centering / Guide / Max) when alphabetic.
+        if (trimmed.All(c => char.IsLetter(c)))
+            return char.ToUpperInvariant(trimmed[0]) + trimmed.Substring(1).ToLowerInvariant();
+        // "2X" → "2x" reads better next to other steps in the slider tick label.
+        return trimmed.ToLowerInvariant();
+    }
+
+    /// <summary>Light up exactly one element of TELESCOPE_SLEW_RATE.
+    /// OneOfMany switch — write all elements explicitly (true for the
+    /// chosen one, false for everyone else) so drivers that don't
+    /// honour the OneOfMany rule strictly still see a consistent
+    /// state. Throws if the requested element doesn't exist on the
+    /// device snapshot so the UI surfaces a clear error instead of a
+    /// silent no-op (driver would drop the write — see LogIndiWrite
+    /// warning path).</summary>
+    public async Task SetSlewRateAsync(string elementName, CancellationToken ct = default) {
+        var rate = _client.GetProperty(DeviceName, "TELESCOPE_SLEW_RATE")
+            as Protocol.IndiSwitchProperty;
+        if (rate == null || rate.Values.Count == 0) {
+            throw new NotSupportedException(
+                $"Mount '{DeviceName}' does not expose TELESCOPE_SLEW_RATE — driver doesn't support rate selection.");
+        }
+        if (!rate.Values.ContainsKey(elementName)) {
+            throw new ArgumentException(
+                $"TELESCOPE_SLEW_RATE has no '{elementName}' element. Available: [{string.Join(", ", rate.Values.Keys)}]",
+                nameof(elementName));
+        }
+        var payload = rate.Values.Keys.ToDictionary(k => k, k => k == elementName);
+        await _client.SetSwitchAsync(DeviceName, "TELESCOPE_SLEW_RATE", payload, ct);
+    }
+
     private async Task EnsureSlewRateAsync(CancellationToken ct) {
         var rate = _client.GetProperty(DeviceName, "TELESCOPE_SLEW_RATE")
             as Protocol.IndiSwitchProperty;

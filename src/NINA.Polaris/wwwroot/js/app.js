@@ -12568,6 +12568,39 @@ function ninaApp() {
                            WS tick shows whether the mount stopped */ }
         },
 
+        // SLEWRATE: index of the currently-lit rate in mount.slewRates,
+        // or -1 when no driver-reported rate is active. Computed live
+        // off the WS payload, so an external INDI Control Panel write
+        // (operator nudges the slider in indi-web while we're idle)
+        // reflects within the next 1Hz tick. Bound to the slider
+        // `<input>` value via the setter below.
+        get mountSlewRateIndex() {
+            const rates = this.mount?.slewRates || [];
+            const idx = rates.findIndex(r => r.active);
+            return idx;   // -1 when none active (will be 0-anchored by UI)
+        },
+        async setMountSlewRate(idx) {
+            const rates = this.mount?.slewRates || [];
+            const i = Math.max(0, Math.min(rates.length - 1, parseInt(idx, 10)));
+            const target = rates[i];
+            if (!target) return;
+            // Optimistic local update so the slider thumb doesn't snap
+            // back while the WS roundtrip is in flight. Server payload
+            // overrides on next tick if the driver re-orders or our
+            // write loses to a concurrent Control-Panel write.
+            rates.forEach((r, j) => r.active = (j === i));
+            try {
+                await this.apiPost('/api/telescope/slew-rate', null, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ elementName: target.name })
+                });
+            } catch (e) {
+                this.toast('Slew rate change failed: '
+                    + this._mountErrorText(e), 'error');
+            }
+        },
+
         async mountStop() {
             try {
                 await this.apiPost('/api/telescope/abort');
@@ -18736,7 +18769,15 @@ function ninaApp() {
                     // (Park, Find Home, pier side). Fall back to current
                     // value when the payload doesn't carry it (e.g.
                     // alternative backend that hasn't been updated).
-                    capabilities: eq.telescope.capabilities || this.mount.capabilities
+                    capabilities: eq.telescope.capabilities || this.mount.capabilities,
+                    // SLEWRATE: discrete steps the driver advertises +
+                    // which is currently lit. Empty array when the
+                    // driver hard-codes a single rate -- the slider in
+                    // the mount panel / VIDEO sidebar hides in that
+                    // case. Order is driver-reported (slow-to-fast on
+                    // indilib mounts), which is what a left-to-right
+                    // slider expects.
+                    slewRates: eq.telescope.slewRates || []
                 });
                 // Same "disconnect-doesn't-stick" guard as the camera
                 // above, the EquipmentManager keeps Telescope!=null

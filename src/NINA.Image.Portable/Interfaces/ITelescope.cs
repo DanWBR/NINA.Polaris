@@ -137,7 +137,38 @@ public interface ITelescope {
     Task SetTrackingModeAsync(TrackingMode mode, CancellationToken ct = default) =>
         throw new NotSupportedException(
             "SetTrackingMode not supported by this mount driver");
+
+    /// <summary>Discover the slew-rate steps advertised by the driver.
+    /// INDI's <c>TELESCOPE_SLEW_RATE</c> is a OneOfMany switch whose
+    /// element names vary by mount (LX200 spec: SLEW_GUIDE / SLEW_CENTERING
+    /// / SLEW_FIND / SLEW_MAX; ZWO AM3 + others may add SLEW_2X / SLEW_4X
+    /// / etc). Default impl returns empty so the UI hides the slider on
+    /// backends without rate selection (e.g. ASCOM mounts where rate
+    /// is set via a different API). Order in the returned list is the
+    /// order the driver reported — typically slow-to-fast, which matches
+    /// what a left-to-right slider expects.</summary>
+    IReadOnlyList<SlewRateStep> GetSlewRates() => Array.Empty<SlewRateStep>();
+
+    /// <summary>Set the slew-rate switch to the requested element.
+    /// The <paramref name="elementName"/> must match one of the names
+    /// returned by <see cref="GetSlewRates"/> exactly (case-sensitive
+    /// per INDI spec; ZWO/PlayerOne drivers use upper-snake-case).
+    /// Throws on a mismatch so the UI surfaces a clear error if the
+    /// dropdown ever drifts out of sync with the live property.</summary>
+    Task SetSlewRateAsync(string elementName, CancellationToken ct = default) =>
+        throw new NotSupportedException(
+            "SetSlewRate not supported by this mount driver");
 }
+
+/// <summary>One discrete step of a mount's <c>TELESCOPE_SLEW_RATE</c>
+/// OneOfMany switch. <see cref="Name"/> is the canonical element name
+/// the driver advertises (e.g. <c>SLEW_FIND</c>) and is what the
+/// <see cref="ITelescope.SetSlewRateAsync"/> caller passes back.
+/// <see cref="Label"/> is the human-readable label the driver attached
+/// (sometimes localised, e.g. "Find") — preferred for UI display when
+/// non-empty, falls back to Name otherwise. <see cref="Active"/> is
+/// the live state read from the property snapshot at call time.</summary>
+public record SlewRateStep(string Name, string Label, bool Active);
 
 /// <summary>Tracking rate models defined by the INDI
 /// TELESCOPE_TRACK_MODE standard property.</summary>

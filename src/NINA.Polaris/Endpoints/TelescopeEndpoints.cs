@@ -301,6 +301,38 @@ public static class TelescopeEndpoints {
             }
         });
 
+        // SLEWRATE-1: list the driver's TELESCOPE_SLEW_RATE steps for
+        // the slider UI. Returns rates ordered the way the driver
+        // advertised them (slow-to-fast for indilib mounts) so a
+        // left-to-right slider maps naturally. Empty list when the
+        // driver hard-codes a single rate.
+        group.MapGet("/slew-rates", (EquipmentManager equip) => {
+            if (equip.Telescope == null)
+                return Results.BadRequest(new { error = "No telescope selected" });
+            var rates = equip.Telescope.GetSlewRates();
+            return Results.Ok(new { rates });
+        });
+
+        // SLEWRATE-2: pick one of the advertised rates. ElementName is
+        // case-sensitive per INDI spec (SLEW_FIND, not slew_find) — UI
+        // sends back the exact Name string it got from /slew-rates.
+        group.MapPut("/slew-rate", async (EquipmentManager equip, SlewRateRequest req) => {
+            if (equip.Telescope == null)
+                return Results.BadRequest(new { error = "No telescope selected" });
+            if (string.IsNullOrWhiteSpace(req.ElementName))
+                return Results.BadRequest(new { error = "elementName required" });
+            try {
+                await equip.Telescope.SetSlewRateAsync(req.ElementName);
+                return Results.Ok(new { elementName = req.ElementName });
+            } catch (NotSupportedException ex) {
+                return Results.Json(new { error = ex.Message }, statusCode: 501);
+            } catch (ArgumentException ex) {
+                return Results.Json(new { error = ex.Message }, statusCode: 400);
+            } catch (Exception ex) {
+                return Results.Json(new { error = ex.Message }, statusCode: 500);
+            }
+        });
+
         group.MapPost("/select/{deviceName}", (EquipmentManager equip, string deviceName, string? driver) => {
             // ?driver=indi (default) | synscan-wifi | nexstar-wifi |
             // lx200-tcp | alpaca. Legacy clients omit it and get INDI.
@@ -421,6 +453,11 @@ public static class TelescopeEndpoints {
 
     public record SlewRequest(double Ra, double Dec);
     public record TrackingRequest(bool Enabled);
+    /// <summary>PUT /api/telescope/slew-rate body. ElementName matches
+    /// one of the Name strings returned by GET /api/telescope/slew-rates
+    /// — typically <c>SLEW_GUIDE</c> / <c>SLEW_CENTERING</c> /
+    /// <c>SLEW_FIND</c> / <c>SLEW_MAX</c> for LX200-class mounts.</summary>
+    public record SlewRateRequest(string ElementName);
     /// <summary>Optional override for POST /sync-location. All three
     /// fields are nullable so a null body OR an empty {} OR a partial
     /// {Elevation: 1200} body all work, falling back to the active

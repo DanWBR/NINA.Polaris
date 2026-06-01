@@ -2758,6 +2758,40 @@
                                     @pointercancel="mountMoveStop()">S</button>
                         </div>
 
+                        <!-- SLEWRATE: same discrete-tick slider the mount
+                             float panel uses. For planetary recentering
+                             the operator typically drops to SLEW_GUIDE
+                             or SLEW_CENTERING (the planet drifts too
+                             fast across the ROI at SLEW_FIND/MAX) so
+                             this is the daily-driver control while
+                             recording. Hidden when no driver-reported
+                             rates exist (single-rate ASCOM mounts). -->
+                        <div class="mount-slew-rate"
+                             x-show="mount.connected && (mount.slewRates || []).length > 1"
+                             style="margin-bottom:8px; padding:4px 6px">
+                            <div style="display:flex; justify-content:space-between;
+                                        align-items:center; font-size:10px;
+                                        text-transform:uppercase;
+                                        color:var(--text-muted)">
+                                <span>Slew rate</span>
+                                <strong style="color:var(--text-primary)"
+                                        x-text="(mount.slewRates || [])
+                                            .find(r => r.active)?.label || '—'"></strong>
+                            </div>
+                            <input type="range" min="0"
+                                   :max="(mount.slewRates || []).length - 1"
+                                   step="1"
+                                   :value="Math.max(0, mountSlewRateIndex)"
+                                   @input="setMountSlewRate($event.target.value)"
+                                   list="video-slew-rate-ticks"
+                                   style="width:100%">
+                            <datalist id="video-slew-rate-ticks">
+                                <template x-for="(r, i) in (mount.slewRates || [])" :key="r.name">
+                                    <option :value="i" :label="r.label"></option>
+                                </template>
+                            </datalist>
+                        </div>
+
                         <!-- SHUT-3: Polaris Shutter for VIDEO Record.
                              Tap = toggle (start when idle, stop when
                              recording). Long-press = same toggle (no
@@ -5511,6 +5545,42 @@
                             <button class="dpad-btn dpad-stop"
                                     style="grid-area: c;"
                                     @click="mountStop()">STOP</button>
+                        </div>
+
+                        <!-- SLEWRATE: discrete slew-rate slider. Tick
+                             count = number of TELESCOPE_SLEW_RATE
+                             elements the driver advertises (typically
+                             4 for LX200-class: Guide / Centering / Find
+                             / Max). Hidden when the driver hard-codes
+                             a single rate (slewRates.length < 2). The
+                             label below the slider shows the currently
+                             lit element so the operator can confirm
+                             which step they're on without counting
+                             ticks. -->
+                        <div class="mount-slew-rate"
+                             x-show="(mount.slewRates || []).length > 1"
+                             style="margin-top:6px; padding:4px 6px">
+                            <div style="display:flex; justify-content:space-between;
+                                        align-items:center; font-size:10px;
+                                        text-transform:uppercase;
+                                        color:var(--text-muted)">
+                                <span>Slew rate</span>
+                                <strong style="color:var(--text-primary)"
+                                        x-text="(mount.slewRates || [])
+                                            .find(r => r.active)?.label || '—'"></strong>
+                            </div>
+                            <input type="range" min="0"
+                                   :max="(mount.slewRates || []).length - 1"
+                                   step="1"
+                                   :value="Math.max(0, mountSlewRateIndex)"
+                                   @input="setMountSlewRate($event.target.value)"
+                                   list="mount-slew-rate-ticks"
+                                   style="width:100%">
+                            <datalist id="mount-slew-rate-ticks">
+                                <template x-for="(r, i) in (mount.slewRates || [])" :key="r.name">
+                                    <option :value="i" :label="r.label"></option>
+                                </template>
+                            </datalist>
                         </div>
                         <div class="mount-info mount-info-sm">
                             <div class="info-row"><span>RA:</span><strong x-text="formatRA(mount.ra)"></strong></div>

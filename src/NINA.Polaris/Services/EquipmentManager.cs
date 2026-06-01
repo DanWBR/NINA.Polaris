@@ -511,6 +511,11 @@ public class EquipmentManager : IDisposable {
             // tick so a hot-plug rig switch flips the buttons without
             // a UI reload.
             var caps = Telescope.Capabilities;
+            // Slew-rate snapshot: empty when the driver hard-codes a
+            // single rate (ASCOM mounts, some Alpaca). The slider in
+            // the mount panel + VIDEO sidebar shows/hides based on
+            // this being non-empty.
+            var slewRates = Telescope.GetSlewRates();
             status["telescope"] = new {
                 name = Telescope.DeviceName,
                 connected = Telescope.IsConnected,
@@ -522,6 +527,9 @@ public class EquipmentManager : IDisposable {
                 slewing = Telescope.IsSlewing,
                 parked = Telescope.IsParked,
                 pierSide = Telescope.SideOfPier.ToString(),
+                slewRates = slewRates.Select(r => new {
+                    name = r.Name, label = r.Label, active = r.Active
+                }).ToArray(),
                 capabilities = new {
                     park = caps.SupportsPark,
                     trackingToggle = caps.SupportsTrackingToggle,
