@@ -2297,11 +2297,10 @@
                          (.shutter-inputs / .shutter-wrap / .shutter-secondary). -->
                     <div class="shutter-inputs">
                     <div class="control-row">
-                        <label>Exp
+                        <label>Exposure (s)
                             <input type="number" x-model.number="preview.exposure"
                                    list="exposure-presets" step="any" min="0" class="input-sm"
-                                   :disabled="preview.busy"> s
-                        </label>
+                                   :disabled="preview.busy"></label>
                         <label>Gain
                             <input type="number" x-model.number="preview.gain"
                                    step="10" min="0" class="input-sm"
