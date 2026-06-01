@@ -4767,6 +4767,13 @@ label select.input-sm {
     cursor: pointer;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     transition: opacity 0.3s, transform 0.3s;
+    /* Toasts sit over the live image preview most of the time and the
+       previous 0.15 alpha made them hard to read against bright stars
+       or galaxy cores. Bump the colour tints up to 0.92 and layer them
+       over the app-tertiary background so the tint stays subtle but
+       the text is fully opaque against a solid backdrop. */
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
 }
 
 .toast-info {
@@ -4776,19 +4783,25 @@ label select.input-sm {
 }
 
 .toast-ok {
-    background: rgba(76, 175, 80, 0.15);
+    background:
+        linear-gradient(rgba(76, 175, 80, 0.30), rgba(76, 175, 80, 0.30)),
+        var(--bg-tertiary);
     border-left: 3px solid var(--success);
     color: var(--success);
 }
 
 .toast-warn {
-    background: rgba(255, 152, 0, 0.15);
+    background:
+        linear-gradient(rgba(255, 152, 0, 0.30), rgba(255, 152, 0, 0.30)),
+        var(--bg-tertiary);
     border-left: 3px solid var(--warning);
     color: var(--warning);
 }
 
 .toast-error {
-    background: rgba(244, 67, 54, 0.15);
+    background:
+        linear-gradient(rgba(244, 67, 54, 0.30), rgba(244, 67, 54, 0.30)),
+        var(--bg-tertiary);
     border-left: 3px solid var(--danger);
     color: var(--danger);
 }
