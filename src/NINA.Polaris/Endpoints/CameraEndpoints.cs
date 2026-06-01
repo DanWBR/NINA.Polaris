@@ -106,7 +106,17 @@ public static class CameraEndpoints {
                 // the real numbers.
                 if (stats.StarCount == 0 && stats.HFR == 0) {
                     try {
-                        var detector = new NINA.Image.ImageAnalysis.StarDetector();
+                        // FIELD2-1: match the AutoFocusService detector
+                        // tune so the manual focus snap and live
+                        // tracking case agree on whether a heavily
+                        // defocused field has stars. The same operator
+                        // who's manually focusing will iterate IN/OUT
+                        // past best focus; if the detector rejects
+                        // donuts the HFR readout drops to 0 mid-sweep
+                        // and they can't tell which side is closer.
+                        var detector = new NINA.Image.ImageAnalysis.StarDetector {
+                            MaxStarSize = 2000, MaxHfr = 100
+                        };
                         var detected = detector.Detect(
                             imageData.Data,
                             imageData.Properties.Width,

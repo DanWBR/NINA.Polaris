@@ -131,8 +131,16 @@ public class AutoFocusService {
                     i + 1, positions.Count, actualPos, point.StarCount, point.HFR);
             }
 
-            // Fit parabola only over points with valid HFR (star count > 0)
-            var validPoints = Progress.Points.Where(p => p.StarCount > 0 && p.HFR > 0).ToList();
+            // FIELD2-1: fit parabola only over points that cleared
+            // the operator's min-stars threshold. The earlier filter
+            // `StarCount > 0 && HFR > 0` accepted "I saw 1 noise blob"
+            // points whose HFR was a random small value that yanked
+            // the parabola fit sideways. MeasureHFR sentinels invalid
+            // samples as HFR=0; the `>0` check survives both that and
+            // the rare degenerate-flat-frame case.
+            var validPoints = Progress.Points
+                .Where(p => p.StarCount >= request.MinStars && p.HFR > 0)
+                .ToList();
 
             if (validPoints.Count < 3) {
                 throw new InvalidOperationException(
@@ -251,11 +259,30 @@ public class AutoFocusService {
     }
 
     private (double medianHfr, int starCount) MeasureHFR(IImageData image, int minStars) {
-        var detector = new StarDetector();
+        // FIELD2-1: tune the detector for autofocus, NOT the live
+        // tracking case the defaults target. A heavily defocused star
+        // is a donut that the live-default 200-pixel MaxStarSize ceiling
+        // (and the matching HFR<50 sanity gate) reject entirely. The
+        // result: stars.Count = 0 at the sweep extremes -> the V-curve
+        // gets zero / NaN points at the ends instead of forming a real
+        // V. Loosen both knobs so the sweep can still recognise a
+        // donut as a "star" (we don't care about precise photometry
+        // here, only the HFR magnitude that drives the parabola fit).
+        var detector = new StarDetector {
+            MaxStarSize = 2000,    // donut on 478 mm + ASI224 sensor ~ 50 px diameter ≈ 2000 px area
+            MaxHfr      = 100      // far-out-of-focus HFR can easily exceed the live default of 50
+        };
         var stars = detector.Detect(image.Data, image.Properties.Width, image.Properties.Height);
 
         if (stars.Count < minStars) {
             _logger.LogDebug("Only {Count} stars detected (min={Min}), HFR unreliable", stars.Count, minStars);
+            // FIELD2-1: return 0 (not NaN) because System.Text.Json
+            // rejects NaN/Infinity by default and the V-curve points
+            // are serialized straight onto the WS status payload --
+            // a NaN here would 500 the broadcast. The downstream
+            // filters (RunAsync below + the client's V-curve chart
+            // helper) both treat HFR == 0 OR StarCount < minStars
+            // as "invalid sample" and skip it cleanly.
             return (0, stars.Count);
         }
 

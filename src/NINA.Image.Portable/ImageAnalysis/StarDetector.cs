@@ -6,6 +6,17 @@ public class StarDetector {
     public double SigmaThreshold { get; set; } = 5.0;
     public int MaxStars { get; set; } = 500;
     public int BorderExclusion { get; set; } = 20;
+    /// <summary>FIELD2-1: cap on accepted HFR. Defaults to 50 (live-
+    /// tracking case where an in-focus star with HFR &gt; 50 px is
+    /// noise). Autofocus over-rides this to ~100 so heavily
+    /// defocused stars at the sweep extremes still get measured;
+    /// without a high cap the V-curve gets zero / NaN floors at the
+    /// ends and the parabola fit becomes shallow + unreliable.</summary>
+    public double MaxHfr { get; set; } = 50;
+    /// <summary>Floor on accepted HFR. Single-pixel hot pixels and
+    /// cosmic ray hits often produce HFR &lt; 0.5; rejecting them is
+    /// the original guard. Exposed for symmetry with MaxHfr.</summary>
+    public double MinHfr { get; set; } = 0.5;
 
     public List<DetectedStar> Detect(ushort[] data, int width, int height) {
         var stats = ComputeStats(data);
@@ -36,7 +47,7 @@ public class StarDetector {
                 if (pixels.Count < MinStarSize || pixels.Count > MaxStarSize) continue;
 
                 var star = ComputeStarProperties(data, width, pixels);
-                if (star.HFR > 0.5 && star.HFR < 50)
+                if (star.HFR > MinHfr && star.HFR < MaxHfr)
                     stars.Add(star);
             }
         }

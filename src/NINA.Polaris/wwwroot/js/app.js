@@ -708,6 +708,12 @@ function ninaApp() {
             lastError: null
         },
 
+        // FIELD2-3: browser fullscreen state. The sidebar fullscreen
+        // button flips between Enter / Exit icons based on this.
+        // Kept in sync by the fullscreenchange listeners installed
+        // in init().
+        isFullscreen: false,
+
         // KC-1: Keep Centered (mount) control loop state. Top-level
         // because the server broadcasts it as a sibling of cameraStream,
         // not nested under mount.* (which is rebuilt every tick from
@@ -2222,6 +2228,24 @@ function ninaApp() {
                     this.dismissedChips.add('uv-past');
                 }
             } catch (e) { /* private mode; ignore */ }
+
+            // FIELD2-3: track browser fullscreen state so the sidebar
+            // button can flip between Enter / Exit icons. Listen to
+            // the standard event + the WebKit/Moz prefixed ones so
+            // older mobile browsers and the system-F11 path also
+            // update the UI. fullscreenchange fires on EVERY entry
+            // and exit including ESC-key exits.
+            const updateFs = () => {
+                this.isFullscreen = !!(
+                    document.fullscreenElement
+                    || document.webkitFullscreenElement
+                    || document.mozFullScreenElement
+                );
+            };
+            document.addEventListener('fullscreenchange', updateFs);
+            document.addEventListener('webkitfullscreenchange', updateFs);
+            document.addEventListener('mozfullscreenchange', updateFs);
+            updateFs();
             // DBGLOG-6: window error + unhandledrejection capture.
             // Installed once per app boot. apiFetch + toast wrappers
             // are inlined into those methods themselves (cleaner than
@@ -4278,6 +4302,36 @@ function ninaApp() {
             this.toasts = this.toasts.filter(t => t.id !== id);
         },
 
+        // FIELD2-3: Fullscreen API. Toggles between fullscreen
+        // (hide browser chrome) and windowed. Uses the standard +
+        // WebKit-prefixed methods so it works on macOS Safari / iOS
+        // (where the spec method is missing). Must be called from
+        // a user gesture event handler -- the sidebar button click
+        // qualifies. Any error from requestFullscreen (rare: feature
+        // policy blocked, browser refuses) surfaces as a toast so
+        // the operator knows it didn't work rather than wondering
+        // why the chrome is still there.
+        async toggleFullscreen() {
+            try {
+                const fsEl = document.fullscreenElement
+                    || document.webkitFullscreenElement
+                    || document.mozFullScreenElement;
+                if (fsEl) {
+                    if (document.exitFullscreen) await document.exitFullscreen();
+                    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                    else if (document.mozCancelFullScreen) document.mozCancelFullScreen();
+                } else {
+                    const el = document.documentElement;
+                    if (el.requestFullscreen) await el.requestFullscreen();
+                    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+                    else if (el.mozRequestFullScreen) el.mozRequestFullScreen();
+                    else throw new Error('Fullscreen API not supported in this browser');
+                }
+            } catch (e) {
+                this.toast('Fullscreen toggle failed: ' + (e?.message || e), 'error');
+            }
+        },
+
         // FIELD-6: activity-bar chip dismissal. Session-only Set so
         // the operator can suppress a chip after acknowledging it.
         // The dismissed id only stays out of activityChips() while
@@ -5773,6 +5827,12 @@ function ninaApp() {
             this._loggedFanout = true;
             this._fanoutCounter = this._fanoutCounter || 0;
 
+            // FIELD2-2: cache the source per target id so a tab
+            // switch into a previously-hidden canvas can re-blit
+            // the last frame instead of staring at empty. The
+            // fan-out below records the source in this._lastFrameSrc
+            // -- _replayCachedFrame(id) reads it back.
+            this._lastFrameSrc = this._lastFrameSrc || {};
             for (const id of targets) {
                 if (skipLive && id === 'liveCanvas') {
                     if (report) report.push(id + '=src');
@@ -5784,6 +5844,13 @@ function ninaApp() {
                 if (!container) { if (report) report.push(id + '=noparent'); continue; }
                 const cw = container.clientWidth;
                 const ch = container.clientHeight;
+                // Always cache the latest source -- even when the
+                // canvas is hidden right now -- so that a tab switch
+                // into that panel can replay it. The cached source
+                // is an ImageBitmap-like (HTMLCanvasElement or
+                // OffscreenCanvas already produced upstream) so it
+                // stays valid across paints.
+                this._lastFrameSrc[id] = { src, srcW, srcH };
                 if (cw <= 0 || ch <= 0) {
                     if (report) report.push(id + '=hidden(' + cw + 'x' + ch + ')');
                     continue;
@@ -10396,7 +10463,15 @@ function ninaApp() {
             }));
             if (!c) return;
             const pts = this.autoFocus.points || [];
-            c.data.datasets[0].data = pts.map(p => ({ x: p.position, y: p.hfr }));
+            // FIELD2-1: filter out NaN / zero HFR samples (the
+            // heavy-defocus extremes of the sweep) so the chart
+            // shows a real V instead of a V with zero floors at
+            // the ends. The server's parabola fit already excludes
+            // these points; this brings the chart visual into
+            // agreement with the math.
+            c.data.datasets[0].data = pts
+                .filter(p => Number.isFinite(p.hfr) && p.hfr > 0)
+                .map(p => ({ x: p.position, y: p.hfr }));
             // Generate fitted parabola curve if we have a best position
             if (this.autoFocus.bestPosition && pts.length >= 3) {
                 const bestX = this.autoFocus.bestPosition;
@@ -13303,8 +13378,46 @@ function ninaApp() {
         // mount time and the bars look blank on first activation).
         manualFocusOnTabSwitch() {
             if (this.focusTab === 'assist') {
-                this.$nextTick(() => this._renderManualFocusChart());
+                this.$nextTick(() => {
+                    this._renderManualFocusChart();
+                    // FIELD2-2: re-blit the last cached focus frame.
+                    // Without this, a frame that arrived while the
+                    // user was on the Auto V-curve sub-tab never
+                    // shows up after they switch to Manual Assist:
+                    // the fan-out skipped the manualFocusCanvas
+                    // because its container had zero dimensions
+                    // (display:none from x-show='vcurve'). With the
+                    // cache, the latest source still gets drawn the
+                    // moment the canvas becomes visible.
+                    this._replayCachedFrame('manualFocusCanvas');
+                });
+            } else if (this.focusTab === 'vcurve') {
+                this.$nextTick(() => this._replayCachedFrame('focusCanvas'));
             }
+        },
+
+        // FIELD2-2: replay the cached source into a canvas that
+        // just became visible. Used by tab-switch handlers that
+        // need a frame on the canvas even when no new frame is
+        // about to arrive. Cheap no-op when no cached source exists.
+        _replayCachedFrame(canvasId) {
+            const cached = this._lastFrameSrc && this._lastFrameSrc[canvasId];
+            if (!cached || !cached.src) return;
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            const container = canvas.parentElement;
+            if (!container) return;
+            const cw = container.clientWidth, ch = container.clientHeight;
+            if (cw <= 0 || ch <= 0) return;
+            const scale = Math.min(cw / cached.srcW, ch / cached.srcH, 1);
+            canvas.width  = Math.round(cached.srcW * scale);
+            canvas.height = Math.round(cached.srcH * scale);
+            try {
+                const ctx = canvas.getContext('2d');
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                ctx.drawImage(cached.src, 0, 0, canvas.width, canvas.height);
+            } catch (e) { /* defensive: lost source / GC'd ImageBitmap */ }
         },
 
         // Loop start / stop. The loop is purely client-driven: every
@@ -14124,7 +14237,15 @@ function ninaApp() {
         get afChartHfrMax() {
             const pts = this.autoFocus.points || [];
             let max = 1;
-            for (const p of pts) { if (p.hfr > max) max = p.hfr; }
+            // FIELD2-1: ignore NaN / 0 HFR samples so the y-axis
+            // auto-scale isn't pulled to ~1 just because the sweep
+            // extremes returned no stars (NaN < 1 is false but a
+            // mixed dataset with one good HFR ≈ 8 + several NaNs
+            // used to scale to 8*1.15 fine; this just guards the
+            // future case where Number.isFinite catches NaN/-Inf).
+            for (const p of pts) {
+                if (Number.isFinite(p.hfr) && p.hfr > max) max = p.hfr;
+            }
             return max * 1.15;
         },
         get afChartHasFit() {
