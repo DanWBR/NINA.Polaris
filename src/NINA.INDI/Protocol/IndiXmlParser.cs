@@ -232,6 +232,12 @@ public class IndiXmlParser {
         };
         if (double.TryParse(reader.GetAttribute("timeout"), out double timeout))
             prop.Timeout = timeout;
+        // INDI servers can attach a free-form message="..." on any
+        // set*Vector. Most useful when state=Alert (driver explains why
+        // the operation was rejected). Always capture it so the ack-
+        // based write helpers can surface it instead of swallowing.
+        var message = reader.GetAttribute("message");
+        if (!string.IsNullOrEmpty(message)) prop.Message = message;
     }
 
     private static IndiPropertyState ParseState(string state) => state switch {

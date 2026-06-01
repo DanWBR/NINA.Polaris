@@ -96,8 +96,25 @@ public class IndiFilterWheel : NINA.Image.Interfaces.IFilterWheel {
     }
 
     public async Task SetPositionAsync(int position, CancellationToken ct = default) {
-        await _client.SetNumberAsync(DeviceName, "FILTER_SLOT",
-            new Dictionary<string, double> { ["FILTER_SLOT_VALUE"] = position }, ct);
+        // INDIROB-1: ack-based write so a rejected filter change
+        // (slot out of range, wheel uncalibrated, motor stuck) surfaces
+        // as an exception with the driver's message instead of silently
+        // failing. Filter wheels are slow (1-3s per change) so the
+        // Alert path matters -- a fire-and-forget that hits an Alert
+        // would let the rest of the sequence run with the wrong filter.
+        var ack = await _client.SetNumberAsyncAck(DeviceName, "FILTER_SLOT",
+            new Dictionary<string, double> { ["FILTER_SLOT_VALUE"] = position }, ct: ct);
+        if (ack.Rejected) {
+            var detail = string.IsNullOrEmpty(ack.AlertMessage)
+                ? "(no message from driver)"
+                : ack.AlertMessage;
+            throw new InvalidOperationException(
+                $"Filter wheel '{DeviceName}' rejected slot change to {position}: {detail}");
+        }
+        // TimedOut = silent driver. Don't throw here because some
+        // mechanical wheels legitimately take longer than the 5s
+        // default ack window to acknowledge (servo windup); the
+        // upstream caller polls Position separately for completion.
     }
 
     public async Task SetFilterByNameAsync(string filterName, CancellationToken ct = default) {

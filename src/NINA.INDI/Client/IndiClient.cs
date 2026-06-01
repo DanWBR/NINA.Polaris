@@ -272,6 +272,108 @@ public class IndiClient : IDisposable {
     }
 
     // ====================================================================
+    // Ack-based property writes (INDIROB-1, ported from NINA PINS
+    // pattern at NINA.INDI/Devices/INDIDevice.cs:203-262 in that fork).
+    //
+    // INDI is fire-and-forget — the server never replies to a write
+    // with a status code. Instead it echoes back a set*Vector whose
+    // `state` attribute tells the client how the driver reacted:
+    //
+    //   state=Busy   driver accepted, operation in progress
+    //   state=Ok     driver acted instantly
+    //   state=Alert  driver rejected (message="..." explains why)
+    //
+    // The plain SetNumberAsync / SetSwitchAsync wrappers above return
+    // as soon as the bytes are on the wire — fine for "stream to disk"
+    // style writes but disastrous for slew / move / sync flows because
+    // the caller has no way to know whether the driver even saw the
+    // command. Worse: IsSlewing (which reads `prop.State == Busy`) can
+    // be polled BEFORE the driver echoes anything back, returning
+    // false (last Ok state) and making the slew appear instant.
+    //
+    // The *Ack variants below subscribe to PropertyChanged for one
+    // shot before sending the write, then wait for the matching
+    // device+property to come back with Busy/Ok (acknowledged) or
+    // Alert (rejected). Timeout defaults to 5s — INDI drivers typically
+    // ack in <100ms, so 5s is comfortable headroom for slow USB-serial
+    // links or congested networks without making the user wait forever
+    // when the driver is wedged.
+    // ====================================================================
+
+    public TimeSpan DefaultAckTimeout { get; set; } = TimeSpan.FromSeconds(5);
+
+    public Task<IndiAckResult> SetNumberAsyncAck(string device, string property,
+        Dictionary<string, double> values, TimeSpan? timeout = null, CancellationToken ct = default)
+        => SendAndAwaitAckAsync(device, property,
+            send: () => SetNumberAsync(device, property, values, ct),
+            timeout: timeout ?? DefaultAckTimeout, ct: ct);
+
+    public Task<IndiAckResult> SetSwitchAsyncAck(string device, string property,
+        Dictionary<string, bool> values, TimeSpan? timeout = null, CancellationToken ct = default)
+        => SendAndAwaitAckAsync(device, property,
+            send: () => SetSwitchAsync(device, property, values, ct),
+            timeout: timeout ?? DefaultAckTimeout, ct: ct);
+
+    public Task<IndiAckResult> SetTextAsyncAck(string device, string property,
+        Dictionary<string, string> values, TimeSpan? timeout = null, CancellationToken ct = default)
+        => SendAndAwaitAckAsync(device, property,
+            send: () => SetTextAsync(device, property, values, ct),
+            timeout: timeout ?? DefaultAckTimeout, ct: ct);
+
+    /// <summary>Subscribe to PropertyChanged for one matching update,
+    /// fire the write, then wait. Ack semantics:
+    ///   first Busy or Ok arriving with matching device+property → Acknowledged
+    ///   first Alert arriving with matching device+property      → Rejected
+    ///   no matching update within timeout                       → TimedOut
+    /// Multiple concurrent ack waits on the same property are allowed;
+    /// each gets a private TaskCompletionSource. We DON'T enforce that
+    /// the property must already exist in the device snapshot — some
+    /// def*Vector / set*Vector cycles arrive interleaved during a fresh
+    /// driver load, and the property is only added to Devices once the
+    /// first def*Vector is parsed.
+    ///
+    /// Internal (not private) so unit tests can drive it with a
+    /// no-op send and fire PropertyChanged manually — exercises the
+    /// ack logic without needing a real INDI server. Production
+    /// callers go through the typed Set*AsyncAck wrappers above.</summary>
+    internal async Task<IndiAckResult> SendAndAwaitAckAsync(string device, string property,
+        Func<Task> send, TimeSpan timeout, CancellationToken ct) {
+        var tcs = new TaskCompletionSource<IndiAckResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        void OnPropChanged(string evDevice, IndiProperty evProp) {
+            if (!string.Equals(evDevice, device, StringComparison.Ordinal)) return;
+            if (!string.Equals(evProp.Name, property, StringComparison.Ordinal)) return;
+            switch (evProp.State) {
+                case IndiPropertyState.Busy:
+                case IndiPropertyState.Ok:
+                    tcs.TrySetResult(new IndiAckResult(
+                        Acknowledged: true, Rejected: false, TimedOut: false, AlertMessage: null));
+                    break;
+                case IndiPropertyState.Alert:
+                    tcs.TrySetResult(new IndiAckResult(
+                        Acknowledged: false, Rejected: true, TimedOut: false,
+                        AlertMessage: evProp.Message));
+                    break;
+                // Idle = property re-defined / cleared; not an ack signal.
+            }
+        }
+
+        PropertyChanged += OnPropChanged;
+        try {
+            await send();
+
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(timeout);
+            using var _ = timeoutCts.Token.Register(() => tcs.TrySetResult(new IndiAckResult(
+                Acknowledged: false, Rejected: false, TimedOut: true, AlertMessage: null)));
+
+            return await tcs.Task.ConfigureAwait(false);
+        } finally {
+            PropertyChanged -= OnPropChanged;
+        }
+    }
+
+    // ====================================================================
     // CONFIG_PROCESS — INDI's standard "save / load / default" mechanism.
     // Every well-behaved INDI driver advertises a CONFIG_PROCESS switch
     // vector with elements CONFIG_LOAD, CONFIG_SAVE, CONFIG_DEFAULT (and
@@ -432,6 +534,10 @@ public class IndiClient : IDisposable {
             MergeProperty(existing, prop);
             existing.State = prop.State;
             existing.Timestamp = prop.Timestamp;
+            // Propagate the new update's message verbatim — including
+            // null, so a recovered-from-Alert update clears the previous
+            // error string. SetNumberAsyncAck reads this when raising.
+            existing.Message = prop.Message;
         } else {
             deviceProps[prop.Name] = prop;
         }

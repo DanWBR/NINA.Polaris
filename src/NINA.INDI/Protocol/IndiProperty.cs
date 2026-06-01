@@ -28,6 +28,14 @@ public abstract class IndiProperty {
     public IndiPropertyPermission Permission { get; set; } = IndiPropertyPermission.ReadOnly;
     public double Timeout { get; set; }
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    /// <summary>Optional per-update explanation from the driver — INDI
+    /// servers can attach <c>message="..."</c> on any set*Vector, and
+    /// typically do so when reporting state=Alert (e.g. "Mount is parked",
+    /// "Below horizon", "Slew limit exceeded"). Captured here so the
+    /// ack-based write API (<c>SetNumberAsyncAck</c> /
+    /// <c>SetSwitchAsyncAck</c>) can bubble it up to the operator as a
+    /// real error message instead of a generic "slew failed".</summary>
+    public string? Message { get; set; }
 }
 
 public class IndiTextProperty : IndiProperty {

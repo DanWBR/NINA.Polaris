@@ -110,22 +110,56 @@ public class IndiTelescope : ITelescope {
         await _client.SetSwitchAsync(DeviceName, "ON_COORD_SET",
             new Dictionary<string, bool> { ["TRACK"] = true, ["SLEW"] = false, ["SYNC"] = false }, ct);
 
-        // 4. Issue the slew via the coord write.
-        await _client.SetNumberAsync(DeviceName, "EQUATORIAL_EOD_COORD",
-            new Dictionary<string, double> { ["RA"] = ra, ["DEC"] = dec }, ct);
+        // 4. Issue the slew via the coord write -- ack-based so we
+        //    actually know the driver received it. INDIROB-1: before
+        //    this was fire-and-forget which raced IsSlewing (poller
+        //    would see the previous Ok state and decide the slew was
+        //    instant). The ack helper waits up to 5s for the driver
+        //    to echo back Busy/Ok (accepted) or Alert (rejected). On
+        //    Alert -- typical reasons: target below horizon, slew
+        //    limit, mount still parked, dome unsafe -- we surface the
+        //    driver's message verbatim so the operator sees a real
+        //    error instead of a silent no-op.
+        var ack = await _client.SetNumberAsyncAck(DeviceName, "EQUATORIAL_EOD_COORD",
+            new Dictionary<string, double> { ["RA"] = ra, ["DEC"] = dec }, ct: ct);
+        ThrowIfRejectedOrTimedOut(ack, "slew", "EQUATORIAL_EOD_COORD");
     }
 
     public async Task SyncAsync(double ra, double dec, CancellationToken ct = default) {
         await _client.SetSwitchAsync(DeviceName, "ON_COORD_SET",
             new Dictionary<string, bool> { ["TRACK"] = false, ["SLEW"] = false, ["SYNC"] = true }, ct);
 
-        await _client.SetNumberAsync(DeviceName, "EQUATORIAL_EOD_COORD",
-            new Dictionary<string, double> { ["RA"] = ra, ["DEC"] = dec }, ct);
+        var ack = await _client.SetNumberAsyncAck(DeviceName, "EQUATORIAL_EOD_COORD",
+            new Dictionary<string, double> { ["RA"] = ra, ["DEC"] = dec }, ct: ct);
+        ThrowIfRejectedOrTimedOut(ack, "sync", "EQUATORIAL_EOD_COORD");
     }
 
     public async Task ParkAsync(CancellationToken ct = default) {
-        await _client.SetSwitchAsync(DeviceName, "TELESCOPE_PARK",
-            new Dictionary<string, bool> { ["PARK"] = true, ["UNPARK"] = false }, ct);
+        var ack = await _client.SetSwitchAsyncAck(DeviceName, "TELESCOPE_PARK",
+            new Dictionary<string, bool> { ["PARK"] = true, ["UNPARK"] = false }, ct: ct);
+        ThrowIfRejectedOrTimedOut(ack, "park", "TELESCOPE_PARK");
+    }
+
+    /// <summary>Map an IndiAckResult into an exception when the driver
+    /// rejected or never acknowledged the write. INDIROB-1: makes the
+    /// previously-silent failure modes show up as toasts in the UI
+    /// instead of pretending the operation succeeded.</summary>
+    private void ThrowIfRejectedOrTimedOut(IndiAckResult ack, string operation, string property) {
+        if (ack.Acknowledged) return;
+        if (ack.Rejected) {
+            var detail = string.IsNullOrEmpty(ack.AlertMessage)
+                ? "(no message from driver)"
+                : ack.AlertMessage;
+            throw new InvalidOperationException(
+                $"Mount '{DeviceName}' rejected {operation} on {property}: {detail}");
+        }
+        // TimedOut: driver was silent. Most common cause is a wedged
+        // serial link or the property name being wrong (LogIndiWrite
+        // already warned). Surface as a different message so the
+        // operator can tell the two apart.
+        throw new InvalidOperationException(
+            $"Mount '{DeviceName}' did not acknowledge {operation} on {property} within timeout. " +
+            "Driver may be wedged — check INDI server logs.");
     }
 
     /// <summary>Drive the mount to its mechanical home. The INDI
@@ -254,8 +288,9 @@ public class IndiTelescope : ITelescope {
     }
 
     public async Task UnparkAsync(CancellationToken ct = default) {
-        await _client.SetSwitchAsync(DeviceName, "TELESCOPE_PARK",
-            new Dictionary<string, bool> { ["PARK"] = false, ["UNPARK"] = true }, ct);
+        var ack = await _client.SetSwitchAsyncAck(DeviceName, "TELESCOPE_PARK",
+            new Dictionary<string, bool> { ["PARK"] = false, ["UNPARK"] = true }, ct: ct);
+        ThrowIfRejectedOrTimedOut(ack, "unpark", "TELESCOPE_PARK");
     }
 
     public async Task SetTrackingAsync(bool enabled, CancellationToken ct = default) {

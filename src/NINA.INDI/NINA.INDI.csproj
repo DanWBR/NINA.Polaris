@@ -17,4 +17,13 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.*" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Tests need access to the internal SendAndAwaitAckAsync overload
+         that takes a Func<Task> send (so the test can substitute a no-op
+         instead of going through SendAsync which requires a real socket).
+         The typed Set*AsyncAck wrappers stay public; only the testable
+         helper is internal. -->
+    <InternalsVisibleTo Include="NINA.Polaris.Test" />
+  </ItemGroup>
+
 </Project>

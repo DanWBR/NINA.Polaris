@@ -38,8 +38,18 @@ public class IndiRotator {
     }
 
     public async Task MoveToAsync(double degrees, CancellationToken ct = default) {
-        await _client.SetNumberAsync(DeviceName, "ABS_ROTATOR_ANGLE",
-            new Dictionary<string, double> { ["ANGLE"] = degrees }, ct);
+        // INDIROB-1: ack-based. Rotator rejects are common (limit
+        // switches, mechanical end-stops, calibration drift) and need
+        // to surface as toasts rather than silent no-ops.
+        var ack = await _client.SetNumberAsyncAck(DeviceName, "ABS_ROTATOR_ANGLE",
+            new Dictionary<string, double> { ["ANGLE"] = degrees }, ct: ct);
+        if (ack.Rejected) {
+            var detail = string.IsNullOrEmpty(ack.AlertMessage)
+                ? "(no message from driver)"
+                : ack.AlertMessage;
+            throw new InvalidOperationException(
+                $"Rotator '{DeviceName}' rejected move to {degrees:F2}°: {detail}");
+        }
     }
 
     public async Task ReverseAsync(bool reversed, CancellationToken ct = default) {
