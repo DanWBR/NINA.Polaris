@@ -905,8 +905,12 @@ body {
    vertically between the surrounding blocks. */
 .polaris-shutter {
     position: relative;
-    width: 128px;
-    height: 128px;
+    /* Sized to fill the vertical space inside the floating sidebar.
+       Previous 128px looked dwarfed by the new 320px pane; 200px
+       reads as the dominant action without crowding the inputs at
+       the top or the secondary controls at the bottom. */
+    width: 200px;
+    height: 200px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -932,13 +936,13 @@ body {
 .polaris-shutter .shutter-track {
     fill: none;
     stroke: rgba(255, 255, 255, 0.10);
-    stroke-width: 5;
+    stroke-width: 4;
 }
 .polaris-shutter .shutter-progress {
     fill: none;
     /* Cyan stellar gradient matches the brand (#0891b2 → #67e8f9). */
     stroke: #67e8f9;
-    stroke-width: 5;
+    stroke-width: 4;
     stroke-linecap: round;
     /* Circumference of r=46 is 2π × 46 ≈ 289.027. dashoffset 289
        = empty ring; 0 = full. Inline style on the element sets
@@ -962,8 +966,11 @@ body {
 }
 .polaris-shutter .shutter-inner {
     position: relative;
-    width: 96px;
-    height: 96px;
+    /* ~75% of the outer ring (200px). Keeps the visual ratio that
+       the old 128/96 pair had so the progress ring still reads
+       around the button rather than fused with it. */
+    width: 150px;
+    height: 150px;
     border-radius: 50%;
     background: linear-gradient(160deg, #1e3a8a 0%, #0891b2 100%);
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45),
@@ -993,8 +1000,8 @@ body {
     line-height: 0;     /* prevents the SVG getting extra vertical space */
 }
 .polaris-shutter .shutter-icon svg {
-    width: 36px;
-    height: 36px;
+    width: 56px;
+    height: 56px;
     fill: currentColor;
     display: block;
 }
