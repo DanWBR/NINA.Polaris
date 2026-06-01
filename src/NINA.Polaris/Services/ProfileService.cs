@@ -261,7 +261,19 @@ public class ProfileService {
             LiveStackComputeMode = src.LiveStackComputeMode,
             LiveStackSaveFramesToDisk = src.LiveStackSaveFramesToDisk,
             LiveStackMaxDurationSeconds = src.LiveStackMaxDurationSeconds,
-            TargetSnr = src.TargetSnr
+            TargetSnr = src.TargetSnr,
+            // LSPP-3: per-frame pre-processing (calibration + BGE).
+            // Clone the shape so the new rig inherits the source's
+            // enable flags + master overrides + BGE knobs.
+            LiveStackPreProcessing = new LiveStackPreProcSettings {
+                CalibrationEnabled    = src.LiveStackPreProcessing.CalibrationEnabled,
+                MasterDarkOverrideId  = src.LiveStackPreProcessing.MasterDarkOverrideId,
+                MasterFlatOverrideId  = src.LiveStackPreProcessing.MasterFlatOverrideId,
+                MasterBiasOverrideId  = src.LiveStackPreProcessing.MasterBiasOverrideId,
+                BgeEnabled            = src.LiveStackPreProcessing.BgeEnabled,
+                BgeSmoothing          = src.LiveStackPreProcessing.BgeSmoothing,
+                BgeCorrection         = src.LiveStackPreProcessing.BgeCorrection
+            }
         };
         _activeProfile.EquipmentProfiles.Add(copy);
         Save();
@@ -713,6 +725,14 @@ public class EquipmentProfile {
     /// session without persisting (liveStack.targetSnrOverride on the
     /// frontend); when null the override falls back to this value.</summary>
     public double? TargetSnr { get; set; }
+
+    /// <summary>LSPP-3: per-frame pre-processing toggles for live
+    /// stacking. Calibration applies dark/flat/bias on the server
+    /// (or wherever the stack runs); BGE applies GraXpert background
+    /// extraction on the client (MetricsOnly mode only). Both default
+    /// OFF so existing rigs behave identically to the pre-LSPP build
+    /// until the operator opts in via the LIVE tab.</summary>
+    public LiveStackPreProcSettings LiveStackPreProcessing { get; set; } = new();
 
     /// <summary>Last-used VIDEO tab ROI / FOV (subframe). Persisted so
     /// the next session restores the same crop without the user re-
