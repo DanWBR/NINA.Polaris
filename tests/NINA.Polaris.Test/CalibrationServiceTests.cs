@@ -14,11 +14,15 @@ namespace NINA.Polaris.Test;
 [TestFixture]
 public class CalibrationServiceTests {
 
+    // LSPP-1: NormalizeFlat / FindNearestDark / FindMatchingFlat were
+    // moved from CalibrationService (private static) to CalibrationMath
+    // (public static). Reflection here continues to work because the
+    // helpers are still pure-function and stateless.
     private static readonly Type SvcType = Type.GetType(
-        "NINA.Polaris.Services.Studio.CalibrationService, NINA.Polaris")!;
+        "NINA.Polaris.Services.Studio.CalibrationMath, NINA.Polaris")!;
 
     private static MethodInfo PrivateStatic(string name)
-        => SvcType.GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)!;
+        => SvcType.GetMethod(name, BindingFlags.Public | BindingFlags.Static)!;
 
     // --- Flat normalisation ---------------------------------------
 
@@ -137,11 +141,16 @@ public class CalibrationServiceTests {
     }
 
     private static int? InvokeFindNearestDark(List<object> darks, double exp, int gain) {
+        // LSPP-1: CalibrationMath returns FrameRow? (full record) instead of
+        // the int? Id the old CalibrationService helper returned. Pull the
+        // Id off the row so the assertions in the tests stay readable.
         var rowType = Type.GetType("NINA.Polaris.Services.Studio.FrameRow, NINA.Polaris")!;
         var listType = typeof(List<>).MakeGenericType(rowType);
         var list = (System.Collections.IList)Activator.CreateInstance(listType)!;
         foreach (var d in darks) list.Add(d);
-        return (int?)PrivateStatic("FindNearestDark").Invoke(null, new object[] { list, exp, gain });
+        var row = PrivateStatic("FindNearestDark").Invoke(null, new object[] { list, exp, gain });
+        if (row == null) return null;
+        return (int)rowType.GetProperty("Id")!.GetValue(row)!;
     }
 
     private static int? InvokeFindMatchingFlat(List<object> flats, string filter, int gain) {
@@ -149,7 +158,9 @@ public class CalibrationServiceTests {
         var listType = typeof(List<>).MakeGenericType(rowType);
         var list = (System.Collections.IList)Activator.CreateInstance(listType)!;
         foreach (var f in flats) list.Add(f);
-        return (int?)PrivateStatic("FindMatchingFlat").Invoke(null, new object[] { list, filter, gain });
+        var row = PrivateStatic("FindMatchingFlat").Invoke(null, new object[] { list, filter, gain });
+        if (row == null) return null;
+        return (int)rowType.GetProperty("Id")!.GetValue(row)!;
     }
 
     private static object MakeFrameRow(int id, int gain = 0, double exposureSec = 0,

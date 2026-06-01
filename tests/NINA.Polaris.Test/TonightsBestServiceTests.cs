@@ -27,7 +27,8 @@ public class TonightsBestServiceTests {
         var catalog  = new SkyCatalogService();
         var altitude = new AltitudeService(profile);
         var indi     = new IndiClient("localhost", 7624);
-        var equip    = new EquipmentManager(indi, NullLogger<EquipmentManager>.Instance);
+        var equip    = new EquipmentManager(indi, NullLogger<EquipmentManager>.Instance,
+            new NINA.Polaris.Services.Alpaca.AlpacaDiscoveryCache());
         return new TonightsBestService(catalog, altitude, equip, profile,
             NullLogger<TonightsBestService>.Instance);
     }

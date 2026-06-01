@@ -97,7 +97,8 @@ public class LiveStackTriggersServiceTests {
         var stack = new LiveStackingService(relay, NullLogger<LiveStackingService>.Instance);
         var profiles = new ProfileService(cfg, NullLogger<ProfileService>.Instance);
         var indi = new IndiClient("localhost", 7624);
-        var equip = new EquipmentManager(indi, NullLogger<EquipmentManager>.Instance);
+        var equip = new EquipmentManager(indi, NullLogger<EquipmentManager>.Instance,
+            new NINA.Polaris.Services.Alpaca.AlpacaDiscoveryCache());
         var autoFocus = new AutoFocusService(equip, relay, NullLogger<AutoFocusService>.Instance);
         var solver = new PlateSolveService(cfg, NullLogger<PlateSolveService>.Instance);
         var slew = new SlewCenterService(equip, solver, profiles,

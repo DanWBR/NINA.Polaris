@@ -19,7 +19,8 @@ public class CameraStreamServiceTests {
 
     private CameraStreamService MakeService() {
         var indi = new IndiClient("localhost", 7624);
-        var equip = new EquipmentManager(indi, NullLogger<EquipmentManager>.Instance);
+        var equip = new EquipmentManager(indi, NullLogger<EquipmentManager>.Instance,
+            new NINA.Polaris.Services.Alpaca.AlpacaDiscoveryCache());
         var relay = new ImageRelayService(NullLogger<ImageRelayService>.Instance);
         return new CameraStreamService(equip, relay, NullLogger<CameraStreamService>.Instance);
     }

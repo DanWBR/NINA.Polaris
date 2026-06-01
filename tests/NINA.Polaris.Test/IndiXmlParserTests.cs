@@ -213,7 +213,7 @@ public class IndiXmlParserTests {
             """;
 
         string? deletedName = null;
-        _parser.PropertyDeleted += name => deletedName = name;
+        _parser.PropertyDeleted += (_, name) => deletedName = name;
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         using var stream = XmlStream(xml);
