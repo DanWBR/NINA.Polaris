@@ -11939,6 +11939,52 @@ function ninaApp() {
                 this.toast('Stream failed: ' + (e.message || 'unknown'), 'error');
             }
         },
+        // VIDEO tab "📡 Auto" button next to Target name. Asks the
+        // server which Moon / planet is closest to where the mount
+        // is currently pointing and fills the field if it's within
+        // 5° (a fairly generous cone — the operator just slewed to
+        // it, so it should be near centre). Beyond that, toast and
+        // leave the field alone so we don't silently lie.
+        async videoAutoDetectTarget() {
+            // mount.ra is in hours, mount.dec in degrees (the schema
+            // the WS handler writes on every tick). The /nearest-planet
+            // endpoint expects the same units.
+            const ra = this.mount?.ra;
+            const dec = this.mount?.dec;
+            if (!this.mount?.connected || !Number.isFinite(ra) || !Number.isFinite(dec)) {
+                this.toast('Mount RA/Dec unavailable', 'warn');
+                return;
+            }
+            try {
+                const r = await this.apiGet(
+                    '/api/sky/nearest-planet?ra=' + encodeURIComponent(ra)
+                    + '&dec=' + encodeURIComponent(dec));
+                if (!r?.found) {
+                    this.toast('No planet detected nearby', 'warn');
+                    return;
+                }
+                // 5° threshold = pointing accuracy of an unaligned
+                // mount before plate-solve. Tighter would miss a
+                // legitimate "slewed to Jupiter but mount model is
+                // off by 3°" case; looser would label random sky
+                // patches as the nearest body.
+                if (r.angularSepDeg > 5) {
+                    this.toast(
+                        'Nearest body (' + r.name + ') is '
+                        + r.angularSepDeg.toFixed(1)
+                        + '° away — too far to assume that\'s the target',
+                        'warn');
+                    return;
+                }
+                this.video.targetName = r.name;
+                this.toast(
+                    'Detected ' + r.name + ' (' + r.angularSepDeg.toFixed(2) + '° from centre)',
+                    'success');
+            } catch (e) {
+                this.toast('Auto-detect failed: ' + (e?.message || ''), 'error');
+            }
+        },
+
         async videoToggleRecord() {
             if (this.videoRecording.recording) {
                 try {

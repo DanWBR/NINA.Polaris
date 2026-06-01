@@ -2595,9 +2595,21 @@
                                 </template>
                             </span>
                             <label>Target name
-                                <input type="text" x-model="video.targetName"
-                                       class="input-sm" style="width:120px"
-                                       :disabled="videoRecording.recording">
+                                <span style="display:inline-flex; align-items:center; gap:4px">
+                                    <input type="text" x-model="video.targetName"
+                                           class="input-sm" style="width:120px"
+                                           :disabled="videoRecording.recording">
+                                    <!-- One-click "what is the mount pointing at?"
+                                         helper. Queries /api/sky/nearest-planet
+                                         with mount RA/Dec; if the nearest Moon /
+                                         planet is within 5° it fills the field.
+                                         Saves planetary-imaging operators from
+                                         typing "Jupiter" / "Saturn" every time. -->
+                                    <button type="button" class="btn btn-sm"
+                                            :disabled="videoRecording.recording || !mount?.connected"
+                                            title="Auto-detect the planet or Moon the mount is pointing at"
+                                            @click="videoAutoDetectTarget()">📡 Auto</button>
+                                </span>
                             </label>
                             <label>Max duration (s)
                                 <input type="number" x-model.number="video.maxDurationSec"

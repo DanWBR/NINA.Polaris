@@ -1,3 +1,4 @@
+using CosineKitty;
 using NINA.Polaris.Services;
 
 namespace NINA.Polaris.Endpoints;
@@ -298,6 +299,88 @@ public static class SkyEndpoints {
             var result = svc.Compute(n);
             return Results.Ok(result);
         });
+
+        // GET /api/sky/nearest-planet?ra={raHours}&dec={decDeg}
+        // Returns the Moon or planet closest to the given pointing
+        // in angular separation (deg) on the celestial sphere right
+        // now. Drives the VIDEO tab's "auto-detect target" button so
+        // the operator doesn't have to type "Jupiter" / "Saturn" /
+        // "Moon" manually when they slewed to one for planetary
+        // imaging. Sun is intentionally excluded (you don't image it
+        // with the same rig setup; including would make a 1° pointing
+        // to a daytime sky always score 'Sun').
+        group.MapGet("/nearest-planet", (double ra, double dec, ProfileService profiles) => {
+            var p = profiles.Active;
+            var time = new AstroTime(DateTime.UtcNow);
+            var observer = new Observer(p.Latitude, p.Longitude, p.Altitude);
+
+            (string name, Body body)[] targets = new[] {
+                ("Moon",    Body.Moon),
+                ("Mercury", Body.Mercury),
+                ("Venus",   Body.Venus),
+                ("Mars",    Body.Mars),
+                ("Jupiter", Body.Jupiter),
+                ("Saturn",  Body.Saturn),
+                ("Uranus",  Body.Uranus),
+                ("Neptune", Body.Neptune),
+            };
+
+            string? bestName = null;
+            double bestSep = double.MaxValue;
+            double bestRa = 0, bestDec = 0;
+
+            foreach (var (name, body) in targets) {
+                try {
+                    var eq = Astronomy.Equator(body, time, observer,
+                        EquatorEpoch.OfDate, Aberration.Corrected);
+                    var sep = AngularSeparationDeg(ra, dec, eq.ra, eq.dec);
+                    if (sep < bestSep) {
+                        bestSep = sep;
+                        bestName = name;
+                        bestRa = eq.ra;
+                        bestDec = eq.dec;
+                    }
+                } catch {
+                    // AstronomyEngine doesn't compute Pluto-class
+                    // bodies in all branches; skip whatever doesn't
+                    // converge rather than dragging the whole probe
+                    // down with it.
+                }
+            }
+
+            if (bestName == null)
+                return Results.Ok(new { found = false });
+
+            return Results.Ok(new {
+                found = true,
+                name = bestName,
+                raHours = bestRa,
+                decDeg = bestDec,
+                angularSepDeg = bestSep
+            });
+        });
+    }
+
+    /// <summary>
+    /// Great-circle distance between two RA/Dec points in degrees.
+    /// Haversine formula in spherical coordinates — accurate at the
+    /// arcsec level which is way more than we need to pick "the closest
+    /// planet". RA in hours, Dec in degrees, like the rest of the
+    /// codebase. Reused by the nearest-planet probe + any future
+    /// "what's at this pointing" query.
+    /// </summary>
+    private static double AngularSeparationDeg(double ra1H, double dec1D, double ra2H, double dec2D) {
+        double D2R = Math.PI / 180.0;
+        double ra1 = ra1H * 15.0 * D2R;
+        double ra2 = ra2H * 15.0 * D2R;
+        double d1  = dec1D * D2R;
+        double d2  = dec2D * D2R;
+        double dRa = ra2 - ra1;
+        double dDec = d2 - d1;
+        double a = Math.Sin(dDec / 2) * Math.Sin(dDec / 2)
+                 + Math.Cos(d1) * Math.Cos(d2) * Math.Sin(dRa / 2) * Math.Sin(dRa / 2);
+        double c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+        return c / D2R;
     }
 
     public record SlewAndCenterRequest(double Ra, double Dec, double ToleranceArcsec = 30.0);
