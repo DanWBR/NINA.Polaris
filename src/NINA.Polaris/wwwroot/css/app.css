@@ -779,36 +779,38 @@ body {
    chevron flips when collapsed so it always points the direction the
    panel would slide if clicked. tap-friendly 32×40 px. */
 .quick-controls-toggle {
+    /* Vertical handle pinned to the inside-left edge of the floating
+       panel. Lives INSIDE .quick-controls (the panel has overflow-y:auto
+       which implicitly clips X-overflow per spec, so the handle can't
+       poke out the panel — it has to live within the panel bounds).
+       When the panel is collapsed (transform translateX(100% - 28px)),
+       only its leftmost 28 px stays visible, which is exactly where
+       this handle sits → operator can always grab it. */
     position: absolute;
-    left: -1px;
     top: 12px;
-    transform: translateX(-100%);
+    left: 0;
     width: 28px;
-    height: 44px;
+    height: 56px;
     padding: 0;
-    background: rgba(15, 23, 42, 0.88);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid var(--border);
-    border-right: none;
-    border-radius: var(--radius) 0 0 var(--radius);
-    color: var(--text-primary);
-    font-size: 16px;
+    background: rgba(56, 189, 248, 0.18);   /* tinted so it stands out
+                                               against the dark panel
+                                               background */
+    border: 1px solid rgba(103, 232, 249, 0.45);
+    border-left: none;
+    border-radius: 0 var(--radius) var(--radius) 0;
+    color: #67e8f9;
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 5;
+    z-index: 10;       /* above the scrollable content of the panel */
 }
-.quick-controls-toggle:hover { background: rgba(30, 41, 59, 0.92); }
-/* When collapsed: the toggle sits on the visible tab so the operator
-   can grab it; chevron flips to point left (the direction the panel
-   will travel on click to come back). */
-.quick-controls--collapsed .quick-controls-toggle {
-    transform: none;
-    left: 0;
-    border-right: 1px solid var(--border);
-    border-radius: 0 var(--radius) var(--radius) 0;
+.quick-controls-toggle:hover {
+    background: rgba(56, 189, 248, 0.35);
+    color: white;
 }
 
 /* AUTORUN sidebar is shutter-only (no exposure / gain / filter
