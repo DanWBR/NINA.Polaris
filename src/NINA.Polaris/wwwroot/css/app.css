@@ -2035,6 +2035,79 @@ label select.input-sm {
 .mount-info-sm .info-row {
     font-size: 11px;
 }
+
+/* SLEWRATE: discrete-tick slider for TELESCOPE_SLEW_RATE. Shared by
+   the floating Mount panel (Sky tab) and the VIDEO Capture sidebar.
+   Tight stacked layout: small label row up top with the live element
+   name in bold on the right, then the slider, then the tick marks
+   inline below (the <datalist> renders native tick marks on the
+   browser but the styling varies; the explicit label row is what the
+   operator reads). The slider itself is `.range-with-controls` once
+   _augmentRangeInputs() wraps it so the [-] [+] step buttons appear
+   automatically -- those are useful for touch but only need ~28px,
+   so the wrapper inherits the slider's width:100%. */
+.mount-slew-rate {
+    padding: 4px 6px 2px;
+    min-width: 0;
+}
+.mount-slew-rate-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+}
+.mount-slew-rate-label > strong {
+    color: var(--text-primary);
+    font-size: 11px;
+    letter-spacing: 0;
+    text-transform: none;
+}
+.mount-slew-rate input[type="range"] {
+    width: 100%;
+    margin: 0;
+}
+/* When the _augmentRangeInputs() helper wraps with [-] / [+] step
+   buttons, override the default 28px button to a tighter 22px so
+   the whole block fits comfortably in the 320 px floating panel. */
+.mount-slew-rate .range-with-controls {
+    width: 100%;
+    gap: 4px;
+}
+.mount-slew-rate .range-step-btn {
+    width: 22px;
+    height: 22px;
+    font-size: 13px;
+}
+
+/* VIDEO Capture sidebar: titled mount-jog block that groups the d-pad
+   and the slew-rate slider. Lives right under the wheel pickers so
+   the operator can recenter a drifting planet without scrolling. */
+.mount-jog-cluster {
+    margin: 6px 0 10px;
+    padding: 6px 8px 4px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: rgba(255, 255, 255, 0.02);
+}
+.mount-jog-cluster-title {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+.mount-jog-cluster .dpad-container {
+    margin: 0 auto;
+}
+.mount-jog-cluster .mount-slew-rate {
+    margin-top: 6px;
+    padding: 0;
+}
 /* Re-open pill (bottom-right of the Sky tab) */
 .mount-float-reopen,
 .camera-float-reopen {

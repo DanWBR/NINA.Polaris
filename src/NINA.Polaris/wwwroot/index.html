@@ -2584,12 +2584,78 @@
                                   x-text="'Focus ' + focusPosition + ' / ' + focusMaxPosition
                                           + (focusMoving ? ' ⚙' : '')"></span>
                         </div>
-                        <!-- ZWO L/M/H gain shortcuts stay as a row of
-                             quick-pick chips next to the gain wheel. -->
+
+                        <!-- Mount jog cluster: ASIAIR-style recenter during
+                             planetary capture. Lives RIGHT here at the top
+                             of the sidebar (above gain/binning/FOV) because
+                             the operator's hand is on this while recording
+                             a planet drifting across the ROI -- a click
+                             at the bottom of a scrolled sidebar would
+                             cost the framing. D-pad + rate slider grouped
+                             in a thin titled block so it reads as one
+                             control surface. Hidden when no mount is
+                             connected. -->
+                        <div class="mount-jog-cluster"
+                             x-show="mount.connected">
+                            <div class="mount-jog-cluster-title">Mount jog</div>
+                            <div class="dpad-container dpad-container-sm"
+                                 x-show="mount.capabilities?.manualJog !== false">
+                                <button class="dpad-btn dpad-n"
+                                        @pointerdown.prevent="mountMoveStart('n', $event)"
+                                        @pointerup.prevent="mountMoveStop()"
+                                        @pointerleave="mountMoveStop()"
+                                        @pointercancel="mountMoveStop()">N</button>
+                                <button class="dpad-btn dpad-w"
+                                        @pointerdown.prevent="mountMoveStart('w', $event)"
+                                        @pointerup.prevent="mountMoveStop()"
+                                        @pointerleave="mountMoveStop()"
+                                        @pointercancel="mountMoveStop()">W</button>
+                                <button class="dpad-btn dpad-stop" @click="mountStop()">STOP</button>
+                                <button class="dpad-btn dpad-e"
+                                        @pointerdown.prevent="mountMoveStart('e', $event)"
+                                        @pointerup.prevent="mountMoveStop()"
+                                        @pointerleave="mountMoveStop()"
+                                        @pointercancel="mountMoveStop()">E</button>
+                                <button class="dpad-btn dpad-s"
+                                        @pointerdown.prevent="mountMoveStart('s', $event)"
+                                        @pointerup.prevent="mountMoveStop()"
+                                        @pointerleave="mountMoveStop()"
+                                        @pointercancel="mountMoveStop()">S</button>
+                            </div>
+                            <!-- Discrete slew-rate slider — driver-advertised
+                                 TELESCOPE_SLEW_RATE elements. For planetary
+                                 recentering operator typically drops to
+                                 Guide/Centering so the planet doesn't fly
+                                 out of the ROI on a single tap. Hidden when
+                                 driver has only one rate. -->
+                            <div class="mount-slew-rate"
+                                 x-show="(mount.slewRates || []).length > 1">
+                                <div class="mount-slew-rate-label">
+                                    <span>Slew rate</span>
+                                    <strong x-text="(mount.slewRates || [])
+                                        .find(r => r.active)?.label || '—'"></strong>
+                                </div>
+                                <input type="range" min="0"
+                                       :max="(mount.slewRates || []).length - 1"
+                                       step="1"
+                                       :value="Math.max(0, mountSlewRateIndex)"
+                                       @input="setMountSlewRate($event.target.value)"
+                                       list="video-slew-rate-ticks">
+                                <datalist id="video-slew-rate-ticks">
+                                    <template x-for="(r, i) in (mount.slewRates || [])" :key="r.name">
+                                        <option :value="i" :label="r.label"></option>
+                                    </template>
+                                </datalist>
+                            </div>
+                        </div>
+
+                        <!-- ZWO L/M/H gain shortcuts. Sits inline next to
+                             the wheel picker above (which is labeled GAIN);
+                             no redundant "Gain" sub-label needed -- the
+                             buttons themselves carry L/M/H semantics. -->
                         <div class="control-row"
                              x-show="zwoPresetsForActiveCamera() && !cameraStream.running && !videoRecording.recording">
-                            <span style="font-size:11px; color:var(--text-muted); min-width:34px">Gain</span>
-                            <span class="zwo-gain-presets">
+                            <span class="zwo-gain-presets" style="width:100%">
                                 <button type="button" class="zwo-gain-preset"
                                         :data-active="video.gain === zwoPresetsForActiveCamera()?.L"
                                         @click="applyGainPreset('video.gain', zwoPresetsForActiveCamera().L)">L</button>
@@ -2720,76 +2786,6 @@
                             </label>
                             <button class="btn btn-sm" @click="videoResetWhiteBalance()"
                                     title="Reset to neutral (50/50)">↻</button>
-                        </div>
-
-                        <!-- Manual jog d-pad: ASIAIR-style recenter during
-                             planetary capture. Press-and-hold N/S/E/W to
-                             nudge the mount; release stops via abort.
-                             Hidden when no mount is connected (no point
-                             showing buttons that would all 502). The
-                             same component the floating mount panel uses
-                             so behavior is identical: same press-and-hold
-                             semantics, same auto-track + slew-rate
-                             ensure-on-first-jog AM3 workarounds, same
-                             pointer-capture for finger drift tolerance. -->
-                        <div class="dpad-container dpad-container-sm"
-                             style="margin-bottom: 8px"
-                             x-show="mount.connected && mount.capabilities?.manualJog !== false">
-                            <button class="dpad-btn dpad-n"
-                                    @pointerdown.prevent="mountMoveStart('n', $event)"
-                                    @pointerup.prevent="mountMoveStop()"
-                                    @pointerleave="mountMoveStop()"
-                                    @pointercancel="mountMoveStop()">N</button>
-                            <button class="dpad-btn dpad-w"
-                                    @pointerdown.prevent="mountMoveStart('w', $event)"
-                                    @pointerup.prevent="mountMoveStop()"
-                                    @pointerleave="mountMoveStop()"
-                                    @pointercancel="mountMoveStop()">W</button>
-                            <button class="dpad-btn dpad-stop" @click="mountStop()">STOP</button>
-                            <button class="dpad-btn dpad-e"
-                                    @pointerdown.prevent="mountMoveStart('e', $event)"
-                                    @pointerup.prevent="mountMoveStop()"
-                                    @pointerleave="mountMoveStop()"
-                                    @pointercancel="mountMoveStop()">E</button>
-                            <button class="dpad-btn dpad-s"
-                                    @pointerdown.prevent="mountMoveStart('s', $event)"
-                                    @pointerup.prevent="mountMoveStop()"
-                                    @pointerleave="mountMoveStop()"
-                                    @pointercancel="mountMoveStop()">S</button>
-                        </div>
-
-                        <!-- SLEWRATE: same discrete-tick slider the mount
-                             float panel uses. For planetary recentering
-                             the operator typically drops to SLEW_GUIDE
-                             or SLEW_CENTERING (the planet drifts too
-                             fast across the ROI at SLEW_FIND/MAX) so
-                             this is the daily-driver control while
-                             recording. Hidden when no driver-reported
-                             rates exist (single-rate ASCOM mounts). -->
-                        <div class="mount-slew-rate"
-                             x-show="mount.connected && (mount.slewRates || []).length > 1"
-                             style="margin-bottom:8px; padding:4px 6px">
-                            <div style="display:flex; justify-content:space-between;
-                                        align-items:center; font-size:10px;
-                                        text-transform:uppercase;
-                                        color:var(--text-muted)">
-                                <span>Slew rate</span>
-                                <strong style="color:var(--text-primary)"
-                                        x-text="(mount.slewRates || [])
-                                            .find(r => r.active)?.label || '—'"></strong>
-                            </div>
-                            <input type="range" min="0"
-                                   :max="(mount.slewRates || []).length - 1"
-                                   step="1"
-                                   :value="Math.max(0, mountSlewRateIndex)"
-                                   @input="setMountSlewRate($event.target.value)"
-                                   list="video-slew-rate-ticks"
-                                   style="width:100%">
-                            <datalist id="video-slew-rate-ticks">
-                                <template x-for="(r, i) in (mount.slewRates || [])" :key="r.name">
-                                    <option :value="i" :label="r.label"></option>
-                                </template>
-                            </datalist>
                         </div>
 
                         <!-- SHUT-3: Polaris Shutter for VIDEO Record.
