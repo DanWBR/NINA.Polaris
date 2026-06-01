@@ -1415,11 +1415,32 @@
             <!-- POLAR ALIGNMENT (TPPA) -->
             <div x-show="tab === 'polar'" class="tab-panel tab-panel-polar">
                 <div class="panel-header">
-                    Polar alignment (TPPA)
+                    Polar alignment
                     <span class="status-indicator-sm"
                           :class="polarStatusClass()"
                           x-text="polarStatusLabel()"></span>
                 </div>
+
+                <!-- RDPA-4: workflow picker. TPPA = original 3-point
+                     sweep (works when you can see the polar region +
+                     slew freely in RA). Rudimentary = single-target
+                     iterative for setups where TPPA isn't viable
+                     (varanda, partial pole view). -->
+                <div class="polar-tabstrip">
+                    <button class="polar-tab"
+                            :class="{ active: polarTab === 'tppa' }"
+                            @click="polarTab = 'tppa'">
+                        TPPA (3-point sweep)
+                    </button>
+                    <button class="polar-tab"
+                            :class="{ active: polarTab === 'rudimentary' }"
+                            @click="polarTab = 'rudimentary'; rudimentaryInit()">
+                        Rudimentary (single-target)
+                    </button>
+                </div>
+
+                <!-- TPPA sub-pane (original UI wrapped) -->
+                <div x-show="polarTab === 'tppa'">
 
                 <!-- Parameters form. Bound to per-rig profile fields;
                      changes POST to /api/equipment/rigs/{id} on blur. -->
@@ -1598,6 +1619,188 @@
                         adjust your tripod knobs and watch the error vector shrink in real time.
                     </p>
                 </div>
+                </div>
+                <!-- end TPPA sub-pane -->
+
+                <!-- RDPA-4: Rudimentary single-target alignment sub-pane.
+                     Workflow: pick a bright visible target, optionally
+                     slew, capture+solve, see the error in arrows + sky
+                     map, walk to mount, nudge knobs, click Re-solve.
+                     Loop until happy. No auto-convergence threshold. -->
+                <div x-show="polarTab === 'rudimentary'" class="rudimentary-pane">
+                    <!-- Pre-flight strip -->
+                    <div class="control-row" style="margin-bottom: 10px; gap: 14px; flex-wrap: wrap">
+                        <span :class="equipCameraInfo?.connected ? 'text-ok' : 'text-warn'">
+                            <span x-text="equipCameraInfo?.connected ? '✓' : '✗'"></span> Camera
+                        </span>
+                        <span :class="equipTelescopeInfo?.connected ? 'text-ok' : 'text-warn'">
+                            <span x-text="equipTelescopeInfo?.connected ? '✓' : '✗'"></span> Mount
+                        </span>
+                        <span :class="(settings.latitude || settings.longitude) ? 'text-ok' : 'text-warn'">
+                            <span x-text="(settings.latitude || settings.longitude) ? '✓' : '✗'"></span> Site location
+                        </span>
+                    </div>
+
+                    <!-- Target picker -->
+                    <div class="quick-controls" style="margin-bottom: 12px">
+                        <div class="control-row">
+                            <label style="flex: 1; min-width: 240px">
+                                Target (catalog search)
+                                <input type="text" class="input-md"
+                                       x-model="rudimentary.search"
+                                       @input.debounce.250ms="rudimentarySearch()"
+                                       :disabled="rudimentary.busy"
+                                       placeholder="Sirius, M42, NGC 7000…">
+                                <div x-show="rudimentary.searchResults.length > 0"
+                                     class="rudimentary-search-results">
+                                    <template x-for="r in rudimentary.searchResults" :key="r.name">
+                                        <div class="rudimentary-search-row"
+                                             @click="rudimentaryPickResult(r)">
+                                            <strong x-text="r.name"></strong>
+                                            <span class="text-muted" style="font-size: 11px"
+                                                  x-text="(r.commonName ? r.commonName + ' · ' : '') + (r.type || '') + ' · mag ' + (r.magnitude ?? '?')"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </label>
+                        </div>
+                        <div class="control-row">
+                            <label>RA (h)
+                                <input type="number" class="input-sm" step="0.0001"
+                                       min="0" max="24"
+                                       x-model.number="rudimentary.targetRaHours"
+                                       :disabled="rudimentary.busy">
+                            </label>
+                            <label>Dec (°)
+                                <input type="number" class="input-sm" step="0.0001"
+                                       min="-90" max="90"
+                                       x-model.number="rudimentary.targetDecDeg"
+                                       :disabled="rudimentary.busy">
+                            </label>
+                            <span x-show="rudimentary.targetName" class="text-ok"
+                                  style="align-self: end; padding-bottom: 6px">
+                                ✓ <strong x-text="rudimentary.targetName"></strong>
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Aim mode + action buttons -->
+                    <div class="quick-controls" style="margin-bottom: 12px">
+                        <div class="control-row">
+                            <label>
+                                <input type="radio" name="rudimentary-aim"
+                                       value="slew" x-model="rudimentary.aimMode"
+                                       :disabled="rudimentary.busy">
+                                Slew to target (GoTo)
+                            </label>
+                            <label>
+                                <input type="radio" name="rudimentary-aim"
+                                       value="current" x-model="rudimentary.aimMode"
+                                       :disabled="rudimentary.busy">
+                                Use current mount position
+                            </label>
+                        </div>
+                        <div class="control-row actions">
+                            <button class="btn btn-primary"
+                                    @click="rudimentaryStart()"
+                                    :disabled="rudimentary.busy
+                                               || !rudimentary.targetRaHours
+                                               || rudimentary.targetDecDeg === null
+                                               || rudimentary.targetDecDeg === undefined">
+                                ▶ Start
+                            </button>
+                            <button class="btn"
+                                    @click="rudimentaryResolve()"
+                                    :disabled="rudimentary.busy || !rudimentary.lastSolved">
+                                ↻ Re-capture + solve
+                            </button>
+                            <button class="btn btn-danger"
+                                    @click="rudimentaryAbort()"
+                                    :disabled="!rudimentary.busy">
+                                ⏹ Stop
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Result block -->
+                    <div x-show="rudimentary.lastSolved" class="rudimentary-result">
+                        <div class="control-row" style="gap: 18px; flex-wrap: wrap">
+                            <div>
+                                <span class="text-muted" style="font-size: 11px">Solved</span><br>
+                                <strong x-text="rudimentary.lastSolved?.raHours?.toFixed(4) + ' h'"></strong>
+                                <strong x-text="' / ' + rudimentary.lastSolved?.decDeg?.toFixed(4) + '°'"></strong>
+                            </div>
+                            <div>
+                                <span class="text-muted" style="font-size: 11px">Az error</span><br>
+                                <strong :class="rudimentaryErrColor(rudimentary.azErrorArcsec)"
+                                        x-text="formatArcsec(rudimentary.azErrorArcsec)"></strong>
+                            </div>
+                            <div>
+                                <span class="text-muted" style="font-size: 11px">Alt error</span><br>
+                                <strong :class="rudimentaryErrColor(rudimentary.altErrorArcsec)"
+                                        x-text="formatArcsec(rudimentary.altErrorArcsec)"></strong>
+                            </div>
+                            <div>
+                                <span class="text-muted" style="font-size: 11px">Total</span><br>
+                                <strong :class="rudimentaryErrColor(rudimentary.totalErrorArcsec)"
+                                        x-text="formatArcsec(rudimentary.totalErrorArcsec)"></strong>
+                            </div>
+                            <div>
+                                <span class="text-muted" style="font-size: 11px">Iterations</span><br>
+                                <strong x-text="rudimentary.history.length"></strong>
+                            </div>
+                        </div>
+
+                        <!-- History sparkline: simple inline bars proportional to totalErrorArcsec.
+                             Convergência = barras encolhendo da esquerda pra direita. -->
+                        <div x-show="rudimentary.history.length > 1"
+                             class="rudimentary-sparkline" style="margin-top: 10px">
+                            <span class="text-muted" style="font-size: 11px">Convergence:</span>
+                            <template x-for="(h, idx) in rudimentary.history" :key="idx">
+                                <span class="rudimentary-spark-bar"
+                                      :style="'height: ' + Math.min(28, Math.max(2, h.totalErrorArcsec / 30)) + 'px;'
+                                              + ' background:' + rudimentarySparkColor(h.totalErrorArcsec)"
+                                      :title="'Iter ' + (idx+1) + ': ' + formatArcsec(h.totalErrorArcsec)"></span>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Sky map mini iframe — same engine as SKY tab.
+                         RDPA-3 set-alignment-markers RPC draws target +
+                         actual + line. Centred on the target via look-at
+                         after each solve so the user sees both dots. -->
+                    <div x-show="rudimentary.lastSolved" class="rudimentary-skymap-wrap">
+                        <div class="text-muted" style="font-size: 11px; margin: 8px 0 4px 0">
+                            Sky map: target (green) vs solved (red)
+                        </div>
+                        <iframe class="rudimentary-skymap" src="/sky/"
+                                referrerpolicy="no-referrer"
+                                @load="rudimentarySkyMapReady()"></iframe>
+                    </div>
+
+                    <!-- Idle hint -->
+                    <div x-show="!rudimentary.lastSolved && !rudimentary.busy"
+                         class="hint" style="margin-top: 12px">
+                        <p>
+                            <strong>How rudimentary alignment works:</strong>
+                            you align the mount roughly with a compass + tilt
+                            app, then pick a bright visible target above.
+                            Polaris slews (or you point manually), captures
+                            one frame, plate-solves, and reports the
+                            pointing error. Walk to the mount, nudge the
+                            azimuth or altitude knob a little, then click
+                            <strong>Re-capture + solve</strong> to see the
+                            new error. Repeat until you're satisfied.
+                        </p>
+                        <p>
+                            Unlike TPPA, this works when the polar region
+                            is blocked (e.g. balcony with view to the south
+                            only). It also works on manual mounts when you
+                            pick <em>Use current mount position</em>.
+                        </p>
+                    </div>
+                </div>
+                <!-- end Rudimentary sub-pane -->
             </div>
 
             <!-- FOCUS -->

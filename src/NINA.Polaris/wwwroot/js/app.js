@@ -2085,6 +2085,32 @@ function ninaApp() {
         // enter + on demand via Refresh. items[] comes from
         // /api/polar/best-targets and is sorted server-side by score.
         polarTargets: { items: [], loading: false, lastFetchUtc: null },
+
+        // RDPA-4: workflow picker inside the POLAR tab. 'tppa' shows
+        // the original 3-point sweep; 'rudimentary' shows the
+        // single-target iterative pane.
+        polarTab: 'tppa',
+
+        // RDPA-4: state for the rudimentary (single-target) workflow.
+        // search/searchResults drive the catalog autocomplete; the
+        // numeric RA/Dec inputs accept custom coords without going
+        // through the picker. lastSolved + history come from the WS
+        // payload's polarAlignment sub-object when mode==='rudimentary'.
+        rudimentary: {
+            search: '',
+            searchResults: [],
+            targetRaHours: null,
+            targetDecDeg: null,
+            targetName: '',
+            aimMode: 'slew',    // 'slew' | 'current'
+            busy: false,
+            lastSolved: null,   // { raHours, decDeg }
+            azErrorArcsec: 0,
+            altErrorArcsec: 0,
+            totalErrorArcsec: 0,
+            history: [],         // [{ totalErrorArcsec, atUtc }]
+            _skyMapReady: false
+        },
         afParams: {
             steps: 9,
             stepSize: 50,
@@ -13474,6 +13500,167 @@ function ninaApp() {
                 await this.apiPost('/api/polar/refine/stop');
                 this.toast('Polar refine stopped', 'warn');
             } catch (e) { this.toast('Refine stop failed', 'error'); }
+        },
+
+        // ---- RDPA-4: Rudimentary single-target polar alignment ----
+
+        // No-op if already initialised; runs once on first sub-tab
+        // enter. Wires the sky-map ready flag (the iframe load event
+        // fires before the engine inside is ready, so we re-check on
+        // first paint).
+        rudimentaryInit() {
+            // Nothing async needed — state defaults are enough; this
+            // hook is kept so future setup (e.g. preflight diagnostic)
+            // has a place to land without re-touching the markup.
+        },
+
+        async rudimentarySearch() {
+            const q = (this.rudimentary.search || '').trim();
+            if (q.length < 2) { this.rudimentary.searchResults = []; return; }
+            try {
+                // SkyCatalogService exposed as /api/sky/catalog/search.
+                // Limit to 8 to keep the dropdown readable.
+                const r = await this.apiFetch(
+                    '/api/sky/catalog/search?query=' + encodeURIComponent(q) + '&limit=8');
+                const json = await r.json();
+                this.rudimentary.searchResults = Array.isArray(json) ? json : (json.results || []);
+            } catch (e) {
+                console.warn('[Rudimentary] search failed', e);
+                this.rudimentary.searchResults = [];
+            }
+        },
+
+        rudimentaryPickResult(r) {
+            this.rudimentary.targetRaHours = r.raHours ?? r.RaHours ?? null;
+            this.rudimentary.targetDecDeg = r.decDeg ?? r.DecDeg ?? null;
+            this.rudimentary.targetName = r.name || r.Name || '';
+            this.rudimentary.search = r.name || '';
+            this.rudimentary.searchResults = [];
+        },
+
+        async rudimentaryStart() {
+            if (this.rudimentary.targetRaHours == null
+                || this.rudimentary.targetDecDeg == null) {
+                this.toast('Pick a target first', 'warn');
+                return;
+            }
+            this.rudimentary.busy = true;
+            try {
+                const body = {
+                    targetRaHours: this.rudimentary.targetRaHours,
+                    targetDecDeg: this.rudimentary.targetDecDeg,
+                    targetName: this.rudimentary.targetName || null,
+                    slewToTarget: this.rudimentary.aimMode === 'slew',
+                    exposureSeconds: this.polar.exposureSec,
+                    gain: this.polar.gain,
+                    settleSeconds: this.polar.settleSec
+                };
+                const r = await this.apiPost('/api/polar/rudimentary/start', body);
+                this._rudimentaryAbsorbResult(r);
+                if (r.ok) this.toast('Solved · total error ' + this.formatArcsec(r.totalErrorArcsec), 'success');
+                else if (r.error) this.toast(r.error, 'error');
+            } catch (e) {
+                this.toast('Start failed: ' + (e?.message || ''), 'error');
+            } finally {
+                this.rudimentary.busy = false;
+            }
+        },
+
+        async rudimentaryResolve() {
+            if (!this.rudimentary.lastSolved) return;
+            this.rudimentary.busy = true;
+            try {
+                const r = await this.apiPost('/api/polar/rudimentary/resolve', {});
+                this._rudimentaryAbsorbResult(r);
+                if (r.ok) this.toast('Re-solved · total error ' + this.formatArcsec(r.totalErrorArcsec), 'success');
+                else if (r.error) this.toast(r.error, 'error');
+            } catch (e) {
+                this.toast('Re-solve failed: ' + (e?.message || ''), 'error');
+            } finally {
+                this.rudimentary.busy = false;
+            }
+        },
+
+        async rudimentaryAbort() {
+            try { await this.apiPost('/api/polar/rudimentary/abort'); }
+            catch { /* swallow */ }
+            this.rudimentary.busy = false;
+        },
+
+        _rudimentaryAbsorbResult(r) {
+            if (!r || !r.ok) return;
+            this.rudimentary.lastSolved = {
+                raHours: r.solvedRaHours, decDeg: r.solvedDecDeg
+            };
+            this.rudimentary.azErrorArcsec = r.azErrorArcsec || 0;
+            this.rudimentary.altErrorArcsec = r.altErrorArcsec || 0;
+            this.rudimentary.totalErrorArcsec = r.totalErrorArcsec || 0;
+            // Append to local history (WS payload also brings the full
+            // server-side history, but a local append keeps the
+            // sparkline lively without waiting for the next 1Hz tick).
+            this.rudimentary.history.push({
+                totalErrorArcsec: r.totalErrorArcsec || 0,
+                atUtc: new Date().toISOString()
+            });
+            while (this.rudimentary.history.length > 20) this.rudimentary.history.shift();
+            this._rudimentaryPushSkyMarkers();
+        },
+
+        rudimentarySkyMapReady() {
+            this.rudimentary._skyMapReady = true;
+            // If we already have solve data when the iframe finishes
+            // loading, push the markers immediately.
+            this._rudimentaryPushSkyMarkers();
+        },
+
+        _rudimentaryPushSkyMarkers() {
+            if (!this.rudimentary._skyMapReady) return;
+            if (!this.rudimentary.lastSolved) return;
+            const iframe = document.querySelector('.rudimentary-skymap');
+            if (!iframe || !iframe.contentWindow) return;
+            const targetRaDeg = (this.rudimentary.targetRaHours || 0) * 15;
+            const targetDecDeg = this.rudimentary.targetDecDeg || 0;
+            const actualRaDeg = (this.rudimentary.lastSolved.raHours || 0) * 15;
+            const actualDecDeg = this.rudimentary.lastSolved.decDeg || 0;
+            try {
+                // Centre the view on the target so both dots stay
+                // visible. Wide FOV (5°) so a multi-arcmin error gap
+                // is readable on a small embedded iframe.
+                iframe.contentWindow.postMessage(
+                    { type: 'look-at', raDeg: targetRaDeg, decDeg: targetDecDeg, fovDeg: 5 },
+                    '*');
+                iframe.contentWindow.postMessage(
+                    { type: 'set-alignment-markers',
+                      target: { raDeg: targetRaDeg, decDeg: targetDecDeg },
+                      actual: { raDeg: actualRaDeg, decDeg: actualDecDeg },
+                      drawLine: true },
+                    '*');
+            } catch (e) {
+                console.warn('[Rudimentary] sky map postMessage failed', e);
+            }
+        },
+
+        rudimentaryErrColor(arcsec) {
+            const a = Math.abs(arcsec || 0);
+            if (a < 60)  return 'text-ok';     // < 1 arcmin
+            if (a < 300) return 'text-warn';   // 1-5 arcmin
+            return 'text-error';
+        },
+
+        rudimentarySparkColor(arcsec) {
+            const a = Math.abs(arcsec || 0);
+            if (a < 60)  return '#22c55e';
+            if (a < 300) return '#f59e0b';
+            return '#ef4444';
+        },
+
+        formatArcsec(arcsec) {
+            if (arcsec == null || isNaN(arcsec)) return '—';
+            const v = Math.abs(arcsec);
+            if (v < 60) return arcsec.toFixed(1) + '"';
+            const min = Math.floor(v / 60);
+            const sec = (v - min * 60).toFixed(0);
+            return (arcsec < 0 ? '-' : '') + min + "' " + sec + '"';
         },
 
         /// Persist the 4 form fields back to the active rig profile

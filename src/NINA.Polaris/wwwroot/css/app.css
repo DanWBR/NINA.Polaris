@@ -9711,3 +9711,79 @@ label select.input-sm {
     border-radius: 3px;
     font-size: 11px;
 }
+
+/* RDPA-4: Rudimentary polar alignment sub-pane styles. */
+.polar-tabstrip {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 12px;
+}
+.polar-tab {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: color 120ms ease, border-color 120ms ease;
+}
+.polar-tab:hover { color: var(--text-primary); }
+.polar-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
+}
+.rudimentary-pane {
+    padding-top: 4px;
+}
+.rudimentary-search-results {
+    position: relative;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-top: 4px;
+    max-height: 240px;
+    overflow-y: auto;
+    z-index: 50;
+}
+.rudimentary-search-row {
+    padding: 6px 10px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border-bottom: 1px solid var(--border);
+}
+.rudimentary-search-row:last-child { border-bottom: none; }
+.rudimentary-search-row:hover { background: rgba(255,255,255,0.05); }
+.rudimentary-result {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-top: 8px;
+}
+.rudimentary-sparkline {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 32px;
+}
+.rudimentary-spark-bar {
+    display: inline-block;
+    width: 8px;
+    min-height: 2px;
+    border-radius: 1px;
+}
+.rudimentary-skymap-wrap {
+    margin-top: 10px;
+}
+.rudimentary-skymap {
+    width: 100%;
+    height: 280px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #000;
+}
