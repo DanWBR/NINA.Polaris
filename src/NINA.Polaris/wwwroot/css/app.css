@@ -9804,3 +9804,105 @@ label select.input-sm {
 }
 .slew-center-tune summary:hover { color: var(--text-primary); }
 .slew-center-tune[open] summary { color: var(--text-primary); margin-bottom: 4px; }
+
+/* ----- Checkbox + radio normalisation -----
+   The browser-default checkbox is a tiny 13px Windows 95 thing that
+   sits visually adrift from every other control. This brings them
+   into the same family as .btn / .input-sm: same border, same radius,
+   same hover / focus colour, same bg-input fill. Drawn purely with
+   CSS (no images) so dark / night mode picks up var() changes for
+   free.
+
+   Escape hatch: add class="checkbox-native" on the input to opt out
+   (useful inside iframes / third-party widgets that depend on the
+   default size). */
+input[type="checkbox"]:not(.checkbox-native),
+input[type="radio"]:not(.checkbox-native) {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    min-height: 18px;
+    margin: 0 6px 0 0;
+    padding: 0;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    position: relative;
+    vertical-align: middle;
+    transition: background var(--transition), border-color var(--transition);
+    flex-shrink: 0;
+}
+
+/* Radios stay round; checkboxes inherit the .input-sm radius. */
+input[type="radio"]:not(.checkbox-native) {
+    border-radius: 50%;
+}
+
+input[type="checkbox"]:not(.checkbox-native):hover,
+input[type="radio"]:not(.checkbox-native):hover {
+    border-color: var(--accent);
+}
+
+input[type="checkbox"]:not(.checkbox-native):focus-visible,
+input[type="radio"]:not(.checkbox-native):focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+input[type="checkbox"]:not(.checkbox-native):checked,
+input[type="radio"]:not(.checkbox-native):checked {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+/* Checkmark drawn as a rotated border-bottom + border-right rect.
+   Two-pixel strokes so it stays readable at 18px. */
+input[type="checkbox"]:not(.checkbox-native):checked::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 1px;
+    width: 5px;
+    height: 10px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+/* Radio bullet — solid filled circle centred in the ring. */
+input[type="radio"]:not(.checkbox-native):checked::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 4px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #fff;
+}
+
+input[type="checkbox"]:not(.checkbox-native):disabled,
+input[type="radio"]:not(.checkbox-native):disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Labels wrapping a checkbox were laid out with display:block by the
+   browser default — switching the input to inline-block above leaves
+   stray flex/grid items wrapping awkwardly. Force inline-flex on the
+   nearby <label class="checkbox-label"> (and any vanilla label that
+   contains a checkbox) so the label + text stay on one line and
+   align vertically with each other. */
+label:has(> input[type="checkbox"]:not(.checkbox-native)),
+label:has(> input[type="radio"]:not(.checkbox-native)),
+.checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+}
