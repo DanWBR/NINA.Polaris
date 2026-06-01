@@ -2722,6 +2722,42 @@
                                     title="Reset to neutral (50/50)">↻</button>
                         </div>
 
+                        <!-- Manual jog d-pad: ASIAIR-style recenter during
+                             planetary capture. Press-and-hold N/S/E/W to
+                             nudge the mount; release stops via abort.
+                             Hidden when no mount is connected (no point
+                             showing buttons that would all 502). The
+                             same component the floating mount panel uses
+                             so behavior is identical: same press-and-hold
+                             semantics, same auto-track + slew-rate
+                             ensure-on-first-jog AM3 workarounds, same
+                             pointer-capture for finger drift tolerance. -->
+                        <div class="dpad-container dpad-container-sm"
+                             style="margin-bottom: 8px"
+                             x-show="mount.connected && mount.capabilities?.manualJog !== false">
+                            <button class="dpad-btn dpad-n"
+                                    @pointerdown.prevent="mountMoveStart('n', $event)"
+                                    @pointerup.prevent="mountMoveStop()"
+                                    @pointerleave="mountMoveStop()"
+                                    @pointercancel="mountMoveStop()">N</button>
+                            <button class="dpad-btn dpad-w"
+                                    @pointerdown.prevent="mountMoveStart('w', $event)"
+                                    @pointerup.prevent="mountMoveStop()"
+                                    @pointerleave="mountMoveStop()"
+                                    @pointercancel="mountMoveStop()">W</button>
+                            <button class="dpad-btn dpad-stop" @click="mountStop()">STOP</button>
+                            <button class="dpad-btn dpad-e"
+                                    @pointerdown.prevent="mountMoveStart('e', $event)"
+                                    @pointerup.prevent="mountMoveStop()"
+                                    @pointerleave="mountMoveStop()"
+                                    @pointercancel="mountMoveStop()">E</button>
+                            <button class="dpad-btn dpad-s"
+                                    @pointerdown.prevent="mountMoveStart('s', $event)"
+                                    @pointerup.prevent="mountMoveStop()"
+                                    @pointerleave="mountMoveStop()"
+                                    @pointercancel="mountMoveStop()">S</button>
+                        </div>
+
                         <!-- SHUT-3: Polaris Shutter for VIDEO Record.
                              Tap = toggle (start when idle, stop when
                              recording). Long-press = same toggle (no
