@@ -148,13 +148,25 @@ public class LiveStackingService {
     /// the active rig hasn't forced server-side.</summary>
     public StackMode Mode { get; set; } = StackMode.Full;
 
+    // LSPP-3+4: per-frame pre-processing. Settings read from the active
+    // rig on every frame so live toggles take effect without a restart.
+    // PreProcessor is the singleton (Program.cs); null in unit-test
+    // doubles -- splice is no-op when null. Status fields broadcast via
+    // the WS payload so the LIVE-tab UI can show counters in real time.
+    private readonly LiveStackPreProcessor? _preProcessor;
+    private readonly ProfileService? _profiles;
+    public LiveStackPreProcStatus PreProcStatus { get; } = new();
+
     public LiveStackingService(ImageRelayService relay,
                                 ILogger<LiveStackingService> logger,
                                 ImageWriterService? writer = null,
-                                ProfileService? profiles = null) {
+                                ProfileService? profiles = null,
+                                LiveStackPreProcessor? preProcessor = null) {
         _relay = relay;
         _writer = writer;
         _logger = logger;
+        _profiles = profiles;
+        _preProcessor = preProcessor;
         // SNR-3: keep TargetSnr aligned with the active rig until the
         // user explicitly overrides via /api/livestack/target-snr.
         // ProfileService is optional in the ctor so the existing test
@@ -165,6 +177,10 @@ public class LiveStackingService {
                 // Refresh only if no override is in place — the user's
                 // session-level number sticks until they clear it.
                 if (_targetSnrOverride == null) TargetSnr = rig?.TargetSnr;
+                // LSPP-3: switching rigs invalidates the master cache
+                // (different rig = different gain/binning likely).
+                _preProcessor?.Reset();
+                PreProcStatus.Reset();
             };
         }
     }
@@ -216,6 +232,10 @@ public class LiveStackingService {
             CumulativeSnr = 0;
             _snrHistory.Clear();
             LastEta = null;
+            // LSPP-3+4: target switch -> drop the master cache so the
+            // next frame re-resolves with the new filter/exposure/gain.
+            _preProcessor?.Reset();
+            PreProcStatus.Reset();
             _logger.LogInformation("Live stacking reset");
         }
     }
@@ -281,6 +301,41 @@ public class LiveStackingService {
         var mode = Mode;
         _logger.LogInformation("Live stack: processing frame {N} ({W}x{H}), mode={Mode}",
             _frameCount + 1, props.Width, props.Height, mode);
+
+        // LSPP-4: per-frame pre-processing splice. Calibration runs
+        // here on the server (or via the client when MetricsOnly is
+        // chosen by the server-side stack -- either way the pixels
+        // we feed into StarDetector below are the calibrated ones).
+        // BGE is handled client-side ONLY (MetricsOnly) so the server
+        // just tracks supportedThisSession for the WS payload.
+        var preProcSettings = _profiles?.ActiveEquipmentProfile?.LiveStackPreProcessing
+                              ?? new LiveStackPreProcSettings();
+        PreProcStatus.BgeSupportedThisSession = (mode == StackMode.MetricsOnly);
+        if (preProcSettings.CalibrationEnabled && _preProcessor != null) {
+            var res = await _preProcessor.ApplyAsync(imageData, preProcSettings, ct);
+            if (res.Success && (res.MasterDarkUsed != null
+                                || res.MasterFlatUsed != null
+                                || res.MasterBiasUsed != null)) {
+                // Calibration applied successfully -- swap in the
+                // calibrated pixels for the rest of the pipeline.
+                data = res.Pixels;
+                PreProcStatus.RecordCalibrationApplied(res);
+            } else if (!res.Success) {
+                // Math threw / master corrupted -- fall back to raw
+                // pixels so the session continues. Operator sees the
+                // counter increment via WS, and the warning lands in
+                // the debug log via the helper.
+                _logger.LogWarning(
+                    "Live-stack calibration failed for frame {N}: {Err}",
+                    _frameCount + 1, res.Error);
+                PreProcStatus.RecordCalibrationFallback(res.Error);
+            } else {
+                // Success but no masters matched (auto-match empty).
+                // Don't penalise the counter as fallback -- nothing
+                // went wrong, there just wasn't anything to apply.
+                PreProcStatus.RecordCalibrationNoMatch();
+            }
+        }
 
         // StarDetector runs in BOTH modes:
         //   - Full: feeds StarMatcher for alignment + provides HFR
@@ -446,6 +501,20 @@ public class LiveStackingService {
     /// Full mode. Frame-side per-frame snr also flows here so the
     /// LIVE / PREVIEW UIs render consistent numbers.</summary>
     public void InjectClientStackMetrics(int frameCount, double frameSnr, double cumulativeSnr) {
+        InjectClientStackMetrics(frameCount, frameSnr, cumulativeSnr,
+            bgeProcessed: null, bgeFallback: null, bgeError: null);
+    }
+
+    /// <summary>LSPP-5: extended overload that also lets the client
+    /// report per-session BGE counters back to the server. When the
+    /// browser runs BGE per-frame (MetricsOnly + bgeEnabled), it
+    /// posts the running counters here so the WS broadcast can
+    /// mirror them to every other connected browser + the LIVE-tab
+    /// status badge stays in sync. Null params on the legacy
+    /// 3-arg overload keep the existing CLST-5 wire format working
+    /// untouched.</summary>
+    public void InjectClientStackMetrics(int frameCount, double frameSnr, double cumulativeSnr,
+                                          int? bgeProcessed, int? bgeFallback, string? bgeError) {
         if (Mode != StackMode.MetricsOnly) return;
         // Defensive: only update when the WASM client's frameCount is
         // not behind ours (it lags by ≤1 due to async dispatch). A
@@ -456,6 +525,12 @@ public class LiveStackingService {
             CumulativeSnr = cumulativeSnr;
             RecordSnrSample(frameCount, cumulativeSnr);
             RecomputeEta();
+        }
+        if (bgeProcessed.HasValue || bgeFallback.HasValue) {
+            PreProcStatus.InjectClientBgeMetrics(
+                processed: bgeProcessed ?? 0,
+                fallback:  bgeFallback  ?? 0,
+                error: bgeError);
         }
     }
 

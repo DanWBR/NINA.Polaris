@@ -68,6 +68,33 @@ public static class LiveStackEndpoints {
             return Results.Ok(new { fired = true });
         });
 
+        // ----- LSPP-3: per-frame pre-processing settings + status -----
+        //
+        // GET returns both the persisted settings (so the UI can
+        // hydrate the form on tab open) AND the runtime status
+        // (counters of calibrated/fallback frames, names of the
+        // masters that were resolved on first frame). The status
+        // half is what the WS payload also broadcasts -- exposing it
+        // via REST lets a fresh tab catch up without waiting for
+        // the next 1Hz tick.
+        group.MapGet("/preprocessing/settings", (ProfileService profiles) => {
+            var rig = profiles.ActiveEquipmentProfile;
+            return Results.Ok(rig?.LiveStackPreProcessing ?? new LiveStackPreProcSettings());
+        });
+
+        group.MapPut("/preprocessing/settings",
+            (LiveStackPreProcSettings req, ProfileService profiles,
+             LiveStackPreProcessor preProc) => {
+                var rig = profiles.ActiveEquipmentProfile;
+                if (rig == null) return Results.BadRequest(new { error = "no active rig" });
+                profiles.UpdateEquipmentProfile(rig.Id, r => r.LiveStackPreProcessing = req);
+                // Settings changed -> drop the master cache so the next
+                // frame resolves with the new overrides (or the new
+                // CalibrationEnabled flag).
+                preProc.Reset();
+                return Results.Ok(new { saved = true });
+            });
+
         // ----- REFSUG-1: dismiss the refocus suggestion -----
         //
         // resetBaseline=true is the "I refocused" path, replaces the

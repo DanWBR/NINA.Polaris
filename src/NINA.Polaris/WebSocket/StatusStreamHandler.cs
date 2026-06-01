@@ -273,7 +273,34 @@ public static class StatusStreamHandler {
                             // REFSUG-1: trend-based advisory. Always
                             // emitted so the UI can decide whether to
                             // render the chip / callout without polling.
-                            refocusSuggestion = refocusSuggest.CurrentStatus
+                            refocusSuggestion = refocusSuggest.CurrentStatus,
+                            // LSPP-3: per-frame pre-processing status.
+                            // Counters update on every frame; master
+                            // names hold across the session until the
+                            // operator overrides (cache reset). UI in
+                            // the LIVE tab consumes these for the
+                            // "X calibrated / Y fallback" badges.
+                            preProc = new {
+                                calibration = new {
+                                    enabled = profile.ActiveEquipmentProfile?.LiveStackPreProcessing?.CalibrationEnabled ?? false,
+                                    masterDarkName = liveStack.PreProcStatus.MasterDarkUsed,
+                                    masterFlatName = liveStack.PreProcStatus.MasterFlatUsed,
+                                    masterBiasName = liveStack.PreProcStatus.MasterBiasUsed,
+                                    framesCalibrated = liveStack.PreProcStatus.FramesCalibrated,
+                                    framesFallback = liveStack.PreProcStatus.FramesCalibrationFallback,
+                                    framesNoMatch = liveStack.PreProcStatus.FramesCalibrationNoMatch,
+                                    lastError = liveStack.PreProcStatus.LastCalibrationError
+                                },
+                                bge = new {
+                                    enabled = profile.ActiveEquipmentProfile?.LiveStackPreProcessing?.BgeEnabled ?? false,
+                                    supportedThisSession = liveStack.PreProcStatus.BgeSupportedThisSession,
+                                    framesProcessed = liveStack.PreProcStatus.FramesBgeProcessed,
+                                    framesFallback = liveStack.PreProcStatus.FramesBgeFallback,
+                                    lastError = liveStack.PreProcStatus.LastBgeError,
+                                    smoothing = profile.ActiveEquipmentProfile?.LiveStackPreProcessing?.BgeSmoothing ?? 1.0,
+                                    correction = profile.ActiveEquipmentProfile?.LiveStackPreProcessing?.BgeCorrection ?? "Subtraction"
+                                }
+                            }
                         },
                         guider = guiderPayload,
                         autoFocus = autoFocusPayload,

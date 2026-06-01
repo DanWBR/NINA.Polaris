@@ -114,10 +114,29 @@ public static class ImageStreamHandler {
                             && root.TryGetProperty("frameSnr", out var fsnr)
                             && root.TryGetProperty("cumulativeSnr", out var csnr)) {
                             try {
+                                // LSPP-5: BGE counters are optional --
+                                // older clients (pre-LSPP) just don't
+                                // send them. The 6-arg overload accepts
+                                // nulls and skips the BgeMetrics call,
+                                // keeping the legacy 3-arg path intact.
+                                int? bgeP = null, bgeF = null;
+                                string? bgeErr = null;
+                                if (root.TryGetProperty("bgeProcessed", out var bp)
+                                    && bp.ValueKind == JsonValueKind.Number)
+                                    bgeP = bp.GetInt32();
+                                if (root.TryGetProperty("bgeFallback", out var bf)
+                                    && bf.ValueKind == JsonValueKind.Number)
+                                    bgeF = bf.GetInt32();
+                                if (root.TryGetProperty("bgeError", out var be)
+                                    && be.ValueKind == JsonValueKind.String)
+                                    bgeErr = be.GetString();
                                 liveStack.InjectClientStackMetrics(
                                     fcSnr.GetInt32(),
                                     fsnr.GetDouble(),
-                                    csnr.GetDouble());
+                                    csnr.GetDouble(),
+                                    bgeProcessed: bgeP,
+                                    bgeFallback: bgeF,
+                                    bgeError: bgeErr);
                             } catch (Exception ex) {
                                 logger.LogDebug(ex, "Client {Id} SNR inject failed", clientId);
                             }
