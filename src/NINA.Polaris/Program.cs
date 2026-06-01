@@ -125,6 +125,11 @@ builder.Services.AddSingleton<RefocusSuggestionService>();
 // background poll loop runs.
 builder.Services.AddSingleton<SlewPreviewService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<SlewPreviewService>());
+// LSPP-2: per-frame calibration helper consumed by LiveStackingService.
+// Singleton so the master cache (loaded ushort[] buffers, ~150MB peak)
+// survives across all sessions in the process lifetime -- a single
+// Reset clears it when LiveStackingService.Reset is called.
+builder.Services.AddSingleton<LiveStackPreProcessor>();
 builder.Services.AddSingleton<LiveStackingService>();
 builder.Services.AddSingleton<EquipmentManager>();
 builder.Services.AddSingleton<SequenceEngine>();
