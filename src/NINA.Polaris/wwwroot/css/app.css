@@ -1933,7 +1933,7 @@ label select.input-sm {
 .mount-float-panel {
     position: fixed;
     z-index: 90;
-    width: 280px;
+    width: 360px;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: var(--radius);
