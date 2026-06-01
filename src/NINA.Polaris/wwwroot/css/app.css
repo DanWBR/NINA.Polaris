@@ -839,17 +839,50 @@ body {
 }
 .live-pane > .quick-controls .control-row,
 .preview-pane > .quick-controls .control-row {
+    /* Stack control items vertically inside the narrow 320px sidebar
+       so each row spans the full panel width — looks tidy and gives
+       the inputs / preset bars proper breathing room instead of the
+       jagged wrap the row-direction layout produces here. */
     display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px 8px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
     min-width: 0;
 }
 .live-pane > .quick-controls .control-row > label,
 .preview-pane > .quick-controls .control-row > label {
+    /* Each label = "title [input] suffix" laid out horizontally,
+       but the whole label spans the full sidebar width so multiple
+       labels stack instead of competing for one row. */
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
     min-width: 0;
-    max-width: 100%;
+}
+.live-pane > .quick-controls .control-row > label > input,
+.live-pane > .quick-controls .control-row > label > select,
+.preview-pane > .quick-controls .control-row > label > input,
+.preview-pane > .quick-controls .control-row > label > select {
+    flex: 1;
+    min-width: 0;
+}
+/* Preset button bars (ZWO L/M/H gain, BIN1..4) — make every button
+   share the row equally so they justify across the full sidebar. */
+.live-pane > .quick-controls .control-row > .zwo-gain-presets,
+.live-pane > .quick-controls .control-row > .bin-presets,
+.preview-pane > .quick-controls .control-row > .zwo-gain-presets,
+.preview-pane > .quick-controls .control-row > .bin-presets {
+    display: flex;
+    gap: 6px;
+    width: 100%;
+}
+.live-pane > .quick-controls .control-row > .zwo-gain-presets > button,
+.live-pane > .quick-controls .control-row > .bin-presets > button,
+.preview-pane > .quick-controls .control-row > .zwo-gain-presets > button,
+.preview-pane > .quick-controls .control-row > .bin-presets > button {
+    flex: 1;
+    min-width: 0;
 }
 .live-pane > .quick-controls .control-row.actions,
 .preview-pane > .quick-controls .control-row.actions {
@@ -8482,16 +8515,36 @@ label select.input-sm {
    within the row but every row sits stacked top-to-bottom. The
    labels inherit the same look as elsewhere. */
 .video-pane .quick-controls .control-row {
+    /* Stack items vertically (same treatment as LIVE/PREVIEW). */
     display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px 8px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
     min-width: 0;
 }
 .video-pane .quick-controls .control-row > label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
     min-width: 0;
     max-width: 100%;
+}
+.video-pane .quick-controls .control-row > label > input,
+.video-pane .quick-controls .control-row > label > select {
+    flex: 1;
+    min-width: 0;
+}
+.video-pane .quick-controls .control-row > .zwo-gain-presets,
+.video-pane .quick-controls .control-row > .bin-presets {
+    display: flex;
+    gap: 6px;
+    width: 100%;
+}
+.video-pane .quick-controls .control-row > .zwo-gain-presets > button,
+.video-pane .quick-controls .control-row > .bin-presets > button {
+    flex: 1;
+    min-width: 0;
 }
 /* Compact stats / hint lines inside the sidebar shouldn't expand
    horizontally past the panel; allow wrapping. */
