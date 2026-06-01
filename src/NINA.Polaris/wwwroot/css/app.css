@@ -9787,3 +9787,20 @@ label select.input-sm {
     border-radius: 6px;
     background: #000;
 }
+
+/* Slew & Center capture tune popup inside the sky map overlay actions.
+   Uses <details> so it stays out of the way until expanded. */
+.slew-center-tune {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+}
+.slew-center-tune summary {
+    cursor: pointer;
+    color: var(--text-muted);
+    user-select: none;
+}
+.slew-center-tune summary:hover { color: var(--text-primary); }
+.slew-center-tune[open] summary { color: var(--text-primary); margin-bottom: 4px; }

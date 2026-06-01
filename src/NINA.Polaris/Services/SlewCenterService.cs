@@ -80,7 +80,14 @@ public class SlewCenterService {
 
     private async Task RunJobAsync(SlewCenterJob job, CancellationToken ct) {
         const int maxIterations = 5;
-        const double solveExposure = 5.0;
+        // Per-rig knobs so long-FL setups don't saturate Sirius on a
+        // hardcoded 5s frame and short-FL setups don't time out
+        // waiting for stars at gain 0. Defaults match the previous
+        // hardcoded values (5.0s / 100) so existing rigs behave
+        // identically until the operator tweaks them in Manage Rigs.
+        var rig = _profiles.ActiveEquipmentProfile;
+        double solveExposure = rig.SlewCenterExposureSec > 0 ? rig.SlewCenterExposureSec : 5.0;
+        int solveGain = rig.SlewCenterGain > 0 ? rig.SlewCenterGain : 100;
 
         try {
             if (_equip.Telescope == null) {
@@ -153,11 +160,18 @@ public class SlewCenterService {
 
                 ct.ThrowIfCancellationRequested();
 
-                // Step 2: Capture short exposure for plate solving
+                // Step 2: Capture short exposure for plate solving.
+                // Pass gain via CaptureOptions so vendor cameras (Canon,
+                // Nikon, ASCOM) that don't honour a bare CaptureAsync
+                // gain still get the right ISO/gain for the solve.
                 job.State = SlewCenterState.Capturing;
-                _logger.LogInformation("Capturing {Exp}s solve frame", solveExposure);
+                _logger.LogInformation(
+                    "Capturing {Exp}s solve frame at gain {Gain}", solveExposure, solveGain);
 
-                var imageData = await _equip.Camera.CaptureAsync(solveExposure, ct);
+                var imageData = await _equip.Camera.CaptureAsync(
+                    solveExposure,
+                    new NINA.Image.Interfaces.CaptureOptions(Gain: solveGain, ImageType: "SOLVE"),
+                    ct);
 
                 var tempFits = Path.Combine(Path.GetTempPath(),
                     $"nina_solve_{job.Id}_{i}.fits");

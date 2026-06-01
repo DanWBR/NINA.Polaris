@@ -103,6 +103,11 @@ public static class EquipmentEndpoints {
                     r.PolarAlignSettleSeconds = update.PolarAlignSettleSeconds;
                 if (update.PolarAlignGain > 0)
                     r.PolarAlignGain = update.PolarAlignGain;
+                // Slew & Center plate-solve tunables (per-rig).
+                if (update.SlewCenterExposureSec > 0)
+                    r.SlewCenterExposureSec = update.SlewCenterExposureSec;
+                if (update.SlewCenterGain > 0)
+                    r.SlewCenterGain = update.SlewCenterGain;
                 r.FocalLengthMm = update.FocalLengthMm;
                 // Telescope picker fields. Strings safe to set as-is
                 // (empty string is the "no picker selection" sentinel).

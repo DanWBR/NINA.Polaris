@@ -576,6 +576,15 @@ public class EquipmentProfile {
     public int PolarAlignSettleSeconds { get; set; } = 2;
     public int PolarAlignGain { get; set; } = 100;
 
+    // Slew & Center plate-solve tunables. Used by SKY tab "Go to",
+    // meridian-flip recenter, and live-stack auto-recenter trigger.
+    // Per-rig because the same defaults bite long-FL setups (5s + low
+    // gain saturates Sirius; high gain + 2s burns sky-glow on slow
+    // optics). Defaults match the previous SlewCenterService hardcoded
+    // values so existing rigs behave identically until the user tunes.
+    public double SlewCenterExposureSec { get; set; } = 5.0;
+    public int SlewCenterGain { get; set; } = 100;
+
     // Optics specific to this rig. FocalLengthMm is the *effective*
     // focal length used everywhere downstream (FOV calc, FITS
     // FOCALLEN header, mosaic planner, etc.), for OTAs with a

@@ -2081,6 +2081,14 @@ function ninaApp() {
             settleSec: 2,
             gain: 100
         },
+        // Slew & Center plate-solve capture (per-rig). Defaults match
+        // the previous SlewCenterService hardcoded values so existing
+        // rigs behave identically until tweaked. Hydrated alongside
+        // polar.* in _hydratePolarSettingsFromRig.
+        slewCenter: {
+            exposureSec: 5.0,
+            gain: 100
+        },
         // PA-6: "Best targets for TPPA now" chip list. Fetched on tab
         // enter + on demand via Refresh. items[] comes from
         // /api/polar/best-targets and is sorted server-side by score.
@@ -13693,6 +13701,33 @@ function ninaApp() {
             if (rig.polarAlignExposureSec > 0) this.polar.exposureSec = rig.polarAlignExposureSec;
             if (rig.polarAlignSettleSeconds >= 0) this.polar.settleSec = rig.polarAlignSettleSeconds;
             if (rig.polarAlignGain > 0) this.polar.gain = rig.polarAlignGain;
+            // Slew & Center capture (used by SKY "Go to" / meridian
+            // flip recenter / live-stack recenter). Same hydrate path
+            // because they share the per-rig profile.
+            if (rig.slewCenterExposureSec > 0) this.slewCenter.exposureSec = rig.slewCenterExposureSec;
+            if (rig.slewCenterGain > 0) this.slewCenter.gain = rig.slewCenterGain;
+        },
+
+        /// Persist Slew & Center capture settings to the active rig.
+        /// Mirrors savePolarRigSettings — separate handler so the
+        /// debounced @change on the SKY tab inputs doesn't churn the
+        /// polar fields and vice-versa.
+        async saveSlewCenterRigSettings() {
+            const rig = this.rigs?.find(r => r.id === this.activeRigId);
+            if (!rig) return;
+            try {
+                await this.apiPost('/api/equipment/rigs/' + encodeURIComponent(rig.id), null, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ...rig,
+                        slewCenterExposureSec: parseFloat(this.slewCenter.exposureSec) || 5.0,
+                        slewCenterGain: parseInt(this.slewCenter.gain) || 100
+                    })
+                });
+            } catch (e) {
+                this.toast('Slew & Center settings save failed: ' + (e.message || ''), 'error');
+            }
         },
 
         // ---- PA-4: Polar UI helpers (status pills, progress, formatting) ----

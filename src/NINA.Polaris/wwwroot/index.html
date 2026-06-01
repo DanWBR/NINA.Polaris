@@ -5198,6 +5198,39 @@
                                 :title="!mount.connected ? 'Connect a mount first' : 'Re-centre the sky map on where the mount is currently pointing'">
                             Center on mount
                         </button>
+                        <details class="slew-center-tune">
+                            <summary title="Per-rig capture settings used by Slew &amp; Center plate-solve">
+                                ⚙ Solve frame
+                            </summary>
+                            <div class="control-row" style="margin-top: 6px; gap: 8px; flex-wrap: wrap">
+                                <label>Exp (s)
+                                    <input type="number" class="input-sm" min="0.1" step="0.5"
+                                           x-model.number="slewCenter.exposureSec"
+                                           @change="saveSlewCenterRigSettings()">
+                                </label>
+                                <label>Gain
+                                    <input type="number" class="input-sm" min="0" max="600" step="10"
+                                           x-model.number="slewCenter.gain"
+                                           @change="saveSlewCenterRigSettings()">
+                                </label>
+                                <span class="zwo-gain-presets"
+                                      x-show="zwoPresetsForActiveCamera()"
+                                      :title="'ZWO preset gains'">
+                                    <button type="button" class="zwo-gain-preset"
+                                            :data-active="slewCenter.gain === zwoPresetsForActiveCamera()?.L"
+                                            @click="applyGainPreset('slewCenter.gain', zwoPresetsForActiveCamera().L); saveSlewCenterRigSettings()">L</button>
+                                    <button type="button" class="zwo-gain-preset"
+                                            :data-active="slewCenter.gain === zwoPresetsForActiveCamera()?.M"
+                                            @click="applyGainPreset('slewCenter.gain', zwoPresetsForActiveCamera().M); saveSlewCenterRigSettings()">M</button>
+                                    <button type="button" class="zwo-gain-preset"
+                                            :data-active="slewCenter.gain === zwoPresetsForActiveCamera()?.H"
+                                            @click="applyGainPreset('slewCenter.gain', zwoPresetsForActiveCamera().H); saveSlewCenterRigSettings()">H</button>
+                                </span>
+                            </div>
+                            <p class="hint" style="margin: 6px 0 0 0; font-size: 11px">
+                                Used by Slew &amp; Center, meridian-flip recenter, and live-stack auto-recenter. Saved per-rig.
+                            </p>
+                        </details>
                     </div>
 
                     <!-- Top-centre progress + STOP overlay. Always
