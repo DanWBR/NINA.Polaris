@@ -12440,8 +12440,9 @@ function ninaApp() {
                     body.hintRa = this.mount.ra;
                     body.hintDec = this.mount.dec;
                 }
-                const r = await this.apiPost(
+                const resp = await this.apiPost(
                     '/api/platesolve/solve-latest', body);
+                const r = await resp.json();
                 this.previewSolveResult = r || { success: false, error: 'No response' };
                 if (this.previewSolveResult.success) {
                     this.toast('Plate solve succeeded', 'ok');
