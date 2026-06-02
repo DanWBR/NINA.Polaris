@@ -15,7 +15,39 @@
   verbatim, only the prose around them was translated.
 -->
 
-# Current chapter: AUTORUN item controls + centre preview
+# Current chapter: Preview render quality settings
+
+> The live view always receives full-resolution 16-bit data (LZ4
+> lossless), but the WebGL output canvas was hard-capped at 2048px
+> and OSC colour was always half-res superpixel. Operator wanted
+> control over that. All display-only; saved files are unaffected.
+
+## What shipped (Settings -> Appearance card)
+
+### Preview quality selector (2048 / 4096 / native)
+New `previewMaxDim` pref (localStorage, default 4096). The WebGL
+output cap (`MAX_GPU_DIM`) now reads it instead of a hard-coded
+2048, clamped to the GPU's real `MAX_TEXTURE_SIZE`. "Native" = full
+sensor up to the hardware limit. Raising the cap takes OSC from
+quarter-res to true half-res (or full with the toggle below) and
+lets mono preview zoom sharper. Source texture is uploaded full-res
+regardless; only the output canvas size changes.
+
+### Full-resolution OSC colour debayer toggle
+New `previewFullDebayer` pref (default off). Adds a full-res
+bilinear demosaic path to the WebGL shader (new `u_fullDebayer`
+uniform + `colorAt()` helper): each output pixel keeps its native
+Bayer channel and reconstructs the other two by averaging the
+same-colour pixels in the 3x3 window. It only engages when the
+native frame fits within the Preview-quality cap (output == source,
+1:1) so there is no fractional cell drift -> no return of the
+checkerboard; otherwise it falls back to the existing half-res
+superpixel path. Mono is unaffected.
+
+Both controls re-render the cached frame immediately via
+`applyManualStretch()` and persist per browser.
+
+# Past chapter: AUTORUN item controls + centre preview
 
 > Make the AUTORUN tab feel like an editor: manage items safely and
 > watch the frames land in the middle, ASIAIR-style.

@@ -2116,6 +2116,17 @@ function ninaApp() {
         _lastRawFrame: null,  // cache: { pixels, width, height, bitDepth, bayerPattern }
         showStretchPanel: false,
 
+        // Preview render quality (client-side, persisted in localStorage).
+        //   previewMaxDim: max GPU output canvas dimension. 2048 / 4096 /
+        //     0 (native = hardware MAX_TEXTURE_SIZE). Bigger = sharper zoom,
+        //     more GPU/canvas memory. Default 4096.
+        //   previewFullDebayer: when true, OSC colour frames are demosaiced
+        //     at FULL sensor resolution (bilinear) instead of the default
+        //     half-res superpixel. Heavier; only kicks in when the full-res
+        //     output fits within previewMaxDim, else falls back to superpixel.
+        previewMaxDim: 4096,
+        previewFullDebayer: false,
+
         // Client-side white-balance (display tint applied in the WebGL
         // shader AFTER stretch). Shared across LIVE, PREVIEW, FOCUS,
         // VIDEO so changing it anywhere updates the preview everywhere.
@@ -2509,6 +2520,14 @@ function ninaApp() {
                 ? fontSaved
                 : 'atkinson';
             this.applyUiFont();
+
+            // Preview render-quality prefs (client-side display only).
+            try {
+                const md = parseInt(localStorage.getItem('nina-preview-maxdim'), 10);
+                if ([2048, 4096, 0].includes(md)) this.previewMaxDim = md;
+                this.previewFullDebayer =
+                    localStorage.getItem('nina-preview-fulldebayer') === '1';
+            } catch { /* private mode: keep defaults */ }
 
             // Re-render the cached frame whenever the user switches
             // tabs. Fixes the classic "last snap painted on PREVIEW,
@@ -5146,10 +5165,35 @@ function ninaApp() {
                 uniform ivec2 u_bayerOff; // pixel offset (0 or 1) for the Bayer grid origin
                 uniform vec2 u_outSize;   // debayer output canvas size in pixels
                 uniform int u_cellStep;   // texels per output pixel along each axis (EVEN for color)
+                uniform int u_fullDebayer; // 1 = full-res bilinear demosaic, 0 = half-res superpixel
                 uniform float u_wbR;   // red channel gain  (default 1.7 for daylight OSC)
                 uniform float u_wbB;   // blue channel gain (default 1.5 for daylight OSC)
                 in vec2 v_uv;
                 out vec4 fragColor;
+
+                // Native colour of a source pixel q (0=R 1=G 2=B) for the
+                // current Bayer pattern + grid origin. Used by the full-res
+                // bilinear demosaic path.
+                int colorAt(ivec2 q) {
+                    int mx = (q.x - u_bayerOff.x) & 1;
+                    int my = (q.y - u_bayerOff.y) & 1;
+                    if (u_bayer == 1) {            // RGGB
+                        if (mx == 0 && my == 0) return 0;
+                        if (mx == 1 && my == 1) return 2;
+                        return 1;
+                    } else if (u_bayer == 2) {     // BGGR
+                        if (mx == 0 && my == 0) return 2;
+                        if (mx == 1 && my == 1) return 0;
+                        return 1;
+                    } else if (u_bayer == 3) {     // GBRG
+                        if (mx == 1 && my == 0) return 2;
+                        if (mx == 0 && my == 1) return 0;
+                        return 1;
+                    }                              // GRBG (4)
+                    if (mx == 1 && my == 0) return 0;
+                    if (mx == 0 && my == 1) return 2;
+                    return 1;
+                }
 
                 float fetch(vec2 uv) {
                     ivec2 p = ivec2(uv * u_texSize);
@@ -5179,6 +5223,40 @@ function ninaApp() {
                         float v = fetch(v_uv);
                         float s = stretch(v);
                         fragColor = vec4(s, s, s, 1.0);
+                        return;
+                    }
+                    // Full-resolution bilinear demosaic (opt-in). The output
+                    // canvas equals the sensor resolution (1:1, set by JS only
+                    // when it fits the GPU cap) so each output pixel maps to a
+                    // single source pixel -- no fractional cell drift, hence no
+                    // checkerboard. For each output pixel we keep its own
+                    // native channel and reconstruct the other two by averaging
+                    // the same-colour pixels in the surrounding 3x3 window,
+                    // which is exactly bilinear interpolation for a Bayer grid.
+                    if (u_fullDebayer == 1) {
+                        ivec2 maxP = ivec2(u_texSize) - ivec2(1);
+                        ivec2 p = clamp(ivec2(v_uv * u_texSize), ivec2(0), maxP);
+                        float sumR = 0.0, sumG = 0.0, sumB = 0.0;
+                        float cR = 0.0, cG = 0.0, cB = 0.0;
+                        for (int dy = -1; dy <= 1; dy++) {
+                            for (int dx = -1; dx <= 1; dx++) {
+                                ivec2 q = clamp(p + ivec2(dx, dy), ivec2(0), maxP);
+                                float val = float(texelFetch(u_tex, q, 0).r);
+                                int c = colorAt(q);
+                                if (c == 0) { sumR += val; cR += 1.0; }
+                                else if (c == 1) { sumG += val; cG += 1.0; }
+                                else { sumB += val; cB += 1.0; }
+                            }
+                        }
+                        float r = cR > 0.0 ? sumR / cR : 0.0;
+                        float g = cG > 0.0 ? sumG / cG : 0.0;
+                        float b = cB > 0.0 ? sumB / cB : 0.0;
+                        float fr = stretch(r);
+                        float fg = stretch(g);
+                        float fb = stretch(b);
+                        fragColor = vec4(clamp(fr * u_wbR, 0.0, 1.0),
+                                         fg,
+                                         clamp(fb * u_wbB, 0.0, 1.0), 1.0);
                         return;
                     }
                     // Half-resolution superpixel debayer. CRITICAL:
@@ -5277,6 +5355,7 @@ function ninaApp() {
                 bayerOff: gl.getUniformLocation(prog, 'u_bayerOff'),
                 outSize: gl.getUniformLocation(prog, 'u_outSize'),
                 cellStep: gl.getUniformLocation(prog, 'u_cellStep'),
+                fullDebayer: gl.getUniformLocation(prog, 'u_fullDebayer'),
                 wbR: gl.getUniformLocation(prog, 'u_wbR'),
                 wbB: gl.getUniformLocation(prog, 'u_wbB')
             };
@@ -5315,8 +5394,21 @@ function ninaApp() {
             // Cap the GPU render size to avoid uploading absurd buffers
             // when a 6000×4000 sensor lands, fan-out scaling handles
             // visual fidelity beyond ~2048 anyway.
-            const MAX_GPU_DIM = 2048;
+            // Output cap from the user's "Preview quality" setting (UI
+            // settings card): 2048 / 4096 / 0(native). Native clamps to the
+            // GPU's real MAX_TEXTURE_SIZE so we never request an illegal
+            // canvas. The source texture is always uploaded at full
+            // resolution regardless; this only bounds the OUTPUT canvas.
+            const hwMax = gl.getParameter(gl.MAX_TEXTURE_SIZE) || 4096;
+            const wantDim = this.previewMaxDim | 0;
+            const MAX_GPU_DIM = wantDim > 0 ? Math.min(wantDim, hwMax) : hwMax;
             const isColorBayer = (bayerPattern | 0) >= 1 && (bayerPattern | 0) <= 4;
+            // Full-resolution bilinear demosaic (opt-in) only when the
+            // operator enabled it AND the native frame fits the output cap
+            // (so output == source, 1:1, no cell drift -> no checkerboard).
+            // Otherwise fall back to the half-res superpixel path below.
+            const useFullDebayer = isColorBayer && this.previewFullDebayer
+                && width <= MAX_GPU_DIM && height <= MAX_GPU_DIM;
             // cellStep = texels per output pixel. 0 marks the mono path
             // (the shader ignores it). For colour it MUST be even so the
             // 2x2 Bayer cell sampled by each output pixel stays aligned
@@ -5325,7 +5417,12 @@ function ninaApp() {
             // res) and bump the step in steps of 2 if half-res would
             // still blow past the GPU cap.
             let cellStep = 0;
-            if (isColorBayer) {
+            if (useFullDebayer) {
+                // Full-res demosaic: output canvas == sensor resolution.
+                // cellStep stays 0 (the shader's full path ignores it).
+                canvas.width = width;
+                canvas.height = height;
+            } else if (isColorBayer) {
                 cellStep = 2;
                 while (Math.floor(width / cellStep) > MAX_GPU_DIM ||
                        Math.floor(height / cellStep) > MAX_GPU_DIM) {
@@ -5386,6 +5483,7 @@ function ninaApp() {
             // cell-aligned debayer sampling (the OSC checkerboard fix).
             gl.uniform2f(this._glLocs.outSize, canvas.width, canvas.height);
             gl.uniform1i(this._glLocs.cellStep, cellStep);
+            gl.uniform1i(this._glLocs.fullDebayer, useFullDebayer ? 1 : 0);
             // Per-channel WB gain. Defaults give a roughly neutral
             // daylight look on raw OSC data; users can tune via the
             // existing WB Red / WB Blue sliders in VIDEO (and soon
@@ -6208,6 +6306,21 @@ function ninaApp() {
             try { this.applyManualStretch(); } catch (e) { /* no frame yet */ }
             this.toast(this.stretchAuto ? 'Auto-stretch on' : 'Auto-stretch off (linear)',
                 'ok');
+        },
+
+        // --- Preview render quality (UI settings card) ---
+        // Persist to localStorage and re-render the cached frame so the
+        // change is visible immediately without waiting for the next one.
+        setPreviewMaxDim(v) {
+            const n = parseInt(v, 10);
+            this.previewMaxDim = [2048, 4096, 0].includes(n) ? n : 4096;
+            try { localStorage.setItem('nina-preview-maxdim', String(this.previewMaxDim)); } catch { }
+            try { this.applyManualStretch(); } catch (e) { /* no frame yet */ }
+        },
+        setPreviewFullDebayer(on) {
+            this.previewFullDebayer = !!on;
+            try { localStorage.setItem('nina-preview-fulldebayer', this.previewFullDebayer ? '1' : '0'); } catch { }
+            try { this.applyManualStretch(); } catch (e) { /* no frame yet */ }
         },
 
         _pzInitArea(areaEl, canvasId) {

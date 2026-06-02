@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260602-clock">
+    <link rel="stylesheet" href="/css/app.css?v=20260602-quality">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -8413,6 +8413,40 @@
                         Try it if you (or your stargazing companions) prefer a more readable
                         typeface. Persists per browser; no restart needed.
                     </p>
+
+                    <!-- Preview render quality. The live view is rendered on
+                         the GPU; the output canvas is capped at this size.
+                         Bigger = sharper zoom, more GPU/canvas memory. The
+                         full data (16-bit, full resolution) and saved files
+                         are unaffected: this is display only. -->
+                    <label style="display:flex; align-items:center; gap:12px; max-width:560px; margin-top:18px">
+                        <span style="min-width:90px">Preview quality</span>
+                        <select :value="previewMaxDim" @change="setPreviewMaxDim($event.target.value)" style="flex:1">
+                            <option value="2048">Standard — up to 2048 px (lightest)</option>
+                            <option value="4096">High — up to 4096 px (default)</option>
+                            <option value="0">Native — full sensor (sharpest, heaviest)</option>
+                        </select>
+                    </label>
+                    <p class="text-muted" style="font-size: 12px; margin-top: 6px; max-width:560px">
+                        How sharp the on-screen preview can get when you zoom in.
+                        Higher uses more graphics memory on the device showing the
+                        view (your phone / tablet / PC), not the telescope computer.
+                        Your saved images are always full quality regardless.
+                    </p>
+
+                    <label class="checkbox-label" style="display:flex; align-items:center; gap:10px; max-width:560px; margin-top:12px">
+                        <input type="checkbox" :checked="previewFullDebayer"
+                               @change="setPreviewFullDebayer($event.target.checked)">
+                        <span>Full-resolution colour preview (OSC cameras)</span>
+                    </label>
+                    <p class="text-muted" style="font-size: 12px; margin-top: 6px; max-width:560px">
+                        For one-shot-colour cameras, reconstruct colour at the full
+                        sensor resolution instead of the lighter half-resolution
+                        preview. Sharper, but heavier — it only takes effect when
+                        the frame fits within the Preview quality limit above
+                        (so pair it with <strong>Native</strong> for the full effect).
+                        Mono cameras are unaffected.
+                    </p>
                 </div>
 
                 <!-- Remote terminal, opens an SSH shell from the
@@ -11259,7 +11293,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260602-autorunpreview"></script>
+    <script src="/js/app.js?v=20260602-previewquality"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
