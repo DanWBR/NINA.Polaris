@@ -85,6 +85,32 @@ Full INDI protocol client with support for 400+ Linux drivers:
 - **Weather**, Temperature, humidity, dew point, wind, pressure, cloud cover, SQM, rain, safety status
 - **Flat Panel**, Light on/off, brightness control, dust cap open/close
 
+### INDI control panel (property browser)
+
+The **RIGS → INDI control panel** sub-tab is a built-in, in-browser
+replacement for the standalone `indi_control_panel` Qt app (which
+recent Raspberry Pi OS / libindi 2.x releases no longer package). It
+renders the full device → group → property tree for every connected
+INDI device and lets you read and edit any property without xpra or
+an external Qt install:
+
+- Number / switch / text / light properties with type-aware editors
+  (inputs, radio/checkbox, read-only indicators), live state dots,
+  per-device grouping, search, and auto-refresh.
+- Edits POST through the same `IndiClient` setters the rest of the
+  app uses, then auto-save to the driver's `~/.indi/*_config.xml` so
+  they survive reconnects.
+- **Property descriptions / help.** The INDI protocol carries no
+  description field (drivers advertise only a name and a label), so
+  every property gets a small **(?) help icon**. Hovering shows a
+  plain-language English explanation as a tooltip; clicking opens a
+  little editor where you can read the built-in description and write
+  your own note. Built-in descriptions for ~80 common INDI standard
+  properties ship in `wwwroot/data/indi-property-help.json`; your own
+  notes are saved in the profile (keyed by property name, so a note
+  on `CCD_TEMPERATURE` shows for every camera) and take priority over
+  the built-in text.
+
 ### DSLR / Mirrorless cameras
 
 Beyond the dedicated astronomy cameras INDI exposes, Polaris speaks
@@ -937,6 +963,12 @@ JSON-based settings persistence with multi-profile support:
 - Image output directory, naming pattern, format (FITS / XISF)
 - List of equipment rigs (see above)
 - Save, load, and rename profiles
+- **Factory reset** (Settings → "Reset everything to factory
+  defaults"): wipes every profile, rig, the app password and login
+  sessions, observer location, and the browser's UI preferences,
+  then reloads into first-run state. Captured images / FITS are
+  left untouched. Use it before imaging a clean SD card for
+  distribution so none of your own (or test) config ships.
 
 ### Remote Access (Relay Server)
 
@@ -1357,6 +1389,17 @@ Persistence:
 | POST | `/api/equipment/rigs/{id}/activate` | Switch to this rig |
 | DELETE | `/api/equipment/rigs/{id}` | Delete a rig (refuses to delete the last one) |
 
+### INDI control panel (property browser)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/indi/properties?device=` | Full device → group → property tree (optionally filtered to one device) |
+| POST | `/api/indi/properties/set` | Set a property `{ device, property, type, numbers/switches/texts }` |
+| POST | `/api/indi/properties/refresh` | Wipe the device cache and re-issue getProperties |
+| POST | `/api/indi/properties/config/{save\|load\|default}?device=` | Drive the driver's CONFIG_PROCESS |
+| GET | `/api/indi/properties/notes` | Operator's saved help notes (keyed by property name) |
+| POST | `/api/indi/properties/note` | Set or clear a note `{ property, text }` (empty text clears) |
+
 ### Camera
 
 | Method | Endpoint | Description |
@@ -1621,6 +1664,7 @@ export.
 | PUT | `/api/system/profile` | Update settings |
 | POST | `/api/system/profile/save-as` | Save profile as new name |
 | POST | `/api/system/profile/load/{id}` | Load profile by ID |
+| POST | `/api/system/factory-reset` | Wipe all profiles / rigs / auth / settings back to first-run (keeps captured images) |
 
 ### WebSocket Streams
 

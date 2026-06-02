@@ -56,6 +56,15 @@ remote Pi's IP. But this is fragile (USB drivers want to be physically
 co-located with the camera). The reference deploy is Polaris + INDI
 on the same SBC at the telescope.
 
+**Q: I need indi_control_panel but my Pi OS doesn't have it. Now what?**
+
+A: Use the built-in **RIGS → INDI control panel** sub-tab. It is a
+full in-browser property browser (read + edit every device property,
+auto-saved to the driver config) so you do not need the standalone Qt
+app, which recent Pi OS / libindi 2.x no longer package. Each property
+also has a **(?)** help icon: hover for a plain-language description,
+click to write your own note. See [RIGS](rigs.md#indi-control-panel-property-browser).
+
 ## Workflow
 
 **Q: AUTORUN vs ADV, which should I use?**
@@ -104,6 +113,14 @@ unaffected (in-memory accumulation).
 A: `{AppData}/Polaris/profile.json` (Windows: `%LocalAppData%`, Linux:
 `~/.config/Polaris/`). Back this up before major OS upgrades, losing
 it loses your rig configurations.
+
+**Q: How do I wipe all my settings (e.g. before sharing an SD card)?**
+
+A: Settings → "Reset everything to factory defaults". It clears every
+profile, rig, the app password and login sessions, observer location,
+and the browser's UI preferences, then reloads into first-run state.
+Your captured images and FITS files are kept. This cannot be undone,
+so back up the profile first if you might want it later.
 
 ## Software
 

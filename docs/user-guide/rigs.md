@@ -137,6 +137,47 @@ repo, to add a new OTA / reducer, edit the JSON, restart the server,
 refresh the browser. Pull requests with additions for popular new
 hardware are welcome.
 
+## INDI control panel (property browser)
+
+The **INDI control panel** sub-tab is a built-in replacement for the
+old standalone `indi_control_panel` Qt app, which recent Raspberry Pi
+OS / libindi 2.x releases no longer ship. It shows every property each
+connected device exposes, grouped per device, and lets you read and
+edit them right in the browser.
+
+- Properties are grouped (Main, Options, Site, ...) and searchable.
+  Number, switch, text and light types each get the right editor;
+  read-only properties show greyed out.
+- Edits are sent through the same path the rest of the app uses and
+  then auto-saved to the driver's `~/.indi/*_config.xml`, so they
+  come back on the next connect.
+- **Refresh / Resync** at the top re-reads the property list (use
+  Resync after loading or unloading a driver in the INDI Web
+  manager).
+
+### Property descriptions (the "?" help icon)
+
+The INDI protocol does not include a description for each property,
+only a short label. To make the cryptic names friendlier, every
+property has a small **(?)** icon next to its name:
+
+- **Hover** the (?) to read a plain-language English explanation as a
+  tooltip. Around 80 common INDI standard properties (camera, mount,
+  focuser, filter wheel, dome, rotator, weather, plus the general
+  ones) ship with a built-in description.
+- **Click** the (?) to open a small editor. It shows the built-in
+  description and gives you a box to write your own note. Your note
+  is saved and shown instead of the built-in text from then on.
+- Notes are saved per property name, not per device, so a note you
+  write on (for example) `CCD_TEMPERATURE` shows up for every camera
+  and survives reconnects. Use **Clear note** to go back to the
+  built-in description.
+
+Built-in descriptions live in
+`wwwroot/data/indi-property-help.json`; your own notes live in the
+profile, so a [factory reset](#) clears them along with the rest of
+your settings.
+
 ## Common pitfalls
 
 **Cards show empty dropdowns even after INDI connects**, INDI hasn't
