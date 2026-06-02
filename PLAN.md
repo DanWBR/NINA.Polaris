@@ -15,7 +15,46 @@
   verbatim, only the prose around them was translated.
 -->
 
-# Current chapter: INDI control panel property descriptions (help tooltips)
+# Current chapter: AUTORUN panel polish + calibration fixes
+
+> Varanda follow-ups on the AUTORUN tab: a clearer progress display
+> plus two real capture bugs surfaced while shooting BIAS frames.
+
+## What shipped
+
+### AUTORUN dual progress rings + layout
+The shutter sidebar was widened (168px -> 260px) and the
+Pause/Resume button shrunk (btn-sm, centered) so the panel reads
+better. The shutter now shows TWO rings: the outer red ring is the
+whole-sequence progress (frames done / total, unchanged), and a new
+inner cyan ring shows the CURRENT exposure's progress (elapsed /
+the active item's exposure seconds). The inner ring is driven
+client-side: `_autorunSyncFrame()` stamps `autorunFrameStart` when
+the active item/frame changes (called from both the WS and polling
+status handlers, never from a getter, to avoid Alpine write loops),
+and `autorunExposureProgress()` animates against the existing 50ms
+`shutterTick`. Zero-second frames (BIAS) draw no inner ring.
+
+### Fix: AUTORUN frames no longer feed the live stack
+`SequenceEngine` routed every captured frame into
+`LiveStackingService` whenever it was running (both the normal and
+the single-retry path). That meant scheduled-capture frames,
+including calibration (BIAS/DARK/FLAT), were stacked and fired the
+live-stack triggers. AUTORUN now always `RelayImageAsync` for the
+preview only and never touches the LIVE-tab accumulator; live
+stacking stays driven by the LIVE tab's own loop.
+
+### Fix: BIAS frames now actually expose
+A BIAS item sets exposure = 0. At exactly 0 s most INDI drivers
+(incl. indi_svbony_ccd) never start a readout, so no CCD1 BLOB was
+delivered and the capture hung to timeout (no image). `IndiCamera`
+now clamps a <= 0 request up to the driver-advertised minimum
+exposure (new `MinExposure`, read from the `CCD_EXPOSURE_VALUE`
+number element's `min`), or a 0.0001s fallback. The logical 0 s is
+still recorded in the FITS EXPTIME / metadata by the caller, so the
+bias is tagged correctly.
+
+# Past chapter: INDI control panel property descriptions (help tooltips)
 
 > The INDI control panel lists every property each device exposes,
 > but for retired-beginner operators the raw names (CCD_TEMPERATURE,

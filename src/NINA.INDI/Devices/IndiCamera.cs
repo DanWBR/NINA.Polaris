@@ -63,6 +63,24 @@ public class IndiCamera : ICamera {
     public double PixelSizeY => _client.GetNumber(DeviceName, "CCD_INFO", "CCD_PIXEL_SIZE_Y");
     public int BitDepth => (int)_client.GetNumber(DeviceName, "CCD_INFO", "CCD_BITSPERPIXEL");
 
+    /// <summary>Smallest exposure the driver advertises for
+    /// <c>CCD_EXPOSURE_VALUE</c> (the number element's <c>min</c>).
+    /// Used to satisfy BIAS / zero-second requests: most INDI drivers
+    /// will not start a readout at exactly 0 s, so we clamp up to this
+    /// instead. Returns 0 when the driver doesn't advertise a positive
+    /// minimum (the caller falls back to a tiny default).</summary>
+    public double MinExposure {
+        get {
+            var prop = _client.GetProperty(DeviceName, "CCD_EXPOSURE") as IndiNumberProperty;
+            if (prop != null
+                && prop.Values.TryGetValue("CCD_EXPOSURE_VALUE", out var el)
+                && el.Min > 0) {
+                return el.Min;
+            }
+            return 0;
+        }
+    }
+
     /// <summary>Read the Bayer mosaic pattern from the INDI
     /// <c>CCD_CFA</c> text property (<c>CFA_TYPE</c> element).
     /// Most OSC drivers (indi_asi_ccd, indi_svbony_ccd, indi_qhy_ccd,
@@ -276,6 +294,17 @@ public class IndiCamera : ICamera {
         // hangs forever. Cheap (single small XML packet) so doing it on
         // every capture is fine.
         try { await _client.EnableBlobAsync(DeviceName, ct); } catch { /* best effort */ }
+
+        // BIAS / zero-second requests: at exactly 0 s most INDI drivers
+        // (incl. indi_svbony_ccd) never start a readout, so no BLOB is
+        // ever delivered and the capture hangs until timeout. Clamp up to
+        // the driver's advertised minimum exposure (or a tiny fallback)
+        // so a bias frame still produces an image. The caller keeps the
+        // logical 0 s for the FITS EXPTIME / metadata.
+        if (exposureSeconds <= 0) {
+            var minExp = MinExposure;
+            exposureSeconds = minExp > 0 ? minExp : 0.0001;
+        }
 
         _exposureTcs = new TaskCompletionSource<IImageData>();
         var localTcs = _exposureTcs;

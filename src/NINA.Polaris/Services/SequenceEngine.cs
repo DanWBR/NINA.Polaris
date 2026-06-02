@@ -339,11 +339,14 @@ public class SequenceEngine {
                             });
                         }
 
-                        if (_liveStack.IsRunning) {
-                            await _liveStack.AddFrameAsync(imageData, ct);
-                        } else {
-                            await _relay.RelayImageAsync(imageData, ct);
-                        }
+                        // AUTORUN frames are saved to disk and shown in the
+                        // preview, but are NOT fed into the LIVE-tab stacking
+                        // accumulator. Live stacking is its own EAA loop driven
+                        // by the LIVE tab; routing scheduled-capture frames into
+                        // it would corrupt the stack and fire the live-stack
+                        // triggers, and calibration frames (BIAS/DARK/FLAT) must
+                        // never be stacked at all. Always relay for preview only.
+                        await _relay.RelayImageAsync(imageData, ct);
 
                         CurrentFrameInItem = f + 1;
                         TotalFramesCompleted++;
@@ -358,10 +361,9 @@ public class SequenceEngine {
                             await Task.Delay(2000, ct);
                             var imageData = await _equip.Camera.CaptureAsync(item.Exposure, ct);
 
-                            if (_liveStack.IsRunning)
-                                await _liveStack.AddFrameAsync(imageData, ct);
-                            else
-                                await _relay.RelayImageAsync(imageData, ct);
+                            // Preview only (see note above): AUTORUN never feeds
+                            // the LIVE-tab stacking accumulator.
+                            await _relay.RelayImageAsync(imageData, ct);
 
                             CurrentFrameInItem = f + 1;
                             TotalFramesCompleted++;
