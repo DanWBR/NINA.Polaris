@@ -1775,6 +1775,20 @@ label select.input-sm {
     text-align: center;
 }
 
+/* Fullscreen toggle badge in the top-right status row. Compact,
+   icon-only; lights up with the accent colour while fullscreen is
+   active so it doubles as a state indicator. */
+.fullscreen-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.fullscreen-badge-active {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: rgba(99, 102, 241, 0.12);
+}
+
 .btn-active {
     background: var(--accent);
     border-color: var(--accent);
