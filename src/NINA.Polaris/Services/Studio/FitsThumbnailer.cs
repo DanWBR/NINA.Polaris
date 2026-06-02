@@ -1,4 +1,6 @@
+using NINA.Core.Enum;
 using NINA.Image.FileFormat.FITS;
+using NINA.Image.ImageAnalysis;
 using SkiaSharp;
 
 namespace NINA.Polaris.Services.Studio;
@@ -23,8 +25,17 @@ public static class FitsThumbnailer {
     /// Returns the raw JPEG bytes, caller decides whether to cache
     /// them to disk or stream them straight to the response.
     /// </summary>
+    /// <param name="bayerOverride">
+    /// When set to a concrete pattern (RGGB, BGGR, GBRG, GRBG),
+    /// the raw CFA pixels are debayered with that pattern regardless
+    /// of what the BAYERPAT header says. Lets the FILES viewer
+    /// dropdown show "what would this look like if the pattern were
+    /// actually GRBG" without editing the file on disk. Pass
+    /// <c>null</c> to use whatever the file declares (the default).
+    /// </param>
     public static byte[] RenderJpegFromPath(string fitsPath, int maxDim = 256, int quality = 85,
-                                            string? stretchFromPath = null) {
+                                            string? stretchFromPath = null,
+                                            BayerPatternEnum? bayerOverride = null) {
         using var fs = File.OpenRead(fitsPath);
         var img = FITSReader.Read(fs);
         var w = img.Properties.Width;
@@ -39,6 +50,24 @@ public static class FitsThumbnailer {
         var overrideParams = (stretchFromPath != null)
             ? ComputeParamsFor(stretchFromPath, img.Properties.IsColor ? 3 : 1, bits)
             : null;
+
+        // Bayer override: if the caller asked for a specific pattern
+        // (from the image-viewer dropdown), debayer the mono CFA
+        // buffer into RGB planes and render as colour.
+        var effectivePattern = bayerOverride ?? img.Properties.BayerPattern;
+        if (!img.Properties.IsColor
+            && effectivePattern != BayerPatternEnum.None
+            && effectivePattern != BayerPatternEnum.Auto) {
+            var ch = BayerDebayer.Bilinear(img.Data, w, h, effectivePattern);
+            // Pack R/G/B into a plane-sequential buffer.
+            int plane = w * h;
+            var rgb = new ushort[plane * 3];
+            Array.Copy(ch.R, 0, rgb, 0,         plane);
+            Array.Copy(ch.G, 0, rgb, plane,     plane);
+            Array.Copy(ch.B, 0, rgb, plane * 2, plane);
+            return RenderJpegFromRgbPlanes(rgb, w, h, bits, maxDim, quality, overrideParams);
+        }
+
         if (img.Properties.IsColor) {
             return RenderJpegFromRgbPlanes(img.Data, w, h, bits, maxDim, quality, overrideParams);
         }

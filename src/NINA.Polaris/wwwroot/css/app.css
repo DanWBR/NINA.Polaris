@@ -3504,6 +3504,26 @@ label select.input-sm {
     font-size: 11px;
     color: var(--text-primary);
 }
+.ivh-val-input {
+    width: 100%;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    border: 1px solid transparent;
+    border-radius: 3px;
+    padding: 1px 3px;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color 0.15s;
+}
+.ivh-val-input:hover { border-color: var(--border); }
+.ivh-val-input:focus { border-color: var(--accent); }
+.ivh-footer {
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-tertiary);
+}
 
 [x-cloak] { display: none !important; }
 

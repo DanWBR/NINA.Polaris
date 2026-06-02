@@ -2028,6 +2028,10 @@ function ninaApp() {
         // still gets the latest frame.
         imageViewerUrl: '/api/image/latest/preview',
         imageViewerTitle: 'Image Viewer, full resolution',
+        // Bayer pattern override for the FITS preview. '' means
+        // "Auto (from FITS)" -- use whatever the file's BAYERPAT says.
+        // Set to RGGB/BGGR/GBRG/GRBG to force a specific pattern.
+        imageViewerBayerOverride: '',
         // FITS header overlay panel inside the image viewer. Open
         // automatically when previewing a .fits/.fit/.fts file from
         // the FILES tab, toggleable by the user via the toolbar
@@ -2038,7 +2042,9 @@ function ninaApp() {
             loading: false,
             data: null,         // { fileName, totalCards, groups: [{name, cards: [{keyword,value,comment}]}] }
             error: '',
-            path: ''
+            path: '',
+            dirty: false,
+            saving: false
         },
 
         // First-run location setup modal
@@ -2689,6 +2695,19 @@ function ninaApp() {
         async apiPost(url, body = null, opts = {}) {
             const options = {
                 method: 'POST',
+                ...opts
+            };
+            if (body !== null) {
+                options.headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+                options.body = JSON.stringify(body);
+            }
+            return this.apiFetch(url, options);
+        },
+
+        // PUT JSON shorthand -- same as apiPost but uses PUT method.
+        async apiPut(url, body = null, opts = {}) {
+            const options = {
+                method: 'PUT',
                 ...opts
             };
             if (body !== null) {
@@ -10392,6 +10411,9 @@ function ninaApp() {
             this.fitsHeaders.data = null;
             this.fitsHeaders.path = '';
             this.fitsHeaders.error = '';
+            this.fitsHeaders.dirty = false;
+            this.fitsHeaders.saving = false;
+            this.imageViewerBayerOverride = '';
         },
 
         reloadImageViewer() {
@@ -10514,6 +10536,54 @@ function ninaApp() {
             this.fitsHeaders.visible = !this.fitsHeaders.visible;
             localStorage.setItem('fitsHeadersVisible',
                 this.fitsHeaders.visible ? '1' : '0');
+        },
+
+        // Called when the Bayer-pattern dropdown changes. Updates the
+        // preview URL to include the override and reloads the image.
+        onBayerOverrideChange() {
+            const pat = this.imageViewerBayerOverride;
+            // Rebuild the viewer URL from the base (strip any existing
+            // bayer= param, then append the new one if non-empty).
+            let url = this.imageViewerUrl.replace(/&bayer=[^&]*/g, '');
+            if (pat) {
+                url += '&bayer=' + encodeURIComponent(pat);
+            }
+            this.imageViewerUrl = url;
+            this.reloadImageViewer();
+        },
+
+        // Mark a header value as changed (called from the editable
+        // input in the headers panel).
+        markFitsHeaderDirty() {
+            this.fitsHeaders.dirty = true;
+        },
+
+        // Persist edited FITS header values back to the file on disk.
+        async saveFitsHeaders() {
+            if (!this.fitsHeaders.data || !this.fitsHeaders.path) return;
+            this.fitsHeaders.saving = true;
+            try {
+                // Collect all keyword/value pairs from every group.
+                const headers = [];
+                for (const group of this.fitsHeaders.data.groups) {
+                    for (const c of group.cards) {
+                        headers.push({ keyword: c.keyword, value: c.value });
+                    }
+                }
+                await this.apiPut('/api/files/fits-headers', {
+                    path: this.fitsHeaders.path,
+                    headers
+                });
+                this.fitsHeaders.dirty = false;
+                this.toast('FITS headers saved', 'success');
+                // Reload the preview in case the edit changed something
+                // visible (e.g. BAYERPAT, BZERO).
+                this.reloadImageViewer();
+            } catch (e) {
+                this.toast('Save failed: ' + (e.message || ''), 'error');
+            } finally {
+                this.fitsHeaders.saving = false;
+            }
         },
 
         // True when the currently-open viewer should show the

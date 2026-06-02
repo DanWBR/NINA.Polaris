@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.AspNetCore.Http;
+using NINA.Core.Enum;
 using NINA.Polaris.Services;
 using NINA.Polaris.Services.Studio;
 using NINA.Image.FileFormat.FITS;
@@ -130,6 +131,7 @@ public static class FilesEndpoints {
         // ~32 KB as text/plain. Unknown formats → 415.
         g.MapGet("/preview", async (FileBrowserService svc, string path,
                                     int? maxDim, string? stretchFrom,
+                                    string? bayer,
                                     CancellationToken ct) => {
             try {
                 var full = svc.ResolveSafe(path, mustExist: true);
@@ -152,12 +154,27 @@ public static class FilesEndpoints {
                     catch { /* silently ignore, fall back to self-stretch */ }
                 }
 
+                // Optional Bayer pattern override from the image-viewer
+                // dropdown. When set, the preview debayers with the
+                // chosen pattern instead of whatever BAYERPAT says.
+                BayerPatternEnum? bayerOverride = null;
+                if (!string.IsNullOrWhiteSpace(bayer)) {
+                    bayerOverride = bayer.ToUpperInvariant() switch {
+                        "RGGB" => BayerPatternEnum.RGGB,
+                        "BGGR" => BayerPatternEnum.BGGR,
+                        "GBRG" => BayerPatternEnum.GBRG,
+                        "GRBG" => BayerPatternEnum.GRBG,
+                        _ => null
+                    };
+                }
+
                 switch (kind) {
                     case PreviewKind.Fits: {
                         var jpeg = await Task.Run(()
                             => FitsThumbnailer.RenderJpegFromPath(full,
                                     maxDim: max, quality: 90,
-                                    stretchFromPath: stretchRefFull), ct);
+                                    stretchFromPath: stretchRefFull,
+                                    bayerOverride: bayerOverride), ct);
                         return Results.File(jpeg, "image/jpeg");
                     }
                     case PreviewKind.RasterPassthrough: {
@@ -271,6 +288,52 @@ public static class FilesEndpoints {
                         new { name = "Other",       cards = Sort(other)       }
                     }
                 });
+            } catch (UnauthorizedAccessException ex) {
+                return Results.Json(new { error = ex.Message },
+                    statusCode: StatusCodes.Status403Forbidden);
+            } catch (FileNotFoundException ex) {
+                return Results.NotFound(new { error = ex.Message });
+            } catch (Exception ex) {
+                return Results.Problem(ex.Message);
+            }
+        });
+
+        // Update individual FITS header keywords in place. The pixel
+        // data stays untouched -- only the 80-byte card images in the
+        // header block(s) are rewritten. Used by the editable-headers
+        // panel in the image viewer.
+        g.MapPut("/fits-headers", async (FileBrowserService svc,
+                                         UpdateFitsHeadersRequest req) => {
+            try {
+                if (string.IsNullOrWhiteSpace(req.Path))
+                    return Results.BadRequest(new { error = "path is required" });
+                if (req.Headers == null || req.Headers.Count == 0)
+                    return Results.BadRequest(new { error = "headers list is empty" });
+
+                var full = svc.ResolveSafe(req.Path, mustExist: true);
+                if (!File.Exists(full))
+                    return Results.NotFound(new { error = "File not found" });
+                var ext = Path.GetExtension(full).ToLowerInvariant();
+                if (ext != ".fits" && ext != ".fit" && ext != ".fts")
+                    return Results.BadRequest(new { error = "Not a FITS file" });
+
+                // Reject read-only files up front so the error message
+                // is clearer than a generic IOException.
+                var attrs = File.GetAttributes(full);
+                if (attrs.HasFlag(FileAttributes.ReadOnly))
+                    return Results.Json(new { error = "File is read-only" },
+                        statusCode: StatusCodes.Status409Conflict);
+
+                var updates = req.Headers
+                    .Where(h => !string.IsNullOrWhiteSpace(h.Keyword))
+                    .Select(h => (h.Keyword.Trim().ToUpperInvariant(), h.Value ?? ""))
+                    .ToList();
+
+                if (updates.Count == 0)
+                    return Results.BadRequest(new { error = "No valid keywords" });
+
+                await Task.Run(() => FITSHeaderWriter.UpdateHeaders(full, updates));
+                return Results.Ok(new { ok = true, updated = updates.Count });
             } catch (UnauthorizedAccessException ex) {
                 return Results.Json(new { error = ex.Message },
                     statusCode: StatusCodes.Status403Forbidden);
@@ -455,4 +518,6 @@ public static class FilesEndpoints {
     public record ZipRequest(List<string> Paths, string? RootForNames, string? FileName);
     public record StudioRootRequest(string Path);
     public record GroupedCard(string Keyword, string Value, string Comment);
+    public record UpdateFitsHeadersRequest(string Path, List<HeaderUpdate> Headers);
+    public record HeaderUpdate(string Keyword, string Value);
 }
