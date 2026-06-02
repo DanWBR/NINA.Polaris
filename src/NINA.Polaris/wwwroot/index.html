@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260602-shutter">
+    <link rel="stylesheet" href="/css/app.css?v=20260602-clock">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -414,6 +414,11 @@
                 <span class="chip-icon">S</span>
                 <span x-text="liveStackFrames + ' frames'"></span>
             </span>
+            <!-- App clock. Moved here from the LIVE stats bar (where a
+                 wall-clock time next to the stacking stats was confusing).
+                 Hidden on very narrow viewports to keep the badge row tidy. -->
+            <span class="status-chip status-clock" x-text="currentTime"
+                  title="Current time"></span>
             <!-- DBGLOG-6: log inspector badge. Always visible (helps
                  trust + discoverability), colours by unread severity:
                  red when there are unread errors, amber for unread
@@ -1379,7 +1384,12 @@
                     <span>SNR: <strong x-text="(liveStackStatus?.cumulativeSnr > 0 ? liveStackStatus.cumulativeSnr.toFixed(1) : (stats.snr || '--'))">--</strong></span>
                     <span x-show="filterWheel.connected" class="text-ok" x-text="filterWheel.currentFilter"></span>
                     <span>Frames: <strong x-text="sessionCaptures"></strong></span>
-                    <span x-text="currentTime"></span>
+                    <!-- Live-stacking elapsed integration time (replaces the
+                         old wall clock, which read as confusing here). Shows
+                         how long the current stack has been integrating; '--'
+                         until the first frame lands. -->
+                    <span>Stacking: <strong
+                          x-text="liveStackStatus?.elapsedSeconds > 0 ? formatTime(liveStackStatus.elapsedSeconds) : '--'">--</strong></span>
                     <button class="btn btn-sm" @click="showStretchPanel = !showStretchPanel"
                             :class="showStretchPanel ? 'btn-active' : ''" style="margin-left:auto;"
                             :disabled="!selectedCamera">Stretch</button>

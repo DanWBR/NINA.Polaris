@@ -529,6 +529,18 @@ body {
     color: var(--accent);
 }
 
+/* Top-bar clock. Tabular figures so the seconds tick without the
+   text width jittering. Hidden on narrow viewports to keep the badge
+   row from wrapping. */
+.status-clock {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary);
+    opacity: 0.85;
+}
+@media (max-width: 720px) {
+    .status-clock { display: none; }
+}
+
 /* App Layout */
 .app-layout {
     display: flex;
