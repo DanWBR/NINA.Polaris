@@ -63,6 +63,30 @@ public class IndiCamera : ICamera {
     public double PixelSizeY => _client.GetNumber(DeviceName, "CCD_INFO", "CCD_PIXEL_SIZE_Y");
     public int BitDepth => (int)_client.GetNumber(DeviceName, "CCD_INFO", "CCD_BITSPERPIXEL");
 
+    /// <summary>Read the Bayer mosaic pattern from the INDI
+    /// <c>CCD_CFA</c> text property (<c>CFA_TYPE</c> element).
+    /// Most OSC drivers (indi_asi_ccd, indi_svbony_ccd, indi_qhy_ccd,
+    /// etc.) advertise this when the camera is connected. The FITS
+    /// BLOBs they emit typically do NOT include a BAYERPAT keyword,
+    /// so this is the only reliable source for the Bayer pattern on
+    /// the INDI side. Returns <see cref="BayerPatternEnum.None"/>
+    /// for mono cameras or drivers that don't publish CCD_CFA.</summary>
+    public BayerPatternEnum BayerPattern {
+        get {
+            var cfaProp = _client.GetProperty(DeviceName, "CCD_CFA") as IndiTextProperty;
+            if (cfaProp == null) return BayerPatternEnum.None;
+            if (!cfaProp.Values.TryGetValue("CFA_TYPE", out var cfaType))
+                return BayerPatternEnum.None;
+            return (cfaType?.Trim().ToUpperInvariant()) switch {
+                "RGGB" => BayerPatternEnum.RGGB,
+                "BGGR" => BayerPatternEnum.BGGR,
+                "GBRG" => BayerPatternEnum.GBRG,
+                "GRBG" => BayerPatternEnum.GRBG,
+                _ => BayerPatternEnum.None
+            };
+        }
+    }
+
     // INDI cameras don't surface gain in a standardised property, the
     // CCD_CONTROLS group varies by driver (gain / Gain / GAIN). Plumb a
     // best-effort read here and return 0 when nothing matches.
@@ -362,6 +386,42 @@ public class IndiCamera : ICamera {
                 imageData.MetaData.Camera.BinY = (short)BinY;
                 imageData.MetaData.Camera.PixelSizeX = PixelSizeX;
                 imageData.MetaData.Camera.PixelSizeY = PixelSizeY;
+
+                // FIELD5-CFA: INDI drivers typically do NOT put BAYERPAT
+                // in the FITS BLOB header (the SV405CC indi_svbony_ccd
+                // is a confirmed case). The CFA layout is advertised
+                // separately via the INDI CCD_CFA text property. When
+                // FITSReader parsed BayerPattern=None (no BAYERPAT in
+                // the BLOB) but the driver reports a CFA, inject it so
+                // the downstream pipeline (ImageRelayService stream
+                // header, FITSWriter save-to-disk, live stack) sees the
+                // correct pattern. Without this the shader received
+                // bayer=0 (mono) and rendered raw Bayer data as-is,
+                // producing the infamous checkerboard.
+                var driverBayer = BayerPattern;
+                if (driverBayer != BayerPatternEnum.None
+                        && imageData.Properties.BayerPattern == BayerPatternEnum.None) {
+                    imageData = new BaseImageData(
+                        imageData.Data,
+                        imageData.Properties with {
+                            BayerPattern = driverBayer,
+                            IsBayered = true
+                        },
+                        imageData.MetaData);
+                }
+                // Also propagate into MetaData so FITSWriter emits
+                // the BAYERPAT keyword when saving frames to disk.
+                if (driverBayer != BayerPatternEnum.None) {
+                    imageData.MetaData.Camera.BayerPattern = driverBayer;
+                    imageData.MetaData.Camera.SensorType =
+                        driverBayer switch {
+                            BayerPatternEnum.RGGB => SensorType.RGGB,
+                            BayerPatternEnum.BGGR => SensorType.BGGR,
+                            BayerPatternEnum.GBRG => SensorType.GBRG,
+                            BayerPatternEnum.GRBG => SensorType.GRBG,
+                            _ => SensorType.Monochrome
+                        };
+                }
 
                 // Native streaming path: when CCD_VIDEO_STREAM is ON the
                 // driver fires BLOBs continuously at its native cadence
