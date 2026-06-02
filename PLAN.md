@@ -15,7 +15,27 @@
   verbatim, only the prose around them was translated.
 -->
 
-# Current chapter: Preview render quality settings
+# Current chapter: Clock-sync timezone fix
+
+> Field report: "Sync Pi clock from this device" left the Pi exactly
+> +10800s (3h, the Brazil UTC-3 offset) ahead. Root cause was a
+> timezone bug in how the UTC instant was handed to timedatectl.
+
+## What shipped
+
+`ClockSyncService.SetUtcAsync` formatted the client's UTC instant as a
+naked "YYYY-MM-DD HH:MM:SS" string and passed it to
+`timedatectl set-time`. But `timedatectl set-time` parses that string
+in the machine's LOCAL timezone, not UTC (there is no UTC flag). On a
+Pi set to America/Sao_Paulo this set the clock 3h off. Fix: convert
+the instant to the host's local time before formatting
+(`DateTime.SpecifyKind(clientUtc, Utc).ToLocalTime()`), so the stamp
+matches what timedatectl expects. The client already sends correct UTC
+(`new Date().toISOString()`) and the skew display math was already
+right -- only the apply step was wrong. Re-syncing after the fix lands
+the clock with ~0 residual skew.
+
+# Past chapter: Preview render quality settings
 
 > The live view always receives full-resolution 16-bit data (LZ4
 > lossless), but the WebGL output canvas was hard-capped at 2048px

@@ -58,11 +58,19 @@ public class ClockSyncService {
                 + "device clock first.");
         }
 
-        // timedatectl wants ISO-ish "YYYY-MM-DD HH:MM:SS" in UTC. The
-        // "+0000" suffix is silently ignored by some systemd versions,
-        // so emit naked UTC + rely on the daemon's default UTC parse.
-        var stamp = clientUtc.ToString("yyyy-MM-dd HH:mm:ss",
-            CultureInfo.InvariantCulture);
+        // IMPORTANT: `timedatectl set-time "YYYY-MM-DD HH:MM:SS"` parses
+        // the wall-clock string in the machine's LOCAL timezone, NOT UTC
+        // (there is no UTC flag for set-time). Feeding it a UTC stamp on a
+        // Pi whose timezone is, say, America/Sao_Paulo (UTC-3) sets the
+        // clock 3h off -- exactly the +10800s skew reported in the field.
+        // So convert the client's UTC instant to this host's local time
+        // before formatting. SpecifyKind(Utc) guards against the JSON
+        // binder handing us a Local-kind DateTime: the numeric value is
+        // always the UTC wall clock the browser sent (new Date().toISOString()),
+        // and ToLocalTime() then applies the host's offset.
+        var localStamp = DateTime.SpecifyKind(clientUtc, DateTimeKind.Utc)
+            .ToLocalTime()
+            .ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
         try {
             // Two-step: NTP can hold the clock, so disable it first if
             // running. Best-effort, ignore failure (most field Pis are
@@ -78,7 +86,7 @@ public class ClockSyncService {
             // to fail fast with a clear message than have the browser
             // timeout with a generic 'Network error'.
             var setResult = await RunAsync("timedatectl",
-                $"set-time \"{stamp}\"", ct, timeoutMs: 5_000);
+                $"set-time \"{localStamp}\"", ct, timeoutMs: 5_000);
             if (setResult.ExitCode != 0) {
                 _logger.LogWarning("timedatectl set-time failed: {Err}",
                     setResult.Stderr);
