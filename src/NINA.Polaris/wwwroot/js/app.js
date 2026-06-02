@@ -815,6 +815,9 @@ function ninaApp() {
                         okLabel: 'OK', cancelLabel: 'Cancel', danger: false },
         _confirmResolver: null,
 
+        // Factory-reset in-flight flag (Settings danger zone button).
+        factoryResetting: false,
+
         // Activity bar (bottom). Populated from the status WS message
         // each second. host comes from HostMetricsService; sirilActiveJobs
         // and graXpertActiveJobs are compact summaries of the respective
@@ -15922,6 +15925,50 @@ function ninaApp() {
                 this.toast('ONNX cache cleared', 'ok');
             } finally {
                 this.onnx.clearingCache = false;
+            }
+        },
+
+        // ─── Factory reset ──────────────────────────────────────────────
+        // Wipe every saved setting (profiles, rigs, app password, login
+        // sessions, observer location) plus the browser's localStorage so
+        // a clean Raspberry Pi SD-card image ships with no personal or
+        // test config. Captured images / FITS are deliberately left alone
+        // (the server endpoint only touches the config + cache dirs).
+        async factoryReset() {
+            if (this.factoryResetting) return;
+            const ok = await this._confirmAsync(
+                'This wipes ALL of your settings: every rig and equipment ' +
+                'profile, the app password and login sessions, your ' +
+                'observer location, and this browser\'s preferences. Your ' +
+                'captured images are kept. This cannot be undone. ' +
+                'The page will reload into first-run setup.',
+                {
+                    title: 'Reset everything to factory defaults',
+                    okLabel: 'Reset everything',
+                    cancelLabel: 'Cancel',
+                    danger: true
+                });
+            if (!ok) return;
+            this.factoryResetting = true;
+            try {
+                const resp = await this.apiPost('/api/system/factory-reset', {});
+                if (!resp.ok) {
+                    let msg = 'Factory reset failed.';
+                    try { const j = await resp.json(); if (j && j.detail) msg = j.detail; } catch { }
+                    this.toast(msg, 'error');
+                    this.factoryResetting = false;
+                    return;
+                }
+                // Clear every client-side preference so the reloaded page
+                // starts as a genuine first run (no cached login token,
+                // no help progress, no UI prefs).
+                try { localStorage.clear(); } catch { }
+                try { sessionStorage.clear(); } catch { }
+                this.toast('Factory reset complete. Reloading…', 'ok');
+                setTimeout(() => { window.location.reload(); }, 800);
+            } catch (e) {
+                this.toast('Factory reset failed: ' + (e?.message || e), 'error');
+                this.factoryResetting = false;
             }
         },
 

@@ -200,6 +200,61 @@ public static class SystemEndpoints {
             return Results.NotFound(new { error = "Profile not found" });
         });
 
+        // Factory reset: wipe ALL configuration back to a fresh
+        // install so the operator can ship a clean distribution image
+        // with none of their rigs, location, password, camera quirks,
+        // or test data. The active profile (+ every named profile and
+        // the auth sessions) is reset to defaults, and the sibling
+        // cache dirs (studio frame index, on-disk debug logs, editor
+        // sidecars) are removed best-effort. Captured images in the
+        // operator's output folder are intentionally left alone --
+        // that is data, not config. The client clears its own
+        // localStorage + reloads after this returns.
+        group.MapPost("/factory-reset", (ProfileService profiles, ILogger<ProfileService> logger) => {
+            int removed;
+            try {
+                removed = profiles.FactoryReset();
+            } catch (Exception ex) {
+                logger.LogError(ex, "Factory reset: profile wipe failed");
+                return Results.Problem("Factory reset failed: " + ex.Message);
+            }
+
+            // Best-effort wipe of sibling cache directories. Derive the
+            // app root from the profile dir (.../NINA.Polaris/profiles
+            // -> .../NINA.Polaris) and remove the studio index + logs.
+            // Per-dir errors are swallowed so a locked file doesn't
+            // abort the reset -- the profile is already gone by here.
+            try {
+                var appRoot = Directory.GetParent(profiles.DataDir)?.FullName;
+                if (!string.IsNullOrEmpty(appRoot)) {
+                    foreach (var sub in new[] { "studio", "logs" }) {
+                        var dir = Path.Combine(appRoot, sub);
+                        try { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
+                        catch (Exception ex) { logger.LogWarning(ex, "Factory reset: could not remove {Dir}", dir); }
+                    }
+                }
+            } catch (Exception ex) {
+                logger.LogWarning(ex, "Factory reset: cache cleanup skipped");
+            }
+
+            // Editor sidecars live under a separate LocalAppData root.
+            try {
+                var sidecars = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "Polaris", "sidecars");
+                if (Directory.Exists(sidecars)) Directory.Delete(sidecars, true);
+            } catch (Exception ex) {
+                logger.LogWarning(ex, "Factory reset: could not remove editor sidecars");
+            }
+
+            logger.LogWarning("Factory reset done ({Count} config file(s) removed); "
+                + "app is now at first-run defaults.", removed);
+            return Results.Ok(new {
+                message = "Factory reset complete. Reloading to first-run state.",
+                filesRemoved = removed
+            });
+        });
+
         // CLOCK-1: client-driven wall-clock sync. The /clock GET is
         // cheap status (used by Settings + the activity-bar chip);
         // POST /clock/sync writes the client's UTC into the system

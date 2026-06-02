@@ -9166,6 +9166,36 @@
                     </details>
                 </div>
 
+                <!-- Factory reset: wipe all profiles/rigs/auth so a
+                     clean Raspberry Pi image can ship with no personal
+                     or test config. Captured images are NOT touched. -->
+                <div class="settings-section settings-section--wide danger-section">
+                    <h3><span class="settings-card-icon">⚠️</span>Reset everything to factory defaults</h3>
+                    <p class="hint" style="margin-top:0">
+                        This wipes <strong>all</strong> of your saved settings:
+                        every rig, equipment profile, the app password and
+                        login sessions, observer location, and UI preferences.
+                        Polaris goes back to how it was the very first time
+                        you opened it. Use this before sharing or distributing
+                        a clean SD card image so none of your own (or test)
+                        config is included.
+                    </p>
+                    <p class="hint">
+                        <strong>Your captured images and FITS files are kept</strong>,
+                        only settings are cleared. This cannot be undone.
+                        After it finishes, the page reloads and the first-run
+                        setup starts fresh.
+                    </p>
+                    <div class="control-row actions" style="margin-top:6px">
+                        <button class="btn btn-sm btn-danger"
+                                @click="factoryReset()"
+                                :disabled="factoryResetting">
+                            <span x-show="!factoryResetting">⚠️ Reset everything</span>
+                            <span x-show="factoryResetting">Resetting…</span>
+                        </button>
+                    </div>
+                </div>
+
                 </div><!-- /.settings-grid -->
             </div>
 

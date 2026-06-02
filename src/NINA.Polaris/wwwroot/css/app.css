@@ -1573,6 +1573,13 @@ label select.input-sm {
     background: rgba(244, 67, 54, 0.25);
 }
 
+/* Factory-reset danger card: a subtle red accent so it reads as a
+   "careful" zone without shouting. */
+.danger-section {
+    border-color: var(--danger);
+    box-shadow: inset 0 0 0 1px rgba(244, 67, 54, 0.18);
+}
+
 .btn-sm {
     padding: 4px 10px;
     font-size: 12px;

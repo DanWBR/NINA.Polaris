@@ -118,6 +118,38 @@ public class ProfileService {
         }
     }
 
+    /// <summary>
+    /// Factory reset: delete every profile JSON in the profile
+    /// directory (active + named) plus the auth-sessions file, then
+    /// recreate a fresh "Default" profile. Used to ship a clean
+    /// distribution image with none of the operator's rigs, location,
+    /// password, camera quirks, or test settings. Captured images
+    /// (in the user's output folder) are NOT touched -- that's data,
+    /// not config. Returns the number of files removed.
+    /// </summary>
+    public int FactoryReset() {
+        _saveLock.Wait();
+        int removed = 0;
+        try {
+            if (Directory.Exists(_profileDir)) {
+                foreach (var f in Directory.GetFiles(_profileDir, "*.json")) {
+                    try { File.Delete(f); removed++; }
+                    catch (Exception ex) { _logger.LogWarning(ex, "FactoryReset: could not delete {File}", f); }
+                }
+                // Auth sessions (not a .json profile) live here too.
+                var sessions = Path.Combine(_profileDir, "auth-sessions.json");
+                try { if (File.Exists(sessions)) { File.Delete(sessions); removed++; } } catch { }
+            }
+        } finally {
+            _saveLock.Release();
+        }
+        // Rebuild a pristine Default profile in memory + on disk.
+        _activeProfile = new UserProfile { Name = "Default" };
+        Save();
+        _logger.LogWarning("Factory reset complete: removed {Count} config file(s), reset to defaults", removed);
+        return removed;
+    }
+
     public void Save() {
         _saveLock.Wait();
         try {
