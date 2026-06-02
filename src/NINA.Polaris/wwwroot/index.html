@@ -7345,6 +7345,23 @@
                             aria-label="Crop">
                         <span class="files-icon">⌗</span>
                     </button>
+                    <!-- Plate solve: solve the selected FITS to get RA/Dec/
+                         rotation/scale. Result card appears below the
+                         file list with Sync mount + Slew & Center
+                         buttons when the mount is connected. -->
+                    <span class="files-actions-sep" aria-hidden="true"></span>
+                    <button class="btn btn-sm btn-icon"
+                            :disabled="files.selectedPaths.length !== 1
+                                       || filesSelectedDir() != null
+                                       || filesSolveBusy"
+                            @click="filesPlateSolve(files.selectedPaths[0])"
+                            :title="filesSolveBusy
+                                ? 'Plate solve in progress...'
+                                : 'Plate solve: identify RA/Dec/rotation from this FITS'"
+                            aria-label="Plate solve">
+                        <span class="files-icon" x-show="!filesSolveBusy">🎯</span>
+                        <span class="files-icon" x-show="filesSolveBusy">⏳</span>
+                    </button>
                     <!-- GraXpert dropdown, visible when EITHER the CLI
                          is installed on the host OR the matching ONNX
                          model is detected by the server. The modal's
@@ -7391,6 +7408,60 @@
                             aria-label="Set as Studio root">
                         <span class="files-icon">⭐</span>
                     </button>
+                </div>
+
+                <!-- Plate solve result card (same shape as PREVIEW). -->
+                <div x-show="filesSolveResult" style="padding: 0 8px 8px;">
+                    <div style="padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-elev); font-size: 12px;">
+                        <template x-if="filesSolveResult && filesSolveResult.success">
+                            <div>
+                                <div style="display:flex; align-items:center; gap:10px; margin-bottom: 6px;">
+                                    <strong class="text-ok">Solved</strong>
+                                    <span class="text-muted" x-text="'via ' + (filesSolveResult.solverUsed || '?')"></span>
+                                    <button class="btn btn-xs" style="margin-left:auto;"
+                                            @click="filesSolveResult = null">x</button>
+                                </div>
+                                <div style="display:flex; flex-wrap: wrap; gap: 14px; margin-bottom: 8px;">
+                                    <span>RA: <strong x-text="formatRA(filesSolveResult.raHours)"></strong></span>
+                                    <span>Dec: <strong x-text="formatDec(filesSolveResult.decDeg)"></strong></span>
+                                    <span>Scale: <strong x-text="(filesSolveResult.scaleArcsecPerPixel || 0).toFixed(2) + ' &quot;/px'"></strong></span>
+                                    <span>Rotation: <strong x-text="(filesSolveResult.rotationDeg || 0).toFixed(2) + '°'"></strong></span>
+                                </div>
+                                <div style="display:flex; gap: 6px; flex-wrap: wrap;">
+                                    <button class="btn btn-sm btn-primary"
+                                            @click="filesSolveSyncMount()"
+                                            :disabled="!mount?.connected"
+                                            title="Tell the mount that its current pointing IS the solved coordinates">
+                                        Sync mount
+                                    </button>
+                                    <button class="btn btn-sm btn-primary"
+                                            @click="filesSolveGoto()"
+                                            :disabled="!mount?.connected"
+                                            title="Slew & center to the solved RA/Dec (iterative plate-solve convergence)">
+                                        Slew & Center
+                                    </button>
+                                    <button class="btn btn-sm"
+                                            @click="filesSolveApplyTargetRotation()"
+                                            title="Set the red SKY rectangle to the solved rotation">
+                                        Set as target rotation
+                                    </button>
+                                    <button class="btn btn-sm"
+                                            @click="filesSolveApplyMountRotation()"
+                                            title="Set the blue SKY rectangle to the solved rotation">
+                                        Use as mount rotation
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="filesSolveResult && !filesSolveResult.success">
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <strong class="text-danger">Solve failed</strong>
+                                <span class="text-muted" x-text="filesSolveResult.error || 'Unknown error'"></span>
+                                <button class="btn btn-xs" style="margin-left:auto;"
+                                        @click="filesSolveResult = null">x</button>
+                            </div>
+                        </template>
+                    </div>
                 </div>
 
                 <!-- File list -->

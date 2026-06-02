@@ -1374,6 +1374,10 @@ function ninaApp() {
             error: '',
             preview: { open: false, path: '', name: '', kind: '', textContent: null }
         },
+        // FILES-tab plate solve state (mirrors previewSolve* from
+        // PREVIEW but operates on a file path instead of LatestImage).
+        filesSolveBusy: false,
+        filesSolveResult: null,
         filesPersistMetaToggle() {
             try {
                 if (typeof localStorage === 'undefined') return;
@@ -12536,6 +12540,96 @@ function ninaApp() {
             // physical mount/camera angle). Plumbing exists since
             // FIELD3-4; this button feeds the solved angle into it
             // even when the slew-and-center workflow wasn't used.
+            this.solveRotationDeg = r.rotationDeg;
+            try { this._pushSkyFovOverlays && this._pushSkyFovOverlays(); }
+            catch (e) { /* SKY engine may not be live */ }
+            this.toast('Mount FOV rotation set to ' + r.rotationDeg.toFixed(2) + '°', 'ok');
+        },
+
+        // ---- FILES-tab plate solve ----
+        // Mirrors previewSolve() but sends a file path instead of
+        // using LatestImage. The result card + action buttons are
+        // identical in shape; "Slew & Center" is the new addition
+        // (makes sense for FILES where the user picks an old frame
+        // from a previous session to re-frame on).
+
+        async filesPlateSolve(path) {
+            if (!path || this.filesSolveBusy) return;
+            this.filesSolveBusy = true;
+            this.filesSolveResult = null;
+            try {
+                const body = { path };
+                if (this.mount?.connected
+                        && Number.isFinite(this.mount.ra)
+                        && Number.isFinite(this.mount.dec)) {
+                    body.hintRa = this.mount.ra;
+                    body.hintDec = this.mount.dec;
+                }
+                const resp = await this.apiPost(
+                    '/api/platesolve/solve-file', body);
+                const r = await resp.json();
+                this.filesSolveResult = r || { success: false, error: 'No response' };
+                if (this.filesSolveResult.success) {
+                    this.toast('Plate solve succeeded', 'ok');
+                } else {
+                    this.toast('Plate solve failed: '
+                        + (this.filesSolveResult.error || 'unknown'), 'warn');
+                }
+            } catch (e) {
+                this.filesSolveResult = { success: false, error: e.message || 'request failed' };
+                this.toast('Plate solve request failed', 'error');
+            } finally {
+                this.filesSolveBusy = false;
+            }
+        },
+
+        async filesSolveSyncMount() {
+            const r = this.filesSolveResult;
+            if (!r || !r.success) return;
+            try {
+                await this.apiPost('/api/telescope/sync', {
+                    ra: r.raHours,
+                    dec: r.decDeg
+                });
+                this.toast('Mount synced to solved coordinates', 'ok');
+            } catch (e) {
+                this.toast('Mount sync failed: ' + (e.message || ''), 'error');
+            }
+        },
+
+        async filesSolveGoto() {
+            const r = this.filesSolveResult;
+            if (!r || !r.success) return;
+            try {
+                const resp = await this.apiPost('/api/sky/slew-and-center', {
+                    ra: r.raHours,
+                    dec: r.decDeg,
+                    toleranceArcsec: 30
+                });
+                const data = await resp.json();
+                if (data.jobId) {
+                    this.slewCenterJobId = data.jobId;
+                    this._pollSlewCenter();
+                    this.toast('Slew & Center started -- check SKY tab for progress', 'ok');
+                }
+            } catch (e) {
+                this.toast('Slew & Center failed: ' + (e.message || ''), 'error');
+            }
+        },
+
+        filesSolveApplyTargetRotation() {
+            const r = this.filesSolveResult;
+            if (!r || !r.success || !Number.isFinite(r.rotationDeg)) return;
+            if (!this.fov) this.fov = { width: 2.82, height: 1.88 };
+            this.fov.rotationDeg = r.rotationDeg;
+            try { this._pushSkyFovOverlays && this._pushSkyFovOverlays(); }
+            catch (e) { /* SKY engine may not be live */ }
+            this.toast('Target FOV rotation set to ' + r.rotationDeg.toFixed(2) + '°', 'ok');
+        },
+
+        filesSolveApplyMountRotation() {
+            const r = this.filesSolveResult;
+            if (!r || !r.success || !Number.isFinite(r.rotationDeg)) return;
             this.solveRotationDeg = r.rotationDeg;
             try { this._pushSkyFovOverlays && this._pushSkyFovOverlays(); }
             catch (e) { /* SKY engine may not be live */ }

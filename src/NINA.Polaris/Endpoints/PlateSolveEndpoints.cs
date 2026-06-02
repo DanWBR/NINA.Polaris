@@ -115,6 +115,104 @@ public static class PlateSolveEndpoints {
                 try { File.Delete(tempFits); } catch { }
             }
         });
+
+        // ---- Solve from file (FILES tab) ----
+        // The file is already a FITS on disk; no temp-write needed.
+        // Body carries the absolute path + optional RA/Dec hints.
+        // On success, returns the same shape as solve-latest so the
+        // JS client can reuse the same result card + action buttons.
+        group.MapPost("/solve-file", async (
+                SolveFileRequest request,
+                PlateSolveService solver,
+                EquipmentManager equip,
+                ProfileService profiles,
+                ILogger<PlateSolveStatusMarker> logger,
+                CancellationToken ct) => {
+            if (string.IsNullOrWhiteSpace(request.Path))
+                return Results.BadRequest(new { error = "Path is required." });
+
+            if (!File.Exists(request.Path))
+                return Results.BadRequest(new { error = $"File not found: {request.Path}" });
+
+            if (!solver.IsAvailable)
+                return Results.BadRequest(new { error = "No plate solver configured / installed." });
+
+            double? hintRa = request.HintRa;
+            double? hintDec = request.HintDec;
+            if (!hintRa.HasValue || !hintDec.HasValue) {
+                var tel = equip.Telescope;
+                if (tel != null && tel.IsConnected
+                        && !double.IsNaN(tel.RightAscension)
+                        && !double.IsNaN(tel.Declination)) {
+                    hintRa ??= tel.RightAscension;
+                    hintDec ??= tel.Declination;
+                }
+            }
+
+            // Compute FOV from rig focal length + camera pixel size.
+            // If the camera isn't connected, try to read pixel count
+            // from the FITS header (NAXIS1) and assume a default pixel
+            // size of 3.76um (common for IMX sensor family).
+            double fovDeg = 0;
+            var rig = profiles.ActiveEquipmentProfile;
+            double fl = rig?.FocalLengthMm ?? 0;
+            if (fl > 0) {
+                double pixSize = equip.Camera?.PixelSizeX ?? 3.76;
+                // Guess width from filename -- just read FITS header
+                // NAXIS1 if we can, otherwise use a safe default.
+                int imgWidth = 3008; // fallback
+                try {
+                    using var fs = new FileStream(request.Path, FileMode.Open, FileAccess.Read);
+                    using var br = new BinaryReader(fs);
+                    var headerBytes = br.ReadBytes(2880);
+                    var headerStr = System.Text.Encoding.ASCII.GetString(headerBytes);
+                    var match = System.Text.RegularExpressions.Regex.Match(
+                        headerStr, @"NAXIS1\s*=\s*(\d+)");
+                    if (match.Success) imgWidth = int.Parse(match.Groups[1].Value);
+                } catch { /* keep fallback */ }
+                double sensorMm = pixSize * imgWidth / 1000.0;
+                fovDeg = 2.0 * Math.Atan(sensorMm / (2.0 * fl)) * (180.0 / Math.PI);
+            }
+
+            try {
+                var options = new PlateSolveOptions {
+                    HintRa = hintRa,
+                    HintDec = hintDec,
+                    FovDeg = fovDeg,
+                    SearchRadiusDeg = request.SearchRadiusDeg ?? 30
+                };
+                logger.LogInformation(
+                    "FILES plate solve: {Path} hint RA={Ra} Dec={Dec} fov={Fov:F2}° radius={Rad}°",
+                    request.Path, hintRa, hintDec, fovDeg, options.SearchRadiusDeg);
+
+                var result = await solver.SolveAsync(request.Path, options, ct);
+
+                if (!result.Success) {
+                    return Results.Ok(new {
+                        success = false,
+                        error = result.Error,
+                        solverUsed = result.SolverUsed
+                    });
+                }
+                return Results.Ok(new {
+                    success = true,
+                    raHours = result.RaHours,
+                    decDeg = result.DecDeg,
+                    raDeg = result.RaDeg,
+                    rotationDeg = result.RotationDeg,
+                    scaleArcsecPerPixel = result.ScaleArcsecPerPixel,
+                    solverUsed = result.SolverUsed
+                });
+            } catch (OperationCanceledException) {
+                return Results.StatusCode(499);
+            } catch (Exception ex) {
+                logger.LogError(ex, "FILES plate solve failed for {Path}", request.Path);
+                return Results.Ok(new {
+                    success = false,
+                    error = ex.Message
+                });
+            }
+        });
     }
 
     /// <summary>POST body for <c>/api/platesolve/solve-latest</c>.
@@ -125,6 +223,14 @@ public static class PlateSolveEndpoints {
         double? HintRa,
         double? HintDec,
         double? SearchRadiusDeg);
+
+    /// <summary>POST body for <c>/api/platesolve/solve-file</c>.
+    /// Path is the absolute server-side path to the FITS file.</summary>
+    public record SolveFileRequest(
+        string Path,
+        double? HintRa = null,
+        double? HintDec = null,
+        double? SearchRadiusDeg = null);
 
     /// <summary>Marker type for the ILogger&lt;T&gt; category --
     /// the static endpoint class itself can't be used as a generic
