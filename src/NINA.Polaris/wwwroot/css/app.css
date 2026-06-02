@@ -1783,6 +1783,45 @@ label select.input-sm {
     align-items: center;
     justify-content: center;
 }
+
+/* Image control toolbar pinned to the bottom-left of a .preview-area.
+   Zoom-to-fit / fit-width / fit-height / zoom in-out / stretch. Sits
+   above the canvas + overlay, semi-transparent so it never hides much
+   of the frame. Shared by LIVE, PREVIEW and VIDEO panes. */
+.pz-toolbar {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    z-index: 5;
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 6px;
+    background: rgba(5, 8, 20, 0.62);
+    backdrop-filter: blur(6px);
+    border: 1px solid var(--border);
+}
+.pz-toolbar button {
+    min-width: 30px;
+    height: 28px;
+    padding: 0 7px;
+    font-size: 13px;
+    line-height: 1;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.pz-toolbar button:hover { background: rgba(255, 255, 255, 0.16); }
+.pz-toolbar button.pz-active {
+    background: rgba(99, 102, 241, 0.25);
+    border-color: var(--accent);
+    color: var(--accent);
+}
 .fullscreen-badge-active {
     color: var(--accent);
     border-color: var(--accent);

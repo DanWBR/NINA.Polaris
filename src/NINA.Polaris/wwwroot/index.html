@@ -723,6 +723,17 @@
                      @mouseleave="hoverPixel = null">
                     <canvas id="liveCanvas" class="preview-canvas"></canvas>
                     <canvas id="overlayCanvas" class="preview-overlay-canvas"></canvas>
+                    <!-- Image controls: zoom to fit / fit width / fit
+                         height / zoom in-out / auto-stretch. Operate on
+                         the _pz pan-zoom transform + the display stretch. -->
+                    <div class="pz-toolbar" @pointerdown.stop @dblclick.stop @wheel.stop>
+                        <button @click="_pzFit('liveCanvas')" title="Zoom to fit (whole frame)">⊡</button>
+                        <button @click="_pzFitWidth('liveCanvas')" title="Fit width">↔</button>
+                        <button @click="_pzFitHeight('liveCanvas')" title="Fit height">↕</button>
+                        <button @click="_pzZoomButton('liveCanvas', 1.3)" title="Zoom in">＋</button>
+                        <button @click="_pzZoomButton('liveCanvas', 1/1.3)" title="Zoom out">－</button>
+                        <button @click="toggleAutoStretch()" :class="stretchAuto ? 'pz-active' : ''" title="Auto-stretch brightness">◐</button>
+                    </div>
                     <div class="preview-overlay" x-show="!liveActive">
                         <p x-text="selectedCamera ? 'Ready - ' + selectedCamera : 'No camera connected'"></p>
                         <p class="hint" x-show="!selectedCamera">Connect a camera in Settings to start imaging</p>
@@ -2316,6 +2327,14 @@
                          a re-fetch). -->
                     <canvas id="previewCanvas" class="preview-canvas"></canvas>
                     <canvas id="previewOverlayCanvas" class="preview-overlay-canvas"></canvas>
+                    <div class="pz-toolbar" @pointerdown.stop @dblclick.stop @wheel.stop>
+                        <button @click="_pzFit('previewCanvas')" title="Zoom to fit (whole frame)">⊡</button>
+                        <button @click="_pzFitWidth('previewCanvas')" title="Fit width">↔</button>
+                        <button @click="_pzFitHeight('previewCanvas')" title="Fit height">↕</button>
+                        <button @click="_pzZoomButton('previewCanvas', 1.3)" title="Zoom in">＋</button>
+                        <button @click="_pzZoomButton('previewCanvas', 1/1.3)" title="Zoom out">－</button>
+                        <button @click="toggleAutoStretch()" :class="stretchAuto ? 'pz-active' : ''" title="Auto-stretch brightness">◐</button>
+                    </div>
                     <div class="preview-overlay" x-show="!preview.lastSnapAt">
                         <p x-text="selectedCamera
                                     ? 'Pick exposure + bin, then Take snap'
@@ -2607,6 +2626,14 @@
                         <canvas id="videoCaptureCanvas" class="preview-canvas"
                                 @click="videoCenterRoiAt($event)"
                                 :style="(video.roiSize > 0 && cameraStream.running) ? 'cursor: crosshair' : ''"></canvas>
+                        <div class="pz-toolbar" @pointerdown.stop @dblclick.stop @wheel.stop>
+                            <button @click="_pzFit('videoCaptureCanvas')" title="Zoom to fit (whole frame)">⊡</button>
+                            <button @click="_pzFitWidth('videoCaptureCanvas')" title="Fit width">↔</button>
+                            <button @click="_pzFitHeight('videoCaptureCanvas')" title="Fit height">↕</button>
+                            <button @click="_pzZoomButton('videoCaptureCanvas', 1.3)" title="Zoom in">＋</button>
+                            <button @click="_pzZoomButton('videoCaptureCanvas', 1/1.3)" title="Zoom out">－</button>
+                            <button @click="toggleAutoStretch()" :class="stretchAuto ? 'pz-active' : ''" title="Auto-stretch brightness">◐</button>
+                        </div>
                         <div class="preview-overlay" x-show="!cameraStream.running">
                             <p x-text="selectedCamera
                                 ? (cameraStream.supportsNative

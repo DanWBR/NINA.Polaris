@@ -6097,6 +6097,88 @@ function ninaApp() {
             this._pzApply(canvasId);
         },
 
+        // -------- toolbar helpers (bottom-left controls) --------
+
+        // Geometry of the displayed image inside the .preview-area box.
+        // The canvas element fills the container (100%) and object-fit:
+        // contain letterboxes the bitmap inside it. Returns the
+        // container size, the bitmap's displayed rect at scale=1, and
+        // its top-left offset (letterbox) -- everything the fit
+        // operations need. Null if the canvas/area isn't mounted yet.
+        _pzMetrics(canvasId) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return null;
+            const area = canvas.closest('.preview-area');
+            if (!area) return null;
+            const rect = area.getBoundingClientRect();
+            const W = rect.width, H = rect.height;
+            const cw = canvas.width || 1, ch = canvas.height || 1;
+            if (W <= 0 || H <= 0) return null;
+            const contain = Math.min(W / cw, H / ch);
+            const imgW = cw * contain, imgH = ch * contain;
+            return {
+                W, H, cw, ch,
+                imgW, imgH,
+                ox: (W - imgW) / 2,   // letterbox left
+                oy: (H - imgH) / 2    // letterbox top
+            };
+        },
+
+        // Apply scale + translate directly (screen px), clamping scale
+        // to [1,10]. Used by the fit helpers, which compute their own
+        // exact translate, so we don't run the box clamp here.
+        _pzSet(canvasId, scale, tx, ty) {
+            const s = this._pzGet(canvasId);
+            s.scale = Math.max(1, Math.min(10, scale));
+            s.tx = tx;
+            s.ty = ty;
+            this._pzApply(canvasId);
+        },
+
+        // Zoom to fit / reset: whole image visible (object-fit contain).
+        _pzFit(canvasId) { this._pzReset(canvasId); },
+
+        // Fit width: scale so the image spans the full container width,
+        // centred vertically (crops top/bottom if the image is taller).
+        _pzFitWidth(canvasId) {
+            const m = this._pzMetrics(canvasId);
+            if (!m) return;
+            const k = Math.max(1, m.W / m.imgW);
+            const tx = -m.ox * k;
+            const ty = (m.H - m.imgH * k) / 2 - m.oy * k;
+            this._pzSet(canvasId, k, tx, ty);
+        },
+
+        // Fit height: scale so the image spans the full container
+        // height, centred horizontally (crops left/right if wider).
+        _pzFitHeight(canvasId) {
+            const m = this._pzMetrics(canvasId);
+            if (!m) return;
+            const k = Math.max(1, m.H / m.imgH);
+            const ty = -m.oy * k;
+            const tx = (m.W - m.imgW * k) / 2 - m.ox * k;
+            this._pzSet(canvasId, k, tx, ty);
+        },
+
+        // Zoom in / out about the container centre (toolbar +/- buttons).
+        _pzZoomButton(canvasId, factor) {
+            const m = this._pzMetrics(canvasId);
+            if (!m) return;
+            this._pzZoomAt(canvasId, m.W, m.H, m.W / 2, m.H / 2, factor);
+        },
+
+        // "Stretch" toolbar button: toggle auto display-stretch and
+        // re-render the cached frame so the operator can flip between
+        // the auto-stretched (bright, see-the-target) view and the
+        // raw linear view without leaving the tab. Shared across all
+        // preview canvases since stretch is a global display setting.
+        toggleAutoStretch() {
+            this.stretchAuto = !this.stretchAuto;
+            try { this.applyManualStretch(); } catch (e) { /* no frame yet */ }
+            this.toast(this.stretchAuto ? 'Auto-stretch on' : 'Auto-stretch off (linear)',
+                'ok');
+        },
+
         _pzInitArea(areaEl, canvasId) {
             if (!areaEl) return;
             const self = this;
