@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260602-quality">
+    <link rel="stylesheet" href="/css/app.css?v=20260602-battery">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -413,6 +413,25 @@
             <span class="status-chip" x-show="liveStackEnabled && liveStackFrames > 0">
                 <span class="chip-icon">S</span>
                 <span x-text="liveStackFrames + ' frames'"></span>
+            </span>
+            <!-- Client-device battery (Battery Status API). Only shows on
+                 browsers that support it (Chrome / most Android); reflects
+                 the charge of the tablet / phone / laptop viewing the UI,
+                 NOT the telescope computer. Live-updates via the API events. -->
+            <span class="status-chip status-battery" x-show="battery.supported" x-cloak
+                  :title="'This device battery: ' + battery.level + '%'
+                          + (battery.charging ? ' (charging)' : '')">
+                <svg viewBox="0 0 24 12" width="22" height="12" aria-hidden="true"
+                     style="vertical-align:middle; color:var(--text-secondary)">
+                    <rect x="0.5" y="0.5" width="20" height="11" rx="2" ry="2"
+                          fill="none" stroke="currentColor" stroke-width="1"></rect>
+                    <rect x="21" y="3.5" width="2.2" height="5" rx="1" fill="currentColor"></rect>
+                    <rect x="2" y="2" height="8" rx="1"
+                          :width="Math.max(0, (battery.level || 0) / 100 * 17)"
+                          :fill="batteryColor()"></rect>
+                </svg>
+                <span x-text="(battery.level != null ? battery.level : '--') + '%'"></span>
+                <span x-show="battery.charging" title="Charging" style="color:#86efac">⚡</span>
             </span>
             <!-- App clock. Moved here from the LIVE stats bar (where a
                  wall-clock time next to the stacking stats was confusing).
@@ -11293,7 +11312,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260602-previewquality"></script>
+    <script src="/js/app.js?v=20260602-battery"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

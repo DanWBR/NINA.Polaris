@@ -59,6 +59,10 @@ function ninaApp() {
         _shutterArmStartedAt: 0,
         stats: { starCount: '--', hfr: null, mean: null, snr: null },
         currentTime: '--:--:--',
+        // Battery of the CLIENT device (tablet/phone/laptop showing the
+        // UI), via the browser Battery Status API. supported stays false
+        // on Firefox/Safari (no API) so the top-bar chip simply hides.
+        battery: { supported: false, level: null, charging: false },
         cameraTemp: null,
         sessionCaptures: 0,
         imageHistory: [],
@@ -2288,6 +2292,7 @@ function ninaApp() {
         init() {
             this.updateClock();
             setInterval(() => this.updateClock(), 1000);
+            this.initBattery();
             this.updateFov();
 
             // FIELD-6: rehydrate persisted chip dismissals. Only
@@ -6522,6 +6527,40 @@ function ninaApp() {
         },
 
         // --- Clock and FOV ---
+
+        // Client-device battery via the Battery Status API. Resolves a
+        // BatteryManager (Chrome / most Android browsers); Firefox + Safari
+        // don't implement it, so we leave battery.supported = false and the
+        // top-bar chip stays hidden. Updates live via the API's own events
+        // (no polling), so a phone/tablet running the UI shows its charge.
+        async initBattery() {
+            try {
+                if (!navigator.getBattery) return;
+                const bm = await navigator.getBattery();
+                const sync = () => {
+                    this.battery.supported = true;
+                    this.battery.level = Math.round((bm.level ?? 0) * 100);
+                    this.battery.charging = !!bm.charging;
+                };
+                sync();
+                bm.addEventListener('levelchange', sync);
+                bm.addEventListener('chargingchange', sync);
+            } catch (e) {
+                // Some browsers expose getBattery but reject it (privacy);
+                // just leave the chip hidden.
+            }
+        },
+
+        // Fill colour for the battery chip: red when low, amber mid,
+        // green otherwise. Charging always reads as healthy green.
+        batteryColor() {
+            const l = this.battery.level;
+            if (l == null) return 'var(--text-secondary)';
+            if (this.battery.charging) return '#86efac';
+            if (l <= 15) return '#f87171';
+            if (l <= 40) return '#fbbf24';
+            return '#86efac';
+        },
 
         updateClock() {
             this.currentTime = new Date().toLocaleTimeString('en-GB');

@@ -537,8 +537,13 @@ body {
     color: var(--text-secondary);
     opacity: 0.85;
 }
+.status-battery {
+    gap: 5px;
+    font-variant-numeric: tabular-nums;
+}
 @media (max-width: 720px) {
     .status-clock { display: none; }
+    .status-battery { display: none; }
 }
 
 /* App Layout */
