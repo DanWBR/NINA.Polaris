@@ -813,6 +813,8 @@ app.MapAutoFocusEndpoints();
 // metric, gaussian FWHM fit, ...).
 app.MapFocusEndpoints();
 app.MapMeridianFlipEndpoints();
+// FIELD4-4: PREVIEW-tab one-shot plate solve.
+app.MapPlateSolveEndpoints();
 // AUTH-1: /api/auth/{status,setup,login,logout,change-password,
 // disable,enable}. Mapped here; AuthMiddleware (AUTH-2) exempts the
 // whole /api/auth/* prefix so these are reachable without a token.

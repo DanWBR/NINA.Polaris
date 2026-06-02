@@ -593,6 +593,15 @@ function ninaApp() {
         activeRigId: null,
         rigModalOpen: false,
         newRigName: '',
+
+        // FIELD4-3: per-camera quirks (Bayer override + vertical
+        // flip). Loaded from /api/equipment/camera-quirks when the
+        // Manage Rigs modal opens; each entry is {cameraId,
+        // bayerPatternOverride, verticalFlipImage}. activeCameraIdForQuirks
+        // mirrors the active rig's camera id so the table can
+        // highlight the row that's currently in effect.
+        cameraQuirks: [],
+        activeCameraIdForQuirks: null,
         // Derived: the active rig's display name. The home panel uses
         // this in places like `x-show="activeRig"` + "Rig: {name}".
         // Defined as a getter so Alpine reacts when rigs or activeRigId
@@ -692,6 +701,14 @@ function ninaApp() {
             _snapStartedAt: null,
             _snapExposure: 0
         },
+
+        // FIELD4-4: PREVIEW-tab one-shot plate solve. previewSolveBusy
+        // gates the button; previewSolveResult is the raw response
+        // ({success, raHours, decDeg, rotationDeg, scaleArcsecPerPixel,
+        // solverUsed} on success; {success:false, error} on failure).
+        // Result card render is gated on previewSolveResult !== null.
+        previewSolveBusy: false,
+        previewSolveResult: null,
 
         // Server-side continuous video stream. Started by the Stream
         // button in PREVIEW; backend's CameraStreamService auto-picks
@@ -11052,17 +11069,74 @@ function ninaApp() {
         // through saveRig's debounce; takes effect on the next frame
         // the relay broadcasts (no reconnect needed).
         setBayerOverride(rig, value) {
-            rig.bayerPatternOverride = value && value.trim() ? value.trim() : null;
-            this.saveRig(rig);
+            // FIELD4-3: per-rig field is gone; legacy callers (e.g.
+            // sequencer entities created pre-FIELD4) route here from
+            // the bayer-pattern instruction. Forward to the per-camera
+            // map so existing code paths keep working.
+            if (rig && rig.camera) {
+                this._saveCameraQuirks(rig.camera, {
+                    bayerPatternOverride: value && value.trim() ? value.trim() : null,
+                    verticalFlipImage: !!rig.verticalFlipImage
+                });
+            }
         },
 
-        // FIELD3-2: per-rig vertical-flip override. Mirrors the
-        // pixel array Y-direction server-side so RGGB stays RGGB on
-        // drivers that deliver top-down data without flipping the
-        // FITS axis (SV405CC indi_svbony_ccd notably).
         setVerticalFlipImage(rig, value) {
-            rig.verticalFlipImage = !!value;
-            this.saveRig(rig);
+            if (rig && rig.camera) {
+                this._saveCameraQuirks(rig.camera, {
+                    bayerPatternOverride: rig.bayerPatternOverride || null,
+                    verticalFlipImage: !!value
+                });
+            }
+        },
+
+        // FIELD4-3: per-camera-id quirks (Bayer override + flip).
+        // Lives at the user-profile level on the server, so the
+        // workaround follows the physical camera between rigs that
+        // share it. The Manage Rigs modal calls loadCameraQuirks()
+        // on open; the table widgets call setCameraQuirksBayer /
+        // setCameraQuirksFlip on change, which both forward to
+        // _saveCameraQuirks (one PUT, REPLACE semantics).
+        async loadCameraQuirks() {
+            try {
+                const data = await this.apiGet('/api/equipment/camera-quirks');
+                this.cameraQuirks = data.cameras || [];
+                this.activeCameraIdForQuirks = data.activeCameraId || null;
+            } catch (e) {
+                // Server unreachable / older build without the
+                // endpoint, keep the table empty rather than logging
+                // a scary error in the operator's console.
+                this.cameraQuirks = [];
+                this.activeCameraIdForQuirks = null;
+            }
+        },
+
+        setCameraQuirksBayer(entry, value) {
+            const normalised = value && value.trim() ? value.trim() : null;
+            entry.bayerPatternOverride = normalised;
+            this._saveCameraQuirks(entry.cameraId, {
+                bayerPatternOverride: normalised,
+                verticalFlipImage: !!entry.verticalFlipImage
+            });
+        },
+
+        setCameraQuirksFlip(entry, value) {
+            entry.verticalFlipImage = !!value;
+            this._saveCameraQuirks(entry.cameraId, {
+                bayerPatternOverride: entry.bayerPatternOverride || null,
+                verticalFlipImage: !!value
+            });
+        },
+
+        async _saveCameraQuirks(cameraId, body) {
+            if (!cameraId) return;
+            try {
+                await this.apiPost(
+                    `/api/equipment/camera-quirks/${encodeURIComponent(cameraId)}`,
+                    body, { method: 'PUT' });
+            } catch (e) {
+                this.toast('Could not save camera quirks', 'error');
+            }
         },
 
         async deleteRig(id) {
@@ -12107,6 +12181,82 @@ function ninaApp() {
             if (this.preview.looping && !this.preview.busy) {
                 this.previewTakeSnap();
             }
+        },
+
+        // FIELD4-4: PREVIEW-tab one-shot plate solve. POSTs the
+        // current frame's location-hint (mount RA/Dec when
+        // connected) and pops the result card on success. The
+        // server reads the most recent frame off ImageRelayService;
+        // the operator doesn't have to re-snap.
+        async previewSolve() {
+            if (this.previewSolveBusy) return;
+            this.previewSolveBusy = true;
+            this.previewSolveResult = null;
+            try {
+                const body = {};
+                if (this.mount?.connected
+                        && Number.isFinite(this.mount.ra)
+                        && Number.isFinite(this.mount.dec)) {
+                    body.hintRa = this.mount.ra;
+                    body.hintDec = this.mount.dec;
+                }
+                const r = await this.apiPost(
+                    '/api/platesolve/solve-latest', body);
+                this.previewSolveResult = r || { success: false, error: 'No response' };
+                if (this.previewSolveResult.success) {
+                    this.toast('Plate solve succeeded', 'ok');
+                } else {
+                    this.toast('Plate solve failed: '
+                        + (this.previewSolveResult.error || 'unknown'), 'warn');
+                }
+            } catch (e) {
+                this.previewSolveResult = { success: false, error: e.message || 'request failed' };
+                this.toast('Plate solve request failed', 'error');
+            } finally {
+                this.previewSolveBusy = false;
+            }
+        },
+
+        async previewSolveSyncMount() {
+            const r = this.previewSolveResult;
+            if (!r || !r.success) return;
+            try {
+                await this.apiPost('/api/telescope/sync', {
+                    ra: r.raHours,
+                    dec: r.decDeg
+                });
+                this.toast('Mount synced to solved coordinates', 'ok');
+            } catch (e) {
+                this.toast('Mount sync failed: ' + (e.message || ''), 'error');
+            }
+        },
+
+        previewSolveApplyTargetRotation() {
+            const r = this.previewSolveResult;
+            if (!r || !r.success || !Number.isFinite(r.rotationDeg)) return;
+            // fov.rotationDeg drives the red SKY rectangle (the
+            // operator's desired framing). Setting it from the solve
+            // answers "rotate my desired framing to whatever the
+            // camera is currently producing", useful for locking in
+            // the current orientation as the new baseline.
+            if (!this.fov) this.fov = { width: 2.82, height: 1.88 };
+            this.fov.rotationDeg = r.rotationDeg;
+            try { this._pushSkyFovOverlays && this._pushSkyFovOverlays(); }
+            catch (e) { /* SKY engine may not be live */ }
+            this.toast('Target FOV rotation set to ' + r.rotationDeg.toFixed(2) + '°', 'ok');
+        },
+
+        previewSolveApplyMountRotation() {
+            const r = this.previewSolveResult;
+            if (!r || !r.success || !Number.isFinite(r.rotationDeg)) return;
+            // solveRotationDeg drives the blue SKY rectangle (the
+            // physical mount/camera angle). Plumbing exists since
+            // FIELD3-4; this button feeds the solved angle into it
+            // even when the slew-and-center workflow wasn't used.
+            this.solveRotationDeg = r.rotationDeg;
+            try { this._pushSkyFovOverlays && this._pushSkyFovOverlays(); }
+            catch (e) { /* SKY engine may not be live */ }
+            this.toast('Mount FOV rotation set to ' + r.rotationDeg.toFixed(2) + '°', 'ok');
         },
 
         async previewAbort() {

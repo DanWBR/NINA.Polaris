@@ -93,6 +93,14 @@ public class ProfileService {
             }
         }
 
+        // FIELD4-3: hoist legacy per-rig camera quirks (Bayer
+        // override + vertical flip) into the per-camera-id map on
+        // the user profile. Runs once per load; skipped for any
+        // camera id that's already present in CameraQuirks so a
+        // later edit to the per-camera entry isn't overwritten by
+        // a stale legacy field on an old rig.
+        MigrateLegacyCameraQuirks();
+
         // Deployment-time override for the capture root. Useful for
         // distribution images (Pi systemd unit, Docker, etc.) that
         // want a sensible default like /home/polaris/files without
@@ -332,6 +340,76 @@ public class ProfileService {
         return true;
     }
 
+    /// <summary>FIELD4-3: get the quirks (Bayer override + vertical
+    /// flip) for the currently-active rig's camera id. Returns an
+    /// empty <see cref="CameraQuirks"/> (both fields off) when no
+    /// camera is selected or no entry exists for that id yet. The
+    /// active camera's quirks are looked up by string match against
+    /// <see cref="EquipmentProfile.Camera"/>, so the same physical
+    /// camera shared across rigs gets the same workaround
+    /// automatically.</summary>
+    public CameraQuirks GetActiveCameraQuirks() {
+        var id = ActiveEquipmentProfile?.Camera;
+        if (string.IsNullOrWhiteSpace(id)) return new CameraQuirks();
+        return _activeProfile.CameraQuirks.TryGetValue(id, out var q)
+            ? q
+            : new CameraQuirks();
+    }
+
+    /// <summary>FIELD4-3: get-or-create the quirks entry for a given
+    /// camera id. Used by the camera-quirks PUT endpoint. Does not
+    /// persist; caller is responsible for calling Save() once the
+    /// edit is applied (the endpoint does).</summary>
+    public CameraQuirks GetOrCreateCameraQuirks(string cameraId) {
+        if (!_activeProfile.CameraQuirks.TryGetValue(cameraId, out var q)) {
+            q = new CameraQuirks();
+            _activeProfile.CameraQuirks[cameraId] = q;
+        }
+        return q;
+    }
+
+    /// <summary>FIELD4-3: snapshot of the full per-camera quirks
+    /// map. Returns a copy of the keys (so a caller can iterate
+    /// without worrying about concurrent edits) plus the live
+    /// CameraQuirks references (callers shouldn't mutate). Consumed
+    /// by the camera-quirks GET endpoint and by the RIGS tab UI to
+    /// populate the table.</summary>
+    public IReadOnlyDictionary<string, CameraQuirks> ListCameraQuirks() {
+        return new Dictionary<string, CameraQuirks>(_activeProfile.CameraQuirks);
+    }
+
+    /// <summary>FIELD4-3: hoist legacy per-rig BayerPatternOverride
+    /// and VerticalFlipImage values into the user-profile-level
+    /// CameraQuirks map keyed by the rig's camera id. Skips any
+    /// camera id already present in the map so a later edit to the
+    /// new field isn't overwritten by a stale legacy field on an
+    /// old rig. Runs once on Load(). Safe to keep running on every
+    /// boot, it's idempotent (the if-present guard).</summary>
+    private void MigrateLegacyCameraQuirks() {
+        if (_activeProfile.EquipmentProfiles == null) return;
+        var migrated = 0;
+        foreach (var rig in _activeProfile.EquipmentProfiles) {
+            if (string.IsNullOrWhiteSpace(rig.Camera)) continue;
+            if (_activeProfile.CameraQuirks.ContainsKey(rig.Camera)) continue;
+
+            var hasBayer = !string.IsNullOrWhiteSpace(rig.BayerPatternOverride);
+            var hasFlip = rig.VerticalFlipImage;
+            if (!hasBayer && !hasFlip) continue;
+
+            _activeProfile.CameraQuirks[rig.Camera] = new CameraQuirks {
+                BayerPatternOverride = hasBayer ? rig.BayerPatternOverride : null,
+                VerticalFlipImage = hasFlip
+            };
+            migrated++;
+        }
+        if (migrated > 0) {
+            _logger.LogInformation(
+                "Migrated {Count} legacy per-rig Bayer/flip override(s) into per-camera quirks",
+                migrated);
+            Save();
+        }
+    }
+
     /// <summary>On first run (or upgrade from a pre-rig profile), create a
     /// "Default" rig populated from the legacy LastXxx fields.</summary>
     private void EnsureMigratedToEquipmentProfiles() {
@@ -500,6 +578,18 @@ public class UserProfile {
     /// the UI lands on first.
     /// </summary>
     public bool PreferAdvancedSequencer { get; set; } = false;
+
+    /// <summary>
+    /// FIELD4-3: per-camera-id quirks (Bayer override + vertical
+    /// flip). Keyed on the camera identifier the operator picked
+    /// in the rig editor (INDI device name, Alpaca host:port:dev,
+    /// SDK serial), these follow the physical camera across rigs
+    /// that share it. Migrated on first load from the legacy
+    /// per-rig <c>BayerPatternOverride</c> / <c>VerticalFlipImage</c>
+    /// fields, which stay on <see cref="EquipmentProfile"/> for one
+    /// release so older profile JSON keeps deserialising.
+    /// </summary>
+    public Dictionary<string, CameraQuirks> CameraQuirks { get; set; } = new();
 
     /// <summary>
     /// DBGLOG-9: opt-in disk persistence for the debug log. When
@@ -824,4 +914,36 @@ public class ProfileSummary {
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
     public DateTime LastModified { get; set; }
+}
+
+/// <summary>
+/// FIELD4-3: per-camera-id workarounds for driver quirks. Keyed on
+/// the camera identifier the operator picked in the rig editor
+/// (INDI device name, Alpaca <c>host:port:dev</c>, SDK serial),
+/// these toggles follow the physical camera across rigs that share
+/// it. Surfaced in the RIGS tab top-level "Camera quirks" table so
+/// every camera the operator ever connects shows up with both
+/// knobs.
+///
+/// Both fields used to live per-rig on <see cref="EquipmentProfile"/>;
+/// they were hoisted up here so a user with two rigs sharing the
+/// same SVBONY camera only configures the workaround once.
+/// </summary>
+public class CameraQuirks {
+    /// <summary>One of "RGGB" / "BGGR" / "GBRG" / "GRBG", forces
+    /// the corresponding <see cref="NINA.Core.Enum.BayerPatternEnum"/>
+    /// regardless of what the driver said. Null / empty / "Auto"
+    /// honours the driver-reported pattern.</summary>
+    public string? BayerPatternOverride { get; set; }
+
+    /// <summary>True flips the pixel buffer Y-direction on receive.
+    /// FITS rows are bottom-up per spec, but some drivers (notably
+    /// the SVBONY indi_svbony_ccd build at the time of writing)
+    /// deliver top-down without flipping NAXIS2. The visible
+    /// symptom is a red-green checkerboard after debayer because
+    /// the cell pairing in the GPU shader is off by one row. The
+    /// row flip is composed with an automatic Bayer-enum row-shift
+    /// inside <see cref="ImageRelayService"/> so the final pattern
+    /// on the wire stays aligned with the new buffer orientation.</summary>
+    public bool VerticalFlipImage { get; set; }
 }

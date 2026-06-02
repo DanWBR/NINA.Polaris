@@ -2442,8 +2442,75 @@
                         <button class="btn" @click="openImageViewer()"
                                 :disabled="!selectedCamera"
                                 title="Full-resolution zoom/pan viewer">⛶ View</button>
+                        <!-- FIELD4-4: one-shot plate solve of the currently
+                             displayed frame. Hint comes from the mount
+                             pointing (when connected) so the solver doesn't
+                             have to blind-solve. Disabled until at least one
+                             frame has been received AND no solve is in
+                             flight. -->
+                        <button class="btn"
+                                @click="previewSolve()"
+                                :disabled="!preview.lastSnapAt || previewSolveBusy"
+                                :title="previewSolveBusy
+                                    ? 'Plate solve in progress...'
+                                    : 'Plate solve the current preview frame'">
+                            <span x-show="!previewSolveBusy">🎯 Plate solve</span>
+                            <span x-show="previewSolveBusy">⏳ Solving...</span>
+                        </button>
                     </div>
                     </div><!-- /.shutter-secondary -->
+
+                    <!-- FIELD4-4: plate solve result card. Renders only
+                         after a solve completes (success or failure).
+                         Success shows formatted RA / Dec / scale /
+                         rotation plus three action buttons; failure
+                         shows the solver error inline. -->
+                    <div class="control-row" style="margin-top: 8px;"
+                         x-show="previewSolveResult">
+                        <div style="flex:1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-elev); font-size: 12px;">
+                            <template x-if="previewSolveResult && previewSolveResult.success">
+                                <div>
+                                    <div style="display:flex; align-items:center; gap:10px; margin-bottom: 6px;">
+                                        <strong class="text-ok">✓ Solved</strong>
+                                        <span class="text-muted" x-text="'via ' + (previewSolveResult.solverUsed || '?')"></span>
+                                        <button class="btn btn-xs" style="margin-left:auto;"
+                                                @click="previewSolveResult = null">✕</button>
+                                    </div>
+                                    <div style="display:flex; flex-wrap: wrap; gap: 14px; margin-bottom: 8px;">
+                                        <span>RA: <strong x-text="formatRA(previewSolveResult.raHours)"></strong></span>
+                                        <span>Dec: <strong x-text="formatDec(previewSolveResult.decDeg)"></strong></span>
+                                        <span>Scale: <strong x-text="(previewSolveResult.scaleArcsecPerPixel || 0).toFixed(2) + ' &quot;/px'"></strong></span>
+                                        <span>Rotation: <strong x-text="(previewSolveResult.rotationDeg || 0).toFixed(2) + '°'"></strong></span>
+                                    </div>
+                                    <div style="display:flex; gap: 6px; flex-wrap: wrap;">
+                                        <button class="btn btn-sm btn-primary"
+                                                @click="previewSolveSyncMount()"
+                                                title="Tell the mount that its current pointing IS the solved coordinates">
+                                            ⚓ Sync mount
+                                        </button>
+                                        <button class="btn btn-sm"
+                                                @click="previewSolveApplyTargetRotation()"
+                                                title="Rotate the red target FOV rectangle on the SKY map to match the solved camera angle">
+                                            🎯 Set as target rotation
+                                        </button>
+                                        <button class="btn btn-sm"
+                                                @click="previewSolveApplyMountRotation()"
+                                                title="Rotate the blue mount FOV rectangle on the SKY map to match the solved camera angle">
+                                            🔭 Use as mount rotation
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                            <template x-if="previewSolveResult && !previewSolveResult.success">
+                                <div style="display:flex; align-items:center; gap:10px;">
+                                    <strong class="text-danger">✗ Solve failed</strong>
+                                    <span class="text-muted" x-text="previewSolveResult.error || 'Unknown error'"></span>
+                                    <button class="btn btn-xs" style="margin-left:auto;"
+                                            @click="previewSolveResult = null">✕</button>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
                 </div>
                 </div><!-- /.preview-pane -->
 
@@ -3495,7 +3562,7 @@
                             <option :value="r.id" x-text="r.name"></option>
                         </template>
                     </select>
-                    <button class="btn btn-sm" @click="rigModalOpen = true; loadOpticsCatalogue()">Manage rigs…</button>
+                    <button class="btn btn-sm" @click="rigModalOpen = true; loadOpticsCatalogue(); loadCameraQuirks()">Manage rigs…</button>
                     <button class="btn btn-sm" @click="saveCurrentSelectionsToRig()"
                             :disabled="!indiConnected"
                             title="Save current device selections into this rig">💾 Save selections</button>
@@ -10316,6 +10383,79 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 active, and set per-rig filter offsets.
             </p>
 
+            <!-- FIELD4-3: per-camera quirks (Bayer override + vertical
+                 flip). Lives at the top of the modal so a new operator
+                 discovers it without having to know which rig the
+                 camera belongs to. The table lists every camera id the
+                 operator has registered across all rigs (plus any
+                 explicit entry already saved). Both knobs follow the
+                 physical camera, so a SVBONY SV405CC moved between a
+                 refractor rig and a guidescope rig only needs the flip
+                 set once. -->
+            <details class="camera-quirks-section"
+                     :open="cameraQuirks.length > 0"
+                     style="margin: 8px 0 14px 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-elev);">
+                <summary style="cursor: pointer; font-weight: 600; font-size: 13px;">
+                    🎥 Camera quirks
+                    <span class="text-muted" style="font-weight: normal; font-size: 11px;">
+                        — Bayer mosaic + FITS row order workarounds (per camera)
+                    </span>
+                </summary>
+                <p class="text-muted" style="font-size: 11px; margin: 6px 0;">
+                    Override only if the live preview / stack comes out grey,
+                    with swapped colours, or as a red/green checkerboard.
+                    Most cameras work on <strong>Auto</strong> + flip off.
+                </p>
+                <template x-if="cameraQuirks.length === 0">
+                    <div class="text-muted" style="font-size: 12px; padding: 6px 0;">
+                        No cameras configured yet, pick a camera on a rig
+                        first and it will appear here.
+                    </div>
+                </template>
+                <template x-if="cameraQuirks.length > 0">
+                    <table style="width:100%; font-size: 12px; border-collapse: collapse;">
+                        <thead>
+                            <tr style="text-align: left; color: var(--text-muted); font-size: 11px;">
+                                <th style="padding: 4px 6px;">Camera</th>
+                                <th style="padding: 4px 6px; width: 140px;">Bayer override</th>
+                                <th style="padding: 4px 6px; width: 110px;">Flip rows</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="c in cameraQuirks" :key="c.cameraId">
+                                <tr :class="c.cameraId === activeCameraIdForQuirks ? 'active' : ''"
+                                    style="border-top: 1px solid var(--border);">
+                                    <td style="padding: 6px;">
+                                        <span x-text="c.cameraId"></span>
+                                        <span x-show="c.cameraId === activeCameraIdForQuirks"
+                                              class="text-ok" style="font-size: 10px; margin-left: 6px;">● ACTIVE</span>
+                                    </td>
+                                    <td style="padding: 6px;">
+                                        <select class="input-sm" style="width: 130px;"
+                                                :value="c.bayerPatternOverride || ''"
+                                                @change="setCameraQuirksBayer(c, $event.target.value)">
+                                            <option value="">Auto (driver)</option>
+                                            <option value="RGGB">RGGB</option>
+                                            <option value="BGGR">BGGR</option>
+                                            <option value="GBRG">GBRG</option>
+                                            <option value="GRBG">GRBG</option>
+                                        </select>
+                                    </td>
+                                    <td style="padding: 6px;">
+                                        <label style="display:flex;align-items:center;gap:6px;">
+                                            <input type="checkbox"
+                                                   :checked="!!c.verticalFlipImage"
+                                                   @change="setCameraQuirksFlip(c, $event.target.checked)">
+                                            <span class="text-muted" style="font-size: 11px;">on</span>
+                                        </label>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </template>
+            </details>
+
             <div class="rig-list">
                 <template x-for="r in rigs" :key="r.id">
                     <div class="rig-row" :class="r.id === activeRigId ? 'active' : ''">
@@ -10446,62 +10586,13 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                 </div>
                             </details>
 
-                            <!-- FIELD-2: per-rig Bayer mosaic override.
-                                 Some OSC drivers (notably the SVBONY
-                                 indi_svbony_ccd build at the time of
-                                 writing) emit the wrong BAYERPAT keyword
-                                 or omit it entirely, which collapses the
-                                 live stack to greyscale. This dropdown
-                                 forces the right mosaic regardless of
-                                 what the driver says. "Auto" = trust the
-                                 driver / FITS header (current behaviour).
-                                 Hint: if the colour looks swapped (red
-                                 leaves, blue moon), cycle through the
-                                 four CFA orderings until one looks
-                                 natural -- it's a 1-in-4 guess at worst. -->
-                            <div class="rig-bayer-override" style="margin-top:8px;display:flex;align-items:center;gap:8px;font-size:12px">
-                                <label :for="'bayer-' + r.id"
-                                       style="text-transform:uppercase;font-size:11px;color:var(--text-muted);letter-spacing:0.3px">
-                                    Bayer
-                                </label>
-                                <select :id="'bayer-' + r.id"
-                                        class="input-sm" style="width:120px"
-                                        :value="r.bayerPatternOverride || ''"
-                                        @change="setBayerOverride(r, $event.target.value)">
-                                    <option value="">Auto (driver)</option>
-                                    <option value="RGGB">RGGB</option>
-                                    <option value="BGGR">BGGR</option>
-                                    <option value="GBRG">GBRG</option>
-                                    <option value="GRBG">GRBG</option>
-                                </select>
-                                <span class="text-muted" style="font-size:11px">
-                                    Override only if the live stack comes out grey or with swapped colours.
-                                </span>
-                            </div>
-
-                            <!-- FIELD3-2: vertical flip companion to
-                                 the Bayer override. When the live
-                                 stack comes out as a red/green
-                                 checkerboard (not the same as wrong
-                                 colours -- a checkerboard means the
-                                 Bayer pattern is offset by one row),
-                                 the driver delivered TOP-DOWN data
-                                 without flipping the FITS axis. Tick
-                                 this to mirror the buffer Y-direction
-                                 on receive so RGGB stays RGGB.
-                                 SVBONY SV405CC (indi_svbony_ccd) is
-                                 the known case as of 2026-06. -->
-                            <div class="rig-vflip-override" style="margin-top:6px;display:flex;align-items:center;gap:8px;font-size:12px">
-                                <label style="display:flex;align-items:center;gap:6px">
-                                    <input type="checkbox"
-                                           :checked="!!r.verticalFlipImage"
-                                           @change="setVerticalFlipImage(r, $event.target.checked)">
-                                    <span style="text-transform:uppercase;font-size:11px;color:var(--text-muted);letter-spacing:0.3px">Flip vertically</span>
-                                </label>
-                                <span class="text-muted" style="font-size:11px">
-                                    Enable if the live stack is a red/green checkerboard despite the correct Bayer pattern.
-                                </span>
-                            </div>
+                            <!-- FIELD4-3: Bayer override + vertical flip
+                                 moved to the per-camera-id "Camera
+                                 quirks" table at the top of this modal,
+                                 so the workaround follows the physical
+                                 camera (not the rig) and gets discovered
+                                 by new operators without having to
+                                 unfold a per-rig section first. -->
                         </div>
                         <div class="rig-row-actions">
                             <button class="btn btn-sm btn-primary"

@@ -34,6 +34,7 @@ public class ImageRelayService : IDisposable {
     private readonly ILogger<ImageRelayService> _logger;
     private readonly ProfileService? _profiles;
     private ImageBuffer? _latestImage;
+    private IImageData? _latestImageData;
     private byte[]? _latestJpeg;
 
     /// <summary>The most recently relayed frame, as a decoded
@@ -43,6 +44,13 @@ public class ImageRelayService : IDisposable {
     /// without forcing a duplicate capture. Lifetime: replaced on
     /// every RelayImageAsync call.</summary>
     public ImageBuffer? LatestImage => _latestImage;
+
+    /// <summary>FIELD4-4: the most recently relayed frame as an
+    /// IImageData, so callers (notably the PREVIEW plate-solve
+    /// endpoint) can hand it to FITSWriter without round-tripping
+    /// through ImageBuffer (which drops metadata). Mirrors the
+    /// LatestImage lifetime, replaced on every RelayImageAsync.</summary>
+    public IImageData? LatestImageData => _latestImageData;
 
     private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(10);
     private const int MaxConsecutiveFailures = 3;
@@ -63,15 +71,16 @@ public class ImageRelayService : IDisposable {
         _profiles = profiles;
     }
 
-    /// <summary>FIELD3-2: build a new IImageData with rows reversed
-    /// when the active rig's VerticalFlipImage toggle is true. Returns
-    /// the original IImageData unchanged when off / no profile
-    /// resolved. The flip is a simple row-by-row reversal of the
-    /// ushort[] buffer; ImageProperties + MetaData are shared by
-    /// reference because nothing downstream mutates them. Cheap on a
-    /// modern CPU (4096x4096 @ 16 bit ~ 32 MB row swap, ~5 ms).</summary>
+    /// <summary>FIELD3-2 / FIELD4-3: build a new IImageData with
+    /// rows reversed when the active camera's VerticalFlipImage
+    /// quirk is true. Returns the original IImageData unchanged
+    /// when off / no profile resolved. The flip is a simple
+    /// row-by-row reversal of the ushort[] buffer;
+    /// ImageProperties + MetaData are shared by reference because
+    /// nothing downstream mutates them. Cheap on a modern CPU
+    /// (4096x4096 @ 16 bit ~ 32 MB row swap, ~5 ms).</summary>
     private IImageData ApplyVerticalFlipIfEnabled(IImageData source) {
-        if (!(_profiles?.ActiveEquipmentProfile?.VerticalFlipImage ?? false)) return source;
+        if (!ActiveVerticalFlip()) return source;
         var w = source.Properties.Width;
         var h = source.Properties.Height;
         if (w <= 0 || h <= 0 || source.Data == null || source.Data.Length != w * h) return source;
@@ -84,24 +93,84 @@ public class ImageRelayService : IDisposable {
         return new NINA.Image.ImageData.BaseImageData(flipped, source.Properties, source.MetaData);
     }
 
-    /// <summary>Resolve the active rig's Bayer override (if any) to a
-    /// concrete enum value. Returns null when:
+    /// <summary>FIELD4-3: read the active camera's flip toggle from
+    /// the per-camera quirks map, falling back to the legacy per-rig
+    /// field while the migration window is still open. Once the
+    /// per-rig field is removed (one release out), this collapses
+    /// back to just the quirks lookup.</summary>
+    private bool ActiveVerticalFlip() {
+        if (_profiles == null) return false;
+        var q = _profiles.GetActiveCameraQuirks();
+        if (q.VerticalFlipImage) return true;
+        // Legacy per-rig fallback (kept for one release; the
+        // ProfileService Load migrator already copies these into
+        // CameraQuirks on the first boot, so this branch is dead
+        // code on any second-boot install).
+        return _profiles.ActiveEquipmentProfile?.VerticalFlipImage ?? false;
+    }
+
+    /// <summary>FIELD4-3: read the active camera's Bayer override
+    /// string from the per-camera quirks map, falling back to the
+    /// legacy per-rig field. Same migration story as
+    /// <see cref="ActiveVerticalFlip"/>.</summary>
+    private string? ActiveBayerOverride() {
+        if (_profiles == null) return null;
+        var q = _profiles.GetActiveCameraQuirks();
+        if (!string.IsNullOrWhiteSpace(q.BayerPatternOverride)) return q.BayerPatternOverride;
+        return _profiles.ActiveEquipmentProfile?.BayerPatternOverride;
+    }
+
+    /// <summary>FIELD4-2: when the buffer's been row-flipped, the
+    /// Bayer 2x2 cell pairing also shifts by one row -- the original
+    /// row-1 (e.g. G/B in RGGB) is now row-0 of every cell. Remap
+    /// the pattern so the wire-side enum stays aligned with the
+    /// flipped pixels. Identity for unknown / None / Auto.</summary>
+    public static BayerPatternEnum RowShiftBayer(BayerPatternEnum source) {
+        return source switch {
+            BayerPatternEnum.RGGB => BayerPatternEnum.GBRG,
+            BayerPatternEnum.GBRG => BayerPatternEnum.RGGB,
+            BayerPatternEnum.BGGR => BayerPatternEnum.GRBG,
+            BayerPatternEnum.GRBG => BayerPatternEnum.BGGR,
+            _ => source
+        };
+    }
+
+    /// <summary>Resolve the active camera's Bayer override (if
+    /// any) to a concrete enum value, composing it with the
+    /// vertical-flip row-shift (FIELD4-2) so the wire-side pattern
+    /// matches the actual pixel layout the client receives.
+    ///
+    /// Returns null when:
     ///   - No ProfileService injected (legacy ctor path / tests)
-    ///   - No active rig
-    ///   - Override is null / empty / "Auto" (honour the source)
+    ///   - No active rig / no camera quirks
+    ///   - Override is null / empty / "Auto" AND vertical flip is off
     ///   - String doesn't parse to a known pattern (graceful fall
     ///     through to the source-reported value)
     /// </summary>
-    private BayerPatternEnum? ResolveBayerOverride() {
-        var raw = _profiles?.ActiveEquipmentProfile?.BayerPatternOverride;
-        if (string.IsNullOrWhiteSpace(raw)) return null;
-        if (string.Equals(raw, "Auto", StringComparison.OrdinalIgnoreCase)) return null;
-        if (Enum.TryParse<BayerPatternEnum>(raw, ignoreCase: true, out var parsed)
-                && parsed != BayerPatternEnum.None
-                && parsed != BayerPatternEnum.Auto) {
-            return parsed;
+    private BayerPatternEnum? ResolveBayerOverride(BayerPatternEnum? sourcePattern) {
+        var raw = ActiveBayerOverride();
+        BayerPatternEnum? parsed = null;
+        if (!string.IsNullOrWhiteSpace(raw)
+                && !string.Equals(raw, "Auto", StringComparison.OrdinalIgnoreCase)
+                && Enum.TryParse<BayerPatternEnum>(raw, ignoreCase: true, out var p)
+                && p != BayerPatternEnum.None
+                && p != BayerPatternEnum.Auto) {
+            parsed = p;
         }
-        return null;
+
+        // FIELD4-2: if the buffer is being row-flipped, shift the
+        // Bayer enum to match. The shift applies whether the
+        // operator picked an explicit override OR we're trusting
+        // the source pattern. Without this the WebGL2 debayer
+        // shader applies (e.g.) RGGB-formula math to GBRG-aligned
+        // pixels and the output paints the classic red/green
+        // checkerboard the SV405CC operator reported.
+        if (ActiveVerticalFlip()) {
+            var basis = parsed ?? sourcePattern;
+            if (basis.HasValue) return RowShiftBayer(basis.Value);
+        }
+
+        return parsed;
     }
 
     public void RegisterClient(string id, System.Net.WebSockets.WebSocket ws) {
@@ -151,16 +220,21 @@ public class ImageRelayService : IDisposable {
         // side accumulator, since LiveStackingService's integrated
         // output re-enters this method).
         var sourceData = ApplyVerticalFlipIfEnabled(imageData);
-        // FIELD-2: apply the active rig's Bayer pattern override (if
-        // any) before we hand the buffer to the JPEG encoder / raw
-        // header writer. Drivers that emit a wrong or missing
-        // BAYERPAT keyword (notably SVBONY's indi_svbony_ccd at the
-        // time of writing) would otherwise feed mono into the
-        // client-side debayer and the live stack comes out grey. The
-        // override is the operator's "I know better than the driver"
-        // escape hatch.
-        var buffer = ImageBuffer.FromImageData(sourceData, ResolveBayerOverride());
+        // FIELD-2 + FIELD4-2: compose the operator's Bayer override
+        // (if any) with the automatic row-shift remap that kicks in
+        // when VerticalFlipImage is on. Drivers that emit a wrong /
+        // missing BAYERPAT (SVBONY indi_svbony_ccd notably) would
+        // otherwise feed mono into the client-side debayer; drivers
+        // that deliver row-flipped buffers (also SVBONY's SV405CC)
+        // would paint a red/green checkerboard because the WebGL2
+        // shader cell pairing shifts under the flip. The composed
+        // resolver hands a single final enum to the wire side so
+        // the shader stays untouched.
+        var sourcePattern = sourceData.Properties.BayerPattern;
+        var resolved = ResolveBayerOverride(sourcePattern);
+        var buffer = ImageBuffer.FromImageData(sourceData, resolved);
         _latestImage = buffer;
+        _latestImageData = sourceData;
         _latestJpeg = null;
 
         if (_clients.IsEmpty) return;

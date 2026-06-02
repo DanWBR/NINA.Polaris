@@ -272,6 +272,19 @@ public class SlewCenterService {
                     solveResult.RaHours, solveResult.DecDeg);
 
                 await _equip.Telescope.SyncAsync(solveResult.RaHours, solveResult.DecDeg, ct);
+
+                // FIELD4-1: post-sync settle. The driver-level SyncAsync
+                // returns when the EQUATORIAL_EOD write is ack'd, but
+                // the mount's internal coordinate system needs a beat
+                // (typically 200-500 ms) to adopt the new zero. Without
+                // this delay the next iteration's slew computes its
+                // motion vector from STALE mount RA/Dec, producing
+                // backwards / perpendicular nudges close to convergence
+                // (the "erratic near target" symptom) and stretching
+                // the loop into a final iteration that bumps into the
+                // camera CaptureAsync timeout. 800 ms covers every
+                // mainstream mount we've tested with margin.
+                await Task.Delay(800, ct);
             }
 
             job.State = SlewCenterState.Failed;

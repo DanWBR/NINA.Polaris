@@ -172,11 +172,34 @@ public sealed class AlpacaTelescope : ITelescope, IDisposable {
         }
     }
 
-    public Task SyncAsync(double ra, double dec, CancellationToken ct = default) =>
-        _client.PutAsync("synctocoordinates", new Dictionary<string, string> {
+    /// <summary>
+    /// Sync the mount to (ra, dec). Alpaca's <c>synctocoordinates</c>
+    /// PUT returns when the HTTP call ack'd, but doesn't wait for the
+    /// driver to actually adopt the new coordinates (some drivers
+    /// briefly flip <c>Slewing=true</c> while resetting their internal
+    /// model). FIELD4-1: poll <c>slewing == false</c> for up to 5 s
+    /// after the PUT so the caller (SlewCenterService loop, sequencer)
+    /// sees the mount settled before reading RA/Dec back. Mirrors the
+    /// ack pattern <c>IndiTelescope.SyncAsync</c> already implements.
+    /// </summary>
+    public async Task SyncAsync(double ra, double dec, CancellationToken ct = default) {
+        await _client.PutAsync("synctocoordinates", new Dictionary<string, string> {
             ["RightAscension"] = ra.ToString(CultureInfo.InvariantCulture),
             ["Declination"] = dec.ToString(CultureInfo.InvariantCulture)
         }, ct);
+
+        // Settle window: most drivers don't toggle Slewing on sync, so
+        // this loop typically exits on the first poll. A few mounts
+        // (notably some 10micron and iOptron Alpaca bridges) do flip
+        // Slewing briefly; cap at 5 s so a stuck driver doesn't hang
+        // the centering loop.
+        var settleDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (DateTime.UtcNow < settleDeadline) {
+            ct.ThrowIfCancellationRequested();
+            if (!await SafeBool("slewing", ct)) return;
+            await Task.Delay(PollInterval, ct);
+        }
+    }
 
     public Task ParkAsync(CancellationToken ct = default) =>
         _client.PutAsync("park", null, ct);

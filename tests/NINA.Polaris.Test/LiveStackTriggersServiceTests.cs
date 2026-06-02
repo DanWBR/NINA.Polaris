@@ -101,7 +101,9 @@ public class LiveStackTriggersServiceTests {
             new NINA.Polaris.Services.Alpaca.AlpacaDiscoveryCache());
         var autoFocus = new AutoFocusService(equip, relay, NullLogger<AutoFocusService>.Instance);
         var solver = new PlateSolveService(cfg, NullLogger<PlateSolveService>.Instance);
-        var slew = new SlewCenterService(equip, solver, profiles,
+        var stream = new CameraStreamService(equip, relay,
+            NullLogger<CameraStreamService>.Instance);
+        var slew = new SlewCenterService(equip, solver, profiles, stream,
             NullLogger<SlewCenterService>.Instance);
         return new LiveStackTriggersService(stack, profiles, equip, autoFocus, slew, solver,
             NullLogger<LiveStackTriggersService>.Instance);

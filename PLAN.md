@@ -15,7 +15,92 @@
   verbatim, only the prose around them was translated.
 -->
 
-# Current chapter: Live-stack per-frame pre-processing (LSPP-1..7)
+# Current chapter: Field-testing batch FIELD4 (plate solve + camera quirks + PREVIEW solve)
+
+> Operator's varanda session #3 surfaced four issues: erratic plate
+> solve close to the target with last-iteration camera timeout;
+> the FIELD3-2 vertical-flip toggle didn't actually fix the SV405CC
+> checkerboard because the WebGL shader cell pairing shifts under
+> the row flip; the Bayer / flip workarounds should be per-camera
+> (not per-rig) and visible in RIGS by default; and they wanted an
+> ASIAIR-style plate solve straight from the PREVIEW frame with
+> one-click sync + rotation buttons.
+
+## What shipped
+
+### FIELD4-1: plate solve sync settle + Alpaca ack
+`SlewCenterService.RunJobAsync` now waits 800 ms after every
+`SyncAsync` call. Without this, the next iteration's slew
+computed its motion vector from STALE mount RA/Dec (the driver
+ack'd the EQUATORIAL_EOD write but the mount's internal
+coordinate system hadn't adopted it yet), producing the
+"erratic near target" oscillation and the last-iteration
+camera timeout. `AlpacaTelescope.SyncAsync` additionally polls
+`slewing == false` for up to 5 s after the `synctocoordinates`
+PUT, mirroring the ack pattern IndiTelescope already uses.
+
+### FIELD4-2: VerticalFlip Bayer row-shift remap
+The WebGL2 debayer shader hard-codes the 2x2 cell pairing
+keyed off the source Bayer enum. When `ImageRelayService` row-
+flips the buffer, the cell pairing shifts by one row -- RGGB
+becomes GBRG-aligned (and BGGR <-> GRBG). The relay now composes
+the operator's Bayer override with an automatic row-shift map
+(`ImageRelayService.RowShiftBayer`) so the wire-side enum
+matches the actual pixel layout the shader receives. SV405CC's
+red/green checkerboard is gone on PREVIEW + LIVE alike with
+`VerticalFlipImage = true`.
+
+### FIELD4-3: per-camera-id quirks (Bayer + flip)
+`BayerPatternOverride` and `VerticalFlipImage` moved from per-
+rig on `EquipmentProfile` to a new per-camera-id map on
+`UserProfile.CameraQuirks` (keyed on the camera id the rig
+picker writes: INDI device name, Alpaca `host:port:dev`, or SDK
+serial). The same physical camera moved between rigs only
+needs the workaround set once. Migration runs once on
+`ProfileService.Load` to hoist legacy per-rig values into the
+new map without overwriting any explicit per-camera entry.
+New endpoints `GET /api/equipment/camera-quirks` (the table)
+and `PUT /api/equipment/camera-quirks/{cameraId}` (REPLACE).
+RIGS-tab Manage Rigs modal grew a top-level "Camera quirks"
+section listing every camera the operator has registered;
+the old per-rig Bayer dropdown + Vertical-flip checkbox are
+gone. Legacy `EquipmentProfile.BayerPatternOverride` /
+`VerticalFlipImage` fields stay one release as a JSON
+back-compat shim.
+
+### FIELD4-4: plate solve from PREVIEW
+New `POST /api/platesolve/solve-latest` endpoint
+(`PlateSolveEndpoints.cs`). Reads
+`ImageRelayService.LatestImageData` (new public surface that
+mirrors `LatestImage` but preserves metadata for FITS writing),
+writes a temp FITS, runs `PlateSolveService.SolveAsync` with
+the mount-pointing hint, and returns RA / Dec / scale /
+rotation inline. PREVIEW toolbar grew a "Plate solve" button
+next to "View"; on success the operator gets a result card
+with three one-click actions:
+- **Sync mount** -> POST `/api/telescope/sync` with the solved
+  coords.
+- **Set as target rotation** -> assigns `fov.rotationDeg` so
+  the red SKY rectangle adopts the solved angle.
+- **Use as mount rotation** -> assigns `solveRotationDeg` so
+  the blue SKY rectangle adopts the solved angle (FIELD3-4
+  plumbing already in place).
+
+## Tests + verify
+
+- `dotnet build src/NINA.Polaris/NINA.Polaris.csproj`: clean.
+- `dotnet test tests/NINA.Polaris.Test`: 889 + 6 = 895 passing
+  (plus 11 ignored Windows-only fixtures). The 6 new tests in
+  `Field4Tests.cs` pin the row-shift map (3 cases) and the
+  per-camera quirks migration (3 cases).
+- Fixed two pre-existing test build errors in
+  `LiveStackTriggersServiceTests` and `SequenceEngineDitherTests`
+  (the `SlewCenterService` ctor gained a `CameraStreamService`
+  param at FIELD-1; tests still passed the old 4-arg shape).
+- Real-hardware verify deferred to next varanda session (SV405CC
+  checkerboard, ZWO AM3 convergence, PREVIEW solve happy path).
+
+# Past chapter: Live-stack per-frame pre-processing (LSPP-1..7)
 
 > Operator asked for calibration + BGE to run on EACH live-stack
 > frame before star-detection + accumulation. Goal: live stack

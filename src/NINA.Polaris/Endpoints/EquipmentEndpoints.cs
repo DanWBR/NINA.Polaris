@@ -218,8 +218,75 @@ public static class EquipmentEndpoints {
             return ok ? Results.Ok(new { message = "Rig deleted" })
                       : Results.BadRequest(new { error = "Rig not found or last remaining" });
         });
+
+        // ---- FIELD4-3: per-camera-id quirks (Bayer override + flip) ----
+        //
+        // Lives at the user-profile level, not on EquipmentProfile,
+        // so a camera that ships across multiple rigs (same SVBONY
+        // moved between a refractor and a guidescope, say) gets the
+        // workaround once and follows the physical sensor. Keyed on
+        // EquipmentProfile.Camera (INDI device name / Alpaca
+        // host:port:dev / SDK serial).
+
+        group.MapGet("/camera-quirks", (ProfileService profiles) => {
+            // Surface every camera that has either a saved quirks
+            // entry OR is referenced by any rig the operator
+            // configured. That way the RIGS-tab table lists rows
+            // for cameras the user has used even when both toggles
+            // are still default (so they can be edited from one
+            // place without having to "discover" the camera first).
+            var map = new Dictionary<string, CameraQuirks>(
+                profiles.ListCameraQuirks().ToDictionary(kv => kv.Key, kv => kv.Value));
+            foreach (var rig in profiles.ListEquipmentProfiles()) {
+                if (string.IsNullOrWhiteSpace(rig.Camera)) continue;
+                if (!map.ContainsKey(rig.Camera))
+                    map[rig.Camera] = new CameraQuirks();
+            }
+            return Results.Ok(new {
+                activeCameraId = profiles.ActiveEquipmentProfile?.Camera,
+                cameras = map.Select(kv => new {
+                    cameraId = kv.Key,
+                    bayerPatternOverride = kv.Value.BayerPatternOverride,
+                    verticalFlipImage = kv.Value.VerticalFlipImage
+                }).OrderBy(c => c.cameraId).ToList()
+            });
+        });
+
+        group.MapPut("/camera-quirks/{cameraId}",
+                (string cameraId, CameraQuirksUpdate update, ProfileService profiles) => {
+            if (string.IsNullOrWhiteSpace(cameraId))
+                return Results.BadRequest(new { error = "Camera id required" });
+            profiles.UpdateSettings(p => {
+                if (!p.CameraQuirks.TryGetValue(cameraId, out var q)) {
+                    q = new CameraQuirks();
+                    p.CameraQuirks[cameraId] = q;
+                }
+                // Empty/whitespace = "Auto" sentinel, store as null
+                // so ResolveBayerOverride honours the driver. Other
+                // values normalise to upper-case so RGGB / rggb /
+                // RgGb all round-trip identically.
+                q.BayerPatternOverride = string.IsNullOrWhiteSpace(update.BayerPatternOverride)
+                    ? null : update.BayerPatternOverride.Trim().ToUpperInvariant();
+                q.VerticalFlipImage = update.VerticalFlipImage;
+            });
+            var saved = profiles.GetOrCreateCameraQuirks(cameraId);
+            return Results.Ok(new {
+                cameraId,
+                bayerPatternOverride = saved.BayerPatternOverride,
+                verticalFlipImage = saved.VerticalFlipImage
+            });
+        });
     }
 
     public record CreateRigRequest(string Name);
     public record CloneRigRequest(string NewName);
+
+    /// <summary>FIELD4-3: PUT body for /api/equipment/camera-quirks/{cameraId}.
+    /// Either field may be omitted -- omitted bool defaults to false,
+    /// omitted string defaults to null. The endpoint REPLACES the
+    /// quirks entry wholesale rather than merging, which keeps the
+    /// UI simple (table is the source of truth, no hidden state).</summary>
+    public record CameraQuirksUpdate(
+        string? BayerPatternOverride,
+        bool VerticalFlipImage);
 }
