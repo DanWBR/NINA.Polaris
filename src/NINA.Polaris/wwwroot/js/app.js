@@ -2537,6 +2537,10 @@ function ninaApp() {
             window.addEventListener('keydown', (ev) => this._confirmModalKeydown(ev));
             this.fetchPhd2ProcessStatus();
             this.fetchPhd2InstallInfo();
+            // Load camera quirks so the Bayer offset is applied
+            // to the shader from the very first frame, even before
+            // the operator opens the Manage Rigs modal.
+            this.loadCameraQuirks();
             // PANZOOM: bind pinch-to-zoom + drag-to-pan on the three
             // main image preview areas. Deferred to next tick so the
             // DOM has settled after Alpine's x-init hydration pass.
@@ -5072,6 +5076,7 @@ function ninaApp() {
                 uniform float u_scale;
                 uniform float u_mtf;   // typically 0.25
                 uniform int u_bayer;   // 0=mono 1=RGGB 2=BGGR 3=GBRG 4=GRBG
+                uniform ivec2 u_bayerOff; // pixel offset (0 or 1) for the Bayer grid origin
                 uniform float u_wbR;   // red channel gain  (default 1.7 for daylight OSC)
                 uniform float u_wbB;   // blue channel gain (default 1.5 for daylight OSC)
                 in vec2 v_uv;
@@ -5110,8 +5115,14 @@ function ninaApp() {
                     // Simple half-resolution debayer: read a 2x2 superpixel and
                     // average the two greens. Works for any pattern.
                     vec2 px = vec2(1.0) / u_texSize;
-                    // Snap UV to top-left of 2x2 cell
-                    vec2 base = floor(v_uv * (u_texSize * 0.5)) * 2.0 / u_texSize;
+                    // Snap UV to top-left of 2x2 cell, shifted by the
+                    // Bayer offset. Some sensors (SV405CC / IMX533 via
+                    // indi_svbony_ccd) have their CFA grid starting at
+                    // pixel (1,1) instead of (0,0). Without this offset
+                    // the cell sampling grabs the wrong 4 pixels and no
+                    // Bayer pattern enum swap can fix the checkerboard.
+                    vec2 off = vec2(u_bayerOff) / u_texSize;
+                    vec2 base = floor((v_uv - off) * (u_texSize * 0.5)) * 2.0 / u_texSize + off;
                     float p00 = fetch(base);
                     float p10 = fetch(base + vec2(px.x, 0.0));
                     float p01 = fetch(base + vec2(0.0, px.y));
@@ -5182,6 +5193,7 @@ function ninaApp() {
                 scale: gl.getUniformLocation(prog, 'u_scale'),
                 mtf: gl.getUniformLocation(prog, 'u_mtf'),
                 bayer: gl.getUniformLocation(prog, 'u_bayer'),
+                bayerOff: gl.getUniformLocation(prog, 'u_bayerOff'),
                 wbR: gl.getUniformLocation(prog, 'u_wbR'),
                 wbB: gl.getUniformLocation(prog, 'u_wbB')
             };
@@ -5258,6 +5270,13 @@ function ninaApp() {
                 : Math.min(0.999, Math.max(0.001, this.stretchMid || 0.25));
             gl.uniform1f(this._glLocs.mtf, mtfParam);
             gl.uniform1i(this._glLocs.bayer, bayerPattern | 0);
+            // Bayer grid pixel offset. Read from the per-camera
+            // quirks (bayerOffsetX / bayerOffsetY). Default (0,0)
+            // is correct for most sensors; SV405CC / IMX533 via
+            // indi_svbony_ccd may need (1,0) or (0,1) or (1,1).
+            const boX = this._bayerOffX || 0;
+            const boY = this._bayerOffY || 0;
+            gl.uniform2i(this._glLocs.bayerOff, boX, boY);
             // Per-channel WB gain. Defaults give a roughly neutral
             // daylight look on raw OSC data; users can tune via the
             // existing WB Red / WB Blue sliders in VIDEO (and soon
@@ -11342,6 +11361,10 @@ function ninaApp() {
                 const data = await this.apiGet('/api/equipment/camera-quirks');
                 this.cameraQuirks = data.cameras || [];
                 this.activeCameraIdForQuirks = data.activeCameraId || null;
+                // FIELD5: apply the active camera's Bayer offset to
+                // the WebGL shader uniforms immediately so each new
+                // frame renders with the correct cell alignment.
+                this._applyActiveBayerOffset();
             } catch (e) {
                 // Server unreachable / older build without the
                 // endpoint, keep the table empty rather than logging
@@ -11354,17 +11377,26 @@ function ninaApp() {
         setCameraQuirksBayer(entry, value) {
             const normalised = value && value.trim() ? value.trim() : null;
             entry.bayerPatternOverride = normalised;
-            this._saveCameraQuirks(entry.cameraId, {
-                bayerPatternOverride: normalised,
-                verticalFlipImage: !!entry.verticalFlipImage
-            });
+            this._saveCameraQuirksEntry(entry);
         },
 
         setCameraQuirksFlip(entry, value) {
             entry.verticalFlipImage = !!value;
+            this._saveCameraQuirksEntry(entry);
+        },
+
+        setCameraQuirksOffset(entry, offX, offY) {
+            entry.bayerOffsetX = offX;
+            entry.bayerOffsetY = offY;
+            this._saveCameraQuirksEntry(entry);
+        },
+
+        _saveCameraQuirksEntry(entry) {
             this._saveCameraQuirks(entry.cameraId, {
                 bayerPatternOverride: entry.bayerPatternOverride || null,
-                verticalFlipImage: !!value
+                verticalFlipImage: !!entry.verticalFlipImage,
+                bayerOffsetX: entry.bayerOffsetX || 0,
+                bayerOffsetY: entry.bayerOffsetY || 0
             });
         },
 
@@ -11374,9 +11406,19 @@ function ninaApp() {
                 await this.apiPost(
                     `/api/equipment/camera-quirks/${encodeURIComponent(cameraId)}`,
                     body, { method: 'PUT' });
+                // Refresh the active camera offset in case the user
+                // just changed the offset for the active camera.
+                this._applyActiveBayerOffset();
             } catch (e) {
                 this.toast('Could not save camera quirks', 'error');
             }
+        },
+
+        _applyActiveBayerOffset() {
+            const active = this.cameraQuirks.find(
+                c => c.cameraId === this.activeCameraIdForQuirks);
+            this._bayerOffX = active?.bayerOffsetX || 0;
+            this._bayerOffY = active?.bayerOffsetY || 0;
         },
 
         async deleteRig(id) {

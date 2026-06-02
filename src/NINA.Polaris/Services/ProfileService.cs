@@ -936,6 +936,16 @@ public class CameraQuirks {
     /// honours the driver-reported pattern.</summary>
     public string? BayerPatternOverride { get; set; }
 
+    /// <summary>Bayer grid X pixel offset (0 or 1). Some sensors
+    /// start the CFA grid at column 1 instead of 0 (e.g. SV405CC /
+    /// IMX533 via indi_svbony_ccd with overscan columns). When
+    /// non-zero the WebGL shader shifts the 2x2 cell sampling so
+    /// the debayer aligns with the actual sensor mosaic.</summary>
+    public int BayerOffsetX { get; set; }
+
+    /// <summary>Bayer grid Y pixel offset (0 or 1).</summary>
+    public int BayerOffsetY { get; set; }
+
     /// <summary>True flips the pixel buffer Y-direction on receive.
     /// FITS rows are bottom-up per spec, but some drivers (notably
     /// the SVBONY indi_svbony_ccd build at the time of writing)

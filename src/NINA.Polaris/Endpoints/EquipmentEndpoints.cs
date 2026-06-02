@@ -247,7 +247,9 @@ public static class EquipmentEndpoints {
                 cameras = map.Select(kv => new {
                     cameraId = kv.Key,
                     bayerPatternOverride = kv.Value.BayerPatternOverride,
-                    verticalFlipImage = kv.Value.VerticalFlipImage
+                    verticalFlipImage = kv.Value.VerticalFlipImage,
+                    bayerOffsetX = kv.Value.BayerOffsetX,
+                    bayerOffsetY = kv.Value.BayerOffsetY
                 }).OrderBy(c => c.cameraId).ToList()
             });
         });
@@ -268,12 +270,16 @@ public static class EquipmentEndpoints {
                 q.BayerPatternOverride = string.IsNullOrWhiteSpace(update.BayerPatternOverride)
                     ? null : update.BayerPatternOverride.Trim().ToUpperInvariant();
                 q.VerticalFlipImage = update.VerticalFlipImage;
+                q.BayerOffsetX = Math.Clamp(update.BayerOffsetX, 0, 1);
+                q.BayerOffsetY = Math.Clamp(update.BayerOffsetY, 0, 1);
             });
             var saved = profiles.GetOrCreateCameraQuirks(cameraId);
             return Results.Ok(new {
                 cameraId,
                 bayerPatternOverride = saved.BayerPatternOverride,
-                verticalFlipImage = saved.VerticalFlipImage
+                verticalFlipImage = saved.VerticalFlipImage,
+                bayerOffsetX = saved.BayerOffsetX,
+                bayerOffsetY = saved.BayerOffsetY
             });
         });
     }
@@ -288,5 +294,7 @@ public static class EquipmentEndpoints {
     /// UI simple (table is the source of truth, no hidden state).</summary>
     public record CameraQuirksUpdate(
         string? BayerPatternOverride,
-        bool VerticalFlipImage);
+        bool VerticalFlipImage,
+        int BayerOffsetX = 0,
+        int BayerOffsetY = 0);
 }

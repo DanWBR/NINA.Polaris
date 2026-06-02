@@ -10427,7 +10427,9 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             <tr style="text-align: left; color: var(--text-muted); font-size: 11px;">
                                 <th style="padding: 4px 6px;">Camera</th>
                                 <th style="padding: 4px 6px; width: 140px;">Bayer override</th>
-                                <th style="padding: 4px 6px; width: 110px;">Flip rows</th>
+                                <th style="padding: 4px 6px; width: 80px;">Flip rows</th>
+                                <th style="padding: 4px 6px; width: 80px;">Off X</th>
+                                <th style="padding: 4px 6px; width: 80px;">Off Y</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -10457,6 +10459,22 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                                    @change="setCameraQuirksFlip(c, $event.target.checked)">
                                             <span class="text-muted" style="font-size: 11px;">on</span>
                                         </label>
+                                    </td>
+                                    <td style="padding: 6px;">
+                                        <select class="input-sm" style="width:60px;"
+                                                :value="c.bayerOffsetX || 0"
+                                                @change="setCameraQuirksOffset(c, parseInt($event.target.value), c.bayerOffsetY || 0)">
+                                            <option value="0">0</option>
+                                            <option value="1">1</option>
+                                        </select>
+                                    </td>
+                                    <td style="padding: 6px;">
+                                        <select class="input-sm" style="width:60px;"
+                                                :value="c.bayerOffsetY || 0"
+                                                @change="setCameraQuirksOffset(c, c.bayerOffsetX || 0, parseInt($event.target.value))">
+                                            <option value="0">0</option>
+                                            <option value="1">1</option>
+                                        </select>
                                     </td>
                                 </tr>
                             </template>
