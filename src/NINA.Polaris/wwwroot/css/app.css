@@ -1147,12 +1147,12 @@ body {
     object-fit: contain;
     object-position: center;
     /* PANZOOM: the JS pan/zoom system applies CSS transform
-       (scale + translate) from the center of the canvas. The
-       transform-origin defaults to 50% 50% which is what we
-       want, but state it explicitly so a future rule can't
-       accidentally override it. will-change hints the compositor
-       to promote the canvas to its own layer for smooth pinch. */
-    transform-origin: center center;
+       (translate + scale) from the TOP-LEFT of the canvas. The
+       pixel-space pan math in app.js (_pz*) assumes origin 0 0;
+       a centre origin breaks the zoom-to-cursor offset. will-change
+       hints the compositor to promote the canvas to its own layer
+       for smooth pinch. */
+    transform-origin: 0 0;
     will-change: transform;
 }
 
