@@ -1,7 +1,7 @@
 Package: polaris
 Version: __VERSION__
 Architecture: __ARCH__
-Maintainer: Daniel Boas <daniel@danielboas.com>
+Maintainer: Daniel Wagner <danielwag@gmail.com>
 Section: science
 Priority: optional
 Homepage: https://github.com/DanWBR/NINA.Polaris
