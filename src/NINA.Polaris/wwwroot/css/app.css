@@ -992,6 +992,29 @@ body {
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;   /* disable double-tap zoom on mobile */
 }
+/* LIVE / PREVIEW / VIDEO shutters are shrunk to ~75% (150px) of the
+   200px default. AUTORUN keeps the full size (it carries the dual
+   progress rings now) and FOCUS is left untouched. Stroke widths are
+   viewBox-relative so the rings scale automatically; only the pixel
+   sizes (box + icon + countdown) need overriding. */
+.live-pane .polaris-shutter,
+.preview-pane .polaris-shutter,
+.video-pane .polaris-shutter {
+    width: 150px;
+    height: 150px;
+}
+.live-pane .polaris-shutter .shutter-icon svg,
+.preview-pane .polaris-shutter .shutter-icon svg,
+.video-pane .polaris-shutter .shutter-icon svg {
+    width: 42px;
+    height: 42px;
+}
+.live-pane .polaris-shutter .shutter-countdown,
+.preview-pane .polaris-shutter .shutter-countdown,
+.video-pane .polaris-shutter .shutter-countdown {
+    font-size: 13px;
+    bottom: -22px;
+}
 .polaris-shutter[aria-disabled="true"] {
     cursor: not-allowed;
     opacity: 0.45;
