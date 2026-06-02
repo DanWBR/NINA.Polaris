@@ -15,7 +15,51 @@
   verbatim, only the prose around them was translated.
 -->
 
-# Current chapter: Field-testing batch FIELD5 (checkerboard root-cause, FILES/PREVIEW solve, viewer parity, privacy, factory reset)
+# Current chapter: INDI control panel property descriptions (help tooltips)
+
+> The INDI control panel lists every property each device exposes,
+> but for retired-beginner operators the raw names (CCD_TEMPERATURE,
+> TELESCOPE_PARK, ...) are cryptic. The INDI protocol itself has no
+> description field (def vectors carry only name/label/group), so any
+> explanation has to be ours.
+
+## What shipped
+
+A `(?)` help icon next to every property in the INDI control panel.
+Hovering shows the effective description as a native tooltip;
+clicking opens a small editor.
+
+- **Built-in dictionary:** `wwwroot/data/indi-property-help.json`, a
+  flat map keyed by INDI property name with one short English
+  sentence each (~80 entries covering general, camera, mount,
+  focuser, filter wheel, dome, rotator, weather standard
+  properties). Loaded once via `fetch` (offline-friendly, the same
+  pattern as the other `/data/*.json` assets).
+- **Operator notes:** `UserProfile.IndiPropertyNotes`
+  (`Dictionary<string,string>`, keyed by property name, NOT per
+  device) persists the operator's own text, which overrides the
+  built-in entry. Helpers `GetIndiPropertyNotes()` /
+  `SetIndiPropertyNote()` on `ProfileService` (empty text clears).
+- **Endpoints** on the existing `/api/indi/properties` group:
+  `GET /notes` returns the saved map; `POST /note {property, text}`
+  sets or clears one.
+- **Frontend:** `indiHelpLoad()` pulls the dictionary + notes once;
+  `indiPropEffectiveDesc(p)` resolves note-over-builtin; the `(?)`
+  icon (`.has-desc` accent when a description exists) opens a note
+  editor modal (built-in shown read-only, textarea for the note,
+  Save / Clear / Cancel). All UI copy is English.
+
+Scope: descriptions are property-level (not per element), English
+only, keyed by property name so one note is reused everywhere that
+property appears.
+
+## Verify
+- `dotnet build src/NINA.Polaris/NINA.Polaris.csproj`: clean.
+- Open RIGS > INDI control panel: hover a known property's `(?)` to
+  see the English text; click it, type a note, Save, reload, the
+  note persists; Clear reverts to the built-in text.
+
+# Past chapter: Field-testing batch FIELD5 (checkerboard root-cause, FILES/PREVIEW solve, viewer parity, privacy, factory reset)
 
 > Operator's varanda session #4 was a long one. The SV405CC
 > checkerboard was finally root-caused (it was never a Bayer /

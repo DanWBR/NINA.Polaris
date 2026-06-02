@@ -1679,6 +1679,45 @@ label select.input-sm {
     font-size: 10px;
     color: var(--text-muted);
 }
+/* INDIPROP: the (?) help icon next to each property name. Faint by
+   default; gets the accent colour when a description (built-in or
+   operator note) is available, so the operator can tell at a glance
+   which properties are explained. */
+.indi-help-icon {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    line-height: 14px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid var(--border, #3a3a3a);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    opacity: 0.55;
+}
+.indi-help-icon:hover {
+    opacity: 1;
+    border-color: var(--accent, #4ea1ff);
+    color: var(--accent, #4ea1ff);
+}
+.indi-help-icon.has-desc {
+    opacity: 1;
+    border-color: var(--accent, #4ea1ff);
+    color: var(--accent, #4ea1ff);
+}
+/* The read-only built-in description block inside the note editor. */
+.indi-help-builtin {
+    margin-top: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--surface-2, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--border, #3a3a3a);
+    font-size: 12px;
+    line-height: 1.4;
+}
 .indi-props-subtab .indi-prop-rows {
     /* One element per visual row. Flex column wrapper, each element
        is a flex row (label | input | optional Set). Was a 3-column

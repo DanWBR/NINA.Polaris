@@ -965,7 +965,17 @@ function ninaApp() {
             collapsedGroups: {},
             autoRefresh: true,
             busy: false,
-            lastError: ''
+            lastError: '',
+            // INDIPROP: per-property help. builtinHelp is the shipped
+            // English dictionary (keyed by INDI property name), notes
+            // are the operator's own overrides (persisted in profile).
+            // helpEditor backs the little (?) tooltip editor modal.
+            builtinHelp: {},
+            notes: {},
+            helpLoaded: false,
+            helpEditor: {
+                open: false, property: '', label: '', builtin: '', draft: '', saving: false
+            }
         },
         _indiPropsTimer: null,
 
@@ -19312,6 +19322,9 @@ function ninaApp() {
         async indiPropsLoad() {
             if (this.indiProps.busy) return;
             this.indiProps.busy = true;
+            // Lazily pull the help dictionary + saved notes the first
+            // time the panel loads (cheap, runs once).
+            if (!this.indiProps.helpLoaded) this.indiHelpLoad();
             try {
                 const r = await this.apiGet('/api/indi/properties/');
                 this.indiProps.devices = this._indiPropsMerge(
@@ -19323,6 +19336,89 @@ function ninaApp() {
                 this.indiProps.busy = false;
                 this.indiPropsScheduleRefresh();
             }
+        },
+
+        // INDIPROP: load the built-in English help dictionary (static
+        // asset, works offline) + the operator's own saved notes. Runs
+        // once; failures are non-fatal (the panel still works, just
+        // without descriptions).
+        async indiHelpLoad() {
+            this.indiProps.helpLoaded = true;
+            try {
+                const resp = await fetch('/data/indi-property-help.json');
+                if (resp.ok) {
+                    const dict = await resp.json();
+                    // Drop the leading "_comment" doc key.
+                    delete dict._comment;
+                    this.indiProps.builtinHelp = dict;
+                }
+            } catch (e) { /* offline / missing: no built-in text, that's fine */ }
+            try {
+                const r = await this.apiGet('/api/indi/properties/notes');
+                this.indiProps.notes = r?.notes || {};
+            } catch (e) { /* notes are best-effort */ }
+        },
+
+        // Effective description for a property: the operator's note wins,
+        // else the built-in dictionary entry, else empty.
+        indiPropEffectiveDesc(p) {
+            const name = p?.name;
+            if (!name) return '';
+            return this.indiProps.notes[name] || this.indiProps.builtinHelp[name] || '';
+        },
+
+        // Open the little (?) editor for a property. Shows the built-in
+        // text as read-only context and pre-fills the textarea with the
+        // operator's current note (if any).
+        indiHelpOpenEditor(p) {
+            this.indiProps.helpEditor = {
+                open: true,
+                property: p.name,
+                label: p.label || p.name,
+                builtin: this.indiProps.builtinHelp[p.name] || '',
+                draft: this.indiProps.notes[p.name] || '',
+                saving: false
+            };
+        },
+
+        indiHelpCloseEditor() {
+            this.indiProps.helpEditor.open = false;
+        },
+
+        // Save the operator's note for this property. Empty text clears
+        // it (the built-in description, if any, takes over again).
+        async indiHelpSaveNote() {
+            const ed = this.indiProps.helpEditor;
+            if (!ed.property || ed.saving) return;
+            ed.saving = true;
+            const text = (ed.draft || '').trim();
+            try {
+                const resp = await this.apiPost('/api/indi/properties/note', {
+                    property: ed.property, text
+                });
+                if (!resp.ok) {
+                    let msg = 'Could not save note.';
+                    try { const j = await resp.json(); if (j && j.error) msg = j.error; } catch { }
+                    this.toast(msg, 'error');
+                    ed.saving = false;
+                    return;
+                }
+                // Mirror locally so the tooltip updates without a reload.
+                if (text) this.indiProps.notes[ed.property] = text;
+                else delete this.indiProps.notes[ed.property];
+                this.toast(text ? 'Note saved' : 'Note cleared', 'ok');
+                ed.open = false;
+            } catch (e) {
+                this.toast('Could not save note: ' + (e?.message || e), 'error');
+            } finally {
+                ed.saving = false;
+            }
+        },
+
+        // Clear the operator's note (revert to the built-in description).
+        indiHelpClearNote() {
+            this.indiProps.helpEditor.draft = '';
+            return this.indiHelpSaveNote();
         },
 
         // Force a full server-side device-cache wipe + re-issue

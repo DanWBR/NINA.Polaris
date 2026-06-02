@@ -442,6 +442,31 @@ public class ProfileService {
         }
     }
 
+    /// <summary>INDIPROP: snapshot copy of the operator's INDI property
+    /// help notes (keyed by INDI property name). Returned to the INDI
+    /// control panel so it can show the operator's own text in the
+    /// help tooltip / editor. Copy so callers can't mutate the live
+    /// map.</summary>
+    public IReadOnlyDictionary<string, string> GetIndiPropertyNotes() {
+        return new Dictionary<string, string>(_activeProfile.IndiPropertyNotes);
+    }
+
+    /// <summary>INDIPROP: set or clear the operator's help note for one
+    /// INDI property (keyed by property name, e.g. "CCD_TEMPERATURE").
+    /// A null/whitespace text removes the note so the built-in English
+    /// dictionary entry (if any) takes over again. Persists immediately
+    /// via Save().</summary>
+    public void SetIndiPropertyNote(string property, string? text) {
+        if (string.IsNullOrWhiteSpace(property)) return;
+        var key = property.Trim();
+        if (string.IsNullOrWhiteSpace(text)) {
+            _activeProfile.IndiPropertyNotes.Remove(key);
+        } else {
+            _activeProfile.IndiPropertyNotes[key] = text.Trim();
+        }
+        Save();
+    }
+
     /// <summary>On first run (or upgrade from a pre-rig profile), create a
     /// "Default" rig populated from the legacy LastXxx fields.</summary>
     private void EnsureMigratedToEquipmentProfiles() {
@@ -622,6 +647,15 @@ public class UserProfile {
     /// release so older profile JSON keeps deserialising.
     /// </summary>
     public Dictionary<string, CameraQuirks> CameraQuirks { get; set; } = new();
+
+    /// <summary>INDIPROP: operator-written help notes for INDI control
+    /// panel properties. Keyed by INDI property name (e.g.
+    /// "CCD_TEMPERATURE"), NOT per device, so a note written once shows
+    /// for that property on every device that exposes it and survives
+    /// reconnects. Augments / overrides the built-in English dictionary
+    /// shipped in wwwroot/data/indi-property-help.json. Empty map by
+    /// default.</summary>
+    public Dictionary<string, string> IndiPropertyNotes { get; set; } = new();
 
     /// <summary>
     /// DBGLOG-9: opt-in disk persistence for the debug log. When

@@ -163,6 +163,25 @@ public static class IndiPropertiesEndpoints {
                 message = ok ? "default-load dispatched" : "device does not advertise CONFIG_PROCESS"
             });
         });
+
+        // INDIPROP: operator-written help notes for properties. The INDI
+        // protocol has no description field (def vectors carry only
+        // name/label/group), so the panel shows a built-in English
+        // dictionary (wwwroot/data/indi-property-help.json) plus these
+        // notes, which the operator writes per property name. Keyed by
+        // property name (NOT per device) so a note is reused across every
+        // device that exposes the same standard property.
+        g.MapGet("/notes", (Services.ProfileService profiles) =>
+            Results.Ok(new { notes = profiles.GetIndiPropertyNotes() }));
+
+        g.MapPost("/note", (Services.ProfileService profiles, IndiNoteRequest req) => {
+            if (string.IsNullOrWhiteSpace(req.Property))
+                return Results.BadRequest(new { error = "property is required" });
+            // Empty/whitespace text clears the note (falls back to the
+            // built-in dictionary entry, if any).
+            profiles.SetIndiPropertyNote(req.Property, req.Text);
+            return Results.Ok(new { ok = true });
+        });
     }
 
     /// <summary>Build the JSON DTO for one property. Returns null when
@@ -264,4 +283,12 @@ public sealed class IndiSetRequest {
     public Dictionary<string, double>? Numbers { get; set; }
     public Dictionary<string, bool>? Switches { get; set; }
     public Dictionary<string, string>? Texts { get; set; }
+}
+
+/// <summary>Body shape for POST /api/indi/properties/note. Sets (or
+/// clears, when <see cref="Text"/> is empty/whitespace) the operator's
+/// help note for the INDI property named <see cref="Property"/>.</summary>
+public sealed class IndiNoteRequest {
+    public string? Property { get; set; }
+    public string? Text { get; set; }
 }

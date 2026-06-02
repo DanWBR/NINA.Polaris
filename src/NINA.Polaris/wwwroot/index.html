@@ -5189,6 +5189,14 @@
                                                                   :class="'indi-state-' + (p.state || 'idle')"
                                                                   >●</span>
                                                             <strong x-text="p.label || p.name"></strong>
+                                                            <!-- INDIPROP: help (?) icon. Hover shows the
+                                                                 effective description (operator note or the
+                                                                 built-in English text) as a tooltip; click
+                                                                 opens the editor to read/write your own note. -->
+                                                            <button class="indi-help-icon"
+                                                                    :class="{ 'has-desc': !!indiPropEffectiveDesc(p) }"
+                                                                    :title="indiPropEffectiveDesc(p) || 'Add a description'"
+                                                                    @click="indiHelpOpenEditor(p)">?</button>
                                                             <span class="indi-prop-meta"
                                                                   x-text="p.type + ' · ' + p.permission"></span>
                                                         </div>
@@ -11156,6 +11164,51 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <button class="btn btn-sm" :class="confirmModal.danger ? 'btn-danger' : 'btn-primary'"
                         @click="_confirmAccept()"
                         x-text="confirmModal.okLabel || 'OK'"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- INDIPROP: INDI property help / note editor. Reuses the confirm
+         modal shell for styling. Shows the built-in English description
+         (read-only) plus a textarea for the operator's own note. The
+         operator's note overrides the built-in text in the (?) tooltip. -->
+    <div class="confirm-modal-overlay"
+         x-show="indiProps.helpEditor.open" x-cloak
+         @click.self="indiHelpCloseEditor()">
+        <div class="confirm-modal-card" style="max-width:520px">
+            <h3 class="confirm-modal-title">
+                <span x-text="indiProps.helpEditor.label"></span>
+            </h3>
+            <p class="hint" style="margin-top:-4px"
+               x-text="indiProps.helpEditor.property"></p>
+            <template x-if="indiProps.helpEditor.builtin">
+                <div class="indi-help-builtin">
+                    <strong style="font-size:11px; text-transform:uppercase; letter-spacing:.04em; opacity:.7">What it does</strong>
+                    <p style="margin:4px 0 0" x-text="indiProps.helpEditor.builtin"></p>
+                </div>
+            </template>
+            <label style="display:block; margin-top:12px; font-size:12px">
+                Your note
+                <span class="hint" style="font-weight:normal">(optional, shown instead of the text above)</span>
+                <textarea class="input-md" rows="3"
+                          style="width:100%; margin-top:4px; resize:vertical"
+                          x-model="indiProps.helpEditor.draft"
+                          placeholder="Write your own reminder about this property..."></textarea>
+            </label>
+            <div class="confirm-modal-actions" style="justify-content:space-between">
+                <button class="btn btn-sm"
+                        @click="indiHelpClearNote()"
+                        :disabled="indiProps.helpEditor.saving || !indiProps.notes[indiProps.helpEditor.property]"
+                        title="Remove your note and go back to the built-in description">Clear note</button>
+                <span style="display:flex; gap:8px">
+                    <button class="btn btn-sm" @click="indiHelpCloseEditor()"
+                            :disabled="indiProps.helpEditor.saving">Cancel</button>
+                    <button class="btn btn-sm btn-primary" @click="indiHelpSaveNote()"
+                            :disabled="indiProps.helpEditor.saving">
+                        <span x-show="!indiProps.helpEditor.saving">Save</span>
+                        <span x-show="indiProps.helpEditor.saving">Saving…</span>
+                    </button>
+                </span>
             </div>
         </div>
     </div>
