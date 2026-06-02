@@ -819,12 +819,11 @@ body {
 }
 
 /* AUTORUN sidebar is shutter-only (no exposure / gain / filter
-   pickers like LIVE/PREVIEW have) — narrow it down to just fit
-   the 128 px shutter + the Pause button below + breathing room,
-   so the sequence card grid on the left gets the reclaimed
-   ~150 px of horizontal real estate. */
+   pickers like LIVE/PREVIEW have). Wide enough to give the dual
+   progress rings (sequence + current-exposure) room to breathe
+   and the stats block below room to read on one line. */
 .autorun-pane > .quick-controls {
-    flex: 0 0 168px;
+    flex: 0 0 260px;
     align-items: center;
 }
 /* AUTORUN list column on the left is just a vertical stack with its
@@ -1017,6 +1016,24 @@ body {
        countdown without the default 0.1s lag making it look stuck. */
     stroke: #fbbf24;
     transition: stroke-dashoffset 60ms linear, stroke 0.15s ease;
+}
+/* Inner ring (AUTORUN only): progress of the CURRENT exposure.
+   Sits just inside the outer sequence ring. r=38 -> circumference
+   2π × 38 ≈ 238.76; inline style sets offset = 238.76 × (1 - p). */
+.polaris-shutter .shutter-track-inner {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.07);
+    stroke-width: 3;
+}
+.polaris-shutter .shutter-progress-inner {
+    fill: none;
+    /* Cyan so it reads as distinct from the red outer (sequence) ring. */
+    stroke: #67e8f9;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-dasharray: 238.76 238.76;
+    stroke-dashoffset: 238.76;
+    transition: stroke-dashoffset 0.2s linear;
 }
 .polaris-shutter .shutter-inner {
     position: relative;

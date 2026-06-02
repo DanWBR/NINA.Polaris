@@ -6851,6 +6851,16 @@
                                             + (armingLoop
                                                 ? (289 * (1 - _shutterArmProgress()))
                                                 : autorunShutterDashoffset())"></circle>
+                                <!-- Inner ring: progress of the CURRENT exposure
+                                     (elapsed / exposure seconds). Only while the
+                                     sequence is active. r=38 -> circumference 238.76. -->
+                                <template x-if="seqState === 'running' || seqState === 'paused'">
+                                    <g>
+                                        <circle class="shutter-track-inner" cx="50" cy="50" r="38"></circle>
+                                        <circle class="shutter-progress-inner" cx="50" cy="50" r="38"
+                                                :style="'stroke-dashoffset:' + autorunExposureDashoffset()"></circle>
+                                    </g>
+                                </template>
                             </svg>
                             <span class="shutter-icon">
                                 <svg viewBox="0 0 24 24" x-show="seqState === 'idle'">
@@ -6865,12 +6875,11 @@
                     </div>
 
                     <div class="shutter-secondary">
-                        <div class="control-row">
-                            <button class="btn"
+                        <div class="control-row" style="justify-content:center">
+                            <button class="btn btn-sm"
                                     @click="pauseSequence()"
                                     :disabled="seqState === 'idle'"
-                                    x-text="seqState === 'paused' ? '▶ Resume' : '⏸ Pause'"
-                                    style="flex:1"></button>
+                                    x-text="seqState === 'paused' ? '▶ Resume' : '⏸ Pause'"></button>
                         </div>
                         <div class="control-row text-muted" style="font-size:11px; flex-direction:column; align-items:flex-start; gap:2px"
                              x-show="seqState !== 'idle' && seqStatus">
@@ -11213,7 +11222,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260530-indicp"></script>
+    <script src="/js/app.js?v=20260602-autorunring"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

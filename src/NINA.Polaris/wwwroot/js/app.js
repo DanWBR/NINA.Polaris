@@ -48,6 +48,11 @@ function ninaApp() {
         shutterTick: 0,
         armingLoop: false,         // true while user holds the shutter
         _shutterRafTimer: null,
+        // AUTORUN inner ring: tracks when the current exposure (frame)
+        // started so the inner radial ring can show its elapsed/total
+        // progress. Reset whenever the active item/frame changes.
+        autorunFrameStart: 0,      // ms timestamp of current frame start
+        autorunFrameKey: '',       // "itemIndex:frameInItem" change detector
         _shutterPressTimer: null,
         _shutterLongPressed: false,
         _shutterArmTimer: null,    // animates the arming ring at 60ms cadence
@@ -12481,6 +12486,46 @@ function ninaApp() {
             return done + '/' + total;
         },
 
+        /// Detect when the sequence moved on to a new exposure (frame)
+        /// and stamp autorunFrameStart so the inner ring can time it.
+        /// Called from the status-update handlers (NOT from a getter, to
+        /// avoid Alpine reactivity write loops). Cleared when idle.
+        _autorunSyncFrame(seq) {
+            if (!seq || seq.state !== 'running') {
+                if (this.autorunFrameKey !== '') {
+                    this.autorunFrameKey = '';
+                    this.autorunFrameStart = 0;
+                }
+                return;
+            }
+            const key = (seq.currentItemIndex || 0) + ':' + (seq.currentFrameInItem || 0);
+            if (this.autorunFrameKey !== key) {
+                this.autorunFrameKey = key;
+                this.autorunFrameStart = Date.now();
+            }
+        },
+
+        /// Progress (0..1) of the CURRENT exposure: elapsed since the
+        /// frame started / the active item's exposure seconds. Reads
+        /// shutterTick (50ms while running) so the inner ring animates
+        /// smoothly between the 1 Hz status updates. Returns 0 for
+        /// zero-second frames (BIAS) or when not running.
+        autorunExposureProgress() {
+            // eslint-disable-next-line no-unused-expressions
+            this.shutterTick;   // reactivity dependency
+            if (this.seqState !== 'running' || !this.autorunFrameStart) return 0;
+            const st = this.seqStatus;
+            const item = (st && st.items) ? st.items[st.currentItemIndex] : null;
+            const exp = item ? item.exposure : 0;
+            if (!exp || exp <= 0) return 0;
+            const elapsed = (Date.now() - this.autorunFrameStart) / 1000;
+            return Math.max(0, Math.min(1, elapsed / exp));
+        },
+        autorunExposureDashoffset() {
+            // r=38 -> circumference 2π × 38 ≈ 238.76.
+            return 238.76 * (1 - this.autorunExposureProgress());
+        },
+
         // ----- FW-2: Flat Wizard tab glue -----
 
         /// Hydrate form + trained cache when the user clicks the
@@ -18654,6 +18699,7 @@ function ninaApp() {
                 const status = await this.apiGet('/api/sequence/status');
                 this.seqStatus = status;
                 this.seqState = status.state || 'idle';
+                this._autorunSyncFrame(status);
                 if (status.state === 'idle' && this._seqPollTimer) {
                     this.stopSeqPolling();
                     if (status.totalFramesCompleted > 0 && !status.lastError) {
@@ -20346,6 +20392,7 @@ function ninaApp() {
             }
             if (msg.sequence) {
                 this.seqStatus = msg.sequence;
+                this._autorunSyncFrame(msg.sequence);
                 var newState = msg.sequence.state || 'idle';
                 var oldState = this.seqState;
                 this.seqState = newState;
