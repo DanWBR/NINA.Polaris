@@ -1146,6 +1146,14 @@ body {
        _renderRawFrame, so contain letterboxes correctly. */
     object-fit: contain;
     object-position: center;
+    /* PANZOOM: the JS pan/zoom system applies CSS transform
+       (scale + translate) from the center of the canvas. The
+       transform-origin defaults to 50% 50% which is what we
+       want, but state it explicitly so a future rule can't
+       accidentally override it. will-change hints the compositor
+       to promote the canvas to its own layer for smooth pinch. */
+    transform-origin: center center;
+    will-change: transform;
 }
 
 .preview-overlay-canvas {
@@ -1161,6 +1169,10 @@ body {
        the bitmap is letterboxed by aspect ratio. */
     object-fit: contain;
     object-position: center;
+    /* PANZOOM: the overlay follows the same CSS transform as the
+       underlying .preview-canvas so annotations stay aligned. */
+    transform-origin: center center;
+    will-change: transform;
 }
 
 .preview-overlay-controls {

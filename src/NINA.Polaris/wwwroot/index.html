@@ -750,6 +750,15 @@
                         <button class="btn btn-sm" @click="liveOverlayVisible = !liveOverlayVisible"
                                 :class="liveOverlayVisible ? 'btn-active' : ''"
                                 title="Toggle image history + HFR chart overlay">⊟</button>
+                        <!-- PANZOOM: zoom level indicator + reset.
+                             Only visible when zoomed > 1x. Tap the chip
+                             to snap back to 1:1 fit-to-container. -->
+                        <button class="btn btn-sm btn-active"
+                                x-show="(_pzState?.liveCanvas?.scale || 1) > 1.01"
+                                @click="_pzReset('liveCanvas')"
+                                title="Reset zoom to fit">
+                            <span x-text="((_pzState?.liveCanvas?.scale || 1).toFixed(1)) + 'x'"></span>
+                        </button>
                     </div>
                     <div class="preview-overlay-info" x-show="showPixelReadout && hoverPixel">
                         <span>x=<strong x-text="hoverPixel?.x"></strong></span>

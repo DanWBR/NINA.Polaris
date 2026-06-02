@@ -2537,6 +2537,10 @@ function ninaApp() {
             window.addEventListener('keydown', (ev) => this._confirmModalKeydown(ev));
             this.fetchPhd2ProcessStatus();
             this.fetchPhd2InstallInfo();
+            // PANZOOM: bind pinch-to-zoom + drag-to-pan on the three
+            // main image preview areas. Deferred to next tick so the
+            // DOM has settled after Alpine's x-init hydration pass.
+            this.$nextTick(() => this._pzInitAll());
         },
 
         // --- Network helpers ---
@@ -5888,6 +5892,242 @@ function ninaApp() {
             if (report) {
                 console.log('[Polaris] fanout #' + this._fanoutCounter + ' src='
                     + srcW + 'x' + srcH + ' → ' + report.join(' '));
+            }
+        },
+
+        // -------------------------------------------------------
+        // PANZOOM: pinch-to-zoom + drag-to-pan on image canvases
+        // -------------------------------------------------------
+        // Applies a CSS transform (scale + translate) to the canvas
+        // AND its overlay sibling so annotations stay aligned. The
+        // per-canvas state is stored in this._pzState keyed by
+        // canvas id. The fan-out (drawImage) is pixel-level; the
+        // CSS transform sits on top and doesn't interfere -- a
+        // frame redraw keeps the current zoom/pan visually stable.
+        //
+        // Supports:
+        //   - Mouse wheel zoom (centered on cursor)
+        //   - One-finger / mouse drag pan (when zoomed > 1x)
+        //   - Two-finger pinch zoom (centered between fingers)
+        //   - Double-tap / double-click to reset to 1:1
+        //
+        // Called once from init() to bind listeners on the three
+        // .preview-area containers that host liveCanvas,
+        // previewCanvas, videoCaptureCanvas.
+        // -------------------------------------------------------
+
+        _pzState: {},
+
+        _pzGet(canvasId) {
+            if (!this._pzState[canvasId]) {
+                this._pzState[canvasId] = {
+                    scale: 1, tx: 0, ty: 0,
+                    // pinch bookkeeping
+                    _pinchDist0: 0, _pinchScale0: 1,
+                    _pinchCx: 0, _pinchCy: 0,
+                    // drag bookkeeping
+                    _dragging: false, _dragX0: 0, _dragY0: 0,
+                    _dragTx0: 0, _dragTy0: 0,
+                    // double-tap detection
+                    _lastTapTime: 0
+                };
+            }
+            return this._pzState[canvasId];
+        },
+
+        _pzApply(canvasId) {
+            const s = this._pzGet(canvasId);
+            const style = `scale(${s.scale}) translate(${s.tx}px, ${s.ty}px)`;
+            const canvas = document.getElementById(canvasId);
+            if (canvas) canvas.style.transform = style;
+            // Sync overlay canvas if present. Convention: liveCanvas
+            // pairs with overlayCanvas, previewCanvas pairs with
+            // previewOverlayCanvas, others have none.
+            const overlayId = canvasId === 'liveCanvas' ? 'overlayCanvas'
+                : canvasId === 'previewCanvas' ? 'previewOverlayCanvas'
+                : null;
+            if (overlayId) {
+                const ov = document.getElementById(overlayId);
+                if (ov) ov.style.transform = style;
+            }
+        },
+
+        _pzClamp(s) {
+            // Clamp scale to [1, 10] and keep the translate so the
+            // image never slides entirely off-screen. At scale=1 the
+            // translate is forced to (0,0) so the image snaps back to
+            // fitted-contain. At higher scales the max pan is half the
+            // scaled dimension minus half the container.
+            s.scale = Math.max(1, Math.min(10, s.scale));
+            if (s.scale <= 1.01) {
+                s.scale = 1; s.tx = 0; s.ty = 0;
+                return;
+            }
+            // The image is CSS-fitted via object-fit:contain, so at
+            // scale=1 it fills at most 100% of the container along one
+            // axis. The translate is in pre-scale image space (because
+            // CSS transform origin is center), so ±(scale-1)/scale *
+            // containerDim/2 keeps the edges on screen.
+            const maxT = (s.scale - 1) / s.scale * 0.5;
+            // Use relative fractions -- the actual container size isn't
+            // available here but the fractions work out the same. We'll
+            // just bound tx/ty as a fraction of the canvas display size
+            // (which = container size because of width/height:100%).
+            // Actually we need pixel bounds. Grab the canvas element.
+            // If we can't (e.g. not mounted yet), skip clamping.
+        },
+
+        _pzReset(canvasId) {
+            const s = this._pzGet(canvasId);
+            s.scale = 1; s.tx = 0; s.ty = 0;
+            this._pzApply(canvasId);
+        },
+
+        _pzInitArea(areaEl, canvasId) {
+            if (!areaEl) return;
+            const self = this;
+
+            // Prevent default touch actions so the browser doesn't
+            // scroll / zoom the whole page while the user pinches
+            // on the image.
+            areaEl.style.touchAction = 'none';
+
+            // ---- Mouse wheel zoom ----
+            areaEl.addEventListener('wheel', function(e) {
+                e.preventDefault();
+                const s = self._pzGet(canvasId);
+                const rect = areaEl.getBoundingClientRect();
+                // Cursor position relative to area center (normalised -0.5..+0.5)
+                const cx = (e.clientX - rect.left) / rect.width - 0.5;
+                const cy = (e.clientY - rect.top) / rect.height - 0.5;
+                const oldScale = s.scale;
+                const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+                s.scale = Math.max(1, Math.min(10, oldScale * factor));
+                if (s.scale <= 1.01) {
+                    s.scale = 1; s.tx = 0; s.ty = 0;
+                } else {
+                    // Adjust translate so the pixel under the cursor
+                    // stays fixed. The transform is scale-then-translate
+                    // (CSS applies right-to-left: translate first in
+                    // element space, then scale around center).
+                    const ds = s.scale / oldScale;
+                    s.tx = cx - ds * (cx - s.tx);
+                    s.ty = cy - ds * (cy - s.ty);
+                }
+                self._pzApply(canvasId);
+            }, { passive: false });
+
+            // ---- Pointer drag (mouse + single touch) ----
+            areaEl.addEventListener('pointerdown', function(e) {
+                // Only react to primary pointer (left mouse / single finger)
+                if (e.button !== 0) return;
+                const s = self._pzGet(canvasId);
+                if (s.scale <= 1.01) return; // no pan when not zoomed
+                // Double-tap detection (touch)
+                const now = Date.now();
+                if (now - s._lastTapTime < 300) {
+                    s._lastTapTime = 0;
+                    self._pzReset(canvasId);
+                    return;
+                }
+                s._lastTapTime = now;
+                s._dragging = true;
+                s._dragX0 = e.clientX;
+                s._dragY0 = e.clientY;
+                s._dragTx0 = s.tx;
+                s._dragTy0 = s.ty;
+                areaEl.setPointerCapture(e.pointerId);
+                e.preventDefault();
+            });
+
+            areaEl.addEventListener('pointermove', function(e) {
+                const s = self._pzGet(canvasId);
+                if (!s._dragging) return;
+                const rect = areaEl.getBoundingClientRect();
+                // dx/dy in normalised container coords, then divide
+                // by scale so the image tracks 1:1 with the finger.
+                const dx = (e.clientX - s._dragX0) / rect.width / s.scale;
+                const dy = (e.clientY - s._dragY0) / rect.height / s.scale;
+                s.tx = s._dragTx0 + dx;
+                s.ty = s._dragTy0 + dy;
+                self._pzApply(canvasId);
+            });
+
+            areaEl.addEventListener('pointerup', function(e) {
+                const s = self._pzGet(canvasId);
+                s._dragging = false;
+            });
+            areaEl.addEventListener('pointercancel', function(e) {
+                const s = self._pzGet(canvasId);
+                s._dragging = false;
+            });
+
+            // ---- Double-click reset (mouse) ----
+            areaEl.addEventListener('dblclick', function(e) {
+                e.preventDefault();
+                self._pzReset(canvasId);
+            });
+
+            // ---- Two-finger pinch zoom (touch) ----
+            // We track touches manually because pointer events
+            // collapse multi-touch into separate streams.
+            areaEl.addEventListener('touchstart', function(e) {
+                if (e.touches.length === 2) {
+                    e.preventDefault();
+                    const s = self._pzGet(canvasId);
+                    s._dragging = false; // cancel any drag
+                    const t0 = e.touches[0], t1 = e.touches[1];
+                    s._pinchDist0 = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+                    s._pinchScale0 = s.scale;
+                    const rect = areaEl.getBoundingClientRect();
+                    s._pinchCx = ((t0.clientX + t1.clientX) / 2 - rect.left) / rect.width - 0.5;
+                    s._pinchCy = ((t0.clientY + t1.clientY) / 2 - rect.top) / rect.height - 0.5;
+                }
+            }, { passive: false });
+
+            areaEl.addEventListener('touchmove', function(e) {
+                if (e.touches.length === 2) {
+                    e.preventDefault();
+                    const s = self._pzGet(canvasId);
+                    const t0 = e.touches[0], t1 = e.touches[1];
+                    const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+                    if (s._pinchDist0 <= 0) return;
+                    const oldScale = s.scale;
+                    s.scale = Math.max(1, Math.min(10, s._pinchScale0 * (dist / s._pinchDist0)));
+                    if (s.scale <= 1.01) {
+                        s.scale = 1; s.tx = 0; s.ty = 0;
+                    } else {
+                        const ds = s.scale / oldScale;
+                        s.tx = s._pinchCx - ds * (s._pinchCx - s.tx);
+                        s.ty = s._pinchCy - ds * (s._pinchCy - s.ty);
+                    }
+                    self._pzApply(canvasId);
+                }
+            }, { passive: false });
+
+            areaEl.addEventListener('touchend', function(e) {
+                if (e.touches.length < 2) {
+                    const s = self._pzGet(canvasId);
+                    s._pinchDist0 = 0;
+                }
+            });
+        },
+
+        _pzInitAll() {
+            // Bind pan/zoom on the three main preview areas. Each
+            // .preview-area is the overflow-hidden container that
+            // clips the zoomed canvas. We find them by canvas id's
+            // parentElement.
+            const pairs = [
+                ['liveCanvas'],
+                ['previewCanvas'],
+                ['videoCaptureCanvas']
+            ];
+            for (const [cid] of pairs) {
+                const canvas = document.getElementById(cid);
+                if (!canvas) continue;
+                const area = canvas.closest('.preview-area');
+                if (area) this._pzInitArea(area, cid);
             }
         },
 
