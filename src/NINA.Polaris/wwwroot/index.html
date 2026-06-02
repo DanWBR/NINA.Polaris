@@ -6501,9 +6501,14 @@
                     <template x-for="(item, i) in sequence" :key="i">
                         <div class="sequence-item" :class="{
                             'seq-active': seqStatus && seqStatus.currentItemIndex === i && seqState === 'running',
-                            'seq-done': seqStatus && i < seqStatus.currentItemIndex
+                            'seq-done': seqStatus && i < seqStatus.currentItemIndex,
+                            'seq-disabled': item.enabled === false
                         }">
                             <div class="seq-card-head">
+                                <input type="checkbox" class="seq-enable-check" x-model="item.enabled"
+                                       :disabled="seqState === 'running'"
+                                       @change="syncSequenceToServer()"
+                                       title="Enable or disable this item (disabled items are skipped)">
                                 <span class="seq-num" x-text="i + 1"></span>
                                 <input type="text" class="seq-input seq-input-name" x-model="item.name"
                                        :disabled="seqState === 'running'"
@@ -6812,10 +6817,32 @@
 
                 <!-- Add item stays as a footer button; Start/Pause/
                      Stop move to the right sidebar around the shutter. -->
-                <div class="control-row actions" style="margin-top: 1rem;">
+                <div class="control-row actions" style="margin-top: 1rem; gap: 8px;">
                     <button class="btn" @click="addSequenceItem()" :disabled="seqState === 'running'">+ Add</button>
+                    <button class="btn btn-sm btn-danger" @click="resetSequence()"
+                            :disabled="seqState === 'running' || sequence.length === 0"
+                            title="Remove all items from the sequence">Reset</button>
                 </div>
                 </div><!-- /.autorun-list-col -->
+
+                <!-- Centre preview: last captured frame from the running
+                     sequence (relayed as a Live frame, mirrored here by
+                     the multi-canvas renderer). Same pan/zoom/stretch
+                     toolbar as the PREVIEW tab. -->
+                <div class="preview-area autorun-preview">
+                    <canvas id="autorunCanvas" class="preview-canvas"></canvas>
+                    <div class="pz-toolbar" @pointerdown.stop @dblclick.stop @wheel.stop>
+                        <button @click="_pzFit('autorunCanvas')" title="Zoom to fit (whole frame)">⊡</button>
+                        <button @click="_pzFitWidth('autorunCanvas')" title="Fit width">↔</button>
+                        <button @click="_pzFitHeight('autorunCanvas')" title="Fit height">↕</button>
+                        <button @click="_pzZoomButton('autorunCanvas', 1.3)" title="Zoom in">＋</button>
+                        <button @click="_pzZoomButton('autorunCanvas', 1/1.3)" title="Zoom out">－</button>
+                        <button @click="toggleAutoStretch()" :class="stretchAuto ? 'pz-active' : ''" title="Auto-stretch brightness">◐</button>
+                    </div>
+                    <div class="preview-overlay" x-show="!_lastRawFrame">
+                        <p>The last captured frame of the running sequence appears here.</p>
+                    </div>
+                </div>
 
                 <!-- SHUT-4: right sidebar with the Polaris Shutter
                      (start / abort), Pause/Resume toggle, and the
@@ -11222,7 +11249,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260602-autorunring"></script>
+    <script src="/js/app.js?v=20260602-autorunpreview"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

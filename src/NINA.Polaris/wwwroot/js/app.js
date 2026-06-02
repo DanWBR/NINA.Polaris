@@ -2537,6 +2537,15 @@ function ninaApp() {
                     }
                 });
             });
+            // AUTORUN Sequence sub-tab hosts autorunCanvas; re-blit the
+            // last frame when the operator returns to it.
+            this.$watch('autorunTab', () => {
+                this.$nextTick(() => {
+                    if (this._lastRawFrame) {
+                        this.applyManualStretch();
+                    }
+                });
+            });
 
             this.$watch('settings', () => {
                 this.updateFov();
@@ -5946,8 +5955,12 @@ function ninaApp() {
                 case 2:  return ['focusCanvas', 'manualFocusCanvas'];       // Focus
                 case 3:  return ['videoCaptureCanvas'];                     // Video
                 case 4:  return ['slewPreviewCanvas'];                      // SlewPreview
+                // Live frames also mirror into the AUTORUN centre preview
+                // (sequence frames relay as FrameKind.Live), so the
+                // operator sees the last captured frame there with the
+                // same zoom / drag / stretch as PREVIEW.
                 case 0:
-                default: return ['liveCanvas'];                             // Live
+                default: return ['liveCanvas', 'autorunCanvas'];            // Live
             }
         },
 
@@ -6325,7 +6338,8 @@ function ninaApp() {
             const pairs = [
                 ['liveCanvas'],
                 ['previewCanvas'],
-                ['videoCaptureCanvas']
+                ['videoCaptureCanvas'],
+                ['autorunCanvas']
             ];
             for (const [cid] of pairs) {
                 const canvas = document.getElementById(cid);
@@ -18570,6 +18584,9 @@ function ninaApp() {
                 filter: null,
                 ra: null, dec: null,
                 imageType: 'LIGHT',
+                // Per-item enable toggle. Disabled items stay in the
+                // schedule but are skipped at run time.
+                enabled: true,
                 // FLAT auto-exposure toggle (engine reads it when
                 // imageType === 'FLAT'). Defaults off so LIGHT/DARK/
                 // BIAS items don't accidentally pick up the flag.
@@ -18605,12 +18622,37 @@ function ninaApp() {
             return (bytesPerFrame * this.sequenceTotalFrames()) / 1048576;
         },
 
-        removeSequenceItem(index) {
+        async removeSequenceItem(index) {
             if (this.seqState === 'running') {
                 this.toast('Cannot modify while running', 'warn');
                 return;
             }
+            const item = this.sequence[index];
+            const label = (item && item.name) ? `"${item.name}"` : `item ${index + 1}`;
+            const ok = await this._confirmAsync(
+                `Remove ${label} from the sequence?`,
+                { title: 'Remove item', okLabel: 'Remove', cancelLabel: 'Cancel', danger: true });
+            if (!ok) return;
             this.sequence.splice(index, 1);
+            this.syncSequenceToServer();
+        },
+
+        // Reset the whole AUTORUN schedule: clears every item after a
+        // confirm. Refuses while running. Keeps options (dither / MF /
+        // end events) untouched -- this only wipes the target list.
+        async resetSequence() {
+            if (this.seqState === 'running') {
+                this.toast('Cannot reset while running', 'warn');
+                return;
+            }
+            if (this.sequence.length === 0) return;
+            const ok = await this._confirmAsync(
+                'Remove all items from the sequence? This clears the whole schedule.',
+                { title: 'Reset autorun', okLabel: 'Reset', cancelLabel: 'Cancel', danger: true });
+            if (!ok) return;
+            this.sequence = [];
+            this.syncSequenceToServer();
+            this.toast('Autorun cleared', 'ok');
         },
 
         async syncSequenceToServer() {
@@ -18633,6 +18675,9 @@ function ninaApp() {
                     // caches the API response on disk for 30 days so
                     // this is a cheap re-fetch.
                     for (const item of this.sequence) {
+                        // Default the enable flag for sequences saved
+                        // before the per-item toggle existed.
+                        if (item && item.enabled === undefined) item.enabled = true;
                         if (item && item.fromSky && item.name && !item.thumbUrl) {
                             this._loadCelestialThumb(item);
                         }

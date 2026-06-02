@@ -835,6 +835,25 @@ body {
     overflow-y: auto;
     padding: 0 4px 12px;
 }
+/* AUTORUN Sequence sub-tab is now 3-column: a fixed-width left rail
+   (the item list + options), the centre preview (flex), and the
+   shutter sidebar on the right. The shared rule above gives the list
+   col flex:1; pin it to a fixed width here so the centre preview gets
+   the remaining space. Flat Wizard keeps the flex:1 single layout. */
+.autorun-pane > .autorun-list-col {
+    flex: 0 0 360px;
+}
+.autorun-pane > .autorun-preview {
+    flex: 1;
+    min-width: 0;
+    border-radius: var(--radius);
+}
+/* Stack to a single column when the pane gets too narrow for three. */
+@media (max-width: 1100px) {
+    .autorun-pane { flex-wrap: wrap; }
+    .autorun-pane > .autorun-list-col { flex: 1 1 100%; }
+    .autorun-pane > .autorun-preview { flex: 1 1 100%; min-height: 280px; }
+}
 .live-pane > .quick-controls .control-row,
 .preview-pane > .quick-controls .control-row {
     /* Stack control items vertically inside the narrow 320px sidebar
@@ -5579,12 +5598,14 @@ label select.input-sm {
    pills + Exp / count / gain inputs without horizontal scrolling. */
 .sequence-list {
     padding: 8px;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    /* Single-column, top-down stack (the AUTORUN list column is now a
+       narrow left rail beside the centre preview, so items read as a
+       vertical schedule rather than a reflowing card grid). */
+    display: flex;
+    flex-direction: column;
     gap: 8px;
-    max-height: calc(100vh - 280px);
     overflow-y: auto;
-    align-content: start;
+    align-items: stretch;
 }
 
 .sequence-item {
@@ -5630,6 +5651,21 @@ label select.input-sm {
 
 .sequence-item.seq-done {
     opacity: 0.5;
+}
+
+/* Disabled item: kept in the list but visually dimmed + dashed so the
+   operator can tell at a glance it will be skipped. */
+.sequence-item.seq-disabled {
+    opacity: 0.55;
+    border-style: dashed;
+    background: var(--bg-secondary);
+}
+.seq-enable-check {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--accent);
 }
 
 /* Top row inside every card: number badge + name input + remove

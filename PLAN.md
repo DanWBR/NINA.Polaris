@@ -15,7 +15,42 @@
   verbatim, only the prose around them was translated.
 -->
 
-# Current chapter: AUTORUN panel polish + calibration fixes
+# Current chapter: AUTORUN item controls + centre preview
+
+> Make the AUTORUN tab feel like an editor: manage items safely and
+> watch the frames land in the middle, ASIAIR-style.
+
+## What shipped
+
+### Per-item enable toggle
+`SequenceItem` gained an `Enabled` flag (default true so old saved
+sequences keep running). The engine skips disabled items at run time
+and excludes them from the total-frame / progress / ETA math. The UI
+adds a checkbox on each card; disabled cards render dimmed + dashed
+(`.seq-disabled`). Toggling syncs the sequence to the server.
+
+### Delete confirmation + Reset
+`removeSequenceItem()` now opens the shared danger confirm modal
+("Remove <name>?") before splicing. A new `resetSequence()` (Reset
+button next to + Add) clears the whole schedule after a confirm.
+Both are no-ops while a run is in progress.
+
+### Centre preview (last captured frame)
+The AUTORUN Sequence sub-tab is now 3-column: a fixed 360px item
+rail on the left, a centre `.preview-area` with `autorunCanvas`, and
+the shutter sidebar on the right. Sequence frames already relay as
+`FrameKind.Live`, so `autorunCanvas` was added to the kind-0 fan-out
+target list and to `_pzInitAll` -- it inherits the exact PREVIEW
+pan / drag / zoom-to-fit / stretch toolbar with zero new render code.
+An `autorunTab` watcher re-blits the cached frame when returning to
+the sub-tab. Collapses to a single column under 1100px.
+
+### Items left-aligned, top-down
+`.sequence-list` switched from a reflowing card grid to a single
+vertical flex column so the schedule reads top-down in the narrow
+left rail.
+
+# Past chapter: AUTORUN panel polish + calibration fixes
 
 > Varanda follow-ups on the AUTORUN tab: a clearer progress display
 > plus two real capture bugs surfaced while shooting BIAS frames.

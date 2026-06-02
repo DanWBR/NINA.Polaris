@@ -146,7 +146,9 @@ public class SequenceEngine {
     }
 
     public SequenceStatus GetStatus() {
-        var totalFrames = Items.Sum(i => i.Count);
+        // Disabled items are skipped at run time, so they don't count
+        // toward the total / progress / ETA either.
+        var totalFrames = Items.Where(i => i.Enabled).Sum(i => i.Count);
         var elapsed = StartedAt.HasValue ? DateTime.UtcNow - StartedAt.Value : TimeSpan.Zero;
 
         double estimatedRemainingSeconds = 0;
@@ -185,6 +187,14 @@ public class SequenceEngine {
                 ct.ThrowIfCancellationRequested();
                 CurrentItemIndex = i;
                 var item = Items[i];
+
+                // Disabled items are kept in the schedule for editing but
+                // skipped here (and excluded from the frame totals below).
+                if (!item.Enabled) {
+                    _logger.LogInformation("Sequence item {Index}/{Total}: {Name} is disabled, skipping",
+                        i + 1, Items.Count, item.Name);
+                    continue;
+                }
 
                 // BIAS frames are zero-second exposures by definition. If the
                 // UI somehow sent a non-zero exposure, clamp it, saves the
@@ -553,6 +563,14 @@ public class SequenceItem {
     public string? Filter { get; set; }
     public double? Ra { get; set; }
     public double? Dec { get; set; }
+
+    /// <summary>
+    /// When false the item is kept in the schedule but skipped at run
+    /// time (and excluded from the total-frame count / estimates). Lets
+    /// the operator park an item without deleting it. Defaults true so
+    /// older saved sequences (no flag) keep running.
+    /// </summary>
+    public bool Enabled { get; set; } = true;
 
     /// <summary>
     /// Frame classification: LIGHT (default), DARK, BIAS, FLAT, DARKFLAT.
