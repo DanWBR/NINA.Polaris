@@ -11557,6 +11557,32 @@ function ninaApp() {
             this._bayerOffY = active?.bayerOffsetY || 0;
         },
 
+        // FIELD5: return the quirks entry for the camera shown on the
+        // Camera equipment card (connected device, else the picked
+        // device, else the active rig's camera). Lazily creates a
+        // default entry in cameraQuirks so the card's controls have a
+        // reactive object to bind to. Idempotent: after the first
+        // call the find() short-circuits. Loads the quirks list on
+        // first use if it hasn't been fetched yet.
+        cameraCardQuirks() {
+            const id = this.selectedCamera || this.equipCameraChoice
+                || this.activeCameraIdForQuirks || '';
+            if (!id) return null;
+            if (!Array.isArray(this.cameraQuirks)) this.cameraQuirks = [];
+            let e = this.cameraQuirks.find(c => c.cameraId === id);
+            if (!e) {
+                e = {
+                    cameraId: id,
+                    bayerPatternOverride: null,
+                    verticalFlipImage: false,
+                    bayerOffsetX: 0,
+                    bayerOffsetY: 0
+                };
+                this.cameraQuirks.push(e);
+            }
+            return e;
+        },
+
         async deleteRig(id) {
             if (this.rigs.length <= 1) {
                 this.toast('Cannot delete the last rig', 'warn');

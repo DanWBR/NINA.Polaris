@@ -4025,6 +4025,69 @@
                                      x-show="!isDslrCamera && tempHistory.length >= 2">
                                     <canvas x-ref="tempChart" id="tempChart"></canvas>
                                 </div>
+
+                                <!-- FIELD5: per-camera quirks (Bayer override
+                                     + vertical flip + grid offset). Scoped to
+                                     THIS camera, keyed by its device id, so
+                                     the workaround follows the physical camera
+                                     across rigs. Only shown once a camera is
+                                     picked/connected. Collapsed by default --
+                                     most cameras work on Auto + flip off. -->
+                                <details class="camera-quirks-card"
+                                         x-show="(selectedCamera || equipCameraChoice) && cameraCardQuirks()"
+                                         style="margin-top: 10px; font-size: 12px;">
+                                    <summary style="cursor:pointer; color: var(--text-muted); font-size: 11px;">
+                                        🎥 Colour / debayer quirks
+                                    </summary>
+                                    <p class="text-muted" style="font-size: 11px; margin: 6px 0;">
+                                        Change these only if the preview / stack
+                                        comes out grey, with swapped colours, or
+                                        as a red/green checkerboard.
+                                    </p>
+                                    <template x-if="cameraCardQuirks()">
+                                        <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">
+                                            <div>
+                                                <label style="display:block; font-size:11px; color:var(--text-muted);">Bayer override</label>
+                                                <select class="input-sm" style="width:130px;"
+                                                        :value="cameraCardQuirks().bayerPatternOverride || ''"
+                                                        @change="setCameraQuirksBayer(cameraCardQuirks(), $event.target.value)">
+                                                    <option value="">Auto (driver)</option>
+                                                    <option value="RGGB">RGGB</option>
+                                                    <option value="BGGR">BGGR</option>
+                                                    <option value="GBRG">GBRG</option>
+                                                    <option value="GRBG">GRBG</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label style="display:block; font-size:11px; color:var(--text-muted);">Flip rows</label>
+                                                <label style="display:flex; align-items:center; gap:6px; height:28px;">
+                                                    <input type="checkbox"
+                                                           :checked="!!cameraCardQuirks().verticalFlipImage"
+                                                           @change="setCameraQuirksFlip(cameraCardQuirks(), $event.target.checked)">
+                                                    <span class="text-muted" style="font-size:11px;">on</span>
+                                                </label>
+                                            </div>
+                                            <div>
+                                                <label style="display:block; font-size:11px; color:var(--text-muted);">Off X</label>
+                                                <select class="input-sm" style="width:60px;"
+                                                        :value="cameraCardQuirks().bayerOffsetX || 0"
+                                                        @change="setCameraQuirksOffset(cameraCardQuirks(), parseInt($event.target.value), cameraCardQuirks().bayerOffsetY || 0)">
+                                                    <option value="0">0</option>
+                                                    <option value="1">1</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label style="display:block; font-size:11px; color:var(--text-muted);">Off Y</label>
+                                                <select class="input-sm" style="width:60px;"
+                                                        :value="cameraCardQuirks().bayerOffsetY || 0"
+                                                        @change="setCameraQuirksOffset(cameraCardQuirks(), cameraCardQuirks().bayerOffsetX || 0, parseInt($event.target.value))">
+                                                    <option value="0">0</option>
+                                                    <option value="1">1</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </details>
                             </div>
                         </div>
                     </div>
@@ -10585,96 +10648,9 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 active, and set per-rig filter offsets.
             </p>
 
-            <!-- FIELD4-3: per-camera quirks (Bayer override + vertical
-                 flip). Lives at the top of the modal so a new operator
-                 discovers it without having to know which rig the
-                 camera belongs to. The table lists every camera id the
-                 operator has registered across all rigs (plus any
-                 explicit entry already saved). Both knobs follow the
-                 physical camera, so a SVBONY SV405CC moved between a
-                 refractor rig and a guidescope rig only needs the flip
-                 set once. -->
-            <details class="camera-quirks-section"
-                     :open="cameraQuirks.length > 0"
-                     style="margin: 8px 0 14px 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-elev);">
-                <summary style="cursor: pointer; font-weight: 600; font-size: 13px;">
-                    🎥 Camera quirks
-                    <span class="text-muted" style="font-weight: normal; font-size: 11px;">
-                        — Bayer mosaic + FITS row order workarounds (per camera)
-                    </span>
-                </summary>
-                <p class="text-muted" style="font-size: 11px; margin: 6px 0;">
-                    Override only if the live preview / stack comes out grey,
-                    with swapped colours, or as a red/green checkerboard.
-                    Most cameras work on <strong>Auto</strong> + flip off.
-                </p>
-                <template x-if="cameraQuirks.length === 0">
-                    <div class="text-muted" style="font-size: 12px; padding: 6px 0;">
-                        No cameras configured yet, pick a camera on a rig
-                        first and it will appear here.
-                    </div>
-                </template>
-                <template x-if="cameraQuirks.length > 0">
-                    <table style="width:100%; font-size: 12px; border-collapse: collapse;">
-                        <thead>
-                            <tr style="text-align: left; color: var(--text-muted); font-size: 11px;">
-                                <th style="padding: 4px 6px;">Camera</th>
-                                <th style="padding: 4px 6px; width: 140px;">Bayer override</th>
-                                <th style="padding: 4px 6px; width: 80px;">Flip rows</th>
-                                <th style="padding: 4px 6px; width: 80px;">Off X</th>
-                                <th style="padding: 4px 6px; width: 80px;">Off Y</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template x-for="c in cameraQuirks" :key="c.cameraId">
-                                <tr :class="c.cameraId === activeCameraIdForQuirks ? 'active' : ''"
-                                    style="border-top: 1px solid var(--border);">
-                                    <td style="padding: 6px;">
-                                        <span x-text="c.cameraId"></span>
-                                        <span x-show="c.cameraId === activeCameraIdForQuirks"
-                                              class="text-ok" style="font-size: 10px; margin-left: 6px;">● ACTIVE</span>
-                                    </td>
-                                    <td style="padding: 6px;">
-                                        <select class="input-sm" style="width: 130px;"
-                                                :value="c.bayerPatternOverride || ''"
-                                                @change="setCameraQuirksBayer(c, $event.target.value)">
-                                            <option value="">Auto (driver)</option>
-                                            <option value="RGGB">RGGB</option>
-                                            <option value="BGGR">BGGR</option>
-                                            <option value="GBRG">GBRG</option>
-                                            <option value="GRBG">GRBG</option>
-                                        </select>
-                                    </td>
-                                    <td style="padding: 6px;">
-                                        <label style="display:flex;align-items:center;gap:6px;">
-                                            <input type="checkbox"
-                                                   :checked="!!c.verticalFlipImage"
-                                                   @change="setCameraQuirksFlip(c, $event.target.checked)">
-                                            <span class="text-muted" style="font-size: 11px;">on</span>
-                                        </label>
-                                    </td>
-                                    <td style="padding: 6px;">
-                                        <select class="input-sm" style="width:60px;"
-                                                :value="c.bayerOffsetX || 0"
-                                                @change="setCameraQuirksOffset(c, parseInt($event.target.value), c.bayerOffsetY || 0)">
-                                            <option value="0">0</option>
-                                            <option value="1">1</option>
-                                        </select>
-                                    </td>
-                                    <td style="padding: 6px;">
-                                        <select class="input-sm" style="width:60px;"
-                                                :value="c.bayerOffsetY || 0"
-                                                @change="setCameraQuirksOffset(c, c.bayerOffsetX || 0, parseInt($event.target.value))">
-                                            <option value="0">0</option>
-                                            <option value="1">1</option>
-                                        </select>
-                                    </td>
-                                </tr>
-                            </template>
-                        </tbody>
-                    </table>
-                </template>
-            </details>
+            <!-- FIELD5: Camera quirks (Bayer override + flip + offset)
+                 moved out of here and onto the Camera equipment card
+                 in the RIGS tab, scoped to the connected camera. -->
 
             <div class="rig-list">
                 <template x-for="r in rigs" :key="r.id">
