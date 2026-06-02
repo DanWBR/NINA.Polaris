@@ -137,8 +137,45 @@ public static class PlateSolveEndpoints {
             if (!solver.IsAvailable)
                 return Results.BadRequest(new { error = "No plate solver configured / installed." });
 
+            // Read FITS headers for hints (RA/Dec, pixel size, focal
+            // length, image dimensions). This is the primary source
+            // for hint coordinates when solving files from a previous
+            // session -- the mount may not be connected or may be
+            // pointing somewhere else entirely. ReadHeadersOnly skips
+            // the pixel block so it's essentially free on a Pi.
+            Dictionary<string, NINA.Image.FileFormat.FITS.FITSHeaderCard>? fitsHeaders = null;
+            try {
+                using var hdrFs = File.OpenRead(request.Path);
+                fitsHeaders = FITSReader.ReadHeadersOnly(hdrFs);
+            } catch { /* non-FITS or unreadable, proceed with other hints */ }
+
             double? hintRa = request.HintRa;
             double? hintDec = request.HintDec;
+
+            // Priority 1: explicit hint from the request body
+            // Priority 2: RA/DEC from the FITS header (original
+            //   pointing when the frame was captured)
+            // Priority 3: current mount position (if connected)
+            // Priority 4: no hint (ASTAP blind-solves, slower)
+            if (!hintRa.HasValue && fitsHeaders != null) {
+                if (fitsHeaders.TryGetValue("RA", out var raCard)
+                        && double.TryParse(raCard.Value,
+                            System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            out var raVal) && raVal != 0) {
+                    // RA header is in degrees; convert to hours
+                    hintRa = raVal / 15.0;
+                }
+            }
+            if (!hintDec.HasValue && fitsHeaders != null) {
+                if (fitsHeaders.TryGetValue("DEC", out var decCard)
+                        && double.TryParse(decCard.Value,
+                            System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            out var decVal) && Math.Abs(decVal) <= 90) {
+                    hintDec = decVal;
+                }
+            }
             if (!hintRa.HasValue || !hintDec.HasValue) {
                 var tel = equip.Telescope;
                 if (tel != null && tel.IsConnected
@@ -149,27 +186,32 @@ public static class PlateSolveEndpoints {
                 }
             }
 
-            // Compute FOV from rig focal length + camera pixel size.
-            // If the camera isn't connected, try to read pixel count
-            // from the FITS header (NAXIS1) and assume a default pixel
-            // size of 3.76um (common for IMX sensor family).
+            // Compute FOV from the FITS header first (FOCALLEN +
+            // XPIXSZ + NAXIS1), falling back to the active rig's
+            // focal length + connected camera pixel size.
             double fovDeg = 0;
-            var rig = profiles.ActiveEquipmentProfile;
-            double fl = rig?.FocalLengthMm ?? 0;
+            double headerFl = 0, headerPix = 0;
+            int imgWidth = 0;
+            if (fitsHeaders != null) {
+                if (fitsHeaders.TryGetValue("FOCALLEN", out var flCard))
+                    double.TryParse(flCard.Value,
+                        System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out headerFl);
+                if (fitsHeaders.TryGetValue("XPIXSZ", out var pxCard))
+                    double.TryParse(pxCard.Value,
+                        System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out headerPix);
+                if (fitsHeaders.TryGetValue("NAXIS1", out var n1Card))
+                    int.TryParse(n1Card.Value, out imgWidth);
+            }
+            double fl = headerFl > 0 ? headerFl
+                : (profiles.ActiveEquipmentProfile?.FocalLengthMm ?? 0);
+            double pixSize = headerPix > 0 ? headerPix
+                : (equip.Camera?.PixelSizeX ?? 3.76);
+            if (imgWidth <= 0) imgWidth = 3008;
             if (fl > 0) {
-                double pixSize = equip.Camera?.PixelSizeX ?? 3.76;
-                // Guess width from filename -- just read FITS header
-                // NAXIS1 if we can, otherwise use a safe default.
-                int imgWidth = 3008; // fallback
-                try {
-                    using var fs = new FileStream(request.Path, FileMode.Open, FileAccess.Read);
-                    using var br = new BinaryReader(fs);
-                    var headerBytes = br.ReadBytes(2880);
-                    var headerStr = System.Text.Encoding.ASCII.GetString(headerBytes);
-                    var match = System.Text.RegularExpressions.Regex.Match(
-                        headerStr, @"NAXIS1\s*=\s*(\d+)");
-                    if (match.Success) imgWidth = int.Parse(match.Groups[1].Value);
-                } catch { /* keep fallback */ }
                 double sensorMm = pixSize * imgWidth / 1000.0;
                 fovDeg = 2.0 * Math.Atan(sensorMm / (2.0 * fl)) * (180.0 / Math.PI);
             }
