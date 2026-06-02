@@ -15,7 +15,93 @@
   verbatim, only the prose around them was translated.
 -->
 
-# Current chapter: Field-testing batch FIELD4 (plate solve + camera quirks + PREVIEW solve)
+# Current chapter: Field-testing batch FIELD5 (checkerboard root-cause, FILES/PREVIEW solve, viewer parity, privacy, factory reset)
+
+> Operator's varanda session #4 was a long one. The SV405CC
+> checkerboard was finally root-caused (it was never a Bayer /
+> flip / offset problem); the STUDIO viewer gained Bayer override
+> and a FITS-header editor; plate solve became available from any
+> FILES image and from PREVIEW with slew/center; preview/live/video
+> got real pinch-zoom + drag parity with the STUDIO viewer plus a
+> bottom-left image toolbar; fullscreen moved to a top-right badge;
+> camera quirks moved onto the Camera card; a privacy policy landed
+> in HELP; and a factory-reset switch was added so a clean Raspbian
+> image can ship with zero personal or test config.
+
+## What shipped
+
+### Checkerboard real root cause (CCD_CFA read + cell-aligned WebGL debayer)
+The SV405CC red/green checkerboard survived every Bayer-pattern,
+flip and pixel-offset permutation because none of those were the
+cause. Two real bugs: (a) `indi_svbony_ccd` never writes
+`BAYERPAT` into the FITS BLOB, so the pattern was lost; the fix
+reads the INDI `CCD_CFA.CFA_TYPE` property in `IndiCamera` and
+injects it into `ImageProperties` + `ImageMetaData`. (b) The
+WebGL2 superpixel debayer was sampling at a fractional downscale
+(a 4144-wide sensor capped to a 2048 GPU canvas), which breaks
+2x2 Bayer cell alignment. The shader now renders colour frames at
+`width/cellStep x height/cellStep` with an EVEN `cellStep` and
+integer `texelFetch`, matching how NINA + PINS debayer server-side
+at native resolution.
+
+### STUDIO viewer: Bayer override + FITS header editor
+The STUDIO image viewer gained a Bayer-pattern override dropdown
+(for files that, like the SV405CC frames, never recorded one) and
+a FITS-header editor so the operator can inspect / fix header
+cards in place. Editor sidecars persist under
+`{LocalAppData}/Polaris/sidecars`.
+
+### Plate solve from FILES + from PREVIEW
+Any image in FILES can be plate-solved via a modal that accepts an
+object name or approximate coordinates (so files with no WCS / no
+pointing header still solve). `solve-file` reads
+`RA/DEC/FOCALLEN/XPIXSZ/NAXIS1` from the FITS header as primary
+hints. The result panel was trimmed to just the two safe actions:
+**Center Only** (sync without slewing, via the new
+`SlewCenterService` `skipInitialSlew` flag) and **Slew and Center**.
+PREVIEW keeps its one-click solve from the latest live frame.
+
+### Viewer parity: pinch-zoom + drag, image toolbar, fullscreen badge
+PREVIEW / LIVE / VIDEO now share the STUDIO viewer's pan/zoom
+behaviour. The pan/zoom system was rewritten into pixel space
+(`transform-origin: 0 0`, screen-pixel `tx/ty`, unitless scale,
+zoom-to-cursor `t' = m - (m - t)*(S'/S)`) after the old normalized-
+fraction transform produced sub-pixel motion. A bottom-left image
+toolbar (zoom to fit, fit width, fit height, reset, auto-stretch)
+was added to all three. Fullscreen moved from an inline button to
+a top-right badge.
+
+### Camera quirks on the Camera card
+The per-camera Bayer-override / flip / offset settings moved from
+the Manage Rigs modal onto the Camera card itself, where the
+operator expects per-camera configuration to live.
+
+### Privacy policy in HELP
+A "Privacy & your data" section was added to the HELP tab, inline
+(no network call, works offline) and gated on
+`help.tutorial === 'privacy'`, mirroring the Troubleshooting
+accordion. Plain-language copy for retired-beginner operators:
+Polaris is local-first, no analytics / telemetry / crash
+reporting; the only outbound touchpoints (online plate solver,
+relay tunnel, DuckDNS + Let's Encrypt, LAN discovery) are all
+opt-in and named explicitly. A rendering bug (an empty
+"STEP 1 OF 0" stepper above the section) was fixed by excluding
+`privacy` from the generic stepper template.
+
+### Factory reset (clear all settings)
+`ProfileService.FactoryReset()` deletes every profile `*.json`
+plus `auth-sessions.json` under the profile dir and rebuilds the
+Default profile. `POST /api/system/factory-reset` runs the wipe
+and best-effort clears the `studio/` + `logs/` cache dirs and the
+editor sidecars dir; captured images / FITS are deliberately left
+untouched. A Settings "Reset everything to factory defaults"
+danger card (red accent, danger confirm dialog) calls
+`factoryReset()`, which on success clears `localStorage` +
+`sessionStorage` and reloads so the page comes back as a genuine
+first run. Lets a clean Raspberry Pi SD-card image ship with no
+personal or test config.
+
+# Past chapter: Field-testing batch FIELD4 (plate solve + camera quirks + PREVIEW solve)
 
 > Operator's varanda session #3 surfaced four issues: erratic plate
 > solve close to the target with last-iteration camera timeout;
