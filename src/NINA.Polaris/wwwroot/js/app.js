@@ -5100,6 +5100,8 @@ function ninaApp() {
                 uniform float u_mtf;   // typically 0.25
                 uniform int u_bayer;   // 0=mono 1=RGGB 2=BGGR 3=GBRG 4=GRBG
                 uniform ivec2 u_bayerOff; // pixel offset (0 or 1) for the Bayer grid origin
+                uniform vec2 u_outSize;   // debayer output canvas size in pixels
+                uniform int u_cellStep;   // texels per output pixel along each axis (EVEN for color)
                 uniform float u_wbR;   // red channel gain  (default 1.7 for daylight OSC)
                 uniform float u_wbB;   // blue channel gain (default 1.5 for daylight OSC)
                 in vec2 v_uv;
@@ -5135,21 +5137,33 @@ function ninaApp() {
                         fragColor = vec4(s, s, s, 1.0);
                         return;
                     }
-                    // Simple half-resolution debayer: read a 2x2 superpixel and
-                    // average the two greens. Works for any pattern.
-                    vec2 px = vec2(1.0) / u_texSize;
-                    // Snap UV to top-left of 2x2 cell, shifted by the
-                    // Bayer offset. Some sensors (SV405CC / IMX533 via
-                    // indi_svbony_ccd) have their CFA grid starting at
-                    // pixel (1,1) instead of (0,0). Without this offset
-                    // the cell sampling grabs the wrong 4 pixels and no
-                    // Bayer pattern enum swap can fix the checkerboard.
-                    vec2 off = vec2(u_bayerOff) / u_texSize;
-                    vec2 base = floor((v_uv - off) * (u_texSize * 0.5)) * 2.0 / u_texSize + off;
-                    float p00 = fetch(base);
-                    float p10 = fetch(base + vec2(px.x, 0.0));
-                    float p01 = fetch(base + vec2(0.0, px.y));
-                    float p11 = fetch(base + vec2(px.x, px.y));
+                    // Half-resolution superpixel debayer. CRITICAL:
+                    // a Bayer mosaic can only be debayered when the
+                    // 2x2 cell sampling stays EXACTLY aligned to the
+                    // sensor grid. The previous shader snapped the cell
+                    // off a continuous v_uv * texSize, which drifts when
+                    // the output canvas resolution differs from the
+                    // sensor resolution (e.g. a 4144-wide sensor capped
+                    // to a 2048 GPU canvas): consecutive output pixels
+                    // then step a fractional ~2.02 texels and the four
+                    // cell fetches land in different/overlapping cells.
+                    // That fractional beat IS the colourful checkerboard.
+                    //
+                    // Fix: the JS side sizes the output canvas to exactly
+                    // width/u_cellStep x height/u_cellStep with an EVEN
+                    // u_cellStep, so each output pixel owns one aligned
+                    // cell. We recover the integer output-pixel index
+                    // from v_uv (exact at fragment centres) and multiply
+                    // by the even step to get a cell-aligned base texel.
+                    // u_bayerOff (0/1) shifts the grid origin for the
+                    // rare sensor whose CFA starts at an odd pixel.
+                    ivec2 outPix = ivec2(v_uv * u_outSize);
+                    ivec2 cell = outPix * u_cellStep + u_bayerOff;
+                    ivec2 maxP = ivec2(u_texSize) - ivec2(1);
+                    float p00 = float(texelFetch(u_tex, clamp(cell,                  ivec2(0), maxP), 0).r);
+                    float p10 = float(texelFetch(u_tex, clamp(cell + ivec2(1, 0), ivec2(0), maxP), 0).r);
+                    float p01 = float(texelFetch(u_tex, clamp(cell + ivec2(0, 1), ivec2(0), maxP), 0).r);
+                    float p11 = float(texelFetch(u_tex, clamp(cell + ivec2(1, 1), ivec2(0), maxP), 0).r);
                     float r, g, b;
                     if (u_bayer == 1) { r = p00; g = 0.5 * (p10 + p01); b = p11; }       // RGGB
                     else if (u_bayer == 2) { b = p00; g = 0.5 * (p10 + p01); r = p11; }   // BGGR
@@ -5217,6 +5231,8 @@ function ninaApp() {
                 mtf: gl.getUniformLocation(prog, 'u_mtf'),
                 bayer: gl.getUniformLocation(prog, 'u_bayer'),
                 bayerOff: gl.getUniformLocation(prog, 'u_bayerOff'),
+                outSize: gl.getUniformLocation(prog, 'u_outSize'),
+                cellStep: gl.getUniformLocation(prog, 'u_cellStep'),
                 wbR: gl.getUniformLocation(prog, 'u_wbR'),
                 wbB: gl.getUniformLocation(prog, 'u_wbB')
             };
@@ -5256,9 +5272,31 @@ function ninaApp() {
             // when a 6000×4000 sensor lands, fan-out scaling handles
             // visual fidelity beyond ~2048 anyway.
             const MAX_GPU_DIM = 2048;
-            const renderScale = Math.min(MAX_GPU_DIM / width, MAX_GPU_DIM / height, 1);
-            canvas.width = Math.max(1, Math.round(width * renderScale));
-            canvas.height = Math.max(1, Math.round(height * renderScale));
+            const isColorBayer = (bayerPattern | 0) >= 1 && (bayerPattern | 0) <= 4;
+            // cellStep = texels per output pixel. 0 marks the mono path
+            // (the shader ignores it). For colour it MUST be even so the
+            // 2x2 Bayer cell sampled by each output pixel stays aligned
+            // to the sensor grid -- this is the whole fix for the OSC
+            // checkerboard. We render one output pixel per cell (half
+            // res) and bump the step in steps of 2 if half-res would
+            // still blow past the GPU cap.
+            let cellStep = 0;
+            if (isColorBayer) {
+                cellStep = 2;
+                while (Math.floor(width / cellStep) > MAX_GPU_DIM ||
+                       Math.floor(height / cellStep) > MAX_GPU_DIM) {
+                    cellStep += 2;
+                }
+                canvas.width = Math.max(1, Math.floor(width / cellStep));
+                canvas.height = Math.max(1, Math.floor(height / cellStep));
+            } else {
+                // Mono has no cell-alignment constraint, so a plain
+                // fractional downscale is fine (slight aliasing at most,
+                // never a checkerboard).
+                const renderScale = Math.min(MAX_GPU_DIM / width, MAX_GPU_DIM / height, 1);
+                canvas.width = Math.max(1, Math.round(width * renderScale));
+                canvas.height = Math.max(1, Math.round(height * renderScale));
+            }
 
             gl.viewport(0, 0, canvas.width, canvas.height);
             gl.useProgram(this._glProgram);
@@ -5300,6 +5338,10 @@ function ninaApp() {
             const boX = this._bayerOffX || 0;
             const boY = this._bayerOffY || 0;
             gl.uniform2i(this._glLocs.bayerOff, boX, boY);
+            // Output canvas size + cell step drive the exact integer
+            // cell-aligned debayer sampling (the OSC checkerboard fix).
+            gl.uniform2f(this._glLocs.outSize, canvas.width, canvas.height);
+            gl.uniform1i(this._glLocs.cellStep, cellStep);
             // Per-channel WB gain. Defaults give a roughly neutral
             // daylight look on raw OSC data; users can tune via the
             // existing WB Red / WB Blue sliders in VIDEO (and soon
