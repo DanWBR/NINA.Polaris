@@ -40,12 +40,14 @@ public class SlewCenterService {
         _logger = logger;
     }
 
-    public SlewCenterJob StartJob(double ra, double dec, double toleranceArcsec = 30) {
+    public SlewCenterJob StartJob(double ra, double dec, double toleranceArcsec = 30,
+            bool skipInitialSlew = false) {
         var job = new SlewCenterJob {
             Id = Guid.NewGuid().ToString("N"),
             TargetRa = ra,
             TargetDec = dec,
             ToleranceArcsec = toleranceArcsec,
+            SkipInitialSlew = skipInitialSlew,
             State = SlewCenterState.Pending,
             CreatedAt = DateTime.UtcNow
         };
@@ -180,13 +182,23 @@ public class SlewCenterService {
                 ct.ThrowIfCancellationRequested();
                 job.Iteration = i + 1;
 
-                // Step 1: Slew
-                job.State = SlewCenterState.Slewing;
-                _logger.LogInformation("Slew-and-center iteration {I}: slewing to RA={Ra:F4} Dec={Dec:F4}",
-                    i + 1, job.TargetRa, job.TargetDec);
+                // Step 1: Slew. "Center only" skips the initial slew
+                // on the first iteration: the scope is assumed to be
+                // already pointing at (roughly) the field, so we go
+                // straight to capture + solve + sync and let the
+                // convergence loop nudge it in. Later iterations still
+                // slew to apply the corrected coordinates.
+                if (i == 0 && job.SkipInitialSlew) {
+                    _logger.LogInformation(
+                        "Center-only: skipping initial slew, refining current pointing");
+                } else {
+                    job.State = SlewCenterState.Slewing;
+                    _logger.LogInformation("Slew-and-center iteration {I}: slewing to RA={Ra:F4} Dec={Dec:F4}",
+                        i + 1, job.TargetRa, job.TargetDec);
 
-                await _equip.Telescope.SlewAsync(job.TargetRa, job.TargetDec, ct);
-                await WaitForSlewComplete(ct);
+                    await _equip.Telescope.SlewAsync(job.TargetRa, job.TargetDec, ct);
+                    await WaitForSlewComplete(ct);
+                }
 
                 ct.ThrowIfCancellationRequested();
 
@@ -402,6 +414,9 @@ public class SlewCenterJob {
     public double TargetRa { get; set; }
     public double TargetDec { get; set; }
     public double ToleranceArcsec { get; set; }
+    /// <summary>Center-only mode: skip the initial slew on the first
+    /// iteration (the scope is already on the field; just refine).</summary>
+    public bool SkipInitialSlew { get; set; }
     public SlewCenterState State { get; set; }
     public int Iteration { get; set; }
     public double? ActualRa { get; set; }

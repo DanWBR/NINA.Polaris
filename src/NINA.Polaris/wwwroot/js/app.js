@@ -12895,57 +12895,37 @@ function ninaApp() {
             }
         },
 
-        async filesSolveSyncMount() {
+        // Center on the solved coordinates. centerOnly=true skips the
+        // initial slew (the scope is already on the field; just refine
+        // the framing), centerOnly=false slews there first. The other
+        // result-card actions (raw mount sync, FOV-rotation overlays)
+        // were removed because they are dangerous (sync overwrites the
+        // mount model) or don't make sense for re-framing a file.
+        async filesSolveCenter(centerOnly) {
             const r = this.filesSolveResult;
             if (!r || !r.success) return;
-            try {
-                await this.apiPost('/api/telescope/sync', {
-                    ra: r.raHours,
-                    dec: r.decDeg
-                });
-                this.toast('Mount synced to solved coordinates', 'ok');
-            } catch (e) {
-                this.toast('Mount sync failed: ' + (e.message || ''), 'error');
+            if (!this.mount?.connected) {
+                this.toast('Connect the mount first', 'warn');
+                return;
             }
-        },
-
-        async filesSolveGoto() {
-            const r = this.filesSolveResult;
-            if (!r || !r.success) return;
             try {
                 const resp = await this.apiPost('/api/sky/slew-and-center', {
                     ra: r.raHours,
                     dec: r.decDeg,
-                    toleranceArcsec: 30
+                    toleranceArcsec: 30,
+                    centerOnly: !!centerOnly
                 });
                 const data = await resp.json();
                 if (data.jobId) {
                     this.slewCenterJobId = data.jobId;
                     this._pollSlewCenter();
-                    this.toast('Slew & Center started -- check SKY tab for progress', 'ok');
+                    this.toast((centerOnly ? 'Centering' : 'Slew & Center')
+                        + ' started -- check SKY tab for progress', 'ok');
                 }
             } catch (e) {
-                this.toast('Slew & Center failed: ' + (e.message || ''), 'error');
+                this.toast((centerOnly ? 'Center' : 'Slew & Center')
+                    + ' failed: ' + (e.message || ''), 'error');
             }
-        },
-
-        filesSolveApplyTargetRotation() {
-            const r = this.filesSolveResult;
-            if (!r || !r.success || !Number.isFinite(r.rotationDeg)) return;
-            if (!this.fov) this.fov = { width: 2.82, height: 1.88 };
-            this.fov.rotationDeg = r.rotationDeg;
-            try { this._pushSkyFovOverlays && this._pushSkyFovOverlays(); }
-            catch (e) { /* SKY engine may not be live */ }
-            this.toast('Target FOV rotation set to ' + r.rotationDeg.toFixed(2) + '°', 'ok');
-        },
-
-        filesSolveApplyMountRotation() {
-            const r = this.filesSolveResult;
-            if (!r || !r.success || !Number.isFinite(r.rotationDeg)) return;
-            this.solveRotationDeg = r.rotationDeg;
-            try { this._pushSkyFovOverlays && this._pushSkyFovOverlays(); }
-            catch (e) { /* SKY engine may not be live */ }
-            this.toast('Mount FOV rotation set to ' + r.rotationDeg.toFixed(2) + '°', 'ok');
         },
 
         async previewAbort() {

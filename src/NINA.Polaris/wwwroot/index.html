@@ -7517,26 +7517,16 @@
                                 </div>
                                 <div style="display:flex; gap: 6px; flex-wrap: wrap;">
                                     <button class="btn btn-sm btn-primary"
-                                            @click="filesSolveSyncMount()"
+                                            @click="filesSolveCenter(true)"
                                             :disabled="!mount?.connected"
-                                            title="Tell the mount that its current pointing IS the solved coordinates">
-                                        Sync mount
+                                            title="Center on this field without a big slew (the scope is already pointing here -- just refine the framing)">
+                                        Center Only
                                     </button>
                                     <button class="btn btn-sm btn-primary"
-                                            @click="filesSolveGoto()"
+                                            @click="filesSolveCenter(false)"
                                             :disabled="!mount?.connected"
-                                            title="Slew & center to the solved RA/Dec (iterative plate-solve convergence)">
-                                        Slew & Center
-                                    </button>
-                                    <button class="btn btn-sm"
-                                            @click="filesSolveApplyTargetRotation()"
-                                            title="Set the red SKY rectangle to the solved rotation">
-                                        Set as target rotation
-                                    </button>
-                                    <button class="btn btn-sm"
-                                            @click="filesSolveApplyMountRotation()"
-                                            title="Set the blue SKY rectangle to the solved rotation">
-                                        Use as mount rotation
+                                            title="Slew to the solved RA/Dec and center (iterative plate-solve convergence)">
+                                        Slew &amp; Center
                                     </button>
                                 </div>
                             </div>

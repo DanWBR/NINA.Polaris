@@ -9,7 +9,8 @@ public static class SkyEndpoints {
 
         group.MapPost("/slew-and-center", (SlewAndCenterRequest request,
             SlewCenterService slewCenter) => {
-            var job = slewCenter.StartJob(request.Ra, request.Dec, request.ToleranceArcsec);
+            var job = slewCenter.StartJob(request.Ra, request.Dec, request.ToleranceArcsec,
+                request.CenterOnly);
             return Results.Accepted(value: new {
                 jobId = job.Id,
                 target = new { request.Ra, request.Dec },
@@ -383,5 +384,6 @@ public static class SkyEndpoints {
         return c / D2R;
     }
 
-    public record SlewAndCenterRequest(double Ra, double Dec, double ToleranceArcsec = 30.0);
+    public record SlewAndCenterRequest(double Ra, double Dec, double ToleranceArcsec = 30.0,
+        bool CenterOnly = false);
 }
