@@ -9218,6 +9218,15 @@
                                 fix, pointing into the deeper docs.</p>
                                 <span class="help-card-meta">collapsible list</span>
                             </button>
+                            <button class="help-tutorial-card"
+                                    @click="help.tutorial = 'privacy'">
+                                <span class="help-card-icon">🔒</span>
+                                <h3>Privacy &amp; your data</h3>
+                                <p>What Polaris stores, what stays on
+                                your device, and the few optional
+                                features that talk to the internet.</p>
+                                <span class="help-card-meta">read</span>
+                            </button>
                         </div>
                     </div>
                 </template>
@@ -9407,6 +9416,133 @@
                             user guide on GitHub</a> covers every
                             tab in depth.
                         </p>
+                    </div>
+                </template>
+
+                <!-- ---- PRIVACY & YOUR DATA ------------------- -->
+                <template x-if="help.tutorial === 'privacy'">
+                    <div>
+                        <div class="help-stepper-header">
+                            <button class="help-back-btn" @click="helpExit()">
+                                ← Help
+                            </button>
+                            <span class="help-stepper-title">
+                                Privacy &amp; your data
+                            </span>
+                        </div>
+                        <p class="help-intro">
+                            Last updated: June 2026. Click any item to
+                            expand.
+                        </p>
+                        <div class="help-faq-list">
+
+                            <details class="help-faq" open>
+                                <summary>The short version</summary>
+                                <div class="help-faq-body">
+                                    <p>Polaris runs entirely on your own
+                                    device (your Raspberry Pi, mini PC, or
+                                    computer). It does not track you, has no
+                                    ads, and sends no usage data, analytics,
+                                    or crash reports to anyone.</p>
+                                    <p>It works fully offline. Your photos and
+                                    settings stay on your device unless you
+                                    choose to turn on one of the optional
+                                    internet features listed further down.</p>
+                                    <p>You do not need to create an account to
+                                    use Polaris on your own network.</p>
+                                </div>
+                            </details>
+
+                            <details class="help-faq">
+                                <summary>What is stored on your device</summary>
+                                <div class="help-faq-body">
+                                    <p>Your equipment profiles (rigs), your
+                                    observing location, and your preferences.</p>
+                                    <p>Your app password, if you set one, is
+                                    stored scrambled (hashed). The real
+                                    password is never written down anywhere,
+                                    not even on your own device.</p>
+                                    <p>The photos and FITS files you capture,
+                                    saved to the folder you picked in the FILES
+                                    tab.</p>
+                                    <p>A debug log to help fix problems. It
+                                    lives only in memory and disappears when
+                                    you restart, unless you turn on "save log
+                                    to disk" in Settings.</p>
+                                    <p>Small display preferences (theme, font,
+                                    last-used tabs) are kept by your web browser
+                                    on the device you are viewing from.</p>
+                                </div>
+                            </details>
+
+                            <details class="help-faq">
+                                <summary>Optional features that use the internet</summary>
+                                <div class="help-faq-body">
+                                    <p>All of these are switched OFF until you
+                                    turn them on yourself. Until then, nothing
+                                    leaves your device.</p>
+                                    <p><strong>Online plate solving
+                                    (astrometry.net).</strong> Polaris solves
+                                    your images on your own device by default.
+                                    Only if you choose the online solver and
+                                    enter an API key does Polaris upload the
+                                    picture being solved to the astrometry.net
+                                    service so it can identify the star field.</p>
+                                    <p><strong>Remote access (relay
+                                    server).</strong> If you turn on remote
+                                    access so you can reach Polaris from outside
+                                    your home, your session is tunnelled through
+                                    the relay server you signed up for. Only
+                                    then does your traffic pass through it.</p>
+                                    <p><strong>Automatic HTTPS certificate
+                                    (DuckDNS + Let's Encrypt).</strong> If you
+                                    enable the automatic security certificate
+                                    for remote access, Polaris sends your chosen
+                                    domain name and DuckDNS token to DuckDNS, and
+                                    your email address to Let's Encrypt, so the
+                                    certificate can be issued and renewed.</p>
+                                </div>
+                            </details>
+
+                            <details class="help-faq">
+                                <summary>Your local network</summary>
+                                <div class="help-faq-body">
+                                    <p>To find your camera, mount, and other
+                                    gear, Polaris talks to devices on your own
+                                    home or observatory network (INDI, Alpaca,
+                                    and nina.local discovery). This stays on your
+                                    network and never goes out to the internet.</p>
+                                </div>
+                            </details>
+
+                            <details class="help-faq">
+                                <summary>Your control</summary>
+                                <div class="help-faq-body">
+                                    <p>Every internet feature above is opt-in
+                                    and can be turned back off at any time in
+                                    Settings.</p>
+                                    <p>To remove everything Polaris has stored,
+                                    delete the app (or wipe the SD card). There
+                                    is no cloud copy to clean up.</p>
+                                </div>
+                            </details>
+
+                            <details class="help-faq">
+                                <summary>Questions</summary>
+                                <div class="help-faq-body">
+                                    <p>Polaris is free, open-source software.
+                                    You can read the code, raise a question, or
+                                    report a concern on the project page:</p>
+                                    <p>
+                                        <a href="https://github.com/DanWBR/NINA.Polaris"
+                                           target="_blank" rel="noopener">
+                                            github.com/DanWBR/NINA.Polaris
+                                        </a>
+                                    </p>
+                                </div>
+                            </details>
+
+                        </div>
                     </div>
                 </template>
             </div>
