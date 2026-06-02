@@ -7354,7 +7354,7 @@
                             :disabled="files.selectedPaths.length !== 1
                                        || filesSelectedDir() != null
                                        || filesSolveBusy"
-                            @click="filesPlateSolve(files.selectedPaths[0])"
+                            @click="filesOpenSolveModal(files.selectedPaths[0])"
                             :title="filesSolveBusy
                                 ? 'Plate solve in progress...'
                                 : 'Plate solve: identify RA/Dec/rotation from this FITS'"
@@ -10474,6 +10474,100 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         </button>
                     </div>
                 </aside>
+            </div>
+        </div>
+    </div>
+
+    <!-- Plate solve options modal (FILES tab). Give ASTAP a starting
+         position for files that have no RA/DEC header: search the sky
+         catalogue by object name or type approximate coordinates. -->
+    <div class="location-setup-modal" x-show="filesSolveModal.open" x-cloak
+         @click.self="filesSolveModal.open = false"
+         @keydown.escape.window="filesSolveModal.open = false">
+        <div class="location-setup-frame" style="max-width: 540px;">
+            <h2>🎯 Plate solve</h2>
+            <p class="text-muted" style="font-size: 12px;">
+                Solving <strong x-text="filesSolveModal.fileName"></strong>.
+                If the picture has no coordinates saved, give the solver
+                a hint below, search for the object you photographed, or
+                type roughly where the telescope was pointing. Leave it
+                blank to let the solver search the whole sky (slower).
+            </p>
+
+            <!-- Object name search -->
+            <div style="margin-top: 12px;">
+                <label style="font-size: 12px; font-weight: 600;">Search by object name</label>
+                <div class="control-row" style="margin-top: 4px; gap: 6px;">
+                    <input type="text" class="input-md" style="flex:1;"
+                           x-model="filesSolveModal.search"
+                           @keyup.enter="filesSolveSearchObject()"
+                           placeholder="e.g. M42, NGC 2244, Orion Nebula">
+                    <button class="btn btn-sm"
+                            @click="filesSolveSearchObject()"
+                            :disabled="filesSolveModal.searching">
+                        <span x-show="!filesSolveModal.searching">Search</span>
+                        <span x-show="filesSolveModal.searching">...</span>
+                    </button>
+                </div>
+                <div x-show="filesSolveModal.searchResults.length > 0"
+                     style="margin-top: 6px; max-height: 180px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px;">
+                    <template x-for="o in filesSolveModal.searchResults" :key="o.name">
+                        <div @click="filesSolvePickObject(o)"
+                             style="padding: 6px 10px; cursor: pointer; border-bottom: 1px solid var(--border); font-size: 12px;"
+                             onmouseover="this.style.background='var(--bg-elev)'"
+                             onmouseout="this.style.background=''">
+                            <strong x-text="o.commonName || o.name"></strong>
+                            <span class="text-muted" x-show="o.commonName" x-text="' (' + o.name + ')'"></span>
+                            <span class="text-muted" x-show="o.type" x-text="' · ' + o.type"></span>
+                            <div class="text-muted" style="font-size: 11px;"
+                                 x-text="(o.raFormatted || '') + '  ' + (o.decFormatted || '')"></div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Resolved / manual coordinates -->
+            <div style="margin-top: 14px; display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
+                <div>
+                    <label style="font-size: 11px; color: var(--text-muted);">RA (hours)</label>
+                    <input type="number" step="0.0001" min="0" max="24"
+                           class="input-sm" style="width: 110px; display:block;"
+                           x-model.number="filesSolveModal.hintRaHours"
+                           placeholder="e.g. 5.59">
+                </div>
+                <div>
+                    <label style="font-size: 11px; color: var(--text-muted);">Dec (degrees)</label>
+                    <input type="number" step="0.0001" min="-90" max="90"
+                           class="input-sm" style="width: 110px; display:block;"
+                           x-model.number="filesSolveModal.hintDecDeg"
+                           placeholder="e.g. -5.39">
+                </div>
+                <div>
+                    <label style="font-size: 11px; color: var(--text-muted);">Search radius (°)</label>
+                    <input type="number" step="1" min="1" max="180"
+                           class="input-sm" style="width: 90px; display:block;"
+                           x-model.number="filesSolveModal.radiusDeg">
+                </div>
+            </div>
+            <p class="text-muted" style="font-size: 11px; margin-top: 6px;"
+               x-show="filesSolveModal.objectName">
+                Target: <strong x-text="filesSolveModal.objectName"></strong>
+            </p>
+
+            <div class="control-row actions" style="margin-top: 16px;">
+                <button class="btn btn-primary"
+                        @click="filesSolveModalRun(false)"
+                        :disabled="filesSolveBusy">
+                    🎯 Solve with hint
+                </button>
+                <button class="btn"
+                        @click="filesSolveModalRun(true)"
+                        :disabled="filesSolveBusy"
+                        title="Search the whole sky -- works without a hint but is much slower">
+                    Blind solve
+                </button>
+                <button class="btn btn-sm" @click="filesSolveModal.open = false"
+                        style="margin-left: auto;">Cancel</button>
             </div>
         </div>
     </div>

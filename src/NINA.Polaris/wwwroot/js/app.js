@@ -1378,6 +1378,23 @@ function ninaApp() {
         // PREVIEW but operates on a file path instead of LatestImage).
         filesSolveBusy: false,
         filesSolveResult: null,
+        // Plate-solve options modal: lets the operator give ASTAP a
+        // starting position when the FITS has no RA/DEC header (the
+        // common case for old field-test snaps). They can search the
+        // sky catalogue by object name (M42, NGC 2244, ...) or type
+        // approximate coordinates directly, then solve.
+        filesSolveModal: {
+            open: false,
+            path: '',
+            fileName: '',
+            search: '',
+            searchResults: [],
+            searching: false,
+            hintRaHours: null,    // decimal hours
+            hintDecDeg: null,     // decimal degrees
+            objectName: '',
+            radiusDeg: 30
+        },
         filesPersistMetaToggle() {
             try {
                 if (typeof localStorage === 'undefined') return;
@@ -12665,13 +12682,85 @@ function ninaApp() {
         // (makes sense for FILES where the user picks an old frame
         // from a previous session to re-frame on).
 
-        async filesPlateSolve(path) {
+        // Open the plate-solve options modal for a file. The server
+        // will still try the FITS header + mount as hints, but the
+        // modal lets the operator override with a catalogue lookup
+        // or hand-typed coordinates -- essential for old snaps with
+        // no RA/DEC in the header (ASTAP otherwise blind-searches
+        // from the south pole and gives up).
+        filesOpenSolveModal(path) {
+            if (!path) return;
+            this.filesSolveModal.open = true;
+            this.filesSolveModal.path = path;
+            this.filesSolveModal.fileName = path.split('/').pop().split('\\').pop();
+            this.filesSolveModal.search = '';
+            this.filesSolveModal.searchResults = [];
+            this.filesSolveModal.hintRaHours = null;
+            this.filesSolveModal.hintDecDeg = null;
+            this.filesSolveModal.objectName = '';
+            this.filesSolveModal.radiusDeg = 30;
+        },
+
+        async filesSolveSearchObject() {
+            const q = (this.filesSolveModal.search || '').trim();
+            if (q.length < 2) { this.filesSolveModal.searchResults = []; return; }
+            this.filesSolveModal.searching = true;
+            try {
+                const r = await this.apiFetch(
+                    '/api/sky/catalog/search?query=' + encodeURIComponent(q) + '&limit=8');
+                const json = await r.json();
+                const list = Array.isArray(json) ? json : (json.results || []);
+                this.filesSolveModal.searchResults = list;
+            } catch (e) {
+                this.filesSolveModal.searchResults = [];
+            } finally {
+                this.filesSolveModal.searching = false;
+            }
+        },
+
+        filesSolvePickObject(o) {
+            // Catalogue results carry ra (hours) + dec (degrees).
+            this.filesSolveModal.hintRaHours = o.ra ?? o.raHours ?? null;
+            this.filesSolveModal.hintDecDeg = o.dec ?? o.decDeg ?? null;
+            this.filesSolveModal.objectName = o.commonName || o.name || '';
+            this.filesSolveModal.search = o.name || this.filesSolveModal.objectName;
+            this.filesSolveModal.searchResults = [];
+        },
+
+        // Run the solve from the modal. Hints (if the operator picked
+        // an object or typed coords) override the header/mount auto-
+        // hints on the server. "blind" forces no hint + a wide search.
+        async filesSolveModalRun(blind) {
+            const m = this.filesSolveModal;
+            const opts = {};
+            if (!blind) {
+                if (Number.isFinite(m.hintRaHours)) opts.hintRa = m.hintRaHours;
+                if (Number.isFinite(m.hintDecDeg)) opts.hintDec = m.hintDecDeg;
+                if (Number.isFinite(m.radiusDeg) && m.radiusDeg > 0)
+                    opts.searchRadiusDeg = m.radiusDeg;
+            } else {
+                // Blind: explicit wide radius, no coordinate hint.
+                opts.searchRadiusDeg = 180;
+            }
+            const path = m.path;
+            m.open = false;
+            await this.filesPlateSolve(path, opts);
+        },
+
+        async filesPlateSolve(path, opts) {
             if (!path || this.filesSolveBusy) return;
             this.filesSolveBusy = true;
             this.filesSolveResult = null;
             try {
                 const body = { path };
-                if (this.mount?.connected
+                // Explicit hints from the options modal take priority.
+                if (opts && Number.isFinite(opts.hintRa)) body.hintRa = opts.hintRa;
+                if (opts && Number.isFinite(opts.hintDec)) body.hintDec = opts.hintDec;
+                if (opts && Number.isFinite(opts.searchRadiusDeg))
+                    body.searchRadiusDeg = opts.searchRadiusDeg;
+                // If no explicit hint, fall back to mount pointing
+                // (the server also tries the FITS header on its own).
+                if (body.hintRa === undefined && this.mount?.connected
                         && Number.isFinite(this.mount.ra)
                         && Number.isFinite(this.mount.dec)) {
                     body.hintRa = this.mount.ra;
