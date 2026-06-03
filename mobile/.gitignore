@@ -7,6 +7,11 @@ node_modules/
 plugins/*/node_modules/
 plugins/*/dist/
 
+# Plugin Gradle build output (the plugin's android/ SOURCE is committed,
+# but its compiled build/ + .gradle/ are not).
+plugins/*/android/build/
+plugins/*/android/.gradle/
+
 # Capacitor-generated native host projects (recreate with `npx cap add`)
 /android/
 /ios/
