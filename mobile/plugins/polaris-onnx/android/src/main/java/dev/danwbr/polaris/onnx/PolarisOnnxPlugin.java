@@ -91,7 +91,7 @@ public class PolarisOnnxPlugin extends Plugin {
     @PluginMethod
     public void info(PluginCall call) {
         JSObject ret = new JSObject();
-        ret.put("version", ai.onnxruntime.OrtEnvironment.getVersion());
+        ret.put("version", env.getVersion());
         List<String> p = new ArrayList<>();
         p.add("nnapi"); p.add("xnnpack"); p.add("cpu");
         ret.put("providers", new com.getcapacitor.JSArray(p));
@@ -131,7 +131,7 @@ public class PolarisOnnxPlugin extends Plugin {
             ret.put("outputNames", new com.getcapacitor.JSArray(new ArrayList<>(session.getOutputNames())));
             call.resolve(ret);
         } catch (Throwable t) {
-            call.reject("createSession failed: " + t.getMessage(), t);
+            call.reject("createSession failed: " + t.getMessage());
         }
     }
 
@@ -160,7 +160,7 @@ public class PolarisOnnxPlugin extends Plugin {
                 call.resolve(ret);
             }
         } catch (Throwable err) {
-            call.reject("run failed: " + err.getMessage(), err);
+            call.reject("run failed: " + err.getMessage());
         } finally {
             for (ai.onnxruntime.OnnxTensor t : feeds.values()) {
                 try { t.close(); } catch (Throwable ignore) {}
@@ -180,7 +180,7 @@ public class PolarisOnnxPlugin extends Plugin {
     private ai.onnxruntime.OnnxTensor toOnnxTensor(JSObject t) throws Exception {
         byte[] bytes = Base64.decode(t.getString("data"), Base64.DEFAULT);
         String type = t.getString("type", "float32");
-        com.getcapacitor.JSArray dimsArr = t.getJSArray("dims");
+        org.json.JSONArray dimsArr = t.getJSONArray("dims");
         long[] dims = new long[dimsArr.length()];
         for (int i = 0; i < dims.length; i++) dims[i] = dimsArr.getLong(i);
 
@@ -204,8 +204,9 @@ public class PolarisOnnxPlugin extends Plugin {
                         : ai.onnxruntime.OnnxJavaType.UINT8);
             }
             case "float16": {
-                // ORT Java takes raw fp16 as a ShortBuffer with FLOAT16 type.
-                return ai.onnxruntime.OnnxTensor.createTensor(env, bb.asShortBuffer(), dims,
+                // ORT Java takes raw fp16 bytes via the ByteBuffer overload
+                // tagged FLOAT16 (same overload used for uint8/bool above).
+                return ai.onnxruntime.OnnxTensor.createTensor(env, bb, dims,
                     ai.onnxruntime.OnnxJavaType.FLOAT16);
             }
             default:
