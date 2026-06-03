@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="theme-color" content="#0a1633">
+    <title>Polaris</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <main class="connect" id="connect">
+        <div class="brand">
+            <div class="brand-mark">✦</div>
+            <h1>N.I.N.A. <span>Polaris</span></h1>
+            <p class="tagline">Connect to your telescope computer</p>
+        </div>
+
+        <section class="found" id="foundSection">
+            <div class="row-head">
+                <h2>Found on this network</h2>
+                <button class="link" id="rescanBtn" type="button">Rescan</button>
+            </div>
+            <ul class="host-list" id="hostList"></ul>
+            <p class="hint" id="scanHint">Searching the local network…</p>
+        </section>
+
+        <section class="manual">
+            <h2>Or enter the address</h2>
+            <div class="manual-row">
+                <input type="text" id="hostInput" inputmode="url" autocapitalize="off"
+                       autocomplete="off" spellcheck="false"
+                       placeholder="polaris-app.local:5000 or 192.168.0.50:5000">
+                <button class="btn" id="connectBtn" type="button">Connect</button>
+            </div>
+            <p class="hint">
+                Off your home network? Paste your Relay address
+                (e.g. <code>https://yourname.relay.example.com</code>).
+            </p>
+        </section>
+
+        <p class="last" id="lastHostRow" hidden>
+            Last used: <a href="#" id="lastHostLink"></a>
+        </p>
+    </main>
+
+    <!-- Capacitor + the connect logic. onnx-native-shim.js is NOT loaded
+         here; it is injected into the remote Polaris UI at document-start
+         by the native layer (see plugins/polaris-onnx + README). -->
+    <script type="module" src="connect.js"></script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+# Capacitor mobile app -- generated/native platform output + deps.
+# The hand-written sources (www/, plugins/polaris-onnx/src + android +
+# ios plugin code, configs) ARE committed; the generated native host
+# projects and node_modules are not.
+
+node_modules/
+plugins/*/node_modules/
+plugins/*/dist/
+
+# Capacitor-generated native host projects (recreate with `npx cap add`)
+/android/
+/ios/
+
+# Build artifacts
+dist/
+www/build/
+*.apk
+*.aab
+*.ipa
+.gradle/
+DerivedData/
+Pods/
+
+# Editor / OS
+.DS_Store
+*.log
+.idea/
+.vscode/

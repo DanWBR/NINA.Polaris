@@ -1,0 +1,28 @@
+{
+  "name": "polaris-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "N.I.N.A. Polaris native shell (Capacitor) -- LAN/Relay connect + native GraXpert ONNX.",
+  "license": "MPL-2.0",
+  "scripts": {
+    "sync": "cap sync",
+    "android": "cap run android",
+    "ios": "cap run ios",
+    "open:android": "cap open android",
+    "open:ios": "cap open ios",
+    "plugin:build": "npm --prefix plugins/polaris-onnx install && npm --prefix plugins/polaris-onnx run build"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/app": "^6.0.1",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/ios": "^6.1.2",
+    "@capacitor/keep-awake": "^6.0.2",
+    "@capacitor/preferences": "^6.0.2",
+    "@capacitor-community/zeroconf": "^6.1.0",
+    "polaris-onnx": "file:plugins/polaris-onnx"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2"
+  }
+}

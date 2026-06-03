@@ -15,7 +15,42 @@
   verbatim, only the prose around them was translated.
 -->
 
-# Current chapter: Clock-sync timezone fix
+# Current chapter: Mobile app MVP scaffold (Capacitor, M0 + M1)
+
+> Start of the Android/iOS app. Goal: unlock the GraXpert AI models on
+> phones/tablets (native ONNX Runtime, bypassing the mobile WebGPU /
+> Safari-OOM limits) and add device-only features, while reusing the
+> existing web UI unchanged. Full roadmap in
+> `.claude/plans/analise-e-fa-a-um-graceful-badger.md`.
+
+## What shipped (scaffold only -- needs device build/validation)
+
+New **`mobile/`** folder, completely outside `NINA.sln` (deleting it
+changes nothing in the server/web/.deb). Zero edits to existing code.
+
+- **M0 shell** (`mobile/www/`): a Capacitor launcher that discovers the
+  Pi via mDNS (`_nina._tcp`), takes a manual host / Relay URL, remembers
+  the last one, keeps the screen awake, then navigates the WebView to the
+  live Polaris UI. `capacitor.config.ts` uses `allowNavigation` so the
+  native bridge survives on the remote origin.
+- **M1 native GraXpert** (`mobile/plugins/polaris-onnx/`): a local
+  Capacitor plugin wrapping ONNX Runtime Mobile -- Android
+  (`onnxruntime-android`, NNAPI/XNNPACK) and iOS (`onnxruntime-objc`,
+  CoreML). `www/onnx-native-shim.js` is injected at document-start into
+  the unchanged Polaris UI and installs a drop-in `globalThis.ort` whose
+  `InferenceSession`/`Tensor` forward to the native plugin -- so the
+  existing `onnx-pipelines.js` (tiling/normalization) runs unmodified but
+  on the device GPU/NPU. Models still come from the Pi's `/api/onnx/*`.
+
+## Build / validate (not done here -- needs the toolchains)
+- `cd mobile && npm install && npm run plugin:build && npx cap add android`
+  then `npx cap run android` (Android Studio).
+- iOS requires macOS + Xcode: `npx cap add ios` -> Archive -> TestFlight.
+- Validate ONNX parity + per-model CoreML/NNAPI behaviour on real devices
+  (BGE / Denoise / Decon vs desktop GraXpert), then wire M2 push + M3
+  sensors per the roadmap.
+
+# Past chapter: Clock-sync timezone fix
 
 > Field report: "Sync Pi clock from this device" left the Pi exactly
 > +10800s (3h, the Brazil UTC-3 offset) ahead. Root cause was a

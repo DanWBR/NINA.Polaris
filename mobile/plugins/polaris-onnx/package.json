@@ -1,0 +1,31 @@
+{
+  "name": "polaris-onnx",
+  "version": "0.1.0",
+  "description": "Native ONNX Runtime Mobile bridge for Polaris (CoreML / NNAPI) -- runs GraXpert models on device.",
+  "license": "MPL-2.0",
+  "main": "dist/plugin.cjs.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "files": [
+    "dist/",
+    "ios/",
+    "android/",
+    "PolarisOnnx.podspec"
+  ],
+  "scripts": {
+    "build": "tsc && rollup -c rollup.config.js",
+    "watch": "tsc --watch"
+  },
+  "devDependencies": {
+    "@capacitor/core": "^6.1.2",
+    "rollup": "^4.20.0",
+    "typescript": "^5.5.4"
+  },
+  "peerDependencies": {
+    "@capacitor/core": "^6.0.0"
+  },
+  "capacitor": {
+    "ios": { "src": "ios" },
+    "android": { "src": "android" }
+  }
+}
