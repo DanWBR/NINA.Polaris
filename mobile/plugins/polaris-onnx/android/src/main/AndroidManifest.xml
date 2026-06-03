@@ -1,2 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- mDNS / Bonjour discovery (capacitor-zeroconf uses jmdns + a
+         WifiManager MulticastLock). Android's Wi-Fi driver drops
+         multicast packets unless the app holds CHANGE_WIFI_MULTICAST_STATE,
+         so without this the "_nina._tcp" browse never finds the Pi.
+         Declared here in the always-bundled polaris-onnx plugin so the
+         manifest merger adds it to the app even after `cap add android`
+         regenerates the host project. -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+</manifest>
