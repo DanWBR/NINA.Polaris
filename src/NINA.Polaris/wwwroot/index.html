@@ -10383,9 +10383,9 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          @keydown.escape.window="graxpertIsRunning() || graxpertCloseModal()">
         <div class="siril-modal-frame">
             <h2>
-                <span x-show="graxpert.modalOp === 'background-extraction'">🌅 GraXpert, Remove gradient</span>
-                <span x-show="graxpert.modalOp === 'deconvolution'">✨ GraXpert, Deconvolution</span>
-                <span x-show="graxpert.modalOp === 'denoising'">🔇 GraXpert, Denoise</span>
+                <span x-show="graxpert.modalOp === 'background-extraction'">🌅 GraXpert Background Gradient Removal</span>
+                <span x-show="graxpert.modalOp === 'deconvolution'">✨ GraXpert Deconvolution</span>
+                <span x-show="graxpert.modalOp === 'denoising'">🔇 GraXpert Denoise</span>
             </h2>
 
             <p class="hint">
@@ -10400,13 +10400,10 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <div class="siril-modal-row" x-show="onnxAvailableForOp(graxpert.modalOp)">
                 <label class="checkbox-label">
                     <input type="checkbox" x-model="graxpert.modalRunInBrowser">
-                    Process here on this device
+                    Enable local AI processing
                 </label>
                 <p class="hint" style="margin-top:4px">
-                    The work runs on the computer or tablet you're using right
-                    now, not on the Polaris server. That's usually much faster.
-                    The first time you use this filter, it'll download the
-                    AI model (a one-time wait); after that it's instant.
+                    This device will be used to run the AI model directly, offloading the server. Requires a compatible GPU and a supported browser.
                 </p>
                 <!-- GX-10: when the client is on plain HTTP and HTTPS
                      is available, surface the upgrade. Without WebGPU
