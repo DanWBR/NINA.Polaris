@@ -15,7 +15,66 @@
   verbatim, only the prose around them was translated.
 -->
 
-# Current chapter: Mobile app MVP scaffold (Capacitor, M0 + M1)
+# Current chapter: Mobile field-test fixes + multi-Pi device naming
+
+> Real-device shakedown of the Android app (M0) plus a fix for
+> distributing one SD-card image to several Pis. Everything below was
+> driven by testing on a physical tablet against a Pi on the LAN.
+
+## Mobile connect screen -- made it actually work on a device
+
+The connect screen looked done but failed on real hardware. Fixes, in
+the order the device surfaced them:
+
+- **Dependencies**: wrong npm package names. mDNS is `capacitor-zeroconf`
+  (`@3` for Capacitor 6), keep-awake is `@capacitor-community/keep-awake@5`
+  (not `@capacitor/keep-awake`). Plugin TS build error (private
+  `unavailable()` clashing with `WebPlugin`) renamed to `notNative()`.
+  ORT-Java/Capacitor API fixes in `PolarisOnnxPlugin` (instance
+  `getVersion()`, no `reject(String,Throwable)`, `getJSONArray`, fp16 via
+  `ByteBuffer`). Stopped tracking the plugin's Gradle `build/`.
+- **Connect button dead / no discovery**: `www/` ships unbundled, so the
+  dynamic `import('@capacitor/core')` calls failed and could leave the
+  buttons unwired. Rewrote `connect.js` to reach plugins via the global
+  `window.Capacitor.Plugins` bridge and to `wire()` the controls first.
+- **Self-signed cert blocked the WebView** (LAN HTTPS for WebGPU secure
+  context): a `BridgeWebViewClient` subclass installed via
+  `webView.post()` now proceeds through SSL errors for LAN hosts only
+  (`*.local`, RFC-1918); public hosts (Relay) stay strict. *User-
+  authorized LAN-only TLS exception.*
+- **`.local` doesn't resolve on Android**: guide users to the IP; the
+  discovery path already returns the IP via ZeroConf `ipv4Addresses`.
+- **Discovery found nothing**: the app lacked
+  `CHANGE_WIFI_MULTICAST_STATE` (jmdns needs a MulticastLock). Declared
+  in the always-bundled `polaris-onnx` plugin manifest so the merger adds
+  it to the app even after `cap add android`. Discovery now lists the Pi
+  with its IP -- confirmed on device.
+- **Brand**: connect screen now uses the real Polaris star-compass icon
+  + Atkinson Hyperlegible (vendored), and an `npm run icons`
+  (`@capacitor/assets`) generates the Android launcher icon from the same
+  art.
+
+## Multi-Pi device naming (clone-and-go SD images)
+
+Cloning one image onto several Pis made them all advertise
+`polaris-app.local` -> mDNS collision (Makaretu has no Avahi-style
+dedup). Now:
+
+- `MdnsService` auto-names each device `polaris-app-XXXX`, where `XXXX`
+  comes from a stable hardware id (Pi serial -> `/proc/cpuinfo` ->
+  primary MAC -> machine-name hash). No per-device config.
+- Editable **friendly label** (`UserProfile.DeviceFriendlyName`)
+  advertised in the TXT record under `friendly`; the mobile discovery
+  list shows it instead of the raw hostname. `GET/POST
+  /api/system/device-name` re-announces mDNS live (`MdnsService` is now a
+  singleton + `Republish()`); a "Device name" card in Settings drives it.
+
+## Still to validate on device
+
+- M1 native GraXpert (Denoise/BGE) parity + speedup vs ORT Web.
+- iOS build (needs macOS); M2 push notifications.
+
+# Mobile app MVP scaffold (Capacitor, M0 + M1)
 
 > Start of the Android/iOS app. Goal: unlock the GraXpert AI models on
 > phones/tablets (native ONNX Runtime, bypassing the mobile WebGPU /
