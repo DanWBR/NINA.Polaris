@@ -1118,7 +1118,7 @@ Built for unreliable field WiFi:
 
 ### Discovery & Cross-Platform Drivers
 
-- **mDNS announcer**, host reachable at `polaris-app.local:5000` from any device on the LAN (no IP needed). Override the instance name via `Mdns:InstanceName` in `appsettings.json` if you need a different label (e.g. multiple Polaris instances on the same network).
+- **mDNS announcer**, host reachable on the LAN (no IP needed). Each device auto-names itself **`polaris-app-XXXX`**, where `XXXX` is derived from a stable hardware id (Raspberry Pi serial, else MAC) -- so you can **clone one SD-card image onto several Pis** without mDNS name collisions; each Pi self-names. Set a human-friendly label in **Settings → Device name** (advertised in the TXT record + shown in the mobile app's discovery list). Override the instance name entirely via `Mdns:InstanceName` in `appsettings.json` if you prefer a fixed name. Note: phones can't resolve `.local` names, so the mobile app connects via the IP that discovery returns.
 - **Alpaca (ASCOM HTTP) support**, UDP discovery on port 32227 plus base Camera / Telescope wrappers, so you can drive Windows-only ASCOM drivers exposed over the network
 
 ### WiFi mode switch (Hotspot ↔ Station)

@@ -842,3 +842,32 @@ on writes and is fine on SD.
 - [Troubleshooting](troubleshooting.md), broader problem catalog
 - [Debug from Visual Studio](rpi-debug-from-vs.md), developer workflow
   for editing Polaris source and remote-debugging on the Pi
+
+## Cloning the image onto several Pis
+
+You can build one SD-card image with Polaris pre-installed and copy it to
+as many Raspberry Pis as you like. Network naming is handled
+automatically:
+
+- Each Pi advertises itself over mDNS as **`polaris-app-XXXX`**, where
+  `XXXX` is taken from a stable hardware id (the Pi's serial number, or
+  its primary MAC if the serial isn't readable). Because that id differs
+  per board, **cloned images don't collide** -- every Pi self-names with
+  no per-device configuration.
+- The mobile app's "Found on this network" list shows each Pi (with its
+  IP), so the user just taps the right one. Phones can't resolve `.local`
+  names, so always rely on discovery (or the IP) rather than typing a
+  `.local` hostname on a phone/tablet.
+- To give a Pi a readable name, open **Settings → Device name** and enter
+  something like "Telescope on the balcony". It's stored per device and
+  shown in the discovery list. Changing it re-announces immediately.
+
+If you'd rather pin a fixed mDNS name, set `Mdns:InstanceName` in
+`appsettings.json` -- but then keep that file out of the cloned image (or
+each clone would claim the same name again).
+
+> Tip: the Linux **hostname** in the cloned image is still identical on
+> every Pi (it affects `ssh` and any system Avahi, not Polaris's own
+> discovery). If you ssh into the Pis by hostname, give each a unique
+> hostname on first boot (`sudo raspi-config` → System → Hostname, or a
+> first-boot script).
