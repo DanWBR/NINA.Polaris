@@ -1,6 +1,9 @@
 package dev.danwbr.polaris.onnx;
 
+import android.net.Uri;
+import android.net.http.SslError;
 import android.util.Base64;
+import android.webkit.SslErrorHandler;
 import android.webkit.WebView;
 
 import androidx.webkit.WebViewCompat;
@@ -53,6 +56,61 @@ public class PolarisOnnxPlugin extends Plugin {
     public void load() {
         env = ai.onnxruntime.OrtEnvironment.getEnvironment();
         injectShimAtDocumentStart();
+        acceptLanSslErrors();
+    }
+
+    /**
+     * The Pi serves the Polaris UI over HTTPS with a self-signed cert
+     * (needed for WebGPU's secure-context + general LAN privacy). A stock
+     * WebView rejects that cert, so navigating to https://...:5000 fails
+     * silently. Here we install a WebViewClient that proceeds through SSL
+     * errors ONLY for LAN hosts (*.local, localhost, RFC-1918 private
+     * IPs). Public hosts (the Relay domain, which has a real cert) keep
+     * strict validation -- a bad cert there is still refused.
+     *
+     * We subclass Capacitor's BridgeWebViewClient so all of its other
+     * behaviour (navigation allow-list, request interception) is kept.
+     */
+    private void acceptLanSslErrors() {
+        try {
+            final WebView wv = getBridge().getWebView();
+            wv.setWebViewClient(new com.getcapacitor.BridgeWebViewClient(getBridge()) {
+                @Override
+                public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+                    String host = null;
+                    try {
+                        String url = error != null ? error.getUrl() : null;
+                        if (url != null) host = Uri.parse(url).getHost();
+                    } catch (Throwable ignore) { }
+                    if (isLanHost(host)) {
+                        handler.proceed();   // trust the user's own Pi on the LAN
+                    } else {
+                        handler.cancel();    // strict for public hosts (Relay)
+                    }
+                }
+            });
+        } catch (Throwable t) {
+            // Non-fatal: without this, only LAN HTTPS to a self-signed Pi
+            // is affected; the Relay / http paths still work.
+        }
+    }
+
+    /** True for *.local, localhost and RFC-1918 private IPv4 ranges. */
+    private boolean isLanHost(String host) {
+        if (host == null) return false;
+        host = host.toLowerCase();
+        if (host.equals("localhost") || host.endsWith(".local")) return true;
+        if (host.startsWith("10.") || host.startsWith("192.168.") || host.startsWith("127.")) return true;
+        if (host.startsWith("172.")) {
+            try {
+                String[] p = host.split("\\.");
+                if (p.length >= 2) {
+                    int second = Integer.parseInt(p[1]);
+                    if (second >= 16 && second <= 31) return true; // 172.16/12
+                }
+            } catch (Throwable ignore) { }
+        }
+        return false;
     }
 
     /**
