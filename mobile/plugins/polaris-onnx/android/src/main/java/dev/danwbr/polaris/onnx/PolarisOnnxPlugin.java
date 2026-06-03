@@ -16,6 +16,8 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
@@ -169,27 +171,50 @@ public class PolarisOnnxPlugin extends Plugin {
 
     @PluginMethod
     public void createSession(PluginCall call) {
+        File modelFile = null;
         try {
             String b64 = call.getString("model");
             if (b64 == null) { call.reject("model (base64) required"); return; }
+
+            // Memory: the GraXpert models are huge (BGE ~200 MB, denoise
+            // ~450 MB). env.createSession(byte[]) keeps the whole byte[]
+            // AND lets ORT copy the initializers into RAM while it builds
+            // + optimizes the graph -- on a 4 GB tablet that OOM-crashes
+            // right at session creation. Instead we write the bytes to a
+            // cache file, drop the byte[] so the GC can reclaim it, and
+            // create the session from the PATH: ORT memory-maps the
+            // weights from disk rather than holding a second copy in RAM.
             byte[] model = Base64.decode(b64, Base64.DEFAULT);
+            File dir = new File(getContext().getCacheDir(), "polaris-onnx-models");
+            if (!dir.exists()) dir.mkdirs();
+            // Clear stale model files from previous sessions so the cache
+            // dir doesn't grow unbounded (each is 200-450 MB).
+            File[] old = dir.listFiles();
+            if (old != null) for (File f : old) { try { f.delete(); } catch (Throwable ignore) {} }
+            modelFile = new File(dir, "session-" + counter.get() + ".onnx");
+            try (FileOutputStream out = new FileOutputStream(modelFile)) {
+                out.write(model);
+            }
+            model = null; // let the 200-450 MB array be collected before create
 
             ai.onnxruntime.OrtSession.SessionOptions opts =
                 new ai.onnxruntime.OrtSession.SessionOptions();
+            // BASIC (not ALL) optimization: ALL can materialize transformed
+            // copies of the (huge) initializers in RAM during graph rewrite;
+            // BASIC keeps the mmap'd weights mostly untouched.
             opts.setOptimizationLevel(
-                ai.onnxruntime.OrtSession.SessionOptions.OptLevel.ALL_OPT);
+                ai.onnxruntime.OrtSession.SessionOptions.OptLevel.BASIC_OPT);
+            // XNNPACK keeps a single copy of the weights (fast multi-thread
+            // CPU). NNAPI is intentionally NOT used here: it duplicates the
+            // weights onto the accelerator, doubling peak RAM on exactly
+            // the big models that already OOM.
             String provider = "cpu";
-            try {
-                // NNAPI first (GPU/NPU). Falls back if the device/op set
-                // isn't supported. XNNPACK is the fast CPU fallback.
-                opts.addNnapi();
-                provider = "nnapi";
-            } catch (Throwable ignore) {
-                try { opts.addXnnpack(Collections.emptyMap()); provider = "xnnpack"; }
-                catch (Throwable ignore2) { /* CPU */ }
-            }
+            try { opts.addXnnpack(Collections.emptyMap()); provider = "xnnpack"; }
+            catch (Throwable ignore) { /* plain CPU */ }
 
-            ai.onnxruntime.OrtSession session = env.createSession(model, opts);
+            // createSession(path) memory-maps the model from disk.
+            ai.onnxruntime.OrtSession session =
+                env.createSession(modelFile.getAbsolutePath(), opts);
             String handle = "s" + counter.getAndIncrement();
             sessions.put(handle, session);
 
