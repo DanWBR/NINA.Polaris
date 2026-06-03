@@ -62,6 +62,34 @@ html, body {
 .brand h1 span { color: var(--accent); }
 .tagline { margin: 0; color: var(--muted); font-size: 14px; }
 
+/* Landscape (tablets held sideways): two columns -- brand on the left,
+   the connect panels on the right -- so the screen isn't a tall stack
+   with big empty sides. Portrait keeps the default vertical flow. */
+@media (orientation: landscape) {
+    .connect {
+        max-width: 960px;
+        display: flex;
+        align-items: center;
+        gap: 40px;
+        min-height: 100vh;
+        padding-top: 20px;
+        padding-bottom: 20px;
+    }
+    .brand {
+        flex: 0 0 40%;
+        margin: 0;
+        text-align: center;
+    }
+    .panels {
+        flex: 1 1 60%;
+        min-width: 0;
+    }
+    /* The last section in the right column shouldn't add bottom margin
+       that throws off the vertical centering. */
+    .panels section:last-child,
+    .panels .tools { margin-bottom: 0; }
+}
+
 section { background: var(--card); border: 1px solid var(--border);
     border-radius: 14px; padding: 16px; margin-bottom: 16px; }
 h2 { margin: 0 0 12px; font-size: 14px; font-weight: 600; color: var(--muted);
