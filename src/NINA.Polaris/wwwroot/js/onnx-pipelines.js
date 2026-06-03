@@ -187,7 +187,18 @@
 
     async function fetchManifest(force) {
         if (_manifestPromise && !force) return _manifestPromise;
-        _manifestPromise = fetch('/api/onnx/manifest', { cache: force ? 'no-store' : 'default' })
+        // Auth: desktop browsers carry the session cookie automatically,
+        // but the native app (and any bearer-token client) does not, so a
+        // bare fetch 401s there -> empty manifest -> "no models found" ->
+        // GraXpert wrongly falls back to the server CLI. Attach the same
+        // bearer token the model-bytes fetch uses (read from the storage
+        // slot app.js writes; we run outside Alpine scope here).
+        const token = (typeof sessionStorage !== 'undefined' &&
+                        (sessionStorage.getItem('polaris_token')
+                         || localStorage.getItem('polaris_token'))) || '';
+        const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+        _manifestPromise = fetch('/api/onnx/manifest',
+            { cache: force ? 'no-store' : 'default', headers })
             .then(r => r.ok ? r.json() : { models: [], modelsPath: '', error: 'HTTP ' + r.status })
             .catch(e => ({ models: [], modelsPath: '', error: String(e) }));
         return _manifestPromise;
