@@ -7,9 +7,14 @@
 // in capacitor.config keeps the native bridge (and the polaris-onnx
 // plugin) alive on the remote Polaris UI.
 //
-// Runs both inside Capacitor (native plugins available) and in a plain
-// browser for quick UI iteration (graceful fallbacks when plugins are
-// absent).
+// IMPORTANT: this file is loaded as a plain <script type="module"> with
+// NO bundler. So it must NOT `import` the Capacitor packages by bare
+// specifier (`@capacitor/core`, ...) -- those don't resolve in the
+// WebView and would throw. Native plugins are reached through the global
+// bridge `window.Capacitor.Plugins.<Name>` (ZeroConf / Preferences /
+// KeepAwake), which Capacitor injects regardless of bundling. In a plain
+// desktop browser there is no `window.Capacitor`, so everything falls
+// back gracefully and the manual address box still works.
 
 const LAST_HOST_KEY = 'polaris.lastHost';
 const MDNS_TYPE = '_nina._tcp.';
@@ -24,21 +29,15 @@ const els = {
   lastLink: document.getElementById('lastHostLink'),
 };
 
-// Lazy Capacitor plugin handles (undefined in a plain browser).
-let Capacitor, Preferences, KeepAwake, ZeroConf;
-async function loadPlugins() {
-  try {
-    ({ Capacitor } = await import('@capacitor/core'));
-    ({ Preferences } = await import('@capacitor/preferences'));
-    ({ KeepAwake } = await import('@capacitor-community/keep-awake'));
-    ({ ZeroConf } = await import('capacitor-zeroconf'));
-  } catch (e) {
-    // Plain browser dev: bridge/plugins not bundled. UI still works.
-    console.warn('[connect] Capacitor plugins unavailable (browser dev):', e?.message || e);
-  }
-}
+// Capacitor bridge + plugin handles. Resolved from the global the native
+// layer injects; all undefined in a plain browser.
+const Cap = (typeof window !== 'undefined') ? window.Capacitor : undefined;
+const Plugins = (Cap && Cap.Plugins) ? Cap.Plugins : {};
+const ZeroConf = Plugins.ZeroConf;
+const Preferences = Plugins.Preferences;
+const KeepAwake = Plugins.KeepAwake;
 
-const isNative = () => !!(Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
+const isNative = () => !!(Cap && typeof Cap.isNativePlatform === 'function' && Cap.isNativePlatform());
 
 async function getLastHost() {
   try {
@@ -89,7 +88,7 @@ async function scan() {
   els.scanHint.innerHTML = '<span class="spinner"></span>Searching the local network…';
   try {
     await ZeroConf.watch({ type: MDNS_TYPE, domain: 'local.' }, (result) => {
-      if (result.action !== 'resolved' || !result.service) return;
+      if (!result || result.action !== 'resolved' || !result.service) return;
       const s = result.service;
       const addr = (s.ipv4Addresses && s.ipv4Addresses[0]) || s.hostname;
       if (!addr) return;
@@ -105,20 +104,38 @@ async function scan() {
         els.scanHint.textContent = 'Nothing found yet. Enter the address below.';
     }, 8500);
   } catch (e) {
-    els.scanHint.textContent = 'Discovery failed: ' + (e?.message || e);
+    els.scanHint.textContent = 'Discovery failed: ' + (e && e.message ? e.message : e);
   }
 }
 
 async function connect(origin) {
-  if (!origin) return;
+  if (!origin) {
+    els.scanHint.textContent = 'Enter an address first (e.g. 192.168.0.50:5000).';
+    return;
+  }
   els.connectBtn.disabled = true;
   await setLastHost(origin);
   // Keep the screen on for the imaging session once we're in the app.
   try { if (KeepAwake) await KeepAwake.keepAwake(); } catch {}
   try { if (ZeroConf) await ZeroConf.close(); } catch {}
+
+  // If we're still on this page a few seconds after navigating, the most
+  // common cause is the Pi's self-signed HTTPS cert being blocked by the
+  // WebView. Re-enable the button and explain instead of looking dead.
+  const here = location.href;
+  setTimeout(() => {
+    if (location.href === here) {
+      els.connectBtn.disabled = false;
+      els.scanHint.innerHTML =
+        `Couldn't open <code>${origin}</code>. If the Pi uses HTTPS with a ` +
+        `self-signed certificate the browser may block it -- try ` +
+        `<code>http://</code> instead, or install the Pi's certificate.`;
+    }
+  }, 4000);
+
   // Navigate the same WebView to the live Polaris UI. The Capacitor
   // bridge persists via allowNavigation, so native plugins remain.
-  window.location.href = origin;
+  window.location.assign(origin);
 }
 
 function wire() {
@@ -129,14 +146,18 @@ function wire() {
   });
 }
 
-(async function init() {
-  await loadPlugins();
+(function init() {
+  // Wire the controls FIRST so Connect always works, even if anything
+  // below (plugin calls, discovery) throws.
   wire();
-  const last = await getLastHost();
-  if (last) {
-    els.lastLink.textContent = last;
-    els.lastLink.onclick = (e) => { e.preventDefault(); connect(last); };
-    els.lastRow.hidden = false;
-  }
+
+  getLastHost().then((last) => {
+    if (last) {
+      els.lastLink.textContent = last;
+      els.lastLink.onclick = (e) => { e.preventDefault(); connect(last); };
+      els.lastRow.hidden = false;
+    }
+  });
+
   scan();
 })();
