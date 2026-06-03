@@ -16,10 +16,20 @@
  */
 (function () {
   'use strict';
-  var cap = window.Capacitor;
-  var Native = cap && cap.Plugins && cap.Plugins.PolarisOnnx;
-  if (!Native) { return; } // not in the native app -> leave ORT Web alone
   if (window.__polarisNativeOnnx) { return; } // idempotent
+
+  // This file is injected ONLY by the native app (never served by the
+  // Pi), so we are always inside the Capacitor WebView. We install
+  // window.ort IMMEDIATELY so the page's loadOrtWeb() (guarded by
+  // `if (window.ort) return`) never downloads ORT Web -- otherwise ORT
+  // Web's WebGPU backend runs the models and fails on fp16 (the device
+  // lacks the WGSL `shader-f16` extension). The PolarisOnnx plugin proxy
+  // is NOT ready at document-start, so resolve it LAZILY at call time
+  // (by then the Capacitor bridge is fully wired).
+  function native() {
+    var cap = window.Capacitor;
+    return (cap && cap.Plugins && cap.Plugins.PolarisOnnx) || null;
+  }
 
   // ---- base64 <-> bytes (the bridge marshals binary as base64) ----
   function bytesToB64(u8) {
@@ -80,6 +90,8 @@
   // against available RAM. Best-effort: if deviceMemory isn't available
   // (iOS / older plugin) we skip the check.
   async function assertEnoughMemory(modelBytes) {
+    var Native = native();
+    if (!Native) return;
     var mem = null;
     try { mem = await Native.deviceMemory(); } catch (e) { return; }
     if (!mem || !mem.availBytes) return;
@@ -107,6 +119,8 @@
     var u8 = model instanceof Uint8Array ? model
            : (model instanceof ArrayBuffer ? new Uint8Array(model) : null);
     if (!u8) throw new Error('PolarisOnnx shim: model must be Uint8Array/ArrayBuffer');
+    var Native = native();
+    if (!Native) throw new Error('PolarisOnnx native plugin not available');
     var eps = (options && options.executionProviders) || [];
 
     await assertEnoughMemory(u8.length);
@@ -137,6 +151,8 @@
     }));
   };
   InferenceSession.prototype.run = async function (feeds) {
+    var Native = native();
+    if (!Native) throw new Error('PolarisOnnx native plugin not available');
     var packed = {};
     for (var name in feeds) {
       if (!Object.prototype.hasOwnProperty.call(feeds, name)) continue;
@@ -154,6 +170,8 @@
     return out;
   };
   InferenceSession.prototype.release = async function () {
+    var Native = native();
+    if (!Native) return;
     try { await Native.releaseSession({ handle: this._handle }); } catch (e) {}
   };
 
