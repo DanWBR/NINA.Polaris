@@ -28,7 +28,31 @@
   // (by then the Capacitor bridge is fully wired).
   function native() {
     var cap = window.Capacitor;
-    return (cap && cap.Plugins && cap.Plugins.PolarisOnnx) || null;
+    if (!cap) return null;
+    // Already-registered instance (launcher page, where the plugin JS ran).
+    if (cap.Plugins && cap.Plugins.PolarisOnnx) return cap.Plugins.PolarisOnnx;
+    // Remote Pi page: the plugin's JS (registerPlugin) was never loaded,
+    // so build a name-bound proxy via the core bridge -- it dispatches to
+    // the native plugin by name and needs no JS package.
+    if (typeof cap.registerPlugin === 'function') {
+      try {
+        var p = cap.registerPlugin('PolarisOnnx');
+        if (p) { if (cap.Plugins) { cap.Plugins.PolarisOnnx = p; } return p; }
+      } catch (e) { /* fall through */ }
+    }
+    return null;
+  }
+
+  // Diagnostic when the plugin can't be resolved: dump what IS registered
+  // so a failure screenshot tells us whether the native plugin is even in
+  // the build (PluginHeaders) vs just not proxied yet.
+  function notAvailableError() {
+    var cap = window.Capacitor || {};
+    var plugs = (cap.Plugins && Object.keys(cap.Plugins)) || [];
+    var headers = (cap.PluginHeaders || []).map(function (h) { return h.name; });
+    return new Error('PolarisOnnx native plugin not available. '
+      + 'Capacitor.Plugins=[' + plugs.join(',') + '] '
+      + 'PluginHeaders=[' + headers.join(',') + ']');
   }
 
   // ---- base64 <-> bytes (the bridge marshals binary as base64) ----
@@ -120,7 +144,7 @@
            : (model instanceof ArrayBuffer ? new Uint8Array(model) : null);
     if (!u8) throw new Error('PolarisOnnx shim: model must be Uint8Array/ArrayBuffer');
     var Native = native();
-    if (!Native) throw new Error('PolarisOnnx native plugin not available');
+    if (!Native) throw notAvailableError();
     var eps = (options && options.executionProviders) || [];
 
     await assertEnoughMemory(u8.length);
@@ -152,7 +176,7 @@
   };
   InferenceSession.prototype.run = async function (feeds) {
     var Native = native();
-    if (!Native) throw new Error('PolarisOnnx native plugin not available');
+    if (!Native) throw notAvailableError();
     var packed = {};
     for (var name in feeds) {
       if (!Object.prototype.hasOwnProperty.call(feeds, name)) continue;
