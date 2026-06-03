@@ -74,19 +74,30 @@ public class PolarisOnnxPlugin extends Plugin {
     private void acceptLanSslErrors() {
         try {
             final WebView wv = getBridge().getWebView();
-            wv.setWebViewClient(new com.getcapacitor.BridgeWebViewClient(getBridge()) {
+            // Defer to the end of the UI message queue so this runs AFTER
+            // Capacitor has finished installing its own BridgeWebViewClient
+            // during bridge init -- otherwise ours could be overwritten and
+            // the self-signed cert would still be blocked.
+            wv.post(new Runnable() {
                 @Override
-                public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
-                    String host = null;
+                public void run() {
                     try {
-                        String url = error != null ? error.getUrl() : null;
-                        if (url != null) host = Uri.parse(url).getHost();
+                        wv.setWebViewClient(new com.getcapacitor.BridgeWebViewClient(getBridge()) {
+                            @Override
+                            public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+                                String host = null;
+                                try {
+                                    String url = error != null ? error.getUrl() : null;
+                                    if (url != null) host = Uri.parse(url).getHost();
+                                } catch (Throwable ignore) { }
+                                if (isLanHost(host)) {
+                                    handler.proceed();   // trust the user's own Pi on the LAN
+                                } else {
+                                    handler.cancel();    // strict for public hosts (Relay)
+                                }
+                            }
+                        });
                     } catch (Throwable ignore) { }
-                    if (isLanHost(host)) {
-                        handler.proceed();   // trust the user's own Pi on the LAN
-                    } else {
-                        handler.cancel();    // strict for public hosts (Relay)
-                    }
                 }
             });
         } catch (Throwable t) {
