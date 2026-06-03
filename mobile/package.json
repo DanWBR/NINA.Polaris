@@ -19,7 +19,7 @@
     "@capacitor/ios": "^6.1.2",
     "@capacitor/keep-awake": "^6.0.2",
     "@capacitor/preferences": "^6.0.2",
-    "@capacitor-community/zeroconf": "^6.1.0",
+    "capacitor-zeroconf": "^3.0.0",
     "polaris-onnx": "file:plugins/polaris-onnx"
   },
   "devDependencies": {

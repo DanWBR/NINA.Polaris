@@ -25,13 +25,13 @@ const els = {
 };
 
 // Lazy Capacitor plugin handles (undefined in a plain browser).
-let Capacitor, Preferences, KeepAwake, Zeroconf;
+let Capacitor, Preferences, KeepAwake, ZeroConf;
 async function loadPlugins() {
   try {
     ({ Capacitor } = await import('@capacitor/core'));
     ({ Preferences } = await import('@capacitor/preferences'));
     ({ KeepAwake } = await import('@capacitor/keep-awake'));
-    ({ Zeroconf } = await import('@capacitor-community/zeroconf'));
+    ({ ZeroConf } = await import('capacitor-zeroconf'));
   } catch (e) {
     // Plain browser dev: bridge/plugins not bundled. UI still works.
     console.warn('[connect] Capacitor plugins unavailable (browser dev):', e?.message || e);
@@ -81,14 +81,14 @@ function renderList() {
 async function scan() {
   discovered.clear();
   renderList();
-  if (!Zeroconf) {
+  if (!ZeroConf) {
     els.scanHint.textContent =
       'Automatic discovery needs the installed app. Enter the address below.';
     return;
   }
   els.scanHint.innerHTML = '<span class="spinner"></span>Searching the local network…';
   try {
-    await Zeroconf.watch({ type: MDNS_TYPE, domain: 'local.' }, (result) => {
+    await ZeroConf.watch({ type: MDNS_TYPE, domain: 'local.' }, (result) => {
       if (result.action !== 'resolved' || !result.service) return;
       const s = result.service;
       const addr = (s.ipv4Addresses && s.ipv4Addresses[0]) || s.hostname;
@@ -99,7 +99,7 @@ async function scan() {
       renderList();
     });
     // Stop watching after 8s to save battery; results stay listed.
-    setTimeout(() => { try { Zeroconf.stop(); } catch {} }, 8000);
+    setTimeout(() => { try { ZeroConf.close(); } catch {} }, 8000);
     setTimeout(() => {
       if (discovered.size === 0)
         els.scanHint.textContent = 'Nothing found yet. Enter the address below.';
@@ -115,7 +115,7 @@ async function connect(origin) {
   await setLastHost(origin);
   // Keep the screen on for the imaging session once we're in the app.
   try { if (KeepAwake) await KeepAwake.keepAwake(); } catch {}
-  try { if (Zeroconf) await Zeroconf.stop(); } catch {}
+  try { if (ZeroConf) await ZeroConf.close(); } catch {}
   // Navigate the same WebView to the live Polaris UI. The Capacitor
   // bridge persists via allowNavigation, so native plugins remain.
   window.location.href = origin;
