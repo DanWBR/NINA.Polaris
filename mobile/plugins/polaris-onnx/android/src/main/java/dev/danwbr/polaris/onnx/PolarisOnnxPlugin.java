@@ -1,5 +1,7 @@
 package dev.danwbr.polaris.onnx;
 
+import android.app.ActivityManager;
+import android.content.Context;
 import android.net.Uri;
 import android.net.http.SslError;
 import android.util.Base64;
@@ -169,63 +171,128 @@ public class PolarisOnnxPlugin extends Plugin {
         call.resolve(ret);
     }
 
+    /** Available + total system RAM, so the JS side can refuse to even
+     *  try a model that clearly won't fit (instead of OOM-crashing). */
+    @PluginMethod
+    public void deviceMemory(PluginCall call) {
+        try {
+            ActivityManager am = (ActivityManager)
+                getContext().getSystemService(Context.ACTIVITY_SERVICE);
+            ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
+            am.getMemoryInfo(mi);
+            JSObject ret = new JSObject();
+            ret.put("availBytes", mi.availMem);
+            ret.put("totalBytes", mi.totalMem);
+            ret.put("thresholdBytes", mi.threshold);
+            ret.put("lowMemory", mi.lowMemory);
+            // Per-app Dalvik heap ceilings (MB). The native ORT runs off
+            // the native heap, not Dalvik, but these still hint at how
+            // tightly the OEM provisions this device.
+            ret.put("appHeapMb", am.getMemoryClass());
+            ret.put("appLargeHeapMb", am.getLargeMemoryClass());
+            call.resolve(ret);
+        } catch (Throwable t) {
+            call.reject("deviceMemory failed: " + t.getMessage());
+        }
+    }
+
+    private File modelDir() {
+        File dir = new File(getContext().getCacheDir(), "polaris-onnx-models");
+        if (!dir.exists()) dir.mkdirs();
+        return dir;
+    }
+
+    private void clearModelDir() {
+        File[] old = modelDir().listFiles();
+        if (old != null) for (File f : old) { try { f.delete(); } catch (Throwable ignore) {} }
+    }
+
+    // Shared session builder: create from a model FILE so ORT memory-maps
+    // the weights (low RAM), with BASIC graph optimization + XNNPACK
+    // (single weight copy; NNAPI would duplicate them onto the
+    // accelerator and OOM the big models).
+    private JSObject buildSessionFromFile(File modelFile) throws Exception {
+        ai.onnxruntime.OrtSession.SessionOptions opts =
+            new ai.onnxruntime.OrtSession.SessionOptions();
+        opts.setOptimizationLevel(
+            ai.onnxruntime.OrtSession.SessionOptions.OptLevel.BASIC_OPT);
+        String provider = "cpu";
+        try { opts.addXnnpack(Collections.emptyMap()); provider = "xnnpack"; }
+        catch (Throwable ignore) { /* plain CPU */ }
+
+        ai.onnxruntime.OrtSession session =
+            env.createSession(modelFile.getAbsolutePath(), opts);
+        String handle = "s" + counter.getAndIncrement();
+        sessions.put(handle, session);
+
+        JSObject ret = new JSObject();
+        ret.put("handle", handle);
+        ret.put("provider", provider);
+        ret.put("inputNames", new com.getcapacitor.JSArray(new ArrayList<>(session.getInputNames())));
+        ret.put("outputNames", new com.getcapacitor.JSArray(new ArrayList<>(session.getOutputNames())));
+        return ret;
+    }
+
+    // ---- small-model path: whole model as one base64 blob ----
     @PluginMethod
     public void createSession(PluginCall call) {
-        File modelFile = null;
         try {
             String b64 = call.getString("model");
             if (b64 == null) { call.reject("model (base64) required"); return; }
-
-            // Memory: the GraXpert models are huge (BGE ~200 MB, denoise
-            // ~450 MB). env.createSession(byte[]) keeps the whole byte[]
-            // AND lets ORT copy the initializers into RAM while it builds
-            // + optimizes the graph -- on a 4 GB tablet that OOM-crashes
-            // right at session creation. Instead we write the bytes to a
-            // cache file, drop the byte[] so the GC can reclaim it, and
-            // create the session from the PATH: ORT memory-maps the
-            // weights from disk rather than holding a second copy in RAM.
             byte[] model = Base64.decode(b64, Base64.DEFAULT);
-            File dir = new File(getContext().getCacheDir(), "polaris-onnx-models");
-            if (!dir.exists()) dir.mkdirs();
-            // Clear stale model files from previous sessions so the cache
-            // dir doesn't grow unbounded (each is 200-450 MB).
-            File[] old = dir.listFiles();
-            if (old != null) for (File f : old) { try { f.delete(); } catch (Throwable ignore) {} }
-            modelFile = new File(dir, "session-" + counter.get() + ".onnx");
-            try (FileOutputStream out = new FileOutputStream(modelFile)) {
-                out.write(model);
-            }
-            model = null; // let the 200-450 MB array be collected before create
-
-            ai.onnxruntime.OrtSession.SessionOptions opts =
-                new ai.onnxruntime.OrtSession.SessionOptions();
-            // BASIC (not ALL) optimization: ALL can materialize transformed
-            // copies of the (huge) initializers in RAM during graph rewrite;
-            // BASIC keeps the mmap'd weights mostly untouched.
-            opts.setOptimizationLevel(
-                ai.onnxruntime.OrtSession.SessionOptions.OptLevel.BASIC_OPT);
-            // XNNPACK keeps a single copy of the weights (fast multi-thread
-            // CPU). NNAPI is intentionally NOT used here: it duplicates the
-            // weights onto the accelerator, doubling peak RAM on exactly
-            // the big models that already OOM.
-            String provider = "cpu";
-            try { opts.addXnnpack(Collections.emptyMap()); provider = "xnnpack"; }
-            catch (Throwable ignore) { /* plain CPU */ }
-
-            // createSession(path) memory-maps the model from disk.
-            ai.onnxruntime.OrtSession session =
-                env.createSession(modelFile.getAbsolutePath(), opts);
-            String handle = "s" + counter.getAndIncrement();
-            sessions.put(handle, session);
-
-            JSObject ret = new JSObject();
-            ret.put("handle", handle);
-            ret.put("provider", provider);
-            ret.put("inputNames", new com.getcapacitor.JSArray(new ArrayList<>(session.getInputNames())));
-            ret.put("outputNames", new com.getcapacitor.JSArray(new ArrayList<>(session.getOutputNames())));
-            call.resolve(ret);
+            clearModelDir();
+            File modelFile = new File(modelDir(), "session-" + counter.get() + ".onnx");
+            try (FileOutputStream out = new FileOutputStream(modelFile)) { out.write(model); }
+            model = null;
+            call.resolve(buildSessionFromFile(modelFile));
         } catch (Throwable t) {
             call.reject("createSession failed: " + t.getMessage());
+        }
+    }
+
+    // ---- large-model path: stream the model to a file in chunks so the
+    // WebView renderer never builds a giant base64 string (that ~3-4x
+    // peak OOM-killed the renderer even for the 200 MB BGE model). ----
+
+    @PluginMethod
+    public void beginModel(PluginCall call) {
+        try {
+            String id = call.getString("id");
+            if (id == null) { call.reject("id required"); return; }
+            clearModelDir();
+            File f = new File(modelDir(), id + ".onnx");
+            if (f.exists()) f.delete();
+            call.resolve();
+        } catch (Throwable t) {
+            call.reject("beginModel failed: " + t.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void appendModel(PluginCall call) {
+        try {
+            String id = call.getString("id");
+            String chunk = call.getString("chunk");
+            if (id == null || chunk == null) { call.reject("id + chunk required"); return; }
+            byte[] bytes = Base64.decode(chunk, Base64.DEFAULT);
+            File f = new File(modelDir(), id + ".onnx");
+            try (FileOutputStream out = new FileOutputStream(f, true)) { out.write(bytes); }
+            call.resolve();
+        } catch (Throwable t) {
+            call.reject("appendModel failed: " + t.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void createSessionFromFile(PluginCall call) {
+        try {
+            String id = call.getString("id");
+            if (id == null) { call.reject("id required"); return; }
+            File f = new File(modelDir(), id + ".onnx");
+            if (!f.exists()) { call.reject("model file not found (call beginModel/appendModel first)"); return; }
+            call.resolve(buildSessionFromFile(f));
+        } catch (Throwable t) {
+            call.reject("createSessionFromFile failed: " + t.getMessage());
         }
     }
 

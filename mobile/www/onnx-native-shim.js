@@ -64,21 +64,77 @@
     this.inputNames = [];
     this.outputNames = [];
   }
-  InferenceSession.create = async function (model, options) {
-    var u8 = model instanceof Uint8Array ? model
-           : (model instanceof ArrayBuffer ? new Uint8Array(model) : null);
-    if (!u8) throw new Error('PolarisOnnx shim: model must be Uint8Array/ArrayBuffer');
-    var info = await Native.createSession({
-      model: bytesToB64(u8),
-      // Pass the page's requested EPs as a hint; native maps them to
-      // CoreML / NNAPI / XNNPACK / CPU and falls back gracefully.
-      executionProviders: (options && options.executionProviders) || []
-    });
+  function sessionFromInfo(info) {
     var s = new InferenceSession();
     s._handle = info.handle;
     s.inputNames = info.inputNames || [];
     s.outputNames = info.outputNames || [];
     return s;
+  }
+
+  function fmtMB(b) { return Math.round(b / (1024 * 1024)) + ' MB'; }
+
+  // Refuse up front when the model clearly won't fit, instead of letting
+  // the device OOM-crash. ORT (XNNPACK) needs roughly one extra copy of
+  // the weights while building the session, so budget ~1.6x the model
+  // against available RAM. Best-effort: if deviceMemory isn't available
+  // (iOS / older plugin) we skip the check.
+  async function assertEnoughMemory(modelBytes) {
+    var mem = null;
+    try { mem = await Native.deviceMemory(); } catch (e) { return; }
+    if (!mem || !mem.availBytes) return;
+    var needed = modelBytes * 1.6;
+    if (needed > mem.availBytes) {
+      throw new Error(
+        'Not enough free memory to run this AI model on the device. ' +
+        'Model needs about ' + fmtMB(needed) + ' but only ' +
+        fmtMB(mem.availBytes) + ' is free' +
+        (mem.lowMemory ? ' (device is low on memory)' : '') +
+        '. Close other apps, or use a smaller model (e.g. denoise 2.0.0).');
+    }
+  }
+
+  // Big models (BGE ~200 MB, denoise ~450 MB) must NOT cross the bridge
+  // as one base64 string: building it holds the model ~3-4x in the
+  // WebView renderer (Uint8Array + joined string + btoa output), which
+  // OOM-kills the renderer. Stream to a file in chunks instead; native
+  // creates the session from the file (mmap). Small models keep the
+  // one-shot base64 path.
+  var FILE_THRESHOLD = 8 * 1024 * 1024;   // 8 MB
+  var CHUNK = 4 * 1024 * 1024;            // 4 MB raw per appendModel call
+
+  InferenceSession.create = async function (model, options) {
+    var u8 = model instanceof Uint8Array ? model
+           : (model instanceof ArrayBuffer ? new Uint8Array(model) : null);
+    if (!u8) throw new Error('PolarisOnnx shim: model must be Uint8Array/ArrayBuffer');
+    var eps = (options && options.executionProviders) || [];
+
+    await assertEnoughMemory(u8.length);
+
+    if (u8.length > FILE_THRESHOLD) {
+      try {
+        var id = 'm' + Date.now().toString(36) + '_' +
+                 Math.floor(Math.random() * 1e9).toString(36);
+        await Native.beginModel({ id: id });
+        for (var off = 0; off < u8.length; off += CHUNK) {
+          var slice = u8.subarray(off, Math.min(off + CHUNK, u8.length));
+          await Native.appendModel({ id: id, chunk: bytesToB64(slice) });
+        }
+        return sessionFromInfo(await Native.createSessionFromFile(
+          { id: id, executionProviders: eps }));
+      } catch (e) {
+        // assertEnoughMemory throws a friendly message we want to surface
+        // verbatim; only fall back to base64 for "method not found" style
+        // failures (older plugin / iOS not yet ported).
+        if (/memory/i.test(e && e.message || '')) throw e;
+        console.warn('[polaris] chunked model load unavailable, falling back:', e && e.message);
+      }
+    }
+
+    return sessionFromInfo(await Native.createSession({
+      model: bytesToB64(u8),
+      executionProviders: eps
+    }));
   };
   InferenceSession.prototype.run = async function (feeds) {
     var packed = {};
