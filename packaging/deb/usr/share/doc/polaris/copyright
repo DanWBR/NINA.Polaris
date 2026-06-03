@@ -1,10 +1,10 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: N.I.N.A. Polaris
-Upstream-Contact: Daniel Boas <daniel@danielboas.com>
+Upstream-Contact: Daniel Wagner <danielwag@gmail.com>
 Source: https://github.com/DanWBR/NINA.Polaris
 
 Files: *
-Copyright: 2024-2026 Daniel Boas and contributors
+Copyright: 2024-2026 Daniel Wagner and contributors
 License: MPL-2.0
 
 License: MPL-2.0

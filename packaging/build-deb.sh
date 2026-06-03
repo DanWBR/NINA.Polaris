@@ -125,7 +125,7 @@ polaris (${VERSION}) unstable; urgency=medium
 
   * Automated build from upstream commit $(cd "$REPO_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown).
 
- -- Daniel Boas <daniel@danielboas.com>  ${TODAY}
+ -- Daniel Wagner <danielwag@gmail.com>  ${TODAY}
 EOF
 gzip -9 -n -f "$BUILD_DIR/usr/share/doc/polaris/changelog.Debian"
 
