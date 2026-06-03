@@ -1,3 +1,21 @@
+/* App typeface -- Atkinson Hyperlegible, the same family the Polaris UI
+   defaults to (vendored from the server's /fonts/atkinson, OFL-1.1).
+   Keeps the connect screen visually identical to the live app. */
+@font-face {
+    font-family: 'Atkinson Hyperlegible';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('assets/fonts/AtkinsonHyperlegible-Regular.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Atkinson Hyperlegible';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('assets/fonts/AtkinsonHyperlegible-Bold.woff2') format('woff2');
+}
+
 :root {
     --bg: #0a1633;
     --bg2: #101d3f;
@@ -16,7 +34,7 @@ html, body {
     padding: 0;
     background: radial-gradient(120% 80% at 50% -10%, #16235a 0%, var(--bg) 60%);
     color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+    font-family: 'Atkinson Hyperlegible', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
     min-height: 100vh;
 }
 
@@ -28,10 +46,19 @@ html, body {
 
 .brand { text-align: center; margin: 28px 0 32px; }
 .brand-mark {
-    font-size: 40px; color: var(--accent2);
-    text-shadow: 0 0 16px rgba(103, 232, 249, 0.5);
+    width: 96px; height: 96px; margin: 0 auto 14px;
+    display: flex; align-items: center; justify-content: center;
 }
-.brand h1 { margin: 8px 0 2px; font-size: 26px; letter-spacing: 0.5px; }
+.brand-icon {
+    width: 72px; height: 72px; border-radius: 50%; object-fit: contain;
+    filter: drop-shadow(0 4px 16px rgba(96, 165, 250, 0.35));
+    animation: brand-pulse 4s ease-in-out infinite;
+}
+@keyframes brand-pulse {
+    0%, 100% { transform: scale(1);    filter: drop-shadow(0 4px 16px rgba(96, 165, 250, 0.35)); }
+    50%      { transform: scale(1.04); filter: drop-shadow(0 6px 22px rgba(96, 165, 250, 0.55)); }
+}
+.brand h1 { margin: 6px 0 2px; font-size: 26px; font-weight: 700; letter-spacing: 0.5px; }
 .brand h1 span { color: var(--accent); }
 .tagline { margin: 0; color: var(--muted); font-size: 14px; }
 
