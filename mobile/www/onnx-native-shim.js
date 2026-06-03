@@ -1,39 +1,36 @@
 /*
  * onnx-native-shim.js  (M1 - the GraXpert unlock)
  *
- * Injected into the LIVE Polaris UI at document-start by the native
- * layer (see plugins/polaris-onnx). It installs a drop-in `globalThis.ort`
- * that forwards inference to the `PolarisOnnx` Capacitor plugin (ONNX
- * Runtime Mobile: CoreML on iOS, NNAPI/XNNPACK on Android).
+ * Injected at document-start into EVERY frame of the native app. It has
+ * two roles depending on which frame it runs in:
  *
- * The Pi's wwwroot/js/onnx-pipelines.js is NOT modified: it keeps doing
- * all the tiling / normalization and calls the same small ORT surface
- * (`ort.Tensor`, `ort.InferenceSession.create`, `session.run`). Those
- * calls now run natively, dodging the mobile WebGPU / Safari-OOM limits.
+ *  - PARENT frame (the app's own connect screen, app origin): native
+ *    Capacitor plugins ARE available here. The shim installs a
+ *    postMessage handler that forwards ONNX RPC requests to the real
+ *    `PolarisOnnx` plugin and posts the results back.
  *
- * It only activates when the native plugin is present; in a normal
- * browser it is a no-op and the page's own ORT Web loads as usual.
+ *  - CHILD frame (the remote Polaris UI loaded in an <iframe>): native
+ *    plugins are NOT available on a navigated external origin (Capacitor
+ *    only bridges plugins on the app origin). So here the shim installs a
+ *    drop-in `window.ort` whose InferenceSession/Tensor forward inference
+ *    to the parent via postMessage. The unchanged onnx-pipelines.js calls
+ *    the same small ORT surface; it now runs on the device's native ORT
+ *    (XNNPACK/CPU), dodging the mobile WebGPU fp16 / Safari-OOM limits.
+ *
+ * The model never crosses postMessage as one giant blob: large models are
+ * streamed in 4 MB chunks (beginModel/appendModel) and tensors are small
+ * tiles, so every message stays small.
  */
 (function () {
   'use strict';
-  if (window.__polarisNativeOnnx) { return; } // idempotent
+  if (window.__polarisOnnxShim) { return; }
+  window.__polarisOnnxShim = true;
 
-  // This file is injected ONLY by the native app (never served by the
-  // Pi), so we are always inside the Capacitor WebView. We install
-  // window.ort IMMEDIATELY so the page's loadOrtWeb() (guarded by
-  // `if (window.ort) return`) never downloads ORT Web -- otherwise ORT
-  // Web's WebGPU backend runs the models and fails on fp16 (the device
-  // lacks the WGSL `shader-f16` extension). The PolarisOnnx plugin proxy
-  // is NOT ready at document-start, so resolve it LAZILY at call time
-  // (by then the Capacitor bridge is fully wired).
-  function native() {
+  // Resolve the real native plugin (parent/app origin only).
+  function realNative() {
     var cap = window.Capacitor;
     if (!cap) return null;
-    // Already-registered instance (launcher page, where the plugin JS ran).
     if (cap.Plugins && cap.Plugins.PolarisOnnx) return cap.Plugins.PolarisOnnx;
-    // Remote Pi page: the plugin's JS (registerPlugin) was never loaded,
-    // so build a name-bound proxy via the core bridge -- it dispatches to
-    // the native plugin by name and needs no JS package.
     if (typeof cap.registerPlugin === 'function') {
       try {
         var p = cap.registerPlugin('PolarisOnnx');
@@ -43,17 +40,73 @@
     return null;
   }
 
-  // Diagnostic when the plugin can't be resolved: dump what IS registered
-  // so a failure screenshot tells us whether the native plugin is even in
-  // the build (PluginHeaders) vs just not proxied yet.
-  function notAvailableError() {
-    var cap = window.Capacitor || {};
-    var plugs = (cap.Plugins && Object.keys(cap.Plugins)) || [];
-    var headers = (cap.PluginHeaders || []).map(function (h) { return h.name; });
-    return new Error('PolarisOnnx native plugin not available. '
-      + 'Capacitor.Plugins=[' + plugs.join(',') + '] '
-      + 'PluginHeaders=[' + headers.join(',') + ']');
+  var inIframe = false;
+  try { inIframe = (window.top !== window.self); } catch (e) { inIframe = true; }
+
+  // ---------- PARENT role: RPC handler -> native plugin ----------
+  if (!inIframe) {
+    window.addEventListener('message', async function (ev) {
+      var d = ev.data;
+      if (!d || d.__polarisOnnxReq !== true) return;
+      var reply = { __polarisOnnxRes: true, id: d.id };
+      try {
+        var Native = realNative();
+        if (!Native) {
+          var cap = window.Capacitor || {};
+          var headers = (cap.PluginHeaders || []).map(function (h) { return h.name; });
+          throw new Error('native plugin unavailable in app shell (PluginHeaders=['
+            + headers.join(',') + '])');
+        }
+        var fn = Native[d.method];
+        if (typeof fn !== 'function') throw new Error('unknown method ' + d.method);
+        reply.result = await fn.call(Native, d.args || {});
+        reply.ok = true;
+      } catch (e) {
+        reply.ok = false;
+        reply.error = (e && e.message) || String(e);
+      }
+      try { ev.source.postMessage(reply, '*'); } catch (e) { /* ignore */ }
+    });
+    console.log('[polaris] ONNX RPC host ready (parent frame)');
+    return; // the parent never runs ONNX itself
   }
+
+  // ---------- CHILD role (iframe): window.ort -> postMessage RPC ----------
+
+  var _rpcId = 0;
+  var _pending = {};
+  window.addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (!d || d.__polarisOnnxRes !== true) return;
+    var p = _pending[d.id];
+    if (!p) return;
+    delete _pending[d.id];
+    if (d.ok) p.resolve(d.result);
+    else p.reject(new Error(d.error || 'native error'));
+  });
+  function rpc(method, args) {
+    return new Promise(function (resolve, reject) {
+      var id = 'r' + (++_rpcId);
+      _pending[id] = { resolve: resolve, reject: reject };
+      try {
+        window.parent.postMessage(
+          { __polarisOnnxReq: true, id: id, method: method, args: args || {} }, '*');
+      } catch (e) {
+        delete _pending[id];
+        reject(e);
+      }
+    });
+  }
+  // RPC proxy mirroring the native plugin's method surface.
+  var Native = {
+    deviceMemory: function () { return rpc('deviceMemory', {}); },
+    beginModel: function (a) { return rpc('beginModel', a); },
+    appendModel: function (a) { return rpc('appendModel', a); },
+    createSessionFromFile: function (a) { return rpc('createSessionFromFile', a); },
+    createSession: function (a) { return rpc('createSession', a); },
+    run: function (a) { return rpc('run', a); },
+    releaseSession: function (a) { return rpc('releaseSession', a); },
+  };
 
   // ---- base64 <-> bytes (the bridge marshals binary as base64) ----
   function bytesToB64(u8) {
@@ -72,12 +125,11 @@
     if (data instanceof Uint8Array) return data;
     return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
   }
-  // Map an ORT element type string to the JS typed array used for output.
   function typedFromBytes(type, u8) {
     var b = u8.buffer, o = u8.byteOffset, n = u8.byteLength;
     switch (type) {
       case 'float32': return new Float32Array(b, o, n / 4);
-      case 'float16': return new Uint16Array(b, o, n / 2); // raw half bits
+      case 'float16': return new Uint16Array(b, o, n / 2);
       case 'int32':   return new Int32Array(b, o, n / 4);
       case 'int64':   return new BigInt64Array(b, o, n / 8);
       case 'uint8':   return new Uint8Array(b, o, n);
@@ -87,7 +139,6 @@
   }
 
   function Tensor(type, data, dims) {
-    // Mirrors ort.Tensor's shape used by onnx-pipelines.js.
     this.type = type;
     this.data = data;
     this.dims = dims || [];
@@ -108,14 +159,7 @@
 
   function fmtMB(b) { return Math.round(b / (1024 * 1024)) + ' MB'; }
 
-  // Refuse up front when the model clearly won't fit, instead of letting
-  // the device OOM-crash. ORT (XNNPACK) needs roughly one extra copy of
-  // the weights while building the session, so budget ~1.6x the model
-  // against available RAM. Best-effort: if deviceMemory isn't available
-  // (iOS / older plugin) we skip the check.
   async function assertEnoughMemory(modelBytes) {
-    var Native = native();
-    if (!Native) return;
     var mem = null;
     try { mem = await Native.deviceMemory(); } catch (e) { return; }
     if (!mem || !mem.availBytes) return;
@@ -130,12 +174,6 @@
     }
   }
 
-  // Big models (BGE ~200 MB, denoise ~450 MB) must NOT cross the bridge
-  // as one base64 string: building it holds the model ~3-4x in the
-  // WebView renderer (Uint8Array + joined string + btoa output), which
-  // OOM-kills the renderer. Stream to a file in chunks instead; native
-  // creates the session from the file (mmap). Small models keep the
-  // one-shot base64 path.
   var FILE_THRESHOLD = 8 * 1024 * 1024;   // 8 MB
   var CHUNK = 4 * 1024 * 1024;            // 4 MB raw per appendModel call
 
@@ -143,30 +181,20 @@
     var u8 = model instanceof Uint8Array ? model
            : (model instanceof ArrayBuffer ? new Uint8Array(model) : null);
     if (!u8) throw new Error('PolarisOnnx shim: model must be Uint8Array/ArrayBuffer');
-    var Native = native();
-    if (!Native) throw notAvailableError();
     var eps = (options && options.executionProviders) || [];
 
     await assertEnoughMemory(u8.length);
 
     if (u8.length > FILE_THRESHOLD) {
-      try {
-        var id = 'm' + Date.now().toString(36) + '_' +
-                 Math.floor(Math.random() * 1e9).toString(36);
-        await Native.beginModel({ id: id });
-        for (var off = 0; off < u8.length; off += CHUNK) {
-          var slice = u8.subarray(off, Math.min(off + CHUNK, u8.length));
-          await Native.appendModel({ id: id, chunk: bytesToB64(slice) });
-        }
-        return sessionFromInfo(await Native.createSessionFromFile(
-          { id: id, executionProviders: eps }));
-      } catch (e) {
-        // assertEnoughMemory throws a friendly message we want to surface
-        // verbatim; only fall back to base64 for "method not found" style
-        // failures (older plugin / iOS not yet ported).
-        if (/memory/i.test(e && e.message || '')) throw e;
-        console.warn('[polaris] chunked model load unavailable, falling back:', e && e.message);
+      var id = 'm' + Date.now().toString(36) + '_' +
+               Math.floor(Math.random() * 1e9).toString(36);
+      await Native.beginModel({ id: id });
+      for (var off = 0; off < u8.length; off += CHUNK) {
+        var slice = u8.subarray(off, Math.min(off + CHUNK, u8.length));
+        await Native.appendModel({ id: id, chunk: bytesToB64(slice) });
       }
+      return sessionFromInfo(await Native.createSessionFromFile(
+        { id: id, executionProviders: eps }));
     }
 
     return sessionFromInfo(await Native.createSession({
@@ -175,8 +203,6 @@
     }));
   };
   InferenceSession.prototype.run = async function (feeds) {
-    var Native = native();
-    if (!Native) throw notAvailableError();
     var packed = {};
     for (var name in feeds) {
       if (!Object.prototype.hasOwnProperty.call(feeds, name)) continue;
@@ -194,21 +220,13 @@
     return out;
   };
   InferenceSession.prototype.release = async function () {
-    var Native = native();
-    if (!Native) return;
-    try { await Native.releaseSession({ handle: this._handle }); } catch (e) {}
+    try { await Native.releaseSession({ handle: this._handle }); } catch (e) { /* ignore */ }
   };
 
-  // Install the drop-in ORT. `env` is a no-op shell so any
-  // ort.env.wasm.* tweaks the pipelines make don't throw.
   window.ort = {
     Tensor: Tensor,
     InferenceSession: InferenceSession,
     env: { wasm: {}, webgpu: {}, logLevel: 'warning' }
   };
-  window.__polarisNativeOnnx = true;
-
-  // Some builds guard `loadOrtWeb()` with `if (window.ort) return;`; this
-  // satisfies that and skips the heavy ORT Web download entirely.
-  console.log('[polaris] native ONNX shim active (GraXpert runs on device GPU/NPU)');
+  console.log('[polaris] native ONNX shim active (iframe -> parent RPC -> device CPU)');
 })();

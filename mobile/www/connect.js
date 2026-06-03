@@ -122,30 +122,24 @@ async function connect(origin) {
   try { if (KeepAwake) await KeepAwake.keepAwake(); } catch {}
   try { if (ZeroConf) await ZeroConf.close(); } catch {}
 
-  // If we're still on this page a few seconds after navigating, surface
-  // the most likely cause. Phones can't resolve mDNS `.local` names in
-  // the WebView (ERR_NAME_NOT_RESOLVED), so if the user typed one, point
-  // them at the IP; otherwise it's usually the self-signed cert.
-  const here = location.href;
-  let isDotLocal = false;
-  try { isDotLocal = /\.local(?::\d+)?$/i.test(new URL(origin).host); } catch {}
-  setTimeout(() => {
-    if (location.href === here) {
-      els.connectBtn.disabled = false;
-      els.scanHint.innerHTML = isDotLocal
-        ? `Couldn't open <code>${origin}</code>. Phones can't look up ` +
-          `<code>.local</code> names -- use the Pi's IP address instead ` +
-          `(e.g. <code>192.168.0.50:5000</code>), or use automatic ` +
-          `discovery above (it fills in the IP for you).`
-        : `Couldn't open <code>${origin}</code>. If the Pi uses HTTPS with ` +
-          `a self-signed certificate the browser may block it -- try ` +
-          `<code>http://</code> instead, or install the Pi's certificate.`;
-    }
-  }, 4000);
-
-  // Navigate the same WebView to the live Polaris UI. The Capacitor
-  // bridge persists via allowNavigation, so native plugins remain.
-  window.location.assign(origin);
+  // Load the Polaris UI in a FULL-SCREEN IFRAME instead of navigating.
+  // Navigating away would drop the Capacitor plugin bridge (plugins only
+  // work on the app origin), which is exactly what broke native GraXpert.
+  // By keeping this page (app origin) as the parent and loading the Pi UI
+  // as a child, the parent keeps the native plugins; the injected
+  // onnx-native-shim in the iframe RPCs inference back here via
+  // postMessage. The Pi UI itself is unchanged.
+  let frame = document.getElementById('polarisFrame');
+  if (!frame) {
+    frame = document.createElement('iframe');
+    frame.id = 'polarisFrame';
+    frame.setAttribute('allow',
+      'fullscreen; accelerometer; gyroscope; magnetometer; ' +
+      'camera; microphone; clipboard-read; clipboard-write');
+    document.body.appendChild(frame);
+  }
+  frame.src = origin;
+  document.body.classList.add('connected');
 }
 
 function wire() {

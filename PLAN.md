@@ -69,9 +69,40 @@ dedup). Now:
   /api/system/device-name` re-announces mDNS live (`MdnsService` is now a
   singleton + `Republish()`); a "Device name" card in Settings drives it.
 
+## Native GraXpert on device -- the hard part (iframe + postMessage RPC)
+
+Getting GraXpert to actually run on the device's ORT (not ORT Web) took
+several layers, each uncovering the next:
+
+1. Manifest fetch was a bare `fetch()` (no bearer token) -> 401 in the
+   app (cookie-less) -> "no models" -> server-CLI fallback. Fixed.
+2. ORT Web's WebGPU backend ran the models and died on fp16 (Adreno 610
+   has no WGSL `shader-f16`). The native shim was bailing at
+   document-start, so window.ort never got installed and ORT Web loaded.
+   Fixed: install window.ort unconditionally, resolve the plugin lazily.
+3. create-session OOM-crashed the 4 GB tablet on the big fp32 models ->
+   write the model to a cache file + `env.createSession(path)` (mmap),
+   BASIC graph opt, XNNPACK (not NNAPI, which duplicates weights);
+   stream the model to the file in 4 MB chunks so the WebView renderer
+   never builds a giant base64 string; an up-front `deviceMemory()`
+   guard refuses models that won't fit instead of crashing.
+4. **The blocker:** Capacitor only bridges native plugins on the *app
+   origin*. Navigating the WebView to the remote Pi UI dropped all
+   plugins (`PluginHeaders=[]`), so the shim could never reach
+   PolarisOnnx. Re-architected: the connect screen now loads the Pi UI
+   in a **full-screen iframe** (parent stays on the app origin, keeps the
+   plugins); the shim runs in both frames -- parent installs a
+   postMessage RPC host that calls the real native plugin, the iframe
+   installs window.ort whose calls RPC to the parent. Models cross as
+   4 MB chunks + small tiles, so messages stay tiny.
+
+Also added per-op model-version dropdowns (BGE/Decon, not just Denoise)
+and fp16 support so low-RAM devices can pick a lighter model.
+
 ## Still to validate on device
 
-- M1 native GraXpert (Denoise/BGE) parity + speedup vs ORT Web.
+- End-to-end: BGE + Denoise (fp16) actually completing through the
+  iframe RPC on the Redmi Pad SE (4 GB) and writing the sibling FITS.
 - iOS build (needs macOS); M2 push notifications.
 
 # Mobile app MVP scaffold (Capacitor, M0 + M1)
