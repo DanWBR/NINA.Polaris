@@ -433,6 +433,11 @@ function ninaApp() {
         uiZoom: 1.0,
         uiZoomDraft: 1.0,
 
+        // Friendly device name (shown on network discovery) + the
+        // auto-generated mDNS name. Loaded from /api/system/device-name.
+        deviceFriendlyName: '',
+        deviceMdnsName: '',
+
         // FONT-1: app-wide font picker. Values match the
         // [data-font="..."] selectors in app.css that override
         // --font-body / --font-mono. 'atkinson' is the default
@@ -2293,6 +2298,7 @@ function ninaApp() {
             this.updateClock();
             setInterval(() => this.updateClock(), 1000);
             this.initBattery();
+            this.loadDeviceName();
             this.updateFov();
 
             // FIELD-6: rehydrate persisted chip dismissals. Only
@@ -4180,6 +4186,35 @@ function ninaApp() {
             document.body.style.zoom = String(z);
             try { localStorage.setItem('nina-ui-zoom', String(z)); }
             catch (_) { /* private mode etc. */ }
+        },
+
+        // Friendly device name (shown on network discovery). Loaded at
+        // boot; saved on demand. Saving re-announces mDNS server-side so
+        // the new label appears without a restart.
+        async loadDeviceName() {
+            try {
+                const r = await this.apiFetch('/api/system/device-name');
+                if (!r.ok) return;
+                const j = await r.json();
+                this.deviceFriendlyName = j.friendlyName || '';
+                this.deviceMdnsName = j.mdnsName || '';
+            } catch (_) { /* non-fatal */ }
+        },
+        async saveDeviceName() {
+            try {
+                const r = await this.apiFetch('/api/system/device-name', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: this.deviceFriendlyName || '' })
+                });
+                if (!r.ok) { this.toast('Could not save device name', 'error'); return; }
+                const j = await r.json();
+                this.deviceFriendlyName = j.friendlyName || '';
+                this.deviceMdnsName = j.mdnsName || '';
+                this.toast('Device name saved', 'ok');
+            } catch (e) {
+                this.toast('Could not save device name: ' + e.message, 'error');
+            }
         },
 
         // FONT-1: write [data-font] on <html> + persist. The CSS

@@ -602,6 +602,14 @@ public class UserProfile {
     public string AuthHashAlgo { get; set; } = "pbkdf2-sha256-100000";
     public int AuthSessionTimeoutHours { get; set; } = 24;
 
+    // Human-friendly name shown when this device is discovered on the
+    // network (e.g. "Telescope on the balcony"). Empty = fall back to the
+    // auto-generated mDNS instance name (polaris-app-XXXX). Useful when a
+    // single SD-card image is cloned onto several Pis: each Pi already
+    // self-names uniquely from its hardware id, and the owner can give
+    // each a readable label here.
+    public string DeviceFriendlyName { get; set; } = "";
+
     // Image output
     public string ImageOutputDir { get; set; } = "";
     public string ImageNamePattern { get; set; } = "{target}_{filter}_{exposure}s_{date}_{seq}";

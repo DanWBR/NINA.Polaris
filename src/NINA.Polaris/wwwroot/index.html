@@ -8671,6 +8671,31 @@
                     </div>
                 </div>
 
+                <!-- Device name: friendly label shown when this Pi is
+                     discovered on the network. Each Pi already self-names
+                     uniquely (polaris-app-XXXX from its hardware id), so a
+                     cloned SD-card image just works; this lets the owner
+                     give each one a readable name. -->
+                <div class="settings-section" id="device-name-card">
+                    <h3><span class="settings-card-icon">🔭</span>Device name</h3>
+                    <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
+                        Shown when phones/tablets discover this telescope
+                        computer on the network. Give it a name you'll
+                        recognise (e.g. <em>Telescope on the balcony</em>).
+                        Leave blank to use the automatic name.
+                    </p>
+                    <label style="display:flex; align-items:center; gap:12px; max-width:560px; margin-top:10px">
+                        <span style="min-width:90px">Name</span>
+                        <input type="text" x-model="deviceFriendlyName"
+                               maxlength="48" placeholder="Telescope on the balcony"
+                               style="flex:1">
+                        <button class="btn btn-sm btn-primary" @click="saveDeviceName()">Save</button>
+                    </label>
+                    <p class="text-muted" style="font-size:12px; margin-top:8px" x-show="deviceMdnsName">
+                        Network name: <code x-text="deviceMdnsName"></code>
+                    </p>
+                </div>
+
                 <!-- CLOCK-3: server-vs-client wall-clock card. Drift
                      surfaces here so the user can sync explicitly
                      instead of Polaris jumping the wall clock during
@@ -11312,7 +11337,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260602-battery"></script>
+    <script src="/js/app.js?v=20260603-devicename"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

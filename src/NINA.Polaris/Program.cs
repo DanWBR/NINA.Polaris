@@ -265,7 +265,8 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Tls.DuckDnsClient>();
 builder.Services.AddResourceMonitoring();
 builder.Services.AddSingleton<HostMetricsService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<HostMetricsService>());
-builder.Services.AddHostedService<MdnsService>();
+builder.Services.AddSingleton<MdnsService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<MdnsService>());
 // Server-pushed toast channel + boot-time auto-connect for INDI /
 // Alpaca / active-rig equipment. The auto-connect service is gated
 // on profile.AutoConnectOnStartup; if the toggle is off, RunAsync

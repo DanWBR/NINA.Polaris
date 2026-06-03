@@ -333,8 +333,29 @@ public static class SystemEndpoints {
                 logToDisk = p.LogToDisk
             });
         });
+
+        // Friendly device name shown when this Pi is discovered on the
+        // network. Lets the owner of a cloned SD-card image label each Pi
+        // ("Telescope on the balcony"). Re-announces mDNS so the new name
+        // shows up without a restart.
+        group.MapGet("/device-name", (ProfileService profiles, MdnsService mdns) =>
+            Results.Ok(new {
+                friendlyName = profiles.Active.DeviceFriendlyName,
+                mdnsName = mdns.InstanceName
+            }));
+
+        group.MapPost("/device-name", (DeviceNameRequest req, ProfileService profiles, MdnsService mdns) => {
+            profiles.Active.DeviceFriendlyName = (req.Name ?? "").Trim();
+            profiles.Save();
+            mdns.Republish();
+            return Results.Ok(new {
+                friendlyName = profiles.Active.DeviceFriendlyName,
+                mdnsName = mdns.InstanceName
+            });
+        });
     }
 
     record SaveAsRequest(string Name);
     record ClockSyncRequest(string ClientUtc);
+    record DeviceNameRequest(string? Name);
 }

@@ -93,7 +93,10 @@ async function scan() {
       const addr = (s.ipv4Addresses && s.ipv4Addresses[0]) || s.hostname;
       if (!addr) return;
       const origin = toOrigin(addr, s.port || 5000);
-      discovered.set(origin, { name: s.name || 'Polaris', addr: `${addr}:${s.port || 5000}` });
+      // Prefer the human-set label the server advertises in its TXT
+      // record ("Telescope on the balcony"); fall back to the mDNS name.
+      const friendly = (s.txtRecord && s.txtRecord.friendly) || s.name || 'Polaris';
+      discovered.set(origin, { name: friendly, addr: `${addr}:${s.port || 5000}` });
       els.scanHint.textContent = `${discovered.size} found.`;
       renderList();
     });
