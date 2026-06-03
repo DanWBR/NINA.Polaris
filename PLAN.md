@@ -41,6 +41,16 @@ changes nothing in the server/web/.deb). Zero edits to existing code.
   `InferenceSession`/`Tensor` forward to the native plugin -- so the
   existing `onnx-pipelines.js` (tiling/normalization) runs unmodified but
   on the device GPU/NPU. Models still come from the Pi's `/api/onnx/*`.
+- **M3 sensor "Aim" helper** (`mobile/www/aim/`): standalone,
+  dependency-free page (linked from the connect screen). Three modes:
+  Polar align (points at the celestial pole, alt=|lat|, az=N/S),
+  Target (client-side RA/Dec -> alt/az for now, exact astronomy), and a
+  tripod bubble Level. Uses the DeviceOrientation web sensors
+  (compass + tilt) with the iOS permission gesture; observer lat/lon +
+  target RA/Dec come from query string / localStorage / geolocation /
+  manual inputs (the connected app can pass them via the query string
+  later). Astronomy is exact; the device-frame heading/tilt mapping is
+  best-effort pending on-device calibration.
 
 ## Build / validate (not done here -- needs the toolchains)
 - `cd mobile && npm install && npm run plugin:build && npx cap add android`

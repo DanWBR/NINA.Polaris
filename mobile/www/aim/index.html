@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="theme-color" content="#0a1633">
+    <title>Polaris -- Aim helper</title>
+    <link rel="stylesheet" href="aim.css">
+</head>
+<body>
+    <header class="bar">
+        <a class="back" href="../index.html">‹</a>
+        <h1>Aim helper</h1>
+        <div class="modes">
+            <button class="mode active" data-mode="pole" type="button">Polar align</button>
+            <button class="mode" data-mode="target" type="button">Target</button>
+            <button class="mode" data-mode="level" type="button">Level</button>
+        </div>
+    </header>
+
+    <!-- One-time sensor permission (required on iOS 13+, harmless else). -->
+    <div class="enable" id="enableOverlay">
+        <p>This helper uses your phone's compass and tilt sensors.</p>
+        <button class="btn" id="enableBtn" type="button">Enable sensors</button>
+        <p class="hint" id="enableHint"></p>
+    </div>
+
+    <main class="stage" id="stage" hidden>
+        <!-- Compass / aim dial -->
+        <div class="dial-wrap" id="aimView">
+            <svg class="dial" viewBox="-110 -110 220 220" id="dial">
+                <circle class="ring" cx="0" cy="0" r="100"></circle>
+                <!-- ring + cardinals rotate so N points to true north -->
+                <g id="compassRot">
+                    <g id="ticks"></g>
+                    <text class="card n" x="0" y="-86">N</text>
+                    <text class="card" x="88" y="6">E</text>
+                    <text class="card" x="0" y="96">S</text>
+                    <text class="card" x="-88" y="6">W</text>
+                </g>
+                <!-- target marker (where to point), at bearing-from-top -->
+                <g id="targetMarker">
+                    <circle class="tgt" cx="0" cy="-78" r="9"></circle>
+                </g>
+                <!-- fixed "you are pointing here" pointer at top -->
+                <polygon class="youptr" points="0,-104 -7,-92 7,-92"></polygon>
+            </svg>
+            <div class="aim-cta" id="aimCta">Turn to face the marker</div>
+        </div>
+
+        <!-- Tilt (altitude) bar -->
+        <div class="tilt" id="tiltView">
+            <div class="tilt-track">
+                <div class="tilt-target" id="tiltTarget"></div>
+                <div class="tilt-now" id="tiltNow"></div>
+            </div>
+            <div class="tilt-labels"><span>0&deg;</span><span>45&deg;</span><span>90&deg;</span></div>
+            <div class="tilt-cta" id="tiltCta">Tilt to match the line</div>
+        </div>
+
+        <!-- Bubble level (tripod) -->
+        <div class="level" id="levelView" hidden>
+            <div class="bubble-area"><div class="bubble" id="bubble"></div>
+                <div class="cross-h"></div><div class="cross-v"></div>
+            </div>
+            <p class="level-readout" id="levelReadout">--</p>
+        </div>
+
+        <!-- Readouts -->
+        <section class="readouts">
+            <div class="ro"><span>Aim at</span><strong id="roTargetName">North celestial pole</strong></div>
+            <div class="ro"><span>Target az / alt</span><strong id="roTargetAzAlt">--</strong></div>
+            <div class="ro"><span>Phone heading</span><strong id="roHeading">--</strong></div>
+            <div class="ro"><span>Phone tilt</span><strong id="roPitch">--</strong></div>
+        </section>
+
+        <!-- Inputs (observer + target). Prefilled from query string /
+             localStorage; the connected app can pass these later. -->
+        <details class="inputs" id="inputs">
+            <summary>Location &amp; target</summary>
+            <div class="grid">
+                <label>Latitude <input id="inLat" type="number" step="0.0001" placeholder="-23.55"></label>
+                <label>Longitude <input id="inLon" type="number" step="0.0001" placeholder="-46.63"></label>
+                <label>Target RA (h) <input id="inRa" type="number" step="0.0001" placeholder="0.0"></label>
+                <label>Target Dec (&deg;) <input id="inDec" type="number" step="0.0001" placeholder="0.0"></label>
+                <label>Target name <input id="inName" type="text" placeholder="optional"></label>
+            </div>
+            <p class="hint">Latitude sets the celestial-pole altitude for polar
+            alignment. RA/Dec are only needed for "Target" mode.</p>
+        </details>
+    </main>
+
+    <script src="aim.js"></script>
+</body>
+</html>

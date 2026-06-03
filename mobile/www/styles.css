@@ -77,6 +77,17 @@ input[type="text"]:focus { outline: none; border-color: var(--accent); }
 .last { text-align: center; color: var(--muted); font-size: 13px; margin-top: 8px; }
 .last a { color: var(--accent); }
 
+.tools { margin-top: 4px; }
+.tool-link {
+    display: flex; align-items: center; gap: 12px; text-decoration: none;
+    color: var(--text); padding: 12px 14px; border: 1px solid var(--border);
+    border-radius: 10px; background: var(--bg2);
+}
+.tool-link:active { border-color: var(--accent); }
+.tool-ico { font-size: 22px; }
+.tool-link .go { margin-left: auto; color: var(--accent); font-size: 18px; }
+.tool-link .hint { margin: 0; }
+
 .spinner {
     width: 16px; height: 16px; border: 2px solid var(--border);
     border-top-color: var(--accent); border-radius: 50%;
