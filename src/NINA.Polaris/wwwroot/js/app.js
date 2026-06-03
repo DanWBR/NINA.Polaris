@@ -16957,7 +16957,14 @@ function ninaApp() {
                     written, paths.length - written.length, pairs);
             } catch (e) {
                 console.error('[GraXpert browser] failed', e);
-                this.toast('Browser run failed: ' + (e.message || ''), 'error');
+                // Surface whatever the error carries -- native plugin
+                // rejections come through with .message, .errorMessage, or
+                // as a bare string, so try them all instead of "" .
+                var msg = (e && (e.message || e.errorMessage))
+                    || (typeof e === 'string' ? e : '')
+                    || (function () { try { return JSON.stringify(e); } catch (_) { return String(e); } })();
+                this.graxpert.browserPhase = 'failed: ' + msg;
+                this.toast('Browser run failed: ' + msg, 'error', 6000);
             } finally {
                 this.graxpert.browserActive = false;
             }
