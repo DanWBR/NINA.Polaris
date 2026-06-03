@@ -119,17 +119,24 @@ async function connect(origin) {
   try { if (KeepAwake) await KeepAwake.keepAwake(); } catch {}
   try { if (ZeroConf) await ZeroConf.close(); } catch {}
 
-  // If we're still on this page a few seconds after navigating, the most
-  // common cause is the Pi's self-signed HTTPS cert being blocked by the
-  // WebView. Re-enable the button and explain instead of looking dead.
+  // If we're still on this page a few seconds after navigating, surface
+  // the most likely cause. Phones can't resolve mDNS `.local` names in
+  // the WebView (ERR_NAME_NOT_RESOLVED), so if the user typed one, point
+  // them at the IP; otherwise it's usually the self-signed cert.
   const here = location.href;
+  let isDotLocal = false;
+  try { isDotLocal = /\.local(?::\d+)?$/i.test(new URL(origin).host); } catch {}
   setTimeout(() => {
     if (location.href === here) {
       els.connectBtn.disabled = false;
-      els.scanHint.innerHTML =
-        `Couldn't open <code>${origin}</code>. If the Pi uses HTTPS with a ` +
-        `self-signed certificate the browser may block it -- try ` +
-        `<code>http://</code> instead, or install the Pi's certificate.`;
+      els.scanHint.innerHTML = isDotLocal
+        ? `Couldn't open <code>${origin}</code>. Phones can't look up ` +
+          `<code>.local</code> names -- use the Pi's IP address instead ` +
+          `(e.g. <code>192.168.0.50:5000</code>), or use automatic ` +
+          `discovery above (it fills in the IP for you).`
+        : `Couldn't open <code>${origin}</code>. If the Pi uses HTTPS with ` +
+          `a self-signed certificate the browser may block it -- try ` +
+          `<code>http://</code> instead, or install the Pi's certificate.`;
     }
   }, 4000);
 
