@@ -64,53 +64,21 @@
     this.inputNames = [];
     this.outputNames = [];
   }
-  function sessionFromInfo(info) {
+  InferenceSession.create = async function (model, options) {
+    var u8 = model instanceof Uint8Array ? model
+           : (model instanceof ArrayBuffer ? new Uint8Array(model) : null);
+    if (!u8) throw new Error('PolarisOnnx shim: model must be Uint8Array/ArrayBuffer');
+    var info = await Native.createSession({
+      model: bytesToB64(u8),
+      // Pass the page's requested EPs as a hint; native maps them to
+      // CoreML / NNAPI / XNNPACK / CPU and falls back gracefully.
+      executionProviders: (options && options.executionProviders) || []
+    });
     var s = new InferenceSession();
     s._handle = info.handle;
     s.inputNames = info.inputNames || [];
     s.outputNames = info.outputNames || [];
     return s;
-  }
-
-  // Big models (the GraXpert denoise model is large) must NOT be shipped
-  // across the bridge as one giant base64 string: that holds the model
-  // ~4-5x over (Uint8Array + base64 string + the bridge's JSON copy +
-  // the native decode), which OOM-froze tablets at session creation.
-  // Instead stream the bytes to a file in chunks and let native create
-  // the session from the PATH (ORT memory-maps the weights). Small models
-  // keep the simple one-shot base64 path.
-  var FILE_THRESHOLD = 8 * 1024 * 1024;   // 8 MB
-  var CHUNK = 6 * 1024 * 1024;            // 6 MB raw per appendModel call
-
-  InferenceSession.create = async function (model, options) {
-    var u8 = model instanceof Uint8Array ? model
-           : (model instanceof ArrayBuffer ? new Uint8Array(model) : null);
-    if (!u8) throw new Error('PolarisOnnx shim: model must be Uint8Array/ArrayBuffer');
-    var eps = (options && options.executionProviders) || [];
-
-    if (u8.length > FILE_THRESHOLD) {
-      try {
-        var id = 'm' + Date.now().toString(36) + '_' +
-                 Math.floor(Math.random() * 1e9).toString(36);
-        await Native.beginModel({ id: id });
-        for (var off = 0; off < u8.length; off += CHUNK) {
-          var slice = u8.subarray(off, Math.min(off + CHUNK, u8.length));
-          await Native.appendModel({ id: id, chunk: bytesToB64(slice) });
-        }
-        var finfo = await Native.createSessionFromFile({ id: id, executionProviders: eps });
-        return sessionFromInfo(finfo);
-      } catch (e) {
-        // Older native plugin (e.g. iOS not yet ported) -> fall back to
-        // the one-shot base64 path below.
-        console.warn('[polaris] chunked model load unavailable, falling back:', e && e.message);
-      }
-    }
-
-    var info = await Native.createSession({
-      model: bytesToB64(u8),
-      executionProviders: eps
-    });
-    return sessionFromInfo(info);
   };
   InferenceSession.prototype.run = async function (feeds) {
     var packed = {};

@@ -16,8 +16,6 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
@@ -169,122 +167,40 @@ public class PolarisOnnxPlugin extends Plugin {
         call.resolve(ret);
     }
 
-    // Holder for the chosen options + the EP label we report back.
-    private static final class Built {
-        ai.onnxruntime.OrtSession.SessionOptions opts;
-        String provider;
-    }
-
-    /**
-     * Build session options. NNAPI duplicates the weights onto the
-     * accelerator, which roughly doubles peak RAM -- fine for small
-     * models, dangerous for the big GraXpert ones on a tablet. So NNAPI
-     * is only attempted for small models; larger ones use XNNPACK (fast
-     * multi-threaded CPU) which keeps a single copy of the weights.
-     */
-    private Built buildOptions(long modelBytes) throws Exception {
-        Built b = new Built();
-        b.opts = new ai.onnxruntime.OrtSession.SessionOptions();
-        b.opts.setOptimizationLevel(
-            ai.onnxruntime.OrtSession.SessionOptions.OptLevel.ALL_OPT);
-        b.provider = "cpu";
-
-        final long NNAPI_MAX = 24L * 1024 * 1024; // 24 MB
-        if (modelBytes > 0 && modelBytes <= NNAPI_MAX) {
-            try { b.opts.addNnapi(); b.provider = "nnapi"; return b; }
-            catch (Throwable ignore) { /* fall through to XNNPACK */ }
-        }
-        try { b.opts.addXnnpack(Collections.emptyMap()); b.provider = "xnnpack"; }
-        catch (Throwable ignore) { /* plain CPU */ }
-        return b;
-    }
-
-    private JSObject sessionInfo(ai.onnxruntime.OrtSession session, String provider) {
-        String handle = "s" + counter.getAndIncrement();
-        sessions.put(handle, session);
-        JSObject ret = new JSObject();
-        ret.put("handle", handle);
-        ret.put("provider", provider);
-        ret.put("inputNames", new com.getcapacitor.JSArray(new ArrayList<>(session.getInputNames())));
-        ret.put("outputNames", new com.getcapacitor.JSArray(new ArrayList<>(session.getOutputNames())));
-        return ret;
-    }
-
-    private File modelFile(String id) {
-        File dir = new File(getContext().getCacheDir(), "polaris-onnx-models");
-        if (!dir.exists()) dir.mkdirs();
-        // Sanitise: only the id the shim generates (hex/counter) is used.
-        String safe = id.replaceAll("[^A-Za-z0-9_.-]", "_");
-        return new File(dir, safe + ".onnx");
-    }
-
-    // ---- small-model path: whole model as one base64 blob (legacy) ----
     @PluginMethod
     public void createSession(PluginCall call) {
         try {
             String b64 = call.getString("model");
             if (b64 == null) { call.reject("model (base64) required"); return; }
             byte[] model = Base64.decode(b64, Base64.DEFAULT);
-            Built b = buildOptions(model.length);
-            ai.onnxruntime.OrtSession session = env.createSession(model, b.opts);
-            call.resolve(sessionInfo(session, b.provider));
+
+            ai.onnxruntime.OrtSession.SessionOptions opts =
+                new ai.onnxruntime.OrtSession.SessionOptions();
+            opts.setOptimizationLevel(
+                ai.onnxruntime.OrtSession.SessionOptions.OptLevel.ALL_OPT);
+            String provider = "cpu";
+            try {
+                // NNAPI first (GPU/NPU). Falls back if the device/op set
+                // isn't supported. XNNPACK is the fast CPU fallback.
+                opts.addNnapi();
+                provider = "nnapi";
+            } catch (Throwable ignore) {
+                try { opts.addXnnpack(Collections.emptyMap()); provider = "xnnpack"; }
+                catch (Throwable ignore2) { /* CPU */ }
+            }
+
+            ai.onnxruntime.OrtSession session = env.createSession(model, opts);
+            String handle = "s" + counter.getAndIncrement();
+            sessions.put(handle, session);
+
+            JSObject ret = new JSObject();
+            ret.put("handle", handle);
+            ret.put("provider", provider);
+            ret.put("inputNames", new com.getcapacitor.JSArray(new ArrayList<>(session.getInputNames())));
+            ret.put("outputNames", new com.getcapacitor.JSArray(new ArrayList<>(session.getOutputNames())));
+            call.resolve(ret);
         } catch (Throwable t) {
             call.reject("createSession failed: " + t.getMessage());
-        }
-    }
-
-    // ---- large-model path: stream the model to a file in chunks, then
-    // create the session from the PATH so ORT memory-maps the weights.
-    // Avoids holding the whole model as a giant base64 string + a decoded
-    // copy + the bridge's JSON copy all at once (which OOM'd tablets on
-    // the big denoise model). ----
-
-    @PluginMethod
-    public void beginModel(PluginCall call) {
-        try {
-            String id = call.getString("id");
-            if (id == null) { call.reject("id required"); return; }
-            File f = modelFile(id);
-            if (f.exists()) f.delete();
-            call.resolve();
-        } catch (Throwable t) {
-            call.reject("beginModel failed: " + t.getMessage());
-        }
-    }
-
-    @PluginMethod
-    public void appendModel(PluginCall call) {
-        try {
-            String id = call.getString("id");
-            String chunk = call.getString("chunk");
-            if (id == null || chunk == null) { call.reject("id + chunk required"); return; }
-            byte[] bytes = Base64.decode(chunk, Base64.DEFAULT);
-            try (FileOutputStream out = new FileOutputStream(modelFile(id), true)) {
-                out.write(bytes);
-            }
-            call.resolve();
-        } catch (Throwable t) {
-            call.reject("appendModel failed: " + t.getMessage());
-        }
-    }
-
-    @PluginMethod
-    public void createSessionFromFile(PluginCall call) {
-        try {
-            String id = call.getString("id");
-            if (id == null) { call.reject("id required"); return; }
-            File f = modelFile(id);
-            if (!f.exists()) { call.reject("model file not found (call beginModel/appendModel first)"); return; }
-            Built b = buildOptions(f.length());
-            // createSession(path) memory-maps the model from disk.
-            ai.onnxruntime.OrtSession session = env.createSession(f.getAbsolutePath(), b.opts);
-            JSObject info = sessionInfo(session, b.provider);
-            // The weights are mmap'd from the file; keep it on disk so the
-            // mapping stays valid for the life of the session. It lives in
-            // the cache dir, so the OS can reclaim it under pressure.
-            call.resolve(info);
-        } catch (Throwable t) {
-            call.reject("createSessionFromFile failed: " + t.getMessage());
         }
     }
 
