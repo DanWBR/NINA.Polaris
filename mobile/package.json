@@ -10,7 +10,8 @@
     "ios": "cap run ios",
     "open:android": "cap open android",
     "open:ios": "cap open ios",
-    "plugin:build": "npm --prefix plugins/polaris-onnx install && npm --prefix plugins/polaris-onnx run build"
+    "plugin:build": "npm --prefix plugins/polaris-onnx install && npm --prefix plugins/polaris-onnx run build",
+    "icons": "capacitor-assets generate --iconBackgroundColor '#102146' --iconBackgroundColorDark '#102146'"
   },
   "dependencies": {
     "@capacitor/android": "^6.1.2",
@@ -23,6 +24,7 @@
     "polaris-onnx": "file:plugins/polaris-onnx"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^6.1.2"
   }
 }

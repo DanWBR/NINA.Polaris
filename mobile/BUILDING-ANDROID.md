@@ -47,6 +47,23 @@ native ONNX plugin won't be bundled.
 Re-run `npx cap sync android` any time you change files under `www/` or
 the plugin.
 
+### App (launcher) icon
+
+The launcher icon -- the round Polaris star you see in the phone's app
+drawer -- is generated from the source images in `mobile/assets/`
+(`icon-only.png`, `icon-foreground.png`, `icon-background.png`, all the
+real Polaris brand at 1024px). Run this once after `cap add android`
+(and again whenever the source images change):
+
+```powershell
+npm install            # first time: pulls @capacitor/assets
+npm run icons          # writes mipmap-* + adaptive icons into android/
+npx cap sync android
+```
+
+`npm run icons` regenerates the platform icons in the (git-ignored)
+`android/` project, so re-run it after any fresh `cap add android`.
+
 ---
 
 ## 3. Debug APK (for testing on your own phone)
