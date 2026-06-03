@@ -30,7 +30,7 @@ async function loadPlugins() {
   try {
     ({ Capacitor } = await import('@capacitor/core'));
     ({ Preferences } = await import('@capacitor/preferences'));
-    ({ KeepAwake } = await import('@capacitor/keep-awake'));
+    ({ KeepAwake } = await import('@capacitor-community/keep-awake'));
     ({ ZeroConf } = await import('capacitor-zeroconf'));
   } catch (e) {
     // Plain browser dev: bridge/plugins not bundled. UI still works.
