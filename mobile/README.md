@@ -68,6 +68,10 @@ npx cap sync
 
 ## Run / build
 
+> Full Android step-by-step (toolchain, debug + **signed** APK, keystore,
+> troubleshooting) is in [`BUILDING-ANDROID.md`](BUILDING-ANDROID.md).
+
+
 ```bash
 # Android (device/emulator)
 npx cap run android
