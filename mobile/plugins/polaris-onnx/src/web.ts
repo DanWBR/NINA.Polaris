@@ -15,17 +15,17 @@ import type {
  * shim never installs, so the page's own `ort` stays in charge).
  */
 export class PolarisOnnxWeb extends WebPlugin implements PolarisOnnxPlugin {
-  private unavailable(): never {
+  private notNative(): never {
     throw this.unimplemented('PolarisOnnx native runtime is not available on web.');
   }
   async createSession(_options: CreateSessionOptions): Promise<CreateSessionResult> {
-    return this.unavailable();
+    return this.notNative();
   }
   async run(_options: RunOptions): Promise<RunResult> {
-    return this.unavailable();
+    return this.notNative();
   }
   async releaseSession(_options: { handle: string }): Promise<void> {
-    return this.unavailable();
+    return this.notNative();
   }
   async info(): Promise<{ version: string; providers: string[] }> {
     return { version: 'web-unavailable', providers: [] };
