@@ -10471,6 +10471,12 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <input type="checkbox" x-model="graxpert.modalSaveBackground">
                     Save background model
                 </label>
+                <label class="seq-dither-checkbox" style="align-self:end"
+                       x-show="!!window.__polarisIsNativeApp"
+                       title="Run on the device GPU/NPU (NNAPI). Faster on powerful tablets; uses more memory.">
+                    <input type="checkbox" x-model="graxpert.modalUseGpu">
+                    Use GPU
+                </label>
             </div>
 
             <!-- Decon controls, labels + range match GraXpert's UI
@@ -10512,6 +10518,12 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <input type="number" class="input-sm" step="0.1" min="0.5" max="20"
                            x-model.number="graxpert.modalDeconPsfSize">
                 </label>
+                <label class="seq-dither-checkbox" style="align-self:end"
+                       x-show="!!window.__polarisIsNativeApp"
+                       title="Run on the device GPU/NPU (NNAPI). Faster on powerful tablets; uses more memory.">
+                    <input type="checkbox" x-model="graxpert.modalUseGpu">
+                    Use GPU
+                </label>
             </div>
 
             <!-- Denoise controls -->
@@ -10544,6 +10556,12 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         <span class="graxpert-strength-value"
                               x-text="graxpert.modalDenoiseStrength.toFixed(2)"></span>
                     </span>
+                </label>
+                <label class="seq-dither-checkbox" style="align-self:end"
+                       x-show="!!window.__polarisIsNativeApp"
+                       title="Run on the device GPU/NPU (NNAPI). Faster on powerful tablets; uses more memory.">
+                    <input type="checkbox" x-model="graxpert.modalUseGpu">
+                    Use GPU
                 </label>
             </div>
 
@@ -11179,7 +11197,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          build fed the model 100× off inputs → garbage residuals →
          visible tile seams in the output. Also handles object v1.0.0's
          3-input signature (sigma + strenght separate). -->
-    <script src="/js/onnx-pipelines.js?v=GX12o-modelpick"></script>
+    <script src="/js/onnx-pipelines.js?v=GX12o-gpu"></script>
     <script src="/js/lib/alpine.min.js" defer></script>
     <!-- Cache buster on app.js so JS fixes propagate without users
          having to remember Ctrl+Shift+R. Bump the v= when shipping
@@ -11349,7 +11367,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260603-runerr"></script>
+    <script src="/js/app.js?v=20260603-gpu"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

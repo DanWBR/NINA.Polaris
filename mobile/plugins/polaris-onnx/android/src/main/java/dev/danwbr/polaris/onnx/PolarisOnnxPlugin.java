@@ -211,14 +211,26 @@ public class PolarisOnnxPlugin extends Plugin {
     // the weights (low RAM), with BASIC graph optimization + XNNPACK
     // (single weight copy; NNAPI would duplicate them onto the
     // accelerator and OOM the big models).
-    private JSObject buildSessionFromFile(File modelFile) throws Exception {
+    private JSObject buildSessionFromFile(File modelFile, boolean useGpu) throws Exception {
         ai.onnxruntime.OrtSession.SessionOptions opts =
             new ai.onnxruntime.OrtSession.SessionOptions();
         opts.setOptimizationLevel(
             ai.onnxruntime.OrtSession.SessionOptions.OptLevel.BASIC_OPT);
         String provider = "cpu";
-        try { opts.addXnnpack(Collections.emptyMap()); provider = "xnnpack"; }
-        catch (Throwable ignore) { /* plain CPU */ }
+        if (useGpu) {
+            // User opted into GPU/NPU: NNAPI routes conv/matmul to the
+            // accelerator (some ops still fall back to CPU). It duplicates
+            // the weights, so it's only used on request + behind the JS
+            // memory guard. Fall back to XNNPACK if NNAPI isn't usable.
+            try { opts.addNnapi(); provider = "nnapi"; }
+            catch (Throwable ignore) {
+                try { opts.addXnnpack(Collections.emptyMap()); provider = "xnnpack"; }
+                catch (Throwable ignore2) { /* plain CPU */ }
+            }
+        } else {
+            try { opts.addXnnpack(Collections.emptyMap()); provider = "xnnpack"; }
+            catch (Throwable ignore) { /* plain CPU */ }
+        }
 
         ai.onnxruntime.OrtSession session =
             env.createSession(modelFile.getAbsolutePath(), opts);
@@ -244,7 +256,7 @@ public class PolarisOnnxPlugin extends Plugin {
             File modelFile = new File(modelDir(), "session-" + counter.get() + ".onnx");
             try (FileOutputStream out = new FileOutputStream(modelFile)) { out.write(model); }
             model = null;
-            call.resolve(buildSessionFromFile(modelFile));
+            call.resolve(buildSessionFromFile(modelFile, Boolean.TRUE.equals(call.getBoolean("useGpu", false))));
         } catch (Throwable t) {
             call.reject("createSession failed: " + t.getMessage());
         }
@@ -290,7 +302,7 @@ public class PolarisOnnxPlugin extends Plugin {
             if (id == null) { call.reject("id required"); return; }
             File f = new File(modelDir(), id + ".onnx");
             if (!f.exists()) { call.reject("model file not found (call beginModel/appendModel first)"); return; }
-            call.resolve(buildSessionFromFile(f));
+            call.resolve(buildSessionFromFile(f, Boolean.TRUE.equals(call.getBoolean("useGpu", false))));
         } catch (Throwable t) {
             call.reject("createSessionFromFile failed: " + t.getMessage());
         }

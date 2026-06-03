@@ -389,8 +389,10 @@
      *                                  'creating-session',
      *                          fraction?: number) => void
      */
-    async function loadSession(family, version, onProgress) {
-        const key = family + '/' + version;
+    async function loadSession(family, version, onProgress, useGpu) {
+        // Cache per (family, version, accelerator): toggling GPU must build
+        // a fresh session rather than reuse the CPU one (or vice versa).
+        const key = family + '/' + version + (useGpu ? '#gpu' : '');
         const existing = _sessions.get(key);
         if (existing) return existing;
 
@@ -478,6 +480,9 @@
             session = await ort.InferenceSession.create(bytes, {
                 executionProviders: ep,
                 graphOptimizationLevel: 'all',
+                // Native-shim-only hint: route to NNAPI (GPU/NPU) when the
+                // user ticked "Use GPU". Ignored by ORT Web on desktop.
+                polarisUseGpu: !!useGpu,
             });
         } catch (e) {
             // GX-12n2: turn ORT's cryptic "no backend found" / "failed
@@ -716,7 +721,7 @@
             const channels = opts.channels === 3 ? 3 : 1;
             const planeLen = width * height;
 
-            const session = await loadSession(family, version, opts.onProgress);
+            const session = await loadSession(family, version, opts.onProgress, opts.useGpu);
 
             // 1) Downsample each input plane to 256x256 independently.
             //    For mono there's a single plane; for RGB we resize R,
@@ -1013,7 +1018,7 @@
             const MARGIN = (TILE - STRIDE) / 2;   // 64
             const CLIP = version.startsWith('3.') ? 1.0 : 10.0;
 
-            const session = await loadSession(family, version, opts.onProgress);
+            const session = await loadSession(family, version, opts.onProgress, opts.useGpu);
 
             // GX-12m2: zero-copy tile reads. We previously allocated a
             // full padded Float32 plane (~26 MB / channel on a 3000×2000
@@ -1226,7 +1231,7 @@
             const STRIDE = 448;
             const MARGIN = (TILE - STRIDE) / 2;   // 32
 
-            const session = await loadSession(family, version, opts.onProgress);
+            const session = await loadSession(family, version, opts.onProgress, opts.useGpu);
 
             // GX-9 (UX): yield before the multi-MB padding + normalize
             // burst so the browser repaints between model-load and

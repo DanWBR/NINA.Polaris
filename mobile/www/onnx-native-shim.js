@@ -159,11 +159,13 @@
 
   function fmtMB(b) { return Math.round(b / (1024 * 1024)) + ' MB'; }
 
-  async function assertEnoughMemory(modelBytes) {
+  async function assertEnoughMemory(modelBytes, useGpu) {
     var mem = null;
     try { mem = await Native.deviceMemory(); } catch (e) { return; }
     if (!mem || !mem.availBytes) return;
-    var needed = modelBytes * 1.6;
+    // NNAPI (GPU) duplicates the weights onto the accelerator, so budget
+    // more headroom when the user asked for GPU.
+    var needed = modelBytes * (useGpu ? 2.6 : 1.6);
     if (needed > mem.availBytes) {
       throw new Error(
         'Not enough free memory to run this AI model on the device. ' +
@@ -182,8 +184,11 @@
            : (model instanceof ArrayBuffer ? new Uint8Array(model) : null);
     if (!u8) throw new Error('PolarisOnnx shim: model must be Uint8Array/ArrayBuffer');
     var eps = (options && options.executionProviders) || [];
+    // Custom flag the unchanged onnx-pipelines passes through; only the
+    // native shim reads it (ORT Web ignores unknown SessionOptions).
+    var useGpu = !!(options && options.polarisUseGpu);
 
-    await assertEnoughMemory(u8.length);
+    await assertEnoughMemory(u8.length, useGpu);
 
     if (u8.length > FILE_THRESHOLD) {
       var id = 'm' + Date.now().toString(36) + '_' +
@@ -194,12 +199,13 @@
         await Native.appendModel({ id: id, chunk: bytesToB64(slice) });
       }
       return sessionFromInfo(await Native.createSessionFromFile(
-        { id: id, executionProviders: eps }));
+        { id: id, executionProviders: eps, useGpu: useGpu }));
     }
 
     return sessionFromInfo(await Native.createSession({
       model: bytesToB64(u8),
-      executionProviders: eps
+      executionProviders: eps,
+      useGpu: useGpu
     }));
   };
   InferenceSession.prototype.run = async function (feeds) {
@@ -228,5 +234,8 @@
     InferenceSession: InferenceSession,
     env: { wasm: {}, webgpu: {}, logLevel: 'warning' }
   };
+  // Lets the (unchanged) Polaris UI show native-only controls, e.g. the
+  // per-run "Use GPU" toggle in the GraXpert modals.
+  window.__polarisIsNativeApp = true;
   console.log('[polaris] native ONNX shim active (iframe -> parent RPC -> device CPU)');
 })();

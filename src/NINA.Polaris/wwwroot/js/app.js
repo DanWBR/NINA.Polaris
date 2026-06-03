@@ -1911,6 +1911,9 @@ function ninaApp() {
             // -fp16 model on low-RAM devices).
             modalBgeVersion: '',
             modalDeconVersion: '',
+            // Per-run "Use GPU" toggle (native app only): routes inference
+            // to NNAPI (GPU/NPU) instead of XNNPACK (CPU).
+            modalUseGpu: false,
             currentJobId: null,
             currentJob: null,
             _pollTimer: null,
@@ -16832,6 +16835,7 @@ function ninaApp() {
                             saveBackground: !!this.graxpert.modalSaveBackground,
                             // Per-run model version from the modal dropdown.
                             version: this.graxpert.modalBgeVersion || undefined,
+                            useGpu: !!this.graxpert.modalUseGpu,
                         };
                         break;
                     case 'denoising':
@@ -16844,6 +16848,7 @@ function ninaApp() {
                             version: this.graxpert.modalDenoiseVersion
                                   || this.settings.onnxDefaultDenoiseVersion
                                   || '2.0.0',
+                            useGpu: !!this.graxpert.modalUseGpu,
                         };
                         break;
                     case 'deconvolution':
@@ -16857,6 +16862,7 @@ function ninaApp() {
                             target: this.graxpert.modalDeconTarget || 'stars',
                             // Per-run model version from the modal dropdown.
                             version: this.graxpert.modalDeconVersion || undefined,
+                            useGpu: !!this.graxpert.modalUseGpu,
                         };
                         break;
                     default:
