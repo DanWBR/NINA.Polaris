@@ -1906,6 +1906,11 @@ function ninaApp() {
             // safer on iOS) and 3.0.2 (more aggressive, ~456 MB,
             // ±1 clip, better quality on capable hardware).
             modalDenoiseVersion: '2.0.0',
+            // GX: per-run model version for BGE + Decon (hydrated from the
+            // manifest when the modal opens; lets the user pick a lighter
+            // -fp16 model on low-RAM devices).
+            modalBgeVersion: '',
+            modalDeconVersion: '',
             currentJobId: null,
             currentJob: null,
             _pollTimer: null,
@@ -16337,6 +16342,13 @@ function ninaApp() {
             } else {
                 this.graxpert.modalDenoiseVersion = profileDefault;
             }
+            // BGE + Decon per-run version: default to the first choice for
+            // the family (manifest order already puts the recommended
+            // pick first -- fp16 first on iOS, otherwise non-quantized).
+            const bgeChoices = this.modelChoices('bge');
+            this.graxpert.modalBgeVersion = (bgeChoices[0] && bgeChoices[0].version) || '1.0.1';
+            const deconChoices = this.modelChoices(this.deconFamily());
+            this.graxpert.modalDeconVersion = (deconChoices[0] && deconChoices[0].version) || '';
             // GX-7: default depends on the user's preference + per-op
             // availability. Force browser-off when there's no model
             // even if the user prefers browser (CLI is the only path).
@@ -16604,9 +16616,21 @@ function ninaApp() {
         // dropdown without any code change. iOS rises the quantized
         // variants because they're the only ones with a real shot of
         // not OOM-killing the tab.
-        denoiseModelChoices() {
+        denoiseModelChoices() { return this.modelChoices('denoise'); },
+
+        // Which decon ONNX family the current Method dropdown maps to.
+        deconFamily() {
+            return (this.graxpert.modalDeconTarget === 'objects')
+                ? 'decon-objects' : 'decon-stars';
+        },
+
+        // Generic version picker for any GraXpert family (bge / denoise /
+        // decon-stars / decon-objects). Lists every version in the
+        // manifest (incl. -fp16 / -int8 siblings) with on-disk size, so
+        // the user can pick a lighter model on a low-RAM device.
+        modelChoices(family) {
             const models = (this.onnx?.manifest?.models || [])
-                .filter(m => m.family === 'denoise');
+                .filter(m => m.family === family);
             // Build label: "<version>, <sizeMB> MB"
             const choices = models.map(m => {
                 const mb = m.sizeBytes
@@ -16658,10 +16682,16 @@ function ninaApp() {
             // rescanned yet), keep the original built-in choices so
             // the UI doesn't go blank.
             if (choices.length === 0) {
-                return [
-                    { version: '2.0.0', label: 'v2.0.0, ~284 MB',  sizeBytes: 284e6, isQuantized: false },
-                    { version: '3.0.2', label: 'v3.0.2, ~456 MB',  sizeBytes: 456e6, isQuantized: false },
-                ];
+                const fb = {
+                    denoise: [
+                        { version: '2.0.0', label: 'v2.0.0, ~284 MB', sizeBytes: 284e6, isQuantized: false },
+                        { version: '3.0.2', label: 'v3.0.2, ~456 MB', sizeBytes: 456e6, isQuantized: false },
+                    ],
+                    bge: [ { version: '1.0.1', label: 'v1.0.1, ~208 MB', sizeBytes: 208e6, isQuantized: false } ],
+                    'decon-stars': [ { version: '1.0.0', label: 'v1.0.0, ~266 MB', sizeBytes: 266e6, isQuantized: false } ],
+                    'decon-objects': [ { version: '1.0.1', label: 'v1.0.1, ~266 MB', sizeBytes: 266e6, isQuantized: false } ],
+                };
+                return fb[family] || [];
             }
             return choices;
         },
@@ -16800,6 +16830,8 @@ function ninaApp() {
                             // ({stem}_bge_bg.fits) below. Matches the CLI
                             // path's -bg behaviour.
                             saveBackground: !!this.graxpert.modalSaveBackground,
+                            // Per-run model version from the modal dropdown.
+                            version: this.graxpert.modalBgeVersion || undefined,
                         };
                         break;
                     case 'denoising':
@@ -16823,6 +16855,8 @@ function ninaApp() {
                             strength: this.graxpert.modalDeconStrength,
                             psfPixels: this.graxpert.modalDeconPsfSize,
                             target: this.graxpert.modalDeconTarget || 'stars',
+                            // Per-run model version from the modal dropdown.
+                            version: this.graxpert.modalDeconVersion || undefined,
                         };
                         break;
                     default:

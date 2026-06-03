@@ -706,7 +706,7 @@
             // WebGPU cap (200 MB), so it lands on WASM today. If a
             // -fp16 sibling exists (~104 MB), prefer it on iOS to get
             // the WebGPU GPU path.
-            const version = await preferQuantizedOnIOS('bge', '1.0.1');
+            const version = opts.version || await preferQuantizedOnIOS('bge', '1.0.1');
             const TILE = 256;
             // GX-9: derive the channel count. Old callers omit
             // opts.channels and pass a Uint16Array length == w*h,
