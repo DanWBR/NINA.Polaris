@@ -60,7 +60,26 @@ on the tablet against the Pi:
   console styling, auto-scroll, error highlighting) and now stays open on
   completion with a "Close & view results" button that runs the
   sibling-select + before/after comparator (so the log isn't hidden the
-  instant the run ends).
+  instant the run ends). `PYTHONUNBUFFERED=1` is set on the subprocess so
+  Python/tqdm output streams live instead of arriving in one lump.
+- **GraXpert modal could trap the user.** While a host job ran only Abort
+  showed, and Abort hit a cancel that 404'd, with no way to close. Now:
+  Abort actually kills the host subprocess (per-job linked
+  `CancellationTokenSource`; `ProcessFrameAsync` registers a ct callback
+  that `Kill`s the process tree -- before, `CancelRequested` only stopped
+  launching new files); the client tolerates a cancel 404 (tears down job
+  state so Close returns); and a Close button is always present (reads
+  "Close (keep running)" mid host-run, backgrounding it).
+- **GraXpert host ignored the model selection** (used its own download,
+  e.g. denoise 3.0.2). Polaris ships models under
+  `wwwroot/graxpert/models/{family-ai-models}/{version}/model.onnx` --
+  the exact layout GraXpert expects under
+  `~/.local/share/GraXpert/...`. `StageVendoredModel` now symlinks (or
+  copies) Polaris's vendored `model.onnx` into GraXpert's store for the
+  requested family/version (suffix `-fp16`/`-int8` stripped so
+  `-ai_version` is valid), so the host CLI uses the same model as the
+  browser, honours the dropdown, and works offline. Denoise-scoped for
+  now (client only forwards aiVersion for denoise).
 
 ## Mobile connect screen -- made it actually work on a device
 
