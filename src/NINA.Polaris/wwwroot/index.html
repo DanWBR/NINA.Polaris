@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260604-analyzevh">
+    <link rel="stylesheet" href="/css/app.css?v=20260604-inspector">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -10733,7 +10733,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <div class="siril-modal" x-show="analyze.open" x-cloak
          @click.self="analyzeClose()"
          @keydown.escape.window="analyzeClose()"
-         @resize.window.debounce.150ms="analyze.open && _analyzeDrawOverlay()">
+         @resize.window.debounce.150ms="analyze.open && _analyzeRedraw()">
         <div class="siril-modal-frame analyze-modal-frame">
             <h2 style="font-size:18px;font-weight:600;display:flex;align-items:center;gap:8px">
                 🔬 Image analysis
@@ -10743,6 +10743,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         @click="analyzeSetTab('tilt')">Tilt</button>
                 <button :class="{ active: analyze.tab === 'aberration' }"
                         @click="analyzeSetTab('aberration')">Aberration</button>
+                <button :class="{ active: analyze.tab === 'inspector' }"
+                        @click="analyzeSetTab('inspector')">Inspector</button>
             </div>
 
             <p class="hint" x-show="analyze.busy">Analyzing… detecting stars across the frame.</p>
@@ -10752,18 +10754,36 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <div class="analyze-body" x-show="!analyze.busy && analyze.result">
                 <div class="analyze-stage crop-picker">
                     <img class="crop-picker-img" :src="analyze.previewUrl"
+                         x-show="analyze.tab !== 'inspector'"
                          @load="analyzeOnImageLoaded($event)"
                          alt="Source preview" draggable="false">
-                    <canvas class="analyze-overlay" x-ref="analyzeCanvas"></canvas>
+                    <canvas class="analyze-overlay" x-ref="analyzeCanvas"
+                            x-show="analyze.tab !== 'inspector'"></canvas>
+                    <!-- Aberration Inspector: 3x3 mosaic of 1:1 crops
+                         (corners + edges + centre) so star shapes can be
+                         compared by eye, Siril / PixInsight style. -->
+                    <canvas class="analyze-inspector-canvas" x-ref="inspectorCanvas"
+                            x-show="analyze.tab === 'inspector'"></canvas>
                 </div>
                 <div class="analyze-side">
-                    <div class="analyze-zone-grid">
+                    <div class="analyze-zone-grid" x-show="analyze.tab !== 'inspector'">
                         <template x-for="z in (analyze.result?.zones || [])" :key="z.row * 3 + z.col">
                             <div class="analyze-zone-cell" :style="analyzeZoneStyle(z)">
                                 <span x-text="analyzeZoneLabel(z)"></span>
                             </div>
                         </template>
                     </div>
+
+                    <!-- Inspector help -->
+                    <template x-if="analyze.tab === 'inspector'">
+                        <p class="analyze-verdict sev-unknown">
+                            9 crops at 1:1 — corners + edges around the
+                            centre (C). Compare the corner stars to the
+                            centre: bloated or stretched corners mean tilt,
+                            coma, or field curvature; round + even means
+                            clean optics.
+                        </p>
+                    </template>
 
                     <!-- Tilt view -->
                     <template x-if="analyze.tab === 'tilt'">
@@ -11487,7 +11507,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260604-analyzecenter"></script>
+    <script src="/js/app.js?v=20260604-inspector"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

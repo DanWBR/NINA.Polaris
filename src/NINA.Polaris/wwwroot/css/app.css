@@ -8282,6 +8282,12 @@ label select.input-sm {
     top: 0;
     pointer-events: none;
 }
+/* Aberration Inspector mosaic — a plain centred canvas (sized in JS). */
+.analyze-inspector-canvas {
+    display: block;
+    max-width: 100%;
+    max-height: calc(94vh - 170px);
+}
 .analyze-side {
     flex: 1 1 260px;
     min-width: 240px;

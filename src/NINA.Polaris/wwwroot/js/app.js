@@ -16502,6 +16502,8 @@ function ninaApp() {
             this.analyze.tab = 'tilt';
             this.analyze.busy = true;
             this.analyze.open = true;
+            this._analyzeInspectorImg = null;   // drop the previous file's hi-res crop source
+            this._analyzeInspectorPath = '';
             // Same auto-stretched preview the crop tool + FILES viewer use.
             this.analyze.previewUrl = this.authUrl(
                 '/api/files/preview?path=' + encodeURIComponent(path) + '&maxDim=1600');
@@ -16521,11 +16523,87 @@ function ninaApp() {
             this.analyze.open = false;
             this.analyze.previewUrl = '';
             this.analyze.result = null;
+            this._analyzeInspectorImg = null;
+            this._analyzeInspectorPath = '';
         },
 
         analyzeSetTab(tab) {
             this.analyze.tab = tab;
-            this.$nextTick(() => this._analyzeDrawOverlay());
+            this.$nextTick(() => this._analyzeRedraw());
+        },
+
+        // Redraw whatever the active tab shows. Used by tab switch + resize.
+        _analyzeRedraw() {
+            if (this.analyze.tab === 'inspector') this._analyzeEnsureInspector();
+            else this._analyzeDrawOverlay();
+        },
+
+        // Aberration Inspector: lazy-load a high-res preview once, then
+        // draw the 3x3 mosaic of 1:1 crops.
+        _analyzeEnsureInspector() {
+            if (this._analyzeInspectorImg
+                && this._analyzeInspectorPath === this.analyze.sourcePath) {
+                this._analyzeDrawInspector();
+                return;
+            }
+            const im = new Image();
+            im.onload = () => {
+                this._analyzeInspectorImg = im;
+                this._analyzeInspectorPath = this.analyze.sourcePath;
+                this._analyzeDrawInspector();
+            };
+            im.onerror = () => { this.analyze.error = 'Could not load the image for the inspector.'; };
+            // Big maxDim so corner detail survives (near-native for most
+            // sensors). authUrl carries the bearer token for the <img>.
+            im.src = this.authUrl('/api/files/preview?path='
+                + encodeURIComponent(this.analyze.sourcePath) + '&maxDim=4096');
+        },
+
+        _analyzeDrawInspector() {
+            const img = this._analyzeInspectorImg;
+            const canvas = this.$refs.inspectorCanvas;
+            if (!img || !canvas) return;
+            const stage = canvas.parentElement;
+            const availW = stage.clientWidth, availH = stage.clientHeight;
+            if (!availW || !availH) return;
+            const gap = 6;
+            const sidePx = Math.max(120, Math.min(availW, availH));
+            const cell = Math.floor((sidePx - 2 * gap) / 3);
+            const size = cell * 3 + 2 * gap;
+            canvas.width = size; canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#0b0e14';
+            ctx.fillRect(0, 0, size, size);
+
+            const iw = img.naturalWidth, ih = img.naturalHeight;
+            // Source patch ~18% of the short side, capped so it never
+            // exceeds the frame; centre anchors inset by half a patch.
+            const patch = Math.max(24, Math.round(Math.min(iw, ih) * 0.18));
+            const half = patch / 2;
+            const ax = [half, iw / 2, iw - half];
+            const ay = [half, ih / 2, ih - half];
+            const labels = [['TL', 'T', 'TR'], ['L', 'C', 'R'], ['BL', 'B', 'BR']];
+
+            for (let r = 0; r < 3; r++) {
+                for (let c = 0; c < 3; c++) {
+                    const sx = Math.round(ax[c] - half);
+                    const sy = Math.round(ay[r] - half);
+                    const dx = c * (cell + gap), dy = r * (cell + gap);
+                    try { ctx.drawImage(img, sx, sy, patch, patch, dx, dy, cell, cell); }
+                    catch { /* drawImage can throw on a 0-size patch; skip */ }
+                    // Centre cell gets an accent frame (the reference).
+                    const isCentre = r === 1 && c === 1;
+                    ctx.strokeStyle = isCentre ? 'rgba(96,165,250,0.9)' : 'rgba(255,255,255,0.18)';
+                    ctx.lineWidth = isCentre ? 2 : 1;
+                    ctx.strokeRect(dx + 0.5, dy + 0.5, cell - 1, cell - 1);
+                    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+                    ctx.fillRect(dx, dy, 24, 16);
+                    ctx.fillStyle = '#cfe3ff';
+                    ctx.font = '11px sans-serif';
+                    ctx.textBaseline = 'top';
+                    ctx.fillText(labels[r][c], dx + 5, dy + 3);
+                }
+            }
         },
 
         analyzeOnImageLoaded(ev) {
