@@ -115,6 +115,20 @@ public class GraXpertService {
             return new GraXpertResult("", null, opts.Operation, 0,
                 "Denoising requires GraXpert v3.0+");
 
+        // Make the host CLI use the SAME model Polaris ships for the
+        // browser/native path: normalise the requested version (GraXpert
+        // doesn't know Polaris's -fp16/-int8 variants) and stage the
+        // vendored model.onnx into GraXpert's own store. This honours the
+        // model dropdown on host runs, keeps results consistent with the
+        // browser, and avoids GraXpert re-downloading (works offline).
+        if (!string.IsNullOrEmpty(opts.AiVersion)) {
+            var clean = opts.AiVersion;
+            var dash = clean.IndexOf('-');
+            if (dash > 0) clean = clean[..dash];
+            if (clean != opts.AiVersion) opts = opts with { AiVersion = clean };
+            StageVendoredModel(opts, onLog);
+        }
+
         // GX-12i: use the variant-aware overload so decon stars/objects
         // land in separate sibling files instead of clobbering each other.
         var outputPath = DefaultOutputPath(inputPath, opts);
@@ -210,6 +224,54 @@ public class GraXpertService {
             _logger.LogError(ex, "GraXpert {Op} threw on {Path}", opts.Operation, inputPath);
             return new GraXpertResult("", null, opts.Operation,
                 sw.Elapsed.TotalSeconds, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Stage Polaris's vendored GraXpert model into GraXpert's own model
+    /// store so a host (CLI) run uses the exact file the browser/native
+    /// path uses, instead of GraXpert downloading (or defaulting to) its
+    /// own. Polaris ships the models under
+    ///   wwwroot/graxpert/models/{family-ai-models}/{version}/model.onnx
+    /// which is the SAME layout GraXpert expects under
+    ///   ~/.local/share/GraXpert/{family-ai-models}/{version}/model.onnx
+    /// so we just symlink (or copy, if symlinks are unavailable) the file
+    /// into place when it isn't there already. Best-effort: any failure
+    /// just falls back to GraXpert's normal model resolution.
+    /// </summary>
+    private void StageVendoredModel(GraXpertOptions opts, Action<string>? onLog) {
+        try {
+            var familyDir = opts.Operation switch {
+                GraXpertOperation.BackgroundExtraction => "bge-ai-models",
+                GraXpertOperation.Denoising            => "denoise-ai-models",
+                GraXpertOperation.Deconvolution =>
+                    string.Equals(opts.DeconTarget, "objects", StringComparison.OrdinalIgnoreCase)
+                        ? "deconvolution-object-ai-models"
+                        : "deconvolution-stars-ai-models",
+                _ => null
+            };
+            if (familyDir == null || string.IsNullOrEmpty(opts.AiVersion)) return;
+
+            var src = Path.Combine(AppContext.BaseDirectory, "wwwroot", "graxpert",
+                "models", familyDir, opts.AiVersion, "model.onnx");
+            if (!File.Exists(src)) return; // nothing vendored for this version
+
+            var destDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "GraXpert", familyDir, opts.AiVersion);
+            var dest = Path.Combine(destDir, "model.onnx");
+            if (File.Exists(dest)) return; // already downloaded or staged
+
+            Directory.CreateDirectory(destDir);
+            try {
+                File.CreateSymbolicLink(dest, src);
+                onLog?.Invoke($"using Polaris model: {familyDir}/{opts.AiVersion} (linked)");
+            } catch {
+                File.Copy(src, dest, overwrite: false);
+                onLog?.Invoke($"using Polaris model: {familyDir}/{opts.AiVersion} (copied)");
+            }
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "GraXpert vendored-model staging skipped");
         }
     }
 
