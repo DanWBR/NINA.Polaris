@@ -78,8 +78,10 @@ on the tablet against the Pi:
   copies) Polaris's vendored `model.onnx` into GraXpert's store for the
   requested family/version (suffix `-fp16`/`-int8` stripped so
   `-ai_version` is valid), so the host CLI uses the same model as the
-  browser, honours the dropdown, and works offline. Denoise-scoped for
-  now (client only forwards aiVersion for denoise).
+  browser, honours the dropdown, and works offline. Now covers all three
+  families: `graxpertStartRun` forwards the per-op selected version
+  (`_graxpertSelectedVersion`: BGE / Decon / Denoise), and
+  `StageVendoredModel` stages the matching vendored model for each.
 - **Local (client) models needed a manual Settings re-scan to appear.**
   The ONNX registry resolved a single models dir by priority (profile >
   `/home/polaris/models` > bundled `wwwroot/graxpert/models`). The .deb
