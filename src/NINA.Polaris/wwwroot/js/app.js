@@ -16829,16 +16829,13 @@ function ninaApp() {
                         // and the output suffix (_decon_stars / _decon_objects).
                         deconTarget: this.graxpert.modalDeconTarget || 'stars',
                         denoiseStrength: this.graxpert.modalDenoiseStrength,
-                        // GX-12k: forward the picked denoise model
-                        // version so CLI runs the same AI variant the
-                        // browser would. GraXpert's `-ai_version` is
-                        // op-agnostic, so only send it for denoise to
-                        // avoid accidentally pinning BGE/decon to a
-                        // value that doesn't exist for those families.
-                        aiVersion: this.graxpert.modalOp === 'denoising'
-                            ? (this.graxpert.modalDenoiseVersion
-                                || this.settings.onnxDefaultDenoiseVersion)
-                            : null
+                        // Forward the picked model version for ALL ops so
+                        // the host CLI runs the same AI variant the browser
+                        // would. The server stages Polaris's vendored model
+                        // for that family/version into GraXpert's store and
+                        // passes -ai_version (stripping any -fp16/-int8
+                        // suffix GraXpert doesn't recognise).
+                        aiVersion: this._graxpertSelectedVersion()
                 });
                 // apiPost returns the raw Response — parse the body to get
                 // the jobId (reading resp.jobId directly gave "undefined").
@@ -16848,6 +16845,24 @@ function ninaApp() {
                 this._graxpertStartPolling();
             } catch (e) {
                 this.toast('GraXpert start failed: ' + (e.message || ''), 'error');
+            }
+        },
+
+        // The model version selected in the modal for the current op.
+        // Maps each op to its dropdown so the host CLI can stage + pin the
+        // matching vendored model (BGE / Decon / Denoise alike). Returns
+        // null when nothing is selected (server then uses its default).
+        _graxpertSelectedVersion() {
+            switch (this.graxpert.modalOp) {
+                case 'denoising':
+                    return this.graxpert.modalDenoiseVersion
+                        || this.settings.onnxDefaultDenoiseVersion || null;
+                case 'background-extraction':
+                    return this.graxpert.modalBgeVersion || null;
+                case 'deconvolution':
+                    return this.graxpert.modalDeconVersion || null;
+                default:
+                    return null;
             }
         },
 
