@@ -84,6 +84,28 @@ public class IndiClient : IDisposable {
         _lastConnectionState[device] = nowConnected;
 
         if (nowConnected && !wasConnected) {
+            // Re-issue a device-scoped getProperties shortly after the
+            // device connects. A driver only advertises its operational
+            // property groups (Main Control, Motion Control, Options,
+            // ...) AFTER CONNECT; if our snapshot was taken before that
+            // (or any def broadcast was missed), the property browser
+            // would show only the pre-connect Connection group. Asking
+            // the server to resend this device's properties guarantees
+            // the full tree fills in without the user clicking Refresh.
+            _ = Task.Run(async () => {
+                try {
+                    await Task.Delay(2500);
+                    await SendAsync(IndiXmlWriter.GetProperties(device),
+                                    _cts?.Token ?? default);
+                    DiagLogger.LogInformation(
+                        "INDI re-issued getProperties for '{Device}' after connect "
+                        + "(pull full property tree)", device);
+                } catch (Exception ex) {
+                    DiagLogger.LogDebug(ex,
+                        "INDI post-connect getProperties failed for '{Device}'", device);
+                }
+            });
+
             // Fire-and-forget delayed CONFIG_LOAD. Best-effort -- if the
             // device doesn't have CONFIG_PROCESS the helper returns false
             // silently. 1500ms gives the driver time to define all of
