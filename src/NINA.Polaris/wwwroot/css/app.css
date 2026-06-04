@@ -8288,6 +8288,20 @@ label select.input-sm {
     max-width: 100%;
     max-height: calc(94vh - 170px);
 }
+.analyze-zoom {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+.analyze-zoom .btn {
+    min-width: 30px;
+    padding: 4px 8px;
+    font-size: 16px;
+    line-height: 1;
+}
 .analyze-side {
     flex: 1 1 260px;
     min-width: 240px;

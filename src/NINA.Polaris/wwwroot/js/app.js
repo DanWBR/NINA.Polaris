@@ -2001,6 +2001,7 @@ function ninaApp() {
             result: null,         // FrameAnalysis DTO from the server
             imgDisplayWidth: 0,
             imgDisplayHeight: 0,
+            inspectorZoom: 2,     // 1..6 — higher = tighter (more magnified) crops
         },
 
         // GX-5: editor "AI" section runtime state. Single in-flight
@@ -16538,6 +16539,13 @@ function ninaApp() {
             else this._analyzeDrawOverlay();
         },
 
+        // +/- the inspector crop magnification (1x..6x) and redraw.
+        analyzeInspectorZoom(delta) {
+            const z = Math.min(6, Math.max(1, (this.analyze.inspectorZoom || 2) + delta));
+            this.analyze.inspectorZoom = z;
+            this.$nextTick(() => this._analyzeDrawInspector());
+        },
+
         // Aberration Inspector: lazy-load a high-res preview once, then
         // draw the 3x3 mosaic of 1:1 crops.
         _analyzeEnsureInspector() {
@@ -16576,9 +16584,11 @@ function ninaApp() {
             ctx.fillRect(0, 0, size, size);
 
             const iw = img.naturalWidth, ih = img.naturalHeight;
-            // Source patch ~18% of the short side, capped so it never
-            // exceeds the frame; centre anchors inset by half a patch.
-            const patch = Math.max(24, Math.round(Math.min(iw, ih) * 0.18));
+            // Source patch ~18% of the short side at 1x, shrunk by the zoom
+            // factor so higher zoom magnifies a tighter region. Centre
+            // anchors are inset by half a patch.
+            const zoom = this.analyze.inspectorZoom || 1;
+            const patch = Math.max(24, Math.round(Math.min(iw, ih) * 0.18 / zoom));
             const half = patch / 2;
             const ax = [half, iw / 2, iw - half];
             const ay = [half, ih / 2, ih - half];

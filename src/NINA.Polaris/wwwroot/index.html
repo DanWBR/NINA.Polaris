@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260604-inspector">
+    <link rel="stylesheet" href="/css/app.css?v=20260604-inspzoom">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -10774,15 +10774,25 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         </template>
                     </div>
 
-                    <!-- Inspector help -->
+                    <!-- Inspector help + zoom -->
                     <template x-if="analyze.tab === 'inspector'">
-                        <p class="analyze-verdict sev-unknown">
-                            9 crops at 1:1 — corners + edges around the
-                            centre (C). Compare the corner stars to the
-                            centre: bloated or stretched corners mean tilt,
-                            coma, or field curvature; round + even means
-                            clean optics.
-                        </p>
+                        <div>
+                            <p class="analyze-verdict sev-unknown">
+                                9 crops — corners + edges around the
+                                centre (C). Compare the corner stars to the
+                                centre: bloated or stretched corners mean
+                                tilt, coma, or field curvature; round + even
+                                means clean optics.
+                            </p>
+                            <div class="analyze-zoom">
+                                <span>Zoom</span>
+                                <button class="btn btn-sm" @click="analyzeInspectorZoom(-1)"
+                                        :disabled="analyze.inspectorZoom <= 1">−</button>
+                                <strong x-text="(analyze.inspectorZoom || 2) + '×'"></strong>
+                                <button class="btn btn-sm" @click="analyzeInspectorZoom(1)"
+                                        :disabled="analyze.inspectorZoom >= 6">+</button>
+                            </div>
+                        </div>
                     </template>
 
                     <!-- Tilt view -->
@@ -11507,7 +11517,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260604-inspector"></script>
+    <script src="/js/app.js?v=20260604-inspzoom"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
