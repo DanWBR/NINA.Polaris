@@ -48,6 +48,15 @@ server star-detection pass feeds a combined modal with two tabs.
   radial corners=coma) + a StarDetector eccentricity test. 4 new, 58
   star/livestack/autofocus/crop tests still green (no regression).
 - Backend changed -> operator rebuilds the `.deb`; web cache-bust bumped.
+- **Aberration Inspector tab** (Siril/PixInsight-style): a third tab in
+  the Analyze modal renders a 3x3 mosaic of 1:1 crops (corners + edge
+  midpoints + centre, centre cell accented) on a client-side canvas from
+  a lazily-loaded high-res preview (maxDim=4096), with a Zoom −/+ control
+  (1x..6x) that tightens the per-cell source patch. Purely visual (no
+  metrics) for eyeballing corner star shapes vs the centre. The modal was
+  also enlarged to near-fullscreen (96vw x 94vh) with the preview centred
+  and capped to the viewport height so the whole frame always shows
+  without cropping or scrolling.
 
 ## FIELD5 -- crop / GraXpert toast / INDI properties (real-rig fixes)
 
