@@ -80,6 +80,15 @@ on the tablet against the Pi:
   `-ai_version` is valid), so the host CLI uses the same model as the
   browser, honours the dropdown, and works offline. Denoise-scoped for
   now (client only forwards aiVersion for denoise).
+- **Local (client) models needed a manual Settings re-scan to appear.**
+  The ONNX registry resolved a single models dir by priority (profile >
+  `/home/polaris/models` > bundled `wwwroot/graxpert/models`). The .deb
+  postinst creates an empty `/home/polaris/models`, which shadowed the
+  bundled models -> startup scan found 0 -> empty manifest until the user
+  pressed Re-scan. Now `RescanSync` merges every existing candidate dir
+  (first family/version wins, so user overrides still beat the bundle),
+  and `/api/onnx/manifest` does a cheap stat-only rescan when the registry
+  is empty so a startup race / late-dropped models self-heal.
 
 ## Mobile connect screen -- made it actually work on a device
 
