@@ -9357,10 +9357,12 @@ label select.input-sm {
 
 /* Part B4: meridian-flip "Flip now" control inside the LIVE tab. */
 .livestack-meridian {
-    margin-top: 8px;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border, rgba(255, 255, 255, 0.08));
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 8px;
 }
 .livestack-meridian-row {
     display: flex;
@@ -9372,16 +9374,25 @@ label select.input-sm {
 .livestack-meridian-auto {
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 6px;
+    gap: 8px;
     font-size: 12px;
     cursor: pointer;
 }
+/* Offset row: "Flip [N] min past the meridian", kept together so the
+   unit label never wraps away from its input. */
+.livestack-meridian-offset {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    padding-left: 24px; /* align under the checkbox label text */
+}
 /* Narrower than the default .input-sm: a meridian offset is 0-60, so a
-   compact field reads cleaner inline with the checkbox label. */
+   compact field reads cleaner inline with the unit label. */
 .livestack-meridian-min {
-    width: 60px;
-    min-width: 60px;
+    width: 64px;
+    min-width: 64px;
+    text-align: center;
 }
 .livestack-meridian-err {
     font-size: 11px;

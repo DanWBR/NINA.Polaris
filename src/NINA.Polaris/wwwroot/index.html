@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260604-autoflip2">
+    <link rel="stylesheet" href="/css/app.css?v=20260604-autoflip3">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -1073,19 +1073,24 @@
                              automatically once the target crosses the meridian
                              by N minutes, then the stack keeps going. -->
                         <label class="livestack-meridian-auto"
-                               title="Automatically flip the mount during live stacking once the target passes the meridian by the minutes set here. The stack re-orients and continues on its own.">
+                               title="Automatically flip the mount during live stacking once the target passes the meridian by the minutes set below. The stack re-orients and continues on its own.">
                             <input type="checkbox"
                                    x-model="mfSettings.autoFlipDuringLiveStack"
                                    @change="saveMfSettings()">
-                            🔄 Auto meridian flip
+                            <span>🔄 Auto meridian flip</span>
+                        </label>
+                        <!-- Offset only matters when auto-flip is on. -->
+                        <div class="livestack-meridian-offset"
+                             x-show="mfSettings.autoFlipDuringLiveStack">
+                            <span class="text-muted">Flip</span>
                             <input type="number" min="0" max="60" step="1"
                                    class="input-sm livestack-meridian-min"
                                    x-model.number="mfSettings.minutesAfterMeridian"
                                    @change="saveMfSettings()"
                                    :disabled="mfState !== 'idle'"
                                    title="Minutes past the meridian before flipping">
-                            <span class="text-muted">min past meridian</span>
-                        </label>
+                            <span class="text-muted">min past the meridian</span>
+                        </div>
                         <div class="livestack-meridian-row">
                             <button class="btn btn-sm"
                                     :disabled="!mount.connected || mfState !== 'idle'"
@@ -11583,7 +11588,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260604-autoflip2"></script>
+    <script src="/js/app.js?v=20260604-autoflip3"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
