@@ -10232,6 +10232,8 @@ label select.input-sm {
     font-size: 14px;
     line-height: 1.45;
     color: var(--text-secondary);
+    /* Honour \n in messages (several confirms use multi-line bodies). */
+    white-space: pre-line;
 }
 .confirm-modal-actions {
     display: flex;

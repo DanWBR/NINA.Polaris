@@ -1569,10 +1569,12 @@ function ninaApp() {
             this._stackPersist();
         },
 
-        stackClearSlot(slotKey) {
+        async stackClearSlot(slotKey) {
             if (!Array.isArray(this.stack[slotKey])) return;
             if (this.stack[slotKey].length === 0) return;
-            if (!confirm(`Limpar slot ${slotKey} (${this.stack[slotKey].length} arquivos)?`)) return;
+            if (!await this._confirmAsync(
+                    `Clear slot "${slotKey}" (${this.stack[slotKey].length} file(s))?`,
+                    { title: 'Clear slot', okLabel: 'Clear', danger: true })) return;
             this.stack[slotKey] = [];
             this._stackPersist();
         },
@@ -1672,7 +1674,8 @@ function ninaApp() {
                 + '\n  Dark:  ' + (dPath ? this.stackBasename(dPath) : '(auto-match)')
                 + '\n  Flat:  ' + (fPath ? this.stackBasename(fPath) : '(auto-match)')
                 + '\n  Bias:  ' + (bPath ? this.stackBasename(bPath) : '(auto-match)');
-            if (!confirm(msg)) return;
+            if (!await this._confirmAsync(msg,
+                    { title: 'Calibrate lights', okLabel: 'Calibrate' })) return;
             let resp;
             try {
                 resp = await this.apiPost('/api/studio/calibrate', {
@@ -1703,8 +1706,9 @@ function ninaApp() {
                 'Integration method (Mean / Median / SigmaClippedMean):',
                 'SigmaClippedMean');
             if (!methodIn) return;
-            if (!confirm('Integrate ' + this.stack.lights.length
-                + ' lights with method ' + methodIn.trim() + '?')) return;
+            if (!await this._confirmAsync('Integrate ' + this.stack.lights.length
+                    + ' lights with method ' + methodIn.trim() + '?',
+                    { title: 'Integrate', okLabel: 'Integrate' })) return;
             let resp;
             try {
                 resp = await this.apiPost('/api/studio/integrate', {
@@ -1802,11 +1806,12 @@ function ninaApp() {
                 return;
             }
             const path = this.stack.lights[0];
-            if (!confirm('Background-neutralise (auto sample mode):\n\n'
-                + this.stackBasename(path)
-                + '\n\nOutput will be a sibling FITS with the _bgneu suffix.\n'
-                + '(For Manual + PCC modes, use the old endpoint via curl '
-                + 'until the richer modal lands.)')) return;
+            if (!await this._confirmAsync('Background-neutralise (auto sample mode):\n\n'
+                    + this.stackBasename(path)
+                    + '\n\nOutput will be a sibling FITS with the _bgneu suffix.\n'
+                    + '(For Manual + PCC modes, use the old endpoint via curl '
+                    + 'until the richer modal lands.)',
+                    { title: 'Background neutralise', okLabel: 'Run' })) return;
             let resp;
             try {
                 resp = await this.apiPost('/api/studio/colorcal', {
@@ -1827,11 +1832,12 @@ function ninaApp() {
                 'Color Cal (BG)');
         },
 
-        stackClearAll() {
+        async stackClearAll() {
             const total = this.stackSlotDefs.reduce(
                 (s, def) => s + this.stack[def.key].length, 0);
             if (total === 0) return;
-            if (!confirm(`Limpar TODOS os slots (${total} arquivos)?`)) return;
+            if (!await this._confirmAsync(`Clear ALL slots (${total} file(s))?`,
+                    { title: 'Clear all slots', okLabel: 'Clear all', danger: true })) return;
             for (const def of this.stackSlotDefs) this.stack[def.key] = [];
             this.stack.masterDarks = [];
             this.stack.masterFlats = [];
@@ -9755,8 +9761,9 @@ function ninaApp() {
                 } catch (e) {
                     // 409 means destination exists; ask once and retry the whole batch.
                     if ((e.message || '').includes('Destination exists') && !overwrite) {
-                        if (window.confirm(
-                                `${leaf} already exists in the destination. Overwrite this and any subsequent conflicts?`)) {
+                        if (await this._confirmAsync(
+                                `"${leaf}" already exists in the destination. Overwrite this and any subsequent conflicts?`,
+                                { title: 'Overwrite?', okLabel: 'Overwrite', danger: true })) {
                             overwrite = true;
                             // Retry this one and keep going.
                             try {
@@ -9786,8 +9793,9 @@ function ninaApp() {
         async filesDelete() {
             if (this.files.selectedPaths.length === 0) return;
             const n = this.files.selectedPaths.length;
-            if (!window.confirm(
-                    `Delete ${n} item(s)? This is permanent, folders are removed recursively.`)) return;
+            if (!await this._confirmAsync(
+                    `Delete ${n} item(s)? This is permanent -- folders are removed recursively.`,
+                    { title: 'Delete files', okLabel: 'Delete', danger: true })) return;
             try {
                 await this.apiPost('/api/files/delete', null, {
                     method: 'POST',
@@ -9940,7 +9948,8 @@ function ninaApp() {
                 return;
             }
             // Unknown format: just offer download.
-            if (window.confirm(`No preview available for ${entry.name}. Download instead?`)) {
+            if (await this._confirmAsync(`No preview available for "${entry.name}". Download instead?`,
+                    { title: 'No preview', okLabel: 'Download' })) {
                 this.filesDownloadOne(entry.fullPath);
             }
         },
@@ -9985,9 +9994,10 @@ function ninaApp() {
                 this.toast('Select a single folder first', 'warn');
                 return;
             }
-            if (!window.confirm(
+            if (!await this._confirmAsync(
                     `Use this as the Studio root?\n\n${dir.fullPath}\n\n` +
-                    `Studio will rescan this tree on its next open.`)) return;
+                    `Studio will rescan this tree on its next open.`,
+                    { title: 'Set Studio root', okLabel: 'Set root' })) return;
             try {
                 const r = await this.apiPost('/api/files/studio-root', null, {
                     method: 'POST',
@@ -11913,7 +11923,8 @@ function ninaApp() {
                 this.toast('Cannot delete the last rig', 'warn');
                 return;
             }
-            if (!confirm('Delete this rig? This cannot be undone.')) return;
+            if (!await this._confirmAsync('Delete this rig? This cannot be undone.',
+                    { title: 'Delete rig', okLabel: 'Delete', danger: true })) return;
             try {
                 await this.apiPost(`/api/equipment/rigs/${id}`, null, { method: 'DELETE' });
                 this.rigs = this.rigs.filter(r => r.id !== id);
@@ -13601,10 +13612,12 @@ function ninaApp() {
                 // and post-Reset start both skip the prompt.
                 let action = 'start';   // 'resume' | 'start' | 'start-with-prep'
                 if (existingFrames > 0) {
-                    const choice = window.confirm(
+                    const choice = await this._confirmAsync(
                         existingFrames + ' frame(s) already stacked.\n\n' +
-                        'OK = CONTINUE adding to the existing stack.\n' +
-                        'Cancel = RESTART (clear the stack and begin fresh).');
+                        '"Continue" keeps adding to the existing stack.\n' +
+                        '"Restart" clears the stack and begins fresh.',
+                        { title: 'Live stacking',
+                          okLabel: 'Continue', cancelLabel: 'Restart' });
                     action = choice ? 'resume' : (wantsPrep ? 'start-with-prep' : 'start');
                 } else {
                     action = wantsPrep ? 'start-with-prep' : 'start';
@@ -16196,7 +16209,9 @@ function ninaApp() {
 
         async onnxClearCache() {
             if (this.onnx.clearingCache) return;
-            if (!window.confirm('Drop all cached ONNX model bytes? Next use will re-download.'))
+            if (!await this._confirmAsync(
+                    'Drop all cached ONNX model bytes? Next use will re-download.',
+                    { title: 'Clear AI model cache', okLabel: 'Clear cache', danger: true }))
                 return;
             this.onnx.clearingCache = true;
             try {
@@ -17852,7 +17867,8 @@ function ninaApp() {
         },
 
         async shutdownPhd2() {
-            if (!confirm('Shut down PHD2? Any ongoing guiding will stop.')) return;
+            if (!await this._confirmAsync('Shut down PHD2? Any ongoing guiding will stop.',
+                    { title: 'Shut down PHD2', okLabel: 'Shut down', danger: true })) return;
             try {
                 await this.apiPost('/api/guider/process/shutdown');
                 this.guider.connected = false;
