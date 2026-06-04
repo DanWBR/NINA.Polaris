@@ -120,12 +120,24 @@ public class HostMetricsService : BackgroundService {
                 ? Math.Min(100.0, 100.0 * usedBytes / procTotal)
                 : 0;
         } else {
-            // Fallback (Windows, edge cases): GC info gives the OS
-            // memory ceiling, IResourceMonitor gives the percentage.
+            // Fallback (Windows, edge cases). GCMemoryInfo carries BOTH the
+            // physical-memory ceiling (TotalAvailableMemoryBytes) AND the
+            // system-wide memory load (MemoryLoadBytes, sourced from the OS
+            // — GlobalMemoryStatusEx on Windows). We must NOT use the
+            // IResourceMonitor's MemoryUsedPercentage here: on Windows it is
+            // process-scoped (it reported ~Polaris's working set, e.g.
+            // "1.2 / 63.8 GB"), which is wrong for a system-memory display.
             var gcInfo = GC.GetGCMemoryInfo();
             totalBytes = gcInfo.TotalAvailableMemoryBytes;
-            usedBytes = (long)(totalBytes * util.MemoryUsedPercentage / 100.0);
-            usedPercent = util.MemoryUsedPercentage;
+            usedBytes = gcInfo.MemoryLoadBytes;
+            if (usedBytes <= 0 || totalBytes <= 0) {
+                // GC info not populated yet (no GC has run): fall back to
+                // the monitor's percentage so we show *something* sane.
+                usedBytes = (long)(totalBytes * util.MemoryUsedPercentage / 100.0);
+            }
+            usedPercent = totalBytes > 0
+                ? Math.Min(100.0, 100.0 * usedBytes / totalBytes)
+                : 0;
         }
 
         var now = DateTime.UtcNow;
