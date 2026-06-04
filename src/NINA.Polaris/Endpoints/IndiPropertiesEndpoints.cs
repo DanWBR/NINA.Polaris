@@ -188,6 +188,12 @@ public static class IndiPropertiesEndpoints {
     /// the property type is BLOB (those are routed through
     /// <see cref="Services.ImageRelayService"/> as separate streams,
     /// not edited from this panel).</summary>
+    // Non-finite doubles (±Infinity, NaN) are not valid JSON numbers and
+    // make System.Text.Json throw. INDI number elements can legitimately
+    // carry them for unbounded min/max/step, so we coerce to null.
+    private static double? SafeNum(double v) =>
+        double.IsFinite(v) ? v : (double?)null;
+
     private static object? SerializeProperty(IndiProperty p) {
         var common = new {
             name = p.Name,
@@ -210,10 +216,15 @@ public static class IndiPropertiesEndpoints {
                     elements = num.Values.Select(kv => new {
                         name = kv.Key,
                         label = string.IsNullOrEmpty(kv.Value.Label) ? kv.Key : kv.Value.Label,
-                        value = kv.Value.Value,
-                        min = kv.Value.Min,
-                        max = kv.Value.Max,
-                        step = kv.Value.Step,
+                        // Sanitise: INDI drivers (e.g. OnStep LX200) report
+                        // unbounded numeric fields as ±Infinity / NaN, which
+                        // System.Text.Json refuses to write as valid JSON
+                        // (the whole /properties response would 500). Map
+                        // those to null so the tree still renders.
+                        value = SafeNum(kv.Value.Value),
+                        min = SafeNum(kv.Value.Min),
+                        max = SafeNum(kv.Value.Max),
+                        step = SafeNum(kv.Value.Step),
                         format = kv.Value.Format
                     }).ToList()
                 };

@@ -16803,10 +16803,7 @@ function ninaApp() {
                 return this._graxpertRunInBrowser();
             }
             try {
-                const r = await this.apiPost('/api/graxpert/run', null, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
+                const resp = await this.apiPost('/api/graxpert/run', {
                         paths: this.graxpert.modalPaths,
                         operation: this.graxpert.modalOp,
                         // Backend reads the operation-specific fields
@@ -16831,8 +16828,10 @@ function ninaApp() {
                             ? (this.graxpert.modalDenoiseVersion
                                 || this.settings.onnxDefaultDenoiseVersion)
                             : null
-                    })
                 });
+                // apiPost returns the raw Response — parse the body to get
+                // the jobId (reading resp.jobId directly gave "undefined").
+                const r = await resp.json();
                 this.graxpert.currentJobId = r.jobId;
                 this.toast('GraXpert batch started: ' + r.jobId, 'ok');
                 this._graxpertStartPolling();
