@@ -8349,14 +8349,18 @@ label select.input-sm {
    short and nothing scrolls. The overlay canvas stays aligned because
    the image sits at the stage's top-left. */
 .analyze-modal-frame .analyze-stage {
-    display: flex;
-    align-items: flex-start;
-    justify-content: flex-start;
+    /* Block (not flex): a flex <img> keeps min-height:auto and so
+       max-height:100% can't shrink it, leaving it clipped by overflow.
+       As a plain block whose height is the (definite) stretched column
+       height, the image is bounded by both width and height and shows
+       in full — never cropped. */
+    display: block;
     overflow: hidden;
     background: transparent;
     border: 0;
 }
 .analyze-modal-frame .analyze-stage .crop-picker-img {
+    display: block;
     max-width: 100%;
     max-height: 100%;
     width: auto;
