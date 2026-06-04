@@ -777,6 +777,20 @@ body {
 .video-pane .quick-controls.quick-controls--collapsed {
     transform: translateX(calc(100% - 28px));
 }
+/* Image area reserves room for the floating control panel so the bitmap
+   (and its "no image" placeholder) stays centred in the VISIBLE area
+   instead of sitting behind the panel. The reserve shrinks to just the
+   collapse handle when the panel is collapsed; the transition matches
+   the panel's 200ms slide so they move together. */
+.live-pane > .preview-area,
+.preview-pane > .preview-area {
+    margin-right: 332px; /* 320px panel + 12px gap */
+    transition: margin-right 200ms ease;
+}
+.live-pane.controls-collapsed > .preview-area,
+.preview-pane.controls-collapsed > .preview-area {
+    margin-right: 36px;  /* 28px handle + 8px gap */
+}
 /* AUTORUN + Flat Wizard keep the old in-flow sidebar — they're
    list-driven, not bitmap-driven, so a translucent overlay would
    just hide content with no upside. */
@@ -972,6 +986,8 @@ body {
     .live-pane > .preview-area,
     .preview-pane > .preview-area {
         border-radius: 0;
+        /* Stacked layout: panel docks below, no side reserve. */
+        margin-right: 0;
     }
 }
 
@@ -9159,6 +9175,14 @@ label select.input-sm {
     flex: 1;
     min-width: 0;
     min-height: 200px;
+    /* Reserve room for the floating control panel (340px) so the bitmap
+       stays centred in the visible area, collapsing to the handle width
+       when the panel is hidden. See LIVE/PREVIEW note above. */
+    margin-right: 360px; /* 340px panel + ~20px gap */
+    transition: margin-right 200ms ease;
+}
+.video-pane.controls-collapsed .preview-area {
+    margin-right: 36px;
 }
 /* Floating control sidebar — same treatment as LIVE / PREVIEW
    (translucent, backdrop blur, collapsible via the toggle handle).
@@ -9274,6 +9298,9 @@ label select.input-sm {
 @media (max-width: 900px) {
     .video-pane {
         flex-direction: column;
+    }
+    .video-pane .preview-area {
+        margin-right: 0;
     }
     .video-pane .quick-controls {
         flex: 0 0 auto;

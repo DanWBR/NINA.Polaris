@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260604-autoflip3">
+    <link rel="stylesheet" href="/css/app.css?v=20260604-panereserve">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -741,7 +741,8 @@
                      a horizontal control row sitting under it. Mobile
                      falls back to a column stack (see media query in
                      app.css). -->
-                <div class="live-pane">
+                <div class="live-pane"
+                     :class="{ 'controls-collapsed': quickControlsCollapsed }">
                 <div class="preview-area"
                      @mousemove="onPreviewMouseMove($event)"
                      @mouseleave="hoverPixel = null">
@@ -2412,7 +2413,8 @@
                      canvas left grows into all available width + height,
                      control sidebar 320px on the right. Mobile (≤900px)
                      collapses back to a single-column stack. -->
-                <div class="preview-pane">
+                <div class="preview-pane"
+                     :class="{ 'controls-collapsed': quickControlsCollapsed }">
                 <div class="preview-area">
                     <!-- Dedicated canvas pair (separate ids from LIVE so
                          both tabs can coexist in the DOM and the
@@ -2715,7 +2717,8 @@
                 </div>
 
                 <!-- ===== Tab 1: Capture ===== -->
-                <div x-show="videoTab === 'capture'" class="video-pane">
+                <div x-show="videoTab === 'capture'" class="video-pane"
+                     :class="{ 'controls-collapsed': quickControlsCollapsed }">
                     <div class="preview-area">
                         <canvas id="videoCaptureCanvas" class="preview-canvas"
                                 @click="videoCenterRoiAt($event)"
@@ -3137,7 +3140,8 @@
                 </div>
 
                 <!-- ===== Tab 2: Process (lucky imaging stack) ===== -->
-                <div x-show="videoTab === 'process'" class="video-pane">
+                <div x-show="videoTab === 'process'" class="video-pane"
+                     :class="{ 'controls-collapsed': quickControlsCollapsed }">
                     <div class="control-row" style="margin-bottom:10px">
                         <label style="flex:1">SER file
                             <select x-model="video.processSerPath" class="input-sm">
@@ -11588,7 +11592,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260604-autoflip3"></script>
+    <script src="/js/app.js?v=20260604-panereserve"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
