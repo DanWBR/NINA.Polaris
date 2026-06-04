@@ -10582,17 +10582,41 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 </p>
             </div>
 
+            <!-- Server-side console: live stdout/stderr of the GraXpert
+                 subprocess so the user can watch the host run instead of
+                 a blind spinner. Only present for CLI (host) jobs, the
+                 in-browser ONNX path has its own phase line. Reuses the
+                 Siril console styling. Auto-scrolls (see _graxpertScrollLog). -->
+            <div class="siril-console" x-show="graxpert.currentJob?.log?.length">
+                <div class="siril-console-head">
+                    <span>🖥 GraXpert output (host)</span>
+                    <span class="hint"
+                          x-text="(graxpert.currentJob?.log?.length || 0) + ' lines'"></span>
+                </div>
+                <pre id="graxpertConsole" class="siril-console-body"><template
+                        x-for="(line, i) in (graxpert.currentJob?.log || [])"
+                        :key="i"><span class="siril-console-line"
+                              :class="{ 'siril-console-err': line.startsWith('✗')
+                                        || /error|fail|traceback|exception/i.test(line) }"
+                              x-text="line + '\n'"></span></template></pre>
+            </div>
+
             <!-- During a run (either browser-mode pipeline or CLI
                  batch job) Start + Close hide and Abort takes their
                  place. graxpertIsRunning() covers both backends so
                  the user doesn't see the wrong button briefly while
                  the WS catches up to the CLI job state. -->
             <div class="siril-modal-actions">
+                <!-- CLI finished: keep the console visible until the user
+                     dismisses it; this button runs the post-run UX. -->
+                <button class="btn btn-primary"
+                        x-show="graxpert.cliDone"
+                        @click="graxpertFinishCli()">Close &amp; view results</button>
                 <button class="btn"
-                        x-show="!graxpertIsRunning()"
+                        x-show="!graxpertIsRunning() && !graxpert.cliDone"
                         @click="graxpertCloseModal()">Close</button>
                 <button class="btn btn-primary"
-                        x-show="!graxpertIsRunning() && (!graxpert.currentJob || graxpert.currentJob.completedAt)"
+                        x-show="!graxpertIsRunning() && !graxpert.cliDone && (!graxpert.currentJob || graxpert.currentJob.completedAt)"
                         :disabled="graxpert.browserActive"
                         @click="graxpertStartRun()">Start</button>
                 <button class="btn btn-danger"
@@ -11367,7 +11391,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260604-gxjobid"></script>
+    <script src="/js/app.js?v=20260604-gxlog"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

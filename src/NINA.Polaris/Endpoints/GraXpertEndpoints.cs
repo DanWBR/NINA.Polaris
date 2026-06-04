@@ -59,10 +59,11 @@ public static class GraXpertEndpoints {
 
         g.MapGet("/jobs/{jobId}", (GraXpertService gx, string jobId) => {
             var job = gx.GetJob(jobId);
-            return job == null ? Results.NotFound() : Results.Ok(job);
+            return job == null ? Results.NotFound() : Results.Ok(SnapshotJob(job));
         });
 
-        g.MapGet("/jobs", (GraXpertService gx) => Results.Ok(gx.ActiveJobs));
+        g.MapGet("/jobs", (GraXpertService gx) =>
+            Results.Ok(gx.ActiveJobs.Select(SnapshotJob).ToList()));
 
         g.MapPost("/jobs/{jobId}/cancel", (GraXpertService gx, string jobId) => {
             var ok = gx.CancelJob(jobId);
@@ -80,6 +81,28 @@ public static class GraXpertEndpoints {
                 supportsDenoising = gx.SupportsDenoising
             });
         });
+    }
+
+    // Serialize a consistent snapshot of the job. The service mutates
+    // Log / Results / CurrentlyProcessing live under lock(job); copying
+    // the lists under the same lock prevents a "Collection was modified"
+    // exception when System.Text.Json enumerates them mid-run.
+    private static object SnapshotJob(GraXpertBatchJob job) {
+        lock (job) {
+            return new {
+                jobId = job.JobId,
+                operation = job.Operation.ToString(),
+                total = job.Total,
+                done = job.Done,
+                failed = job.Failed,
+                currentlyProcessing = job.CurrentlyProcessing.ToList(),
+                results = job.Results.ToList(),
+                log = job.Log.ToList(),
+                startedAt = job.StartedAt,
+                completedAt = job.CompletedAt,
+                cancelRequested = job.CancelRequested
+            };
+        }
     }
 
     private static GraXpertOperation? ParseOperation(string? s) {

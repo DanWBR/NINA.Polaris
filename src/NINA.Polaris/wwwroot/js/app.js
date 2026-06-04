@@ -1917,6 +1917,13 @@ function ninaApp() {
             currentJobId: null,
             currentJob: null,
             _pollTimer: null,
+            // CLI run finished but the modal stays open so the user can
+            // read the full server-side console output. cliCompletion
+            // stashes {written, failed, pairs} so "Close & view results"
+            // can still pre-select the siblings + open the before/after
+            // comparator after they dismiss the log.
+            cliDone: false,
+            cliCompletion: null,
             // GX-2: browser-mode (ONNX) run state. Default toggle ON
             // when an operation has its model available in the
             // manifest (onnxAvailableForOp). When the user clicks Start,
@@ -16369,11 +16376,15 @@ function ninaApp() {
             this.graxpert.currentJob = null;
             this.graxpert.browserActive = false;
             this.graxpert.browserAbortRequested = false;
+            this.graxpert.cliDone = false;
+            this.graxpert.cliCompletion = null;
             this.graxpert.modalOpen = true;
         },
 
         graxpertCloseModal() {
             this.graxpert.modalOpen = false;
+            this.graxpert.cliDone = false;
+            this.graxpert.cliCompletion = null;
             if (this.graxpert._pollTimer) {
                 clearInterval(this.graxpert._pollTimer);
                 this.graxpert._pollTimer = null;
@@ -17309,22 +17320,23 @@ function ninaApp() {
                     const job = await this.apiGet('/api/graxpert/jobs/'
                         + encodeURIComponent(this.graxpert.currentJobId));
                     this.graxpert.currentJob = job;
+                    // Auto-scroll the console to the newest line unless the
+                    // user scrolled up to read history.
+                    this._graxpertScrollLog();
                     if (job?.completedAt) {
                         clearInterval(this.graxpert._pollTimer);
                         this.graxpert._pollTimer = null;
                         const msg = `GraXpert done, ${job.done} ok, ${job.failed} failed`;
                         this.toast(msg, job.failed ? 'warn' : 'ok');
-                        // UX: auto-close + select the new siblings.
-                        // GraXpertBatchJob.Results carries the full
-                        // output path for each finished file; map to
-                        // a flat string[] for _graxpertHandleCompletion.
+                        // GraXpertBatchJob.Results carries the full output
+                        // path for each finished file; map to a flat
+                        // string[] for _graxpertHandleCompletion.
                         const written = (job.results || [])
                             .map(r => r.outputPath)
                             .filter(p => !!p);
-                        // GX-11: pair against the modalPaths input
-                        // list. CLI processes inputs in order so a
-                        // positional zip is safe (no per-input split
-                        // like saveBackground in the browser path).
+                        // GX-11: pair against the modalPaths input list.
+                        // CLI processes inputs in order so a positional zip
+                        // is safe (no per-input split like the browser path).
                         const inputs = this.graxpert.modalPaths || [];
                         const pairs = [];
                         for (let i = 0; i < written.length && i < inputs.length; i++) {
@@ -17333,11 +17345,39 @@ function ninaApp() {
                                 label: inputs[i].split(/[\\/]+/).pop(),
                             });
                         }
-                        await this._graxpertHandleCompletion(
-                            written, job.failed || 0, pairs);
+                        // Keep the modal open showing the full console
+                        // output; the user reviews it and clicks "Close &
+                        // view results" to run the sibling-select +
+                        // comparator. (Previously this auto-closed, hiding
+                        // the host log the user asked to see.)
+                        this.graxpert.cliDone = true;
+                        this.graxpert.cliCompletion = {
+                            written, failed: job.failed || 0, pairs
+                        };
+                        this.$nextTick(() => this._graxpertScrollLog());
                     }
                 } catch (e) { /* transient, keep polling */ }
             }, 1500);
+        },
+
+        // Scroll the GraXpert console panel to the bottom if the user
+        // isn't currently scrolled up reading earlier output.
+        _graxpertScrollLog() {
+            const el = document.getElementById('graxpertConsole');
+            if (!el) return;
+            const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+            if (nearBottom) el.scrollTop = el.scrollHeight;
+        },
+
+        // "Close & view results" after a CLI run: finish the post-run UX
+        // (sibling select + before/after comparator) the auto-close used
+        // to do, now deferred until the user dismisses the console.
+        async graxpertFinishCli() {
+            const c = this.graxpert.cliCompletion;
+            this.graxpert.cliDone = false;
+            this.graxpert.cliCompletion = null;
+            if (!c || c.failed > 0) { this.graxpertCloseModal(); return; }
+            await this._graxpertHandleCompletion(c.written, c.failed, c.pairs);
         },
 
         async graxpertCancelCurrent() {

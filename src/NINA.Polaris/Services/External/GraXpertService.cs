@@ -98,7 +98,8 @@ public class GraXpertService {
 
     public async Task<GraXpertResult> ProcessFrameAsync(string inputPath,
                                                          GraXpertOptions opts,
-                                                         CancellationToken ct) {
+                                                         CancellationToken ct,
+                                                         Action<string>? onLog = null) {
         if (!IsAvailable)
             return new GraXpertResult("", null, opts.Operation, 0, "GraXpert not installed");
         if (!File.Exists(inputPath))
@@ -125,27 +126,52 @@ public class GraXpertService {
             opts.Operation, inputPath, outputPath);
 
         try {
-            using var proc = Process.Start(new ProcessStartInfo {
-                FileName = BinaryPath!,
-                Arguments = args,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-                WorkingDirectory = Path.GetDirectoryName(inputPath) ?? Path.GetTempPath()
-            });
-            if (proc == null)
-                return new GraXpertResult("", null, opts.Operation, 0, "Failed to start GraXpert");
+            using var proc = new Process {
+                StartInfo = new ProcessStartInfo {
+                    FileName = BinaryPath!,
+                    Arguments = args,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                    WorkingDirectory = Path.GetDirectoryName(inputPath) ?? Path.GetTempPath()
+                }
+            };
 
-            // Read stdout/stderr to avoid pipe-buffer deadlocks on
-            // long runs. We don't parse anything, GraXpert doesn't
-            // emit structured progress.
-            var stdoutTask = proc.StandardOutput.ReadToEndAsync(ct);
-            var stderrTask = proc.StandardError.ReadToEndAsync(ct);
+            // Stream stdout + stderr line-by-line so the UI can show the
+            // GraXpert console live (model load, progress, errors) instead
+            // of a silent spinner. We still accumulate the full text for
+            // the error message on a non-zero exit. Event-based reading
+            // also avoids pipe-buffer deadlocks on long runs.
+            var stdoutSb = new System.Text.StringBuilder();
+            var stderrSb = new System.Text.StringBuilder();
+            proc.OutputDataReceived += (_, e) => {
+                if (e.Data == null) return;
+                lock (stdoutSb) stdoutSb.AppendLine(e.Data);
+                try { onLog?.Invoke(e.Data); } catch { /* logging is best-effort */ }
+            };
+            proc.ErrorDataReceived += (_, e) => {
+                if (e.Data == null) return;
+                lock (stderrSb) stderrSb.AppendLine(e.Data);
+                try { onLog?.Invoke(e.Data); } catch { /* logging is best-effort */ }
+            };
+
+            // Surface the exact command so the user (or a bug report) can
+            // see precisely what ran on the host.
+            try { onLog?.Invoke($"$ {Path.GetFileName(BinaryPath)} {args}"); } catch { }
+
+            if (!proc.Start())
+                return new GraXpertResult("", null, opts.Operation, 0, "Failed to start GraXpert");
+            proc.BeginOutputReadLine();
+            proc.BeginErrorReadLine();
 
             await proc.WaitForExitAsync(ct);
-            var stdout = await stdoutTask;
-            var stderr = await stderrTask;
+            // Final synchronous wait flushes the async output handlers so
+            // stdout/stderr are complete before we read them.
+            proc.WaitForExit();
+            string stdout, stderr;
+            lock (stdoutSb) stdout = stdoutSb.ToString();
+            lock (stderrSb) stderr = stderrSb.ToString();
             sw.Stop();
 
             if (proc.ExitCode != 0) {
@@ -216,15 +242,42 @@ public class GraXpertService {
         // Windows mini PCs can crank it up.
         var concurrency = Math.Max(1, req.Concurrency);
         using var sem = new SemaphoreSlim(concurrency, concurrency);
+
+        // Append a console line to the job, capped so a chatty model can't
+        // grow the log (and the polled JSON payload) without bound.
+        void AppendLog(string line) {
+            lock (job) {
+                job.Log.Add(line);
+                const int cap = 1000;
+                if (job.Log.Count > cap)
+                    job.Log.RemoveRange(0, job.Log.Count - cap);
+            }
+        }
+
+        AppendLog($"GraXpert {Version} -- {req.Options.Operation}, "
+            + $"{req.InputPaths.Count} file(s), concurrency {concurrency}");
+
         var tasks = new List<Task>();
         foreach (var input in req.InputPaths) {
             if (job.CancelRequested) break;
             await sem.WaitAsync(outerCt);
             tasks.Add(Task.Run(async () => {
+                var baseName = Path.GetFileName(input);
                 try {
                     if (job.CancelRequested) return;
                     lock (job) job.CurrentlyProcessing.Add(input);
-                    var res = await ProcessFrameAsync(input, req.Options, outerCt);
+                    AppendLog($"▶ {baseName}");
+                    // When several files run concurrently, prefix each
+                    // console line with the file so interleaved output is
+                    // still readable; single-file runs stay clean.
+                    var res = await ProcessFrameAsync(input, req.Options, outerCt,
+                        req.InputPaths.Count > 1
+                            ? line => AppendLog($"[{baseName}] {line}")
+                            : AppendLog);
+                    AppendLog(string.IsNullOrEmpty(res.Error)
+                        ? $"✓ {baseName} done in {res.ElapsedSeconds:0.0}s "
+                            + $"→ {Path.GetFileName(res.OutputPath)}"
+                        : $"✗ {baseName} FAILED: {res.Error}");
                     lock (job) {
                         job.CurrentlyProcessing.Remove(input);
                         job.Results.Add(res);
@@ -493,6 +546,10 @@ public class GraXpertBatchJob {
     public int Failed { get; set; }
     public List<string> CurrentlyProcessing { get; set; } = new();
     public List<GraXpertResult> Results { get; set; } = new();
+    /// <summary>Live console output (stdout + stderr) from the GraXpert
+    /// subprocess(es), capped to the last ~1000 lines. Polled by the UI
+    /// so the user can watch the host-side run instead of a blind spinner.</summary>
+    public List<string> Log { get; set; } = new();
     public DateTime StartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
     public bool CancelRequested { get; set; }
