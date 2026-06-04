@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260604-spinner">
+    <link rel="stylesheet" href="/css/app.css?v=20260604-cache-mflip">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -1058,6 +1058,42 @@
                                   x-show="liveStackStatus?.framesSavedToDisk"
                                   x-text="'(' + liveStackStatus.framesSavedToDisk + ' saved)'"></span>
                         </label>
+                    </div>
+
+                    <!-- Part B4: meridian flip from the LIVE panel. The
+                         mount is already on target, so "Flip now" reads its
+                         current RA/Dec and re-slews to the same spot (the
+                         mount firmware flips when crossing its limit, then
+                         we recenter). The live stack auto-detects the new
+                         orientation and keeps stacking — no ghosting. The
+                         button is disabled unless a mount is connected and
+                         no flip is already running. -->
+                    <div class="livestack-meridian">
+                        <div class="livestack-meridian-row">
+                            <button class="btn btn-sm"
+                                    :disabled="!mount.connected || mfState !== 'idle'"
+                                    @click="triggerMeridianFlipNow()"
+                                    title="Flip the mount now and keep stacking. Reads the mount's current position; the mount flips when the re-slew crosses its meridian limit, then recenters.">
+                                🔄 Flip now
+                            </button>
+                            <button class="btn btn-sm btn-danger"
+                                    x-show="mfState !== 'idle'"
+                                    @click="abortMeridianFlip()"
+                                    title="Abort the running meridian flip.">
+                                ✕ Abort flip
+                            </button>
+                            <span class="text-muted" x-show="!mount.connected">
+                                Connect a mount to flip.
+                            </span>
+                            <span class="text-warn" x-show="mfState !== 'idle'"
+                                  x-text="'Flipping: ' + mfState"></span>
+                            <span class="text-muted"
+                                  x-show="mount.connected && mfState === 'idle' && (liveStackStatus?.meridianFlipsHandled || 0) > 0"
+                                  x-text="liveStackStatus.meridianFlipsHandled + ' flip(s) handled this stack'"></span>
+                        </div>
+                        <div class="livestack-meridian-err text-err"
+                             x-show="mfLastFlipError"
+                             x-text="'Last flip error: ' + mfLastFlipError"></div>
                     </div>
 
                     <!-- REFSUG-3: refocus-suggestion callout. Visible only
@@ -11523,7 +11559,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260604-spinner"></script>
+    <script src="/js/app.js?v=20260604-cache-mflip"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

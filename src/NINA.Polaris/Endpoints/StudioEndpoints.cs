@@ -55,21 +55,36 @@ public static class StudioEndpoints {
         // second; FrameProcessingService keeps a small decoded-frame LRU
         // so the LUT pass is the only work per request. All stretch
         // params are optional, omit them to get the auto-stretch view.
-        g.MapGet("/frames/{id:int}/preview", async (FrameProcessingService svc,
+        g.MapGet("/frames/{id:int}/preview", async (HttpContext ctx,
+            FrameProcessingService svc, FrameLibraryService lib,
             int id, double? black, double? mid, double? white,
             int? max, int? quality, string? format, CancellationToken ct) => {
+            // Resolve the source row first: gives us the file path (for the
+            // mtime-aware cache key) and a clean 404 for a stale id.
+            var row = lib.GetById(id);
+            if (row == null) return Results.NotFound();
+
             var opts = new FrameProcessingService.StretchOptions(black, mid, white);
             var fmt = (format ?? "jpg").Trim().ToLowerInvariant();
-            byte[]? bytes;
-            string mime;
-            if (fmt == "png") {
-                bytes = await svc.RenderPngAsync(id, opts, max ?? 1600, ct);
-                mime = "image/png";
-            } else {
-                bytes = await svc.RenderJpegAsync(id, opts, max ?? 1600, quality ?? 85, ct);
-                mime = "image/jpeg";
+            var maxDim = max ?? 1600;
+            var q = quality ?? 85;
+            var (ext, mime) = fmt == "png" ? ("png", "image/png") : ("jpg", "image/jpeg");
+
+            // CACHE: the stretch params (black/mid/white) are part of the key,
+            // so each distinct slider position renders once then serves from
+            // disk with ETag/304. A source overwrite changes mtime -> new key.
+            var key = RenderCache.KeyForFile(row.Path, "studio", id, fmt,
+                maxDim, q, black, mid, white);
+            try {
+                return await Task.Run(() => RenderCache.ServeCached(ctx, key, ext, mime, () => {
+                    var bytes = fmt == "png"
+                        ? svc.RenderPngAsync(id, opts, maxDim, ct).GetAwaiter().GetResult()
+                        : svc.RenderJpegAsync(id, opts, maxDim, q, ct).GetAwaiter().GetResult();
+                    return bytes ?? throw new StudioRenderFailedException();
+                }), ct);
+            } catch (StudioRenderFailedException) {
+                return Results.NotFound();
             }
-            return bytes == null ? Results.NotFound() : Results.File(bytes, mime);
         });
 
         // Black/mid/white the UI should preload sliders with for this
@@ -295,4 +310,9 @@ public static class StudioEndpoints {
     // UNIF-3a: path-based contract. The Stack sub-tab posts absolute
     // paths straight from the user's slot assignments.
     public record MasterRequest(List<string> FramePaths, string Type, string Method);
+
+    /// <summary>Thrown from the preview RenderCache lambda when the
+    /// frame renderer returns null (corrupt / unreadable source), so the
+    /// caller maps it to 404 instead of a generic 500.</summary>
+    private sealed class StudioRenderFailedException : Exception { }
 }

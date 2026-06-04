@@ -247,6 +247,9 @@ public static class StatusStreamHandler {
                             // counter rendered next to it.
                             saveFramesToDisk = liveStack.SaveFramesToDisk,
                             framesSavedToDisk = liveStack.FramesSavedToDisk,
+                            // Part B: how many meridian flips the stacker
+                            // re-oriented and kept stacking through.
+                            meridianFlipsHandled = liveStack.MeridianFlipsHandled,
                             // Continuous-stack + duration cap. UI uses
                             // these to render the elapsed counter, the
                             // "stack complete" badge once the cap fires,

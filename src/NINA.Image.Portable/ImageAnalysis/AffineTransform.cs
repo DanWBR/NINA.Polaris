@@ -14,6 +14,29 @@ public class AffineTransform {
         return (M00 * x + M01 * y + Tx, M10 * x + M11 * y + Ty);
     }
 
+    /// <summary>
+    /// Composition <c>after ∘ first</c>: the returned transform applies
+    /// <paramref name="first"/> to a point and then <paramref name="after"/>
+    /// to the result, i.e. <c>Compose(after, first).Apply(p) ==
+    /// after.Apply(first.Apply(p))</c>.
+    ///
+    /// Used by the live stacker's meridian-flip path: a post-flip frame is
+    /// rotated 180° onto the reference orientation (<paramref name="first"/>),
+    /// then the residual translation/rotation match (<paramref name="after"/>)
+    /// is applied, so a single resampler warp lands the frame on the
+    /// reference grid.
+    /// </summary>
+    public static AffineTransform Compose(AffineTransform after, AffineTransform first) {
+        return new AffineTransform {
+            M00 = after.M00 * first.M00 + after.M01 * first.M10,
+            M01 = after.M00 * first.M01 + after.M01 * first.M11,
+            M10 = after.M10 * first.M00 + after.M11 * first.M10,
+            M11 = after.M10 * first.M01 + after.M11 * first.M11,
+            Tx = after.M00 * first.Tx + after.M01 * first.Ty + after.Tx,
+            Ty = after.M10 * first.Tx + after.M11 * first.Ty + after.Ty
+        };
+    }
+
     public static AffineTransform? FromPointPairs(
         (double x, double y)[] src, (double x, double y)[] dst) {
         int n = Math.Min(src.Length, dst.Length);

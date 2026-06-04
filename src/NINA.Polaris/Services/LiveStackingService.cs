@@ -1,3 +1,4 @@
+using NINA.Core.Enum;
 using NINA.Image.ImageAnalysis;
 using NINA.Image.ImageData;
 using NINA.Image.Interfaces;
@@ -60,6 +61,27 @@ public class LiveStackingService {
     private int _frameCount;
     private int _framesSavedToDisk;
     private List<DetectedStar>? _referenceStars;
+
+    // ---- Meridian flip (Part B) ---------------------------------
+    // The accumulator stays in the REFERENCE orientation. After a GEM
+    // meridian flip, incoming frames arrive ~180-deg rotated; we detect
+    // that and warp them back onto the reference grid so the stack keeps
+    // growing without ghosting.
+    //
+    // _flipped tracks the orientation incoming frames are currently in
+    // relative to the reference (true = arriving 180-deg rotated). Once
+    // set we probe that orientation first to avoid a wasted match.
+    private bool _flipped;
+    // Pier side captured at the reference frame. A later frame reporting a
+    // different pier side is a proactive hint that the next frame is
+    // flipped (B2) -- purely an optimisation, B1's auto-detect is the
+    // guarantee.
+    private PierSide _referencePier = PierSide.pierUnknown;
+    /// <summary>Count of meridian-flip orientation changes the stacker
+    /// re-oriented and kept stacking through during the current session.
+    /// Surfaced on the WS status payload + LIVE tab. Reset in
+    /// <see cref="Reset"/>.</summary>
+    public int MeridianFlipsHandled { get; private set; }
     // Default: stacking is ON. Live stacking is the user's expected
     // behaviour the moment they point a camera at the sky — they
     // shouldn't have to click "Start" first. The toggle still exists
@@ -155,18 +177,28 @@ public class LiveStackingService {
     // the WS payload so the LIVE-tab UI can show counters in real time.
     private readonly LiveStackPreProcessor? _preProcessor;
     private readonly ProfileService? _profiles;
+    // Part B: optional in unit tests (the doubles construct without DI).
+    // _equipment provides the pier-side hint; _meridian lets us pause
+    // integration while a flip slew is in progress. Both null -> the
+    // alignment-based auto-detect (B1) still handles a flip on its own.
+    private readonly EquipmentManager? _equipment;
+    private readonly MeridianFlipService? _meridian;
     public LiveStackPreProcStatus PreProcStatus { get; } = new();
 
     public LiveStackingService(ImageRelayService relay,
                                 ILogger<LiveStackingService> logger,
                                 ImageWriterService? writer = null,
                                 ProfileService? profiles = null,
-                                LiveStackPreProcessor? preProcessor = null) {
+                                LiveStackPreProcessor? preProcessor = null,
+                                EquipmentManager? equipment = null,
+                                MeridianFlipService? meridian = null) {
         _relay = relay;
         _writer = writer;
         _logger = logger;
         _profiles = profiles;
         _preProcessor = preProcessor;
+        _equipment = equipment;
+        _meridian = meridian;
         // SNR-3: keep TargetSnr aligned with the active rig until the
         // user explicitly overrides via /api/livestack/target-snr.
         // ProfileService is optional in the ctor so the existing test
@@ -221,6 +253,9 @@ public class LiveStackingService {
             _stackBuffer = null;
             _countBuffer = null;
             _referenceStars = null;
+            _flipped = false;
+            _referencePier = PierSide.pierUnknown;
+            MeridianFlipsHandled = 0;
             _frameCount = 0;
             _framesSavedToDisk = 0;
             _width = 0;
@@ -313,6 +348,17 @@ public class LiveStackingService {
             return;
         }
 
+        // Part B3: while a meridian flip is running the mount is slewing
+        // and settling, so any frame captured now is trailed/blurred.
+        // Skip integration until the flip returns to Idle -- the frame is
+        // still saved to disk (above) and the first good frame afterwards
+        // is re-oriented by the alignment probe in B1.
+        if (_meridian != null && _meridian.State != MeridianFlipState.Idle) {
+            _logger.LogDebug("Live stack: meridian flip in progress ({State}), skipping frame",
+                _meridian.State);
+            return;
+        }
+
         var props = imageData.Properties;
         var data = imageData.Data;
 
@@ -378,6 +424,10 @@ public class LiveStackingService {
                     _stackBuffer = new float[pixelCount];
                     _countBuffer = new int[pixelCount];
                     _referenceStars = stars;
+                    // Part B2: remember the pier side at the reference so a
+                    // later change can hint a flip before alignment proves it.
+                    _referencePier = _equipment?.Telescope?.SideOfPier ?? PierSide.pierUnknown;
+                    _flipped = false;
                     alignedData = data;
                 } else {
                     if (props.Width != _width || props.Height != _height) {
@@ -386,15 +436,36 @@ public class LiveStackingService {
                         return;
                     }
 
-                    // Align to reference
-                    var transform = StarMatcher.Match(_referenceStars!, stars);
-                    if (transform == null) {
+                    // Part B1+B2: orientation-aware alignment. Probe the
+                    // orientation we expect first (the one we last matched,
+                    // or "flipped" when the pier side changed), then the
+                    // other. The reference accumulator never rotates -- a
+                    // post-flip frame is warped back onto it.
+                    var curPier = _equipment?.Telescope?.SideOfPier ?? PierSide.pierUnknown;
+                    bool pierFlipHint = _referencePier != PierSide.pierUnknown
+                        && curPier != PierSide.pierUnknown
+                        && curPier != _referencePier;
+                    // Probe the flipped orientation first when either the
+                    // pier hint says so or we're already tracking a flip.
+                    bool flippedFirst = _flipped || pierFlipHint;
+
+                    alignedData = TryAlignOriented(stars, data, flippedFirst, out bool usedFlipped);
+                    if (alignedData == null) {
                         _logger.LogWarning("Alignment failed for frame {N}, skipping", _frameCount + 1);
                         return;
                     }
 
-                    alignedData = ImageResampler.ApplyTransform(data, _width, _height, transform);
-                    _logger.LogDebug("Frame aligned: dx={Tx:F1} dy={Ty:F1}", transform.Tx, transform.Ty);
+                    if (usedFlipped != _flipped) {
+                        // Orientation toggled -> a meridian flip happened
+                        // (or the mount flipped back). Count it and keep
+                        // probing this orientation first from now on.
+                        _flipped = usedFlipped;
+                        MeridianFlipsHandled++;
+                        _logger.LogInformation(
+                            "Live stack: meridian flip handled, now stacking {Orient} frames (total flips={N})",
+                            usedFlipped ? "180-deg-rotated" : "reference-orientation",
+                            MeridianFlipsHandled);
+                    }
                 }
 
                 // Accumulate into stack buffer (running average)
@@ -490,6 +561,71 @@ public class LiveStackingService {
                 }
             }
         }
+    }
+
+    // ===== Meridian-flip alignment helpers (Part B) ==============
+    //
+    // Callers hold _lock (these read _referenceStars / _width / _height).
+
+    /// <summary>
+    /// Try to align <paramref name="data"/> onto the reference grid in both
+    /// orientations, probing <paramref name="flippedFirst"/> first. Returns
+    /// the warped pixels (reference orientation) or null if neither
+    /// orientation registers. <paramref name="usedFlipped"/> reports which
+    /// orientation won so the caller can track flip state.
+    /// </summary>
+    private ushort[]? TryAlignOriented(List<DetectedStar> stars, ushort[] data,
+                                       bool flippedFirst, out bool usedFlipped) {
+        usedFlipped = false;
+        var order = flippedFirst ? new[] { true, false } : new[] { false, true };
+        foreach (var flip in order) {
+            if (!flip) {
+                var t = StarMatcher.Match(_referenceStars!, stars);
+                if (t != null) {
+                    usedFlipped = false;
+                    _logger.LogDebug("Frame aligned (reference orientation): dx={Tx:F1} dy={Ty:F1}",
+                        t.Tx, t.Ty);
+                    return ImageResampler.ApplyTransform(data, _width, _height, t);
+                }
+            } else {
+                var rotStars = Rotate180Stars(stars, _width, _height);
+                // Bigger search radius: a flip that wasn't plate-solve
+                // recentred can leave a large residual translation that the
+                // default 50 px window would miss.
+                var t = StarMatcher.Match(_referenceStars!, rotStars, maxSearchRadius: 250.0);
+                if (t != null) {
+                    usedFlipped = true;
+                    // Single warp lands the (un-rotated) frame on the
+                    // reference grid: rotate 180 then apply the residual
+                    // match, composed into one transform.
+                    var rot180 = new AffineTransform {
+                        M00 = -1, M11 = -1, Tx = _width - 1, Ty = _height - 1
+                    };
+                    var composed = AffineTransform.Compose(t, rot180);
+                    _logger.LogDebug("Frame aligned (flipped): residual dx={Tx:F1} dy={Ty:F1}",
+                        t.Tx, t.Ty);
+                    return ImageResampler.ApplyTransform(data, _width, _height, composed);
+                }
+            }
+        }
+        return null;
+    }
+
+    private static List<DetectedStar> Rotate180Stars(List<DetectedStar> stars, int w, int h) {
+        var result = new List<DetectedStar>(stars.Count);
+        foreach (var s in stars) {
+            result.Add(new DetectedStar {
+                X = (w - 1) - s.X,
+                Y = (h - 1) - s.Y,
+                HFR = s.HFR,
+                Peak = s.Peak,
+                Flux = s.Flux,
+                PixelCount = s.PixelCount,
+                Eccentricity = s.Eccentricity,
+                OrientationRad = s.OrientationRad
+            });
+        }
+        return result;
     }
 
     // ===== SNR-4 helpers =========================================
@@ -648,6 +784,7 @@ public class LiveStackingService {
             Mode = Mode.ToString().ToLowerInvariant(),
             SaveFramesToDisk = SaveFramesToDisk,
             FramesSavedToDisk = _framesSavedToDisk,
+            MeridianFlipsHandled = MeridianFlipsHandled,
             MaxDurationSeconds = MaxDurationSeconds,
             StartedAt = _startedAt,
             ElapsedSeconds = ElapsedSeconds,
@@ -684,6 +821,10 @@ public class LiveStackingService {
         /// current session. Shown next to the toggle as live
         /// confirmation that the writes are actually working.</summary>
         public int FramesSavedToDisk { get; set; }
+        /// <summary>How many meridian-flip orientation changes the stacker
+        /// re-oriented and stacked through this session. Surfaced in the
+        /// LIVE tab as a "flips handled" note.</summary>
+        public int MeridianFlipsHandled { get; set; }
         /// <summary>Per-stack auto-pause cap, seconds. 0 = unlimited
         /// (default). Persisted per-rig.</summary>
         public int MaxDurationSeconds { get; set; }

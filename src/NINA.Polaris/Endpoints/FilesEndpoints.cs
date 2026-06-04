@@ -129,7 +129,7 @@ public static class FilesEndpoints {
         // formats pass through unchanged (browser decodes natively);
         // TIFF gets decoded via Skia to PNG; text gets the first
         // ~32 KB as text/plain. Unknown formats → 415.
-        g.MapGet("/preview", async (FileBrowserService svc, string path,
+        g.MapGet("/preview", async (HttpContext ctx, FileBrowserService svc, string path,
                                     int? maxDim, string? stretchFrom,
                                     string? bayer,
                                     CancellationToken ct) => {
@@ -170,23 +170,37 @@ public static class FilesEndpoints {
 
                 switch (kind) {
                     case PreviewKind.Fits: {
-                        var jpeg = await Task.Run(()
-                            => FitsThumbnailer.RenderJpegFromPath(full,
+                        // CACHE: render once per (file, mtime, size, maxDim,
+                        // stretchFrom, bayer) and serve the physical file so
+                        // ASP.NET answers conditional GETs with 304.
+                        var key = RenderCache.KeyForFile(full, "fits", max,
+                            stretchRefFull, bayer);
+                        return await Task.Run(() => RenderCache.ServeCached(
+                            ctx, key, "jpg", "image/jpeg",
+                            () => FitsThumbnailer.RenderJpegFromPath(full,
                                     maxDim: max, quality: 90,
                                     stretchFromPath: stretchRefFull,
-                                    bayerOverride: bayerOverride), ct);
-                        return Results.File(jpeg, "image/jpeg");
+                                    bayerOverride: bayerOverride)), ct);
                     }
                     case PreviewKind.RasterPassthrough: {
-                        var stream = svc.OpenRead(full);
-                        return Results.File(stream,
-                            FileBrowserService.GuessMime(Path.GetExtension(full)));
+                        // Serve the physical source file directly: validators
+                        // (ETag + Last-Modified) and 304 handling for free,
+                        // no cache copy needed since the source IS the bytes.
+                        ctx.Response.Headers.CacheControl = "private";
+                        return Results.File(full,
+                            FileBrowserService.GuessMime(Path.GetExtension(full)),
+                            enableRangeProcessing: true);
                     }
                     case PreviewKind.TiffDecode: {
-                        var png = await Task.Run(() => DecodeRasterToPng(full, max), ct);
-                        return png == null
-                            ? Results.UnprocessableEntity(new { error = "TIFF decode failed" })
-                            : Results.File(png, "image/png");
+                        var key = RenderCache.KeyForFile(full, "tiff", max);
+                        try {
+                            return await Task.Run(() => RenderCache.ServeCached(
+                                ctx, key, "png", "image/png",
+                                () => DecodeRasterToPng(full, max)
+                                      ?? throw new RenderFailedException()), ct);
+                        } catch (RenderFailedException) {
+                            return Results.UnprocessableEntity(new { error = "TIFF decode failed" });
+                        }
                     }
                     case PreviewKind.Text: {
                         var text = await ReadHeadAsync(full, maxBytes: 32 * 1024, ct);
@@ -464,6 +478,11 @@ public static class FilesEndpoints {
     };
 
     // --- Helpers for the preview endpoint --------------------------
+
+    /// <summary>Sentinel thrown from a RenderCache render lambda when a
+    /// decode fails, so the caller can map it to 422 instead of letting
+    /// the failure surface as a generic 500.</summary>
+    private sealed class RenderFailedException : Exception { }
 
     private static byte[]? DecodeRasterToPng(string path, int maxDim) {
         using var input = File.OpenRead(path);

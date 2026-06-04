@@ -7662,8 +7662,10 @@ function ninaApp() {
             if (s.black != null) qs.set('black', s.black);
             if (s.mid   != null) qs.set('mid',   s.mid);
             if (s.white != null) qs.set('white', s.white);
-            // cache-bust so the <img> actually re-fetches after slider tweaks
-            qs.set('_t', Date.now());
+            // No cache-bust: the stretch params are already in the URL, so
+            // each distinct slider position is a distinct (cacheable) URL.
+            // The server renders once per position then serves it with
+            // ETag/304, so re-visiting a stretch is a free revalidation.
             this.studio.viewer.previewUrl = `/api/studio/frames/${fr.id}/preview?${qs.toString()}`;
         },
 
@@ -9944,8 +9946,13 @@ function ninaApp() {
                 // to "abc,abc" (comma-joined StringValues), which fails
                 // validation and 401s. Single auth point keeps the
                 // round-trip clean.
+                // No cache-bust: the server now serves this render with
+                // ETag/Last-Modified, so the browser revalidates with a
+                // cheap 304 instead of re-transferring the whole image.
+                // The URL is content-addressed (path + maxDim); a file
+                // overwrite changes the server-side cache key.
                 const url = '/api/files/preview?path=' + encodeURIComponent(entry.fullPath)
-                          + '&maxDim=2400&t=' + Date.now();
+                          + '&maxDim=2400';
                 this._openImageViewerWithUrl(url, entry.name);
                 // Kick off the FITS header fetch in parallel with the
                 // image load. The overlay panel renders as soon as the
@@ -10832,18 +10839,26 @@ function ninaApp() {
             this.imageViewerBayerOverride = '';
         },
 
+        // Live-camera preview keeps a FIXED url while its content changes
+        // every frame, so it must cache-bust. Static file previews are
+        // content-addressed (path + stretch/maxDim params in the query)
+        // and now served with ETag/Last-Modified, so busting them would
+        // defeat the render cache and force a full re-transfer on every
+        // open. Bust only the live endpoint.
+        _viewerCacheBust(url) {
+            if (!url || !url.includes('/api/image/latest/preview')) return url;
+            const sep = url.includes('?') ? '&' : '?';
+            return url + sep + 't=' + Date.now();
+        },
+
         reloadImageViewer() {
             if (this._osdViewer) {
-                // Bust the cache + reuse whatever URL the viewer is
-                // configured for. The live-camera path needs the
-                // timestamp; a static file path is harmless.
                 // authUrl: <img> can't carry the Authorization header,
                 // so append the bearer token as a query-string fallback
                 // for OSD's internal image fetch.
-                const sep = this.imageViewerUrl.includes('?') ? '&' : '?';
                 this._osdViewer.open({
                     type: 'image',
-                    url: this.authUrl(this.imageViewerUrl + sep + 't=' + Date.now())
+                    url: this.authUrl(this._viewerCacheBust(this.imageViewerUrl))
                 });
             }
         },
@@ -10858,13 +10873,13 @@ function ninaApp() {
                 try { this._osdViewer.destroy(); } catch (e) { }
                 this._osdViewer = null;
             }
-            const sep = this.imageViewerUrl.includes('?') ? '&' : '?';
             this._osdViewer = OpenSeadragon({
                 id: 'osd-viewer',
                 tileSources: {
                     type: 'image',
-                    // authUrl: see reloadImageViewer comment above.
-                    url: this.authUrl(this.imageViewerUrl + sep + 't=' + Date.now())
+                    // authUrl + cache-bust: see reloadImageViewer above.
+                    // _viewerCacheBust only busts the live-camera URL.
+                    url: this.authUrl(this._viewerCacheBust(this.imageViewerUrl))
                 },
                 showNavigationControl: false,
                 showNavigator: true,
@@ -11085,6 +11100,48 @@ function ninaApp() {
                 await this.apiPost('/api/meridianflip/abort');
                 this.toast('Meridian flip aborted', 'warn');
             } catch (e) { this.toast('Abort failed', 'error'); }
+        },
+
+        // Part B4: one-click meridian flip from the LIVE panel. The server
+        // reads the mount's current RA/Dec and re-slews to the same spot;
+        // the mount flips when the re-slew crosses its meridian limit, then
+        // recenters. The live stacker auto-detects the new orientation and
+        // keeps stacking. The trigger-current request stays open for the
+        // whole workflow (can be a few minutes), so progress is driven by
+        // the WS mfState meanwhile; we just surface the final result.
+        async triggerMeridianFlipNow() {
+            if (!this.mount.connected) {
+                this.toast('Connect a mount first', 'warn');
+                return;
+            }
+            if (this.mfState !== 'idle') {
+                this.toast('A meridian flip is already in progress', 'warn');
+                return;
+            }
+            const ok = await this._confirmAsync(
+                'Flip the mount now?',
+                'The mount will re-slew across the meridian and flip, then recenter on the ' +
+                'current target. Live stacking keeps going and re-orients the post-flip ' +
+                'frames automatically.',
+                'Flip now');
+            if (!ok) return;
+            try {
+                this.toast('Meridian flip started…', 'info');
+                const resp = await this.apiPost('/api/meridianflip/trigger-current');
+                // apiPost may hand back a Response or already-parsed JSON.
+                let data = resp;
+                if (resp && typeof resp.json === 'function') {
+                    try { data = await resp.json(); } catch { data = null; }
+                }
+                if (data && data.success) {
+                    this.toast('Meridian flip complete', 'success');
+                } else {
+                    this.toast('Meridian flip did not complete: ' +
+                        ((data && data.error) || 'see logs'), 'error');
+                }
+            } catch (e) {
+                this.toast('Flip failed: ' + (e.message || ''), 'error');
+            }
         },
 
         formatMinutes(min) {

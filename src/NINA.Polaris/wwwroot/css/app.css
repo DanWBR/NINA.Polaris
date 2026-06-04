@@ -9355,6 +9355,24 @@ label select.input-sm {
     flex-wrap: wrap;
 }
 
+/* Part B4: meridian-flip "Flip now" control inside the LIVE tab. */
+.livestack-meridian {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.livestack-meridian-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 12px;
+}
+.livestack-meridian-err {
+    font-size: 11px;
+}
+
 /* LSTR-5: Live-stack triggers expandable panel inside the LIVE tab.
    Sits below the capture-buttons row. <details> open is bound to
    either enabled flag so the panel auto-expands when triggers exist. */

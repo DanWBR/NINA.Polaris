@@ -21,6 +21,59 @@
 > distributing one SD-card image to several Pis. Everything below was
 > driven by testing on a physical tablet against a Pi on the LAN.
 
+## CACHE-MFLIP -- image-view caching + meridian flip in live stacking
+
+Two unrelated improvements shipped together.
+
+**A. Image-view caching.** Opening a file re-transferred AND re-rendered
+the same image every time: `GET /api/files/preview` (and the studio-frame
+preview) set no HTTP cache validators, and the frontend appended
+`&t=Date.now()` to every view, so the browser could never reuse a
+response and the Pi re-ran the FITS read -> debayer -> autostretch ->
+encode on each open.
+
+- **`Services/Studio/RenderCache.cs`** (new): `ServeCached(ctx, cacheKey,
+  ext, mime, render)` renders once per key into
+  `LocalAppData/NINA.Polaris/files/render-cache/{sha1(key)}.{ext}`, then
+  serves the **physical file** via `Results.File(path, ...)` -- which
+  auto-sets `Last-Modified`+`ETag` and answers conditional GETs with
+  **304**, so an unchanged file is never re-transferred. `Cache-Control:
+  private` (URLs carry `?token=`). Opportunistic LRU prune at 512 MB.
+  Cache key = `path | mtime | size | <render params>` so a source
+  overwrite invalidates automatically.
+- **Wired:** `FilesEndpoints./preview` (FITS->JPEG, TIFF->PNG through the
+  cache; raster passthrough serves the physical source directly for free
+  validators) and `StudioEndpoints./frames/{id}/preview` (key includes the
+  stretch params, so each slider position caches independently).
+- **Frontend:** dropped the `&t=`/`_t=` cache-bust at the FILES viewer,
+  studio viewer, and OpenSeadragon open. The OSD viewer is shared with the
+  live-camera preview (fixed URL, changing content) so a `_viewerCacheBust`
+  helper busts **only** `/api/image/latest/preview`. `?v=` bumped.
+
+**B. Meridian flip in live stacking.** After a GEM flip, frames arrive
+~180-deg rotated and `StarMatcher.Match` (50 px translation search) failed,
+so `LiveStackingService` silently rejected every post-flip frame and the
+stack stopped growing.
+
+- **`AffineTransform.Compose(after, first)`** (new): `after o first`, used
+  to fold a 180-deg rotation + residual match into a single resampler warp.
+- **`LiveStackingService`** orientation-aware alignment: probes the current
+  orientation, then `Rotate180`+`Match(..., maxSearchRadius:250)`; the
+  winner is warped back onto the (never-rotated) reference accumulator via
+  `Compose(t, rot180)` -- no ghosting. Tracks `_flipped`; counts
+  `MeridianFlipsHandled` (WS payload + LIVE tab). Optional `EquipmentManager`
+  (pier-side hint, B2) + `MeridianFlipService` (skip integration while a
+  flip slew runs, B3) injected; both null -> pure alignment auto-detect.
+- **Manual trigger (B4):** `POST /api/meridianflip/trigger-current` reads
+  the connected mount's current RA/Dec and calls `ExecuteFlipAsync`. A
+  **"Flip now"** button + Abort + state in the LIVE panel; the stack
+  re-orients and keeps going automatically.
+- **Tests:** `AffineTransformComposeTests`, `LiveStackMeridianFlipTests`
+  (rotated+offset frame is re-oriented & integrated, no ghost, count +
+  reset), `RenderCacheTests` (render-once + key invalidation). All green;
+  39 related star/livestack/meridian tests still pass.
+- Backend changed -> operator rebuilds the `.deb`; web cache-bust bumped.
+
 ## STUDIO-ANALYZE -- tilt detection + aberration analyzer
 
 New read-only "Analyze" tool in STUDIO (🔬 in the FILES toolbar) that
