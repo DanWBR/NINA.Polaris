@@ -19,6 +19,13 @@ public static class OnnxEndpoints {
         // Hash is computed lazily here (first request pays the SHA-256
         // pass on each model; subsequent requests hit the cache).
         g.MapGet("/manifest", async (OnnxModelRegistry reg, CancellationToken ct) => {
+            // Safety net: if the registry is empty (e.g. the startup scan
+            // raced the profile load, or the models were dropped in after
+            // boot), do a cheap stat-only rescan so the client never has to
+            // hit "Re-scan" in Settings just to see the bundled models.
+            if (reg.All().Count == 0) {
+                try { await reg.RescanAsync(ct); } catch { /* best-effort */ }
+            }
             var items = new List<object>();
             foreach (var m in reg.All()) {
                 var hash = await reg.GetHashAsync(m.Family, m.Version, ct);

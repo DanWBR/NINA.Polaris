@@ -106,14 +106,36 @@ public class OnnxModelRegistry {
     /// Public so the Settings UI can surface which path is in use.
     /// </summary>
     public string ResolveModelsPath() {
-        var configured = _profile.Active?.OnnxModelsPath ?? "";
-        if (!string.IsNullOrWhiteSpace(configured) && Directory.Exists(configured))
-            return configured;
-        if (OperatingSystem.IsLinux() && Directory.Exists(LinuxPolarisModelsPath))
-            return LinuxPolarisModelsPath;
-        if (Directory.Exists(_bundledModelsPath))
-            return _bundledModelsPath;
-        return "";
+        var all = ResolveModelsPaths();
+        return all.Count > 0 ? all[0] : "";
+    }
+
+    /// <summary>
+    /// ALL candidate model directories that exist, in priority order:
+    /// (1) the profile's <c>OnnxModelsPath</c>, (2) <c>/home/polaris/models</c>
+    /// on Linux, (3) the bundled <c>wwwroot/graxpert/models</c>. The scan
+    /// merges every one of them rather than picking only the first.
+    ///
+    /// Why merge: the .deb postinst creates an (initially empty)
+    /// <c>/home/polaris/models</c>. If we scanned only the first existing
+    /// dir, that empty dir would shadow the bundled models and the manifest
+    /// would come back empty until the user pressed Re-scan. Merging means
+    /// the bundled weights are always discovered, and a user who drops
+    /// extra/override models in a higher-priority dir gets those too
+    /// (first occurrence of a family/version wins).
+    /// </summary>
+    public List<string> ResolveModelsPaths() {
+        var paths = new List<string>();
+        void Add(string? p) {
+            if (string.IsNullOrWhiteSpace(p) || !Directory.Exists(p)) return;
+            var full = Path.GetFullPath(p);
+            if (!paths.Any(x => string.Equals(x, full, StringComparison.OrdinalIgnoreCase)))
+                paths.Add(full);
+        }
+        Add(_profile.Active?.OnnxModelsPath);
+        if (OperatingSystem.IsLinux()) Add(LinuxPolarisModelsPath);
+        Add(_bundledModelsPath);
+        return paths;
     }
 
     /// <summary>Diagnostic, the bundled fallback path even when it doesn't exist yet.</summary>
@@ -140,50 +162,60 @@ public class OnnxModelRegistry {
 
     private void RescanSync() {
         lock (_scanLock) {
-            // GX-12j: resolve effective root via the priority chain
-            // (profile > bundled wwwroot/graxpert/models > empty).
-            var root = ResolveModelsPath();
-            _lastScannedPath = root;
+            // Merge EVERY existing candidate dir (profile, /home/polaris/models,
+            // bundled wwwroot) instead of only the first. Avoids an empty
+            // /home/polaris/models (created by the .deb postinst) shadowing
+            // the bundled weights and leaving the manifest empty.
+            var roots = ResolveModelsPaths();
+            _lastScannedPath = roots.Count > 0 ? roots[0] : "";
 
-            if (string.IsNullOrWhiteSpace(root)) {
+            if (roots.Count == 0) {
                 _logger.LogInformation(
                     "Onnx rescan: no models path available (profile unset, " +
-                    "bundled fallback {Bundled} doesn't exist), clearing registry.",
-                    _bundledModelsPath);
+                    "{Linux} absent, bundled fallback {Bundled} doesn't exist), " +
+                    "clearing registry.",
+                    LinuxPolarisModelsPath, _bundledModelsPath);
                 _models.Clear();
                 return;
             }
 
             var found = new HashSet<string>();
-            try {
-                foreach (var file in Directory.EnumerateFiles(root, "model.onnx", SearchOption.AllDirectories)) {
-                    var parsed = ParseLayout(root, file);
-                    if (parsed == null) continue;
-                    var (family, version) = parsed.Value;
-                    var key = Key(family, version);
-                    found.Add(key);
+            foreach (var root in roots) {
+                try {
+                    foreach (var file in Directory.EnumerateFiles(root, "model.onnx", SearchOption.AllDirectories)) {
+                        var parsed = ParseLayout(root, file);
+                        if (parsed == null) continue;
+                        var (family, version) = parsed.Value;
+                        var key = Key(family, version);
+                        // First root that provides a given family/version
+                        // wins (priority order), so a user override in a
+                        // higher-priority dir beats the bundled copy.
+                        if (found.Contains(key)) continue;
+                        found.Add(key);
 
-                    long size;
-                    try { size = new FileInfo(file).Length; }
-                    catch (Exception ex) {
-                        _logger.LogWarning(ex, "Onnx rescan: stat failed for {File}", file);
-                        continue;
+                        long size;
+                        try { size = new FileInfo(file).Length; }
+                        catch (Exception ex) {
+                            _logger.LogWarning(ex, "Onnx rescan: stat failed for {File}", file);
+                            found.Remove(key);
+                            continue;
+                        }
+
+                        // Preserve already-cached hash if file + size
+                        // unchanged so a Re-detect doesn't re-hash the
+                        // whole multi-GB bundle each time.
+                        if (_models.TryGetValue(key, out var existing)
+                            && existing.Path == file
+                            && existing.SizeBytes == size) {
+                            continue;
+                        }
+
+                        _models[key] = new OnnxModelEntry(
+                            family, version, file, size, null, DateTime.UtcNow);
                     }
-
-                    // Preserve already-cached hash if file + size unchanged
-                    // so a Re-detect doesn't re-hash the whole 1.5 GB
-                    // bundle each time.
-                    if (_models.TryGetValue(key, out var existing)
-                        && existing.Path == file
-                        && existing.SizeBytes == size) {
-                        continue;
-                    }
-
-                    _models[key] = new OnnxModelEntry(
-                        family, version, file, size, null, DateTime.UtcNow);
+                } catch (Exception ex) {
+                    _logger.LogError(ex, "Onnx rescan failed at root {Root}", root);
                 }
-            } catch (Exception ex) {
-                _logger.LogError(ex, "Onnx rescan failed at root {Root}", root);
             }
 
             // Drop entries whose file went away or whose family/version
@@ -191,7 +223,8 @@ public class OnnxModelRegistry {
             foreach (var key in _models.Keys.ToList()) {
                 if (!found.Contains(key)) _models.TryRemove(key, out _);
             }
-            _logger.LogInformation("Onnx rescan: {Count} models in {Root}", _models.Count, root);
+            _logger.LogInformation("Onnx rescan: {Count} models across {Roots}",
+                _models.Count, string.Join(", ", roots));
         }
     }
 
