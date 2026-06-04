@@ -82,6 +82,16 @@ on the tablet against the Pi:
   families: `graxpertStartRun` forwards the per-op selected version
   (`_graxpertSelectedVersion`: BGE / Decon / Denoise), and
   `StageVendoredModel` stages the matching vendored model for each.
+- **Native confirm() dialogs beautified.** Twelve call sites still used
+  the browser's `window.confirm()`/`confirm()` (ugly OS dialog, breaks the
+  dark theme, renders oddly inside the Capacitor iframe). All now route
+  through the existing `_confirmAsync()` styled modal with titles, labels,
+  and a red button on destructive actions (stack clear/calibrate/
+  integrate/BG-neutralise, file paste-overwrite/delete/no-preview/Studio
+  root, delete rig, clear ONNX cache, shut down PHD2, live-stack
+  continue-vs-restart). `confirm-modal-message` got `white-space: pre-line`
+  for multi-line bodies. `prompt()` text-input sites are left for a
+  separate input-modal pass.
 - **Local (client) models needed a manual Settings re-scan to appear.**
   The ONNX registry resolved a single models dir by priority (profile >
   `/home/polaris/models` > bundled `wwwroot/graxpert/models`). The .deb
