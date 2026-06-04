@@ -168,6 +168,14 @@ public class GraXpertService {
             proc.BeginOutputReadLine();
             proc.BeginErrorReadLine();
 
+            // Kill the subprocess when the job is cancelled (Abort button)
+            // so a long denoise on the host actually stops instead of
+            // running to completion after the user gave up.
+            using var killReg = ct.Register(() => {
+                try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); }
+                catch { /* race: already exited */ }
+            });
+
             await proc.WaitForExitAsync(ct);
             // Final synchronous wait flushes the async output handlers so
             // stdout/stderr are complete before we read them.
@@ -221,7 +229,12 @@ public class GraXpertService {
         };
         _jobs[jobId] = job;
 
-        _ = Task.Run(() => RunBatchAsync(job, req, outerCt), outerCt);
+        // Per-job cancellation, linked to any outer token. CancelJob
+        // cancels this so the in-flight subprocess is actually killed
+        // (CancelRequested alone only stops launching *new* files).
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(outerCt);
+        job.Cts = cts;
+        _ = Task.Run(() => RunBatchAsync(job, req, cts.Token), cts.Token);
         return job;
     }
 
@@ -235,6 +248,8 @@ public class GraXpertService {
         if (!_jobs.TryGetValue(jobId, out var j)) return false;
         if (j.CompletedAt != null) return false;
         j.CancelRequested = true;
+        // Actually stop the running subprocess, not just the queue.
+        try { j.Cts?.Cancel(); } catch { /* already disposed/cancelled */ }
         return true;
     }
 
@@ -556,4 +571,8 @@ public class GraXpertBatchJob {
     public DateTime StartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
     public bool CancelRequested { get; set; }
+    /// <summary>Per-job cancellation source. CancelJob cancels it to kill
+    /// the in-flight subprocess. Not serialized.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public CancellationTokenSource? Cts { get; set; }
 }

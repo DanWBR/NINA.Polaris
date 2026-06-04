@@ -10612,13 +10612,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <button class="btn btn-primary"
                         x-show="graxpert.cliDone"
                         @click="graxpertFinishCli()">Close &amp; view results</button>
-                <button class="btn"
-                        x-show="!graxpertIsRunning() && !graxpert.cliDone"
-                        @click="graxpertCloseModal()">Close</button>
-                <button class="btn btn-primary"
-                        x-show="!graxpertIsRunning() && !graxpert.cliDone && (!graxpert.currentJob || graxpert.currentJob.completedAt)"
-                        :disabled="graxpert.browserActive"
-                        @click="graxpertStartRun()">Start</button>
+                <!-- Abort: cancels the run. For a host (CLI) job it now
+                     actually kills the subprocess. -->
                 <button class="btn btn-danger"
                         x-show="graxpertIsRunning()"
                         :disabled="graxpert.browserAbortRequested"
@@ -10626,6 +10621,18 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <span x-show="!graxpert.browserAbortRequested">Abort</span>
                     <span x-show="graxpert.browserAbortRequested">Aborting...</span>
                 </button>
+                <!-- Close: always available except mid in-browser GPU run
+                     (which lives in the page and would be lost). While a
+                     host job runs this backgrounds it (keeps processing on
+                     the server); otherwise it just closes. -->
+                <button class="btn"
+                        x-show="!graxpert.cliDone && !graxpert.browserActive"
+                        @click="graxpertCloseModal()"
+                        x-text="graxpertIsRunning() ? 'Close (keep running)' : 'Close'"></button>
+                <button class="btn btn-primary"
+                        x-show="!graxpertIsRunning() && !graxpert.cliDone && (!graxpert.currentJob || graxpert.currentJob.completedAt)"
+                        :disabled="graxpert.browserActive"
+                        @click="graxpertStartRun()">Start</button>
             </div>
         </div>
     </div>
@@ -11391,7 +11398,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260604-gxlog"></script>
+    <script src="/js/app.js?v=20260604-gxabort"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

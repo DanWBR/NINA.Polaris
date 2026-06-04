@@ -17387,7 +17387,24 @@ function ninaApp() {
                     + encodeURIComponent(this.graxpert.currentJobId) + '/cancel');
                 this.toast('Cancellation requested', 'info');
             } catch (e) {
-                this.toast('Cancel failed: ' + (e.message || ''), 'error');
+                // 404 = the server has no such running job (already
+                // finished, or the server restarted). Don't trap the user
+                // behind a modal that won't close: tear down the client
+                // job state so the Close button reappears.
+                const m = (e && e.message) || '';
+                if (m.includes('404')) {
+                    if (this.graxpert._pollTimer) {
+                        clearInterval(this.graxpert._pollTimer);
+                        this.graxpert._pollTimer = null;
+                    }
+                    this.graxpert.currentJobId = null;
+                    this.graxpert.currentJob = null;
+                    this.graxpert.cliDone = false;
+                    this.graxpert.cliCompletion = null;
+                    this.toast('GraXpert job already finished', 'info');
+                } else {
+                    this.toast('Cancel failed: ' + m, 'error');
+                }
             }
         },
 
