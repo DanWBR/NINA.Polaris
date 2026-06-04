@@ -437,22 +437,50 @@
     // Tangent-plane approximation is sufficient for camera-scale FOVs
     // (< 10°). Returns 5 [ra, dec] pairs (closed polygon — first ==
     // last per the GeoJSON spec).
-    function skyFovRect(raDeg, decDeg, wDeg, hDeg, rotDeg) {
+    function skyFovRect(raDeg, decDeg, wDeg, hDeg, rotDeg, segments) {
+        // True sensor footprint via INVERSE GNOMONIC (tangent-plane)
+        // projection. The old code did ra = ra0 + x/cos(dec0) for every
+        // corner, applying the centre's cos(dec) to the whole box -- which
+        // skews wide fields (and any field far from the equator, like
+        // dec -53°) into a parallelogram. Projecting each corner properly
+        // gives the real rectangle the camera sees. Edges are sampled at
+        // `segments` points so the slight on-sky curvature of a large FOV
+        // renders smoothly instead of as straight chords.
+        segments = segments || 1;
         var rot = (rotDeg || 0) * Math.PI / 180;
         var cosR = Math.cos(rot), sinR = Math.sin(rot);
         var hw = wDeg / 2, hh = hDeg / 2;
-        // Tangent-plane corners (E is +ra-axis, N is +dec-axis).
-        var local = [
+        // Rotated tangent-plane corners (degrees): +x = East/+RA, +y = North/+Dec.
+        var corners = [
             [-hw, -hh], [+hw, -hh], [+hw, +hh], [-hw, +hh]
         ];
-        var cosDec = Math.cos(decDeg * Math.PI / 180);
-        // Avoid /0 right at the pole — cap.
-        if (Math.abs(cosDec) < 1e-3) cosDec = 1e-3;
-        var ring = local.map(function (p) {
-            var x = p[0] * cosR - p[1] * sinR;
-            var y = p[0] * sinR + p[1] * cosR;
-            return [raDeg + x / cosDec, decDeg + y];
-        });
+        var D2R = Math.PI / 180;
+        var ra0 = raDeg * D2R, dec0 = decDeg * D2R;
+        var sinD0 = Math.sin(dec0), cosD0 = Math.cos(dec0);
+
+        function project(lx, ly) {
+            // rotate in the tangent plane, then to radians standard coords
+            var xi = (lx * cosR - ly * sinR) * D2R;   // East (RA)
+            var eta = (lx * sinR + ly * cosR) * D2R;  // North (Dec)
+            var rho = Math.sqrt(xi * xi + eta * eta);
+            if (rho < 1e-12) return [raDeg, decDeg];
+            var c = Math.atan(rho);
+            var sinc = Math.sin(c), cosc = Math.cos(c);
+            var dec = Math.asin(cosc * sinD0 + eta * sinc * cosD0 / rho);
+            var ra = ra0 + Math.atan2(xi * sinc,
+                                      rho * cosD0 * cosc - eta * sinD0 * sinc);
+            return [ra / D2R, dec / D2R];
+        }
+
+        var ring = [];
+        for (var i = 0; i < corners.length; i++) {
+            var a = corners[i], b = corners[(i + 1) % corners.length];
+            for (var s = 0; s < segments; s++) {
+                var t = s / segments;
+                ring.push(project(a[0] + (b[0] - a[0]) * t,
+                                  a[1] + (b[1] - a[1]) * t));
+            }
+        }
         ring.push(ring[0].slice()); // close
         return ring;
     }
@@ -461,7 +489,9 @@
         var raDeg = centre.raDeg, decDeg = centre.decDeg;
         var w = centre.widthDeg, h = centre.heightDeg;
         var rot = centre.rotationDeg || 0;
-        var ring = skyFovRect(raDeg, decDeg, w, h, rot);
+        // Sample each edge so a wide FOV's on-sky curvature renders smooth
+        // (16 pts/edge); the crosshair lines below stay at 1 (just ends).
+        var ring = skyFovRect(raDeg, decDeg, w, h, rot, 16);
         // Engine geojson parser only knows: stroke, fill, stroke-width,
         // stroke-opacity, fill-opacity, stroke-glow. Plus title +
         // text-anchor + text-offset on Point features.
