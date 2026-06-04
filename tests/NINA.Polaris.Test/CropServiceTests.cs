@@ -141,6 +141,37 @@ public class CropServiceTests {
         }
     }
 
+    [Test]
+    public void CropFitsFraction_ResolvesAgainstRealDimensions() {
+        // Regression for the web picker bug: the preview is a downscaled
+        // JPEG, so the client sends a NORMALISED ROI (0..1) and the server
+        // must resolve it against the TRUE 100x100 dimensions. A near-full
+        // 0.10..0.90 box must yield an 80x80 crop, NOT a fraction of it.
+        var src = MakeMono(100, 100, (x, y) => (ushort)(y * 100 + x));
+        var path = WriteFits(src, "big.fits");
+
+        var r = _svc.CropFitsFraction(path, fx: 0.10, fy: 0.10, fw: 0.80, fh: 0.80);
+
+        Assert.That(r.Width, Is.EqualTo(80));
+        Assert.That(r.Height, Is.EqualTo(80));
+        var got = ReadFits(r.OutputPath);
+        // Top-left of the crop maps to image pixel (10,10).
+        Assert.That(got.Data[0], Is.EqualTo((ushort)(10 * 100 + 10)));
+    }
+
+    [Test]
+    public void CropFitsFraction_FullFrame_ClampsToBounds() {
+        // Fractions covering the whole image (0..1) must clamp to the exact
+        // dimensions, never overshoot past the edge.
+        var src = MakeMono(64, 48, (x, y) => (ushort)(x + y));
+        var path = WriteFits(src, "fullfrac.fits");
+
+        var r = _svc.CropFitsFraction(path, fx: 0.0, fy: 0.0, fw: 1.0, fh: 1.0);
+
+        Assert.That(r.Width, Is.EqualTo(64));
+        Assert.That(r.Height, Is.EqualTo(48));
+    }
+
     // ---- helpers ----------------------------------------------------
 
     private static BaseImageData MakeMono(int w, int h, Func<int, int, ushort> pixel) {

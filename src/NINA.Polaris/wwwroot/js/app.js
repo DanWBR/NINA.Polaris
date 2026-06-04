@@ -1963,6 +1963,15 @@ function ninaApp() {
             imgNaturalHeight: 0,
             imgDisplayWidth: 0,
             imgDisplayHeight: 0,
+            // TRUE source resolution (FITS NAXIS1/NAXIS2). The preview is
+            // a downscaled JPEG, so imgNaturalWidth is NOT the master's
+            // real size — using it to scale the ROI shrank the crop. We
+            // fetch the real dimensions from the FITS header and send a
+            // normalised (fraction) ROI so the server crops the master at
+            // full resolution. 0 until loaded (raster files fall back to
+            // the <img> natural size, which equals their real size).
+            sourceWidth: 0,
+            sourceHeight: 0,
         },
 
         // GX-5: editor "AI" section runtime state. Single in-flight
@@ -16402,7 +16411,38 @@ function ninaApp() {
             this.crop.imgNaturalHeight = 0;
             this.crop.imgDisplayWidth = 0;
             this.crop.imgDisplayHeight = 0;
+            this.crop.sourceWidth = 0;
+            this.crop.sourceHeight = 0;
             this.crop.open = true;
+            // Pull the TRUE source resolution from the FITS header so the
+            // ROI summary reports the real output size. The crop itself
+            // sends fractions and is correct even if this fetch fails;
+            // this is only for the "X × Y px" hint. Best-effort + async.
+            this._cropFetchSourceDims(path);
+        },
+
+        // Read NAXIS1/NAXIS2 from the FITS header endpoint and stash them
+        // as the crop's true source dimensions. Silently ignored for
+        // non-FITS files (the <img> natural size is already the real size
+        // for rasters) or on any error.
+        async _cropFetchSourceDims(path) {
+            if (!/\.(fits?|fts)$/i.test(path)) return;
+            try {
+                const r = await this.apiGet(
+                    '/api/files/fits-headers?path=' + encodeURIComponent(path));
+                let w = 0, h = 0;
+                for (const g of (r.groups || [])) {
+                    for (const c of (g.cards || [])) {
+                        if (c.keyword === 'NAXIS1') w = parseInt(c.value, 10) || 0;
+                        else if (c.keyword === 'NAXIS2') h = parseInt(c.value, 10) || 0;
+                    }
+                }
+                // Only apply if the modal is still on the same file.
+                if (this.crop.sourcePath === path && w > 0 && h > 0) {
+                    this.crop.sourceWidth = w;
+                    this.crop.sourceHeight = h;
+                }
+            } catch { /* best-effort; summary falls back to preview size */ }
         },
 
         cropClose() {
@@ -16426,6 +16466,13 @@ function ninaApp() {
             this.crop.imgNaturalHeight = img.naturalHeight || 0;
             this.crop.imgDisplayWidth = img.clientWidth || img.width || 0;
             this.crop.imgDisplayHeight = img.clientHeight || img.height || 0;
+            // Raster files (PNG/TIFF/JPEG) preview at their true size, so
+            // the <img> natural size IS the real source resolution. For
+            // FITS the header fetch overrides this with NAXIS1/NAXIS2.
+            if (!this.crop.sourceWidth || !this.crop.sourceHeight) {
+                this.crop.sourceWidth = this.crop.imgNaturalWidth;
+                this.crop.sourceHeight = this.crop.imgNaturalHeight;
+            }
         },
 
         _cropPointerXY(ev, pickerEl) {
@@ -16495,35 +16542,55 @@ function ninaApp() {
             return `${img.width} × ${img.height} px`;
         },
 
-        // Returns ROI in IMAGE pixel coordinates (server-space) or null
-        // if the user hasn't drawn yet or the <img> hasn't measured.
-        _cropRoiInImagePixels() {
+        // Returns the ROI as NORMALISED fractions (0..1, top-left origin)
+        // relative to the displayed preview. Resolution-independent: this
+        // is what the server uses to crop the master, so it doesn't matter
+        // that the preview is a downscaled JPEG. null until the user draws
+        // and the <img> has measured.
+        _cropRoiFractions() {
             const r = this.crop.roi;
             if (r.startX == null || r.endX == null) return null;
             const dispW = this.crop.imgDisplayWidth;
             const dispH = this.crop.imgDisplayHeight;
-            const natW = this.crop.imgNaturalWidth;
-            const natH = this.crop.imgNaturalHeight;
-            if (!dispW || !dispH || !natW || !natH) return null;
-            const sx = natW / dispW;
-            const sy = natH / dispH;
-            const x = Math.round(Math.min(r.startX, r.endX) * sx);
-            const y = Math.round(Math.min(r.startY, r.endY) * sy);
-            const w = Math.round(Math.abs(r.endX - r.startX) * sx);
-            const h = Math.round(Math.abs(r.endY - r.startY) * sy);
-            // Clamp inside image bounds — float math + the picker's
-            // bounding-rect clamp can leave a 1-pixel overshoot near
-            // the right/bottom edges that the server would reject.
-            const cw = Math.min(w, natW - x);
-            const ch = Math.min(h, natH - y);
-            if (cw < 1 || ch < 1) return null;
-            return { x, y, width: cw, height: ch };
+            if (!dispW || !dispH) return null;
+            const clamp01 = (v) => Math.max(0, Math.min(1, v));
+            const fx = clamp01(Math.min(r.startX, r.endX) / dispW);
+            const fy = clamp01(Math.min(r.startY, r.endY) / dispH);
+            const fw = clamp01(Math.abs(r.endX - r.startX) / dispW);
+            const fh = clamp01(Math.abs(r.endY - r.startY) / dispH);
+            if (fw <= 0 || fh <= 0) return null;
+            return { fx, fy, fw, fh };
+        },
+
+        // Returns ROI in IMAGE pixel coordinates (server-space) for the
+        // summary, or null if not ready. Uses the TRUE source dimensions
+        // (FITS NAXIS / raster natural size), NOT the downscaled preview's
+        // size — the previous code scaled by the preview resolution, which
+        // shrank the crop to a fraction of what the user drew.
+        _cropRoiInImagePixels() {
+            const frac = this._cropRoiFractions();
+            if (!frac) return null;
+            const srcW = this.crop.sourceWidth;
+            const srcH = this.crop.sourceHeight;
+            if (!srcW || !srcH) return null;
+            const x = Math.round(frac.fx * srcW);
+            const y = Math.round(frac.fy * srcH);
+            let w = Math.round(frac.fw * srcW);
+            let h = Math.round(frac.fh * srcH);
+            w = Math.min(w, srcW - x);
+            h = Math.min(h, srcH - y);
+            if (w < 1 || h < 1) return null;
+            return { x, y, width: w, height: h };
         },
 
         async cropStartRun() {
             if (this.crop.busy) return;
-            const roi = this._cropRoiInImagePixels();
-            if (!roi) {
+            // Send the NORMALISED ROI: the server resolves it against the
+            // master's true resolution, so the crop is correct even though
+            // the picker drew on a downscaled preview. (The old absolute-
+            // pixel path scaled by the preview size and shrank the crop.)
+            const frac = this._cropRoiFractions();
+            if (!frac) {
                 this.crop.error = 'Draw a rectangle on the image first.';
                 return;
             }
@@ -16532,8 +16599,8 @@ function ninaApp() {
             try {
                 const body = {
                     paths: [this.crop.sourcePath],
-                    x: roi.x, y: roi.y,
-                    width: roi.width, height: roi.height
+                    fracX: frac.fx, fracY: frac.fy,
+                    fracW: frac.fw, fracH: frac.fh
                 };
                 const r = await this.apiFetch('/api/crop/run', {
                     method: 'POST',

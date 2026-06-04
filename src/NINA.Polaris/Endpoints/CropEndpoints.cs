@@ -25,16 +25,26 @@ public static class CropEndpoints {
                 CropRequest req) => {
             if (req.Paths == null || req.Paths.Length == 0)
                 return Results.BadRequest(new { error = "paths is required" });
-            if (req.Width <= 0 || req.Height <= 0)
+
+            // Prefer the normalised (fraction) ROI when the client sent
+            // one: it is resolution-independent and immune to the preview
+            // being a downscaled JPEG. Fall back to the legacy absolute
+            // pixel ROI for older clients / API callers.
+            bool useFraction = req.FracW is > 0 && req.FracH is > 0;
+            if (!useFraction && (req.Width <= 0 || req.Height <= 0))
                 return Results.BadRequest(new {
-                    error = "width and height must be positive"
+                    error = "width and height (or fracW/fracH) must be positive"
                 });
 
             var results = new List<object>();
             var failures = new List<object>();
             foreach (var path in req.Paths) {
                 try {
-                    var r = svc.CropFits(path, req.X, req.Y, req.Width, req.Height);
+                    var r = useFraction
+                        ? svc.CropFitsFraction(path,
+                            req.FracX ?? 0, req.FracY ?? 0,
+                            req.FracW ?? 0, req.FracH ?? 0)
+                        : svc.CropFits(path, req.X, req.Y, req.Width, req.Height);
                     results.Add(new {
                         sourcePath = path,
                         outputPath = r.OutputPath,
@@ -59,5 +69,12 @@ public static class CropEndpoints {
         });
     }
 
-    public record CropRequest(string[] Paths, int X, int Y, int Width, int Height);
+    // X/Y/Width/Height are legacy absolute pixel coords (kept for API
+    // callers). FracX/FracY/FracW/FracH are the preferred normalised ROI
+    // (0..1, top-left origin) the web picker sends so the crop is
+    // independent of the downscaled preview resolution.
+    public record CropRequest(
+        string[] Paths, int X, int Y, int Width, int Height,
+        double? FracX = null, double? FracY = null,
+        double? FracW = null, double? FracH = null);
 }

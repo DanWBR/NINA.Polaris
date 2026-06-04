@@ -50,7 +50,53 @@ public class CropService {
         using (var fs = File.OpenRead(sourcePath)) {
             src = FITSReader.Read(fs);
         }
+        return CropCore(src, sourcePath, x, y, width, height);
+    }
 
+    /// <summary>
+    /// Crop using a NORMALISED ROI (fractions of the image, 0..1, top-left
+    /// origin). This is the resolution-independent entry point the web UI
+    /// uses: the picker draws on a downscaled JPEG preview, so it cannot
+    /// know the master's true pixel dimensions. By sending fractions and
+    /// resolving them here against the actual FITS width/height, the crop
+    /// lands exactly where the user drew regardless of preview scale.
+    /// Out-of-range fractions are clamped to the image rather than
+    /// rejected, since a near-edge drag legitimately produces 0 or 1.
+    /// </summary>
+    public CropResult CropFitsFraction(string sourcePath,
+                                       double fx, double fy, double fw, double fh) {
+        if (string.IsNullOrWhiteSpace(sourcePath))
+            throw new ArgumentException("sourcePath is required", nameof(sourcePath));
+        if (!File.Exists(sourcePath))
+            throw new FileNotFoundException("Source FITS not found", sourcePath);
+        if (fw <= 0 || fh <= 0)
+            throw new ArgumentException(
+                $"Crop fraction must have positive size, got {fw}×{fh}");
+
+        BaseImageData src;
+        using (var fs = File.OpenRead(sourcePath)) {
+            src = FITSReader.Read(fs);
+        }
+        int srcW = src.Properties.Width;
+        int srcH = src.Properties.Height;
+
+        // Fractions → pixels against the REAL dimensions, then clamp so a
+        // drag that touched the edge (fraction 0 or 1, or a sub-pixel
+        // overshoot from float math) still yields an in-bounds ROI.
+        int x = (int)Math.Round(Math.Clamp(fx, 0.0, 1.0) * srcW);
+        int y = (int)Math.Round(Math.Clamp(fy, 0.0, 1.0) * srcH);
+        int w = (int)Math.Round(Math.Clamp(fw, 0.0, 1.0) * srcW);
+        int h = (int)Math.Round(Math.Clamp(fh, 0.0, 1.0) * srcH);
+        x = Math.Clamp(x, 0, Math.Max(0, srcW - 1));
+        y = Math.Clamp(y, 0, Math.Max(0, srcH - 1));
+        w = Math.Clamp(w, 1, srcW - x);
+        h = Math.Clamp(h, 1, srcH - y);
+
+        return CropCore(src, sourcePath, x, y, w, h);
+    }
+
+    private CropResult CropCore(BaseImageData src, string sourcePath,
+                                int x, int y, int width, int height) {
         int srcW = src.Properties.Width;
         int srcH = src.Properties.Height;
         int channels = src.Properties.Channels == 3 ? 3 : 1;
