@@ -9377,8 +9377,11 @@ label select.input-sm {
     font-size: 12px;
     cursor: pointer;
 }
+/* Narrower than the default .input-sm: a meridian offset is 0-60, so a
+   compact field reads cleaner inline with the checkbox label. */
 .livestack-meridian-min {
-    width: 52px;
+    width: 60px;
+    min-width: 60px;
 }
 .livestack-meridian-err {
     font-size: 11px;
