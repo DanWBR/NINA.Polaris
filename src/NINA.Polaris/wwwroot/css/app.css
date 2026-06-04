@@ -4463,6 +4463,39 @@ label select.input-sm {
     font-size: inherit;
 }
 
+/* Theme bare text-like inputs in Settings cards. Without this they fall
+   back to the OS default (white box, black text) which reads as a foreign
+   UI inside the dark theme -- same problem the bare-<select> rule below
+   fixes. Scoped to :not(.input-sm):not(.input-md) so the already-themed
+   compact fields keep their own sizing. textarea included so note/path
+   fields match too. */
+.settings-section input[type="text"]:not(.input-sm):not(.input-md),
+.settings-section input[type="number"]:not(.input-sm):not(.input-md),
+.settings-section input[type="password"]:not(.input-sm):not(.input-md),
+.settings-section input[type="search"]:not(.input-sm):not(.input-md),
+.settings-section input[type="url"]:not(.input-sm):not(.input-md),
+.settings-section input:not([type]):not(.input-sm):not(.input-md),
+.settings-section textarea:not(.input-sm):not(.input-md) {
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 9px 10px;
+    min-height: 38px;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color var(--transition);
+}
+.settings-section input[type="text"]:not(.input-sm):not(.input-md):focus,
+.settings-section input[type="number"]:not(.input-sm):not(.input-md):focus,
+.settings-section input[type="password"]:not(.input-sm):not(.input-md):focus,
+.settings-section input[type="search"]:not(.input-sm):not(.input-md):focus,
+.settings-section input[type="url"]:not(.input-sm):not(.input-md):focus,
+.settings-section input:not([type]):not(.input-sm):not(.input-md):focus,
+.settings-section textarea:not(.input-sm):not(.input-md):focus {
+    border-color: var(--accent);
+}
+
 /* Native <select> on dark themes defaults to the OS combobox
    chrome (white background, black text, no border-radius), which
    reads as a foreign UI inside the night-mode interface. Pin the
