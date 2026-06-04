@@ -1023,7 +1023,22 @@ body {
     user-select: none;
     -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent;
+    /* Suppress the Android/iOS WebView long-press callout so the hold
+       gesture (loop/repeat) isn't hijacked by the native context menu. */
+    -webkit-touch-callout: none;
     touch-action: manipulation;   /* disable double-tap zoom on mobile */
+}
+
+/* Long-press gesture controls (mount jog hold, etc.) and buttons in
+   general: kill the WebView text-selection callout + highlight so a
+   press-and-hold drives our handlers instead of the native menu. */
+button,
+.mount-jog-cluster,
+.pz-toolbar {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
 }
 /* LIVE / PREVIEW / VIDEO shutters are shrunk to ~75% (150px) of the
    200px default. AUTORUN keeps the full size (it carries the dual

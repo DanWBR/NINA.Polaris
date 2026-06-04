@@ -2670,6 +2670,20 @@ function ninaApp() {
             // closes whichever is open.
             window.addEventListener('keydown', (ev) => this._floatPanelEscapeClose(ev));
             window.addEventListener('keydown', (ev) => this._confirmModalKeydown(ev));
+            // Android/iOS WebView: a long-press on a control pops the native
+            // context menu (text-selection / link callout), which steals the
+            // gesture and breaks our long-press behaviours (shutter loop,
+            // mount-jog hold). Suppress the context menu when it originates
+            // over an interactive control; leave it untouched on text inputs
+            // so copy/paste still works there.
+            window.addEventListener('contextmenu', (ev) => {
+                const t = ev.target;
+                if (!t || !t.closest) return;
+                if (t.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]')) return;
+                if (t.closest('button, .polaris-shutter, .mount-jog-cluster, .pz-toolbar, .bin-presets, .zwo-gain-presets, [data-no-contextmenu]')) {
+                    ev.preventDefault();
+                }
+            });
             this.fetchPhd2ProcessStatus();
             this.fetchPhd2InstallInfo();
             // Load camera quirks so the Bayer offset is applied
