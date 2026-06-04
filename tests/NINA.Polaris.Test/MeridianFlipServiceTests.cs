@@ -115,6 +115,31 @@ public class MeridianFlipServiceTests {
         }
     }
 
+    // ---- HoursUntilFlip (live-stack auto flip countdown) ----
+
+    [Test]
+    public void HoursUntilFlip_TargetEastByThreeHours_FlipsAfterMeridianPlusOffset() {
+        var utc = new DateTime(2024, 6, 15, 22, 30, 0, DateTimeKind.Utc);
+        var lst = MeridianFlipService.ComputeLstHours(utc, 0);
+        // Target 3h east of meridian, flip 5 min (0.0833h) past meridian.
+        var targetRa = (lst + 3) % 24;
+        var hours = MeridianFlipService.HoursUntilFlip(targetRa, utc, 0, minutesAfterMeridian: 5);
+        // HA = -3, flip point = 5/60; time-to-flip = 5/60 - (-3) = 3.0833h
+        Assert.That(hours, Is.EqualTo(3 + 5.0 / 60).Within(0.01));
+    }
+
+    [Test]
+    public void HoursUntilFlip_TargetPastFlipPoint_IsNegative() {
+        var utc = new DateTime(2024, 6, 15, 22, 30, 0, DateTimeKind.Utc);
+        var lst = MeridianFlipService.ComputeLstHours(utc, 0);
+        // Target already 1h west of meridian, flip point only 5 min past.
+        var targetRa = (lst - 1 + 24) % 24;
+        var hours = MeridianFlipService.HoursUntilFlip(targetRa, utc, 0, minutesAfterMeridian: 5);
+        // HA = +1, flip point = 5/60; time-to-flip = 5/60 - 1 < 0 (overdue).
+        Assert.That(hours, Is.LessThan(0));
+        Assert.That(hours, Is.EqualTo(5.0 / 60 - 1).Within(0.01));
+    }
+
     // ---- Settings ----
 
     [Test]
@@ -126,5 +151,6 @@ public class MeridianFlipServiceTests {
         Assert.That(s.RecenterToleranceArcsec, Is.EqualTo(30));
         Assert.That(s.SettleSecondsAfterFlip, Is.EqualTo(5));
         Assert.That(s.AutoFocusAfterFlip, Is.False);
+        Assert.That(s.AutoFlipDuringLiveStack, Is.False);
     }
 }

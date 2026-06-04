@@ -9369,6 +9369,17 @@ label select.input-sm {
     gap: 8px;
     font-size: 12px;
 }
+.livestack-meridian-auto {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 12px;
+    cursor: pointer;
+}
+.livestack-meridian-min {
+    width: 52px;
+}
 .livestack-meridian-err {
     font-size: 11px;
 }

@@ -68,6 +68,16 @@ stack stopped growing.
   the connected mount's current RA/Dec and calls `ExecuteFlipAsync`. A
   **"Flip now"** button + Abort + state in the LIVE panel; the stack
   re-orients and keeps going automatically.
+- **Auto flip + countdown (B5):** `MeridianFlipAutoLiveService`
+  (BackgroundService) polls the mount HA every 20 s and, when LIVE
+  stacking is running and the target has crossed the meridian by
+  `MinutesAfterMeridian`, auto-flips via the same service. Gated on a new
+  `MeridianFlipSettings.AutoFlipDuringLiveStack` toggle (independent of the
+  sequencer's `Enabled`); a per-crossing guard prevents re-flipping until
+  HA goes negative again. `MeridianFlipService.HoursUntilFlip(...)` feeds a
+  **"Flip in HH:MM"** countdown on the `/status` + WS payload, shown in the
+  LIVE panel next to the toggle. Tests:
+  `MeridianFlipServiceTests.HoursUntilFlip_*`.
 - **Tests:** `AffineTransformComposeTests`, `LiveStackMeridianFlipTests`
   (rotated+offset frame is re-oriented & integrated, no ghost, count +
   reset), `RenderCacheTests` (render-once + key invalidation). All green;

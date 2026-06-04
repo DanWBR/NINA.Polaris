@@ -213,6 +213,8 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<NetworkManagerServ
 builder.Services.AddHttpForwarder();
 builder.Services.AddSingleton<AutoFocusService>();
 builder.Services.AddSingleton<MeridianFlipService>();
+// Auto meridian flip during LIVE stacking (polls HA, flips when due).
+builder.Services.AddHostedService<MeridianFlipAutoLiveService>();
 builder.Services.AddSingleton<FlatWizardService>();
 // PA-1: TPPA orchestrator. Singleton because it holds CurrentJob
 // (consumed by StatusStreamHandler) + the in-flight CancellationTokenSource.

@@ -168,6 +168,7 @@ public static class StatusStreamHandler {
 
                     // Meridian flip live status (LST + time-to-meridian for the current mount RA)
                     double? lstHours = null, hourAngleHours = null, timeToMeridianHours = null;
+                    double? timeToFlipHours = null;
                     if (equip.Telescope != null && equip.Telescope.IsConnected) {
                         var raHours = equip.Telescope.RightAscension;
                         if (!double.IsNaN(raHours)) {
@@ -178,6 +179,11 @@ public static class StatusStreamHandler {
                             hourAngleHours = ha;
                             timeToMeridianHours = MeridianFlipService.HoursUntilMeridian(
                                 raHours, DateTime.UtcNow, profile.Active.Longitude);
+                            // Time until the flip point (HA = MinutesAfterMeridian);
+                            // drives the LIVE-tab countdown.
+                            timeToFlipHours = MeridianFlipService.HoursUntilFlip(
+                                raHours, DateTime.UtcNow, profile.Active.Longitude,
+                                meridianFlip.Settings.MinutesAfterMeridian);
                         }
                     }
 
@@ -190,7 +196,9 @@ public static class StatusStreamHandler {
                         lstHours,
                         hourAngleHours,
                         timeToMeridianHours,
-                        timeToMeridianMinutes = timeToMeridianHours * 60
+                        timeToMeridianMinutes = timeToMeridianHours * 60,
+                        timeToFlipHours,
+                        timeToFlipMinutes = timeToFlipHours * 60
                     };
 
                     var autoFocusPayload = new {

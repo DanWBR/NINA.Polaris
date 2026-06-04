@@ -101,6 +101,22 @@ public class MeridianFlipService {
     }
 
     /// <summary>
+    /// Signed hours until the flip point (HA = MinutesAfterMeridian/60) for a
+    /// target at <paramref name="raHours"/>. Positive = the flip is still in
+    /// the future; negative = the target is already past the flip point (or a
+    /// flip just happened). The UI shows a countdown when this is a small
+    /// positive value; the auto-flip service triggers when it crosses 0.
+    /// </summary>
+    public static double HoursUntilFlip(double raHours, DateTime utc,
+            double longitudeDeg, double minutesAfterMeridian) {
+        double lst = ComputeLstHours(utc, longitudeDeg);
+        double ha = lst - raHours;
+        while (ha > 12) ha -= 24;
+        while (ha < -12) ha += 24;
+        return minutesAfterMeridian / 60.0 - ha;
+    }
+
+    /// <summary>
     /// Does the current target require a flip *now*? True when the target has
     /// crossed the meridian by at least Settings.MinutesAfterMeridian, and
     /// the mount currently reports the wrong pier side for the new HA.
@@ -294,6 +310,11 @@ public class MeridianFlipSettings {
     public double SettleSecondsAfterFlip { get; set; } = 5;
     /// <summary>Run auto-focus after the flip (focus often shifts after pier-side change).</summary>
     public bool AutoFocusAfterFlip { get; set; }
+    /// <summary>Automatically perform the flip during LIVE stacking when the
+    /// target crosses the meridian (HA past MinutesAfterMeridian). Independent
+    /// of <see cref="Enabled"/> (which governs the sequencer). Driven by
+    /// MeridianFlipAutoLiveService.</summary>
+    public bool AutoFlipDuringLiveStack { get; set; }
 }
 
 public enum MeridianFlipState {

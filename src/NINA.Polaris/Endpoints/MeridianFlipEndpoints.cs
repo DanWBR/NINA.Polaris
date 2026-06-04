@@ -17,6 +17,7 @@ public static class MeridianFlipEndpoints {
             double? timeToMeridianHours = null;
             double? hourAngle = null;
             double? lst = null;
+            double? timeToFlipHours = null;
 
             if (equip.Telescope != null && equip.Telescope.IsConnected) {
                 var raHours = equip.Telescope.RightAscension;
@@ -25,6 +26,8 @@ public static class MeridianFlipEndpoints {
                 while (hourAngle > 12) hourAngle -= 24;
                 while (hourAngle < -12) hourAngle += 24;
                 timeToMeridianHours = MeridianFlipService.HoursUntilMeridian(raHours, DateTime.UtcNow, profile.Active.Longitude);
+                timeToFlipHours = MeridianFlipService.HoursUntilFlip(
+                    raHours, DateTime.UtcNow, profile.Active.Longitude, mf.Settings.MinutesAfterMeridian);
             }
 
             return Results.Ok(new {
@@ -36,7 +39,9 @@ public static class MeridianFlipEndpoints {
                 lstHours = lst,
                 hourAngleHours = hourAngle,
                 timeToMeridianHours = timeToMeridianHours,
-                timeToMeridianMinutes = timeToMeridianHours.HasValue ? timeToMeridianHours * 60 : null
+                timeToMeridianMinutes = timeToMeridianHours.HasValue ? timeToMeridianHours * 60 : null,
+                timeToFlipHours = timeToFlipHours,
+                timeToFlipMinutes = timeToFlipHours.HasValue ? timeToFlipHours * 60 : null
             });
         });
 

@@ -2309,12 +2309,14 @@ function ninaApp() {
             recenterAfterFlip: true,
             recenterToleranceArcsec: 30,
             settleSecondsAfterFlip: 5,
-            autoFocusAfterFlip: false
+            autoFocusAfterFlip: false,
+            autoFlipDuringLiveStack: false
         },
         mfState: 'idle',
         mfFlipsCompleted: 0,
         mfLastFlipError: null,
         mfTimeToMeridianMinutes: null,
+        mfTimeToFlipMinutes: null,
         mfHourAngleHours: null,
         mfLstHours: null,
         seqMfExpanded: false,
@@ -11074,7 +11076,8 @@ function ninaApp() {
                         recenterAfterFlip: data.recenterAfterFlip !== false,
                         recenterToleranceArcsec: data.recenterToleranceArcsec ?? 30,
                         settleSecondsAfterFlip: data.settleSecondsAfterFlip ?? 5,
-                        autoFocusAfterFlip: !!data.autoFocusAfterFlip
+                        autoFocusAfterFlip: !!data.autoFocusAfterFlip,
+                        autoFlipDuringLiveStack: !!data.autoFlipDuringLiveStack
                     };
                 }
             } catch (e) { }
@@ -21032,9 +21035,11 @@ function ninaApp() {
                 this.mfLstHours = mf.lstHours;
                 this.mfHourAngleHours = mf.hourAngleHours;
                 this.mfTimeToMeridianMinutes = mf.timeToMeridianMinutes;
+                this.mfTimeToFlipMinutes = mf.timeToFlipMinutes;
                 // Sync server-side settings back (in case another client edited)
                 if (mf.settings) {
                     this.mfSettings.enabled = !!mf.settings.enabled;
+                    this.mfSettings.autoFlipDuringLiveStack = !!mf.settings.autoFlipDuringLiveStack;
                     // Don't overwrite other fields the user might be editing right now
                 }
             }
