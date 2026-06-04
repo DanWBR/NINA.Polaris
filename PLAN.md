@@ -49,6 +49,18 @@ on the tablet against the Pi:
   property tree renders; the frontend binds them as plain inputs, so null
   shows an empty field. This also unblocks finding the E/W-axis-reversal
   property in the RIGS INDI panel.
+- **GraXpert host runs were a blind spinner.** Running GraXpert on the
+  server discarded the CLI stdout/stderr, so the user had no feedback.
+  Now `GraXpertService` streams the subprocess output line-by-line
+  (OutputDataReceived/ErrorDataReceived + an `onLog` callback; the exact
+  command is logged too), `GraXpertBatchJob` carries a capped `Log` with
+  per-file `▶`/`✓`/`✗` markers, and the job endpoint returns a locked
+  snapshot to avoid "Collection was modified" mid-serialization. The
+  GraXpert modal shows a live "GraXpert output (host)" console (Siril
+  console styling, auto-scroll, error highlighting) and now stays open on
+  completion with a "Close & view results" button that runs the
+  sibling-select + before/after comparator (so the log isn't hidden the
+  instant the run ends).
 
 ## Mobile connect screen -- made it actually work on a device
 
