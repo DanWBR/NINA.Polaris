@@ -251,6 +251,7 @@ builder.Services.AddSingleton<FileBrowserService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.SirilService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.GraXpertService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.CropService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Studio.FrameAnalysisService>();
 // TLS-2: DuckDNS HTTP client for setting TXT records during ACME
 // DNS-01 challenge. Used by LetsEncryptService (TLS-4); also exposed
 // directly via /api/tls/letsencrypt/test-dns (TLS-5) so the user
@@ -846,6 +847,7 @@ app.MapFilesEndpoints();
 app.MapSirilEndpoints();
 app.MapGraXpertEndpoints();
 app.MapCropEndpoints();
+app.MapAnalysisEndpoints();
 
 // GX-1: kick off an initial walk of the configured Onnx:ModelsPath
 // so /api/onnx/manifest is populated before the first browser request.

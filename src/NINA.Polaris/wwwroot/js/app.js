@@ -1987,6 +1987,22 @@ function ninaApp() {
             sourceHeight: 0,
         },
 
+        // STUDIO "Analyze" tool: read-only tilt + aberration diagnostics
+        // for one FITS. One server detection pass (POST /api/analysis/frame)
+        // feeds both tabs. result holds the FrameAnalysis DTO; the preview
+        // <img> + overlay <canvas> reuse the crop picker's stacking.
+        analyze: {
+            open: false,
+            busy: false,
+            error: '',
+            tab: 'tilt',          // 'tilt' | 'aberration'
+            sourcePath: '',
+            previewUrl: '',
+            result: null,         // FrameAnalysis DTO from the server
+            imgDisplayWidth: 0,
+            imgDisplayHeight: 0,
+        },
+
         // GX-5: editor "AI" section runtime state. Single in-flight
         // button across the section, pipelines are heavy + don't
         // compose with each other anyway. phase is a user-facing
@@ -16475,6 +16491,118 @@ function ninaApp() {
             this.crop.open = false;
             this.crop.previewUrl = '';
             this.cropResetRoi();
+        },
+
+        // ── STUDIO Analyze (tilt + aberration) ────────────────────────
+        async analyzeOpenForFile(path) {
+            if (!path) return;
+            this.analyze.sourcePath = path;
+            this.analyze.result = null;
+            this.analyze.error = '';
+            this.analyze.tab = 'tilt';
+            this.analyze.busy = true;
+            this.analyze.open = true;
+            // Same auto-stretched preview the crop tool + FILES viewer use.
+            this.analyze.previewUrl = this.authUrl(
+                '/api/files/preview?path=' + encodeURIComponent(path) + '&maxDim=1600');
+            try {
+                const resp = await this.apiPost('/api/analysis/frame', { path });
+                this.analyze.result = await resp.json();
+            } catch (e) {
+                this.analyze.error = 'Analysis failed: ' + ((e && e.message) || e);
+            } finally {
+                this.analyze.busy = false;
+            }
+            // Draw once the image + result are both present.
+            this.$nextTick(() => this._analyzeDrawOverlay());
+        },
+
+        analyzeClose() {
+            this.analyze.open = false;
+            this.analyze.previewUrl = '';
+            this.analyze.result = null;
+        },
+
+        analyzeSetTab(tab) {
+            this.analyze.tab = tab;
+            this.$nextTick(() => this._analyzeDrawOverlay());
+        },
+
+        analyzeOnImageLoaded(ev) {
+            const img = ev.target;
+            this.analyze.imgDisplayWidth = img.clientWidth || img.width || 0;
+            this.analyze.imgDisplayHeight = img.clientHeight || img.height || 0;
+            this._analyzeDrawOverlay();
+        },
+
+        // Draw the per-star shape overlay scaled from image px to the
+        // displayed preview px (the result carries true image W/H).
+        _analyzeDrawOverlay() {
+            const r = this.analyze.result;
+            const canvas = this.$refs.analyzeCanvas;
+            const img = canvas ? canvas.previousElementSibling : null;
+            if (!r || !canvas || !img) return;
+            const dw = img.clientWidth, dh = img.clientHeight;
+            if (!dw || !dh) return;
+            canvas.width = dw; canvas.height = dh;
+            const sx = dw / r.width, sy = dh / r.height;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, dw, dh);
+            const cx = r.width / 2, cy = r.height / 2;
+            const aberr = this.analyze.tab === 'aberration';
+
+            for (const s of (r.stars || [])) {
+                const px = s.x * sx, py = s.y * sy;
+                // Ellipse: semi-major grows with eccentricity so round
+                // stars read as small circles, elongated ones as streaks.
+                const base = 4;
+                const major = base * (1 + 3 * s.ecc);
+                const minor = base * (1 - 0.6 * s.ecc);
+                // HFR tint on the Tilt tab (green=sharp → red=soft),
+                // eccentricity tint on the Aberration tab.
+                const t = aberr
+                    ? Math.min(1, s.ecc / 0.6)
+                    : Math.min(1, Math.max(0, (s.hfr - (r.medianHfr * 0.6)) / (r.medianHfr * 0.9 + 1e-6)));
+                const hue = (1 - t) * 120; // 120=green, 0=red
+                ctx.strokeStyle = `hsla(${hue},85%,60%,0.9)`;
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                ctx.ellipse(px, py, major, minor, s.angleRad, 0, 2 * Math.PI);
+                ctx.stroke();
+                // Aberration tab: a short radial tick shows whether the
+                // elongation points at the frame centre (coma).
+                if (aberr && s.ecc > 0.35) {
+                    const ang = Math.atan2(s.y - cy, s.x - cx);
+                    const len = major + 4;
+                    ctx.beginPath();
+                    ctx.moveTo(px, py);
+                    ctx.lineTo(px + Math.cos(ang) * len, py + Math.sin(ang) * len);
+                    ctx.strokeStyle = 'rgba(239,68,68,0.55)';
+                    ctx.stroke();
+                }
+            }
+        },
+
+        // Heatmap cell tint + label depend on the active tab: HFR for
+        // Tilt, eccentricity for Aberration. NaN zones (too few stars)
+        // render muted with a dash.
+        analyzeZoneStyle(z) {
+            const r = this.analyze.result;
+            const aberr = this.analyze.tab === 'aberration';
+            const val = aberr ? z.meanEcc : z.medianHfr;
+            if (val == null || Number.isNaN(val) || !r) return 'background:rgba(255,255,255,0.04)';
+            let t;
+            if (aberr) t = Math.min(1, val / 0.6);
+            else t = Math.min(1, Math.max(0, (val - r.medianHfr * 0.6) / (r.medianHfr * 0.9 + 1e-6)));
+            const hue = (1 - t) * 120;
+            return `background:hsla(${hue},70%,45%,0.5)`;
+        },
+
+        analyzeZoneLabel(z) {
+            const aberr = this.analyze.tab === 'aberration';
+            const val = aberr ? z.meanEcc : z.medianHfr;
+            if (val == null || Number.isNaN(val)) return '—';
+            return aberr ? val.toFixed(2) : val.toFixed(1);
         },
 
         cropResetRoi() {

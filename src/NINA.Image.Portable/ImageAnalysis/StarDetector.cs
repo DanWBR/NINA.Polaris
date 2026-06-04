@@ -105,16 +105,39 @@ public class StarDetector {
         double cx = sumFlux > 0 ? sumX / sumFlux : pixels[0].x;
         double cy = sumFlux > 0 ? sumY / sumFlux : pixels[0].y;
 
-        // HFR: half-flux radius
+        // HFR (half-flux radius) + flux-weighted second moments about the
+        // centroid in one pass. The moments give the star's shape ellipse
+        // (used by the aberration analyzer); they're a handful of extra
+        // mul-adds per pixel so the live-stacking / autofocus callers that
+        // ignore Eccentricity/OrientationRad pay essentially nothing.
         double totalFlux = sumFlux;
         double sumWeightedDist = 0;
+        double mxx = 0, myy = 0, mxy = 0;
         foreach (var (x, y) in pixels) {
             double val = data[y * width + x] - background;
-            double dist = Math.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+            double dx = x - cx, dy = y - cy;
+            double dist = Math.Sqrt(dx * dx + dy * dy);
             sumWeightedDist += val * dist;
+            mxx += val * dx * dx;
+            myy += val * dy * dy;
+            mxy += val * dx * dy;
         }
 
         double hfr = totalFlux > 0 ? sumWeightedDist / totalFlux : 0;
+
+        double ecc = 0, orient = 0;
+        if (totalFlux > 0) {
+            mxx /= totalFlux; myy /= totalFlux; mxy /= totalFlux;
+            // Eigenvalues of the 2x2 covariance [[mxx,mxy],[mxy,myy]].
+            double trace = mxx + myy;
+            double diff = mxx - myy;
+            double disc = Math.Sqrt(Math.Max(0, diff * diff + 4 * mxy * mxy));
+            double l1 = (trace + disc) / 2;   // major-axis variance
+            double l2 = (trace - disc) / 2;   // minor-axis variance
+            if (l1 > 0 && l2 >= 0)
+                ecc = Math.Sqrt(Math.Max(0, 1 - l2 / l1));
+            orient = 0.5 * Math.Atan2(2 * mxy, diff);
+        }
 
         return new DetectedStar {
             X = cx,
@@ -122,7 +145,9 @@ public class StarDetector {
             HFR = hfr,
             Peak = peak,
             Flux = totalFlux,
-            PixelCount = pixels.Count
+            PixelCount = pixels.Count,
+            Eccentricity = ecc,
+            OrientationRad = orient
         };
     }
 

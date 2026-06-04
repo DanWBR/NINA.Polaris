@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260604-inputs">
+    <link rel="stylesheet" href="/css/app.css?v=20260604-analyze">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -7504,6 +7504,17 @@
                             aria-label="Crop">
                         <span class="files-icon">⌗</span>
                     </button>
+                    <!-- ANALYZE — read-only optical diagnostics (tilt +
+                         aberration) on one FITS. Nothing is written; opens
+                         a modal with star-shape overlay + zone heatmap. -->
+                    <button class="btn btn-sm btn-icon"
+                            :disabled="files.selectedPaths.length !== 1
+                                       || filesSelectedDir() != null"
+                            @click="analyzeOpenForFile(files.selectedPaths[0])"
+                            title="Analyze tilt &amp; aberrations in this image"
+                            aria-label="Analyze">
+                        <span class="files-icon">🔬</span>
+                    </button>
                     <!-- Plate solve: solve the selected FITS to get RA/Dec/
                          rotation/scale. Result card appears below the
                          file list with Sync mount + Slew & Center
@@ -10712,6 +10723,85 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
+    <!-- ANALYZE modal: read-only optical diagnostics for one FITS. Two
+         tabs (Tilt / Aberration) share one server-side star-detection
+         pass (POST /api/analysis/frame). The preview <img> + overlay
+         <canvas> reuse the Crop picker's stacking; the canvas draws a
+         per-star ellipse (oriented by the star's elongation) plus, on the
+         Aberration tab, a radial arrow toward/away from frame centre.
+         A 3x3 zone heatmap + plain-language verdict sit on the right. -->
+    <div class="siril-modal" x-show="analyze.open" x-cloak
+         @click.self="analyzeClose()"
+         @keydown.escape.window="analyzeClose()">
+        <div class="siril-modal-frame" style="max-width:960px">
+            <h2 style="font-size:18px;font-weight:600;display:flex;align-items:center;gap:8px">
+                🔬 Image analysis
+            </h2>
+            <div class="analyze-tabs">
+                <button :class="{ active: analyze.tab === 'tilt' }"
+                        @click="analyzeSetTab('tilt')">Tilt</button>
+                <button :class="{ active: analyze.tab === 'aberration' }"
+                        @click="analyzeSetTab('aberration')">Aberration</button>
+            </div>
+
+            <p class="hint" x-show="analyze.busy">Analyzing… detecting stars across the frame.</p>
+            <p class="hint" x-show="analyze.error" style="color:var(--danger)"
+               x-text="analyze.error"></p>
+
+            <div class="analyze-body" x-show="!analyze.busy && analyze.result">
+                <div class="analyze-stage crop-picker">
+                    <img class="crop-picker-img" :src="analyze.previewUrl"
+                         @load="analyzeOnImageLoaded($event)"
+                         alt="Source preview" draggable="false">
+                    <canvas class="analyze-overlay" x-ref="analyzeCanvas"></canvas>
+                </div>
+                <div class="analyze-side">
+                    <div class="analyze-zone-grid">
+                        <template x-for="z in (analyze.result?.zones || [])" :key="z.row * 3 + z.col">
+                            <div class="analyze-zone-cell" :style="analyzeZoneStyle(z)">
+                                <span x-text="analyzeZoneLabel(z)"></span>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Tilt view -->
+                    <template x-if="analyze.tab === 'tilt'">
+                        <div>
+                            <p class="analyze-verdict" :class="'sev-' + (analyze.result?.tilt?.severity || 'unknown')"
+                               x-text="analyze.result?.tilt?.verdict"></p>
+                            <p class="hint">Corner HFR spread:
+                                <strong x-text="(analyze.result?.tilt?.spreadPct ?? 0) + '%'"></strong>
+                                <span x-show="analyze.result?.tilt?.worstCorner">
+                                    · softest: <strong x-text="analyze.result?.tilt?.worstCorner"></strong></span>
+                            </p>
+                        </div>
+                    </template>
+
+                    <!-- Aberration view -->
+                    <template x-if="analyze.tab === 'aberration'">
+                        <div>
+                            <p class="analyze-verdict" :class="'sev-' + (analyze.result?.aberration?.severity || 'unknown')"
+                               x-text="analyze.result?.aberration?.verdict"></p>
+                            <p class="hint">Edge / centre HFR:
+                                <strong x-text="(analyze.result?.aberration?.centerEdgeRatio ?? 0) + '×'"></strong>
+                                · edge elongation
+                                <strong x-text="analyze.result?.aberration?.edgeEcc ?? 0"></strong>
+                            </p>
+                        </div>
+                    </template>
+
+                    <p class="hint" style="margin-top:auto"
+                       x-text="(analyze.result?.starCount || 0) + ' stars · median HFR '
+                               + (analyze.result?.medianHfr ?? 0) + ' px'"></p>
+                </div>
+            </div>
+
+            <div class="siril-modal-actions">
+                <button class="btn" @click="analyzeClose()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- GX-6: ONNX model licence consent. Modal shows on the first
          BGE / Denoise / Decon invocation; user must acknowledge that
          the GraXpert AI weights are CC BY-NC-SA 4.0 (non-commercial)
@@ -11396,7 +11486,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260604-indirow"></script>
+    <script src="/js/app.js?v=20260604-analyze"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

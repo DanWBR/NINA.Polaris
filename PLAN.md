@@ -21,6 +21,34 @@
 > distributing one SD-card image to several Pis. Everything below was
 > driven by testing on a physical tablet against a Pi on the LAN.
 
+## STUDIO-ANALYZE -- tilt detection + aberration analyzer
+
+New read-only "Analyze" tool in STUDIO (🔬 in the FILES toolbar) that
+diagnoses a single FITS for sensor tilt and optical aberrations. One
+server star-detection pass feeds a combined modal with two tabs.
+
+- **Star shape metrics (additive):** `StarDetector.ComputeStarProperties`
+  now also computes flux-weighted second moments in its existing pixel
+  loop, exposing `DetectedStar.Eccentricity` + `OrientationRad` (same
+  ellipse math upstream NINA uses). Existing callers ignore the new
+  fields; no behavior change to live-stacking/autofocus.
+- **`FrameAnalysisService`** (`Services/Studio/`): detects stars
+  (luminance for RGB), bins into a 3x3 zone grid, derives per-zone median
+  HFR + mean eccentricity + radiality, then a **Tilt** verdict (corner
+  HFR spread %, worst corner, good/mild/strong) and an **Aberration**
+  verdict (coma vs astigmatism vs field-curvature vs none, from edge
+  eccentricity + radial alignment + edge/centre HFR ratio). Heuristic
+  thresholds centralized at the top. Nothing is written.
+- **`POST /api/analysis/frame`** (`AnalysisEndpoints`, sync) returns the
+  zones + capped per-star shape list + verdicts.
+- **UI:** combined Analyze modal (mirrors Crop's preview + overlay
+  canvas) with Tilt/Aberration tabs, per-star ellipse/arrow overlay, a
+  3x3 zone heatmap (HFR or eccentricity tint) and plain-language verdict.
+- **Tests:** `FrameAnalysisServiceTests` (uniform=clean, X-ramp=tilt,
+  radial corners=coma) + a StarDetector eccentricity test. 4 new, 58
+  star/livestack/autofocus/crop tests still green (no regression).
+- Backend changed -> operator rebuilds the `.deb`; web cache-bust bumped.
+
 ## FIELD5 -- crop / GraXpert toast / INDI properties (real-rig fixes)
 
 Three bugs surfaced while processing a real session (Trifid SNR G0064-001)
