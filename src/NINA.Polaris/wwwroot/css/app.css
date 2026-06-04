@@ -8333,18 +8333,34 @@ label select.input-sm {
 }
 .analyze-modal-frame .analyze-body {
     flex: 1 1 auto;
-    min-height: 0;          /* let the flex children shrink + scroll */
-    overflow: auto;
+    min-height: 0;          /* let the flex children shrink, not the frame */
+    overflow: hidden;       /* no scrollbar — content is sized to fit */
     align-items: stretch;
 }
 .analyze-modal-frame .analyze-side {
     flex: 0 0 340px;        /* give the picture the lion's share */
+    overflow: auto;         /* safety on short screens; rarely needed */
 }
-/* The picture fills the available height; the overlay canvas stays
-   aligned because .analyze-stage (= .crop-picker) shrink-wraps the img. */
+/* Override .crop-picker's shrink-to-fit (inline-block): that made a wide
+   image ignore max-width:100% (the parent width was the image's own),
+   lock to max-height, overflow the column and force a scrollbar. As a
+   block flex item with a definite column width, the image is bounded by
+   BOTH the column width and the body height, so a wide frame renders
+   short and nothing scrolls. The overlay canvas stays aligned because
+   the image sits at the stage's top-left. */
+.analyze-modal-frame .analyze-stage {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    overflow: hidden;
+    background: transparent;
+    border: 0;
+}
 .analyze-modal-frame .analyze-stage .crop-picker-img {
-    max-height: 82vh;
     max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
 }
 
 .siril-modal-actions {
