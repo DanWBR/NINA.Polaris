@@ -126,17 +126,20 @@ public class GraXpertService {
             opts.Operation, inputPath, outputPath);
 
         try {
-            using var proc = new Process {
-                StartInfo = new ProcessStartInfo {
-                    FileName = BinaryPath!,
-                    Arguments = args,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true,
-                    WorkingDirectory = Path.GetDirectoryName(inputPath) ?? Path.GetTempPath()
-                }
+            var psi = new ProcessStartInfo {
+                FileName = BinaryPath!,
+                Arguments = args,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+                WorkingDirectory = Path.GetDirectoryName(inputPath) ?? Path.GetTempPath()
             };
+            // Force unbuffered output so GraXpert's progress (Python /
+            // tqdm) reaches the UI live instead of arriving in one lump
+            // when the process exits. Harmless for the standalone binary.
+            psi.Environment["PYTHONUNBUFFERED"] = "1";
+            using var proc = new Process { StartInfo = psi };
 
             // Stream stdout + stderr line-by-line so the UI can show the
             // GraXpert console live (model load, progress, errors) instead
