@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260604-analyze">
+    <link rel="stylesheet" href="/css/app.css?v=20260604-analyzebig">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -10732,8 +10732,9 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          A 3x3 zone heatmap + plain-language verdict sit on the right. -->
     <div class="siril-modal" x-show="analyze.open" x-cloak
          @click.self="analyzeClose()"
-         @keydown.escape.window="analyzeClose()">
-        <div class="siril-modal-frame" style="max-width:960px">
+         @keydown.escape.window="analyzeClose()"
+         @resize.window.debounce.150ms="analyze.open && _analyzeDrawOverlay()">
+        <div class="siril-modal-frame analyze-modal-frame">
             <h2 style="font-size:18px;font-weight:600;display:flex;align-items:center;gap:8px">
                 🔬 Image analysis
             </h2>

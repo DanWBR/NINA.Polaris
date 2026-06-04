@@ -8321,6 +8321,32 @@ label select.input-sm {
 .analyze-verdict.sev-strong  { border-left-color: var(--danger); }
 .analyze-verdict.sev-unknown { border-left-color: var(--text-secondary); }
 
+/* Near-fullscreen frame (like the image viewer) so the analyzed frame
+   + overlay get as much room as possible. Flex column: title + tabs on
+   top, body grows to fill, Close pinned at the bottom. */
+.analyze-modal-frame {
+    max-width: none;
+    width: 96vw;
+    height: 94vh;
+    display: flex;
+    flex-direction: column;
+}
+.analyze-modal-frame .analyze-body {
+    flex: 1 1 auto;
+    min-height: 0;          /* let the flex children shrink + scroll */
+    overflow: auto;
+    align-items: stretch;
+}
+.analyze-modal-frame .analyze-side {
+    flex: 0 0 340px;        /* give the picture the lion's share */
+}
+/* The picture fills the available height; the overlay canvas stays
+   aligned because .analyze-stage (= .crop-picker) shrink-wraps the img. */
+.analyze-modal-frame .analyze-stage .crop-picker-img {
+    max-height: 82vh;
+    max-width: 100%;
+}
+
 .siril-modal-actions {
     display: flex;
     justify-content: flex-end;
