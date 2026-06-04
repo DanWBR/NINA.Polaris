@@ -9440,6 +9440,14 @@ label select.input-sm {
     font-size: 11px;
 }
 
+/* Settings > Image cache: stat readouts laid out in a wrapping row. */
+.cache-stats-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    margin-top: 8px;
+}
+
 /* LSTR-5: Live-stack triggers expandable panel inside the LIVE tab.
    Sits below the capture-buttons row. <details> open is bound to
    either enabled flag so the panel auto-expands when triggers exist. */

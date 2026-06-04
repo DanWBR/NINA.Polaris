@@ -32,6 +32,10 @@ public static class RenderCache {
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "NINA.Polaris", "files", "render-cache");
 
+    /// <summary>On-disk location of the render cache, so the cache-management
+    /// endpoints can report size + purge it.</summary>
+    public static string DirectoryPath => CacheDir;
+
     /// <summary>Soft cap on the cache directory. When exceeded the
     /// opportunistic prune deletes least-recently-accessed files down
     /// to ~80% of the cap.</summary>

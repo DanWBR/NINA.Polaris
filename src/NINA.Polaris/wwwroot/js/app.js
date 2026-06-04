@@ -2322,6 +2322,10 @@ function ninaApp() {
         seqMfExpanded: false,
         _mfSaveTimer: null,
 
+        // Settings > Image cache card.
+        cacheStats: null,
+        cacheClearing: false,
+
         // End-of-run actions (post-sequence housekeeping). Default = nothing.
         // Mirrors the SequenceEndActions DTO on the server.
         endActions: {
@@ -11117,6 +11121,39 @@ function ninaApp() {
                 await this.apiPost('/api/meridianflip/abort');
                 this.toast('Meridian flip aborted', 'warn');
             } catch (e) { this.toast('Abort failed', 'error'); }
+        },
+
+        // ----- Settings > Image cache -----
+        async loadCacheStats() {
+            try {
+                this.cacheStats = await this.apiGet('/api/cache/stats');
+            } catch (e) { /* leave stats as-is; card shows "…" */ }
+        },
+
+        async clearCache() {
+            if (this.cacheClearing) return;
+            const ok = await this._confirmAsync(
+                'Clear image cache?',
+                'Removes the cached previews + thumbnails from disk. They are ' +
+                'regenerated automatically the next time you view a file — no ' +
+                'captures or settings are affected.',
+                'Clear cache');
+            if (!ok) return;
+            this.cacheClearing = true;
+            try {
+                const r = await this.apiPost('/api/cache/clear');
+                let data = r;
+                if (r && typeof r.json === 'function') {
+                    try { data = await r.json(); } catch { data = null; }
+                }
+                const n = (data && data.cleared) || 0;
+                this.toast(`Cache cleared (${n} file${n === 1 ? '' : 's'})`, 'success');
+                await this.loadCacheStats();
+            } catch (e) {
+                this.toast('Failed to clear cache: ' + (e.message || ''), 'error');
+            } finally {
+                this.cacheClearing = false;
+            }
         },
 
         // Part B4: one-click meridian flip from the LIVE panel. The server

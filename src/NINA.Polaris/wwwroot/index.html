@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260604-nocontextmenu">
+    <link rel="stylesheet" href="/css/app.css?v=20260604-cachecard">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -9007,6 +9007,38 @@
                     </label>
                 </div>
 
+                <div class="settings-section" x-init="loadCacheStats()">
+                    <h3><span class="settings-card-icon">🗂</span>Image cache</h3>
+                    <p class="hint" style="margin-top:0">
+                        Polaris keeps rendered previews + thumbnails on disk so
+                        re-opening a file is instant and doesn't re-render on
+                        the Pi. Safe to clear any time — entries are
+                        regenerated on demand the next time you view a file.
+                    </p>
+                    <div class="cache-stats-row">
+                        <div class="hint">Render cache:
+                            <strong x-text="cacheStats
+                                ? (formatBytes(cacheStats.render.bytes) + ' · ' + cacheStats.render.files + ' files')
+                                : '…'"></strong>
+                        </div>
+                        <div class="hint">Thumbnails:
+                            <strong x-text="cacheStats
+                                ? (formatBytes(cacheStats.thumbs.bytes) + ' · ' + cacheStats.thumbs.files + ' files')
+                                : '…'"></strong>
+                        </div>
+                        <div class="hint">Total on disk:
+                            <strong x-text="cacheStats ? formatBytes(cacheStats.totalBytes) : '…'"></strong>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+                        <button class="btn btn-sm" @click="loadCacheStats()">↻ Refresh</button>
+                        <button class="btn btn-sm btn-danger"
+                                :disabled="cacheClearing || !cacheStats || cacheStats.totalFiles === 0"
+                                @click="clearCache()"
+                                x-text="cacheClearing ? 'Clearing…' : '🗑 Clear cache'"></button>
+                    </div>
+                </div>
+
                 <div class="settings-section">
                     <h3><span class="settings-card-icon">⚙</span>Hardware</h3>
                     <label class="checkbox-label" title="When Polaris starts up, automatically connect to INDI, run an Alpaca discovery on the local network, and connect every device saved on the active rig. Toasts surface each step.">
@@ -11592,7 +11624,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260604-nocontextmenu"></script>
+    <script src="/js/app.js?v=20260604-cachecard"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

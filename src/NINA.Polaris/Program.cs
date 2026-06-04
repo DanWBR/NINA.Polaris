@@ -846,6 +846,7 @@ app.MapStudioEndpoints();
 app.MapEditorEndpoints();
 app.MapOnnxEndpoints();
 app.MapFilesEndpoints();
+app.MapCacheEndpoints();
 app.MapSirilEndpoints();
 app.MapGraXpertEndpoints();
 app.MapCropEndpoints();
