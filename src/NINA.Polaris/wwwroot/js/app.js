@@ -16545,6 +16545,10 @@ function ninaApp() {
             const dw = img.clientWidth, dh = img.clientHeight;
             if (!dw || !dh) return;
             canvas.width = dw; canvas.height = dh;
+            // The image is centred in the stage (letterboxed), so park the
+            // overlay exactly over it instead of the stage's top-left.
+            canvas.style.left = img.offsetLeft + 'px';
+            canvas.style.top = img.offsetTop + 'px';
             const sx = dw / r.width, sy = dh / r.height;
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, dw, dh);

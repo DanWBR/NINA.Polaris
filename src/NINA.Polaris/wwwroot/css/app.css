@@ -8349,12 +8349,15 @@ label select.input-sm {
    short and nothing scrolls. The overlay canvas stays aligned because
    the image sits at the stage's top-left. */
 .analyze-modal-frame .analyze-stage {
-    /* Block (not flex): a flex <img> keeps min-height:auto and so
-       max-height:100% can't shrink it, leaving it clipped by overflow.
-       As a plain block whose height is the (definite) stretched column
-       height, the image is bounded by both width and height and shows
-       in full — never cropped. */
-    display: block;
+    /* Centre the (letterboxed) image in the column. min-width/height:0
+       on the img is what lets max-width/height:100% actually shrink it
+       inside a flex parent (a flex item defaults to min-*:auto, which
+       otherwise keeps it at intrinsic size and gets it cropped). The
+       overlay canvas is offset to the image's position in JS so it
+       stays aligned even though the image is centred. */
+    display: flex;
+    align-items: center;
+    justify-content: center;
     overflow: hidden;
     background: transparent;
     border: 0;
@@ -8365,6 +8368,8 @@ label select.input-sm {
     max-height: 100%;
     width: auto;
     height: auto;
+    min-width: 0;
+    min-height: 0;
 }
 
 .siril-modal-actions {
