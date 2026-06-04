@@ -21,6 +21,35 @@
 > distributing one SD-card image to several Pis. Everything below was
 > driven by testing on a physical tablet against a Pi on the LAN.
 
+## FIELD5 -- crop / GraXpert toast / INDI properties (real-rig fixes)
+
+Three bugs surfaced while processing a real session (Trifid SNR G0064-001)
+on the tablet against the Pi:
+
+- **Crop cut ~2/3 of the image.** The crop picker draws on the FILES
+  preview, which is a *downscaled* JPEG (`maxDim=2400`), but the client
+  scaled the ROI by the preview's natural size and sent absolute pixels.
+  The server then sliced that region out of the full-res master, so a
+  near-full "trim the borders" rectangle on a 3840x2160 frame produced a
+  2209x1243 crop. Fix: the client now sends a **normalised ROI**
+  (fractions 0..1) and `CropService.CropFitsFraction` resolves it against
+  the master's true NAXIS1/NAXIS2 (shared `CropCore`; legacy pixel path
+  kept for API callers). The ROI summary fetches real dims from
+  `/api/files/fits-headers` (rasters fall back to the `<img>` natural
+  size). +2 unit tests (near-full + full-frame clamp).
+- **"GraXpert batch started: undefined" toast.** The run handler read
+  `r.jobId` off the raw `fetch` Response -- `apiPost` returns the Response,
+  not parsed JSON like `apiGet`. Now `await resp.json()` before reading
+  `jobId`; the polling key is correct as a result. The batch was always
+  starting server-side; only the feedback was wrong.
+- **`GET /api/indi/properties/` 500'd the whole tree.** OnStep LX200
+  reports unbounded number `min/max/step` as `+/-Infinity`/`NaN`, which
+  System.Text.Json refuses to write. `SerializeProperty` now coerces
+  non-finite doubles to `null` via `SafeNum()` (value/min/max/step) so the
+  property tree renders; the frontend binds them as plain inputs, so null
+  shows an empty field. This also unblocks finding the E/W-axis-reversal
+  property in the RIGS INDI panel.
+
 ## Mobile connect screen -- made it actually work on a device
 
 The connect screen looked done but failed on real hardware. Fixes, in
