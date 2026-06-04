@@ -3663,11 +3663,9 @@
                     <div x-show="equipSource === 'indi'" style="margin-top:12px">
                         <p>Connect to INDI server to discover devices. Typical on Linux / RPi
                            or WSL2 on Windows.</p>
-                        <div class="control-row" style="margin-top: 10px;">
+                        <div class="control-row" style="margin-top: 10px; align-items: flex-end;">
                             <label>Host<input type="text" x-model="settings.indiHost" class="input-md"></label>
                             <label>Port<input type="number" x-model.number="settings.indiPort" class="input-sm"></label>
-                        </div>
-                        <div class="control-row actions" style="margin-top: 8px;">
                             <button class="btn btn-primary" @click="connectIndi()">Connect INDI</button>
                         </div>
                     </div>
@@ -11398,7 +11396,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260604-confirm"></script>
+    <script src="/js/app.js?v=20260604-indirow"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
