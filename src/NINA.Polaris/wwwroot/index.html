@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260604-inspzoom">
+    <link rel="stylesheet" href="/css/app.css?v=20260604-spinner">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -10747,9 +10747,15 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         @click="analyzeSetTab('inspector')">Inspector</button>
             </div>
 
-            <p class="hint" x-show="analyze.busy">Analyzing… detecting stars across the frame.</p>
             <p class="hint" x-show="analyze.error" style="color:var(--danger)"
                x-text="analyze.error"></p>
+
+            <!-- Centred loading overlay: server star-detection can take a
+                 couple seconds and the (hi-res) image loads after that. -->
+            <div class="analyze-spinner" x-show="analyzeLoading()" x-cloak>
+                <div class="editor-loading-spinner"></div>
+                <span x-text="analyze.busy ? 'Detecting stars…' : 'Loading image…'"></span>
+            </div>
 
             <div class="analyze-body" x-show="!analyze.busy && analyze.result">
                 <div class="analyze-stage crop-picker">
@@ -11517,7 +11523,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260604-inspzoom"></script>
+    <script src="/js/app.js?v=20260604-spinner"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

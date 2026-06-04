@@ -2002,6 +2002,8 @@ function ninaApp() {
             imgDisplayWidth: 0,
             imgDisplayHeight: 0,
             inspectorZoom: 2,     // 1..6 — higher = tighter (more magnified) crops
+            previewReady: false,  // the tilt/aberration preview <img> finished loading
+            inspectorReady: false,// the hi-res inspector image finished loading
         },
 
         // GX-5: editor "AI" section runtime state. Single in-flight
@@ -16503,6 +16505,8 @@ function ninaApp() {
             this.analyze.tab = 'tilt';
             this.analyze.busy = true;
             this.analyze.open = true;
+            this.analyze.previewReady = false;
+            this.analyze.inspectorReady = false;
             this._analyzeInspectorImg = null;   // drop the previous file's hi-res crop source
             this._analyzeInspectorPath = '';
             // Same auto-stretched preview the crop tool + FILES viewer use.
@@ -16551,16 +16555,22 @@ function ninaApp() {
         _analyzeEnsureInspector() {
             if (this._analyzeInspectorImg
                 && this._analyzeInspectorPath === this.analyze.sourcePath) {
+                this.analyze.inspectorReady = true;
                 this._analyzeDrawInspector();
                 return;
             }
+            this.analyze.inspectorReady = false;
             const im = new Image();
             im.onload = () => {
                 this._analyzeInspectorImg = im;
                 this._analyzeInspectorPath = this.analyze.sourcePath;
+                this.analyze.inspectorReady = true;
                 this._analyzeDrawInspector();
             };
-            im.onerror = () => { this.analyze.error = 'Could not load the image for the inspector.'; };
+            im.onerror = () => {
+                this.analyze.inspectorReady = true; // stop the spinner; show the (empty) canvas
+                this.analyze.error = 'Could not load the image for the inspector.';
+            };
             // Big maxDim so corner detail survives (near-native for most
             // sensors). authUrl carries the bearer token for the <img>.
             im.src = this.authUrl('/api/files/preview?path='
@@ -16620,7 +16630,17 @@ function ninaApp() {
             const img = ev.target;
             this.analyze.imgDisplayWidth = img.clientWidth || img.width || 0;
             this.analyze.imgDisplayHeight = img.clientHeight || img.height || 0;
+            this.analyze.previewReady = true;
             this._analyzeDrawOverlay();
+        },
+
+        // True while something is still loading in the active tab — drives
+        // the centred spinner. busy = server analysis; otherwise the
+        // relevant image (preview, or the inspector hi-res) isn't ready.
+        analyzeLoading() {
+            if (this.analyze.busy) return true;
+            if (this.analyze.tab === 'inspector') return !this.analyze.inspectorReady;
+            return !this.analyze.previewReady;
         },
 
         // Draw the per-star shape overlay scaled from image px to the

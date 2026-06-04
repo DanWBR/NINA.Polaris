@@ -8350,6 +8350,23 @@ label select.input-sm {
     height: 94vh;
     display: flex;
     flex-direction: column;
+    position: relative;   /* positioning context for the loading spinner */
+}
+/* Centred loading overlay shown while the server analysis runs or the
+   (hi-res) image is still loading. */
+.analyze-spinner {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    font-size: 14px;
+    color: var(--text-secondary);
+    background: rgba(11, 14, 20, 0.35);
+    z-index: 5;
+    pointer-events: none;
 }
 .analyze-modal-frame .analyze-body {
     flex: 1 1 auto;
