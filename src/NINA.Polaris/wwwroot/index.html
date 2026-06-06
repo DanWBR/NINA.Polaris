@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260604-wbrange">
+    <link rel="stylesheet" href="/css/app.css?v=20260604-wbpreview">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -532,7 +532,7 @@
                 <svg viewBox="0 0 24 24" width="22" height="22"><polygon points="12,2 15,10 23,10 17,15 19,23 12,18 5,23 7,15 1,10 9,10" fill="none" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Guide</span>
             </button>
-            <button class="nav-btn" :class="{ active: tab === 'preview' }" @click="tab = 'preview'" title="Preview (snap test shots)">
+            <button class="nav-btn" :class="{ active: tab === 'preview' }" @click="tab = 'preview'; loadCameraCapabilities()" title="Preview (snap test shots)">
                 <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" fill="none" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Preview</span>
             </button>
@@ -2501,6 +2501,31 @@
                                    :disabled="preview.busy"
                                    placeholder="snap">
                         </label>
+                    </div>
+                    <!-- Hardware WB for OSC cameras (WB_R/WB_B). Shares the
+                         VIDEO panel's state + range so a hardware WB change
+                         made in VIDEO can be read/undone here too (the
+                         display-WB panel only multiplies pixels, it can't
+                         revert the camera's native WB). -->
+                    <div class="control-row" x-show="cameraCaps.whiteBalance">
+                        <label style="flex:1">
+                            WB Red
+                            <input type="range" :min="video.wbMin" :max="video.wbMax" step="1"
+                                   x-model.number="video.wbR"
+                                   @change="videoSetWhiteBalance()" class="slider">
+                            <span x-text="video.wbR" class="text-muted" style="margin-left:6px"></span>
+                        </label>
+                        <label style="flex:1">
+                            WB Blue
+                            <input type="range" :min="video.wbMin" :max="video.wbMax" step="1"
+                                   x-model.number="video.wbB"
+                                   @change="videoSetWhiteBalance()" class="slider">
+                            <span x-text="video.wbB" class="text-muted" style="margin-left:6px"></span>
+                        </label>
+                        <button class="btn btn-sm" @click="videoResetWhiteBalance()"
+                                title="Reset to neutral (midpoint of the camera's WB range)">
+                            ↻
+                        </button>
                     </div>
                     </div><!-- /.shutter-inputs -->
 
@@ -11624,7 +11649,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260604-wbrange"></script>
+    <script src="/js/app.js?v=20260604-wbpreview"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
