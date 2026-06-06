@@ -1,6 +1,7 @@
 using NINA.Core.Enum;
 using NINA.Image.FileFormat.FITS;
 using NINA.Image.ImageAnalysis;
+using NINA.Image.Interfaces;
 using SkiaSharp;
 
 namespace NINA.Polaris.Services.Studio;
@@ -73,6 +74,39 @@ public static class FitsThumbnailer {
         }
         return RenderJpegFromBuffer(img.Data, w, h, bits, maxDim, quality,
             overrideParams != null && overrideParams.Length > 0 ? overrideParams[0] : null);
+    }
+
+    /// <summary>
+    /// Render a downscaled, auto-stretched JPEG straight from an in-memory
+    /// frame (no file round-trip). Mirrors <see cref="RenderJpegFromPath"/>'s
+    /// colour branching: a CFA (Bayer) mono buffer is debayered to RGB, a
+    /// NAXIS=3 colour cube renders as colour, plain mono renders as
+    /// luminance. Used by the efficient video-stream path so the browser
+    /// gets a small JPEG instead of the full RAW buffer per frame.
+    /// </summary>
+    public static byte[] RenderJpegFromImageData(IImageData img, int maxDim = 1280,
+                                                 int quality = 70,
+                                                 BayerPatternEnum? bayerOverride = null) {
+        var w = img.Properties.Width;
+        var h = img.Properties.Height;
+        var bits = img.Properties.BitDepth;
+        var effectivePattern = bayerOverride ?? img.Properties.BayerPattern;
+
+        if (!img.Properties.IsColor
+            && effectivePattern != BayerPatternEnum.None
+            && effectivePattern != BayerPatternEnum.Auto) {
+            var ch = BayerDebayer.Bilinear(img.Data, w, h, effectivePattern);
+            int plane = w * h;
+            var rgb = new ushort[plane * 3];
+            Array.Copy(ch.R, 0, rgb, 0,         plane);
+            Array.Copy(ch.G, 0, rgb, plane,     plane);
+            Array.Copy(ch.B, 0, rgb, plane * 2, plane);
+            return RenderJpegFromRgbPlanes(rgb, w, h, bits, maxDim, quality);
+        }
+        if (img.Properties.IsColor) {
+            return RenderJpegFromRgbPlanes(img.Data, w, h, bits, maxDim, quality);
+        }
+        return RenderJpegFromBuffer(img.Data, w, h, bits, maxDim, quality);
     }
 
     /// <summary>

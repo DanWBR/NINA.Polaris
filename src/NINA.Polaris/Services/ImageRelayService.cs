@@ -3,6 +3,7 @@ using System.Net.WebSockets;
 using NINA.Core.Enum;
 using NINA.Image.ImageData;
 using NINA.Image.Interfaces;
+using NINA.Polaris.Services.Studio;
 
 namespace NINA.Polaris.Services;
 
@@ -264,6 +265,66 @@ public class ImageRelayService : IDisposable {
         header.CopyTo(rawFrame, 4);
         compressed.CopyTo(rawFrame, 4 + header.Length);
 
+        await BroadcastFrameAsync(rawFrame, ct);
+    }
+
+    /// <summary>
+    /// Efficient video-stream path: instead of the full RAW buffer, send a
+    /// downscaled, auto-stretched JPEG (tagged <see cref="FrameKind.Video"/>)
+    /// over the same <c>/ws/image-stream</c> envelope. The browser already
+    /// decodes headered-JPEG frames and routes them to videoCaptureCanvas,
+    /// so this is a server-only change. The full-resolution RAW frame is
+    /// still handed to recording subscribers untouched (SER stays raw).
+    ///
+    /// <para>Bounded by a single in-flight render guard: if the previous
+    /// frame is still encoding, this frame is dropped rather than queued —
+    /// the stream stays smooth at the rate the Pi can actually encode +
+    /// the link can carry, instead of building an unbounded backlog.</para>
+    /// </summary>
+    public async Task RelayVideoJpegAsync(IImageData imageData,
+                                          int maxDim = 1280, int quality = 70,
+                                          CancellationToken ct = default) {
+        if (_clients.IsEmpty) return;
+        // Drop-if-busy: keep CPU + latency bounded under fast frame rates.
+        if (Interlocked.CompareExchange(ref _videoRenderInFlight, 1, 0) != 0) return;
+        try {
+            var src = ApplyVerticalFlipIfEnabled(imageData);
+            var resolved = ResolveBayerOverride(src.Properties.BayerPattern);
+
+            byte[] jpeg;
+            try {
+                jpeg = await Task.Run(() =>
+                    FitsThumbnailer.RenderJpegFromImageData(src, maxDim, quality, resolved), ct);
+            } catch (Exception ex) {
+                _logger.LogDebug(ex, "Video JPEG render failed (skipping frame)");
+                return;
+            }
+            if (jpeg == null || jpeg.Length == 0) return;
+
+            // Reuse the stream-header envelope (so the browser's headered-
+            // JPEG path picks up the FrameKind and routes to the video
+            // canvas). The W/H/bayer fields describe the source frame but
+            // the client ignores them for JPEG payloads.
+            var buffer = ImageBuffer.FromImageData(src, resolved);
+            var header = buffer.GetStreamHeader((int)FrameKind.Video);
+            var frame = new byte[4 + header.Length + jpeg.Length];
+            BitConverter.GetBytes(header.Length).CopyTo(frame, 0);
+            header.CopyTo(frame, 4);
+            jpeg.CopyTo(frame, 4 + header.Length);
+
+            await BroadcastFrameAsync(frame, ct);
+        } finally {
+            Interlocked.Exchange(ref _videoRenderInFlight, 0);
+        }
+    }
+
+    private int _videoRenderInFlight;
+
+    /// <summary>Fan a pre-built binary frame out to every connected
+    /// /ws/image-stream client, with per-client back-pressure (skip a
+    /// client still sending the previous frame) and dead-client reaping.
+    /// Shared by the RAW (LIVE/PREVIEW) and JPEG (video) paths.</summary>
+    private async Task BroadcastFrameAsync(byte[] frame, CancellationToken ct) {
         var deadClients = new List<string>();
 
         foreach (var (id, entry) in _clients) {
@@ -271,8 +332,6 @@ public class ImageRelayService : IDisposable {
                 deadClients.Add(id);
                 continue;
             }
-
-            var frame = rawFrame;
 
             // Skip clients that are still sending the previous frame (backpressure)
             if (!entry.SendLock.Wait(0)) {
@@ -291,12 +350,6 @@ public class ImageRelayService : IDisposable {
                 entry.LastSendDuration = DateTime.UtcNow - sendStart;
                 entry.ConsecutiveFailures = 0;
                 entry.SkippedFrames = 0;
-                // FIELD-3: adaptive bandwidth removed. The downgrade
-                // target was JPEG, which is the path we just deleted.
-                // Slow clients are now handled by the SendLock skip
-                // above (back-pressure) -- they drop frames instead of
-                // switching format. That's the right trade-off for
-                // RAW-only streaming.
             } catch (OperationCanceledException) when (!ct.IsCancellationRequested) {
                 entry.ConsecutiveFailures++;
                 _logger.LogWarning("Send to client {Id} timed out (failure {N}/{Max})",

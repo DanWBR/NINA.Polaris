@@ -21,6 +21,33 @@
 > distributing one SD-card image to several Pis. Everything below was
 > driven by testing on a physical tablet against a Pi on the LAN.
 
+## VIDSTREAM -- efficient video streaming (downscaled JPEG) + raw recording on server
+
+The VIDEO stream ran at <1 fps. Root cause: `/ws/image-stream` is
+**RAW-only** -- every frame shipped the full uint16 buffer LZ4-compressed
+(tens of MB on a full-frame OSC) + per-frame LZ4 on the Pi + client WebGL
+decode. Wrong trade-off for a live *preview*.
+
+- **Diagnostics first:** `/api/camera/stream/status` now reports
+  `mode`, `fps`, `captureMs`, `frameWidth/Height`, `rawMBPerFrame` so a
+  slow stream is traceable to capture-bound vs network/decode-bound.
+- **Efficient stream:** video frames (`FrameKind.Video`) now relay as a
+  **downscaled, auto-stretched JPEG** (default maxDim 1280, q70) over the
+  same WS envelope instead of RAW. The browser already decodes
+  headered-JPEG frames and routes them to `videoCaptureCanvas`
+  (`_canvasIdsForFrameKind`), so this is **server-only** -- no client
+  change. New `FitsThumbnailer.RenderJpegFromImageData` (debayer/colour/
+  mono + resize, reuses the FILES-preview render path);
+  `ImageRelayService.RelayVideoJpegAsync` (drop-if-busy guard so CPU +
+  latency stay bounded; shares the per-client back-pressure loop, now
+  factored into `BroadcastFrameAsync`). LIVE/PREVIEW stay RAW (WASM
+  stack + WebGL stretch untouched).
+- **Recording stays raw on the server:** `VideoRecordingService` still
+  subscribes to the full-resolution raw frames and writes SER under the
+  studio root (`{ImageOutputDir}/planetary/{target}/…ser`) -- unchanged.
+- Backend only; operator rebuilds the `.deb`. 28 stream/relay/thumbnailer
+  tests still green.
+
 ## CACHE-MFLIP -- image-view caching + meridian flip in live stacking
 
 Two unrelated improvements shipped together.

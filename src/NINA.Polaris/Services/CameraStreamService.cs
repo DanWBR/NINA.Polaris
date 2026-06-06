@@ -222,15 +222,19 @@ public class CameraStreamService : IDisposable {
         LastFrameHeight = props.Height;
         LastFrameRawBytes = (long)(frame.Data?.Length ?? 0) * 2;
         try {
-            // Fire-and-forget relay, ImageRelayService handles its own
-            // queue + back-pressure (adaptive bandwidth + per-client
-            // streak detection already in place).
-            // Tag as Video so the client routes the frame to
-            // videoCaptureCanvas only — without this, every video
-            // stream frame would also paint over the LIVE / PREVIEW /
-            // FOCUS canvases on whichever tab the user happens to
-            // have open.
-            _ = _relay.RelayImageAsync(frame, FrameKind.Video);
+            // Efficient video path: relay a downscaled JPEG instead of
+            // the full RAW buffer. RAW streaming ships W*H*2 bytes/frame
+            // (tens of MB on a full-frame OSC) + per-frame LZ4 on the Pi
+            // + client WebGL decode -- which capped the stream at <1 fps.
+            // The video preview doesn't need pixel-perfect RAW; a small
+            // auto-stretched JPEG (default maxDim 1280) is ~100-200 KB and
+            // decodes instantly via the browser's headered-JPEG path
+            // (routed to videoCaptureCanvas by FrameKind.Video). The
+            // full-res RAW frame still reaches recording subscribers
+            // below, so the SER recording stays raw + full resolution.
+            // Fire-and-forget; RelayVideoJpegAsync drops frames if a
+            // render is still in flight (bounded CPU/latency).
+            _ = _relay.RelayVideoJpegAsync(frame);
         } catch (Exception ex) {
             _logger.LogDebug(ex, "Relay of stream frame failed");
         }
