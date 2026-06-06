@@ -12240,3 +12240,60 @@ Each phase = 1 commit (or 2-3 sub-commits) with green tests before moving on.
 - **Cooperative cancellation**: every service accepts CancellationToken. UI has a "Cancel" button in every progress modal.
 - **CPU intensive**: stacking/calibration maxes CPU. Consider `Parallel.For` with `MaxDegreeOfParallelism = Environment.ProcessorCount - 1` to keep the UI responsive on the RPi.
 - **XISF reader**: left out of this plan. Add in a future sub-phase (~200 lines) if demand shows up. For now STUDIO ignores .xisf on rescan.
+
+---
+
+## WIFI-AP: Automatic hotspot fallback when no saved WiFi is in range
+
+### Problem
+A Pi configured for Station mode on the user's home WiFi became
+unreachable when carried to a new location: the saved
+`polaris-station` network was out of range, nothing brought the AP
+up, and the user had to connect an Ethernet cable. The existing
+try-and-revert only fired during an interactive switch, not across a
+reboot at a place the Pi had never seen.
+
+### Fix
+Two layers, both default-on:
+
+1. **NetworkManager autoconnect priority (OS-level, works before
+   Polaris starts).** `polaris-hotspot` is created with
+   `autoconnect-priority -10`, `polaris-station` with `+10`, so NM
+   prefers the home network when in range and treats the hotspot as
+   the natural fallback.
+2. **In-app watchdog (guarantee).** `NetworkManagerService`'s 5 s
+   snapshot loop now calls `EvaluateHotspotFallbackAsync`. When the
+   link reports Disconnected for longer than the grace window
+   (`Network:HotspotFallbackSeconds`, default 45 s, floor 20 s), it
+   brings `polaris-hotspot` up, recreating the connection first if it
+   is missing (`EnsureHotspotConnectionAsync`, mirrors the .deb
+   bootstrap). Suppressed during manual switches; cleared as soon as a
+   station link reconnects.
+
+### Surface
+- `NetworkSnapshot` + `/ws/status` network block gain
+  `autoHotspotFallback` + `fallbackEngaged`.
+- Settings -> Network shows a note when the hotspot started on its own
+  and explains the behaviour in the help text.
+- Config: `Network:AutoHotspotFallback` (master switch),
+  `Network:HotspotFallbackSeconds`.
+
+### Tests
+`NetworkManagerServiceTests.ShouldEngageHotspotFallback_*` (7 cases):
+engages past grace, waits within grace, never when Station/Hotspot,
+never when disabled, never while suppressed, never without a timer.
+
+### Files
+`Services/NetworkManagerService.cs`, `WebSocket/StatusStreamHandler.cs`,
+`packaging/deb/opt/polaris/bin/polaris-wifi-bootstrap.sh`,
+`wwwroot/index.html`, `tests/.../NetworkManagerServiceTests.cs`,
+`docs/user-guide/network-mode.md`.
+
+### Operator note
+Rebuild the `.deb` (backend + bootstrap script changed). Existing Pis
+that already have a `polaris-hotspot` connection get the watchdog from
+the new binary; the priority tweak applies to hotspots created by the
+updated bootstrap (delete `/var/lib/polaris/wifi-bootstrap.done` and
+the old `polaris-hotspot` connection to re-seed, or set the priority
+manually with `nmcli connection modify polaris-hotspot
+connection.autoconnect-priority -10`).

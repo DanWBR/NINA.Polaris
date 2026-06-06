@@ -63,6 +63,35 @@ stranded with no working WiFi.
 The same auto-revert covers the case where the network exists but
 the Pi is out of range, or where the AP is up but DHCP is broken.
 
+### Taking the rig to a new location (auto hotspot fallback)
+
+The auto-revert above protects you *during* a switch. A separate
+**auto hotspot fallback** protects you across reboots in a place
+the Pi has never seen.
+
+Say the Pi is set to Station mode on your home WiFi, and you drive
+it to a dark site or a friend's house. Your home network is now out
+of range, so the Pi cannot join it on boot, and with no hotspot it
+would be unreachable without an Ethernet cable.
+
+Polaris watches for this. If the Pi stays disconnected from every
+saved WiFi for about a minute, it **automatically brings the
+`Polaris-Hotspot` network back up** so you can connect with your
+phone exactly like the first night, with no cable. The Network
+panel shows a note explaining the hotspot started on its own; from
+there you can switch to whatever WiFi is available at the new site.
+
+When you return home, the Pi prefers your saved home network again
+(it has a higher autoconnect priority than the hotspot), so it
+rejoins your WiFi on the next boot without any action from you.
+
+This watchdog is on by default. It can be tuned or disabled via
+configuration:
+
+- `Network:AutoHotspotFallback` (default `true`) — master switch.
+- `Network:HotspotFallbackSeconds` (default `45`, floor `20`) — how
+  long the Pi waits with no WiFi before starting the hotspot.
+
 ## Switching back to hotspot mode
 
 In Station mode you will see a **Switch back to Hotspot** button in
@@ -112,11 +141,22 @@ The two NetworkManager connection names Polaris uses:
 - **`polaris-hotspot`** — created on first boot by
   `polaris-wifi-bootstrap.service`, persists across reboots. AP
   mode, 2.4 GHz, `ipv4.method=shared` so connected devices get
-  DHCP automatically.
+  DHCP automatically. `autoconnect-priority -10`, so NetworkManager
+  prefers any saved station network when one is in range and treats
+  the hotspot as the fallback. If the connection is ever missing
+  (the first-boot bootstrap never ran), Polaris recreates it
+  automatically the first time it needs to fall back to it.
 - **`polaris-station`** — created on demand when you pick a
   network from the scan list. Replaced (delete + add) every time
   you click "Switch to Station Mode" so the credentials are
-  always fresh.
+  always fresh. `autoconnect-priority 10`, above the hotspot, so
+  your home WiFi wins whenever it is reachable.
+
+The auto hotspot fallback has two layers: NetworkManager's own
+autoconnect-priority handling (works even before Polaris starts),
+plus a watchdog in `NetworkManagerService` that brings the AP up
+explicitly if the link is still down after the grace window. The
+watchdog also recreates the hotspot connection if it is missing.
 
 WPA2 PSKs (your home WiFi password) live in
 `/etc/NetworkManager/system-connections/*.nmconnection`, mode

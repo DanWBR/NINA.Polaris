@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260604-previewfocus">
+    <link rel="stylesheet" href="/css/app.css?v=20260606-wifiap">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -8939,6 +8939,13 @@
                                 <div class="text-warn" style="font-size: 12px; margin-top: 4px"
                                      x-text="network.lastError"></div>
                             </template>
+                            <template x-if="network.fallbackEngaged">
+                                <div class="text-warn" style="font-size: 12px; margin-top: 4px">
+                                    Hotspot started automatically because no saved WiFi network
+                                    was found in range. Reconnect to <code x-text="network.hotspotSsid || 'Polaris-Hotspot'"></code>,
+                                    then switch to Station mode to join the WiFi here.
+                                </div>
+                            </template>
                             <div class="control-row actions" style="margin-top: 8px">
                                 <button class="btn btn-primary"
                                         @click="networkOpenSwitchDialog()"
@@ -8961,6 +8968,11 @@
                                 Switching to Station mode hands the Pi to your home WiFi
                                 so it stops broadcasting its own network. Auto-reverts
                                 to Hotspot after 30 s if the new connection cannot get a DHCP lease.
+                                <template x-if="network.autoHotspotFallback">
+                                    <span> If you take the rig somewhere your saved WiFi is out of
+                                    range, the hotspot comes back up on its own after about a minute
+                                    so you never need an ethernet cable to reach it.</span>
+                                </template>
                             </p>
                         </div>
                     </template>
@@ -11691,7 +11703,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260604-previewfocus"></script>
+    <script src="/js/app.js?v=20260606-wifiap"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

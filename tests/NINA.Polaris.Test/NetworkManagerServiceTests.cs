@@ -108,4 +108,72 @@ public class NetworkManagerServiceTests {
         Assert.That(NetworkManagerService.ValidateSsidPsk("HomeNet", new string('x', 64)),
             Does.Contain("8 to 63"));
     }
+
+    // ----- ShouldEngageHotspotFallback (auto AP fallback watchdog) -----
+
+    private static readonly DateTime Now = new(2026, 6, 6, 22, 0, 0, DateTimeKind.Utc);
+    private static readonly TimeSpan Grace = TimeSpan.FromSeconds(45);
+
+    [Test]
+    public void Fallback_DisconnectedPastGrace_Engages() {
+        // Carried to a new house: no saved network in range, link down
+        // for longer than the grace window => bring the AP up.
+        var since = Now - TimeSpan.FromSeconds(60);
+        Assert.That(NetworkManagerService.ShouldEngageHotspotFallback(
+            WifiMode.Disconnected, since, Now, Grace, enabled: true, suppressUntil: DateTime.MinValue),
+            Is.True);
+    }
+
+    [Test]
+    public void Fallback_DisconnectedWithinGrace_WaitsItOut() {
+        // Still inside the grace window (e.g. NM mid-association) => do
+        // not yank the link to the AP yet.
+        var since = Now - TimeSpan.FromSeconds(10);
+        Assert.That(NetworkManagerService.ShouldEngageHotspotFallback(
+            WifiMode.Disconnected, since, Now, Grace, enabled: true, suppressUntil: DateTime.MinValue),
+            Is.False);
+    }
+
+    [Test]
+    public void Fallback_StationConnected_NeverEngages() {
+        var since = Now - TimeSpan.FromSeconds(600);
+        Assert.That(NetworkManagerService.ShouldEngageHotspotFallback(
+            WifiMode.Station, since, Now, Grace, enabled: true, suppressUntil: DateTime.MinValue),
+            Is.False);
+    }
+
+    [Test]
+    public void Fallback_AlreadyHotspot_NeverEngages() {
+        var since = Now - TimeSpan.FromSeconds(600);
+        Assert.That(NetworkManagerService.ShouldEngageHotspotFallback(
+            WifiMode.Hotspot, since, Now, Grace, enabled: true, suppressUntil: DateTime.MinValue),
+            Is.False);
+    }
+
+    [Test]
+    public void Fallback_Disabled_NeverEngages() {
+        var since = Now - TimeSpan.FromSeconds(600);
+        Assert.That(NetworkManagerService.ShouldEngageHotspotFallback(
+            WifiMode.Disconnected, since, Now, Grace, enabled: false, suppressUntil: DateTime.MinValue),
+            Is.False);
+    }
+
+    [Test]
+    public void Fallback_SuppressedByManualSwitch_DoesNotEngage() {
+        // A manual SwitchToStation is mid-flight (suppress window still
+        // open) => the watchdog must stay out of the way even though the
+        // link transiently reports Disconnected past the grace window.
+        var since = Now - TimeSpan.FromSeconds(600);
+        var suppressUntil = Now + TimeSpan.FromSeconds(20);
+        Assert.That(NetworkManagerService.ShouldEngageHotspotFallback(
+            WifiMode.Disconnected, since, Now, Grace, enabled: true, suppressUntil: suppressUntil),
+            Is.False);
+    }
+
+    [Test]
+    public void Fallback_NoDisconnectTimer_DoesNotEngage() {
+        Assert.That(NetworkManagerService.ShouldEngageHotspotFallback(
+            WifiMode.Disconnected, null, Now, Grace, enabled: true, suppressUntil: DateTime.MinValue),
+            Is.False);
+    }
 }

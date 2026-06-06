@@ -460,7 +460,14 @@ public static class StatusStreamHandler {
                             hotspotSsid       = network.HotspotSsid,
                             lastError         = network.LastError,
                             unsupportedReason = network.UnsupportedReason,
-                            lastRefreshAt     = network.LastRefreshAt
+                            lastRefreshAt     = network.LastRefreshAt,
+                            // Auto AP fallback: when the rig is carried
+                            // out of range of every saved network the
+                            // watchdog starts the hotspot so it stays
+                            // reachable. fallbackEngaged tells the UI to
+                            // show "Hotspot started automatically".
+                            autoHotspotFallback = network.AutoHotspotFallback,
+                            fallbackEngaged     = network.HotspotFallbackEngaged
                         },
                         // PA-4: TPPA orchestrator state. CurrentJob is
                         // null until the user clicks Start; serialise a

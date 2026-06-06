@@ -44,8 +44,15 @@ fi
 # AP when the country code is unset; b/g is universally OK.
 # ipv4.method shared = NM acts as DHCP + DNS + NAT for clients,
 # which is what gives the connected phone an IP automatically.
+#
+# autoconnect yes + a negative autoconnect-priority make the AP a
+# natural fallback: NetworkManager prefers any saved station network
+# (polaris-station is created at priority 0) when one is in range, and
+# only auto-activates the hotspot when none can be joined. This is the
+# OS-level half of the "moved to a new house" recovery; the Polaris
+# watchdog (NetworkManagerService) is the in-app guarantee on top.
 nmcli connection add type wifi ifname "$IFACE" con-name "$CONN" \
-    autoconnect yes ssid "$SSID" \
+    autoconnect yes connection.autoconnect-priority -10 ssid "$SSID" \
     802-11-wireless.mode ap 802-11-wireless.band bg \
     ipv4.method shared ipv6.method ignore \
     wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$PSK"

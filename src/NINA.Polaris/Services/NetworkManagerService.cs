@@ -48,6 +48,30 @@ public class NetworkManagerService : BackgroundService {
     public string? LastError { get; private set; }
     public DateTime? LastRefreshAt { get; private set; }
 
+    /// <summary>When true, the snapshot loop watches for a prolonged
+    /// "no WiFi connected" state and automatically brings the
+    /// <c>polaris-hotspot</c> AP up so the rig stays reachable after it
+    /// is moved out of range of every saved station network (e.g. taken
+    /// to a different house). Configurable via
+    /// <c>Network:AutoHotspotFallback</c>, default on.</summary>
+    public bool AutoHotspotFallback { get; private set; }
+
+    /// <summary>True once the watchdog has brought the AP up as a
+    /// fallback (cleared again as soon as a station link reconnects).
+    /// Surfaced in the snapshot so the UI can explain why the Pi is in
+    /// hotspot mode without the user having asked for it.</summary>
+    public bool HotspotFallbackEngaged { get; private set; }
+
+    // ----- auto hotspot fallback watchdog state -----
+    private readonly TimeSpan _fallbackGrace;
+    private readonly string _hotspotPsk;
+    // First time we observed "no WiFi" in the current disconnected
+    // episode. Null while connected (station or AP).
+    private DateTime? _disconnectedSince;
+    // Suppress the watchdog while a manual switch is mid-flight (those
+    // calls can block ~35s and transiently report Disconnected).
+    private DateTime _suppressFallbackUntil = DateTime.MinValue;
+
     /// <summary>One-line, human-readable reason WiFi management is
     /// unavailable on this host. Null when everything is in order. The
     /// UI surfaces this directly in the Settings → Network banner so
@@ -70,6 +94,12 @@ public class NetworkManagerService : BackgroundService {
         _config = config;
         _logger = logger;
         HotspotSsid = _config.GetValue("Network:HotspotSsid", "Polaris-Hotspot") ?? "Polaris-Hotspot";
+        _hotspotPsk = _config.GetValue("Network:HotspotPsk", "polaris1234") ?? "polaris1234";
+        AutoHotspotFallback = _config.GetValue("Network:AutoHotspotFallback", true);
+        // Clamp the grace period to a sane floor so a misconfigured tiny
+        // value cannot make the watchdog yank the link away mid-DHCP.
+        var graceSec = Math.Max(20, _config.GetValue("Network:HotspotFallbackSeconds", 45));
+        _fallbackGrace = TimeSpan.FromSeconds(graceSec);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
@@ -96,6 +126,8 @@ public class NetworkManagerService : BackgroundService {
         while (!stoppingToken.IsCancellationRequested) {
             try { await RefreshSnapshotAsync(stoppingToken); }
             catch (Exception ex) { _logger.LogDebug(ex, "Network snapshot refresh failed"); }
+            try { await EvaluateHotspotFallbackAsync(stoppingToken); }
+            catch (Exception ex) { _logger.LogDebug(ex, "Hotspot fallback evaluation failed"); }
             try { await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken); }
             catch (TaskCanceledException) { break; }
         }
@@ -157,7 +189,9 @@ public class NetworkManagerService : BackgroundService {
             Signal: SignalStrength,
             HotspotSsid: HotspotSsid,
             LastError: LastError,
-            UnsupportedReason: UnsupportedReason);
+            UnsupportedReason: UnsupportedReason,
+            AutoHotspotFallback: AutoHotspotFallback,
+            HotspotFallbackEngaged: HotspotFallbackEngaged);
     }
 
     private async Task RefreshSnapshotAsync(CancellationToken ct) {
@@ -262,6 +296,14 @@ public class NetworkManagerService : BackgroundService {
         var v = ValidateSsidPsk(ssid, password);
         if (v != null) return SwitchResult.Fail(v);
 
+        // Keep the fallback watchdog out of the way: this call can block
+        // ~65s (up to 35s connect + 30s lease wait) during which the link
+        // legitimately reports Disconnected. The user explicitly asked
+        // for station, so do not race them onto the AP.
+        _suppressFallbackUntil = DateTime.UtcNow + TimeSpan.FromSeconds(80);
+        _disconnectedSince = null;
+        HotspotFallbackEngaged = false;
+
         var hotspotWasUp = (CurrentMode == WifiMode.Hotspot);
 
         // Drop any prior polaris-station so we start from a clean slate.
@@ -269,8 +311,12 @@ public class NetworkManagerService : BackgroundService {
         // exist on the first switch.
         await RunCommandAsync("nmcli", "connection delete polaris-station", ct, timeoutMs: 5000);
 
+        // autoconnect-priority 10 (vs the hotspot's -10) makes NM prefer
+        // this station network whenever it is in range, leaving the AP as
+        // the natural fallback when it is not.
         var add = await RunCommandAsync("nmcli",
             $"connection add type wifi ifname {Shell(WifiInterface!)} con-name polaris-station " +
+            $"connection.autoconnect-priority 10 " +
             $"ssid {Shell(ssid)} wifi-sec.key-mgmt wpa-psk wifi-sec.psk {Shell(password)}",
             ct, timeoutMs: 8000);
         if (add.exitCode != 0) {
@@ -307,6 +353,12 @@ public class NetworkManagerService : BackgroundService {
         if (!NmcliInstalled)   return SwitchResult.Fail("nmcli not installed");
         if (!HasWifiInterface) return SwitchResult.Fail("No WiFi interface");
 
+        // User asked for the AP explicitly; this is not a fallback.
+        _suppressFallbackUntil = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+        _disconnectedSince = null;
+        HotspotFallbackEngaged = false;
+
+        await EnsureHotspotConnectionAsync(ct);
         var up = await RunCommandAsync("nmcli",
             "connection up polaris-hotspot", ct, timeoutMs: 20000);
         if (up.exitCode != 0) {
@@ -330,6 +382,9 @@ public class NetworkManagerService : BackgroundService {
         var v = ValidateSsidPsk(ssid, password);
         if (v != null) return SwitchResult.Fail(v);
 
+        // Rebouncing the AP drops clients briefly; keep the watchdog out.
+        _suppressFallbackUntil = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+
         var mod = await RunCommandAsync("nmcli",
             $"connection modify polaris-hotspot 802-11-wireless.ssid {Shell(ssid)} " +
             $"wifi-sec.psk {Shell(password)}", ct, timeoutMs: 8000);
@@ -352,6 +407,116 @@ public class NetworkManagerService : BackgroundService {
         await RefreshSnapshotAsync(ct);
         LastError = null;
         return SwitchResult.Success(CurrentIp);
+    }
+
+    // ----- auto hotspot fallback watchdog -----
+
+    /// <summary>Called once per snapshot tick. When WiFi has been
+    /// disconnected (no station associated, AP not up) for longer than
+    /// the grace window, brings the <c>polaris-hotspot</c> AP up so the
+    /// rig stays reachable without an ethernet cable. This is the path
+    /// that recovers a Pi configured for the user's home network after
+    /// it is carried somewhere that network is out of range: the saved
+    /// station profile never associates, and nothing else would bring
+    /// the AP up on its own.</summary>
+    private async Task EvaluateHotspotFallbackAsync(CancellationToken ct) {
+        if (!AutoHotspotFallback || !NmcliInstalled || !HasWifiInterface) return;
+        var now = DateTime.UtcNow;
+
+        // Connected (station link or AP serving clients) => healthy.
+        if (CurrentMode == WifiMode.Station || CurrentMode == WifiMode.Hotspot) {
+            _disconnectedSince = null;
+            // A real station reconnect means the fallback is no longer in
+            // effect; if WE put the AP up, leave the flag set so the UI
+            // can still explain it until the user reconnects to a network.
+            if (CurrentMode == WifiMode.Station) HotspotFallbackEngaged = false;
+            return;
+        }
+
+        // Disconnected / Unknown: open (or continue) the grace timer.
+        _disconnectedSince ??= now;
+
+        if (!ShouldEngageHotspotFallback(CurrentMode, _disconnectedSince, now,
+                _fallbackGrace, AutoHotspotFallback, _suppressFallbackUntil))
+            return;
+
+        _logger.LogWarning(
+            "NetworkManagerService: no WiFi for {Sec:n0}s (no saved network in range). " +
+            "Starting polaris-hotspot so the rig stays reachable.",
+            (now - _disconnectedSince.Value).TotalSeconds);
+
+        var ok = await EnsureAndStartHotspotAsync(ct);
+        if (ok) {
+            HotspotFallbackEngaged = true;
+            _disconnectedSince = null;
+            await RefreshSnapshotAsync(ct);
+        } else {
+            // Bringing the AP up failed; back off a full grace window
+            // instead of hammering nmcli every 5 s.
+            _disconnectedSince = now;
+        }
+    }
+
+    /// <summary>Pure decision for the watchdog, factored out so it can be
+    /// unit-tested without nmcli. Engage the AP fallback only when it is
+    /// enabled, not suppressed by an in-flight manual switch, the link is
+    /// genuinely down, and it has stayed down past the grace window.</summary>
+    internal static bool ShouldEngageHotspotFallback(
+            WifiMode mode, DateTime? disconnectedSince, DateTime now,
+            TimeSpan grace, bool enabled, DateTime suppressUntil) {
+        if (!enabled) return false;
+        if (now < suppressUntil) return false;
+        if (mode == WifiMode.Station || mode == WifiMode.Hotspot) return false;
+        if (disconnectedSince == null) return false;
+        return now - disconnectedSince.Value >= grace;
+    }
+
+    /// <summary>Ensures the <c>polaris-hotspot</c> connection exists
+    /// (recreating it if the .deb bootstrap never ran), then brings it
+    /// up. Returns true only when nmcli reports the AP activated.</summary>
+    private async Task<bool> EnsureAndStartHotspotAsync(CancellationToken ct) {
+        await EnsureHotspotConnectionAsync(ct);
+        var up = await RunCommandAsync("nmcli", "connection up polaris-hotspot", ct, timeoutMs: 20000);
+        if (up.exitCode != 0) {
+            LastError = $"auto hotspot fallback failed: {up.stderr.Trim()}";
+            _logger.LogWarning("NetworkManagerService: {Err}", LastError);
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>Creates the <c>polaris-hotspot</c> AP connection if it is
+    /// missing, mirroring the .deb bootstrap (2.4 GHz b/g, shared IPv4 so
+    /// NM hands clients DHCP+DNS+NAT). No-op when the connection already
+    /// exists. Makes the in-app fallback self-sufficient even on a Pi
+    /// where the first-boot bootstrap service never ran.</summary>
+    private async Task EnsureHotspotConnectionAsync(CancellationToken ct) {
+        try {
+            var show = await RunCommandAsync("nmcli", "-t -f NAME connection show", ct, timeoutMs: 5000);
+            var exists = show.stdout
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(l => SplitNmcliTerse(l).FirstOrDefault())
+                .Any(n => string.Equals(n, "polaris-hotspot", StringComparison.OrdinalIgnoreCase));
+            if (exists) return;
+
+            var ssid = HotspotSsid;
+            var psk = _hotspotPsk;
+            if (ValidateSsidPsk(ssid, psk) != null) { ssid = "Polaris-Hotspot"; psk = "polaris1234"; }
+
+            _logger.LogInformation(
+                "NetworkManagerService: polaris-hotspot connection missing, recreating it (SSID {Ssid})", ssid);
+            var add = await RunCommandAsync("nmcli",
+                $"connection add type wifi ifname {Shell(WifiInterface!)} con-name polaris-hotspot " +
+                $"autoconnect no ssid {Shell(ssid)} " +
+                $"802-11-wireless.mode ap 802-11-wireless.band bg " +
+                $"ipv4.method shared ipv6.method ignore " +
+                $"wifi-sec.key-mgmt wpa-psk wifi-sec.psk {Shell(psk)}",
+                ct, timeoutMs: 8000);
+            if (add.exitCode != 0)
+                _logger.LogWarning("NetworkManagerService: failed to recreate polaris-hotspot: {Err}", add.stderr.Trim());
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "EnsureHotspotConnectionAsync failed");
+        }
     }
 
     private async Task RevertToHotspotAsync(bool hotspotWasUp, CancellationToken ct) {
@@ -504,4 +669,6 @@ public record NetworkSnapshot(
     int Signal,
     string HotspotSsid,
     string? LastError,
-    string? UnsupportedReason);
+    string? UnsupportedReason,
+    bool AutoHotspotFallback = true,
+    bool HotspotFallbackEngaged = false);
