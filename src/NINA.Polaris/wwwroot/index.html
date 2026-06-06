@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260604-vidfps">
+    <link rel="stylesheet" href="/css/app.css?v=20260604-focusgoto">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -2082,6 +2082,20 @@
                                    x-model.number="focusStepFast"
                                    @change="focusStep = focusStepFast; saveFocusSteps()">
                         </label>
+                        <!-- Absolute go-to: type a target step count and
+                             jump straight there (single driver write). -->
+                        <label class="focus-step-inline focus-goto-inline">
+                            <span>Goto</span>
+                            <input type="number" min="0" step="1"
+                                   x-model.number="focusGotoTarget"
+                                   :disabled="!focusConnected || focusMoving"
+                                   @keydown.enter.prevent="focusMoveTo(focusGotoTarget)"
+                                   title="Move the focuser to this absolute position">
+                        </label>
+                        <button class="btn btn-sm"
+                                :disabled="!focusConnected || focusMoving"
+                                @click="focusMoveTo(focusGotoTarget)"
+                                title="Go to the absolute position entered">Go</button>
                         <span class="focus-readout" x-show="focusTemp !== null"
                               :title="'Focuser temperature'"
                               x-text="focusTemp !== null ? focusTemp.toFixed(1) + ' °C' : ''"></span>
@@ -11651,7 +11665,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260604-vidfps"></script>
+    <script src="/js/app.js?v=20260604-focusgoto"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

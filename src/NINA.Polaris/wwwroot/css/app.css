@@ -3178,6 +3178,10 @@ label select.input-sm {
     border-color: var(--accent);
     outline: none;
 }
+/* Goto target can be a large absolute step count -> wider field. */
+.focus-goto-inline input[type="number"] {
+    width: 84px;
+}
 .focus-readout {
     font-variant-numeric: tabular-nums;
     color: var(--text-primary);

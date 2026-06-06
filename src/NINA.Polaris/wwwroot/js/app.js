@@ -259,11 +259,14 @@ function ninaApp() {
         // work on all firmware revisions. Default 5.
         focusStepSlow: 5,
         // FAST step: large, double-arrow buttons (◀◀ / ▶▶). User can
-        // crank this up for quick coarse focus. Backend chunks any
-        // move > 100 steps into safe sub-moves with settle waits, so
-        // even a 1000-step click won't crash the driver -- just takes
-        // proportionally longer wall-clock to complete.
+        // crank this up for quick coarse focus. Moves go to the driver in
+        // a single absolute write (the old chunked-walk workaround was
+        // removed -- the EAF crash was insufficient Pi USB current, not
+        // software).
         focusStepFast: 50,
+        // Absolute "go to position" target (the Goto input next to the
+        // stepper).
+        focusGotoTarget: 0,
         // Legacy alias kept for code that still reads focusStep
         // (computed getter would be cleaner but Alpine reactivity is
         // simpler with a plain mirrored field updated on input).
