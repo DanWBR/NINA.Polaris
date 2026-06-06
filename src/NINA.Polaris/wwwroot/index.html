@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260604-focusgoto">
+    <link rel="stylesheet" href="/css/app.css?v=20260604-previewfocus">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -2540,6 +2540,32 @@
                                 title="Reset to neutral (midpoint of the camera's WB range)">
                             ↻
                         </button>
+                    </div>
+                    <!-- Inline focuser control: nudge focus or jump to an
+                         absolute position while reviewing a snap, without
+                         leaving PREVIEW. Shares the FOCUS tab's state +
+                         endpoints; only shown when a focuser is connected. -->
+                    <div class="control-row preview-focus-row" x-show="focusConnected">
+                        <span class="text-muted">Focus</span>
+                        <button class="btn btn-sm" @click="focusMove(-focusStepFast)"
+                                :disabled="focusMoving" :title="'Out ' + focusStepFast + ' (fast)'">&laquo;</button>
+                        <button class="btn btn-sm" @click="focusMove(-focusStepSlow)"
+                                :disabled="focusMoving" :title="'Out ' + focusStepSlow + ' (slow)'">&lt;</button>
+                        <span class="stepper-value" x-text="focusPosition">0</span>
+                        <button class="btn btn-sm" @click="focusMove(focusStepSlow)"
+                                :disabled="focusMoving" :title="'In ' + focusStepSlow + ' (slow)'">&gt;</button>
+                        <button class="btn btn-sm" @click="focusMove(focusStepFast)"
+                                :disabled="focusMoving" :title="'In ' + focusStepFast + ' (fast)'">&raquo;</button>
+                        <input type="number" min="0" step="1"
+                               class="input-sm focus-goto-inline"
+                               x-model.number="focusGotoTarget"
+                               :disabled="focusMoving"
+                               @keydown.enter.prevent="focusMoveTo(focusGotoTarget)"
+                               title="Go to absolute position">
+                        <button class="btn btn-sm" :disabled="focusMoving"
+                                @click="focusMoveTo(focusGotoTarget)" title="Go to the entered position">Go</button>
+                        <span class="focus-readout-warn" x-show="focusMoving"
+                              style="font-size:11px">MOVING</span>
                     </div>
                     </div><!-- /.shutter-inputs -->
 
@@ -11665,7 +11691,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260604-focusgoto"></script>
+    <script src="/js/app.js?v=20260604-previewfocus"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

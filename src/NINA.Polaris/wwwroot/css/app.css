@@ -3182,6 +3182,22 @@ label select.input-sm {
 .focus-goto-inline input[type="number"] {
     width: 84px;
 }
+.focus-goto-inline {
+    width: 84px;
+}
+/* Inline focuser control row in the PREVIEW panel. */
+.preview-focus-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 12px;
+}
+.preview-focus-row .stepper-value {
+    min-width: 56px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
 .focus-readout {
     font-variant-numeric: tabular-nums;
     color: var(--text-primary);
