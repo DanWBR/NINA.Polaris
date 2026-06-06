@@ -366,7 +366,17 @@ public static class CameraEndpoints {
             startedAt = stream.IsRunning ? stream.StartedAt : (DateTime?)null,
             lastFrameAt = stream.IsRunning ? stream.LastFrameAt : (DateTime?)null,
             lastError = stream.LastError,
-            supportsNative = equip.Camera?.Capabilities.SupportsVideoStream ?? false
+            supportsNative = equip.Camera?.Capabilities.SupportsVideoStream ?? false,
+            // Diagnostics for slow-stream triage:
+            //   captureMs  = per-frame CaptureAsync time (loop mode only)
+            //   frameWidth/Height + rawMBPerFrame = on-wire payload size;
+            //     RAW streaming sends W*H*2 bytes/frame before LZ4, so a
+            //     full-frame OSC at BIN1 is bandwidth-bound. Shrink with
+            //     ROI + binning.
+            captureMs = Math.Round(stream.LastCaptureMs, 1),
+            frameWidth = stream.LastFrameWidth,
+            frameHeight = stream.LastFrameHeight,
+            rawMBPerFrame = Math.Round(stream.LastFrameRawBytes / (1024.0 * 1024.0), 2)
         }));
     }
 

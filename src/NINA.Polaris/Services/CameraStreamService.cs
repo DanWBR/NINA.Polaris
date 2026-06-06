@@ -51,6 +51,19 @@ public class CameraStreamService : IDisposable {
     public DateTime LastFrameAt => _lastFrameAt;
     public string? LastError { get; private set; }
 
+    // --- Diagnostics (surfaced via /api/camera/stream/status) so a slow
+    // stream can be traced to its bottleneck without log-diving:
+    //   - LastCaptureMs: how long the per-frame CaptureAsync took (loop
+    //     mode only; 0 in native mode where the driver pushes BLOBs).
+    //   - LastFrameWidth/Height + LastFrameRawBytes: the size of each
+    //     frame. RAW streaming sends width*height*2 bytes/frame (before
+    //     LZ4), so a full-frame OSC at BIN1 is tens of MB per frame ->
+    //     bandwidth-bound. Shrink via ROI + binning.
+    public double LastCaptureMs { get; private set; }
+    public int LastFrameWidth { get; private set; }
+    public int LastFrameHeight { get; private set; }
+    public long LastFrameRawBytes { get; private set; }
+
     /// <summary>Frames-per-second computed from frame count + elapsed
     /// since start. Returns 0 when not running or insufficient samples.</summary>
     public double Fps {
@@ -185,7 +198,10 @@ public class CameraStreamService : IDisposable {
                     Gain: Gain != cam.Gain ? Gain : null,
                     BinX: BinX, BinY: BinY,
                     ImageType: "STREAM");
+                var sw = System.Diagnostics.Stopwatch.StartNew();
                 var image = await cam.CaptureAsync(ExposureSeconds, opts, ct);
+                sw.Stop();
+                LastCaptureMs = sw.Elapsed.TotalMilliseconds;
                 OnStreamFrame(image);
             } catch (OperationCanceledException) { break; }
             catch (Exception ex) {
@@ -199,6 +215,12 @@ public class CameraStreamService : IDisposable {
     private void OnStreamFrame(IImageData frame) {
         Interlocked.Increment(ref _frameCount);
         _lastFrameAt = DateTime.UtcNow;
+        // Record frame geometry + raw on-wire size for diagnostics. RAW
+        // streaming ships width*height*2 bytes per frame before LZ4.
+        var props = frame.Properties;
+        LastFrameWidth = props.Width;
+        LastFrameHeight = props.Height;
+        LastFrameRawBytes = (long)(frame.Data?.Length ?? 0) * 2;
         try {
             // Fire-and-forget relay, ImageRelayService handles its own
             // queue + back-pressure (adaptive bandwidth + per-client
