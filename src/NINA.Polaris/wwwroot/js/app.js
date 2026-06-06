@@ -770,6 +770,11 @@ function ninaApp() {
             maxDurationSec: 60,
             wbR: 50,
             wbB: 50,
+            // Hardware WB slider range, refreshed from the camera's
+            // reported WB_R min/max (varies by driver: ZWO ~0..99, some
+            // QHY/PlayerOne 0..255). Default 0..100 until status loads.
+            wbMin: 0,
+            wbMax: 100,
             // FOV / ROI state. roiSize = 0 means full sensor; non-zero
             // (square pills) keeps the square aspect for compatibility
             // with the prior shape. roiW/roiH/roiX/roiY mirror the
@@ -13493,6 +13498,9 @@ function ninaApp() {
                 // 640 × 640 on a 4144 × 2822 sensor" hint line.
                 if (r && typeof r.maxX === 'number') this.cameraCaps.maxX = r.maxX;
                 if (r && typeof r.maxY === 'number') this.cameraCaps.maxY = r.maxY;
+                if (r && typeof r.whiteBalanceMin === 'number') this.video.wbMin = r.whiteBalanceMin;
+                if (r && typeof r.whiteBalanceMax === 'number' && r.whiteBalanceMax > this.video.wbMin)
+                    this.video.wbMax = r.whiteBalanceMax;
                 if (r && typeof r.whiteBalanceR === 'number') this.video.wbR = r.whiteBalanceR;
                 if (r && typeof r.whiteBalanceB === 'number') this.video.wbB = r.whiteBalanceB;
                 // If the rig had a saved ROI, push it to the camera
@@ -13623,8 +13631,11 @@ function ninaApp() {
             }
         },
         videoResetWhiteBalance() {
-            this.video.wbR = 50;
-            this.video.wbB = 50;
+            // Neutral = midpoint of the camera's actual WB range (50 on a
+            // 0..100 driver, ~128 on a 0..255 driver).
+            const mid = Math.round((this.video.wbMin + this.video.wbMax) / 2);
+            this.video.wbR = mid;
+            this.video.wbB = mid;
             this.videoSetWhiteBalance();
         },
 

@@ -149,6 +149,24 @@ public class IndiCamera : ICamera {
         }
     }
 
+    /// <summary>WB range taken from the WB_R element the driver advertises
+    /// (R + B share the same range on every OSC driver we've seen).
+    /// Falls back to the 0..100 ICamera default if the element or its
+    /// min/max aren't published yet.</summary>
+    public double WhiteBalanceMin => WbElement()?.Min ?? 0;
+    public double WhiteBalanceMax {
+        get {
+            var el = WbElement();
+            return el != null && el.Max > el.Min ? el.Max : 100;
+        }
+    }
+
+    private IndiNumberElement? WbElement() {
+        var ctrl = _client.GetProperty(DeviceName, "CCD_CONTROLS") as IndiNumberProperty;
+        if (ctrl != null && ctrl.Values.TryGetValue("WB_R", out var el)) return el;
+        return null;
+    }
+
     /// <summary>Write gain into CCD_CONTROLS only if the driver actually
     /// advertises that property + a matching element. Some drivers
     /// (notably indi_simulator_ccd) never publish CCD_CONTROLS at all,

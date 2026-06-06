@@ -209,6 +209,8 @@ public static class CameraEndpoints {
                 bitDepth = equip.Camera.BitDepth,
                 whiteBalanceR = equip.Camera.WhiteBalanceR,
                 whiteBalanceB = equip.Camera.WhiteBalanceB,
+                whiteBalanceMin = equip.Camera.WhiteBalanceMin,
+                whiteBalanceMax = equip.Camera.WhiteBalanceMax,
                 // Report which driver + device is currently bound so the
                 // frontend can reconcile its dropdown state on page reload
                 // (the cameraDriver Alpine state defaults from the saved

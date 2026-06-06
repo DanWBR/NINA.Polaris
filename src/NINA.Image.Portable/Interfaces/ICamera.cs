@@ -83,6 +83,13 @@ public interface ICamera {
     double WhiteBalanceR => 50;
     double WhiteBalanceB => 50;
 
+    /// <summary>Driver-reported white-balance range. Varies widely by
+    /// camera (ZWO ASI ~0..99, some QHY/PlayerOne 0..255, ...). Defaults
+    /// to 0..100 for backends that don't report a range; the UI binds the
+    /// WB sliders to these so the full hardware range is reachable.</summary>
+    double WhiteBalanceMin => 0;
+    double WhiteBalanceMax => 100;
+
     /// <summary>Set R + B white-balance multipliers. No-op default for
     /// mono cameras and backends that don't expose WB through a
     /// programmable property. Check <see cref="CameraCapabilities.SupportsWhiteBalance"/>
