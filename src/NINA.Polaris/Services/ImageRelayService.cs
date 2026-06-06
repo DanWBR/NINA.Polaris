@@ -281,12 +281,16 @@ public class ImageRelayService : IDisposable {
     /// the stream stays smooth at the rate the Pi can actually encode +
     /// the link can carry, instead of building an unbounded backlog.</para>
     /// </summary>
-    public async Task RelayVideoJpegAsync(IImageData imageData,
+    /// <returns>true when a JPEG was actually rendered and broadcast to
+    /// clients; false when skipped (no clients, a render already in
+    /// flight, or render failure). The caller uses this to count the
+    /// real transmission rate vs the capture rate.</returns>
+    public async Task<bool> RelayVideoJpegAsync(IImageData imageData,
                                           int maxDim = 1280, int quality = 70,
                                           CancellationToken ct = default) {
-        if (_clients.IsEmpty) return;
+        if (_clients.IsEmpty) return false;
         // Drop-if-busy: keep CPU + latency bounded under fast frame rates.
-        if (Interlocked.CompareExchange(ref _videoRenderInFlight, 1, 0) != 0) return;
+        if (Interlocked.CompareExchange(ref _videoRenderInFlight, 1, 0) != 0) return false;
         try {
             var src = ApplyVerticalFlipIfEnabled(imageData);
             var resolved = ResolveBayerOverride(src.Properties.BayerPattern);
@@ -297,9 +301,9 @@ public class ImageRelayService : IDisposable {
                     FitsThumbnailer.RenderJpegFromImageData(src, maxDim, quality, resolved), ct);
             } catch (Exception ex) {
                 _logger.LogDebug(ex, "Video JPEG render failed (skipping frame)");
-                return;
+                return false;
             }
-            if (jpeg == null || jpeg.Length == 0) return;
+            if (jpeg == null || jpeg.Length == 0) return false;
 
             // Reuse the stream-header envelope (so the browser's headered-
             // JPEG path picks up the FrameKind and routes to the video
@@ -313,6 +317,7 @@ public class ImageRelayService : IDisposable {
             jpeg.CopyTo(frame, 4 + header.Length);
 
             await BroadcastFrameAsync(frame, ct);
+            return true;
         } finally {
             Interlocked.Exchange(ref _videoRenderInFlight, 0);
         }

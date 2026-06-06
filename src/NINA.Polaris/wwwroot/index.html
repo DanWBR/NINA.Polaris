@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260604-wbpreview">
+    <link rel="stylesheet" href="/css/app.css?v=20260604-vidfps">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -2584,7 +2584,8 @@
                             <span x-show="cameraStream.running" x-text="
                                 '⏹ Stop ('
                                 + (cameraStream.mode === 'native' ? 'native' : 'loop')
-                                + ' · ' + (cameraStream.fps?.toFixed?.(1) || '0.0') + ' fps)'"></span>
+                                + ' · cap ' + (cameraStream.captureFps?.toFixed?.(1) || cameraStream.fps?.toFixed?.(1) || '0.0')
+                                + ' / tx ' + (cameraStream.transmitFps?.toFixed?.(1) || '0.0') + ' fps)'"></span>
                         </button>
                         <button class="btn" @click="openImageViewer()"
                                 :disabled="!selectedCamera"
@@ -2889,7 +2890,8 @@
                                     :disabled="!selectedCamera || videoRecording.recording">
                                 <span x-show="!cameraStream.running">🎥 Start Stream</span>
                                 <span x-show="cameraStream.running"
-                                      x-text="'⏹ Stop Stream (' + (cameraStream.fps?.toFixed?.(1) || '0.0') + ' fps)'"></span>
+                                      x-text="'⏹ Stop Stream (cap ' + (cameraStream.captureFps?.toFixed?.(1) || cameraStream.fps?.toFixed?.(1) || '0.0')
+                                              + ' / tx ' + (cameraStream.transmitFps?.toFixed?.(1) || '0.0') + ' fps)'"></span>
                             </button>
                             <span x-show="videoRecording.recording" class="text-muted" style="font-size:11px">
                                 → <code x-text="videoRecording.path"></code>
@@ -11649,7 +11651,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260604-wbpreview"></script>
+    <script src="/js/app.js?v=20260604-vidfps"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

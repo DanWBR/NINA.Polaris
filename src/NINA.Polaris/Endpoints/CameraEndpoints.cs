@@ -362,7 +362,9 @@ public static class CameraEndpoints {
             binX = stream.BinX,
             binY = stream.BinY,
             frames = stream.FrameCount,
-            fps = stream.Fps,
+            fps = stream.Fps,             // capture FPS (back-compat alias)
+            captureFps = stream.Fps,      // frames produced by the camera
+            transmitFps = stream.TransmitFps, // JPEG frames sent to clients
             startedAt = stream.IsRunning ? stream.StartedAt : (DateTime?)null,
             lastFrameAt = stream.IsRunning ? stream.LastFrameAt : (DateTime?)null,
             lastError = stream.LastError,

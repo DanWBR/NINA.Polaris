@@ -32,6 +32,7 @@ public class CameraStreamService : IDisposable {
     private IDisposable? _nativeSubscription;
     private readonly object _lock = new();
     private long _frameCount;
+    private long _transmittedFrames;
     private DateTime _startedAt;
     private DateTime _lastFrameAt;
     // External listeners (VideoRecordingService, SlewPreviewService, etc.)
@@ -64,13 +65,26 @@ public class CameraStreamService : IDisposable {
     public int LastFrameHeight { get; private set; }
     public long LastFrameRawBytes { get; private set; }
 
-    /// <summary>Frames-per-second computed from frame count + elapsed
-    /// since start. Returns 0 when not running or insufficient samples.</summary>
+    /// <summary>Capture FPS: frames produced by the camera (loop capture
+    /// or native driver BLOBs) per second since the stream started.
+    /// Returns 0 when not running.</summary>
     public double Fps {
         get {
             if (!IsRunning) return 0;
             var elapsed = (DateTime.UtcNow - _startedAt).TotalSeconds;
             return elapsed > 0 ? FrameCount / elapsed : 0;
+        }
+    }
+
+    /// <summary>Transmission FPS: downscaled-JPEG frames actually rendered
+    /// and broadcast to clients per second. Lower than <see cref="Fps"/>
+    /// when the encode/link can't keep up (frames are dropped by the
+    /// relay's in-flight guard) or 0 when no client is connected.</summary>
+    public double TransmitFps {
+        get {
+            if (!IsRunning) return 0;
+            var elapsed = (DateTime.UtcNow - _startedAt).TotalSeconds;
+            return elapsed > 0 ? Interlocked.Read(ref _transmittedFrames) / elapsed : 0;
         }
     }
 
@@ -99,6 +113,7 @@ public class CameraStreamService : IDisposable {
             BinY = cfg.BinY ?? 1;
             LastError = null;
             Interlocked.Exchange(ref _frameCount, 0);
+            Interlocked.Exchange(ref _transmittedFrames, 0);
             _startedAt = DateTime.UtcNow;
             _lastFrameAt = _startedAt;
             _cts = new CancellationTokenSource();
@@ -233,8 +248,13 @@ public class CameraStreamService : IDisposable {
             // full-res RAW frame still reaches recording subscribers
             // below, so the SER recording stays raw + full resolution.
             // Fire-and-forget; RelayVideoJpegAsync drops frames if a
-            // render is still in flight (bounded CPU/latency).
-            _ = _relay.RelayVideoJpegAsync(frame);
+            // render is still in flight (bounded CPU/latency). Count the
+            // ones actually transmitted so TransmitFps reflects the real
+            // delivery rate (vs the capture rate above).
+            _ = _relay.RelayVideoJpegAsync(frame).ContinueWith(t => {
+                if (t.IsCompletedSuccessfully && t.Result)
+                    Interlocked.Increment(ref _transmittedFrames);
+            }, TaskScheduler.Default);
         } catch (Exception ex) {
             _logger.LogDebug(ex, "Relay of stream frame failed");
         }

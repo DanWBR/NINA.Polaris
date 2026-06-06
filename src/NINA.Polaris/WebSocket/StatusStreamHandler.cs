@@ -341,6 +341,8 @@ public static class StatusStreamHandler {
                             gain = cameraStream.Gain,
                             frames = cameraStream.FrameCount,
                             fps = cameraStream.Fps,
+                            captureFps = cameraStream.Fps,
+                            transmitFps = cameraStream.TransmitFps,
                             lastError = cameraStream.LastError,
                             supportsNative = equip.Camera?.Capabilities.SupportsVideoStream ?? false
                         },
