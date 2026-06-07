@@ -266,6 +266,9 @@ function ninaApp() {
         // Absolute "go to position" target (the Goto input next to the
         // stepper).
         focusGotoTarget: 0,
+        // Seed the GoTo input with the live position once per connection.
+        // Reset on disconnect so the next connect re-seeds.
+        _focusGotoSeeded: false,
         // Legacy alias kept for code that still reads focusStep
         // (computed getter would be cleaner but Alpine reactivity is
         // simpler with a plain mirrored field updated on input).
@@ -18205,6 +18208,7 @@ function ninaApp() {
                 await this.apiPost('/api/focuser/disconnect');
                 this.selectedFocuser = null;
                 this.focusConnected = false;
+                this._focusGotoSeeded = false;
                 this.focusPosition = 0;
                 this.focusTemp = null;
                 this.toast('Focuser disconnected', 'warn');
@@ -21334,6 +21338,20 @@ function ninaApp() {
                 // camera/telescope had. Treat missing 'connected'
                 // (older server build) as true for backward compat.
                 const focuserOnline = eq.focuser.connected !== false;
+                // Seed the GoTo input with the focuser's current position once
+                // per connection (keyed on a dedicated flag, not the
+                // focusConnected edge, since equipConnectFocuser pre-sets
+                // focusConnected before the first status tick lands). Reset the
+                // flag when offline so the next connect re-seeds.
+                if (focuserOnline) {
+                    if (!this._focusGotoSeeded
+                        && typeof eq.focuser.position === 'number') {
+                        this.focusGotoTarget = eq.focuser.position;
+                        this._focusGotoSeeded = true;
+                    }
+                } else {
+                    this._focusGotoSeeded = false;
+                }
                 this.focusConnected = focuserOnline;
                 this.selectedFocuser = focuserOnline ? eq.focuser.name : null;
                 if (!this.equipFocuserChoice && eq.focuser.name) {
