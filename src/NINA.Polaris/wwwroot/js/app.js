@@ -14512,6 +14512,32 @@ function ninaApp() {
             }
         },
 
+        // VIDEO wheel nudge: the (-)/(+) buttons above/below each drum.
+        // Mutating the bound Alpine field moves the wheel too (the
+        // _mountWheelPickers $watch syncs the drum), so this matches a
+        // scroll. Steps match each wheel's data-step (exp 1ms, gain 1,
+        // focus 10). Focus also commits the absolute move like a drag.
+        videoWheelNudge(which, dir) {
+            const streaming = this.cameraStream.running || this.videoRecording.recording;
+            if (which === 'exp') {
+                if (streaming) return;
+                let ms = Math.round((this.video.exposure || 0) * 1000) + dir;
+                ms = Math.min(5000, Math.max(1, ms));
+                this.video.exposure = ms / 1000;
+            } else if (which === 'gain') {
+                if (streaming) return;
+                let g = (this.video.gain | 0) + dir;
+                this.video.gain = Math.min(600, Math.max(0, g));
+            } else if (which === 'focus') {
+                if (this.focusMoving || !(this.focusMaxPosition > 0)) return;
+                const base = this.focusSliderDirty ? this.focusSliderTarget : this.focusPosition;
+                let p = ((base | 0) + dir * 10);
+                p = Math.min(this.focusMaxPosition, Math.max(0, p));
+                this.focusSliderTarget = p;
+                this.focusMoveTo(p);
+            }
+        },
+
         async focusAbort() {
             try { await this.apiPost('/api/focuser/abort'); } catch (e) { }
         },

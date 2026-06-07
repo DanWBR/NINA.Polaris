@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260607-pfocusslider">
+    <link rel="stylesheet" href="/css/app.css?v=20260607-wheelnudge">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -2853,17 +2853,40 @@
          the stored value (seconds → ms for
          Exposure). data-disabled gates the wheel
          during stream / recording / motor moves. -->
+                        <!-- Each wheel sits in a column with a (-) nudge
+         button above and a (+) below, so on small
+         touch screens you can step the value without
+         having to drag the drum precisely. The
+         buttons mutate the same Alpine field the wheel
+         is bound to (the _mountWheelPickers $watch
+         keeps the drum in sync). -->
                         <div class="wheel-picker-group">
-                            <div data-wheel-picker
-                                 data-label="Exposure (ms)"
-                                 data-min="1" data-max="5000" data-step="1"
-                                 data-bind="video.exposure" data-scale="1000"
-                                 :data-disabled="cameraStream.running || videoRecording.recording"></div>
-                            <div data-wheel-picker
-                                 data-label="Gain"
-                                 data-min="0" data-max="600" data-step="1"
-                                 data-bind="video.gain" data-scale="1"
-                                 :data-disabled="cameraStream.running || videoRecording.recording"></div>
+                            <div class="wheel-col">
+                                <button class="btn btn-sm wheel-nudge"
+                                        :disabled="cameraStream.running || videoRecording.recording"
+                                        @click="videoWheelNudge('exp', -1)" title="Exposure -1 ms">&minus;</button>
+                                <div data-wheel-picker
+                                     data-label="Exposure (ms)"
+                                     data-min="1" data-max="5000" data-step="1"
+                                     data-bind="video.exposure" data-scale="1000"
+                                     :data-disabled="cameraStream.running || videoRecording.recording"></div>
+                                <button class="btn btn-sm wheel-nudge"
+                                        :disabled="cameraStream.running || videoRecording.recording"
+                                        @click="videoWheelNudge('exp', 1)" title="Exposure +1 ms">+</button>
+                            </div>
+                            <div class="wheel-col">
+                                <button class="btn btn-sm wheel-nudge"
+                                        :disabled="cameraStream.running || videoRecording.recording"
+                                        @click="videoWheelNudge('gain', -1)" title="Gain -1">&minus;</button>
+                                <div data-wheel-picker
+                                     data-label="Gain"
+                                     data-min="0" data-max="600" data-step="1"
+                                     data-bind="video.gain" data-scale="1"
+                                     :data-disabled="cameraStream.running || videoRecording.recording"></div>
+                                <button class="btn btn-sm wheel-nudge"
+                                        :disabled="cameraStream.running || videoRecording.recording"
+                                        @click="videoWheelNudge('gain', 1)" title="Gain +1">+</button>
+                            </div>
                             <!-- Wrapped in template x-if (rather than
              x-show) because the WheelPicker
              constructor snapshots data-max ONCE
@@ -2880,27 +2903,24 @@
              sees the new <div> and our
              _mountWheelPickers() runs. -->
                             <template x-if="focusConnected && focusMaxPosition > 0">
-                                <div data-wheel-picker
-                                     data-label="Focus"
-                                     data-min="0"
-                                     :data-max="focusMaxPosition"
-                                     data-step="10"
-                                     data-bind="focusSliderTarget" data-scale="1"
-                                     :data-disabled="focusMoving"
-                                     @pointerdown="focusSliderDirty = true"
-                                     @wheel-pick-end="focusMoveTo(focusSliderTarget); focusSliderDirty = false"></div>
+                                <div class="wheel-col">
+                                    <button class="btn btn-sm wheel-nudge"
+                                            :disabled="focusMoving"
+                                            @click="videoWheelNudge('focus', -1)" title="Focus -10">&minus;</button>
+                                    <div data-wheel-picker
+                                         data-label="Focus"
+                                         data-min="0"
+                                         :data-max="focusMaxPosition"
+                                         data-step="10"
+                                         data-bind="focusSliderTarget" data-scale="1"
+                                         :data-disabled="focusMoving"
+                                         @pointerdown="focusSliderDirty = true"
+                                         @wheel-pick-end="focusMoveTo(focusSliderTarget); focusSliderDirty = false"></div>
+                                    <button class="btn btn-sm wheel-nudge"
+                                            :disabled="focusMoving"
+                                            @click="videoWheelNudge('focus', 1)" title="Focus +10">+</button>
+                                </div>
                             </template>
-                        </div>
-                        <!-- Tiny status bar below the wheels: shows the
-         current numeric value of each wheel so users
-         can read precise values without trying to
-         eyeball the center of the drum. -->
-                        <div class="control-row" style="justify-content:space-between; font-size:11px; color:var(--text-muted)">
-                            <span x-text="'Exp ' + Math.round((video.exposure || 0) * 1000) + ' ms'"></span>
-                            <span x-text="'Gain ' + (video.gain | 0)"></span>
-                            <span x-show="focusConnected && focusMaxPosition > 0"
-                                  x-text="'Focus ' + focusPosition + ' / ' + focusMaxPosition
-                                          + (focusMoving ? ' ⚙' : '')"></span>
                         </div>
 
                         <!-- SHUT-3: Polaris Shutter for VIDEO Record.
@@ -11863,7 +11883,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260607-pfocusslider"></script>
+    <script src="/js/app.js?v=20260607-wheelnudge"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

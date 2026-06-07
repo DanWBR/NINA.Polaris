@@ -9795,6 +9795,21 @@ label select.input-sm {
     justify-items: center;
 }
 
+/* Each wheel stacked between its (-) and (+) nudge buttons, so the
+   value can be stepped by tapping on small touch screens. */
+.wheel-col {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+}
+.wheel-nudge {
+    padding: 6px 0;
+    font-size: 18px;
+    line-height: 1;
+    font-weight: 700;
+}
+
 /* ── MFOC: Manual Focus Assist subtab ──────────────────────
    2-column layout mirroring the VIDEO Capture tab: preview
    canvas on the left, control sidebar on the right. Wraps to
