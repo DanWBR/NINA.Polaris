@@ -31,10 +31,16 @@ public class BenchmarkResultsStore {
         await _saveLock.WaitAsync(ct);
         try {
             Directory.CreateDirectory(Dir);
-            // Sortable, collision-free filename. The result also carries
-            // its own ISO timestamp; this is just the file ordering key.
+            // Sortable filename. The result also carries its own ISO
+            // timestamp; this is just the file ordering key. Append a
+            // counter suffix if two saves land in the same millisecond so
+            // one never overwrites the other (the '.' before the extension
+            // sorts before '_', so the suffixed file stays newest-last in
+            // ordinal order, keeping LoadHistory's newest-first correct).
             var stamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss_fff");
             var path = Path.Combine(Dir, $"benchmark_{stamp}.json");
+            for (int n = 2; File.Exists(path); n++)
+                path = Path.Combine(Dir, $"benchmark_{stamp}_{n}.json");
             var json = JsonSerializer.Serialize(result, JsonOpts);
             await File.WriteAllTextAsync(path, json, ct);
         } finally {

@@ -112,24 +112,29 @@ public class BenchmarkService {
         try {
             SetPhase("Generating frames", 3);
             // The whole synthetic suite is CPU-bound; run it off the
-            // thread-pool entry so the await chain stays responsive.
+            // thread-pool entry so the await chain stays responsive. Each
+            // workload reports a 0..1 fraction so the progress bar advances
+            // continuously within a phase instead of jumping at the
+            // boundaries (and looking stuck during a multi-second stage).
+            bool cam = req.IncludeCamera;
+            int cpuHi = cam ? 80 : 98;
             var (stacking, encode, cpu) = await Task.Run(() => {
-                SetPhase("Stacking pipeline", 10);
-                var s = RunStackingWorkload(FrameW, FrameH, WorkloadBudget, ct);
-                SetPhase("Capture / video encode", 45);
-                var e = RunEncodeWorkload(FrameW, FrameH, WorkloadBudget, ct);
-                SetPhase("CPU / memory", 70);
-                var c = RunCpuWorkload(ct);
+                Phase = "Stacking pipeline";
+                var s = RunStackingWorkload(FrameW, FrameH, WorkloadBudget, ct, f => SetProgress(5, 35, f));
+                Phase = "Capture / video encode";
+                var e = RunEncodeWorkload(FrameW, FrameH, WorkloadBudget, ct, f => SetProgress(35, 60, f));
+                Phase = "CPU / memory";
+                var c = RunCpuWorkload(ct, f => SetProgress(60, cpuHi, f));
                 return (s, e, c);
             }, ct);
 
             CameraResult? camera = null;
             CameraVideoResult? cameraVideo = null;
-            if (req.IncludeCamera) {
-                SetPhase("Live camera (capture)", 86);
-                camera = await RunCameraWorkloadAsync(req, ct);
-                SetPhase("Live camera (video stream)", 93);
-                cameraVideo = await RunCameraVideoWorkloadAsync(req, ct);
+            if (cam) {
+                Phase = "Live camera (capture)";
+                camera = await RunCameraWorkloadAsync(req, ct, f => SetProgress(80, 90, f));
+                Phase = "Live camera (video stream)";
+                cameraVideo = await RunCameraVideoWorkloadAsync(req, ct, f => SetProgress(90, 99, f));
             }
 
             var dev = HostInfo.Current;
@@ -181,9 +186,17 @@ public class BenchmarkService {
         Progress = progress;
     }
 
+    /// <summary>Maps a workload's 0..1 completion fraction onto a [lo, hi]
+    /// slice of the overall progress bar, so it advances smoothly within a
+    /// phase rather than jumping only at phase boundaries.</summary>
+    private void SetProgress(int lo, int hi, double fraction) {
+        var f = Math.Clamp(fraction, 0.0, 1.0);
+        Progress = lo + (int)Math.Round((hi - lo) * f);
+    }
+
     // ----- Workload A: stacking pipeline -----
 
-    internal static StackingResult RunStackingWorkload(int w, int h, TimeSpan budget, CancellationToken ct) {
+    internal static StackingResult RunStackingWorkload(int w, int h, TimeSpan budget, CancellationToken ct, Action<double>? onProgress = null) {
         var reference = GenerateStarField(w, h, Seed, 0, 0);
         // A small known shift so StarMatcher has a real translation to
         // recover (and ImageResampler real work to do).
@@ -234,7 +247,9 @@ public class BenchmarkService {
             sw.Stop(); statsMs += sw.Elapsed.TotalMilliseconds;
 
             iters++;
+            onProgress?.Invoke(clock.Elapsed.TotalMilliseconds / budget.TotalMilliseconds);
         }
+        onProgress?.Invoke(1.0);
 
         double n = Math.Max(1, iters);
         double totalPerFrame = (detectMs + matchMs + resampleMs + statsMs) / n;
@@ -261,7 +276,7 @@ public class BenchmarkService {
 
     // ----- Workload B: capture / video encode -----
 
-    internal static EncodeResult RunEncodeWorkload(int w, int h, TimeSpan budget, CancellationToken ct) {
+    internal static EncodeResult RunEncodeWorkload(int w, int h, TimeSpan budget, CancellationToken ct, Action<double>? onProgress = null) {
         var frame = GenerateStarField(w, h, Seed, 0, 0);
         const BayerPatternEnum pattern = BayerPatternEnum.RGGB;
         var props = new ImageProperties {
@@ -297,12 +312,14 @@ public class BenchmarkService {
             sw.Stop(); lz4Ms += sw.Elapsed.TotalMilliseconds;
 
             iters++;
+            onProgress?.Invoke(clock.Elapsed.TotalMilliseconds / budget.TotalMilliseconds);
         }
+        onProgress?.Invoke(1.0);
 
         double n = Math.Max(1, iters);
         double totalPerFrame = (debayerMs + jpegMs + lz4Ms) / n;
         double fps = totalPerFrame > 0 ? 1000.0 / totalPerFrame : 0;
-        double mpx = (double)FrameW * FrameH / 1_000_000.0;
+        double mpx = (double)w * h / 1_000_000.0;
         double lz4SecPerFrame = (lz4Ms / n) / 1000.0;
         double lz4MBps = lz4SecPerFrame > 0
             ? (uncompressedBytes / (1024.0 * 1024.0)) / lz4SecPerFrame : 0;
@@ -319,7 +336,7 @@ public class BenchmarkService {
 
     // ----- Workload C: raw CPU / memory baseline -----
 
-    internal static CpuResult RunCpuWorkload(CancellationToken ct) {
+    internal static CpuResult RunCpuWorkload(CancellationToken ct, Action<double>? onProgress = null) {
         int cores = Math.Max(1, Environment.ProcessorCount);
         // Compute-bound FLOP kernel: a tight loop over four independent
         // accumulator chains held in registers (no large array), so this
@@ -340,6 +357,7 @@ public class BenchmarkService {
         sw.Stop();
         double singleMflops = sw.Elapsed.TotalSeconds > 0
             ? singleFlops / sw.Elapsed.TotalSeconds / 1e6 : 0;
+        onProgress?.Invoke(0.45);
 
         // Multi-thread: every core runs the full per-core workload
         // independently (no shared data), so total work = perCore * cores.
@@ -358,6 +376,7 @@ public class BenchmarkService {
         double multiMflops = sw.Elapsed.TotalSeconds > 0
             ? multiFlops / sw.Elapsed.TotalSeconds / 1e6 : 0;
         GC.KeepAlive(sink + mtSink);
+        onProgress?.Invoke(0.8);
 
         // Memory bandwidth: stream a large buffer a few times.
         ct.ThrowIfCancellationRequested();
@@ -376,6 +395,7 @@ public class BenchmarkService {
         double movedBytes = (double)bw * 8 * 2 * bwPasses;
         double memGBps = sw.Elapsed.TotalSeconds > 0
             ? movedBytes / sw.Elapsed.TotalSeconds / 1e9 : 0;
+        onProgress?.Invoke(1.0);
 
         double scaling = singleMflops > 0 ? multiMflops / singleMflops : 0;
         return new CpuResult(
@@ -406,7 +426,7 @@ public class BenchmarkService {
 
     // ----- Optional live-camera workload -----
 
-    private async Task<CameraResult> RunCameraWorkloadAsync(BenchmarkRequest req, CancellationToken ct) {
+    private async Task<CameraResult> RunCameraWorkloadAsync(BenchmarkRequest req, CancellationToken ct, Action<double>? onProgress = null) {
         var cam = _equipment.Camera;
         if (cam == null || !cam.IsConnected)
             return new CameraResult(0, 0, 0, 0, 0, 0, "No camera connected.");
@@ -429,6 +449,7 @@ public class BenchmarkService {
                 w = frame.Properties.Width;
                 h = frame.Properties.Height;
                 bytes = (long)frame.Data.Length * 2;
+                onProgress?.Invoke((i + 1) / (double)frames);
             }
         } catch (OperationCanceledException) {
             throw;
@@ -457,7 +478,7 @@ public class BenchmarkService {
     /// (downscaled-JPEG) FPS, the frame size and the raw on-wire MB/s.
     /// Camera + USB dependent, so reported separately and not part of the
     /// host composite score.</summary>
-    private async Task<CameraVideoResult> RunCameraVideoWorkloadAsync(BenchmarkRequest req, CancellationToken ct) {
+    private async Task<CameraVideoResult> RunCameraVideoWorkloadAsync(BenchmarkRequest req, CancellationToken ct, Action<double>? onProgress = null) {
         var cam = _equipment.Camera;
         if (cam == null || !cam.IsConnected)
             return new CameraVideoResult("idle", 0, 0, 0, 0, 0, 0, 0, "No camera connected.");
@@ -468,12 +489,14 @@ public class BenchmarkService {
         // doesn't make the whole test crawl.
         double exposure = Math.Clamp(req.CameraExposure <= 0 ? 0.05 : req.CameraExposure, 0.0, 5.0);
         const int sampleSeconds = 5;
+        const int ticks = sampleSeconds * 10;
         try {
             _cameraStream.Start(new StreamConfig(ExposureSeconds: exposure, Gain: req.CameraGain));
             // Sample for a fixed window, bailing out early on cancellation.
-            for (int i = 0; i < sampleSeconds * 10; i++) {
+            for (int i = 0; i < ticks; i++) {
                 ct.ThrowIfCancellationRequested();
                 await Task.Delay(100, ct);
+                onProgress?.Invoke((i + 1) / (double)ticks);
             }
 
             double captureFps = _cameraStream.Fps;
