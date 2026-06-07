@@ -554,12 +554,18 @@ public sealed class NativeGuider : IGuider, IDisposable {
     // ----- Internals -----
 
     private void BuildAlgorithms() {
-        _raAlgo = new HysteresisAlgorithm(
-            hysteresis: Math.Clamp(Rig.NativeRaHysteresis, 0.0, 0.99),
+        // Per-axis algorithm selection (default hysteresis RA / resist-switch Dec,
+        // PHD2's defaults). Lowpass/Lowpass2/Identity also available.
+        _raAlgo = GuideAlgorithmFactory.Create(
+            string.IsNullOrWhiteSpace(Rig.NativeRaAlgorithm) ? "hysteresis" : Rig.NativeRaAlgorithm,
+            minMove: Math.Max(0.0, Rig.NativeMinMoveRaPx),
             aggression: Math.Clamp(Rig.NativeRaAggression, 0.0, 2.0),
-            minMove: Math.Max(0.0, Rig.NativeMinMoveRaPx));
-        _decAlgo = new ResistSwitchAlgorithm(
-            minMove: Math.Max(0.0, Rig.NativeMinMoveDecPx));
+            hysteresis: Math.Clamp(Rig.NativeRaHysteresis, 0.0, 0.99));
+        _decAlgo = GuideAlgorithmFactory.Create(
+            string.IsNullOrWhiteSpace(Rig.NativeDecAlgorithm) ? "resistswitch" : Rig.NativeDecAlgorithm,
+            minMove: Math.Max(0.0, Rig.NativeMinMoveDecPx),
+            aggression: Math.Clamp(Rig.NativeRaAggression, 0.0, 2.0),
+            hysteresis: Math.Clamp(Rig.NativeRaHysteresis, 0.0, 0.99));
         _raAlgo.Reset();
         _decAlgo.Reset();
     }

@@ -86,7 +86,8 @@ public sealed class AlpacaTelescope : ITelescope, IDisposable {
         SupportsTrackingToggle: _canSetTracking,
         SupportsSync: _canSync,
         SupportsPierSide: _sideOfPier != PierSide.pierUnknown,
-        SupportsManualJog: _canPulseGuide);
+        SupportsManualJog: _canPulseGuide,
+        SupportsPulseGuide: _canPulseGuide);
 
     // ---- ITelescope: lifecycle ----
 
@@ -278,6 +279,18 @@ public sealed class AlpacaTelescope : ITelescope, IDisposable {
 
     public Task AbortSlewAsync(CancellationToken ct = default) =>
         AbortSlewInternalAsync(ct);
+
+    /// <summary>Alpaca PUT /pulseguide?Direction=&Duration=. The Alpaca
+    /// GuideDirections enum (0=N,1=S,2=E,3=W) matches ours, so pass the int.
+    /// Used by the native autoguider.</summary>
+    public Task PulseGuideAsync(GuideDirections direction, int durationMs, CancellationToken ct = default) {
+        if (!_canPulseGuide)
+            throw new NotSupportedException("Alpaca driver reports CanPulseGuide=false.");
+        return _client.PutAsync("pulseguide", new Dictionary<string, string> {
+            ["Direction"] = ((int)direction).ToString(),
+            ["Duration"] = durationMs.ToString()
+        }, ct);
+    }
 
     private Task AbortSlewInternalAsync(CancellationToken ct) =>
         _client.PutAsync("abortslew", null, ct);

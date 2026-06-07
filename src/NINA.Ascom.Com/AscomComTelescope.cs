@@ -24,7 +24,7 @@ public sealed class AscomComTelescope : ITelescope, IDisposable {
     private dynamic? _driver;
     private string _deviceName = "ASCOM Telescope";
     private bool _canPark, _canUnpark, _canSync, _canSetTracking,
-                 _canPierSide, _canMoveAxis;
+                 _canPierSide, _canMoveAxis, _canPulseGuide;
 
     public AscomComTelescope(string progId) {
         _progId = progId ?? throw new ArgumentNullException(nameof(progId));
@@ -56,7 +56,8 @@ public sealed class AscomComTelescope : ITelescope, IDisposable {
         SupportsTrackingToggle: _canSetTracking,
         SupportsSync: _canSync,
         SupportsPierSide: _canPierSide,
-        SupportsManualJog: _canMoveAxis);
+        SupportsManualJog: _canMoveAxis,
+        SupportsPulseGuide: _canPulseGuide);
 
     public Task ConnectAsync(CancellationToken ct = default) => _disp.Invoke(() => {
         var t = Type.GetTypeFromProgID(_progId)
@@ -73,6 +74,7 @@ public sealed class AscomComTelescope : ITelescope, IDisposable {
         _canSetTracking  = SafeGet(() => (bool)_driver.CanSetTracking);
         _canPierSide     = SafeGet(() => (bool)_driver.CanPulseGuide); // proxy
         _canMoveAxis     = SafeGet(() => (bool)_driver.CanMoveAxis(0));
+        _canPulseGuide   = SafeGet(() => (bool)_driver.CanPulseGuide);
     });
 
     public Task DisconnectAsync(CancellationToken ct = default) => _disp.Invoke(() => {
@@ -119,6 +121,20 @@ public sealed class AscomComTelescope : ITelescope, IDisposable {
         if (_driver == null) return;
         try { _driver.AbortSlew(); } catch { /* state-dependent */ }
     });
+
+    public bool IsPulseGuiding => _driver != null
+        && _disp.Invoke<bool>(() => SafeGet(() => (bool)_driver!.IsPulseGuiding)).Result;
+
+    /// <summary>ASCOM PulseGuide(GuideDirections, int ms). The ASCOM
+    /// GuideDirections enum values (0=N,1=S,2=E,3=W) match ours exactly, so we
+    /// pass the int through. Used by the native autoguider.</summary>
+    public Task PulseGuideAsync(GuideDirections direction, int durationMs, CancellationToken ct = default)
+        => _disp.Invoke(() => {
+            if (_driver == null) return;
+            if (!_canPulseGuide)
+                throw new NotSupportedException("ASCOM driver reports CanPulseGuide=false.");
+            _driver.PulseGuide((int)direction, durationMs);
+        });
 
     // ICameraV3.MoveAxis takes an axis index (0=Primary/RA, 1=Secondary/Dec)
     // and a rate in deg/s. Polaris jog uses the mount's tracking rate

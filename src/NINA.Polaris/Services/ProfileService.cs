@@ -268,6 +268,8 @@ public class ProfileService {
             NativeMinMoveDecPx = src.NativeMinMoveDecPx,
             NativeRaAggression = src.NativeRaAggression,
             NativeRaHysteresis = src.NativeRaHysteresis,
+            NativeRaAlgorithm = src.NativeRaAlgorithm,
+            NativeDecAlgorithm = src.NativeDecAlgorithm,
             PHD2Host = src.PHD2Host, PHD2Port = src.PHD2Port,
             // PHD2 deep-integration fields (cloned rig starts un-matched,
             // it will run its own first-time profile lookup the first time
@@ -887,6 +889,14 @@ public class EquipmentProfile {
     /// <summary>Native guider RA hysteresis weight (0..0.99, fraction of
     /// the previous move blended into this one). Default 0.10.</summary>
     public double NativeRaHysteresis { get; set; } = 0.10;
+
+    /// <summary>Native guider RA-axis algorithm: hysteresis (default),
+    /// lowpass, lowpass2, or identity.</summary>
+    public string NativeRaAlgorithm { get; set; } = "hysteresis";
+
+    /// <summary>Native guider Dec-axis algorithm: resistswitch (default),
+    /// lowpass, lowpass2, hysteresis, or identity.</summary>
+    public string NativeDecAlgorithm { get; set; } = "resistswitch";
 
     // Per-rig PHD2 settings
     public string PHD2Host { get; set; } = "localhost";

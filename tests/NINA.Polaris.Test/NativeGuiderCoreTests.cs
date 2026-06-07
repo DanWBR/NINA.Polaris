@@ -277,4 +277,38 @@ public class NativeGuiderCoreTests {
             try { Directory.Delete(tmp, true); } catch { }
         }
     }
+
+    // ---- Lowpass / Lowpass2 / factory ----
+
+    [Test]
+    public void Lowpass_DeadbandsBelowMinMove_AndCapsAtInput() {
+        var algo = new LowpassAlgorithm(minMove: 0.5, slopeWeight: 5.0);
+        Assert.That(algo.Result(0.2), Is.EqualTo(0.0)); // below minMove -> 0
+        for (int i = 0; i < 20; i++) {
+            double outp = algo.Result(2.0);
+            Assert.That(Math.Abs(outp), Is.LessThanOrEqualTo(2.0 + 1e-9)); // never exceeds input
+        }
+    }
+
+    [Test]
+    public void Lowpass2_AttenuatesAndNeverReversesDirection() {
+        var algo = new Lowpass2Algorithm(minMove: 0.2, aggressiveness: 80.0);
+        Assert.That(algo.Result(1.0), Is.EqualTo(0.8).Within(1e-9)); // first pts pass through * 0.8
+        for (int i = 0; i < 30; i++) {
+            double inp = (i % 2 == 0) ? 1.0 : 0.8;
+            double outp = algo.Result(inp);
+            Assert.That(Math.Abs(outp), Is.LessThanOrEqualTo(inp + 1e-9));
+            Assert.That(outp * inp, Is.GreaterThanOrEqualTo(0.0)); // never opposes input
+        }
+    }
+
+    [Test]
+    public void Factory_MapsNamesToAlgorithms() {
+        Assert.That(GuideAlgorithmFactory.Create("hysteresis", 0.1, 0.7, 0.1), Is.TypeOf<HysteresisAlgorithm>());
+        Assert.That(GuideAlgorithmFactory.Create("resistswitch", 0.1, 1.0, 0.0), Is.TypeOf<ResistSwitchAlgorithm>());
+        Assert.That(GuideAlgorithmFactory.Create("lowpass", 0.1, 0.7, 0.1), Is.TypeOf<LowpassAlgorithm>());
+        Assert.That(GuideAlgorithmFactory.Create("lowpass2", 0.1, 0.7, 0.1), Is.TypeOf<Lowpass2Algorithm>());
+        Assert.That(GuideAlgorithmFactory.Create("identity", 0.1, 0.7, 0.1), Is.TypeOf<IdentityAlgorithm>());
+        Assert.That(GuideAlgorithmFactory.Create("bogus", 0.1, 0.7, 0.1), Is.TypeOf<IdentityAlgorithm>()); // fallback
+    }
 }

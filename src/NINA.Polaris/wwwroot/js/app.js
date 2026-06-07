@@ -674,6 +674,17 @@ function ninaApp() {
         guideCameraDriver: 'indi',
         guideCameraVendorDevices: [],
         guideCameraDiscovering: false,
+        // Native guider per-axis algorithm selection (PHD2 defaults:
+        // hysteresis on RA, resist-switch on Dec).
+        nativeRaAlgorithm: 'hysteresis',
+        nativeDecAlgorithm: 'resistswitch',
+        nativeGuideAlgorithms: [
+            { id: 'hysteresis', name: 'Hysteresis' },
+            { id: 'resistswitch', name: 'Resist Switch' },
+            { id: 'lowpass', name: 'Lowpass' },
+            { id: 'lowpass2', name: 'Lowpass2' },
+            { id: 'identity', name: 'Identity' },
+        ],
 
         // Mount driver state, same shape as camera. Today the
         // dropdown shows INDI + synscan-wifi (the rest of the
@@ -11838,6 +11849,8 @@ function ninaApp() {
             this.guiderDriver = rig.guiderDriver || 'phd2';
             this.guideCamera = rig.guideCamera || '';
             this.guideCameraDriver = rig.guideCameraDriver || 'indi';
+            this.nativeRaAlgorithm = rig.nativeRaAlgorithm || 'hysteresis';
+            this.nativeDecAlgorithm = rig.nativeDecAlgorithm || 'resistswitch';
             this.equipMountChoice = rig.telescope || '';
             // Same pattern for the mount driver. For direct WiFi drivers
             // (synscan-wifi, nexstar-wifi, lx200-tcp) the "device name"
@@ -12421,6 +12434,8 @@ function ninaApp() {
                 guiderDriver: this.guiderDriver || rig.guiderDriver || 'phd2',
                 guideCamera: this.guideCamera || rig.guideCamera,
                 guideCameraDriver: this.guideCameraDriver || rig.guideCameraDriver || 'indi',
+                nativeRaAlgorithm: this.nativeRaAlgorithm || rig.nativeRaAlgorithm || 'hysteresis',
+                nativeDecAlgorithm: this.nativeDecAlgorithm || rig.nativeDecAlgorithm || 'resistswitch',
                 telescope: this.equipMountChoice || rig.telescope,
                 telescopeDriver: this.mountDriver || rig.telescopeDriver || 'indi',
                 focuser: this.equipFocuserChoice || rig.focuser,
@@ -16325,6 +16340,17 @@ function ninaApp() {
         setGuiderDriver(driver) {
             this.guiderDriver = driver || 'phd2';
             this._persistRigSelection({ guiderDriver: this.guiderDriver });
+        },
+
+        // Native guider per-axis algorithm (axis = 'ra' | 'dec').
+        setNativeAlgorithm(axis, value) {
+            if (axis === 'ra') {
+                this.nativeRaAlgorithm = value || 'hysteresis';
+                this._persistRigSelection({ nativeRaAlgorithm: this.nativeRaAlgorithm });
+            } else {
+                this.nativeDecAlgorithm = value || 'resistswitch';
+                this._persistRigSelection({ nativeDecAlgorithm: this.nativeDecAlgorithm });
+            }
         },
 
         // Native guide-camera driver kind (indi / alpaca / vendor SDK).

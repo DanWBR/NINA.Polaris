@@ -5044,6 +5044,26 @@
                                         mount (pulse guide via INDI). Must differ from
                                         the imaging camera.
                                     </p>
+                                    <div class="equip-driver-row" style="margin-top:8px">
+                                        <label class="equip-driver-label">RA algo</label>
+                                        <select class="equip-select equip-driver-select"
+                                                @change="setNativeAlgorithm('ra', $event.target.value)">
+                                            <template x-for="a in nativeGuideAlgorithms" :key="'ra-'+a.id">
+                                                <option :value="a.id" :selected="nativeRaAlgorithm === a.id"
+                                                        x-text="a.name"></option>
+                                            </template>
+                                        </select>
+                                    </div>
+                                    <div class="equip-driver-row" style="margin-top:6px">
+                                        <label class="equip-driver-label">Dec algo</label>
+                                        <select class="equip-select equip-driver-select"
+                                                @change="setNativeAlgorithm('dec', $event.target.value)">
+                                            <template x-for="a in nativeGuideAlgorithms" :key="'dec-'+a.id">
+                                                <option :value="a.id" :selected="nativeDecAlgorithm === a.id"
+                                                        x-text="a.name"></option>
+                                            </template>
+                                        </select>
+                                    </div>
                                 </div>
                             </template>
                         </div>

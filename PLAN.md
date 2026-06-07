@@ -12688,7 +12688,28 @@ MVP scope shipped:
   transform round-trip + RaRateAtDec + duration clamp, RMS window,
   CalibrationProcess WEST->SOUTH) + the ActiveGuiderProvider switch.
 
-INDI-only pulse guide for now (TELESCOPE_TIMED_GUIDE_*). Deferred:
-ZFilter/GaussianProcess/Lowpass2, multi-star, backlash comp, pier-side/
-parity handling, ASCOM/Alpaca/SynScan pulse guide. On-rig E2E (calibrate +
-guide + dither against an INDI mount + guide camera) is the next validation.
+On-rig E2E (calibrate + guide + dither against an INDI mount + guide camera)
+is the next validation.
+
+### NATIVE GUIDER follow-up: Lowpass/Lowpass2 + ASCOM/Alpaca pulse guide
+
+- Ported two more PHD2 guide algorithms to NINA.Guider.Portable: `LowpassAlgorithm`
+  (median + slopeWeight*slope over a 10-sample window, capped at input, minMove
+  deadband) and `Lowpass2Algorithm` (auto-windowed least-squares predictor with
+  aggressiveness attenuation, outlier dump + wrong-direction reject). Plus a
+  `GuideAlgorithmFactory` mapping name -> algorithm (hysteresis/resistswitch/
+  lowpass/lowpass2/identity, identity fallback).
+- Per-axis algorithm selection: EquipmentProfile.NativeRaAlgorithm (default
+  hysteresis) + NativeDecAlgorithm (default resistswitch), persisted via the rig
+  PUT; NativeGuider.BuildAlgorithms uses the factory; RIGS tab gained RA-algo +
+  Dec-algo dropdowns under the native guider settings.
+- Pulse guide beyond INDI: implemented `PulseGuideAsync` in AscomComTelescope
+  (ASCOM `PulseGuide`, CanPulseGuide gate) and AlpacaTelescope (PUT /pulseguide),
+  both setting SupportsPulseGuide from the driver probe. SynScan WiFi (alt-az)
+  has no clean timed-pulse in its protocol, so it stays NotSupported (PHD2 itself
+  guides those via INDI/EQMod, not the WiFi app protocol).
+- Tests: NativeGuiderCoreTests now 18 (added lowpass deadband+cap, lowpass2
+  attenuation+no-reverse, factory mapping).
+
+Still deferred: ZFilter, GaussianProcess (RA), multi-star, backlash comp,
+pier-side/parity, SynScan pulse guide.

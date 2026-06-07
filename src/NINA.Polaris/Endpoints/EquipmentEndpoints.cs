@@ -156,6 +156,10 @@ public static class EquipmentEndpoints {
                     r.NativeRaAggression = update.NativeRaAggression;
                 if (update.NativeRaHysteresis >= 0)
                     r.NativeRaHysteresis = update.NativeRaHysteresis;
+                if (!string.IsNullOrWhiteSpace(update.NativeRaAlgorithm))
+                    r.NativeRaAlgorithm = update.NativeRaAlgorithm.Trim().ToLowerInvariant();
+                if (!string.IsNullOrWhiteSpace(update.NativeDecAlgorithm))
+                    r.NativeDecAlgorithm = update.NativeDecAlgorithm.Trim().ToLowerInvariant();
                 // New guide-scope metadata fields (RIGS tab card).
                 // Defensive: clamp aperture to a sane lower bound so
                 // a stray zero doesn't blow up the f-ratio calc on the UI.
