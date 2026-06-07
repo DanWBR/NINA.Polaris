@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Threading.Tasks;
 using NINA.Core.Enum;
 using NINA.Image.ImageData;
 
@@ -107,25 +109,34 @@ public static class FITSReader {
             totalRead += read;
         }
 
+        // BENCH-PERF: the per-pixel decode loops are pure maps (each output
+        // pixel depends only on its own raw bytes), so they fan out across
+        // cores. On a Pi this is the bottleneck when opening masters / batch
+        // stacking. Output is byte-identical to the old serial loops.
         switch (bitpix) {
             case 8:
-                for (int i = 0; i < pixelCount; i++) {
-                    pixels[i] = (ushort)(rawData[i] * bscale + bzero);
-                }
+                Parallel.ForEach(Partitioner.Create(0L, pixelCount), range => {
+                    for (long i = range.Item1; i < range.Item2; i++)
+                        pixels[i] = (ushort)(rawData[i] * bscale + bzero);
+                });
                 break;
             case 16:
-                for (int i = 0; i < pixelCount; i++) {
-                    short val = (short)((rawData[i * 2] << 8) | rawData[i * 2 + 1]); // big-endian
-                    pixels[i] = (ushort)(val * bscale + bzero);
-                }
+                Parallel.ForEach(Partitioner.Create(0L, pixelCount), range => {
+                    for (long i = range.Item1; i < range.Item2; i++) {
+                        short val = (short)((rawData[i * 2] << 8) | rawData[i * 2 + 1]); // big-endian
+                        pixels[i] = (ushort)(val * bscale + bzero);
+                    }
+                });
                 break;
             case 32:
-                for (int i = 0; i < pixelCount; i++) {
-                    int val = (rawData[i * 4] << 24) | (rawData[i * 4 + 1] << 16) |
-                              (rawData[i * 4 + 2] << 8) | rawData[i * 4 + 3];
-                    double scaled = val * bscale + bzero;
-                    pixels[i] = (ushort)Math.Clamp(scaled, 0, 65535);
-                }
+                Parallel.ForEach(Partitioner.Create(0L, pixelCount), range => {
+                    for (long i = range.Item1; i < range.Item2; i++) {
+                        int val = (rawData[i * 4] << 24) | (rawData[i * 4 + 1] << 16) |
+                                  (rawData[i * 4 + 2] << 8) | rawData[i * 4 + 3];
+                        double scaled = val * bscale + bzero;
+                        pixels[i] = (ushort)Math.Clamp(scaled, 0, 65535);
+                    }
+                });
                 break;
             case -32: // IEEE single-precision float
                 ReadFloatPixels(rawData, pixels, pixelCount, bzero, bscale, bytesPerSample: 4);
@@ -159,15 +170,31 @@ public static class FITSReader {
     /// </summary>
     private static void ReadFloatPixels(byte[] rawData, ushort[] pixels, long pixelCount,
                                         int bzero, double bscale, int bytesPerSample) {
+        // BENCH-PERF: both passes are full-frame and dominate float-FITS
+        // load (normalized masters from PixInsight/Siril). Parallelize the
+        // min/max scan with per-partition reduction and the rescale write
+        // per-pixel. Identical result to the old serial two-pass form.
         // First pass: gather a tight min/max over finite samples only.
         double min = double.PositiveInfinity, max = double.NegativeInfinity;
-        for (long i = 0; i < pixelCount; i++) {
-            double val = ReadFloatAt(rawData, i * bytesPerSample, bytesPerSample);
-            val = val * bscale + bzero;
-            if (!double.IsFinite(val)) continue;
-            if (val < min) min = val;
-            if (val > max) max = val;
-        }
+        var mmLock = new object();
+        Parallel.ForEach(Partitioner.Create(0L, pixelCount),
+            () => (lmin: double.PositiveInfinity, lmax: double.NegativeInfinity),
+            (range, _, local) => {
+                var (lmin, lmax) = local;
+                for (long i = range.Item1; i < range.Item2; i++) {
+                    double val = ReadFloatAt(rawData, i * bytesPerSample, bytesPerSample) * bscale + bzero;
+                    if (!double.IsFinite(val)) continue;
+                    if (val < lmin) lmin = val;
+                    if (val > lmax) lmax = val;
+                }
+                return (lmin, lmax);
+            },
+            local => {
+                lock (mmLock) {
+                    if (local.lmin < min) min = local.lmin;
+                    if (local.lmax > max) max = local.lmax;
+                }
+            });
         if (!double.IsFinite(min) || !double.IsFinite(max) || max <= min) {
             // Degenerate input: constant or all-NaN buffer. Output stays
             // zero, there's nothing meaningful to show anyway.
@@ -177,19 +204,20 @@ public static class FITSReader {
 
         double range = max - min;
         double scale65k = 65535.0 / range;
+        double minLocal = min;
 
-        // Second pass: rescale + write. We could fold these into one
-        // loop but the two-pass form is clearer and the extra walk is
-        // negligible against the I/O cost.
-        for (long i = 0; i < pixelCount; i++) {
-            double val = ReadFloatAt(rawData, i * bytesPerSample, bytesPerSample);
-            val = val * bscale + bzero;
-            if (!double.IsFinite(val)) { pixels[i] = 0; continue; }
-            double mapped = (val - min) * scale65k;
-            // Clamp guards against floating-point noise that nudges the
-            // top end one ULP past max.
-            pixels[i] = (ushort)Math.Clamp(mapped, 0.0, 65535.0);
-        }
+        // Second pass: rescale + write (parallel; each output pixel is
+        // independent).
+        Parallel.ForEach(Partitioner.Create(0L, pixelCount), prange => {
+            for (long i = prange.Item1; i < prange.Item2; i++) {
+                double val = ReadFloatAt(rawData, i * bytesPerSample, bytesPerSample) * bscale + bzero;
+                if (!double.IsFinite(val)) { pixels[i] = 0; continue; }
+                double mapped = (val - minLocal) * scale65k;
+                // Clamp guards against floating-point noise that nudges the
+                // top end one ULP past max.
+                pixels[i] = (ushort)Math.Clamp(mapped, 0.0, 65535.0);
+            }
+        });
     }
 
     /// <summary>

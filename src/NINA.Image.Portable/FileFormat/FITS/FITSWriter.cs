@@ -1,6 +1,8 @@
 using System.Buffers.Binary;
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
+using System.Threading.Tasks;
 using NINA.Core.Enum;
 using NINA.Image.Interfaces;
 
@@ -233,13 +235,19 @@ public static class FITSWriter {
         var headerBytes = Encoding.ASCII.GetBytes(string.Concat(cards));
         destination.Write(headerBytes);
 
-        // Pixel data, Int16 big-endian with BZERO=32768
-        var buf = new byte[2];
-        foreach (var px in pixels) {
-            short signed = (short)(px - 32768);
-            BinaryPrimitives.WriteInt16BigEndian(buf, signed);
-            destination.Write(buf);
-        }
+        // Pixel data, Int16 big-endian with BZERO=32768.
+        // BENCH-PERF: encode the whole plane into one buffer (parallel,
+        // each pixel independent) and write it in a single Stream.Write,
+        // instead of a per-pixel 2-byte write that costs a syscall per
+        // pixel on an unbuffered FileStream (~tens of millions per master).
+        var pixelBytes = new byte[(long)pixels.Length * 2];
+        Parallel.ForEach(Partitioner.Create(0, pixels.Length), range => {
+            for (int i = range.Item1; i < range.Item2; i++) {
+                short signed = (short)(pixels[i] - 32768);
+                BinaryPrimitives.WriteInt16BigEndian(pixelBytes.AsSpan(i * 2, 2), signed);
+            }
+        });
+        destination.Write(pixelBytes, 0, pixelBytes.Length);
 
         // Pad to 2880-byte block boundary
         var dataLen = (long)pixels.Length * 2;
