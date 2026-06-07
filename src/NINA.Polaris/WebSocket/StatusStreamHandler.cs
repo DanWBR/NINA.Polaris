@@ -178,8 +178,18 @@ public static class StatusStreamHandler {
                             recentSteps = tail.Select(s => new {
                                 t = ((DateTimeOffset)s.Timestamp).ToUnixTimeMilliseconds(),
                                 ra = s.RaArcsec,
-                                dec = s.DecArcsec
+                                dec = s.DecArcsec,
+                                raPx = s.RaPixels,
+                                decPx = s.DecPixels,
+                                snr = s.SNR,
+                                mass = s.Mass,
+                                raDur = s.RaDuration,
+                                decDur = s.DecDuration,
+                                raDir = s.RaDirection,
+                                decDir = s.DecDirection
                             }),
+                            // Live guide-frame view (native backend only; null for PHD2).
+                            view = activeGuider.ViewState,
                             profileSync = profileSyncPayload,
                             calibrateJob = calibrateJobPayload,
                             guiSession = guiSessionPayload,

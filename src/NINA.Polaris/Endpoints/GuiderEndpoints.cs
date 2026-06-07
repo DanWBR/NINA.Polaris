@@ -64,6 +64,19 @@ public static class GuiderEndpoints {
             return Results.Ok(new { count = snapshot.Count, steps = slice });
         });
 
+        // Latest native guide-camera frame as an auto-stretched JPEG for the
+        // PHD2-style camera view. 404 for the PHD2 backend (it renders its own
+        // GUI) or before the first frame is captured.
+        group.MapGet("/frame.jpg", (ActiveGuiderProvider guiders, int? max, int? q) => {
+            if (guiders.Active is not NativeGuider ng)
+                return Results.NotFound();
+            var bytes = ng.EncodeViewJpeg(
+                max is > 0 ? Math.Clamp(max.Value, 128, 2048) : 600,
+                q is > 0 ? Math.Clamp(q.Value, 30, 95) : 75);
+            if (bytes == null) return Results.NotFound();
+            return Results.File(bytes, "image/jpeg");
+        });
+
         group.MapPost("/connect", async (ActiveGuiderProvider guiders, ConnectGuiderRequest? request) => {
             var g = guiders.Active;
             var host = string.IsNullOrWhiteSpace(request?.Host) ? "localhost" : request!.Host!;

@@ -49,6 +49,12 @@ public interface IGuider {
     /// <summary>Snapshot of the recent guide-step ring buffer (oldest first).</summary>
     List<GuideStep> SnapshotSteps();
 
+    /// <summary>Optional live guide-frame view for the PHD2-style GUIDE UI:
+    /// frame dimensions/origin, the lock position, tracked star markers and a
+    /// star-profile cross-section. Null when the backend does not expose frames
+    /// (PHD2, which renders its own GUI). The native backend overrides it.</summary>
+    object? ViewState => null;
+
     /// <summary>Clear the recent-step ring buffer + reset RMS/peak.</summary>
     void ClearStepHistory();
 

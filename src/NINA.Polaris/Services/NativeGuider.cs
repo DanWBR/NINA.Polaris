@@ -52,6 +52,28 @@ public sealed class NativeGuider : IGuider, IDisposable {
     // star ROI path below is used.
     private readonly MultiStarTracker _multiStar = new(SearchRegion);
 
+    // Live view snapshot for the PHD2-style GUIDE UI (frame + overlay). The
+    // guide loop captures frames already; we keep a reference to the latest one
+    // plus the star/lock overlay so the WS payload (ViewState) and the JPEG
+    // endpoint (EncodeViewJpeg) can surface them without re-capturing.
+    private IImageData? _lastFrame;
+    private int _lastFrameOriginX, _lastFrameOriginY;
+    private volatile ViewFrame? _view;
+    private long _viewSeq;
+
+    /// <summary>Immutable-ish snapshot of one guide frame + its overlay. The
+    /// pixel buffer is the camera's own (not cloned); it is not mutated after
+    /// capture, and the reference swap is atomic.</summary>
+    private sealed class ViewFrame {
+        public ushort[] Pixels = Array.Empty<ushort>();
+        public int Width, Height, BitDepth, OriginX, OriginY;
+        public double LockX, LockY;
+        public bool HaveLock;
+        // (x, y) in full-sensor coords, per-star SNR, primary flag, found flag.
+        public List<(double x, double y, double snr, bool primary, bool found)> Stars = new();
+        public long FrameId;
+    }
+
     // Per-axis algorithms (rebuilt from profile on guiding start).
     private IGuideAlgorithm _raAlgo = new HysteresisAlgorithm();
     private IGuideAlgorithm _decAlgo = new ResistSwitchAlgorithm();
@@ -158,6 +180,8 @@ public sealed class NativeGuider : IGuider, IDisposable {
         IsSettling = false;
         _haveLock = false;
         _multiStar.Clear();
+        _view = null;
+        _lastFrame = null;
         SetAppState("Stopped");
         _logger.LogInformation("Native guider disconnected");
     }
@@ -403,7 +427,11 @@ public sealed class NativeGuider : IGuider, IDisposable {
             while (!ct.IsCancellationRequested) {
                 try {
                     if (mode == LoopMode.Loop) {
-                        await CaptureFullAsync(cam, ct);
+                        var limg = await CaptureFullAsync(cam, ct);
+                        if (limg != null) {
+                            _lastFrame = limg; _lastFrameOriginX = 0; _lastFrameOriginY = 0;
+                            BuildView(double.NaN, double.NaN, 0, false);
+                        }
                         continue;
                     }
                     if (_paused) {
@@ -438,6 +466,7 @@ public sealed class NativeGuider : IGuider, IDisposable {
             // Keep guiding state but skip the pulse; alert occasionally.
             if (_starLostCount % 5 == 1) RaiseAlert("Guide star lost; skipping correction.");
             PushStep(new PortableGuideStep(NowMs(), 0, 0, 0, 0, 0, 0, snr, hfd, false));
+            BuildView(curX, curY, snr, false);
             return;
         }
         _starLostCount = 0;
@@ -492,6 +521,7 @@ public sealed class NativeGuider : IGuider, IDisposable {
             raMs, decMs,
             snr, hfd, true);
         PushStep(step);
+        BuildView(curX, curY, snr, true);
 
         // Settle progress (dither / start).
         if (_settler != null) {
@@ -599,6 +629,7 @@ public sealed class NativeGuider : IGuider, IDisposable {
         try { await cam.SetSubframeAsync(0, 0, 0, 0, ct); } catch { }
         var img = await CaptureFullAsync(cam, ct);
         if (img == null) return (_lockX, _lockY, false, 0, 0);
+        _lastFrame = img; _lastFrameOriginX = 0; _lastFrameOriginY = 0;
         var res = _multiStar.Update(img.Data, img.Properties.Width, img.Properties.Height);
         if (!res.Found) return (_lockX, _lockY, false, res.Snr, res.Hfd);
         return (_lockX + res.OffsetX, _lockY + res.OffsetY, true, res.Snr, res.Hfd);
@@ -684,6 +715,7 @@ public sealed class NativeGuider : IGuider, IDisposable {
             baseX = _lockX; baseY = _lockY;
         }
         if (img == null) return (_lockX, _lockY, false, 0, 0);
+        _lastFrame = img; _lastFrameOriginX = offsetX; _lastFrameOriginY = offsetY;
 
         int w = img.Properties.Width, h = img.Properties.Height;
         var result = GuideStar.Find(img.Data, w, h, baseX, baseY, SearchRegion);
@@ -746,6 +778,127 @@ public sealed class NativeGuider : IGuider, IDisposable {
         }
         if (IsGuiding) SetAppState("Guiding");
         GuideStepReceived?.Invoke(step);
+    }
+
+    // ----- Live view (PHD2-style GUIDE UI) -----
+
+    /// <summary>Snapshot the latest captured frame + star/lock overlay into the
+    /// atomically-swapped <see cref="_view"/> for the WS payload and JPEG endpoint.</summary>
+    private void BuildView(double primaryX, double primaryY, double snr, bool found) {
+        var img = _lastFrame;
+        if (img == null) return;
+        var vf = new ViewFrame {
+            Pixels = img.Data,
+            Width = img.Properties.Width,
+            Height = img.Properties.Height,
+            BitDepth = img.Properties.BitDepth,
+            OriginX = _lastFrameOriginX,
+            OriginY = _lastFrameOriginY,
+            LockX = _lockX, LockY = _lockY, HaveLock = _haveLock,
+            FrameId = ++_viewSeq
+        };
+        bool multi = Rig.NativeMultiStar && _multiStar.Count > 1;
+        if (multi) {
+            foreach (var s in _multiStar.Stars)
+                vf.Stars.Add((s.CurX, s.CurY, s.Snr, s.IsPrimary, s.Found));
+        } else if (found && !double.IsNaN(primaryX)) {
+            vf.Stars.Add((primaryX, primaryY, snr, true, true));
+        }
+        _view = vf;
+    }
+
+    /// <summary>WS-serializable view: frame geometry, lock, star markers, and a
+    /// star-profile cross-section + FWHM. Coordinates are full-sensor pixels;
+    /// the frame buffer's top-left maps to (OriginX, OriginY).</summary>
+    public object? ViewState {
+        get {
+            var vf = _view;
+            if (vf == null) return null;
+            var (profile, fwhm) = ComputeProfile(vf);
+            return new {
+                width = vf.Width,
+                height = vf.Height,
+                originX = vf.OriginX,
+                originY = vf.OriginY,
+                lockX = vf.HaveLock ? vf.LockX : (double?)null,
+                lockY = vf.HaveLock ? vf.LockY : (double?)null,
+                frameId = vf.FrameId,
+                stars = vf.Stars.Select(s => new {
+                    x = s.x, y = s.y, snr = s.snr, primary = s.primary, found = s.found
+                }),
+                profile,
+                fwhm
+            };
+        }
+    }
+
+    /// <summary>Mid-row intensity cross-section (normalized 0..1) through the
+    /// primary star + a FWHM estimate (px). Returns an empty profile when no
+    /// primary star/lock is available.</summary>
+    private static (double[] profile, double fwhm) ComputeProfile(ViewFrame vf) {
+        double px = double.NaN, py = double.NaN;
+        foreach (var s in vf.Stars) {
+            if (s.primary && s.found) { px = s.x - vf.OriginX; py = s.y - vf.OriginY; break; }
+        }
+        if (double.IsNaN(px) && vf.HaveLock) { px = vf.LockX - vf.OriginX; py = vf.LockY - vf.OriginY; }
+        if (double.IsNaN(px)) return (Array.Empty<double>(), 0);
+
+        int cx = (int)Math.Round(px), cy = (int)Math.Round(py);
+        if (cy < 0 || cy >= vf.Height || vf.Pixels.Length < (long)vf.Width * vf.Height)
+            return (Array.Empty<double>(), 0);
+
+        const int half = 15;
+        int n = half * 2 + 1;
+        var prof = new double[n];
+        double mn = double.MaxValue, mx = double.MinValue;
+        for (int i = 0; i < n; i++) {
+            int x = cx - half + i;
+            double v = (x >= 0 && x < vf.Width) ? vf.Pixels[cy * vf.Width + x] : 0;
+            prof[i] = v;
+            if (v < mn) mn = v;
+            if (v > mx) mx = v;
+        }
+        double range = mx - mn;
+        if (range < 1e-6) range = 1;
+        for (int i = 0; i < n; i++) prof[i] = (prof[i] - mn) / range;
+        return (prof, FwhmFromProfile(prof));
+    }
+
+    /// <summary>FWHM (px) from a normalized cross-section: width between the
+    /// half-maximum crossings on either side of the peak, linearly interpolated.</summary>
+    private static double FwhmFromProfile(double[] p) {
+        if (p.Length < 3) return 0;
+        int peak = 0;
+        for (int i = 1; i < p.Length; i++) if (p[i] > p[peak]) peak = i;
+        const double halfMax = 0.5; // normalized peak is 1, baseline 0
+        double Cross(int from, int step) {
+            for (int i = from; i >= 0 && i < p.Length; i += step) {
+                if (p[i] <= halfMax) {
+                    int prev = i - step;
+                    if (prev < 0 || prev >= p.Length) return i;
+                    double denom = p[prev] - p[i];
+                    double frac = Math.Abs(denom) < 1e-9 ? 0 : (p[prev] - halfMax) / denom;
+                    return prev + step * frac;
+                }
+            }
+            return step < 0 ? 0 : p.Length - 1;
+        }
+        double left = Cross(peak, -1);
+        double right = Cross(peak, 1);
+        return Math.Max(0, right - left);
+    }
+
+    /// <summary>Encode the latest guide frame as an auto-stretched JPEG for the
+    /// PHD2-style camera view. Returns null when no frame is available yet.</summary>
+    public byte[]? EncodeViewJpeg(int maxDim = 600, int quality = 75) {
+        var vf = _view;
+        if (vf == null || vf.Pixels.Length < (long)vf.Width * vf.Height) return null;
+        try {
+            return NINA.Polaris.Services.Studio.FitsThumbnailer.RenderJpegFromBuffer(
+                vf.Pixels, vf.Width, vf.Height, vf.BitDepth, maxDim, quality);
+        } catch {
+            return null;
+        }
     }
 
     private void EnsureConnected() {
