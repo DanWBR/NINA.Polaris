@@ -17,10 +17,10 @@ namespace NINA.Polaris.Services;
 /// <see cref="CalibrationData"/>) are the existing PHD2 records, so the
 /// WebSocket JSON is byte-identical.</para>
 ///
-/// <para>MVP scope: single-star centroid, RA+Dec calibration,
-/// Hysteresis(RA) + ResistSwitch(Dec), INDI-only pulse guide, basic
-/// dither. Deferred: multi-star, backlash comp, pier-side/parity,
-/// ZFilter/GaussianProcess.</para>
+/// <para>Scope: single- or multi-star centroid, RA+Dec calibration,
+/// per-axis algorithms (Hysteresis/ResistSwitch/Lowpass/Lowpass2),
+/// pulse guide (INDI/ASCOM/Alpaca), Dec backlash compensation, basic
+/// dither. Deferred: pier-side/parity, ZFilter/GaussianProcess.</para>
 /// </summary>
 public sealed class NativeGuider : IGuider, IDisposable {
     private readonly EquipmentManager _equipment;
@@ -46,6 +46,11 @@ public sealed class NativeGuider : IGuider, IDisposable {
     private double _lockX, _lockY;
     private bool _haveLock;
     private GuideCalibration _calibration = GuideCalibration.Invalid;
+
+    // Multi-star field tracker (primary + secondaries). Engaged only when the
+    // rig enables it and more than one star was locked; otherwise the single
+    // star ROI path below is used.
+    private readonly MultiStarTracker _multiStar = new(SearchRegion);
 
     // Per-axis algorithms (rebuilt from profile on guiding start).
     private IGuideAlgorithm _raAlgo = new HysteresisAlgorithm();
@@ -152,6 +157,7 @@ public sealed class NativeGuider : IGuider, IDisposable {
         IsConnected = false;
         IsSettling = false;
         _haveLock = false;
+        _multiStar.Clear();
         SetAppState("Stopped");
         _logger.LogInformation("Native guider disconnected");
     }
@@ -176,6 +182,7 @@ public sealed class NativeGuider : IGuider, IDisposable {
             }
         }
         BuildAlgorithms();
+        await BuildMultiStarAsync(ct);
         _settleThresholdPx = settlePixels;
         _settler = new GuidingSettler(settlePixels, settleTime, settleTimeout, NowMs());
         await StartLoopAsync(LoopMode.Guide);
@@ -216,8 +223,13 @@ public sealed class NativeGuider : IGuider, IDisposable {
         var rng = Random.Shared;
         double angle = raOnly ? 0.0 : rng.NextDouble() * 2.0 * Math.PI;
         double mag = pixels * (0.5 + rng.NextDouble() * 0.5);
-        _lockX += mag * Math.Cos(angle);
-        _lockY += raOnly ? 0.0 : mag * Math.Sin(angle);
+        double offX = mag * Math.Cos(angle);
+        double offY = raOnly ? 0.0 : mag * Math.Sin(angle);
+        _lockX += offX;
+        _lockY += offY;
+        // Shift every tracked star's reference by the same vector so multi-star
+        // stays consistent with the new lock point.
+        _multiStar.OffsetReferences(offX, offY);
         _raAlgo.Reset();
         _decAlgo.Reset();
         IsSettling = true;
@@ -411,7 +423,7 @@ public sealed class NativeGuider : IGuider, IDisposable {
 
     private async Task GuideOnceAsync(ICamera cam, ITelescope? mount, CancellationToken ct) {
         int expMs = Math.Max(50, Rig.NativeGuideExposureMs);
-        var (curX, curY, found, snr, hfd) = await FindStarDetailedAsync(cam, ct);
+        var (curX, curY, found, snr, hfd) = await MeasureGuideStarAsync(cam, ct);
 
         if (!found) {
             _starLostCount++;
@@ -509,6 +521,72 @@ public sealed class NativeGuider : IGuider, IDisposable {
         } catch (Exception ex) {
             _logger.LogWarning(ex, "Guide capture failed");
             return null;
+        }
+    }
+
+    /// <summary>Measure the guide-star field offset this frame. When multi-star
+    /// is engaged (rig enabled + more than one star locked) it captures a full
+    /// frame, recentres every tracked star and returns the robust combined
+    /// offset expressed as an effective primary position (lock + offset), so the
+    /// caller's <c>cur - lock</c> math is unchanged. Otherwise it falls back to
+    /// the single-star ROI path.</summary>
+    private async Task<(double x, double y, bool found, double snr, double hfd)>
+            MeasureGuideStarAsync(ICamera cam, CancellationToken ct) {
+        bool useMulti = Rig.NativeMultiStar && _multiStar.Count > 1;
+        if (!useMulti) {
+            return await FindStarDetailedAsync(cam, ct);
+        }
+        // Multi-star needs the whole field, so clear any ROI.
+        try { await cam.SetSubframeAsync(0, 0, 0, 0, ct); } catch { }
+        var img = await CaptureFullAsync(cam, ct);
+        if (img == null) return (_lockX, _lockY, false, 0, 0);
+        var res = _multiStar.Update(img.Data, img.Properties.Width, img.Properties.Height);
+        if (!res.Found) return (_lockX, _lockY, false, res.Snr, res.Hfd);
+        return (_lockX + res.OffsetX, _lockY + res.OffsetY, true, res.Snr, res.Hfd);
+    }
+
+    /// <summary>Detect a primary + secondary guide stars on a fresh full frame
+    /// and seed the multi-star tracker. The primary reference is the current
+    /// lock; secondaries are the next-brightest interior, non-saturated stars
+    /// kept a minimum distance apart. No-op (single-star) when disabled, the
+    /// max is 1, or fewer than two suitable stars exist.</summary>
+    private async Task BuildMultiStarAsync(CancellationToken ct) {
+        _multiStar.Clear();
+        if (!Rig.NativeMultiStar) return;
+        int maxStars = Math.Clamp(Rig.NativeMaxGuideStars, 1, 12);
+        if (maxStars <= 1 || !_haveLock) return;
+
+        var cam = _equipment.GuideCamera!;
+        try { await cam.SetSubframeAsync(0, 0, 0, 0, ct); } catch { }
+        var img = await CaptureFullAsync(cam, ct);
+        if (img == null) return;
+
+        int w = img.Properties.Width, h = img.Properties.Height;
+        var detector = new NINA.Image.ImageAnalysis.StarDetector();
+        var stars = detector.Detect(img.Data, w, h);
+
+        int margin = SearchRegion + 5;
+        double satGuard = (1 << Math.Max(1, img.Properties.BitDepth)) - 1;
+        double minSep = SearchRegion * 3.0;
+
+        var refs = new List<(double x, double y)> { (_lockX, _lockY) };
+        foreach (var s in stars
+                     .Where(s => s.X >= margin && s.Y >= margin &&
+                                 s.X <= w - margin && s.Y <= h - margin)
+                     .Where(s => !(satGuard > 1 && s.Peak >= satGuard * 0.95))
+                     .OrderByDescending(s => s.Flux)) {
+            if (refs.Count >= maxStars) break;
+            bool near = refs.Any(r => (r.x - s.X) * (r.x - s.X) +
+                                      (r.y - s.Y) * (r.y - s.Y) < minSep * minSep);
+            if (near) continue;
+            refs.Add((s.X, s.Y));
+        }
+
+        if (refs.Count > 1) {
+            _multiStar.Reset(refs);
+            _logger.LogInformation("Native multi-star: tracking {N} stars", refs.Count);
+        } else {
+            _logger.LogInformation("Native multi-star: only the primary star found; single-star guiding");
         }
     }
 

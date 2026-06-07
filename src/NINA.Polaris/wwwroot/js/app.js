@@ -679,6 +679,7 @@ function ninaApp() {
         nativeRaAlgorithm: 'hysteresis',
         nativeDecAlgorithm: 'resistswitch',
         nativeBacklashComp: false,
+        nativeMultiStar: true,
         nativeGuideAlgorithms: [
             { id: 'hysteresis', name: 'Hysteresis' },
             { id: 'resistswitch', name: 'Resist Switch' },
@@ -11853,6 +11854,7 @@ function ninaApp() {
             this.nativeRaAlgorithm = rig.nativeRaAlgorithm || 'hysteresis';
             this.nativeDecAlgorithm = rig.nativeDecAlgorithm || 'resistswitch';
             this.nativeBacklashComp = !!rig.nativeBacklashComp;
+            this.nativeMultiStar = rig.nativeMultiStar !== false;
             this.equipMountChoice = rig.telescope || '';
             // Same pattern for the mount driver. For direct WiFi drivers
             // (synscan-wifi, nexstar-wifi, lx200-tcp) the "device name"
@@ -16359,6 +16361,12 @@ function ninaApp() {
         setNativeBacklashComp(enabled) {
             this.nativeBacklashComp = !!enabled;
             this._persistRigSelection({ nativeBacklashComp: this.nativeBacklashComp });
+        },
+
+        // Toggle multi-star guiding for the native guider.
+        setNativeMultiStar(enabled) {
+            this.nativeMultiStar = !!enabled;
+            this._persistRigSelection({ nativeMultiStar: this.nativeMultiStar });
         },
 
         // Native guide-camera driver kind (indi / alpaca / vendor SDK).

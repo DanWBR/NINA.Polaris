@@ -12733,3 +12733,30 @@ SynScan pulse guide.
 
 Still deferred: ZFilter, GaussianProcess (RA), multi-star, pier-side/parity,
 SynScan pulse guide.
+
+### NATIVE GUIDER follow-up: Multi-star guiding
+
+- New `MultiStarTracker` in NINA.Guider.Portable (concept ported from PHD2's
+  MultiStar guider): tracks a primary star plus secondaries, recentres each
+  with the single-star `GuideStar.Find`, and reduces the per-star displacements
+  to one robust field offset (median + outlier rejection + SNR-weighted mean).
+  Averaging N stars lowers centroid noise (~1/sqrt(N)) and survives the loss of
+  any single star, including the primary. Per-star miss bookkeeping drops a
+  secondary after too many consecutive misses; the primary is always kept.
+- NativeGuider integration kept the lock-based math intact: when multi-star is
+  engaged the tracker returns an effective primary position (`lock + offset`),
+  so `GuideOnceAsync`'s `cur - lock` is unchanged. `BuildMultiStarAsync` seeds
+  the tracker at guiding start (primary = current lock, secondaries = next
+  brightest interior, non-saturated stars kept a minimum distance apart);
+  dither offsets all references by the same vector. Falls back to the
+  single-star ROI path when disabled or only one star is found. Multi-star uses
+  full-frame capture (it needs the whole field), so the ROI latency win applies
+  only to the single-star path.
+- Per-rig toggle: EquipmentProfile.NativeMultiStar (default on, matching PHD2) +
+  NativeMaxGuideStars (clamped [1,12], default 8), persisted via the rig PUT;
+  RIGS tab gained a "Multi-star guiding" checkbox.
+- Tests: NativeGuiderCoreTests now 29 (added rigid-field average, outlier
+  rejection, primary-loss survival, dither OffsetReferences, all-lost not-found).
+
+Still deferred: ZFilter, GaussianProcess (RA), pier-side/parity, SynScan pulse
+guide.

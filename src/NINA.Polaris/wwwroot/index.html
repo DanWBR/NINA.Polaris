@@ -5069,6 +5069,11 @@
                                                @change="setNativeBacklashComp($event.target.checked)">
                                         <span style="font-size:12px">Dec backlash comp (auto-measured)</span>
                                     </label>
+                                    <label class="equip-driver-row" style="margin-top:6px; gap:6px; cursor:pointer">
+                                        <input type="checkbox" :checked="nativeMultiStar"
+                                               @change="setNativeMultiStar($event.target.checked)">
+                                        <span style="font-size:12px">Multi-star guiding</span>
+                                    </label>
                                 </div>
                             </template>
                         </div>

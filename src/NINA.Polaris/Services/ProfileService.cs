@@ -272,6 +272,8 @@ public class ProfileService {
             NativeDecAlgorithm = src.NativeDecAlgorithm,
             NativeBacklashComp = src.NativeBacklashComp,
             NativeBacklashMaxMs = src.NativeBacklashMaxMs,
+            NativeMultiStar = src.NativeMultiStar,
+            NativeMaxGuideStars = src.NativeMaxGuideStars,
             PHD2Host = src.PHD2Host, PHD2Port = src.PHD2Port,
             // PHD2 deep-integration fields (cloned rig starts un-matched,
             // it will run its own first-time profile lookup the first time
@@ -908,6 +910,15 @@ public class EquipmentProfile {
     /// <summary>Hard ceiling (ms) on the applied Dec backlash pulse. 0 = use
     /// the measured value (capped internally at 2x).</summary>
     public int NativeBacklashMaxMs { get; set; } = 0;
+
+    /// <summary>Multi-star guiding: track several stars and average their
+    /// displacements into one robust offset (lower centroid noise, survives
+    /// the loss of any single star). On by default, matching PHD2.</summary>
+    public bool NativeMultiStar { get; set; } = true;
+
+    /// <summary>Maximum number of guide stars to track when multi-star is on
+    /// (primary + secondaries). Clamped to [1, 12].</summary>
+    public int NativeMaxGuideStars { get; set; } = 8;
 
     // Per-rig PHD2 settings
     public string PHD2Host { get; set; } = "localhost";

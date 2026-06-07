@@ -163,6 +163,9 @@ public static class EquipmentEndpoints {
                 r.NativeBacklashComp = update.NativeBacklashComp;
                 if (update.NativeBacklashMaxMs >= 0)
                     r.NativeBacklashMaxMs = update.NativeBacklashMaxMs;
+                r.NativeMultiStar = update.NativeMultiStar;
+                if (update.NativeMaxGuideStars > 0)
+                    r.NativeMaxGuideStars = Math.Clamp(update.NativeMaxGuideStars, 1, 12);
                 // New guide-scope metadata fields (RIGS tab card).
                 // Defensive: clamp aperture to a sane lower bound so
                 // a stray zero doesn't blow up the f-ratio calc on the UI.
