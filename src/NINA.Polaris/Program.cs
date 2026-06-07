@@ -272,6 +272,10 @@ builder.Services.AddSingleton<HostMetricsService>();
 // store persists run history under {ProfileService.DataDir}/benchmarks/.
 builder.Services.AddSingleton<BenchmarkResultsStore>();
 builder.Services.AddSingleton<BenchmarkService>();
+// Camera sensor analysis (e/ADU, read noise, full well, dynamic range
+// vs gain via the photon-transfer-curve method). On-demand, like the
+// benchmark; launched from the Equipment camera card.
+builder.Services.AddSingleton<SensorAnalysisService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<HostMetricsService>());
 builder.Services.AddSingleton<MdnsService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<MdnsService>());
@@ -853,6 +857,7 @@ app.MapOnnxEndpoints();
 app.MapFilesEndpoints();
 app.MapCacheEndpoints();
 app.MapBenchmarkEndpoints();
+app.MapSensorAnalysisEndpoints();
 app.MapSirilEndpoints();
 app.MapGraXpertEndpoints();
 app.MapCropEndpoints();

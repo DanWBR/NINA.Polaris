@@ -12365,3 +12365,35 @@ Files: `Services/BenchmarkService.cs` (RunCameraVideoWorkloadAsync +
 CameraVideoResult DTO + BenchmarkResult.CameraVideo; reuses the already-
 injected CameraStreamService), `wwwroot/index.html` (camera-video rows in
 the results table; cache-bust 20260607-benchvid), `docs/user-guide/benchmark.md`.
+
+---
+
+## SENSOR: camera Sensor Analysis (photon-transfer-curve)
+
+SharpCap-style sensor characterisation, launched from a button on the
+Equipment camera card. Measures conversion gain (e/ADU), read noise (e),
+full well (e) and dynamic range (stops) across the gain range.
+
+Method (mean-variance / PTC), per gain:
+- bias pair at min exposure -> read noise = stddev(A-B)/sqrt(2) (ADU).
+- exposure sweep on a uniform light -> for each level, signal = mean-bias,
+  variance = var(A-B)/2; linear fit of variance vs signal -> slope; gain
+  e/ADU = 1/slope.
+- full well = saturation*gain; DR = log2(fullWell/readNoise).
+- justification-robust: per-frame quantisation step detected (left-
+  justified 12-in-16 steps by 16) and divided out.
+- unity gain interpolated where e/ADU crosses 1.0.
+
+Automatic (no manual brightness wizard) so it also runs against the
+simulator for testing. On-demand service, guarded against running during
+live stack / video stream.
+
+Files: `Services/SensorAnalysisService.cs` (engine + static PTC math),
+`Endpoints/SensorAnalysisEndpoints.cs` (/api/sensor-analysis
+status/run/cancel), Program.cs (DI + map), WebSocket/StatusStreamHandler
+(sensorAnalysis {state,progress,phase}), wwwroot/index.html (camera-card
+button + modal with Chart.js curves + per-gain table; cache-bust
+20260607-sensoranalysis), wwwroot/js/app.js (state + run/cancel/load +
+chart), tests `SensorAnalysisServiceTests` (11 cases: LinFit, BuildRow,
+DetectQuantStep, BuildGainList, FindUnityGain, RegionDiffVar),
+docs/user-guide/sensor-analysis.md.

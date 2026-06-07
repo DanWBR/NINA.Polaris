@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260607-wheelnudge">
+    <link rel="stylesheet" href="/css/app.css?v=20260607-sensoranalysis">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -4251,6 +4251,18 @@
                                     </label>
                                 </div>
 
+                                <!-- Sensor analysis: photon-transfer-curve
+                                     measurement of gain / read noise / full
+                                     well / dynamic range across the gain
+                                     range (SharpCap-style). Needs a uniform,
+                                     constant light source. -->
+                                <div class="equip-inline-controls" x-show="selectedCamera">
+                                    <button class="btn btn-sm" @click="openSensorAnalysis()"
+                                            title="Measure gain (e/ADU), read noise, full well and dynamic range across the gain range. Point the camera at a uniform light source.">
+                                        📈 Sensor analysis
+                                    </button>
+                                </div>
+
                                 <div class="chart-container chart-container-xs"
                                      x-show="!isDslrCamera && tempHistory.length >= 2">
                                     <canvas x-ref="tempChart" id="tempChart"></canvas>
@@ -6312,6 +6324,106 @@
                             <span x-show="!networkSwitching">Connect &amp; switch</span>
                             <span x-show="networkSwitching">Switching…</span>
                         </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sensor analysis modal: configure + run + show the PTC
+                 result (gain / read noise vs gain + per-gain table). -->
+            <div class="editor-export-backdrop" x-show="sensorAnalysis.open" x-cloak
+                 @click.self="if (sensorAnalysis.state !== 'running') sensorAnalysis.open = false">
+                <div class="editor-export-modal" style="max-width:760px; width:94%">
+                    <h3>📈 Sensor analysis</h3>
+                    <p class="hint" style="margin-top:0">
+                        Measures gain (e/ADU), read noise, full well and dynamic
+                        range across the gain range using the photon-transfer
+                        curve. Point the camera at a <strong>uniform, constant
+                        light source</strong> (flat panel or evenly lit wall) and
+                        keep it steady for the whole run.
+                    </p>
+
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:8px; margin:10px 0">
+                        <label class="hint">Min gain
+                            <input type="number" min="0" class="input-sm" style="width:100%"
+                                   x-model.number="sensorAnalysis.req.minGain"
+                                   :disabled="sensorAnalysis.state === 'running'"></label>
+                        <label class="hint">Max gain
+                            <input type="number" min="1" class="input-sm" style="width:100%"
+                                   x-model.number="sensorAnalysis.req.maxGain"
+                                   :disabled="sensorAnalysis.state === 'running'"></label>
+                        <label class="hint">Gain steps
+                            <input type="number" min="2" max="20" class="input-sm" style="width:100%"
+                                   x-model.number="sensorAnalysis.req.gainSteps"
+                                   :disabled="sensorAnalysis.state === 'running'"></label>
+                        <label class="hint">Max exposure (s)
+                            <input type="number" min="0.01" step="0.1" class="input-sm" style="width:100%"
+                                   x-model.number="sensorAnalysis.req.maxExposureSec"
+                                   :disabled="sensorAnalysis.state === 'running'"></label>
+                        <label class="hint">Exposure steps
+                            <input type="number" min="3" max="20" class="input-sm" style="width:100%"
+                                   x-model.number="sensorAnalysis.req.exposureSteps"
+                                   :disabled="sensorAnalysis.state === 'running'"></label>
+                    </div>
+
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center">
+                        <button class="btn btn-primary btn-sm"
+                                :disabled="sensorAnalysis.state === 'running'"
+                                @click="runSensorAnalysis()"
+                                x-text="sensorAnalysis.state === 'running' ? 'Running…' : '▶ Run'"></button>
+                        <button class="btn btn-sm" x-show="sensorAnalysis.state === 'running'"
+                                @click="cancelSensorAnalysis()">Cancel</button>
+                        <span class="hint" x-show="sensorAnalysis.state === 'running'"
+                              x-text="(sensorAnalysis.phase || 'Working') + '… ' + (sensorAnalysis.progress || 0) + '%'"></span>
+                    </div>
+                    <div x-show="sensorAnalysis.state === 'running'"
+                         style="width:100%;height:6px;background:var(--border,#333);border-radius:3px;overflow:hidden;margin-top:8px">
+                        <div style="height:100%;background:var(--accent,#3a9);border-radius:3px;transition:width .3s"
+                             :style="'width:' + (sensorAnalysis.progress || 0) + '%'"></div>
+                    </div>
+
+                    <template x-if="sensorAnalysis.lastResult">
+                        <div style="margin-top:14px">
+                            <div class="hint" style="margin-bottom:6px">
+                                <strong x-text="sensorAnalysis.lastResult.camera"></strong> ·
+                                bit depth <span x-text="sensorAnalysis.lastResult.bitDepth"></span> ·
+                                quantization <span x-text="sensorAnalysis.lastResult.quantizationStep"></span> ·
+                                linear to <span x-text="sensorAnalysis.lastResult.linearToPercent"></span>%
+                                <template x-if="sensorAnalysis.lastResult.unityGain">
+                                    <span> · unity gain ≈ <span x-text="sensorAnalysis.lastResult.unityGain"></span></span>
+                                </template>
+                            </div>
+                            <div style="height:240px; position:relative">
+                                <canvas x-ref="sensorChart"></canvas>
+                            </div>
+                            <div style="max-height:220px; overflow:auto; margin-top:10px">
+                                <table style="width:100%; font-size:12px; border-collapse:collapse">
+                                    <thead>
+                                        <tr style="text-align:left; color:var(--text-muted)">
+                                            <th>Gain</th><th>e/ADU</th><th>Read noise (e)</th>
+                                            <th>Full well (e)</th><th>Rel. gain (dB)</th><th>DR (stops)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template x-for="(row, i) in sensorAnalysis.lastResult.rows" :key="i">
+                                            <tr :style="row.valid ? '' : 'color:var(--text-muted)'">
+                                                <td x-text="row.gain"></td>
+                                                <td x-text="row.valid ? row.electronsPerAdu : '—'"
+                                                    :title="row.note || ''"></td>
+                                                <td x-text="row.valid ? row.readNoiseE : '—'"></td>
+                                                <td x-text="row.valid ? row.fullWellE : '—'"></td>
+                                                <td x-text="row.valid ? row.relativeGainDb : '—'"></td>
+                                                <td x-text="row.valid ? row.dynamicRangeStops : '—'"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </template>
+
+                    <div class="editor-export-actions" style="margin-top:12px">
+                        <button class="btn" :disabled="sensorAnalysis.state === 'running'"
+                                @click="sensorAnalysis.open = false">Close</button>
                     </div>
                 </div>
             </div>
@@ -11883,7 +11995,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260607-wheelnudge"></script>
+    <script src="/js/app.js?v=20260607-sensoranalysis"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

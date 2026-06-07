@@ -48,6 +48,7 @@ public static class StatusStreamHandler {
             .GetRequiredService<NINA.Polaris.Services.Simulator.SimulatorService>();
         var network = context.RequestServices.GetRequiredService<NetworkManagerService>();
         var benchmark = context.RequestServices.GetRequiredService<BenchmarkService>();
+        var sensorAnalysis = context.RequestServices.GetRequiredService<SensorAnalysisService>();
         var notifications = context.RequestServices.GetRequiredService<NotificationService>();
         var polarAlign = context.RequestServices.GetRequiredService<PolarAlignmentService>();
         var logService = context.RequestServices.GetRequiredService<NINA.Polaris.Services.Logging.LogService>();
@@ -476,6 +477,13 @@ public static class StatusStreamHandler {
                             state    = benchmark.State,
                             progress = benchmark.Progress,
                             phase    = benchmark.Phase
+                        },
+                        // Sensor analysis (e/ADU, read noise, full well vs
+                        // gain). Compact progress here; full result via REST.
+                        sensorAnalysis = new {
+                            state    = sensorAnalysis.State,
+                            progress = sensorAnalysis.Progress,
+                            phase    = sensorAnalysis.Phase
                         },
                         // PA-4: TPPA orchestrator state. CurrentJob is
                         // null until the user clicks Start; serialise a

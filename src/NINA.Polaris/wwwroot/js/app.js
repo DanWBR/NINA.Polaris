@@ -2342,6 +2342,16 @@ function ninaApp() {
         benchGain: null,
         _benchWasRunning: false,
 
+        // Camera sensor analysis (photon-transfer-curve). state/progress/
+        // phase fed by WS; lastResult pulled over REST when a run ends.
+        sensorAnalysis: {
+            open: false, state: 'idle', progress: 0, phase: '', lastResult: null,
+            req: { minGain: 0, maxGain: 1000, gainSteps: 8,
+                   minExposureSec: 0.01, maxExposureSec: 2.0, exposureSteps: 7 }
+        },
+        _saWasRunning: false,
+        _saChart: null,
+
         // End-of-run actions (post-sequence housekeeping). Default = nothing.
         // Mirrors the SequenceEndActions DTO on the server.
         endActions: {
@@ -11254,6 +11264,94 @@ function ninaApp() {
         benchTimeLabel(iso) {
             if (!iso) return '';
             try { return new Date(iso).toLocaleString(); } catch { return iso; }
+        },
+
+        // ─── Sensor analysis (camera card) ─────────────────────────────
+        openSensorAnalysis() {
+            this.sensorAnalysis.open = true;
+            this.loadSensorAnalysis();
+        },
+
+        async loadSensorAnalysis() {
+            try {
+                const st = await this.apiGet('/api/sensor-analysis/status');
+                if (st) {
+                    this.sensorAnalysis.state = st.state ?? this.sensorAnalysis.state;
+                    this.sensorAnalysis.progress = st.progress ?? 0;
+                    this.sensorAnalysis.phase = st.phase ?? '';
+                    if (st.lastResult) {
+                        this.sensorAnalysis.lastResult = st.lastResult;
+                        this.$nextTick(() => this._renderSensorChart());
+                    }
+                }
+            } catch (e) { /* leave as-is */ }
+        },
+
+        async runSensorAnalysis() {
+            if (this.sensorAnalysis.state === 'running') return;
+            const r = this.sensorAnalysis.req;
+            const body = {
+                minGain: Number(r.minGain) || 0,
+                maxGain: Number(r.maxGain) || 1000,
+                gainSteps: Number(r.gainSteps) || 8,
+                minExposureSec: Number(r.minExposureSec) || 0.01,
+                maxExposureSec: Number(r.maxExposureSec) || 2.0,
+                exposureSteps: Number(r.exposureSteps) || 7,
+                framesPerLevel: 2
+            };
+            try {
+                const resp = await this.apiPost('/api/sensor-analysis/run', body);
+                if (resp && !resp.ok) {
+                    let msg = 'Could not start sensor analysis';
+                    try { const d = await resp.json(); if (d && d.error) msg = d.error; } catch {}
+                    this.toast(msg, 'error');
+                    return;
+                }
+                this.sensorAnalysis.state = 'running';
+                this.sensorAnalysis.progress = 0;
+                this._saWasRunning = true;
+                this.toast('Sensor analysis started (this can take a few minutes)', 'info');
+            } catch (e) {
+                this.toast('Sensor analysis error: ' + (e.message || ''), 'error');
+            }
+        },
+
+        async cancelSensorAnalysis() {
+            try { await this.apiPost('/api/sensor-analysis/cancel'); } catch {}
+        },
+
+        _renderSensorChart() {
+            const res = this.sensorAnalysis.lastResult;
+            const el = this.$refs.sensorChart;
+            if (!res || !el || typeof Chart === 'undefined') return;
+            const rows = (res.rows || []).filter(r => r.valid);
+            if (!rows.length) return;
+            const labels = rows.map(r => r.gain);
+            const eadu = rows.map(r => r.electronsPerAdu);
+            const rn = rows.map(r => r.readNoiseE);
+            if (this._saChart) { try { this._saChart.destroy(); } catch {} this._saChart = null; }
+            this._saChart = new Chart(el.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        { label: 'Gain (e/ADU)', data: eadu, borderColor: '#3fb950',
+                          backgroundColor: '#3fb950', yAxisID: 'y', tension: 0.2, pointRadius: 3 },
+                        { label: 'Read noise (e)', data: rn, borderColor: '#f85149',
+                          backgroundColor: '#f85149', yAxisID: 'y1', tension: 0.2, pointRadius: 3 }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        x: { type: 'logarithmic', title: { display: true, text: 'Gain value' } },
+                        y: { position: 'left', title: { display: true, text: 'e/ADU' }, beginAtZero: true },
+                        y1: { position: 'right', title: { display: true, text: 'Read noise (e)' },
+                              beginAtZero: true, grid: { drawOnChartArea: false } }
+                    }
+                }
+            });
         },
 
         // Part B4: one-click meridian flip from the LIVE panel. The server
@@ -21372,6 +21470,17 @@ function ninaApp() {
                 else if (this._benchWasRunning) {
                     this._benchWasRunning = false;
                     this.loadBenchmark();
+                }
+            }
+            // Sensor analysis live progress; pull the full result on finish.
+            if (msg.sensorAnalysis) {
+                this.sensorAnalysis.state = msg.sensorAnalysis.state;
+                this.sensorAnalysis.progress = msg.sensorAnalysis.progress;
+                this.sensorAnalysis.phase = msg.sensorAnalysis.phase;
+                if (msg.sensorAnalysis.state === 'running') this._saWasRunning = true;
+                else if (this._saWasRunning) {
+                    this._saWasRunning = false;
+                    this.loadSensorAnalysis();
                 }
             }
             // KC-1: Keep Centered loop status. Always emitted (running
