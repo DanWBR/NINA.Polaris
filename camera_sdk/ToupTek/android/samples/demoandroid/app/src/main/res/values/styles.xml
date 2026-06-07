@@ -1,0 +1,14 @@
+<resources>
+    <style name="AppBaseTheme" parent="android:Theme.NoTitleBar"> </style>
+    <style name="AppTheme" parent="AppBaseTheme">
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:colorPrimary">@color/theme_background</item>
+        <item name="android:colorPrimaryDark">@color/theme_background</item>
+        <item name="android:windowBackground">@color/theme_background</item>
+    </style>
+
+    <style name="Theme.Fullscreen" parent="android:Theme.NoTitleBar.Fullscreen">
+        <item name="android:windowBackground">@color/black</item>
+    </style>
+</resources>

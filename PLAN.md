@@ -12528,3 +12528,31 @@ Verified: Portable + NINA.Polaris + WASM build clean; targeted suites green
 32). The 4 remaining full-suite failures are pre-existing env/data issues
 (CometService comets.json not shipped to the test output; HostMetrics reads
 real host memory) in code untouched by this work.
+
+---
+
+## VIDHARD: high-fps recording hardening (#362 items 1+2)
+
+Background SER writer queue + zero-copy frame handoff, so the camera
+delivery thread is never blocked by disk I/O during high-fps planetary
+recording. (Item 3, the native ASI SDK backend, stays pending.)
+
+- VideoRecordingService.OnFrame no longer writes inline. It enqueues the
+  frame's ushort[] reference into a bounded Channel (cap 32, FullMode.Wait
+  + TryWrite -> drop-on-full, never blocks). No copy, no alloc, no disk I/O
+  on the delivery thread. The old Monitor.TryEnter(5ms)+inline WriteFrame is
+  gone.
+- A dedicated writer Task (WriterLoopAsync) drains the channel, does the
+  ushort->byte LE encode into a SINGLE reused scratch buffer (zero per-frame
+  alloc), and writes the SER. Disk write-back stalls only consume queue
+  slots; frames drop only when the 32-deep queue fills.
+- SerFileWriter gains WriteFrame(byte[] buf, int count, utc) + BytesPerFrame
+  so the recorder writes from the reused buffer with no allocation.
+- StopAsync now completes the channel and awaits the writer task before
+  closing the SER (header frame-count patch + timestamp trailer intact).
+- Auto-stop (MaxFrames/MaxDuration) keys off frames enqueued.
+
+Benefits all backends (INDI/Alpaca/ASCOM). Files:
+Services/Planetary/VideoRecordingService.cs, SerFileWriter.cs. Verified:
+build clean; 26 SER/Planetary tests green. Measure the real ceiling with the
+benchmark video probe (ROI + MeasureRecording) on the rig.

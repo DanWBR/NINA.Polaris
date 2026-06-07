@@ -1,0 +1,316 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252"/>
+<title>FAQ for toupcam directshow sdk</title>
+</head>
+
+<body>
+<h1 align="center">FAQ for toupcam directshow sdk</h1>
+<p>NOTICE: This Q&amp;A is only for directshow sdk.</p>
+<h2>Q01: What's the version of this sdk?</h2>
+<p align="left"><strong>A</strong>: 1.0.29030.20250722</p>
+<h2>Q02: What's in toupcam directshow sdk?</h2>
+<p align="left"><strong>A</strong>: For normal directshow application development, pure directshow programming is sufficient. For advanced directshow application development (such as camera control GUI customization), COM interfaces in toupcam_dshow.h are available. A how-to-use C++ source code sample demodshow is shipped within toupcamsdk.zip as well.</p>
+<h2>Q03: The toupcam camera gets found on dshow device enumeration even when it is not connected to PC. If the camera is not connected it should not be enumerated. Is this a bug?</h2>
+<p align="left"><strong>A</strong>: No, this is not a bug, it is inherent. If you want to avoid this, please reference <a href="#q14">Q14</a> or use the native C API.</p>
+<h2>Q04: Why the media type is always RGB24 and how to use MONO8/MONO16 or RAW format?</h2>
+<p align="left"><strong>A</strong>: The media type of the output pin is fixed to RGB24, but the content of the media sample can be reinterpret.<br/>
+While the camera filter is <strong>not</strong> connected, use:<br/>
+<blockquote>(a) IToupcam::put_Option(TOUPCAM_OPTION_RAW, 1) to enable RAW data mode;</blockquote>
+<blockquote>(b) or IToupcam::put_Option(TOUPCAM_OPTION_RGB, 3) to enable MONO8 data mode;</blockquote>
+<blockquote>(c) or IToupcam::put_Option(TOUPCAM_OPTION_RGB, 4) to enable MONO16 data mode;</blockquote>
+The data is stored into the output buffer as usual, the only difference is that the used data length is less than RGB24 and left the back part of buffer unused &amp; untouched.<br/>
+NOTE:<br/>(a) It is <strong>not</strong> supported to change TOUPCAM_OPTION_RAW or TOUPCAM_OPTION_RGB while the camera filter is connected, the function will fail with return value E_UNEXPECTED(0x8000ffff).<br/>
+(b) TOUPCAM_OPTION_RGB and TOUPCAM_OPTION_RAW are defined in toupcam.h</p>
+<h2>Q05: How about the samples?</h2>
+<p align="left"><strong>A</strong>: 1. demodshow: everything about directshow is in dshow.h and dshow.cpp. This sample uses mfc for the UI.</p>
+<p>2. amcap: Microsoft sample demonstrates various tasks related to video capture, see <a href="https://github.com/microsoft/Windows-classic-samples/tree/main/Samples/Win7Samples/multimedia/directshow/capture/amcap" target="_blank">https://github.com/microsoft/Windows-classic-samples/tree/main/Samples/Win7Samples/multimedia/directshow/capture/amcap</a>.</p>
+<h2>Q06: Where can I find the learning materials about DirectShow?</h2>
+<p align="left"><strong>A</strong>: Microsoft technical documentation is the most complete reference of DirectShow. You can access it at <a href="https://docs.microsoft.com/en-us/windows/win32/directshow/directshow" target="_blank">https://docs.microsoft.com/en-us/windows/win32/directshow/directshow</a></p>
+<h2>Q07: Which interfaces does toupcam support?</h2>
+<table border="1" cellspacing="0" cellpadding="0" width="100%">
+  <tr>
+    <td width="26%">Filter interfaces</td>
+    <td width="73%" valign="top">IBaseFilter<br/>
+      ISpecifyPropertyPages<br/>
+      IAMFilterMiscFlags<br/>
+      IAMVideoControl (Still capture capable models)<br/>
+      IAMVideoProcAmp<br/>
+      IVideoProcAmp<br/>
+      ICameraControl<br/>
+      IAMCameraControl<br/>
+      IToupcam (see toupcam_dshow.h)<br/>
+      IToupcamSerialNumber<br/>
+      IToupcamStillImage (Still capture capable models)<br/>
+      IToupcamSerialNumber<br/>
+      IToupcamVersion<br/>
+	  IToupcamAdvanced<br/>
+      IToupcamST4</td>
+  </tr>
+  <tr>
+    <td width="26%">Output pin interfaces<br/>
+      Preview or Still</td>
+    <td width="73%" valign="top">IPin<br/>
+      IQualityControl<br/>
+      IAMStreamConfig<br/>
+      IKsPropertySet<br/>
+      ISpecifyPropertyPages<br/>
+      IAMVideoProcAmp<br/>
+      IVideoProcAmp<br/>
+      ICameraControl<br/>
+      IAMCameraControl<br/>
+      IToupcam (see toupcam_dshow.h)<br/>
+      IToupcamSerialNumber<br/>
+      IToupcamStillImage (Still capture capable models)<br/>
+      IToupcamSerialNumber<br/>
+      IToupcamVersion<br/>
+	  IToupcamAdvanced<br/>
+      IToupcamST4</td>
+  </tr>
+  <tr>
+    <td width="26%">Output Pin Media Types</td>
+    <td width="73%" valign="top">MEDIATYPE_Video<br/>
+      MEDIASUBTYPE_RGB24 (RGB24 or RAW)<br/>
+      FORMAT_VideoInfo</td>
+  </tr>
+</table>
+<h2>Q08: What are the valid ranges of parameters?</h2>
+<p><strong>A</strong>: </p>
+<table border="1" cellspacing="0" cellpadding="0" width="100%">
+  <tr>
+    <td width="14%">Category</td>
+    <td width="31%">Functions</td>
+    <td width="37%">Range or function to get the range</td>
+    <td width="16%">Default</td>
+  </tr>
+  <tr>
+    <td width="14%">Video Resolution</td>
+    <td width="31%">put_Size<br/>
+      get_Size<br/>
+      put_eSize<br/>
+      get_eSize</td>
+    <td width="37%">get_ResolutionNumber<br/>
+      get_Resolution</td>
+    <td width="16%">model specific</td>
+  </tr>
+  <tr>
+    <td width="14%" rowspan="4">Exposure</td>
+    <td width="31%">get_AutoExpoTarget<br/>
+      put_AutoExpoTarget</td>
+    <td width="37%">10~230</td>
+    <td width="16%">120</td>
+  </tr>
+  <tr>
+    <td width="31%">get_AutoExpoEnable<br/>
+    put_AutoExpoEnable</td>
+    <td width="37%">TRUE or FALSE</td>
+    <td width="16%">TRUE</td>
+  </tr>
+  <tr>
+    <td width="31%">get_ExpoTime<br/>
+      put_ExpoTime</td>
+    <td width="37%">get_ExpTimeRange</td>
+    <td width="16%">model specific</td>
+  </tr>
+  <tr>
+    <td width="31%">get_ExpoAGain<br/>
+      put_ExpoAGain</td>
+    <td width="37%">get_ExpoAGainRange</td>
+    <td width="16%">model specific</td>
+  </tr>
+  <tr>
+    <td width="14%">White Balance</td>
+    <td width="31%">get_TempTint<br/>
+      put_TempTint</td>
+    <td width="37%">Temp: 2000~15000<br/>
+      Tint: 200~2500</td>
+    <td width="16%">Temp = 6503<br/>
+      Tint = 1000</td>
+  </tr>
+  <tr>
+    <td width="14%" rowspan="7">Color</td>
+    <td width="31%">get_Hue<br/>
+      put_Hue</td>
+    <td width="37%">-180~180</td>
+    <td width="16%">0</td>
+  </tr>
+  <tr>
+    <td width="31%">get_Saturation<br/>
+      put_Saturation</td>
+    <td width="37%">0~255</td>
+    <td width="16%">128</td>
+  </tr>
+  <tr>
+    <td width="31%">get_Brightness<br/>
+      put_Brightness</td>
+    <td width="37%">-64~64</td>
+    <td width="16%">0</td>
+  </tr>
+  <tr>
+    <td width="31%">get_Contrast<br/>
+      put_Contrast</td>
+    <td width="37%">-100~100</td>
+    <td width="16%">0</td>
+  </tr>
+  <tr>
+    <td width="31%">get_Gamma<br/>
+      put_Gamma</td>
+    <td width="37%">20~180</td>
+    <td width="16%">100</td>
+  </tr>
+  <tr>
+    <td width="31%">get_LevelRange<br/>
+      put_LevelRange</td>
+    <td width="37%">0~255</td>
+    <td width="16%">Low = 0<br/>
+      High = 255</td>
+  </tr>
+  <tr>
+    <td width="31%">get_MonoMode</td>
+    <td width="37%">S_OK: mono mode<br/>
+      S_FALSE: color mode</td>
+    <td width="16%">model specific</td>
+  </tr>
+  <tr>
+    <td width="14%" rowspan="3">Vignetting</td>
+    <td width="31%">get_VignetEnable<br/>
+      put_VignetEnable</td>
+    <td width="37%">TRUE or FALSE</td>
+    <td width="16%">FALSE</td>
+  </tr>
+  <tr>
+    <td width="31%">get_VignetMidPointInt<br/>
+      put_VignetMidPointInt</td>
+    <td width="37%">0~100</td>
+    <td width="16%">50</td>
+  </tr>
+  <tr>
+    <td width="31%">get_VignetAmountInt<br/>
+      put_VignetAmountInt</td>
+    <td width="37%">-100~100</td>
+    <td width="16%">0</td>
+  </tr>
+  <tr>
+    <td width="14%" rowspan="4">Misc</td>
+    <td width="31%">get_VFlip<br/>
+      put_VFlip</td>
+    <td width="37%">TRUE or FALSE</td>
+    <td width="16%">FALSE</td>
+  </tr>
+  <tr>
+    <td width="31%">get_HZ<br/>
+      put_HZ</td>
+    <td width="37%">enum: 0, 1, 2<br/>
+      0 -&gt; 60HZ AC<br/>
+      1 -&gt; 50Hz AC<br/>
+      2 -&gt; DC</td>
+    <td width="16%">DC</td>
+  </tr>
+  <tr>
+    <td width="31%">get_Chrome<br/>
+      put_Chrome</td>
+    <td width="37%">1(monochromatic) or color(0)</td>
+    <td width="16%">0</td>
+  </tr>
+  <tr>
+    <td width="31%">get_Speed<br/>
+      put_Speed</td>
+    <td width="37%">get_MaxSpeed</td>
+    <td width="16%">model specific</td>
+  </tr>
+  <tr>
+    <td width="14%">Still Image</td>
+    <td width="31%">put_StillSize<br/>
+      get_StillSize<br/>
+      put_eStillSize<br/>
+      get_eStillSize</td>
+    <td width="37%">get_StillResolutionNumber<br/>
+      get_StillResolution</td>
+    <td width="16%">model specific</td>
+  </tr>
+</table>
+<p align="left">NOTE: Exposure time unit is microsecond.</p>
+<h2>Q09: How to know whether the  camera supports still capture via SDK?</h2>
+<p align="left"><strong>A</strong>: Query the IToupcamStillImage interface.</p>
+<h2>Q10: How to get the actual frame rate with this SDK?</h2>
+<p align="left"><strong>A</strong>: Code example can be found in TDshowContext::get_framerate function in dshow.h and dshow.cpp of the demodshow sample project.</p>
+<h2>Q11: How to get the camera's unique id?</h2>
+<p><strong>A</strong>: Use the IToupcamSerialNumber interface. Code example can be found in the demodshow sample project.</p>
+<h2>Q12: Can this SDK used with .net applications?</h2>
+<p align="left"><strong>A</strong>: Yes, of course. This SDK is DirectShow based and can be easily integrated into your .net applications. See <a href="http://www.aforgenet.com/framework" target="_blank">http://www.aforgenet.com/framework</a> for more details.</p>
+<h2>Q13: How to use the ROI?</h2>
+<p align="left"><strong>A</strong>: There are two cases according to that the camera filter is connected or not connected.<br/>
+(1) While the camera filter is <strong>not</strong> connected: firstly, use put_Roi to set the ROI, both the offset and the size can be changed.<br/>
+(2) While the camera filter is connected: call put_Roi to set the offset can be supported. The width and height can <strong>not</strong> be changed.<br/>
+<br/>Dshow ROI is supported since 20180824.</p>
+<h2><a id="q14">Q14: What is DshowMonSvc used for?</a></h2>
+<p align="left"><strong>A</strong>: DshowMonSrc is a service that can monitor the status of the connection of cameras that are connected to PC by directshow driver and report it to Windows, including whether there are cameras connected, how many cameras connected and their model names.</br/>
+By default, the start type of the DshowMonSvc service is set to "On Demand".</p>
+<h2>Q15: Does directshow sdk support multiple cameras?</h2>
+<p align="left"><strong>A</strong>: Yes, but it's something tricky. The toupcam.ax generally open the "first" camera connected to the computer. If you truely want to open multiple cameras simultaneously in directshow, please use one of the following 2 methods:<br/></p>
+(a) Run DshowMonSvc automatically, set the service start type to "Auto"<br/><br/>
+(b) Use DshowEnumCamera and DshowOpenCamera which are defined as below:<br/>
+<table width="100%" border="0" bgcolor="#B0D0B0">
+<tr><td>
+	/* return value: the number of connected camera */<br/>
+    unsigned __stdcall DshowEnumCamera();<br/><br/>
+    /* return value: camera model name */<br/>
+    const wchar_t* __stdcall DshowGetModelName(unsigned index);<br/><br/>
+    /* return value: the camera directshow COM object, which can be used to QueryInterface(IID_IBaseFilter, ...). When failed, NULL is returned */<br/>
+    /* use DshowOpenCamera(0) to open the first camera, use DshowOpenCamera(1) to open the second camera, etc */<br/>
+    IUnknown* __stdcall DshowOpenCamera(unsigned index);<br/>
+</td></tr>
+</table><br/>
+Please see USE_DSHOWOPENCAMERA in files dshow.h and dshow.cpp of the demodshow sample project. Use InitAxMicro() or InitAxAstro() to get the function pointers.<br/>
+<table width="100%" border="0" bgcolor="#B0D0B0">
+<tr><td><pre>
+typedef unsigned  (__stdcall *PFUN_DSHOWENUMCAMERA)();
+typedef const wchar_t* (__stdcall *PFUN_DSHOWGETMODELNAME)(unsigned index);
+typedef IUnknown* (__stdcall *PFUN_DSHOWOPENCAMERA)(unsigned index);
+PFUN_DSHOWENUMCAMERA g_pDshowEnumCamera = NULL;
+PFUN_DSHOWGETMODELNAME g_pDshowGetModelName = NULL;
+PFUN_DSHOWOPENCAMERA g_pDshowOpenCamera = NULL;
+HMODULE g_hModuleAx = NULL;
+
+static void InitAx(const wchar_t* clsid)
+{
+    if (g_hModuleAx)
+        return;
+    
+    HKEY hKey = NULL;
+    wchar_t regPath[MAX_PATH];
+    wsprintfW(regPath, L"CLSID\\%s\\InprocServer32", clsid); /* construct regkey path */
+    if (ERROR_SUCCESS == RegOpenKeyExW(HKEY_CLASSES_ROOT, regPath, 0, KEY_READ, &amp;hKey))
+    {
+        wchar_t axPath[MAX_PATH + 1] = { 0 };
+        DWORD cbData = MAX_PATH * sizeof(wchar_t);
+        if (ERROR_SUCCESS == RegQueryValueExW(hKey, NULL, NULL, NULL, (PBYTE)axPath, &amp;cbData)) /* query the full path of toupcam.ax */
+        {
+            g_hModuleAx = LoadLibraryW(axPath);
+            if (g_hModuleAx)
+            {
+                g_pDshowEnumCamera = (PFUN_DSHOWENUMCAMERA)GetProcAddress(g_hModuleAx, "DshowEnumCamera");
+                g_pDshowGetModelName = (PFUN_DSHOWGETMODELNAME)GetProcAddress(g_hModuleAx, "DshowGetModelName");
+                g_pDshowOpenCamera = (PFUN_DSHOWOPENCAMERA)GetProcAddress(g_hModuleAx, "DshowOpenCamera");
+            }
+        }
+        RegCloseKey(hKey);
+    }
+}
+
+void InitAxMicro()
+{
+    /* {EA6387A5-60C7-41D3-B058-8D90580A7BE1} is the clsid of toupcam micro dshow object */
+    InitAx(L"{EA6387A5-60C7-41D3-B058-8D90580A7BE1}");
+}
+
+void InitAxAstro()
+{
+    /* {B2190DBF-21E3-4580-98B2-0DB1E557A027} is the clsid of toupcam astro dshow object */
+     InitAx(L"{B2190DBF-21E3-4580-98B2-0DB1E557A027}");
+}</pre></td></tr>
+</table><br/>
+After you get the the function pointers, you can use them to open the cameras, such as: g_pDshowOpenCamera(0), g_pDshowOpenCamera(1), g_pDshowOpenCamera(2), etc.
+</body>
+</html>

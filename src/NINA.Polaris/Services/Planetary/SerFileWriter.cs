@@ -81,14 +81,26 @@ public sealed class SerFileWriter : IDisposable {
     /// <summary>Append a frame. <paramref name="frameBytes"/> length must
     /// equal Width × Height × planes × (BitDepth / 8). For 16-bit, bytes
     /// are little-endian per the SER spec we wrote in the header.</summary>
-    public void WriteFrame(byte[] frameBytes, DateTime? utc = null) {
+    public void WriteFrame(byte[] frameBytes, DateTime? utc = null)
+        => WriteFrame(frameBytes, frameBytes.Length, utc);
+
+    /// <summary>Append <paramref name="count"/> bytes from
+    /// <paramref name="frameBytes"/> (which may be an oversized pooled /
+    /// reused buffer). <paramref name="count"/> must equal the frame size.
+    /// Lets the background recorder write from a single reused scratch
+    /// buffer with no per-frame allocation.</summary>
+    public void WriteFrame(byte[] frameBytes, int count, DateTime? utc = null) {
         if (_disposed) throw new ObjectDisposedException(nameof(SerFileWriter));
-        if (frameBytes.Length != _bytesPerFrame)
+        if (count != _bytesPerFrame)
             throw new ArgumentException(
-                $"Frame size mismatch: expected {_bytesPerFrame} bytes, got {frameBytes.Length}");
-        _fs.Write(frameBytes, 0, frameBytes.Length);
+                $"Frame size mismatch: expected {_bytesPerFrame} bytes, got {count}");
+        _fs.Write(frameBytes, 0, count);
         _frameTimestamps.Add(utc ?? DateTime.UtcNow);
     }
+
+    /// <summary>Expected size of one frame in bytes
+    /// (Width × Height × planes × BitDepth/8).</summary>
+    public int BytesPerFrame => _bytesPerFrame;
 
     /// <summary>Convenience overload for ushort[] payloads. Encodes
     /// little-endian to match the header flag.</summary>

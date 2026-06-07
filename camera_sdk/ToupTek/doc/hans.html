@@ -1,0 +1,2488 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<title>Toupcam API 手册</title>
+</head>
+<body>
+<h1 align="center">Toupcam API 手册</h1>
+<p>&nbsp;</p>
+<hr/><h1><font color="#0000FF">1. 版本和平台</font></h1><hr/>
+<ul><li>版本:59.29030.20250722</li></ul>
+<ul><li>平台<ul>
+      <li>Win32:<ul>
+          <li>x64: Win7及以上版本</li>
+          <li>x86: XP SP3及以上版本; CPU至少需要支持SSE2指令集</li>
+		  <li>arm64: Win10及以上版本</li>
+		  <li>arm: Win10及以上版本</li>
+      </ul></li>
+	  <li><a href="https://learn.microsoft.com/en-us/windows/uwp" target="_blank">WinRT/UWP</a>: x64, x86, arm64, arm；Windows 10及以上版本</li>
+      <li>macOS: x64+arm64: macOS 11.0及以上版本, 支持x64和<a href="https://en.wikipedia.org/wiki/Apple_silicon" target="_blank">Apple silicon</a>(如M1, M2等)</li>
+      <li>Linux: 内核2.6.27及以上<ul>
+			<li>x64: GLIBC 2.14及以上</li>
+			<li>x86: CPU至少需要支持SSE3指令集；GLIBC 2.8及以上</li>
+			<li>arm64: GLIBC 2.17及以上；由aarch64-linux-gnu(版本5.4.0)编译</li>
+			<li>armhf: GLIBC 2.8及以上；由arm-linux-gnueabihf(版本5.4.0)编译</li>
+			<li>armel: GLIBC 2.8及以上；由arm-linux-gnueabi(版本5.4.0)编译</li>
+		</ul></li>
+      <li>Android: __ANDROID_API__ &gt;= 24 (Android 7.0); 由android-ndk-r18b编译; 请参阅<a href="https://developer.android.google.cn/ndk/guides/abis?hl=zh-cn" target="_blank">这里</a>
+        <ul><li>arm64: arm64-v8a</li>
+            <li>arm: armeabi-v7a</li>
+            <li>x64: x86_64</li>
+            <li>x86</li>
+</ul></li></ul></li></ul>
+<hr/><h1><font color="#0000FF">2. 简介</font></h1><hr/>
+<p align="left">Toupcam系列相机支持多种API, 包括：Native C/C++, <a href="#dotnet">.NET(C#和VB.NET)</a>, <a href="#python">Python</a>, <a href="#java">Java</a>, <a href="https://learn.microsoft.com/en-us/windows/win32/directshow/directshow" target="_blank">DirectShow</a>, <a href="http://twain.org" target="_blank">Twain</a>, LabView, MatLab等等. Native C/C++ API作为底层(Low Level) API相比较其他API的特点是使用纯C/C++开发, 不依赖其他的运行时库, 接口简洁, 控制灵活. 本SDK压缩包包含了所有需要用到的的资源和信息, 目录如下:</p>
+<ul><li>inc</li></ul>
+<blockquote><p>toupcam.h, C/C++头文件<br/></p></blockquote>
+<ul><li>win: Microsoft Windows平台文件
+    <ul><li>dotnet<blockquote>
+          <p align="left">toupcam.cs, 支持C#. toupcam.cs使用P/Invoke调用至toupcam.dll. 请把toupcam.cs拷贝到你的C#工程中使用.<br/>
+    toupcam.vb, 支持VB.NET. toupcam.vb使用P/Invoke调用至toupcam.dll. 请把toupcam.vb拷贝到你的VB.NET工程中使用.<br/>
+       </p></blockquote></li>
+		<li>x86: toupcam.dll, toupcam.lib</li>
+		<li>x64: toupcam.dll, toupcam.lib</li>
+    <li>arm: toupcam.dll, toupcam.lib</li>
+    <li>arm64: toupcam.dll, toupcam.lib</li>
+	<li>winrt<blockquote>
+		适用于WinRT / UWP (Universal Windows Platform) / Windows Store App的动态库文件.<br/>
+		它们和Windows Runtime兼容, 可以被Universal Windows Platform app引用.<br/>
+		如果使用C#开发UWP, 可以使用toupcam.cs包装类.<br/>
+		请注意:<blockquote>1. uwp只能使用WinUSB驱动, 不能使用私有私有驱动. 如果已安装, 请在设备管理器中卸载私有驱动, 之后Windows会自动使用Winusb.<br/>2. uwp的DeviceCapability, 参阅<a href="https://learn.microsoft.com/en-us/windows-hardware/drivers/usbcon/updating-the-app-manifest-with-usb-device-capabilities" target="_blank">How to add USB device capabilities to the app manifest</a>.</blockquote>
+	</blockquote></li>
+    <li>drivers
+		<blockquote>USB(<b>2017.1.1之后生产的相机支持WinUSB, 强烈建议不在Windows8及以上版本上安装驱动</b>)<blockquote>
+        <p align="left">x86 文件夹包含x86的内核态驱动文件, 包括toupcam.cat, toupcam.inf和toupcam.sys<br/>
+          x64 文件夹包含x64的内核态驱动文件, 包括toupcam.cat, toupcam.inf和toupcam.sys</p>
+		  建议使用DPInst.exe来自动安装驱动, 如使用NSIS制作安装文件, 可以使用类似如下语句:
+			<table width="100%" border="0" bgcolor="#B0D0B0"><tr><td><pre>ExecWait '"$INSTDIR\drivers\x64\DPInst.exe" /SA /SW /PATH "$INSTDIR\drivers\x64"'</pre></td></tr></table>
+		</blockquote></blockquote>
+		<blockquote>GigE: GigE Performance Driver(Win7及以上版本), 千兆相机可选安装, 万兆相机必须安装并启用. 请使用命令行(<b>管理员模式</b>), cd到.inf文件所在目录, 执行类似如下语句安装(install.cmd). 如果存在老版本, 需要先卸载老版本(uninstall.cmd), 再安装新版本:<blockquote>
+			<table width="100%" border="0" bgcolor="#B0D0B0"><tr><td><pre>安装: netcfg.exe -v -l gigepdrv.inf -c s -i gigepdrv<br/>卸载: netcfg.exe -u gigepdrv</pre></td></tr></table>
+		另外:<br/>(a) 请开启网卡巨帧(<a href="https://en.wikipedia.org/wiki/Jumbo_frame">Jumbo Frame</a>), 选择&gt;=9000的值, 参阅<a href="#mtu">这里</a><br/>
+			(b) 保持网卡协议/驱动的简洁, 特别是生产环境下: 删除或禁用不相干的网卡协议和驱动(如Npcap Packet Driver等等). 最简洁的状态下, 只剩下Gige Performance Driver和TCP/IPv4两条.
+		</blockquote></blockquote>
+	</li></ul></li></ul><ul><li>linux: Linux平台文件<ul>
+ 	<li>udev: 99-toupcam.rules, udev rule文件. 请参考: <a href="http://reactivated.net/writing_udev_rules.html" target="_blank">http://reactivated.net/writing_udev_rules.html</a>
+			<blockquote>不重启重新加载规则:
+                <table width="100%" border="0" bgcolor="#B0D0B0"><tr><td><pre>udevadm control --reload-rules &amp;&amp; udevadm trigger</pre></td></tr></table>
+			</blockquote>
+    </li><li>x86: libtoupcam.so, x86版本so文件</li>
+     <li>x64: libtoupcam.so, x64版本so文件</li>
+	 <li>armel: libtoupcam.so, armel版本so文件, toolchain为arm-linux-gnueabi</li>
+	 <li>armhf: libtoupcam.so, armhf版本so文件, toolchain为arm-linux-gnueabihf</li>
+	 <li>arm64: libtoupcam.so, arm64版本so文件, toolchain为aarch64-linux-gnu</li>
+	</ul><blockquote>***Linux区分平台的简便方法, 在目标平台执行file /bin/ls. 以下为某树莓派下的结果, 可以看出属于armhf:
+    <table width="100%" border="0" bgcolor="#B0D0B0"><tr><td><pre>$ file /bin/ls
+/bin/ls: ELF 32-bit LSB executable, ARM, EABI5 version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux-<strong>armhf</strong>.so.3, for GNU/Linux 3.2.0, BuildID[sha1]=67a394390830ea3ab4e83b5811c66fea9784ee69, stripped</pre></td></tr></table>
+另外一个示例, 可以看出属于x64:
+    <table width="100%" border="0" bgcolor="#B0D0B0"><tr><td><pre>$ file /bin/ls
+/bin/ls: ELF 64-bit LSB executable, <strong>x86-64</strong>, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.32, BuildID[sha1]=c8ada1f7095f6b2bb7ddc848e088c2d615c3743e, stripped</pre></td></tr></table>
+</blockquote></li></ul>
+<ul><li>android: Android平台arm, arm64, x86, x64四种架构的libtoupcam.so</li></ul>
+<ul><li>mac: macOS平台文件, dylib: x64+x86, x64+arm64</li></ul>
+<ul><li>python: toupcam.py和<a href="#demopython">示例代码</a></li></ul>
+<ul><li>java: toupcam.java和<a href="#demojava">示例代码</a></li></ul>
+<ul><li>doc: SDK使用文档, 简体中文, <a href="en.html" target="_blank">英文</a></li></ul>
+<ul><li>extra
+      <ul><li>update: 固件升级工具. 提醒: 均依赖相机动态库, 运行时请复制toupcam.dll/so/dylib到所在目录.
+		<ul><li>updatefw: 升级固件, 相机命名, 设置GigE相机的MAC/IP地址, GUI界面, 只支持Windows</li>
+		<li>updatecli: 升级固件, 控制台界面, 支持Windows/Linux/MacOS</li>
+		</ul></li><li>directshow: DirectShow SDK和<a href="#demodshow">demo程序</a></li>
+        <li>twain: TWAIN SDK</li>
+        <li>labview: Labview SDK和<a href="#demolabview">demo程序</a></li>
+		<li>matlab: MatLab demo程序</li>
+		<li>imagepro: liveedf, live stitch, live stack</li>
+</ul></li></ul>
+<hr/><h1><font color="#0000FF">3. 概念和术语</font></h1><hr/>
+<h2><font color="#0000FF"><a id="camidsn">a. 相机ID(camId)和相机序列号(SN, Serial Number)</a></font></h2>
+<p>请区分相机ID(camId)和相机SN:<br/>
+(a) SN唯一并且是持久化的, 固化在相机内部一直保持不变, 不随连接和系统重启而变化.<br/>
+(b) 相机ID(camId)因为连接或者系统重启可能变化, 枚举相机得到相机ID, 然后调用Open函数传入camId参数打开相机.</p>
+<h2><font color="#0000FF">b. 获取图像数据的模式: “Pull” Mode vs “Push” Mode (“拉”模式 vs “推”模式)</font></h2>
+<p>Toupcam提供了两种模式来获取图像数据: Pull Mode 和 Push Mode. 以下所讲的几种方式中, 从功能上说它们都是<strong>平等</strong>的, 开发者可以任选一种使用. 推荐使用拉模式, 因为它更简单, 且在多线程情况下更加不容易出错, 尤其是使用windows消息机制的情况下.</p>
+<ul>
+  <li>Pull Mode, toupcam 扮演被动角色, 应用程序从toupcam“拉”图像数据. toupcam内部线程从相机获得图像数据,并保存到内部缓存中, 然后通知应用程序来取图像数据. 应用程序可以调用Toupcam_PullImageV4(V3)或Toupcam_PullImage(WithRowPitch)(V2), Toupcam_PullStillImage(WithRowPitch)(V2)来获取图像数据. 存在两种方式来通知应用程序:
+    <blockquote>a) 使用Windows消息机制: 通过调用函数 Toupcam_StartPullModeWithWndMsg启动Pull mode模式. 当事件发生时, toupcam会主动发送消息(PostMessage)到指定窗口. 参数WPARAM 是事件类型, 请参考TOUPCAM_EVENT_xxxx的定义. 参数LPARAM保留未使用. 本模式规避了多线程问题, 是最简单的方式.(显然, 这种方式只支持Windows系统, 不支持Linux和macOS.)</blockquote>
+    <blockquote>b) 使用回调函数使用 Toupcam_StartPullModeWithCallback启动Pull mode模式. 当事件发生时, 会调用PTOUPCAM_EVENT_CALLBACK回调函数.</blockquote>
+  </li>
+</ul><blockquote>
+  <p>在Pull Mode 情况下, toupcam不但可以通知应用程序图像数据或者静态图片到达, 还可以通知其他事件类型, 如下所示:</p>
+  <div align="center">
+    <table width="100%" border="1" cellpadding="0" cellspacing="0" bgcolor="#B0D0B0">
+ <tr><td width="25%">事件</td>
+   <td width="4%">来源</td>
+   <td width="76%">描述</td>
+ </tr><tr>
+        <td>TOUPCAM_EVENT_EXPOSURE</td>
+        <td rowspan="19">软件</td>
+        <td>曝光时间发生改变</td>
+      </tr><tr>
+        <td>TOUPCAM_EVENT_TEMPTINT</td>
+        <td>白平衡参数发生改变, Temp/Tint模式, 请参阅<a href="#wb">这里</a>.</td>
+      </tr><tr>
+        <td>TOUPCAM_EVENT_WBGAIN</td>
+        <td>白平衡参数发生改变, RGB Gain模式, 请参阅<a href="#wb">这里</a>.</td>
+      </tr><tr>
+        <td>TOUPCAM_EVENT_IMAGE</td>
+        <td>视频图像数据到达(视频). 使用Toupcam_PullImageXXXX“拉”图像数据</td>
+      </tr><tr>
+        <td>TOUPCAM_EVENT_STILLIMAGE</td>
+        <td>静态图片数据到达(Toupcam_Snap或Toupcam_SnapN引发). 使用Toupcam_PullImageXXXX“拉”图像数据</td>
+      </tr><tr>
+        <td>TOUPCAM_EVENT_ERROR</td>
+        <td>一般性错误, 数据采集不能继续</td>
+      </tr><tr>
+        <td>TOUPCAM_EVENT_DISCONNECTED</td>
+        <td>相机断开连接, 如被拔出</td>
+      </tr><tr>
+        <td><a id="evnoframe">TOUPCAM_EVENT_NOFRAMETIMEOUT</a></td>
+        <td>规定时间内没有抓取到视频帧. 见<a href="#noframe">TOUPCAM_OPTION_NOFRAME_TIMEOUT</a></td>
+      </tr><tr>
+        <td><a id="evnopacket">TOUPCAM_EVENT_NOPACKETTIMEOUT</a></td>
+        <td>规定时间内没有抓取到视频包. 见<a href="#nopacket">TOUPCAM_OPTION_NOPACKET_TIMEOUT</a></td>
+      </tr><tr>
+   <td>TOUPCAM_EVENT_TRIGGERFAIL</td>
+   <td>触发失败(如帧数据错误或超时)</td>
+ </tr><tr>
+   <td>TOUPCAM_EVENT_BLACK</td>
+   <td>黑平衡参数发生改变</td>
+ </tr><tr>
+   <td>TOUPCAM_EVENT_FFC</td>
+   <td>平场校正(flat field correction)状态发生改变</td>
+ </tr><tr>
+   <td>TOUPCAM_EVENT_DFC</td>
+   <td>暗场校正(dark field correction)状态发生改变</td>
+ </tr><tr>
+   <td>TOUPCAM_EVENT_FPNC</td>
+   <td>固定模式噪声校正(fixed pattern noise correction)状态发生改变</td>
+ </tr><tr>
+   <td>TOUPCAM_EVENT_ROI</td>
+   <td>ROI发生改变</td>
+ </tr><tr>
+   <td>TOUPCAM_EVENT_LEVELRANGE</td>
+   <td>Level range 发生改变</td>
+ </tr><tr>
+   <td>TOUPCAM_EVENT_AUTOEXPO_CONV</td>
+   <td>自动曝光收敛</td>
+ </tr><tr>
+   <td>TOUPCAM_EVENT_AUTOEXPO_CONVFAIL</td>
+   <td>单次模式自动曝光收敛失败</td>
+ </tr><tr>
+   <td>TOUPCAM_EVENT_FACTORY</td>
+   <td>恢复出厂设置</td>
+ </tr><tr>
+   <td><a id="hwevent">TOUPCAM_EVENT_EXPO_START</a></td>
+   <td rowspan="5">硬件</td>
+   <td>硬件事件：曝光开始</td>
+ </tr><tr>
+   <td>TOUPCAM_EVENT_EXPO_STOP</td>
+   <td>硬件事件：曝光结束</td>
+ </tr><tr>
+   <td>TOUPCAM_EVENT_TRIGGER_ALLOW</td>
+   <td>硬件事件：触发允许</td>
+ </tr><tr>
+   <td>TOUPCAM_EVENT_TRIGGER_IN</td>
+   <td>硬件事件：触发进入</td>
+ </tr><tr>
+   <td>TOUPCAM_EVENT_HEARTBEAT</td>
+   <td>硬件事件：心跳, 可以用于监视相机是否存活. 参见<a href="#heartbeat">TOUPCAM_OPTION_HEARTBEAT</a></td>
+</tr></table></div></blockquote>
+<ul><li>Push Mode情况下, toupcam作为主动方, 一旦内部底层线程从camera中抓取到图像数据, 就通过PTOUPCAM_DATA_CALLBACK_V4/V3把图像数据“推”给应用程序 (请注意这个回调函数是在toupcam内部线程上下文中执行的). 调用Toupcam_StartPushModeV4/V3函数进入推模式.推模式比较复杂, 有一些特别注意事项（如多线程问题, 也不能在PTOUPCAM_DATA_CALLBACK_V4/V3回调函数里面调用Toupcam_Close和Toupcam_Stop等等).</li>
+</ul><h2><font color="#0000FF">c. <a id="stillcapture">静态抓拍(静态图片, Still Image, Snap)</a></font></h2>
+<p>大部分的相机型号都支持所谓静态抓拍的能力, 指相机在连续的视频预览过程中, 临时切换到另外一个分辨率, 抓取一帧静态图片之后, 马上把分辨率切换回原始分辨率的过程.</p>
+<p>举例来说, UCMOS05100KPA支持3种分辨率, 假设当前视频预览分辨率为1280 * 960, 调用函数Toupcam_Snap(h, 0)静态抓拍分辨率2592 * 1944的静态图片, 这时相机临时切换到2592 * 1944的分辨率, 抓取一帧数据之后, 又把分辨率切换成原来的1280 * 960.</p>
+<blockquote>a) 拉模式下, 抓拍到静态图片之后, 通知外层应用TOUPCAM_EVENT_STILLIMAGE事件, 然后外层应用调用Toupcam_PullStillImage(V2)获取静态图片的数据.</blockquote>
+<blockquote>b) 推模式下, 抓拍到静态图片之后, 回调函数PTOUPCAM_DATA_CALLBACK_V4/V3, 参数bSnap设置为TRUE, 图片的分辨率等信息在参数pHeader中.</blockquote>
+<p>可以通过函数Toupcam_get_StillResolutionNumber的返回值或者结构ToupcamModelV2的still值来查看是否支持静态抓拍能力.</p>
+<h2><font color="#0000FF"><a id="raw">d. 数据格式: RGB vs RAW</a></font></h2>
+<p>Toupcam支持两种数据格式: RGB格式(默认)和RAW格式. RAW模式可以通过调用函数Toupcam_put_Option设置参数TOUPCAM_OPTION_RAW为1开启.</p>
+<ul><li>RGB格式: 本模式下, 获取底层传感器的数据之后, 进行内部的颜色处理, 输出结果中每像素包含3个分量分别代表R/G/B值.</li></ul>
+<ul><li>RAW格式: 本模式下, 直接获取底层传感器的“裸”数据, 不进行内部颜色处理(RAW=-1稍有不同, 表示进行部分处理). 具体的像素格式(Pixel Format)可以调用函数Toupcam_get_RawFormat获取. RAW格式模式下, 有关颜色处理的功能(如白平衡)和函数（如Toupcam_put_Hue, Toupcam_AwbOnce等等)都无意义.</li></ul>
+<p>用户可以通过<a href="#rawo">TOUPCAM_OPTION_RAW</a>调用函数Toupcam_put_Option来切换这两种模式. 请注意相机必须处于<strong>非运行状态</strong>才能修改此设置.</p>
+<p>用户可以通过<a href="#rgb">TOUPCAM_OPTION_RGB</a>调用函数Toupcam_put_Option来设置RGB的bits数. 请注意相机必须处于<strong>非运行状态</strong>才能修改此设置.</p>
+<h2><font color="#0000FF"><a id="wb">e. 白平衡和自动白平衡: Temp/Tint模式 vs RGB Gain模式</a></font></h2>
+<p>1. Toupcam支持互相独立的两种模式描述白平衡: a) Temp/Tint模式; b) RGB Gain模式</p>
+<blockquote><p>a) 默认是Temp/Tint模式, 在本模式下, 使用Temp, Tint这2个参数来控制白平衡. Toupcam_get_TempTint获取值, Toupcam_put_TempTint设置值. Toupcam_AwbOnce执行自动白平衡. 当白平衡参数改变时, 发送TOUPCAM_EVENT_TEMPTINT通知消息.</p>
+<p>b) 在RGB Gain模式下, 使用3个通道的Gain值来控制白平衡. Toupcam_get_WhiteBalanceGain获取值, Toupcam_put_WhiteBalanceGain设置值. Toupcam_AwbInit执行自动白平衡. 当白平衡参数改变时, 发送TOUPCAM_EVENT_WBGAIN通知消息.</p>
+<p>两种模式下使用的函数不能混淆:</p>
+	<blockquote>
+	a) Temp/Tint模式下, 必须使用Toupcam_get_TempTint和Toupcam_put_TempTint和Toupcam_AwbOnce. 而Toupcam_get_WhiteBalanceGain和Toupcam_put_WhiteBalanceGain和Toupcam_AwbInit不能使用, 永远返回E_NOTIMPL.<br/>
+	b) RGB Gain模式下, 必须使用Toupcam_get_WhiteBalanceGain和Toupcam_put_WhiteBalanceGain和Toupcam_AwbInit. 而Toupcam_get_TempTint和Toupcam_put_TempTint和Toupcam_AwbOnce不能使用, 永远返回E_NOTIMPL<br/>
+	</blockquote>
+<p>两种模式在相机打开的时候指定, 除非关闭相机重新打开, 一旦指定就不能更改. 参阅<a href="#wbmode">这里</a>.</p>
+</blockquote>
+<p>2. 自动白平衡功能, 业界有两种模式, 一种是连续自动白平衡, 一种是触发式自动白平衡(once). 连续自动白平衡功能会一直进行白平衡参数的计算, 触发模式只是在触发的时候才会计算白平衡参数. Toupcam使用触发式白平衡计算方法, 因为这种方法在显微镜等领域更加合适和精确. 连续自动白平衡在某些场景情况下会出现错误.</p>
+<p>3. 黑白相机不支持白平衡. 以上提到的函数一直返回E_NOTIMPL.</p>
+<h2><font color="#0000FF">f. <a id="trigger">触发模式</a></font></h2>
+<p>1. 什么是触发</p><blockquote>
+		Toupcam相机拥有2中工作模式: 视频模式和触发模式. 当处于触发模式时, 只有触发条件满足的情况下才能获取图像. 根据触发源有2种类型的触发类型: 外部触发, 软件触发.
+	</blockquote>
+<p>2. 触发和Snap（静态图像抓拍)的区别</p>
+	<blockquote>
+		触发模式被设计用来精确控制相机当且仅当触发条件满足时才能获取图像. 用户可以通过控制预设的触发条件获取图像. 当进入触发模式时, 直到触发条件被满足才能得到图像. 图像的分辨率没有改变. Snap(静态图像抓拍)是用来在视频模式下抓取相同或者不同分辨率的图像.
+	</blockquote>
+<p>3. 软件触发</p>
+	<blockquote>
+		相机可以被软件触发. 在软件触发模式下, 通过软件来控制触发条件. 图像的张数也可以软件控制.
+	</blockquote>
+<p>4. 外部触发</p>
+	<blockquote>
+		相机可以被外部信号触发. 当前仅支持上升沿触发模式.
+	</blockquote>
+<p>5. 混合触发</p>
+	<blockquote>
+		外部触发+软件触发同时启用.
+	</blockquote>
+<p>6. 模拟触发</p>
+	<blockquote>
+		对于既不支持软件触发又不支持外部触发的相机, 可以使用模拟触发. 当处于模拟触发模式时, 相机硬件的工作模式和视频模式下的工作模式没有区别, 但是上层软件不发起抓取动作, 软件内部的缓冲区保持为空, 直到用户设置触发条件. 
+	</blockquote>
+<p>7. 怎样进入触发模式</p>
+	<blockquote>
+		枚举相机时, 可以得到相机型号的能力标志位, 查看相机对于触发模式的支持能力, 定义如下:
+			<blockquote><table width="100%" border="0" bgcolor="#B0D0B0"><tr><td><pre>#define TOUPCAM_FLAG_TRIGGER_SOFTWARE   0x00080000  /* 支持软触发 */
+#define TOUPCAM_FLAG_TRIGGER_EXTERNAL   0x00100000  /* 支持外部触发 */
+#define TOUPCAM_FLAG_TRIGGER_SINGLE     0x00200000  /* 仅支持单张触发: 一次触发得到一张图像 */</pre></td></tr></table></blockquote>
+		可以使用函数Toupcam_put_Option(HToupcam h, unsigned iOption, int iValue)设置相机的触发模式, 其中iOption参数为TOUPCAM_OPTION_TRIGGER, iValue用于设置触发模式的类型. 请参阅以下内容:
+			<blockquote>
+<table width="100%" border="0" bgcolor="#B0D0B0"><tr><td><pre>#define TOUPCAM_OPTION_TRIGGER   0x0b    /* 0 = 视频模式, 1 = 软件或模拟触发模式, 2 = 外部触发模式, 3 = 外部触发+软件触发模式；默认值 = 0 */</pre></td></tr></table>
+			</blockquote>
+		函数Toupcam_get_Option(HToupcam h, unsigned iOption, int* piValue)可以用来获取当前相机的触发模式类型.
+	</blockquote>
+<p>8. 怎样触发相机</p><blockquote>
+		使用函数Toupcam_Trigger(HToupcam h, unsigned short nNumber). 不同的nNumber的含义:
+			<blockquote>
+			nNumber = 0 取消触发.<br/>
+			nNumber = 0xFFFF 一直触发, 类似于视频模式;<br/>
+			nNumber = 其他合法值代表单次触发获取的图片张数.<br/>
+			</blockquote>
+		如果TOUPCAM_FLAG_TRIGGER_SINGLE标志位是设置的, 那么nNumber参数只能为1, 意味着单次触发只能获取单张图片.<br/>
+		在调用Toupcam_Trigger函数之前, 相机必须已经处于触发模式.
+	</blockquote><p>9. 触发超时</p><blockquote>超时时间建议不少于(曝光时间 * 102% + 4秒).</blockquote>
+<h2><font color="#0000FF">g. 线程安全</font></h2>
+<p>采用一种中性自然策略(类似C++标准库), 意味着:</p>
+<blockquote>
+<p>a) 从多个线程读取单个相机对象是线程安全的. 例如, 给定一个相机对象A, 同时从线程1和线程2读取A是安全的.</p>
+<p>b) 如果一个线程正在写入一个相机对象, 则同一线程或其他线程上对该对象的所有读取和写入都必须受到保护. 例如, 给定一个相机对象A, 如果线程1正在写A, 则必须阻止线程2读取或写入A.</p>
+<p>c) 即使某线程正在读取或写入某相机对象, 其它线程读取和写入另外一个不同的相机对象是安全的. 例如, 给定相机对象A和B, 当线程1写入A, 线程2读取或写入B, 这是安全的. A和B完全独立.</p>
+<p>d) 多线程Pull Image是安全的</p>
+</blockquote>
+<h2><font color="#0000FF">h. 日志文件(log file)</font></h2>
+<p>SDK默认不输出日志. 如果SDK库文件所在目录存在并且具有<strong>写权限</strong>, 日志即被使能并记录在此文件中:</p>
+<blockquote>
+<p>a) 日志文件名和库文件完全相同, 扩展名修改为*.log (如toupcam.dll对应log文件为toupcam.log; xyz.dll对应为xyz.log; libxyz.so对应libxyz.log)</p>
+<p>b) 日志文件的时间默认使用相对时间, 把SDK启动时刻记为[00:00:00.000]. 如果想使用本地时间 (如[0923 17:11:01.491]), 在*.log增加字母"l" (即*.llog)</p>
+<p>c) 默认每次开启程序自动清空log文件的内容, 从0开始写日志. *.log增加字母"a", 表示使用append模式, 重启程序时不清空log文件内容</p>
+<p>d) <strong>请确保程序对log文件有写权限</strong>(比如程序安装在Program Files目录下, 经常发生日志文件非管理员模式下不可写, 建议管理员模式运行程序或者修改日志文件的权限配置)</p>
+</blockquote>
+<hr/><h1><font color="#0000FF">4. 函数</font></h1><hr/>
+<ul><li><h2><font color="#0000FF"><a id="hresult">HRESULT返回值</a></font></h2>
+	<p>HRESULT在Windows平台上的使用很普遍. macOS, Linux和Android平台上借用之, 定义如下:</p>
+	<p><strong>请注意, 返回值&gt;=0都表示成功(特别地S_FALSE也是成功, 但和S_OK有区别, 比如内部值和用户设置的值已经一致, 相当于空操作). 所以, 一般情况下应该使用SUCCEEDED和FAILED宏来判断返回值是成功或者失败.<br/>(除非有特殊需要, 不要使用"==S_OK"或"==0"来判断返回值)</strong></p>
+  <div align="center">
+    <table width="100%" border="1" cellpadding="0" cellspacing="0" bgcolor="#B0D0B0">
+      <tr>
+        <td width="15%">名称</td>
+        <td width="35%">说明</td>
+        <td width="35%">备注</td>
+		<td width="15%">值</td>
+      </tr><tr>
+        <td>S_OK</td>
+        <td>Success (成功)</td>
+		<td></td>
+		<td>0x00000000</td>
+	  </tr><tr>
+        <td>S_FALSE</td>
+        <td>Yet another <strong>success</strong></td>
+		<td>成功, 但和S_OK有所区别, 比如内部值和用户设置的值已经一致, 相当于空操作</td>
+		<td>0x00000001</td>
+	  </tr><tr>
+        <td>E_ACCESSDENIED</td>
+        <td>Permission denied (权限被拒绝)</td>
+		<td>Linux下程序没有权限打开USB设备, 请启用udev rules文件或以root运行</td>
+		<td>0x80070005</td>
+	  </tr><tr>
+        <td>E_INVALIDARG</td>
+        <td>One or more arguments are not valid (参数错误)</td>
+		<td></td>
+		<td>0x80070057</td>
+	  </tr><tr>
+        <td>E_NOTIMPL</td>
+        <td>Not supported or not implemented (功能不支持或未实现)</td>
+		<td>本型号相机不支持该功能</td>
+		<td>0x80004001</td>
+	  </tr><tr>
+        <td>E_POINTER</td>
+        <td>Pointer that is not valid (无效指针)</td>
+		<td>指针为NULL</td>
+		<td>0x80004003</td>
+	  </tr><tr>
+        <td>E_UNEXPECTED</td>
+        <td>Catastrophic failure (灾难性故障)</td>
+		<td>一般表示条件不符合, 如相机运行状态时调用put_Option设置某些不支持运行时修改的选项等等</td>
+		<td>0x8000ffff</td>
+	  </tr><tr>
+        <td>E_WRONG_THREAD</td>
+        <td>Call function in the wrong thread (在错误的线程上下文中调用函数)</td>
+		<td>请参阅<a href="#wrongthread1">这里</a>, <a href="#wrongthread2">这里</a>, <a href="#wrongthread3">这里</a></td>
+		<td>0x8001010e</td>
+	  </tr><tr>
+        <td>E_GEN_FAILURE</td>
+        <td>Device not functioning (设备不响应)</td>
+		<td>一般由硬件错误引起, 如线缆问题, USB口问题, 接触不良, 相机硬件损坏等等</td>
+		<td>0x8007001f</td>
+	  </tr><tr>
+        <td>E_BUSY</td>
+        <td>The requested resource is in use (请求的资源在使用中)</td>
+		<td>相机已经被占用, 如重复打开/启动相机, 或被其它程序使用中等等</td>
+		<td>0x800700aa</td>
+	  </tr><tr>
+        <td>E_PENDING</td>
+        <td>The data necessary to complete this operation is not yet available (没有数据)</td>
+		<td>暂时没有数据可供获取</td>
+		<td>0x8000000a</td>
+	  </tr><tr>
+        <td>E_TIMEOUT</td>
+        <td>This operation returned because the timeout period expired (操作超时)</td>
+		<td></td>
+		<td>0x8001011f</td>
+	  </tr><tr>
+        <td>E_FAIL</td>
+        <td>Unspecified failure (未指定的错误)</td>
+		<td></td>
+		<td>0x80004005</td>
+</tr></table></div><br/>
+<div align="center"><table width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#B0D0B0">
+  <tr><td><pre>#define SUCCEEDED(hr)   (((HRESULT)(hr)) &gt;= 0)
+#define FAILED(hr)      (((HRESULT)(hr)) &lt; 0)</pre></td></tr>
+</table></div>
+<p>在windows平台上, 这些HRESULT常量已经在系统头文件中定义过. 在其它平台上, 如果需要使用这些常量, 可以在#include "toupcam.h"<strong>之前</strong>#define TOUPCAM_HRESULT_ERRORCODE_NEEDED. 如下所示:</p>
+<table width="100%" border="0" bgcolor="#B0D0B0"><tr><td><pre>#define TOUPCAM_HRESULT_ERRORCODE_NEEDED
+#include "toupcam.h"</pre></td></tr></table>
+</li></ul>
+<ul><li><h2><font color="#0000FF">调用规范(Calling Convention)</font></h2>
+	<p>在Win平台使用__stdcall, 请参阅<a href="https://learn.microsoft.com/en-us/cpp/cpp/stdcall" target="_blank">这里</a></p>
+	<p>在macOS, Linux和Android使用__cdecl</p>
+</li></ul>
+<ul><li><h2><a id="callback"><font color="#0000FF">回调函数: PTOUPCAM_EVENT_CALLBACK和PTOUPCAM_DATA_CALLBACK_V4/V3</font></a></h2>
+	<p>这些回调函数是从toupcam.dll的内部线程上下文中回调出来, 所以, 非常有必要关注多线程问题. 请尽量保持回调函数代码的简洁, 并且快速返回.<br/>
+        回调模式下, 如果PTOUPCAM_EVENT_CALLBACK回调函数复杂, 可以设置TOUPCAM_OPTION_CALLBACK_THREAD, 使用专门的线程用于回调.</p>
+	  <strong>由于执行以下操作时必须等待回调函数返回, 回调函数上下文有以下限制:<br/>
+	  (a)不要在回调函数上下文调用Toupcam_Stop或Toupcam_Close函数, 否则, 会死锁.<br/>
+	  (b)<a id="wrongthread1">不要在回调函数上下文调用Toupcam_put_Option设置TOUPCAM_OPTION_TRIGGER, TOUPCAM_OPTION_BITDEPTH, TOUPCAM_OPTION_PIXEL_FORMAT, TOUPCAM_OPTION_BINNING, TOUPCAM_OPTION_ROTATE, 否则返回E_WRONG_THREAD.</a><br/>
+	  (c)<a id="wrongthread2">不要在回调函数上下文调用Toupcam_put_Roi, 否则返回E_WRONG_THREAD.</a><br/>
+	  (d)如果执行以上操作时和回调函数时试图获取同一把锁, 会导致永远等待回调结束, 死锁</strong>
+</li></ul>
+<ul><li><h2><a id="cord"><font color="#0000FF">坐标</font></a></h2>
+<p>类似Toupcam_put_Roi, Toupcam_put_AEAuxRect等等这类带有坐标参数的, 其坐标<strong>永远是相对原始分辨率而言</strong>的, 即使视频已经执行过旋转, Flip, ROI, 数字Binning或它们的任意组合.</p>
+<p>如果视频是倒置的(参考<a href="#upsidedown">这里</a>), 则矩形坐标也必须倒置.</p>
+</li></ul>
+<ul><li><h2><font color="#0000FF">Toupcam_EnumV2<br/>Toupcam_EnumWithName</font></h2>
+  <p><strong>返回值：</strong>非负整数, 枚举到的相机数目</p>
+  <p><strong>参数：</strong>ToupcamDeviceV2数组缓冲区</p>
+  <p><strong>说明：</strong>调用该函数枚举计算机上当前插上的Toupcam相机. 函数返回时, ToupcamDeviceV2缓冲区包含有枚举到的每个相机实例的信息. <strong>如果不关心多个相机同时联入电脑的情况的话, 调用本函数枚举相机实例是可选的.</strong></p>
+  <p>(1). 如下面的代码片段：<br/></p>
+<table width="100%" border="0" bgcolor="#B0D0B0"><tr><td><pre>
+ToupcamDeviceV2 arr[TOUPCAM_MAX];
+unsigned cnt = Toupcam_EnumV2(arr);
+for (unsigned i = 0; i &lt; cnt; ++i)
+    ......
+</pre></td></tr></table><br/>
+<table width="100%" border="0" bgcolor="#B0D0B0"><tr><td><pre>
+typedef struct{
+#ifdef _WIN32
+    const wchar_t*     name;     /* model name */
+#else
+    const char*        name;
+#endif
+    unsigned long long flag;     /* TOUPCAM_FLAG_xxx */
+    unsigned           maxspeed; /* maximum speed level, Toupcam_get_MaxSpeed, the speed range = [0, maxspeed], closed interval */
+    unsigned           preview;  /* number of preview resolution, Toupcam_get_ResolutionNumber */
+    unsigned           still;    /* number of still resolution, Toupcam_get_StillResolutionNumber */
+    unsigned           maxfanspeed; /* maximum fan speed */
+    unsigned           ioctrol;     /* number of input/output control */
+    float              xpixsz;      /* physical pixel size in micrometer */
+    float              ypixsz;      /* physical pixel size in micrometer */
+    ToupcamResolution  res[TOUPCAM_MAX];
+}ToupcamModelV2; /* device model v2 */
+
+typedef struct {
+#if defined(_WIN32)
+    wchar_t  displayname[64];    /* 显示名称: 型号名称或用户指定的自定义名称(如果有并且使用Toupcam_EnumWithName, 使用Toupcam_EnumV2返回型号名称) */
+    wchar_t  id[64];             /* camId */
+#else
+    char     displayname[64];    /* 显示名称: 型号名称或用户指定的自定义名称(如果有并且使用Toupcam_EnumWithName, 使用Toupcam_EnumV2返回型号名称) */
+    char     id[64];             /* camId */
+#endif
+    const ToupcamModelV2* model;
+} ToupcamDeviceV2; /* device instance for enumerating */
+</pre></td></tr></table><br/>
+<div align="center">
+<table width="100%" border="1" cellpadding="0" cellspacing="0" bgcolor="#B0D0B0"><tr>
+   <td width="8%">name</td>
+   <td colspan="2">型号名称</td>
+   </tr><tr>
+   <td width="8%" rowspan="59">flag</td>
+   <td colspan="2">位标记 (Bitwise flag)</td>
+   </tr><tr>
+   <td width="29%">TOUPCAM_FLAG_CMOS</td>
+   <td width="63%">cmos传感器</td>
+ </tr><tr>
+   <td>TOUPCAM_FLAG_CCD_PROGRESSIVE</td>
+   <td>逐行ccd传感器</td>
+ </tr><tr>
+   <td>TOUPCAM_FLAG_CCD_INTERLACED</td>
+   <td>隔行ccd传感器</td>
+ </tr><tr>
+   <td>TOUPCAM_FLAG_ROI_HARDWARE</td>
+   <td>支持硬件ROI. 所谓硬件ROI和软件ROI, 前者设置sensor的工作参数, 从sensor读取的数据减少(从而提高帧率); 后者不改变sensor的工作参数, 从sensor读取的数据量不变, 上层软件把原始图像剪切到目标ROI矩形大小.</td> 	
+ </tr><tr>
+   <td>TOUPCAM_FLAG_MONO</td>
+   <td>黑白传感器</td>
+ </tr><tr>
+   <td>TOUPCAM_FLAG_BINSKIP_SUPPORTED</td>
+   <td>支持bin/skip模式, 请参考<a href="#binskip">Toupcam_put_Mode和Toupcam_get_Mode</a></td>
+ </tr><tr>
+   <td>TOUPCAM_FLAG_USB32</td>
+   <td>USB3.2</td>
+ </tr><tr>
+   <td>TOUPCAM_FLAG_USB30</td>
+   <td>USB3.0</td>
+ </tr><tr>
+   <td>TOUPCAM_FLAG_USB32_OVER_USB30</td>
+   <td>usb3.2相机被插入usb3.0端口</td>
+ </tr><tr>
+   <td>TOUPCAM_FLAG_USB30_OVER_USB20</td>
+   <td>usb3.0相机被插入usb2.0端口</td>
+ </tr><tr>
+   <td>TOUPCAM_FLAG_ST4</td>
+   <td>支持ST4端口</td>
+ </tr><tr>
+   <td>TOUPCAM_FLAG_TEC</td>
+   <td>TEC制冷相机</td>
+ </tr><tr>
+   <td>TOUPCAM_FLAG_GETTEMPERATURE</td>
+   <td>支持读取温度, Toupcam_get_Temperature</td>
+ </tr><tr>
+   <td>TOUPCAM_FLAG_HIGH_FULLWELL</td>
+   <td>支持高满阱模式</td>
+ </tr><tr>
+   <td>TOUPCAM_FLAG_RAW10</td>
+   <td>TOUPCAM_PIXELFORMAT_RAW10 Pixel format, RAW 10 bits</td>
+ </tr><tr>
+   <td>TOUPCAM_FLAG_RAW10PACK</td>
+   <td>TOUPCAM_PIXELFORMAT_RAW10PACK Pixel format, RAW 10 bits, packed</td>
+ </tr><tr>
+   <td>TOUPCAM_FLAG_RAW11</td>
+   <td>TOUPCAM_PIXELFORMAT_RAW11 Pixel format, RAW 11 bits</td>
+ </tr><tr>
+   <td>TOUPCAM_FLAG_RAW12</td>
+   <td>TOUPCAM_PIXELFORMAT_RAW12 Pixel format, RAW 12 bits</td>
+ </tr><tr>
+   <td>TOUPCAM_FLAG_RAW12PACK</td>
+   <td>TOUPCAM_PIXELFORMAT_RAW12PACK Pixel format, RAW 12 bits, packed</td>
+ </tr><tr>
+   <td>TOUPCAM_FLAG_RAW14</td>
+   <td>TOUPCAM_PIXELFORMAT_RAW14 Pixel format, RAW 14 bits</td>
+ </tr><tr>
+   <td>TOUPCAM_FLAG_RAW16</td>
+   <td>TOUPCAM_PIXELFORMAT_RAW16 Pixel format, RAW 16 bits</td>
+ </tr><tr>
+   <td>TOUPCAM_FLAG_FAN</td>
+   <td>支持制冷风扇</td>
+ </tr><tr>
+   <td>TOUPCAM_FLAG_TEC_ONOFF</td>
+   <td>TEC制冷装置支持开启/关闭, TEC制冷的目标温度, 见：<br/>
+							TOUPCAM_OPTION_TEC<br/>
+							TOUPCAM_OPTION_TECTARGET</td>
+ </tr><tr>
+    <td>TOUPCAM_FLAG_ISP</td>
+    <td>支持硬件ISP (Image Signal Processing), 降低CPU进行图像处理时的CPU利用率</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_TRIGGER_SOFTWARE</td>
+    <td>支持软件触发模式</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_TRIGGER_EXTERNAL</td>
+    <td>支持外触发模式</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_TRIGGER_SINGLE</td>
+    <td>只支持单帧触发模式, 单次触发只能获取一张图片.</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_BLACKLEVEL</td>
+    <td>支持设置和获取</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_FOCUSMOTOR</td>
+    <td>支持对焦马达</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_AUTO_FOCUS</td>
+    <td>支持自动对焦</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_BUFFER</td>
+    <td>帧缓冲</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_CG</td>
+    <td>转换增益(Conversion Gain): LCG, HCG</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_CGHDR</td>
+    <td>转换增益(Conversion Gain): LCG, HCG, HDR</td>
+  </tr><tr>
+    <td><a id="ddr">TOUPCAM_FLAG_DDR</a></td>
+    <td>使用超大容量DDR(Double Data Rate SDRAM)作帧缓冲, 容量不少于一个完整帧</td>
+  </tr><tr>
+    <td><a id="hwflag">TOUPCAM_FLAG_EVENT_HARDWARE</a></td>
+    <td>硬件事件(如曝光开始、停止等等). 参阅<a href="#hwevent">这里</a>和<a href="#hwoption">这里</a></td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_YUV411</td>
+    <td>TOUPCAM_PIXELFORMAT_YUV411 Pixel format</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_YUV422</td>
+    <td>TOUPCAM_PIXELFORMAT_YUV422 Pixel format</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_YUV444</td>
+    <td>TOUPCAM_PIXELFORMAT_YUV444 Pixel format</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_RGB888</td>
+    <td>TOUPCAM_PIXELFORMAT_RGB888 Pixel format</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_RAW8</td>
+    <td>TOUPCAM_PIXELFORMAT_RAW8 Pixel format, RAW 8 bits</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_GMCY8</td>
+    <td>TOUPCAM_PIXELFORMAT_GMCY8 Pixel format, GMCY 8 bits</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_GMCY12</td>
+    <td>TOUPCAM_PIXELFORMAT_GMCY12 Pixel format, GMCY 12 btis</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_GLOBALSHUTTER</td>
+    <td>全局快门</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_PRECISE_FRAMERATE</td>
+    <td>支持精确帧率和带宽, 参阅<a href="#precise">TOUPCAM_OPTION_PRECISE_FRAMERATE</a>和TOUPCAM_OPTION_BANDWIDTH</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_HEAT</td>
+    <td>支持加热去雾, 参阅<a href="#heat">TOUPCAM_OPTION_HEAT</a>和<a href="#heatmax">TOUPCAM_OPTION_HEAT_MAX</a></td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_LOW_NOISE</td>
+    <td>支持低噪声模式(更高的信噪比,更低的帧率). 参阅<a href="#lownoise">TOUPCAM_OPTION_LOW_NOISE</a></td>
+  </tr><tr>
+    <td><a id="hwlevelrange">TOUPCAM_FLAG_LEVELRANGE_HARDWARE</a></td>
+    <td>支持硬件Level range</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_GIGE</td>
+    <td>1 Gigabit GigE</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_10GIGE</td>
+    <td>10 Gigabit GigE</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_5GIGE</td>
+    <td>5 Gigabit GigE</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_25GIGE</td>
+    <td>2.5 Gigabit GigE</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_CAMERALINK</td>
+    <td>camera link</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_CXP</td>
+    <td>CXP: CoaXPress</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_FILTERWHEEL</td>
+    <td>天文滤镜轮</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_AUTOFOCUSER</td>
+    <td>天文电调焦</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_LIGHTSOURCE</td>
+    <td>嵌入式光源控制</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_LIGHT_SOURCE</td>
+    <td>独立式光源</td>
+  </tr><tr>
+    <td>TOUPCAM_FLAG_GHOPTO</td>
+    <td>ghopto sensor(不支持增益, 转换增益支持高/中/低三种)</td>
+  </tr><tr>
+   <td width="8%">maxspeed</td>
+   <td colspan="2">最大速度等级, 和函数Toupcam_get_MaxSpeed返回值相同. 速度范围是[0, maxspeed]. 可以通过Toupcam_put_Speed设置速度等级, Toupcam_get_Speed获取当前速度等级</td>
+   </tr><tr>
+   <td width="8%">preview</td>
+   <td colspan="2">预览分辨率的个数. 和函数Toupcam_get_ResolutionNumber返回值相同</td>
+   </tr><tr>
+   <td width="8%">still</td>
+   <td colspan="2">静态抓拍分辨率个数, 0表示不支持静态抓拍. 和函数Toupcam_get_StillResolutionNumber返回值相同</td>
+   </tr><tr>
+   <td width="8%">ioctrol</td>
+   <td colspan="2">IO控制的数目</td>
+   </tr><tr>
+   <td width="8%">xpixsz<br/>ypixsz</td>
+   <td colspan="2">物理像元大小(微米), 见Toupcam_get_PixelSize</td>
+   </tr><tr>
+   <td width="8%">res</td>
+   <td colspan="2">分辨率宽度和高度</td>
+</tr></table></div>
+<p>(2) 安卓平台上, 如果枚举不到相机, 有可能是NDK被限制了枚举USB设备的权限. 请参与<a href="#androidopen">这里</a>.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_HotPlug</font></h2>
+  <p><strong>返回值：</strong>无</p>
+  <p><strong>参数：</strong></p><blockquote>
+    <p>PTOUPCAM_HOTPLUG funHotPlug: 回调函数</p>
+    <blockquote><table width="100%" border="0" bgcolor="#B0D0B0"><tr><td><div align="center">typedef void (*PTOUPCAM_HOTPLUG)(void* ctxHotPlug);</div></td></tr></table></blockquote>
+    <p>void* ctxHotPlug: 回调函数上下文</p></blockquote>
+  <p><strong>说明：</strong></p><blockquote>
+  <p>本函数只存在于macOS, Linux平台. 处理设备插入/拔出通知:</p>
+  <ul><li><a id="hotplugnotify"><object>在Windows平台, 请参阅(<a href="https://learn.microsoft.com/en-us/windows/win32/devio/device-management" target="_blank">Device Management</a>, <a href="https://learn.microsoft.com/en-us/windows/win32/devio/detecting-media-insertion-or-removal" target="_blank">Detecting Media Insertion or Removal</a>, <a href="https://learn.microsoft.com/en-us/windows/win32/devio/processing-a-request-to-remove-a-device" target="_blank">Processing a Request to Remove a Device</a>).</object></a></li>
+  <li>在Android平台, 请参阅<a href="https://developer.android.google.cn/guide/topics/connectivity/usb/host?hl=zh-cn" target="_blank">这里</a></li>
+  <li>在Linux和macOS平台, 如果需要处理设备插入/拔出通知, 调用本函数注册回调函数. 当设备被插入/拔出时时, 程序通过回调函数得到通知, 然后调用Toupcam_EnumV2重新枚举设备即可.</li>
+  <li>在macOS平台下也可以使用IONotificationPortCreate系列API.</li>
+  <li>本函数<strong>不适用于GigE设备</strong>, GigE设备的通知请参阅<a href="#apigige">这里</a>.</li></ul>
+</blockquote></li></ul><ul><li><h2><font color="#0000FF"><a id="apigige">Toupcam_GigeEnable</a></font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong></p>
+    <blockquote>
+      <p>PTOUPCAM_HOTPLUG funHotPlug：回调函数, 用于通知GigE相机上线/下线. 如果不需要相机上下线通知, 回调函数可以设为NULL.</p>
+      <p>void* ctxHotPlug: 回调函数上下文</p>
+    </blockquote>
+    <p><strong>说明：</strong>初始化对GigE相机的支持, 只需要在进程启动时调用一次即可.</p>
+</li></ul><ul><li><h2><font color="#0000FF"><a id="apiopen">Toupcam_Open</a></font></h2>
+    <p><strong>返回值：</strong>相机句柄. 失败时返回NULL(如设备被突然拔出等等)</p>
+    <p><strong>参数：</strong></p>
+		<blockquote>
+	<p><a href="#camidsn">camId</a>: Toupcam相机ID, 由Toupcam_EnumV2枚举得到. <strong>如果</strong><strong>camId</strong><strong>是NULL</strong><strong>则自动打开第一个相机, 所以, 如果不关心多个相机实例同时连入电脑的情况, Toupcam_EnumV2</strong><strong>不是必须的, 直接传入参数NULL</strong><strong>打开唯一的相机实例.</strong></p>
+      	<p>对于<strong>USB, GigE或PCIe</strong>相机, camId也可以直接指定为(区分大小写):<br/>
+			(a) "sn:xxxxxxxxxxxx" (例如sn:d05f64ffff23)<br/>
+			(b) "name:xxxxxxxxxxxx" (例如name:Camera1)</p>
+		<p>另外, 对于<strong>GigE</strong>相机, camId也可以直接指定为(区分大小写):<br/>
+			(a) "ip:xxx.xxx.xxx.xxx" (例如ip:192.168.1.100)<br/>
+			(b) "mac:xxxxxxxxxxxx" (例如mac:d05f64ffff23)</p>
+	</blockquote>
+	<p><strong>说明：</strong>打开相机实例.</p>
+    <p>(1) 在camId后面支持附着一些额外参数(<strong>用分号;分割, 区分大小写</strong>), 如: </p>
+    <blockquote><table width="100%" border="0" bgcolor="#B0D0B0">
+	<tr><td><div align="center">Toupcam_Open(L"\\?\usb#vid_0547&amp;pid_1134#d&amp;397c94f3&amp;0&amp;3<strong>;registry=;wb=rgb</strong>"))</div></td></tr>
+    </table></blockquote>
+	<p>见下表:</p>
+  <div align="center"><table width="100%" border="1" cellpadding="0" cellspacing="0" bgcolor="#B0D0B0"><tr>
+        <td width="15%" rowspan="5"><a id="cfg">相机配置</a><br/>(示例<a href="#democfg">这里</a>)</td>
+        <td width="85%" colspan="3">不添加额外参数, 表示不需要相机配置的保存和加载功能.<br/>添加参数, 相机打开时自动加载指定参数, 相机停止时自动保存参数.</td>
+      </tr><tr>
+        <td width="15%">注册表(Windows only)</td>
+        <td width="15%">;registry=xxxx\yyyy</td>
+		<td width="55%">指定使用注册表HKEY_CURRENT_USER下的相对路径. 如果等号后面为空, 则使用注册表的默认位置:<br/>
+        Software\XXX(公司名称)\capi\YYY(相机型号名称)</td>
+      </tr><tr>
+        <td>;ini=x:\yyyy\zzzz.ini</td>
+        <td>ini文件</td>
+		<td>使用文件x:\yyyy\zzzz.ini. 必须使用完整路径, 等号后面不能为空. 请确保目标目录存在并可读可写</td>
+      </tr><tr>
+        <td>;json=x:\yyyy\zzzz.json</td>
+        <td>json文件</td>
+		<td>使用文件x:\yyyy\zzzz.json. 必须使用完整路径, 等号后面不能为空. 请确保目标目录存在并可读可写</td>
+      </tr><tr>
+        <td>;eeprom=xxxx</td>
+        <td>EEPROM</td>
+		<td>使用EEPROM, 开始地址xxxx. 如果等号后面为空, 表示开始地址为0</td>
+      </tr><tr>
+        <td><a id="wbmode">白平衡模式</a></td>
+        <td>;wb=temptint or rgb</td>
+        <td colspan="2">Temp/Tint模式或RGB Gain模式, 见<a href="#wb">这里</a><br/>默认Temp/Tint</td>
+      </tr><tr>
+        <td>USB块大小</td>
+        <td>;usbblocksize=xxx</td>
+        <td colspan="2">百分数, 范围:10~1000, 表示10%~1000%</td>
+      </tr><tr>
+      <td>linux平台上的零拷贝</td>
+      <td>;zerocopy=1或0</td>
+      <td colspan="2">有利于减少内存拷贝, 提高效率. 要求Kernel版本&gt;=4.6并且硬件平台支持.<br/>如果图像出错, 表示该硬件平台不支持本特性, 请禁用之.<br/>
+      默认在安卓或ARM上禁用, 在非安卓的x86/x64平台上启用.</td></tr>
+</table></div>
+  <p>2. <a id="androidopen">Android</a></p>
+  <p>(a) 对于开放NDK枚举usb设备权限的安卓平台, 和普通流程一样, 没有任何区别.</p>
+  <p>(b) 对于没有开放NDK枚举usb设备权限的安卓平台, 只有通过Java侧获取设备权限, 得到文件描述符传递给Toupcam_Open, 得到HToupcam相机句柄之后的流程则没有区别. 如下:</p>
+<table width="100%" border="0" bgcolor="#B0D0B0"><tr><td><pre>
+usbManager = (UsbManager)getApplicationContext().getSystemService(Context.USB_SERVICE);
+HashMap&lt;String, UsbDevice&gt; deviceList = usbManager.getDeviceList();
+for (UsbDevice usbDevice : deviceList.values()) {
+    ModelV2 model = toupcam.get_Model((short)usbDevice.getVendorId(), (short)usbDevice.getProductId()); //通过VID/PID获取相机型号, 返回null表示非支持的设备
+    if (model != null) {
+        usbManager.requestPermission(usbDevice, mPermissionIntent);                                     //获取权限
+        UsbDeviceConnection usbDeviceConnection = usbManager.openDevice(camDevice);
+        if (usbDeviceConnection != null) {
+            int fileDescriptor = usbDeviceConnection.getFileDescriptor();                               //得到文件描述符
+            toupcam cam = toupcam.Open(String.format("fd-%d-%04x-%04x", fileDescriptor, usbDevice.getVendorId(), usbDevice.getProductId())); //打开相机
+            usbDeviceConnection.close();                                                                //Java侧的usb连接不再需要, 强烈建议马上明确地关闭
+            if (cam != null) {
+                ... //得到toupcam对象之后的流程则没有区别, 正常使用即可
+            }
+        }
+    }
+}</pre></td></tr></table>
+<p>3. Toupcam_Open/Close, Start/Stop是相对繁重的调用, <strong>除非必要, 不推荐频繁操作</strong>.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_Close</font></h2>
+    <p><strong>返回值：</strong>无</p>
+    <p><strong>参数：</strong></p><blockquote>
+	<p>HToupcam h：相机句柄</p>
+	</blockquote>
+    <p><strong>说明：</strong>关闭相机实例. 句柄关闭之后, 请不要再使用之.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_StartPullModeWithWndMsg<br/>Toupcam_StartPullModeWithCallback</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong></p>
+    <blockquote><p>HToupcam h：相机句柄</p>
+      <p>HWND hWnd: 事件发生时, 消息将Post到这个窗口</p>
+      <p>UINT nMsg: Windows自定义消息类型. 消息的WPARAM参数是事件类型TOUPCAM_EVENT_xxxx, LPARAM参数不用(恒等于0)</p>
+      <p>PTOUPCAM_EVENT_CALLBACK funEvent, void* ctxEvent：用户程序指定的回调函数和回调上下文参数.</p>
+      <blockquote><table width="100%" border="0"><tr>
+            <td bgcolor="#B0D0B0"><div align="center">typedef void (*PTOUPCAM_EVENT_CALLBACK)(unsigned nEvent, void* ctxEvent);</div></td>
+          </tr></table></blockquote>
+	  <p>请参阅<a href="#callback">这里</a>.</p>
+    </blockquote><p><strong>说明：</strong>很明显, Toupcam_StartPullModeWithWndMsg只支持Windows系统</p>
+</li></ul><ul><li><h2><font color="#0000FF"><a id="infov2">Toupcam_PullImageV4<br/>Toupcam_WaitImageV4<br/>Toupcam_PullImageV3<br/>Toupcam_WaitImageV3<br/>Toupcam_PullImageV2<br/>Toupcam_PullStillImageV2<br/>Toupcam_PullImageWithRowPitchV2<br/>Toupcam_PullStillImageWithRowPitchV2</a><br/>
+Toupcam_PullImage<br/>Toupcam_PullStillImage<br/><a id="rowpitch1">Toupcam_PullImageWithRowPitch</a><br/><a id="rowpitch2">Toupcam_PullStillImageWithRowPitch</a></font></h2>
+      <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败, <strong>不存在图像可供获取时返回E_PENDING</strong></p>
+      <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+	<p>nWaitMS: 超时值(毫秒). 如果指定非零值, 则该函数或者成功获取图像或者等待超时. 如果nWaitMS为零, 则没有图像可供获取时, 函数不会等待; 它总是立即返回; 相当于Toupcam_PullImageV4(V3).</p>
+    <p>void* pImageData：数据缓冲区. 用户应用程序必须确保改缓冲区足够大以容纳图像数据. 缓冲区大小必须 &gt;= rowPitch * nHeight</p>
+    <p>int bStill: 静态图像填1, 其它填0</p>
+    <p>int bits：图像颜色位数, 支持24, 32, 48, 8, 16和64, 分别代表RGB24, RGB32, RGB48, 8位灰度, 16位灰度, RGB64图像. bits = 0表示使用基于<a href="#rgb">TOUPCAM_OPTION_RGB</a>的默认值. 本参数在RAW模式下没有意义, 被忽略</p>
+    <p>int rowPitch: 行间距(Stride, 跨距), 行与行之间的间距, =0表示默认使用行间距, =-1表示最小行间距(零填充)</p>
+    <p>unsigned* pnWidth, unsigned* pnHeight：输出参数, 图像的宽度高度</p>
+	<p>ToupcamFrameInfoV4/V3/V2* pInfo：输出参数, 本帧图像Info:</p><table width="100%" border="0" bgcolor="#B0D0B0"><tr><td><pre>
+#define TOUPCAM_FRAMEINFO_FLAG_SEQ                0x00000001 /* 帧序号, frame sequence number */
+#define TOUPCAM_FRAMEINFO_FLAG_TIMESTAMP          0x00000002 /* 时间戳, timestamp */
+#define TOUPCAM_FRAMEINFO_FLAG_EXPOTIME           0x00000004 /* 曝光时间, exposure time */
+#define TOUPCAM_FRAMEINFO_FLAG_EXPOGAIN           0x00000008 /* 曝光增益, exposure gain */
+#define TOUPCAM_FRAMEINFO_FLAG_BLACKLEVEL         0x00000010 /* 暗电平, black level */
+#define TOUPCAM_FRAMEINFO_FLAG_SHUTTERSEQ         0x00000020 /* 触发序号, sequence shutter counter */
+#define TOUPCAM_FRAMEINFO_FLAG_GPS                0x00000040 /* GPS */
+#define TOUPCAM_FRAMEINFO_FLAG_AUTOFOCUS          0x00000080 /* 自动对焦相关: uLum &amp; uFV */
+#define TOUPCAM_FRAMEINFO_FLAG_COUNT              0x00000100 /* 计数: timecount, framecount, tricount */
+#define TOUPCAM_FRAMEINFO_FLAG_MECHANICALSHUTTER  0x00000200 /* 机械快门: 关闭 */
+#define TOUPCAM_FRAMEINFO_FLAG_STILL              0x00008000 /* 静态图片, still image */
+#define TOUPCAM_FRAMEINFO_FLAG_CG                 0x00010000 /* 转换增益: 高 */
+
+typedef struct {
+    unsigned            width;      /* 图像宽度, 一直有效 */
+    unsigned            height;     /* 图像高度, 一直有效 */
+    unsigned            flag;       /* TOUPCAM_FRAMEINFO_FLAG_xxxx, flag置bit位, 代表对应的值有效, 取决于相机型号 */
+    unsigned            seq;        /* 帧序列号, frame sequence number */
+    unsigned long long  timestamp;  /* 帧时间戳, 单位微秒 */
+    unsigned            shutterseq; /* 触发序号, sequence shutter counter */
+    unsigned            expotime;   /* 曝光时间 */
+    unsigned short      expogain;   /* 曝光增益 */
+    unsigned short      blacklevel; /* 暗电平, black level */
+} ToupcamFrameInfoV3;
+
+typedef struct {
+    unsigned long long utcstart;    /* 曝光开始时间: 纳秒数(00:00:00 UTC on Thursday, 1 January 1970, see https://en.wikipedia.org/wiki/Unix_time) */
+    unsigned long long utcend;      /* 曝光结束时间 */
+    int                longitude;   /* 百万分之一度, 0.000001 degree */
+    int                latitude;
+    int                altitude;    /* 毫米 */
+    unsigned short     satellite;   /* 卫星数量 */
+    unsigned short     reserved;    /* 保留, 未使用 */
+} ToupcamGps;
+
+typedef struct {
+    ToupcamFrameInfoV3 v3;
+    unsigned reserved; /* 保留, 未使用 */
+    unsigned uLum;
+    unsigned long long uFV;
+    unsigned long long timecount;
+    unsigned framecount, tricount;
+    ToupcamGps gps;
+} ToupcamFrameInfoV4;
+</pre></td></tr></table>
+<p>注: 除了图像宽度高度总是有效以外, 其它都取决于相机型号底层硬件是否支持. 通过判断相应的flag bit位是否设置来判断对应值是否有效.</p>
+</blockquote><p><strong>说明：</strong>当pImageData为NULL而pInfo, pnWidth, pnHeight参数不为NULL的时候, 可以获取(Peek)是否存在图像以及图像的宽度高度等元信息.</p>
+  <blockquote><p>(a) 当bits和TOUPCAM_OPTION_RGB不一致时, 将不得不进行格式转换, 造成损失效率. 见以下bits和TOUPCAM_OPTION_RGB对应表:</p>
+  <div align="center"><table width="100%" border="1" cellpadding="0" cellspacing="0" bgcolor="#B0D0B0">
+    <tr><td width="34%">TOUPCAM_OPTION_RGB</td>
+    <td width="11%">0 (RGB24)</td>
+    <td width="11%">1 (RGB48)</td>
+    <td width="11%">2 (RGB32)</td>
+    <td width="11%">3 (Grey8)</td>
+    <td width="11%">4 (Grey16)</td>
+    <td width="11%">5 (RGB64)</td></tr>
+    <tr><td>bits = 0</td><td>24</td><td>48</td><td>32</td><td>8</td><td>16</td><td>64</td></tr>
+    <tr><td>bits = 24</td><td>24</td><td>NA</td><td>转换至24</td><td>转换至24</td><td>NA</td><td>NA</td></tr>
+    <tr><td>bits = 32</td><td>转换至32</td><td>NA</td><td>32</td><td>转换至32</td><td>NA</td><td>NA</td></tr>
+    <tr><td>bits = 48</td><td>NA</td><td>48</td><td>NA</td><td>NA</td><td>转换至48</td><td>转换至48</td></tr>
+    <tr><td>bits = 8</td><td>转换至8</td><td>NA</td><td>转换至8</td><td>8</td><td>NA</td><td>NA</td></tr>
+    <tr><td>bits = 16</td><td>NA</td><td>转换至16</td><td>NA</td><td>NA</td><td>16</td><td>转换至16</td></tr>
+    <tr><td>bits = 64</td><td>NA</td><td>转换至64</td><td>NA</td><td>NA</td><td>转换至64</td><td>64</td></tr>
+</table></div>
+  <p>(b) 请保证pImageData缓冲区的大小足够容纳整帧数据, 请看下表:</p>
+  <div align="center"><table width="100%" border="1" cellpadding="0" cellspacing="0" bgcolor="#B0D0B0">
+      <tr><td colspan="2">格式</td>
+        <td>0表示默认行间距(跨距)</td>
+		<td>-1表示最小行间距(零填充)</td>
+      </tr><tr>
+        <td width="10%" rowspan="6">RGB</td>
+        <td width="25%">RGB24</td>
+        <td width="35%">TDIBWIDTHBYTES(24 * Width)</td>
+		<td width="30%">Width * 3</td>
+      </tr><tr>
+        <td>RGB32</td>
+        <td>Width * 4</td>
+        <td>Width * 4</td>
+      </tr><tr>
+        <td>RGB48</td>
+        <td>TDIBWIDTHBYTES(48 * Width)</td>
+        <td>Width * 6</td>
+      </tr><tr>
+        <td>GREY8灰度图像</td>
+        <td>TDIBWIDTHBYTES(8 * Width)</td>
+        <td>Width</td>
+      </tr><tr>
+        <td>GREY16灰度图像</td>
+        <td>TDIBWIDTHBYTES(16 * Width)</td>
+        <td>Width * 2</td>
+      </tr><tr>
+        <td>RGB64</td>
+        <td>Width * 8</td>
+        <td>Width * 8</td>
+      </tr><tr>
+        <td rowspan="2">RAW</td>
+        <td>8bits模式</td>
+        <td>Width</td>
+        <td>Width</td>
+      </tr><tr>
+        <td>10bits, 12bits, 14bits, 16bits模式</td>
+        <td>Width * 2</td>
+        <td>Width * 2</td>
+</tr></table></div><br/>
+<div align="center"><table width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#B0D0B0">
+  <tr><td>#ifndef TDIBWIDTHBYTES<br/>
+#define TDIBWIDTHBYTES(bits)&nbsp;&nbsp;&nbsp;&nbsp;((unsigned)(((bits) + 31) &amp; (~31)) / 8)<br/>
+#endif<br/></td></tr></table></div></blockquote>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_StartPushModeV4<br/>Toupcam_StartPushModeV3</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong></p>
+    <blockquote>
+      <p>HToupcam h：相机句柄</p>
+      <p>funData, ctxData：用户程序指定的回调函数和回调上下文参数. toupcam.dll内部从相机得到的图像数据后, 会回调该函数.</p>
+	  <p>funEvent, ctxEvent: 事件回调函数和回调上下文参数.</p>
+    </blockquote><blockquote>
+        <table width="100%" border="0">
+          <tr><td>typedef void (*PTOUPCAM_DATA_CALLBACK_V4)(const void* pData, const ToupcamFrameInfoV3* pInfo, int bSnap, void* ctxData);</td></tr>
+          <tr><td>typedef void (*PTOUPCAM_DATA_CALLBACK_V3)(const void* pData, const ToupcamFrameInfoV2* pInfo, int bSnap, void* ctxData);</td></tr>
+        </table><p>请参阅<a href="#callback">这里</a>.</p>
+    </blockquote><blockquote>
+    <p align="left">如果回调时, pData参数==NULL, 表示发生内部错误(如相机被突然拔出等等). <br/>
+      数据pData的行间距(row pitch, stride, 跨距)是默认值.<br/>    	
+      int bSnap参数, TRUE表示是由Toupcam_Snap或Toupcam_SnapN函数发起的图片抓拍, FALSE表示普通的预览图片(视频). <br/></p>
+  </blockquote>
+  <p><strong>说明：</strong>开启相机实例.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_Stop</font></h2>
+  <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+  <p><strong>参数：</strong>相机句柄</p>
+  <p><strong>说明：</strong>停止相机实例. 停止之后, 可以调用Toupcam_StartPushModeV4/V3重新开启. 比如切换视频分辨率：</p>
+  <blockquote>
+    <p>步骤1：调用Toupcam_Stop停止</p>
+    <p>步骤2：调用Toupcam_put_Size或者Toupcam_put_eSize设置新分辨率</p>
+    <p>步骤3：调用Toupcam_StartXXXX(如Toupcam_StartPullModeWithWndMsg, Toupcam_StartPullModeWithCallback, Toupcam_StartPushModeV4/V3等等)重新开启</p>
+  </blockquote>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_Pause</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong></p><blockquote>
+    		<p>HToupcam h: 相机句柄</p>
+			<p>int bPause: 1 =&gt; 暂停, 0 =&gt; 继续</p>
+    	</blockquote>
+    <p><strong>说明：</strong>暂停或者继续视频流</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_SnapN<br/>Toupcam_SnapR<br/>Toupcam_Snap</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong></p>
+    <blockquote>
+      <p>HToupcam h：相机句柄</p>
+      <p>unsigned nResolutionIndex：想要抓拍的分辨率序号. 0xffffffff表示使用当前预览分辨率.</p>
+	  <p><a id="snapn">unsigned nNum: 抓拍图像张数.</a></p>
+    </blockquote>
+  <p><strong>说明：</strong>抓拍“静态”图片, 请参阅<a href="#stillcapture">这里</a>. 抓拍成功之后, 如果是Push Mode, 则通过TOUPCAM_EVENT_STILLIMAGE通知. 如果是Push Mode则通过PTOUPCAM_DATA_CALLBACK_V4/V3回调函数返回, 其中回调函数的参数BOOL bSnap设为TRUE.</p>
+  <blockquote>
+    <p align="left">有些相机支持在预览视频的不间断的情况下, 抓拍单张的不同于正在视频预览的分辨率的所谓静态图片. 例如UCMOS03100KPA, 正在预览的分辨率是1024*768, 调用Toupcam_Snap(h, 0)抓拍单张第0号分辨率(2048*1536)的图片.预览使用小分辨率(追求更快的帧率), 抓拍使用大分辨率(追求更好的图片质量). 这种行为, 称之为“静态抓拍”. <br/>
+      对于不支持静态抓拍的相机型号, 则参数nResolutionIndex的值必须等于当前正在预览的分辨率, 否则, 函数返回E_UNEXPECTED.<br/>
+      某个型号是否支持静态抓拍能力, 参见ToupcamModelV2的still域(大于0).</p>
+    <p align="left">Toupcam_SnapR用于抓拍"RAW"图像, 对于支持硬件ISP的相机, 跳过ISP的影响.</p>
+	<p align="left">Toupcam_Snap(h, index) == Toupcam_SnapN(h, index, 1)</p>
+  </blockquote>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_Trigger</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败.</p>
+    <p><strong>参数：</strong></p>
+    <blockquote>
+      <p>HToupcam h：相机句柄</p>
+      <p>unsigned short nNumber: 0xffff(一直触发), 0(取消触发), 其他值(触发图片的张数)</p>
+    </blockquote>
+  <p><strong>说明：</strong>触发模式下, 调用本函数进行软件触发. 触发成功之后, 如果是Pull Mode, 则通过TOUPCAM_EVENT_IMAGE通知. 如果是Push Mode则通过PTOUPCAM_DATA_CALLBACK_V4/V3回调函数返回, 其中回调函数的参数BOOL bSnap设为FALSE.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_TriggerSyncV4<br/>Toupcam_TriggerSync</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败.</p>
+    <p><strong>参数：</strong></p>
+    <blockquote>
+      <p>HToupcam h：相机句柄</p>
+      <p>unsigned nWaitMS: 超时值(毫秒). 如果nWaitMS为零, 表示使用默认值(曝光时间 * 102% + 4000毫秒), 0xffffffff表示永久等待, 其它值表示具体毫秒数</p>
+<p>void* pImageData：数据缓冲区. 用户应用程序必须确保改缓冲区足够大以容纳图像数据. 缓冲区大小必须 &gt;= rowPitch * nHeight</p>
+    <p>int bits：图像颜色位数, 支持24, 32, 48, 8, 16和64, 分别代表RGB24, RGB32, RGB48, 8位灰度, 16位灰度, RGB64图像. bits = 0表示使用基于<a href="#rgb">TOUPCAM_OPTION_RGB</a>的默认值. 本参数在RAW模式下没有意义, 被忽略</p>
+    <p>int rowPitch: 行间距(Stride, 跨距), 行与行之间的间距, =0表示默认使用行间距, =-1表示最小行间距(零填充)</p>
+	<p>ToupcamFrameInfoV4/V3* pInfo：输出参数, 本帧图像Info</p>
+    </blockquote>
+  <p><strong>说明：</strong>触发模式下, 调用本函数进行<strong>单次</strong>软件触发, 并等待图像到达.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_put_Size<br/>Toupcam_get_Size<br/>Toupcam_put_eSize<br/>Toupcam_get_eSize</font></h2>
+      <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+      <p><strong>参数：</strong></p>
+  <blockquote>
+    <p>HToupcam h：相机句柄</p>
+    <p>unsigned nResolutionIndex：当前分辨率序号</p>
+    <p>int nWidth, int nHeight：当前分辨率的宽度高度</p>
+  </blockquote>
+  <p><strong>说明：</strong>设置或者得到当前分辨率.</p>
+  <blockquote>
+    <p align="left">设置分辨率应该在相机处于<strong>非运行状态</strong>下.<br/>
+      有2种方法设置当前分辨率, 种是通过分辨率的序号, 一种是通过宽度/高度. 两种方法是等效的. 比如UCMOS03100KPA支持以下3种分辨率:<br/>
+  &nbsp;&nbsp;&nbsp;&nbsp;序号0: 2048, 1536<br/>
+  &nbsp;&nbsp;&nbsp;&nbsp;序号1: 1024, 768<br/>
+  &nbsp;&nbsp;&nbsp;&nbsp;序号2: 680, 510<br/>
+      所以Toupcam_put_Size(h, 1024, 768) or Toupcam_put_eSize(h, 1)效果一样.</p>
+  </blockquote>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_put_Size<br/>Toupcam_get_Size<br/>Toupcam_put_eSize<br/>Toupcam_get_eSize<br/>Toupcam_get_FinalSize</font></h2>
+      <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+      <p><strong>参数：</strong></p>
+  <blockquote>
+    <p>HToupcam h：相机句柄</p>
+    <p>unsigned nResolutionIndex：当前分辨率序号</p>
+    <p>int nWidth, int nHeight：当前分辨率的宽度高度</p>
+  </blockquote>
+  <p><strong>说明：</strong>设置或者得到当前分辨率.</p>
+  <blockquote>
+    <p align="left">设置分辨率应该在在相机处于<strong>非运行状态</strong>下.<br/>
+      有2种方法设置当前分辨率, 一种是通过分辨率的序号, 一种是通过宽度/高度. 两种方法是等效的. 比如UCMOS03100KPA支持以下3种分辨率:<br/>
+  &nbsp;&nbsp;&nbsp;&nbsp;序号0: 2048, 1536<br/>
+  &nbsp;&nbsp;&nbsp;&nbsp;序号1: 1024, 768<br/>
+  &nbsp;&nbsp;&nbsp;&nbsp;序号2: 680, 510<br/>
+      所以Toupcam_put_Size(h, 1024, 768) or Toupcam_put_eSize(h, 1)效果一样.</p>
+	  <p align="left">Toupcam_get_FinalSize获取(经过ROI, Binning, 旋转, 等等之后)图像的<strong>最终</strong>宽度高度.</p>
+  </blockquote>
+</li></ul><ul><li><h2><font color="#0000FF"><a id="roi">Toupcam_put_Roi<br/>Toupcam_get_Roi</a></font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败.</p>
+    <p><strong>参数：</strong></p>
+    <blockquote>
+      <p>HToupcam h: 相机句柄</p>
+      <p>unsigned xOffset: x偏移, 必须是偶数, 否则返回E_INVALIDARG</p>
+      <p>unsigned yOffset: y偏移, 必须是偶数, 否则返回E_INVALIDARG</p>
+      <p>unsigned xWidth: 宽度. 最小值16, 必须是偶数, 否则返回E_INVALIDARG</p>
+      <p>unsigned yHeight: 高度. 最小值16, 必须是偶数, 否则返回E_INVALIDARG</p>
+    </blockquote>
+  <p><strong>说明: </strong>设置/获取ROI. Toupcam_put_Roi(h, 0, 0, 0, 0)表示清除ROI恢复至原始尺寸.</p>
+  <blockquote>
+  	<p><strong>重要提示: 不允许在PTOUPCAM_EVENT_CALLBACK和PTOUPCAM_DATA_CALLBACK_V4/V3的回调上下文中调用Toupcam_put_Roi, 否则返回E_WRONG_THREAD.</strong></p>
+	<p><strong>注意：坐标永远是相对原始分辨率而言的</strong>, 请参阅<a href="#cord">这里</a></p>
+  </blockquote>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_get_ResolutionNumber<br/>Toupcam_get_Resolution<br/>Toupcam_get_ResolutionRatio</font></h2>
+      <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+      <p><strong>参数：</strong></p>
+  <blockquote>
+    <p>HToupcam h：相机句柄</p>
+    <p>unsigned nResolutionIndex：分辨率序号</p>
+    <p>int* pWidth, int* pHeight：宽度、高度</p>
+  </blockquote>
+  <p><strong>说明：</strong>Toupcam_get_ResolutionNumber得到支持的分辨率个数(如UCMOS03100KPA返回3, 表示支持3种分辨率). Toupcam_get_Resolution得到每种分辨率的高度/宽度.</p>
+  <blockquote>
+    <p align="left">这些参数在Toupcam_EnumV2返回相机实例的ToupcamModelV2都已经包含.</p>
+	<p align="left">Toupcam_get_ResolutionRatio获取分辨率的Binning数, 用分数表示, 如1/1, 1/2, 1/3等等.</p>
+  </blockquote>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_get_RawFormat</font></h2>
+      <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败.</p>
+      <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>unsigned* pFourCC：4种Bayer像素排列(MAKEFOURCC('G', 'B', 'R', 'G'), MAKEFOURCC('R', 'G', 'G', 'B'), MAKEFOURCC('B', 'G', 'G', 'R'), MAKEFOURCC('G', 'R', 'B', 'G'), 请参阅<a href="http://www.siliconimaging.com/RGB%20Bayer.htm" target="_blank">这里</a>). <strong>请注意, 不同软件定义Bayer时使用的坐标系Y轴方向可能不同(Y轴向上或向下), 所以互操作时有可能需要做一点映射. 如同一种像素排列, Y轴向下时Bayer是GRBG, Y轴向上则是BGGR.</strong></p>
+    <p>unsigned* pBitsPerPixel：bitdepth, 如8, 10, 12, 14, 16</p>
+<div align="center"><table width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#B0D0B0">
+  <tr><td>#ifndef MAKEFOURCC<br/>
+#define MAKEFOURCC(a, b, c, d) ((unsigned)(unsigned char)(a) | ((unsigned)(unsigned char)(b) &lt;&lt; 8) | ((unsigned)(unsigned char)(c) &lt;&lt; 16) | ((unsigned)(unsigned char)(d) &lt;&lt; 24))<br/>
+#endif<br/></td>
+</tr></table></div><br/></blockquote></li></ul>
+<ul><li><h2><font color="#0000FF">Toupcam_get_PixelFormatSupport</font></h2>
+      <p><strong>返回值: </strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+      <p><strong>参数:</strong></p>
+  <blockquote><p>HToupcam h: 相机句柄</p>
+    <p>char cmd:</p><blockquote>
+		-1: 查询支持的Pixel Format数量<br/>
+		0~number: 查询第n条支持的Pixel Format的值</blockquote>
+    <p>int* pixelFormat: 输出, TOUPCAM_PIXELFORMAT_xxxx, 参阅<a href="#pflist">这里</a></p>
+  </blockquote>
+</li></ul>
+<ul><li><h2><font color="#0000FF">Toupcam_get_PixelFormatName</font></h2>
+      <p><strong>返回值:</strong> Pixel Format名称, 如"RAW10", "HDR12HL"等等</p>
+      <p><strong>参数:</strong></p>
+  <blockquote>
+    <p>int pixelFormat: TOUPCAM_PIXELFORMAT_xxxx, 参阅<a href="#pflist">这里</a></p>
+  </blockquote>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_put_Option<br/>Toupcam_get_Option</font></h2>
+      <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败.</p>
+      <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>unsigned iOption：选项, 见下表</p>
+    <p>int iValue：值, 见下表</p>
+  <div align="center"><table width="100%" border="1" cellpadding="0" cellspacing="0" bgcolor="#B0D0B0"><tr>
+        <td width="21%">选项</td><td width="4%">读写</td><td width="48%">说明</td><td width="6%">默认值</td>
+		<td width="21%">是否可以在相机处于运行状态设置该值<br/>(调用Toupcam_StartXXXX之前或Toupcam_Stop之后)</td>
+      </tr><tr>
+        <td><a id="rawo">TOUPCAM_OPTION_RAW</a></td><td>RW</td>
+        <td>0: RGB模式<br/>
+          1: RAW模式, 直接获取传感器(相机)数据<br/>
+		  -1: RAW模式, 和1的区别是执行FFC, DFC, FPNC, 黑平衡, 白平衡</td>
+		<td>0</td>
+		<td><b>否</b><br/>(在相机处于运行状态时, 设置RAW和非RAW之间变化返回E_UNEXPECTED)<br/>
+		<b>是</b>(1和-1之间变化)</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_ISP</td><td>RW</td>
+        <td>启用/禁用硬件ISP:<br/>0 =&gt; 自动 (RAW模式时禁用, 其它启用)<br/>1 =&gt; 启用<br/>-1 =&gt; 禁用</td>
+		<td>0(自动)</td>
+		<td><b>否</b><br/>(在相机处于运行状态时, 设置本选项, 函数返回E_UNEXPECTED)</td>
+      </tr><tr>
+	  	<td>TOUPCAM_OPTION_BITDEPTH</td><td>RW</td>
+		<td>一些型号的相机支持大于8Bits的位深度(bitdepth), 如10,12,14,16等.<br/>
+		  0表示使用8Bits位深度.<br/>1表示使用本相机支持的最高位深度</td>
+		<td>型号特定</td><td>是<br/>(相对比较“重型”的操作, 不建议在相机处于运行状态时太频繁修改)</td>
+	  </tr><tr>
+      	<td>TOUPCAM_OPTION_TRIGGER</td><td>RW</td>
+      	<td>0 = 视频模式<br/>1 = 软件或模拟触发模式<br/>2 = 外部触发模式<br/><a id="mix">3 = 外部触发和软件触发都开启</a></td>
+      	<td>0</td><td>是</td>
+      </tr><tr>
+      	<td><a id="rgb">TOUPCAM_OPTION_RGB</a></td><td>RW</td>
+      	<td>0 = 使用RGB24<br/>
+				1 = 在位深度&gt;8时, 启用RGB48格式<br/>
+				2 = 使用RGB32<br/>
+				3 = 8位灰度(只对黑白相机有效)<br/>
+				4 = 16位灰度(只对黑白相机并且位深度&gt;8时有效)<br/>
+                5 = 在位深度&gt;8时, 启用RGB64格式</td>
+      	<td>0</td>
+		<td><b>否</b><br/>(在相机处于运行状态时, 设置本选项, 函数返回E_UNEXPECTED)</td>
+      </tr><tr>
+      	<td><a id="bgr">TOUPCAM_OPTION_BYTEORDER</a></td><td>RW</td>
+      	<td>字节序:<br/>1: BGR<br/>0: RGB</td>
+      	<td>Win: 1<br/>Linux/MacOS/Android: 0</td>
+      	<td>是<br/>(相对比较“重型”的操作, 不建议在相机处于运行状态时太频繁修改)</td>
+      </tr><tr>
+      	<td><a id="upsidedown">TOUPCAM_OPTION_UPSIDE_DOWN</a></td><td>RW</td>
+      	<td>倒置:<br/>1: yes<br/>0: no<br/>请和Toupcam_put_VFlip区别, 后者需要耗费CPU对每帧数据执行数据搬动的工作</td>
+      	<td>Win: 1, Windows下默认倒置<br/>Linux/MacOS/Android: 0, 默认不倒置</td>
+		<td><b>否</b><br/>(在相机处于运行状态时, 设置本选项, 函数返回E_UNEXPECTED)</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_ZERO_PADDING</td><td>RW</td>
+      	<td>当Bitdepth大于8小于16时补零方法:<br/>
+		0: 高位补零<br/>
+		1: 低位补零</td>
+      	<td>0</td>
+      	<td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_WBGAIN</td><td>RW</td>
+      	<td>0 = 关闭内部白平衡增益<br/>1 = 开启内部白平衡增益</td>
+      	<td>1</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_FAN</td><td>RW</td>
+      	<td>一些型号的相机支持制冷风扇.<br/>
+      	  0 = 关闭风扇<br/>[1, max] = 风扇速率<br/>
+		  设置为"-1"表示使用本型号的默认值</td>
+      	<td>型号特定</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_TEC</td><td>RW</td>
+      	<td>一些型号的相机支持开启关闭TEC制冷装置.<br/>0 = 关闭TEC制冷<br/>1 = 开启TEC制冷</td>
+      	<td>1</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_TECTARGET</td><td>RW</td>
+      	<td>获取和设置TEC制冷的目标温度, 单位0.1℃. 例如, 125表示12.5℃, -35表示-3.5℃.<br/>设置目标温度为"-2730"或以下表示使用本型号的默认值.</td>
+      	<td>型号特定</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_TECTARGET_RANGE</td><td>RO</td>
+      	<td>获取TEC制冷的目标温度的范围, 单位0.1℃. 例如, 125表示12.5℃, -35表示-3.5℃.<br/>最小值(low 16 bits) = (short)(val &amp; 0xffff)<br/>最大值(high 16 bits) = (short)((val >> 16) &amp; 0xffff).</td>
+      	<td>型号特定</td><td>是</td>
+      </tr><tr>
+      	<td><a id="aepolicy">TOUPCAM_OPTION_AUTOEXP_POLICY</a></td><td>RW</td>
+      	<td>自动曝光策略:<br/>0: 仅曝光<br/>1: 曝光优先<br/>2: 仅模拟增益<br/>3: 模拟增益优先</td>
+      	<td>1</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_AUTOEXP_THRESHOLD</td><td>RW</td>
+      	<td>自动曝光阈值,范围: [2~15]</td>
+      	<td>5</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_FRAMERATE</td><td>RW</td>
+      	<td>帧率限制(每秒帧数). <br/>触发模式下帧率控制自动禁用.</td>
+      	<td>0<br/>(表示不限制)</td>
+		<td><b>否</b><br/>(在相机处于运行状态时, 设置本选项, 函数返回E_UNEXPECTED)</td>
+      </tr><tr>
+      	<td><a id="blacklevel">TOUPCAM_OPTION_BLACKLEVEL</a></td><td>RW</td>
+      	<td>暗电平(Black Level)<br/>对于不支持暗电平的相机返回E_NOTIMPL.</td>
+      	<td>0</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_MULTITHREAD</td><td>RW</td>
+      	<td>多线程图像处理</td><td>1</td>
+		<td><b>否</b><br/>(在相机处于运行状态时, 设置本选项, 函数返回E_UNEXPECTED)</td>
+      </tr><tr>
+      	<td><a id="binning">TOUPCAM_OPTION_BINNING</a></td><td>RW</td>
+      	<td>数字binning:<br/><br/>
+					0x01 (无binning)<br/><br/>
+                    n: (饱和加法, n*n), 0x02(2*2), 0x03(3*3), 0x04(4*4), 0x05(5*5), 0x06(6*6), 0x07(7*7), 0x08(8*8). 数据的Bitdepth保持不变.<br/><br/>
+                    0x40 | n: (非饱和加法, n*n, 只在<a href="#rawo">RAW</a>模式下支持), 0x42(2*2), 0x43(3*3), 0x44(4*4), 0x45(5*5), 0x46(6*6), 0x47(7*7), 0x48(8*8). 数据的Bitdepth增加, 如Bitdepth为12的原始数据2*2 Binning之后Bitdepth增加2位变成14.<br/><br/>
+                    0x80 | n: (平均, n*n), 0x82(2*2), 0x83(3*3), 0x84(4*4), 0x85(5*5), 0x86(6*6), 0x87(7*7), 0x88(8*8). 数据的Bitdepth保持不变.<br/><br/>
+                    最终图像尺寸向下圆整到偶数, 如640/3得到212</td>
+      	<td>1</td><td>是</td>
+      </tr><tr>
+      	<td><a id="rotate">TOUPCAM_OPTION_ROTATE</a></td><td>RW</td>
+      	<td>顺时针旋转: 0°, 90°, 180°, 270°</td>
+      	<td>0</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_CG</td><td>RW</td>
+      	<td>转换增益(Conversion Gain):<br/>
+						0: LCG<br/>
+						1: HCG<br/>
+						2: HDR(对于TOUPCAM_FLAG_CGHDR相机)<br/>
+						2: MCG(对于TOUPCAM_FLAG_GHOPTO相机)</td>
+      	<td>型号特定</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_PIXEL_FORMAT</td><td>RW</td>
+      	<td><a id="pflist">TOUPCAM_PIXELFORMAT_RAW8<br/>
+TOUPCAM_PIXELFORMAT_RAW10<br/>
+TOUPCAM_PIXELFORMAT_RAW12<br/>
+TOUPCAM_PIXELFORMAT_RAW14<br/>
+TOUPCAM_PIXELFORMAT_RAW16<br/>
+TOUPCAM_PIXELFORMAT_YUV411<br/>
+TOUPCAM_PIXELFORMAT_VUYY<br/>
+TOUPCAM_PIXELFORMAT_YUV444<br/>
+TOUPCAM_PIXELFORMAT_RGB888<br/>
+TOUPCAM_PIXELFORMAT_GMCY8 (map to RGGB 8 bits)<br/>
+TOUPCAM_PIXELFORMAT_GMCY12 (map to RGGB 12 bits)<br/>
+TOUPCAM_PIXELFORMAT_UYVY<br/>
+TOUPCAM_PIXELFORMAT_RAW12PACK<br/>
+TOUPCAM_PIXELFORMAT_RAW11<br/>
+TOUPCAM_PIXELFORMAT_HDR8HL(HDR, 位深度: 8, 转换增益: 高 + 低)<br/>
+TOUPCAM_PIXELFORMAT_HDR10HL(HDR, 位深度: 10, 转换增益: 高 + 低)<br/>
+TOUPCAM_PIXELFORMAT_HDR11HL(HDR, 位深度: 11, 转换增益: 高 + 低)<br/>
+TOUPCAM_PIXELFORMAT_HDR12HL(HDR, 位深度: 12, 转换增益: 高 + 低)<br/>
+TOUPCAM_PIXELFORMAT_HDR14HL(HDR, 位深度: 14, 转换增益: 高 + 低)<br/>
+TOUPCAM_PIXELFORMAT_RAW10PACK
+</a></td>
+      	<td>型号特定</td><td>是<br/>(相对比较“重型”的操作, 不建议在相机处于运行状态时太频繁修改)</td>
+      </tr><tr>
+      	<td><a id="ddrdepth">TOUPCAM_OPTION_DDR_DEPTH</a></td><td>RW</td>
+      	<td>DDR最多可以缓存的帧数:<br/>
+						1: DDR最大缓存一帧<br/>
+						0: 自动, 视频模式下自动曝光开启时为1, 其他为全部容量<br/>
+					   -1: DDR最多可缓存至DDR全部容量</td>
+      	<td>0</td><td>是</td>
+      </tr><tr>
+      	<td><a id="ffc">TOUPCAM_OPTION_FFC</a></td><td>RW</td>
+      	<td>平场校正(Flat Field Correction):<br/>
+					设置(set):
+                        <blockquote>0: 禁用<br/>
+                        1: 启用<br/>
+						-1: 重置<br/>
+                        (0xff000000 | n): 设置平均数为n, [1~255]</blockquote>
+                    获取(get):
+                        <blockquote>(val &amp; 0xff): 0 =&gt; 禁用, 1 =&gt; 启用, 2 =&gt; 已初始化<br/>
+                        ((val &amp; 0xff00) &gt;&gt; 8): 序号<br/>
+                        ((val &amp; 0xff0000) &gt;&gt; 16): 平均数</blockquote></td>
+      	<td>0</td><td>是</td>
+      </tr><tr>
+      	<td><a id="dfc">TOUPCAM_OPTION_DFC</a></td><td>RW</td>
+      	<td>暗场校正(Dark Field Correction):<br/>
+					设置(set):
+                        <blockquote>0: 禁用<br/>
+                        1: 启用<br/>
+						-1: 重置<br/>
+                        (0xff000000 | n): 设置平均数为n, [1~255]</blockquote>
+                    获取(get):
+                        <blockquote>(val &amp; 0xff): 0 =&gt; 禁用, 1 =&gt; 启用, 2 =&gt; 已初始化<br/>
+                        ((val &amp; 0xff00) &gt;&gt; 8): 序号<br/>
+                        ((val &amp; 0xff0000) &gt;&gt; 16): 平均数</blockquote></td>
+      	<td>0</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_FPNC</td><td>RW</td>
+      	<td>固定模式噪声校正(Fixed Pattern Noise Correction):<br/>
+					设置(set):
+                        <blockquote>0: 禁用<br/>
+                        1: 启用<br/>
+						-1: 重置<br/>
+                        (0xff000000 | n): 设置平均数为n, [1~255]</blockquote>
+                    获取(get):
+                        <blockquote>(val &amp; 0xff): 0 =&gt; 禁用, 1 =&gt; 启用, 2 =&gt; 已初始化<br/>
+                        ((val &amp; 0xff00) &gt;&gt; 8): 序号<br/>
+                        ((val &amp; 0xff0000) &gt;&gt; 16): 平均数</blockquote></td>
+      	<td>0</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_SHARPENING</td><td>RW</td>
+      	<td>锐化, (threshold &lt;&lt; 24) | (radius &lt;&lt; 16) | strength)
+			<blockquote>强度(strength): [0, 500], default: 0 (disable)<br/>
+			半径(radius): [1, 10]<br/>
+			阈值(threshold): [0, 255]</blockquote></td>
+      	<td>强度: 型号特定<br/>半径: 2<br/>阈值: 0</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_FACTORY</td><td>WO</td>
+      	<td>恢复出厂设置. 请注意恢复出厂设置可能导致分辨率改变</td>
+      	<td>恒为0</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_TEC_VOLTAGE</td><td>RO</td>
+      	<td>获取TEC的当前工作电压, 单位0.1伏, 如59代表5.9伏.<br/>
+			请不要过于频繁获取本值, 建议间隔2秒或以上</td>
+      	<td>NA</td><td>NA</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_TEC_VOLTAGE_MAX</td><td>RW</td>
+      	<td>TEC的最大工作电压, 单位0.1伏, 如59代表5.9伏</td>
+      	<td>NA</td><td>NA</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_TEC_VOLTAGE_MAX_RANGE</td><td>RO</td>
+      	<td>获取TEC的最大工作电压范围, 单位0.1伏, 如59代表5.9伏<br/>
+        高16位: 最大值<br/>低16位: 最小值</td>
+      	<td>NA</td><td>NA</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_POWER</td><td>RO</td>
+      	<td>获取功耗, 单位: 毫瓦</td>
+      	<td>NA</td><td>NA</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_GLOBAL_RESET_MODE</td><td>RW</td>
+      	<td>global reset mode</td>
+      	<td>0</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_DEVICE_RESET</td><td>WO</td>
+      	<td>重置相机的usb连接, 相当于模拟一次重新插拔</td>
+      	<td>NA</td><td>NA</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_FOCUSPOS</td><td>RW</td>
+      	<td>对焦马达位置</td>
+      	<td>NA</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_AFMODE</td><td>RW</td>
+      	<td>自动对焦模式: 见ToupcamAFMode</td>
+      	<td>NA</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_AFSTATUS</td><td>RO</td>
+      	<td>自动对焦状态: 见ToupcamAFStaus</td>
+      	<td>NA</td><td>NA</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_TESTPATTERN</td><td>RW</td>
+      	<td>test pattern:<br/>0: off<br/>3: monochrome diagonal stripes<br/>5: monochrome vertical stripes<br/>7: monochrome horizontal stripes<br/>9: chromatic diagonal stripes</td>
+      	<td>0</td><td>是</td>
+      </tr><tr>
+        <td><a id="noframe">TOUPCAM_OPTION_NOFRAME_TIMEOUT</a></td><td>RW</td>
+        <td>没有抓取到视频帧的超时时间. 当设定时间内没有获取到任何视频帧时, 触发事件<a href="#evnoframe">TOUPCAM_EVENT_NOFRAMETIMEOUT</a><br/>
+          0 =&gt; 禁用<br/>
+          正整数(&gt;=TOUPCAM_NOFRAME_TIMEOUT_MIN) =&gt; 超时毫秒数</td>
+		<td>0</td><td>是</td>
+      </tr><tr>
+        <td><a id="nopacket">TOUPCAM_OPTION_NOPACKET_TIMEOUT</a></td><td>RW</td>
+        <td>没有抓取到视频包的超时时间. 当设定时间内没有获取到任何视频包时, 触发事件<a href="#evnopacket">TOUPCAM_EVENT_NOPACKETTIMEOUT</a><br/>
+          0 =&gt; 禁用<br/>
+          正整数(&gt;=TOUPCAM_NOPACKET_TIMEOUT_MIN) =&gt; 超时毫秒数</td>
+		<td>0</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_BANDWIDTH</td><td>RW</td>
+        <td>带宽, 范围：[1-100]%<br/>设定带宽之后, 获取精确帧率的范围, 再设置精确帧率</td>
+		<td>100</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_MAX_PRECISE_FRAMERATE</td><td>RO</td>
+        <td>获取最大精确帧率. 单位0.1帧/秒, 如115表示11.5帧/秒<br/>
+          最大帧率和带宽的设置/分辨率/位深度/ROI相关, 当这些设置发生改变时, 最大帧率也会发生改变.<br/>
+          相机处于非运行状态时返回E_UNEXPECTED, E_NOTIMPL表示不支持该功能</td>
+		<td>NA</td><td>NA</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_MIN_PRECISE_FRAMERATE</td><td>RO</td>
+        <td>获取最小精确帧率. 单位0.1帧/秒, 如15表示1.5帧/秒<br/>
+          最小帧率和带宽的设置/分辨率/位深度/ROI相关, 当这些设置发生改变时, 最小帧率也会发生改变<br/>
+          相机处于非运行状态时返回E_UNEXPECTED, E_NOTIMPL表示不支持该功能</td>
+		<td>NA</td><td>NA</td>
+      </tr><tr>
+        <td><a id="precise">TOUPCAM_OPTION_PRECISE_FRAMERATE</a></td><td>RW</td>
+        <td>精确帧率: 单位0.1帧/秒, 如115表示11.5帧/秒<br/>
+		使用TOUPCAM_OPTION_MAX_PRECISE_FRAMERATE, TOUPCAM_OPTION_MIN_PRECISE_FRAMERATE获取范围. 如果设置的值超出范围, 将返回E_INVALIDARG</td>
+		<td>最大帧率的90%</td><td>是</td>
+      </tr><tr>
+        <td><a id="reload">TOUPCAM_OPTION_RELOAD</a></td><td>RW</td>
+        <td>触发模式下发生帧丢失时恢复最后一帧的数据.<br/>
+            get返回值S_OK表示支持本功能, E_NOTIMPL表示不支持.</td>
+		<td>NA</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_CALLBACK_THREAD</td><td>RW</td>
+        <td>单独的专门线程用于回调, 只在拉(Pull)模式下Callback可用, 不能用于推(Push)模式:<br/>
+		0 =&gt; 禁用, 1 =&gt; 启用</td>
+		<td>0</td><td><b>否</b><br/>(在相机处于运行状态时, 设置本选项, 函数返回E_UNEXPECTED)</td>
+      </tr><tr>
+        <td><a id="frontend">TOUPCAM_OPTION_FRONTEND_DEQUE_LENGTH</a><br/>或<br/>TOUPCAM_OPTION_FRAME_DEQUE_LENGTH</td><td>RW</td>
+        <td>前端(裸数据)帧队列长度, 范围[2~1024]<br/>内存将在相机start的时候全部预分配, 请关注内存占用</td>
+		<td>4</td><td><b>否</b><br/>(在相机处于运行状态时, 设置本选项, 函数返回E_UNEXPECTED)</td>
+      </tr><tr>
+        <td><a id="backend">TOUPCAM_OPTION_BACKEND_DEQUE_LENGTH</a></td><td>RW</td>
+        <td>后端(Pipeline处理后)帧队列长度(仅在拉模式下可用, Push模式下忽略), 范围[2~1024]<br/>内存将在相机start的时候全部预分配, 请关注内存占用</td>
+		<td>3</td><td><b>否</b><br/>(在相机处于运行状态时, 设置本选项, 函数返回E_UNEXPECTED)</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_SEQUENCER_ONOFF</td><td>RW</td>
+        <td>sequencer trigger: 开启/关闭</td>
+		<td>0</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_SEQUENCER_NUMBER</td><td>RW</td>
+        <td>sequencer trigger: 数量, 范围[1~255]</td>
+		<td>NA</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_SEQUENCER_EXPOTIME</td><td>RW</td>
+        <td>sequencer trigger: 曝光时间<br/>iOption = TOUPCAM_OPTION_SEQUENCER_EXPOTIME | index<br/>iValue = 曝光时间值(不参考50/60HZ约束)<br/>
+		如设置第3组的曝光时间50ms, 则调用:<br/>Toupcam_put_Option(h, TOUPCAM_OPTION_SEQUENCER_EXPOTIME | 3, 50000)</td>
+		<td>NA</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_SEQUENCER_EXPOGAIN</td><td>RW</td>
+        <td>sequencer trigger: 增益<br/>iOption = TOUPCAM_OPTION_SEQUENCER_EXPOGAIN | index<br/>iValue = 增益值</td>
+		<td>NA</td><td>是</td>
+      </tr><tr>
+        <td><a id="denoise">TOUPCAM_OPTION_DENOISE</a></td><td>RW</td>
+        <td>去噪<br/>强度范围[0, 100], 0表示禁用</td>
+		<td>型号特定</td><td>是</td>
+      </tr><tr>
+        <td><a id="heatmax">TOUPCAM_OPTION_HEAT_MAX</a></td><td>RO</td>
+        <td>获取最大加热去雾级别<br/>[0, max], 0表示关闭</td><td>NA</td><td>NA</td>
+      </tr><tr>
+        <td><a id="heat">TOUPCAM_OPTION_HEAT</a></td><td>RW</td>
+        <td>加热去雾级别</td><td>型号特定</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_LIGHTSOURCE_MAX</td><td>RO</td>
+        <td>获取最大光源亮度级别<br/>
+		[0, max], 0表示关闭</td>
+		<td>NA</td><td>NA</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_LIGHTSOURCE</td><td>RW</td>
+        <td>光源亮度级别</td>
+		<td>50%最大级别</td><td>是</td>
+      </tr><tr>
+        <td><a id="heartbeat">TOUPCAM_OPTION_HEARTBEAT</a></td><td>RW</td>
+        <td>心跳间隔, 单位毫秒<br/>范围: [TOUPCAM_HEARTBEAT_MIN, TOUPCAM_HEARTBEAT_MAX]<br/>0: 禁用</td>
+		<td>禁用</td><td>是</td>
+      </tr><tr>
+        <td><a id="hwoption">TOUPCAM_OPTION_EVENT_HARDWARE</a></td><td>RW</td>
+        <td>启用或禁用硬件事件通知: iValue = 1 (enable), 0 (disable)
+        <blockquote>(1) iOption = TOUPCAM_OPTION_EVENT_HARDWARE, 所有硬件事件通知的总开关<br/>
+        (2) iOption = TOUPCAM_OPTION_EVENT_HARDWARE | <a href="#hwevent">(event type)</a>, 特定类型的子开关</blockquote>
+        只有总开关和特定类型的子开关都保持开启, 才算真正启用该类型的事件通知.<br/>参阅<a href="#hwevent">这里</a>和<a href="#hwflag">这里</a>
+        </td><td>禁用</td>
+		<td>总开关: <b>否</b><br/>子开关: 是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_LOW_POWERCONSUMPTION</td><td>RW</td>
+        <td>低功耗模式:<br/>0 : 禁用<br/>1 : 启用<br/>&gt; 1 : 曝光时间大于设定值时启用</td>
+		<td>型号特定</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_LOW_POWER_EXPOTIME</td><td>RW</td>
+        <td>低功耗模式: 曝光时间大于设定值时启用</td>
+		<td>型号特定</td><td>是</td>
+      </tr><tr>
+        <td><a id="lownoise">TOUPCAM_OPTION_LOW_NOISE</a></td><td>RW</td>
+        <td>低噪声模式(更高的信噪比, 更低的帧率):<br/>0 =&gt; 禁用, 1 =&gt; 启用</td>
+		<td>型号特定</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_HIGH_FULLWELL</td><td>RW</td>
+        <td>高满阱模式:<br/>0 =&gt; 禁用, 1 =&gt; 启用</td>
+		<td>型号特定</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_AUTOEXPOSURE_PERCENT</td><td>RW</td>
+        <td>自动曝光亮度统计值峰值模式: 计算感兴趣区域中指定百分比最亮像素的平均亮度. 当背景较暗且目标在平均模式下曝光过度时启用本选项, 启用本选项时, 由于更多的CPU消耗, 帧速率可能会受到影响<br/>
+        1~99: 自动曝光ROI矩形内指定百分比最亮像素的平均亮度, 默认: 1<br/>
+        0或100: 自动曝光ROI矩形内全部像素的平均亮度, 意味着“禁用”</td>
+		<td>0(禁用)</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_DEFECT_PIXEL</td><td>RW</td>
+        <td>坏点校正<br/>0 =&gt; 禁用, 1 =&gt; 启用</td>
+		<td>启用(1)</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_HDR_KB</td><td>RW</td>
+        <td>HDR合成<br/>K(高16位): [1, 25500]<br/>B(低16位): [0, 65535]<br/>0xffffffff => 设置为默认值</td>
+		<td>型号特定</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_HDR_THRESHOLD</td><td>RW</td>
+        <td>HDR合成<br/>阈值: [1, 4094]<br/>0xffffffff => 设置为默认值</td>
+		<td>型号特定</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_DYNAMIC_DEFECT</td><td>RW</td>
+        <td>动态坏点校正:<br/>死点系数, t1(高16位): [0, 100], 表示[0.0, 1.0]<br/>噪点系数, t2: (低16位): [0, 100], 表示[0.0, 1.0]<br/>见:<br/>TOUPCAM_DYNAMIC_DEFECT_T1_(MIN/MAX/DEF), TOUPCAM_DYNAMIC_DEFECT_T2_(MIN/MAX/DEF)</td>
+		<td>不启用<br/>(t1=0, t2=0)</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_ANTI_SHUTTER_EFFECT</td><td>RW</td>
+        <td>anti shutter effect: 1 =&gt; 启用, 0 =&gt; 禁用</td>
+		<td>禁用(0)</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_OVERCLOCK_MAX</td><td>RO</td>
+        <td>获取超频最大挡位</td>
+		<td>NA</td><td>NA</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_OVERCLOCK</td><td>RW</td>
+        <td>超频挡位</td>
+		<td>0</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_RESET_SENSOR</td><td>WO</td>
+        <td>传感器复位</td>
+		<td>NA</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_RESET_SEQ_TIMESTAMP</td><td>WO</td>
+        <td>复位seq, timestamp:<br/>
+		1: seq<br/>
+		2: timestamp<br/>
+		3: both</td>
+		<td>NA</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_MODE_SEQ_TIMESTAMP</td><td>RW</td>
+        <td>seq和timestamp模式:<br/>
+		0: 主动复位到0<br/>
+		1: 从不主动复位</td>
+		<td>0</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_CHAMBER_HT</td><td>RO</td>
+        <td>密封舱湿度和温度:<br/>
+        高16位: 湿度, 单位0.1%, 如325表示湿度=32.5%<br/>
+        低16位: 温度, 单位0.1℃, 如32表示3.2℃</td>
+		<td>NA</td><td>NA</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_ENV_HT</td><td>RO</td>
+        <td>环境湿度和温度</td>
+		<td>NA</td><td>NA</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_EXPOSURE_PRE_DELAY</td><td>RW</td>
+        <td>曝光信号预延迟, 微秒</td>
+		<td>0</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_EXPOSURE_POST_DELAY</td><td>RW</td>
+        <td>曝光信号后延迟, 微秒</td>
+		<td>0</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_LINE_PRE_DELAY</td><td>RW</td>
+        <td>指定行预延迟, 微秒</td>
+		<td>0</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_LINE_POST_DELAY</td><td>RW</td>
+        <td>指定行后延迟, 微秒</td>
+		<td>0</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_AUTOEXPO_CONV</td><td>RO</td>
+        <td>获取当前自动曝光收敛状态:<br/>1(是)<br/>0(否)<br/>-1(PENDING, 未决)</td>
+		<td></td><td>NA</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_AUTOEXP_EXPOTIME_DAMP</td><td>RW</td>
+        <td>自动曝光阻尼系数: 曝光时间 (千分数)<br/>阻尼系数越大, 曝光时间改变越平滑越慢</td>
+		<td>0</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_AUTOEXP_GAIN_DAMP</td><td>RW</td>
+        <td>自动曝光阻尼系数: 增益 (千分数)<br/>阻尼系数越大, 增益改变越平滑越慢</td>
+		<td>0</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_OVEREXP_POLICY</td><td>RW</td>
+        <td>自动曝光过曝策略: 当过曝时,<br/>
+			<blockquote>0 =&gt; 直接降低曝光时间/增益到最小值; 或<br/>
+			1 =&gt; 按当前和目标亮度的比例降低曝光时间/增益; 或<br/>
+			n(>1) =&gt; 先将曝光时间调节为(自动曝光时间最大值*自动曝光增益最大值) * n / 1000, 然后再按1的策略进行调节<br/></blockquote>
+		策略0的优点是收敛速度更快, 缺点是有黑屏.<br/>
+		策略1避免黑屏, 但是收敛速度更慢.</td>
+		<td>是</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_AUTOEXPO_TRIGGER</td><td>RW</td>
+        <td>触发模式下自动曝光:<br/>1(启用) or 0(禁用)</td>
+		<td>0</td><td>是</td>
+		</tr><tr>
+		<td>TOUPCAM_OPTION_AWB_CONTINUOUS</td><td>RW</td>
+		<td>自动白平衡: 连续模式<br/><blockquote>
+			0:  禁用<br/>
+			n&gt;0: 每隔n毫秒<br/>
+			n&lt;0: 每隔-n帧</blockquote>
+		</td><td>0(禁用)</td><td>是</td>
+      </tr><tr>
+		<td>TOUPCAP_OPTION_TIMED_TRIGGER_NUM</td><td>RW</td>
+		<td>定时触发: 数量</td><td>0(禁用)</td><td>是</td>
+      </tr><tr>
+		<td>TOUPCAM_OPTION_TIMED_TRIGGER_LOW</td><td>RW</td>
+		<td>定时触发: 64位触发时间低32位, 纳秒数(00:00:00 UTC on Thursday, 1 January 1970, see https://en.wikipedia.org/wiki/Unix_time)</td><td>0</td><td>是</td>
+      </tr><tr>
+		<td>TOUPCAM_OPTION_TIMED_TRIGGER_HIGH</td><td>RW</td>
+		<td>定时触发: 触发时间高32位. 必须先设置低32位, 后设置高32位</td><td>0</td><td>是</td>
+      </tr><tr>
+        <td>TOUPCAM_OPTION_THREAD_PRIORITY</td><td>RW</td>
+        <td>设置内部线程的优先级.<br/>
+          Win:<blockquote>
+		  0 = THREAD_PRIORITY_NORMAL;<br/>1 = THREAD_PRIORITY_ABOVE_NORMAL;<br/>2 = THREAD_PRIORITY_HIGHEST;<br/>3 = THREAD_PRIORITY_TIME_CRITICAL;<br/>请参阅: <a href="https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setthreadpriority" target="_blank">SetThreadPriority</a>
+		  </blockquote>
+		  Linux &amp; macOS: <blockquote>高16位为调度策略, 低16位为优先级.<br/>请参阅: <a href="https://linux.die.net/man/3/pthread_setschedparam" target="_blank">pthread_setschedparam</a></blockquote></td>
+		<td>Win: 1<br/>Linux / macOS: NA</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_LINEAR</td><td>RW</td>
+      	<td>内部linear tone mapping:<br/>0 = 关闭<br/>1 = 开启</td>
+      	<td>1</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_CURVE</td><td>RW</td>
+      	<td>内部curve tone mapping:<br/>0 = 关闭<br/>
+      	  1 = 开启多项式(polynomial)拟合<br/>
+		  2 = 开启对数(logarithmic)拟合</td>
+      	<td>2</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_COLORMATIX</td><td>RW</td>
+      	<td>0 = 关闭内部颜色矩阵<br/>1 = 开启内部颜色矩阵</td>
+      	<td>1</td><td>是</td>
+      </tr><tr>
+      	<td><a id="demosaic">TOUPCAM_OPTION_DEMOSAIC</a></td><td>RW</td>
+      	<td>视频和静态图像的Demosaic算法：(请参阅<a href="https://en.wikipedia.org/wiki/Demosaicing" target="_blank">https://en.wikipedia.org/wiki/Demosaicing</a>)<br/>
+      			0 = BILINEAR<br/>
+      			1 = VNG(Variable Number of Gradients, 可变数量梯度)<br/>
+      			2 = PPG(Patterned Pixel Grouping)<br/>
+      			3 = AHD(Adaptive Homogeneity Directed, 自适应同质导向)<br/>
+				4 = EA(Edge Aware, 边缘感知)<br/>
+				就CPU使用率而言, EA是最低的, BILINEAR次之, 其它的都更高.<br/>
+      			对于黑白相机始终返回E_NOTIMPL.</td>
+      	<td>0</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_DEMOSAIC_VIDEO</td><td>RW</td>
+      	<td>视频的Demosaic算法</td>
+      	<td>0</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_DEMOSAIC_STILL</td><td>RW</td>
+      	<td>静态图像的Demosaic算法</td>
+      	<td>0</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_OPEN_ERRORCODE</td><td>RO</td>
+      	<td>打开相机的错误码</td>
+      	<td>NA</td><td>NA</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_FLUSH</td><td>WO</td>
+      	<td>1: 硬flush, 丢弃相机内部DDR缓存的帧(如果有的话)<br/>
+			2: 软flush, 丢弃toupcam.dll内部缓存的帧(如果有的话)<br/>
+			3: 硬+软<br/>
+			Toupcam_Flush是'硬+软'<br/>
+            成功时返回被软flush掉的帧数目, 失败时返回<a href="#hresult">HRESULT</a></td>
+      	<td>NA</td><td>NA</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_READOUT_MODE</td><td>RW</td>
+      	<td>读出模式:<br/>
+		0 = IWR (边读出边积分, Integrate While Read)<br/>
+		1 = ITR (先积分后读出, Integrate Then Read)<br/>
+		探测器读出电路的工作模式可分为两种: ITR和IWR. 使用IWR读出模式, 可以大大提高帧频. 在ITR模式中, 第(n+1)帧积分在第n帧所有数据读出完成后开始, 而IWR模式中第(n+1)帧积分时, 同时读出第n帧的数据</td>
+      	<td>NA</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_VOLTAGEBIAS</td><td>RW</td>
+      	<td>电压偏置</td><td>型号特定</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_VOLTAGEBIAS_RANGE</td><td>RO</td>
+      	<td>电压偏置范围:<br/>
+		最小值 (低16位)<br/>
+		最大值 (高16位)</td><td>NA</td><td>NA</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_TAILLIGHT</td><td>RW</td>
+      	<td>打开关闭尾灯:<br/>0 =&gt; 关<br/>1 =&gt; 开</td>
+		<td>1</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_PSEUDO_COLOR_START</td><td>RW</td>
+      	<td>伪彩色: 起始颜色, BGR格式</td>
+      	<td>NA</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_PSEUDO_COLOR_END</td><td>RW</td>
+      	<td>伪彩色: 结束颜色, BGR格式</td>
+      	<td>NA</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_PSEUDO_COLOR_ENABLE</td><td>RW</td>
+      	<td>伪彩色:<br/>-1 => 自定义: 使用起始颜色和结束颜色产生颜色映射表格<br/>
+                                                                    0 =&gt; 禁用<br/>
+                                                                    1 =&gt; spot<br/>
+                                                                    2 =&gt; spring<br/>
+                                                                    3 =&gt; summer<br/>
+                                                                    4 =&gt; autumn<br/>
+                                                                    5 =&gt; winter<br/>
+                                                                    6 =&gt; bone<br/>
+                                                                    7 =&gt; jet<br/>
+                                                                    8 =&gt; rainbow<br/>
+                                                                    9 =&gt; deepgreen<br/>
+                                                                    10 =&gt; ocean<br/>
+                                                                    11 =&gt; cool<br/>
+                                                                    12 =&gt; hsv<br/>
+                                                                    13 =&gt; pink<br/>
+                                                                    14 =&gt; hot<br/>
+                                                                    15 =&gt; parula<br/>
+                                                                    16 =&gt; magma<br/>
+                                                                    17 =&gt; inferno<br/>
+                                                                    18 =&gt; plasma<br/>
+                                                                    19 =&gt; viridis<br/>
+                                                                    20 =&gt; cividis<br/>
+                                                                    21 =&gt; twilight<br/>
+                                                                    22 =&gt; twilight_shifted<br/>
+                                                                    23 =&gt; turbo<br/>
+																	24 =&gt; red<br/>
+																	25 =&gt; green<br/>
+																	26 =&gt; blue</td>
+      	<td>0</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_NUMBER_DROP_FRAME</td><td>RO</td>
+      	<td>已经从USB抓取但是被软件丢弃的帧数</td>
+      	<td>NA</td><td>NA</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_DUMP_CFG</td><td>RW</td>
+      	<td>0 = 当相机被停止时, 不自动刷新配置到文件或EEPROM<br/>
+            1 = 当相机被停止时, 自动刷新配置到文件或EEPROM<br/>
+            -1 = 执行一次手动刷新配置到文件或EEPROM</td>
+      	<td>1</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_FRONTEND_DEQUE_CURRENT</td><td>RO</td>
+      	<td>获取前端队列当前帧数目</td>
+      	<td>NA</td><td>NA</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_BACKEND_DEQUE_CURRENT</td><td>RO</td>
+      	<td>获取后端队列当前帧数目</td>
+      	<td>NA</td><td>NA</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_FRONTEND_FULL</td><td>RO</td>
+      	<td>获取前端队列满数目</td>
+      	<td>NA</td><td>NA</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_BACKEND_FULL</td><td>RO</td>
+      	<td>获取后端队列满数目</td>
+      	<td>NA</td><td>NA</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_PACKET_NUMBER</td><td>RO</td>
+      	<td>获取接收到的包数目</td>
+      	<td>NA</td><td>NA</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_GVCP_TIMEOUT</td><td>RW</td>
+      	<td>GVCP Timeout, 毫秒, 范围: [3, 75]<br/>除非非常特殊情况, 一般而言不需要修改, 保持默认值即可</td>
+      	<td>15</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_GVCP_RETRY</td><td>RW</td>
+      	<td>GVCP Retry, 次数, 范围: [2, 8]<br/>除非非常特殊情况, 一般而言不需要修改, 保持默认值即可</td>
+      	<td>4</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_GVSP_WAIT_PERCENT</td><td>RW</td>
+      	<td>GVSP wait 百分比: 范围: [0, 100]</td>
+      	<td>触发模式: 100, 实时: 0, 其它: 1</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_GIGETIMEOUT</td><td>RW</td>
+      	<td>For GigE cameras, the application periodically sends heartbeat signals to the camera to keep the connection to the camera alive. If the camera doesn't receive heartbeat signals within the time period specified by the heartbeat timeout counter, the camera resets the connection. When the application is stopped by the debugger, the application cannot create the heartbeat signals.<br/>
+		0 =&gt; 自动: 当相机被打开时, 如存在调试器则禁用, 如不存在调试器则启用<br/>
+		1 =&gt; 启用<br/>
+		2 =&gt; 禁用</td>
+      	<td>0</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_FILTERWHEEL_SLOT</td><td>RW</td>
+      	<td>滤镜轮孔数</td>
+      	<td>7</td><td>是</td>
+      </tr><tr>
+      	<td>TOUPCAM_OPTION_FILTERWHEEL_POSITION</td><td>RW</td>
+      	<td>滤镜轮位置:<br/>
+					设置(set):
+                        <blockquote>-1: 校准<br/>
+                        val &amp; 0xff: 位置<br/>
+						(val &gt;&gt; 8) &amp; 0x1: 方向, 0=&gt;顺时钟, 1=&gt;自动方向</blockquote>                   
+                    获取(get):
+                        <blockquote>-1: 动作中<br/>
+                        val: 目标到达</blockquote>
+        </td><td>NA</td><td>是</td></tr><tr>
+      	<td>TOUPCAM_OPTION_TRIGGER_CANCEL_MODE</td><td>RW</td>
+      	<td>触发取消模式:<br/>
+		0: 不输出帧<br/>
+		1: 输出帧</td>
+      	<td>0</td><td>是</td></tr><tr>
+      	<td>TOUPCAM_OPTION_MECHANICALSHUTTER</td><td>RW</td>
+      	<td>机械快门:<br/>
+		0: 开<br/>
+		1: 关</td>
+      	<td>0</td><td>是</td></tr><tr>
+      	<td>TOUPCAM_OPTION_CDS</td><td>RW</td>
+      	<td>相关双采样: 0~100<td>0</td><td>是</td></tr><tr>
+      	<td>TOUPCAM_OPTION_SCAN_DIRECTION</td><td>RW</td>
+      	<td>扫描方向:<br/>
+		0: 正<br/>
+		1: 反<br/>
+		2: 交替</td>
+      	<td>0</td><td>是</td></tr><tr>
+      	<td>TOUPCAM_OPTION_BLACKLEVEL_AUTOADJUST</td><td>RW</td>
+      	<td>黑电平自动调整功能设置:<br/>
+		0: 关闭<br/>
+		1: 开启<br/>
+		该选项通过OB(Optical Black)电平检测机制控制黑电平自动调整功能的开关. 在长曝光等场景下, 因暗电流泄漏等因素可能导致OB电平发生偏移. 此功能即为解决该类异常偏移问题而设置的其中一种解决方案.</td>
+      	<td>型号特定</td><td>是</td></tr><tr>
+      	<td>TOUPCAM_OPTION_LINE_LENGTH</td><td>RW</td>
+      	<td>传感器行长(pixel clock)</td>
+      	<td>NA</td><td>是</td></tr><tr>
+      	<td>TOUPCAM_OPTION_LINE_TIME</td><td>RO</td>
+      	<td>传感器行时间(纳秒)</td>
+      	<td>NA</td><td>NA</td></tr><tr>
+      	<td>TOUPCAM_OPTION_UPTIME</td><td>RO</td>
+      	<td>设备上电行时间(毫秒)</td>
+      	<td>NA</td><td>NA</td></tr><tr>
+      	<td>TOUPCAM_OPTION_GPS</td><td>RO</td>
+      	<td>GPS状态<br/>0 =&gt; 不支持<br/>-1 =&gt; GPS设备不在线<br/>1 =&gt; GPS设备在线</td>
+      	<td>NA</td><td>NA</td></tr><tr>
+      	<td>TOUPCAM_OPTION_BITRANGE</td><td>RW</td>
+      	<td>Bit范围: [0, 8], 参阅: <a href="./images/bitrange.png">截图</a></td>
+      	<td>0</td><td>是</td></tr>
+</table></div>
+<p><strong>重要提示: </strong></p>
+<p>a. RW = <strong>R</strong>ead/<strong>W</strong>rite(可读可写); RO = <strong>R</strong>ead <strong>O</strong>nly(只读); WO = <strong>W</strong>rite <strong>O</strong>nly(只写)</p>
+<p><strong>b. 部分设置只可以在相机不在运行时才可以修改(以上表格最后一列值为“否”).</strong></p>
+<p><strong>c. <a id="wrongthread3">不允许在PTOUPCAM_EVENT_CALLBACK和PTOUPCAM_DATA_CALLBACK_V4/V3的回调上下文中调用Toupcam_put_Option设置TOUPCAM_OPTION_TRIGGER, TOUPCAM_OPTION_BITDEPTH, TOUPCAM_OPTION_PIXEL_FORMAT, TOUPCAM_OPTION_BINNING, TOUPCAM_OPTION_ROTATE, 否则返回E_WRONG_THREAD.</a></strong></p>
+</blockquote>
+</li></ul><ul><li><h2><font color="#0000FF"><a id="realtime">Toupcam_put_RealTime<br/>Toupcam_get_RealTime</a></font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong></p>
+  <blockquote>
+    <p>HToupcam h：相机句柄</p>
+    <p>int val:</p>
+    <blockquote>0: 非实时<blockquote>当帧缓冲队列满时停止抓帧, 直到队列中的帧被取走从而队列非满</blockquote>
+    1: 实时<blockquote>使用最小的帧缓冲. 当新帧来到时, 不论帧缓冲区是否满, 都把所有的老帧全部丢弃.<br/>
+          如果有DDR, 将同时把DDR帧缓冲也设为1.</blockquote>
+    2: 软实时<blockquote>当帧缓冲区满时, 丢弃最老的帧再入队新帧</blockquote>
+  </blockquote></blockquote>
+  <p><strong>说明：</strong>如果设置RealTime模式为1, 更短的帧延时, 但是帧速率降低, 流畅性受损. 缺省设为0, 一般不需要改动.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_get_AutoExpoEnable<br/>
+Toupcam_put_AutoExpoEnable<br/>Toupcam_get_AutoExpoTarget<br/>Toupcam_put_AutoExpoTarget<br/>Toupcam_put_AutoExpoRange<br/>Toupcam_get_AutoExpoRange<br/>
+Toupcam_put_MaxAutoExpoTimeAGain<br/>Toupcam_get_MaxAutoExpoTimeAGain<br/>Toupcam_put_MinAutoExpoTimeAGain<br/>Toupcam_get_MinAutoExpoTimeAGain</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p><a id="aexpo">int bAutoExposure:</a></p>
+	<blockquote>0: 不启用自动曝光<br/>
+	1: 自动曝光连续模式<br/>
+	2: 自动曝光“单次”模式</blockquote>
+    <p>unsigned short Target：自动曝光目标</p>
+    <p>unsigned maxTime, unsigned short maxAGain：自动曝光的最大曝光时间和最大模拟增益. 默认值分别为350ms和500.</p>
+	<p>unsigned minTime, unsigned short minAGain：自动曝光的最小曝光时间和最小模拟增益. 默认值分别为0和100.</p>
+  </blockquote>
+  <p><strong>说明：</strong>如果启用自动曝光, 软件将自动设置曝光时间和模拟增益使得目标矩形的平均亮度尽量接近曝光目标(见Toupcam_put_AEAuxRect, Toupcam_get_AEAuxRect).</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_get_ExpoTime<br/>Toupcam_put_ExpoTime<br/>Toupcam_get_ExpTimeRange<br/>Toupcam_get_RealExpoTime</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>unsigned Time：曝光时间, 单位微秒</p>
+    <p>unsigned* nMin, unsigned* nMax, unsigned* nDef：曝光时间的最小值, 最大值, 默认值</p>
+  </blockquote>
+  <p><strong>说明：</strong>曝光时间相关. Toupcam_get_RealExpoTime获取实际曝光时间(实际曝光时间和设置的曝光时间不一定精确相等, 如50HZ/60HZ调整, 传感器曝光时间精度等).</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_get_ExpoAGain<br/>Toupcam_put_ExpoAGain<br/>Toupcam_get_ExpoAGainRange</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>unsigned short AGain：模拟增益, 百分比, 如200表示增益200%</p>
+    <p>unsigned short* nMin, unsigned short* nMax, unsigned short* nDef：模拟增益的最小值, 最大值, 默认值</p>
+  </blockquote>
+  <p><strong>说明：</strong>模拟增益相关.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_put_Hue<br/>Toupcam_get_Hue<br/>Toupcam_put_Saturation<br/>Toupcam_get_Saturation<br/>Toupcam_put_Brightness<br/>Toupcam_get_Brightness<br/>Toupcam_get_Contrast<br/>Toupcam_put_Contrast<br/>Toupcam_get_Gamma<br/>Toupcam_put_Gamma</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong>HToupcam h：相机句柄</p>
+    <p><strong>说明：</strong>设置或者得到：色度, 饱和度, 亮度, 对比度, Gamma</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_get_Chrome<br/>Toupcam_put_Chrome</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>int bChrome：1(单色)或0(彩色)</p>
+  </blockquote>
+  <p><strong>说明：</strong>多色模式或者单色模式.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_get_VFlip<br/>Toupcam_put_VFlip<br/>Toupcam_get_HFlip<br/>Toupcam_put_HFlip</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong> HToupcam h：相机句柄</p>
+    <p><strong>说明：</strong>垂直或者水平翻转</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_put_Speed<br/>Toupcam_get_Speed<br/>Toupcam_get_MaxSpeed</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>unsigned short nSpeed：帧速率级别</p>
+  </blockquote>
+  <p><strong>说明：</strong>最小帧速率等级是0. 最大帧速率级别可以通过Toupcam_get_MaxSpeed函数得到, 和ToupcamModelV2的maxspeed是一个意思.<br/>
+  对于部分支持所谓<a href="#precise">精确帧率</a>的相机, 建议使用精确帧率控制. 为了保持兼容, Speed仍然有效, 映射机制为: MaxSpeed为9(共10级), 分别对应Bandwidth从10%~100%时的最大帧率. 如设置speed为8, 等同于: 精确帧率设置为Bandwith设置为90%时的最大帧率.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_get_FrameRate</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>unsigned* nFrame: 最近时间的帧数</p>
+	<p>unsigned* nTime: 时间(毫秒数)</p>
+	<p>unsigned* nTotalFrame: 相机开启以来收到的总帧数</p>
+  </blockquote>
+  <p><strong>说明：</strong>获取最近时间(大约几秒)相机实际帧率. 用以下算式计算:</p><blockquote><table width="100%" border="0" bgcolor="#B0D0B0">
+	<tr><td><div align="center">FrameRate(fps) = nFrame * 1000.0 / nTime</div></td></tr>
+	</table></blockquote>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_put_HZ<br/>Toupcam_get_HZ</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>int nHZ：0表示60Hz交流, 1表示50Hz交流, 2表示直流</p>
+  </blockquote>
+  <p><strong>说明：</strong>设置光源的电力供应频率</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_get_Temperature<br/>Toupcam_put_Temperature</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败, E_NOTIMPL表示不支持读取/设置温度</p>
+    <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>short nTemperature：以0.1℃为单位, 如32表示3.2℃, -35表示-3.5℃. 设置目标温度为"-2730"或以下表示使用本型号的默认值.</p>
+  </blockquote>
+  <p><strong>说明：</strong>读取传感器温度(TOUPCAM_FLAG_GETTEMPERATURE表示支持读取温度).</p>
+  <blockquote><p>设置传感器目标温度, 和Toupcam_put_Option(, TOUPCAM_OPTION_TECTARGET, )等价.</p></blockquote>
+</li></ul><ul><li><h2><font color="#0000FF"><a id="binskip">Toupcam_put_Mode<br/>Toupcam_get_Mode</a></font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>int bSkip：Bin模式或者Skip模式</p>
+  </blockquote>
+  <p><strong>说明：</strong>设置Bin模式或者Skip模式. 较高分辨率的相机支持2种采样模式, 一种是Bin模式(邻域平均), 一种是Skip模式(抽样提取). 相比较而言, 前者图像效果较好, 但是帧速率降低；后者帧速率较高, 但是图像效果较差.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_put_TempTint<br/>Toupcam_get_TempTint</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败. Temp/Tint模式下起作用, RGB Gain模式下不起作用直接返回E_NOTIMPL. 对于黑白相机, 始终返回E_NOTIMPL.</p>
+    <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>int nTemp, int nTint：色温和Tint</p>
+  </blockquote>
+  <p><strong>说明：</strong>Temp/Tint模式下设置/获取白平衡的色温和Tint参数. 请参阅<a href="#wb">这里</a>.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_AwbOnce</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败. Temp/Tint模式下起作用, RGB Gain模式下不起作用直接返回E_NOTIMPL. 对于黑白相机, 始终返回E_NOTIMPL.</p>
+    <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>PITOUPCAM_TEMPTINT_CALLBACK funTT, void* ctxTT：自动白平衡过程完成时的回调函数以及回调上下文.</p>
+  </blockquote>
+  <p><strong>说明：</strong>Temp/Tint白平衡模式下调用本函数来触发单次自动白平衡功能. 当白平衡参数计算完成的时候, TOUPCAM_EVENT_TEMPTINT事件会通知应用程序(Pull Mode)和调用回调函数. Pull mode中, 如果不使用回调函数, 请把函数指针设为NULL.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_put_WhiteBalanceGain<br/>Toupcam_get_WhiteBalanceGain</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败. RGB Gain模式下起作用, Temp/Tint模式下不起作用直接返回E_NOTIMPL. 对于黑白相机, 始终返回E_NOTIMPL.</p>
+    <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>int aGain[3]：RGB增益值</p>
+  </blockquote>
+  <p><strong>说明：</strong>RGB Gain模式下设置/获取白平衡的RGB增益值. 请参阅<a href="#wb">这里</a>.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_AwbInit</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败. RGB Gain模式下起作用, Temp/Tint模式下不起作用直接返回E_NOTIMPL. 对于黑白相机, 始终返回E_NOTIMPL.</p>
+    <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>PITOUPCAM_WHITEBALANCE_CALLBACK funWB, void* ctxWB：自动白平衡过程完成时的回调函数以及回调上下文.</p>
+  </blockquote>
+  <p><strong>说明：</strong>RGB Gain白平衡模式下调用本函数来触发单次自动白平衡功能. 当白平衡参数计算完成的时候, TOUPCAM_EVENT_WBGAIN事件会通知应用程序(Pull Mode)和调用回调函数. Pull mode中, 如果不使用回调函数, 请把函数指针设为NULL.</p>
+</li></ul><ul><li><h2><font color="#0000FF"><a id="black">Toupcam_AbbOnce</a></font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败. 对于黑白相机, 始终返回E_NOTIMPL.</p>
+    <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>PITOUPCAM_BLACKBALANCE_CALLBACK funBB, void* ctxBB：自动黑平衡过程完成时的回调函数以及回调上下文.</p>
+  </blockquote>
+  <p><strong>说明：</strong>调用本函数来触发单次自动黑平衡功能. 当黑平衡参数计算完成的时候, TOUPCAM_EVENT_BLACK事件会通知应用程序(Pull Mode)和调用回调函数. Pull mode中, 如果不使用回调函数, 请把函数指针设为NULL.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_put_BlackBalance<br/>Toupcam_get_BlackBalance</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>unsigned short aSub[3]：RGB偏移值</p>
+  </blockquote>
+  <p><strong>说明：</strong>设置/获取黑平衡的RGB偏移值</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_put_AWBAuxRect<br/>Toupcam_get_AWBAuxRect<br/>Toupcam_put_AEAuxRect<br/>Toupcam_get_AEAuxRect<br/>Toupcam_put_ABBAuxRect<br/>Toupcam_get_ABBAuxRect</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong>HToupcam h：相机句柄</p>
+    <p><strong>说明：</strong>设置/获取自动白平衡和自动曝光和黑平衡的参考矩形. 默认矩形位于图像正中央, 宽度等于20%图像宽度, 高度等于20%图像高度.</p>
+	<p><strong>注意：坐标永远是相对原始分辨率而言的</strong>, 请参阅<a href="#cord">这里</a>.</p>
+	<p>对于黑白相机, 白平衡和黑平衡始终返回E_NOTIMPL.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_get_MonoMode</font></h2>
+    <p><strong>返回值：</strong>S_OK表示单色模式, S_FALSE表示彩色模式</p>
+    <p><strong>参数：</strong>HToupcam h：相机句柄</p>
+    <p><strong>说明：</strong>是否单色相机, 对应ToupcamModelV2的flag: TOUPCAM_FLAG_MONO</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_get_MaxBitDepth</font></h2>
+    <p><strong>返回值：</strong>相机支持的最大位深度(bitdepth)</p>
+    <p><strong>参数：</strong>HToupcam h：相机句柄</p>
+    <p><strong>说明：</strong>有些型号的相机支持比8bits更大的位深度, 如10, 12, 14, 16等.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_get_StillResolutionNumber<br/>Toupcam_get_StillResolution</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>unsigned nResolutionIndex：分辨率序号</p>
+    <p>int* pWidth, int* pHeight：宽度、高度</p>
+  </blockquote>
+  <p><strong>说明：</strong>Toupcam_get_StillResolutionNumber得到支持的静态抓拍分辨率个数(如UCMOS03100KPA返回3, 表示支持3种分辨率), 如果不支持静态抓拍能力, 返回0.Toupcam_get_StillResolution得到每种分辨率的高度/宽度.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_get_SerialNumber<br/>Toupcam_get_FwVersion<br/>Toupcam_get_HwVersion<br/>Toupcam_get_ProductionDate<br/>Toupcam_get_Revision</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>char sn[32]：存放序列号的缓冲区. 如：TP110826145730ABCD1234FEDC56787</p>
+    <p>char fwver[16]: 存放固件版本号的缓冲区, 如: 3.2.1.20140922</p>
+    <p>char hwver[16]: 存放硬件版本好的缓冲区, 如: 3.12</p>
+    <p>char pdate[10]: 存放生产日期的缓冲区, 如: 20150327</p>
+	<p>unsigned short pRevision: revision</p>
+  </blockquote>
+  <p><strong>说明：</strong>每个相机都有一个唯一的序列号, <a href="#camidsn">这里</a>.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_get_PixelSize</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>unsigned nResolutionIndex：分辨率序号</p>
+    <p>float* x, float* y: 传感器物理像元大小, 如2.4μm × 2.4μm</p>
+  </blockquote>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_put_LEDState</font></h2>
+  <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+  <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>unsigned short iLed：LED灯的序号</p>
+    <p>unsigned short iState：LED状态, 1代表常亮, 2代表闪烁, 其它代表熄灭</p>
+    <p>unsigned short iPeriod：闪烁周期, 毫秒数. 至少需要500ms.</p>
+  </blockquote>
+  <p><strong>说明：</strong>有些相机上安装有1到n个LED灯, 本函数控制这些灯的状态.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_read_EEPROM<br/>Toupcam_write_EEPROM</font></h2>
+  <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示失败或读写的字节数</p>
+  <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>unsigned addr: EEPROM读写地址</p>
+    <p>const unsigned char* pBuffer: 需要写入EEPROM的数据</p>
+    <p>unsigned char* pBuffer: 读取EEPROM的缓冲区</p>
+    <p>unsigned nBufferLen: 缓冲区长度</p>
+  </blockquote>
+  <p><strong>说明：</strong>有些相机上安装有EEPROM可供读写. 读写失败时返回HRESULT错误码(负数), 成功时返回读取或者写入的字节数.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_read_UART<br/>Toupcam_write_UART</font></h2>
+  <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示失败或读写的字节数</p>
+  <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h: 相机句柄</p>
+    <p>const unsigned char* pBuffer: 需要写入的数据</p>
+    <p>unsigned char* pBuffer: 读取缓冲区</p>
+    <p>unsigned nBufferLen: 缓冲区长度</p>
+  </blockquote>
+  <p><strong>说明：</strong>如果读写失败, 返回负数HRESULT；如果成功, 返回读写成功的字节数.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_FfcOnce<br/>Toupcam_DfcOnce<br/>Toupcam_FpncOnce</font></h2>
+  <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+  <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+  </blockquote>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_FfcExport<br/>Toupcam_FfcImport<br/>Toupcam_DfcExport<br/>Toupcam_DfcImport<br/>Toupcam_FpncExport<br/>Toupcam_FpncImport</font></h2>
+  <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+  <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+	<p>filepath: 文件路径</p>
+  </blockquote>
+  <p><strong>说明：</strong>导入导出*.ffc或*.dfc或*.fpnc文件.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_IoControl</font></h2>
+  <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+  <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>unsigned ioLine:</p>
+    <blockquote>0 =&gt; Opto-isolated input<br/>
+    1 =&gt; Opto-isolated output<br/>
+    2 =&gt; GPIO0<br/>
+    3 =&gt; GPIO1</blockquote>
+    <p>unsigned nType: 控制类型, 见下表</p>
+    <p>int outVal: 输出控制值</p>
+	<p>int* inVal: 输入控制值</p>
+  <div align="center"><table width="100%" border="1" cellpadding="0" cellspacing="0" bgcolor="#B0D0B0">
+      <tr><td width="40%">TOUPCAM_IOCONTROLTYPE_GET_SUPPORTEDMODE</td>
+        <td width="60%">支持的模式：<br/>0x01 =&gt; 输入<br/>0x02 =&gt; 输出<br/>(0x01 | 0x02) =&gt; 同时支持输入和输出</td>
+      </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_GPIODIR</td>
+        <td rowspan="2">IO方向：0x00 =&gt; 输入, 0x01 =&gt; 输出</td>
+      </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_GPIODIR</td>
+      </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_FORMAT</td>
+        <td rowspan="2">格式：<br/>0x00 =&gt; 未连接<br/>0x01 =&gt; 三态<br/>0x02 =&gt; TTL<br/>0x03 =&gt; LVDS<br/>0x04 =&gt; RS422<br/>0x05 =&gt; 光耦隔离</td>
+      </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_FORMAT</td>
+      </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_OUTPUTINVERTER</td>
+        <td rowspan="2">输出反相：boolean, 只支持输出信号</td>
+      </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_OUTPUTINVERTER</td>
+      </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_INPUTACTIVATION</td>
+        <td rowspan="2">输入信号触发沿：0x00 =&gt; 上升沿, 0x01 =&gt; 下降沿, 0x02 =&gt; 高电平, 0x03 =&gt; 低电平</td>
+      </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_INPUTACTIVATION</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_DEBOUNCERTIME</td>
+   <td rowspan="2">消抖时间, [0, 20000]微秒</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_DEBOUNCERTIME</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_TRIGGERSOURCE</td>
+   <td rowspan="2">触发源：0x00 =&gt; 光耦隔离输入<br/>
+                                0x01 =&gt; GPIO0<br/>
+                                0x02 =&gt; GPIO1<br/>
+                                0x03 =&gt; 计数器分频模式<br/>
+                                0x04 =&gt; 脉冲模式(PWM)<br/>
+                                0x05 =&gt; 软件</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_TRIGGERSOURCE</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_TRIGGERDELAY</td>
+   <td rowspan="2">触发延迟时间, [0, 5000000]微秒</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_TRIGGERDELAY</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_BURSTCOUNTER</td>
+   <td rowspan="2">突发计数, 范围：[1 ~ 65535]</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_BURSTCOUNTER</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_COUNTERSOURCE</td>
+   <td rowspan="2">计数器模式信号源：<br/>0x00 =&gt; 光耦隔离输入<br/>0x01 =&gt; GPIO0<br/>0x02 =&gt; GPIO1</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_COUNTERSOURCE</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_COUNTERVALUE</td>
+   <td rowspan="2">计数值, 范围：[1 ~ 65535]</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_COUNTERVALUE</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_RESETCOUNTER</td>
+   <td>计数器复位</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_PWM_FREQ</td>
+   <td rowspan="2">PWM频率</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_COUNTERVALUE</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_PWM_DUTYRATIO</td>
+   <td rowspan="2">PWM占空比</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_COUNTERVALUE</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_PWMSOURCE</td>
+   <td rowspan="2">脉冲模式信号源：<br/>0x00 =&gt; 光耦隔离输入<br/>0x01 =&gt; GPIO0<br/>0x02 =&gt; GPIO1</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_PWMSOURCE</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_OUTPUTMODE</td>
+   <td rowspan="2">输出模式：<br/>0x00 =&gt; 触发等待信号<br/>
+                                0x01 =&gt; 曝光有效信号<br/>
+                                0x02 =&gt; 闪光灯信号<br/>
+                                0x03 =&gt; 用户输出信号<br/>
+                                0x04 =&gt; 计数器输出信号<br/>
+                                0x05 =&gt; 定时器输出信号</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_OUTPUTMODE</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_STROBEDELAYMODE</td>
+   <td rowspan="2">闪光灯信号延迟模式, 0 =&gt; 预输出, 1 =&gt; 延迟输出; compared to exposure active signal</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_STROBEDELAYMODE</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_STROBEDELAYTIME</td>
+   <td rowspan="2">闪光灯信号延迟时间, [0, 5000000]微秒</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_STROBEDELAYTIME</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_STROBEDURATION</td>
+   <td rowspan="2">闪光灯脉冲宽度, [0, 5000000]微秒</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_STROBEDURATION</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_USERVALUE</td>
+   <td rowspan="2">用户输出数值：bit0 =&gt; 光耦隔离输出<br/>bit1 =&gt; GPIO0输出<br/>bit2 =&gt; GPIO1输出</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_USERVALUE</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_UART_ENABLE</td>
+   <td rowspan="2">启用串口: 1 =&gt; on; 0 =&gt; off</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_UART_ENABLE</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_UART_BAUDRATE</td>
+   <td rowspan="2">波特率:<br/>0 =&gt; 9600<br/>1 =&gt; 19200<br/>2 =&gt; 38400<br/>3 =&gt; 57600<br/>4 =&gt; 115200</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_UART_BAUDRATE</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_UART_LINEMODE</td>
+   <td rowspan="2">线缆选择:<br/>0 =&gt; TX(GPIO_0)/RX(GPIO_1)<br/>1 =&gt; TX(GPIO_1)/RX(GPIO_0)</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_UART_LINEMODE</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_EXPO_ACTIVE_MODE</td>
+   <td rowspan="2">曝光时间信号(exposure time signal):<br/>0 =&gt; 指定行(specified line)<br/>1 =&gt; common exposure time</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_EXPO_ACTIVE_MODE</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_EXEVT_ACTIVE_MODE</td>
+   <td rowspan="2">曝光事件(exposure event):<br/>0 =&gt; 指定行(specified line)<br/>1 =&gt; common exposure time</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_EXEVT_ACTIVE_MODE</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_EXPO_START_LINE</td>
+   <td rowspan="2">曝光开始行, 默认：1</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_EXPO_START_LINE</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_EXPO_END_LINE</td>
+   <td rowspan="2">曝光结束行, 默认：0<br/>结束行必须不小于开始行</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_EXPO_END_LINE</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_OUTPUTCOUNTERVALUE</td>
+   <td rowspan="2">输出计数器, 范围: [0 ~ 65535]</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_OUTPUTCOUNTERVALUE</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_OUTPUT_PAUSE</td>
+   <td>输出暂停: 1 =&gt; 暂停, 0 =&gt; 继续</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_INPUT_STATE</td>
+   <td>输入状态: 0 (低电平) 或 1 (高电平)</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_USER_PULSE_HIGH</td>
+   <td rowspan="2">用户脉冲高电平时间(微秒)</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_USER_PULSE_HIGH</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_USER_PULSE_LOW</td>
+   <td rowspan="2">用户脉冲低电平时间(微秒)</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_USER_PULSE_LOW</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_USER_PULSE_NUMBER</td>
+   <td rowspan="2">用户脉冲数目, 默认值: 0</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_SET_USER_PULSE_NUMBER</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_EXTERNAL_TRIGGER_NUMBER</td>
+   <td>外部触发信号计数</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_DEBOUNCER_TRIGGER_NUMBER</td>
+   <td>消抖后的触发信号计数</td>
+ </tr><tr><td>TOUPCAM_IOCONTROLTYPE_GET_EFFECTIVE_TRIGGER_NUMBER</td>
+   <td>有效触发信号计数</td>
+ </tr></table></div></blockquote></li></ul>
+<ul><li><h2><font color="#0000FF"><a id="levelrangev2">Toupcam_put_LevelRangeV2<br/>Toupcam_get_LevelRangeV2</a></font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+	<p>unsigned short mode: 模式, 见下表</p>
+	  <div align="center"><table width="100%" border="1" cellpadding="0" cellspacing="0" bgcolor="#B0D0B0"><tr>
+        <td width="50%">TOUPCAM_LEVELRANGE_MANUAL</td>
+        <td width="50%">手动模式</td>
+      </tr><tr><td>TOUPCAM_LEVELRANGE_ONCE</td><td>单次</td>
+	  </tr><tr><td>TOUPCAM_LEVELRANGE_CONTINUE</td><td>持续模式</td>
+	  </tr><tr><td>TOUPCAM_LEVELRANGE_ROI</td><td>更新ROI矩形</td>
+</tr></table></div>
+	<p>RECT* pRoiRect: ROI矩形</p>
+    <p>unsigned short aLow[4], unsigned short aHigh[4]: R, G, B和灰度的Level Range. RGB只对彩色图像有效, 灰度只对灰度图像有效.</p>
+  </blockquote>
+  <p><strong>说明：</strong>LevelRange相关.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_put_Demosaic</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>    
+    <p><strong>参数：</strong></p><blockquote><p>funDemosaic: 替换内建的demosaic函数</p>
+    <blockquote><table width="100%" border="0" bgcolor="#B0D0B0"><tr>
+        <td><div align="center">typedef void (*PTOUPCAM_DEMOSAIC_CALLBACK)(unsigned nFourCC, int nW, int nH, const void* input, void* output, unsigned char nBitDepth, void* ctxDemosaic);</div></td>
+      </tr></table></blockquote>
+	<p>ctxDemosaic: 回调函数上下文</p></blockquote>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_Update</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong></p><blockquote><p>camId：相机实例ID</p>
+	<p>filePath: *.ufw文件全路径</p>
+	<p>pFun, ctxProgress: 进度百分比回调函数</p></blockquote>
+    <p><strong>说明：</strong>固件升级. 升级过程中请千万不要拔出设备或断电, 这非常非常重要. 一旦升级过程中拔出设备或断电, 相机将不再可用, 只能返厂维修.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_Replug</font></h2>
+    <p><strong>返回值：</strong>&gt;0: 被插拔的相机数量; =0: 没有找到对应的相机; E_ACCESSDENIED: 权限不足, 需要管理员权限</p>
+    <p><strong>参数：</strong></p><blockquote><p>camId：相机实例ID</p></blockquote>
+    <p><strong>说明：</strong>模拟插拔, 整个过程大约需要3秒钟</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_LevelRangeAuto</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong>HToupcam h：相机句柄</p>
+    <p><strong>说明：</strong>软件自动LevelRange</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_put_LevelRange<br/>Toupcam_get_LevelRange</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>unsigned short aLow[4], unsigned short aHigh[4]: R, G, B和灰度的Level Range. RGB只对彩色图像有效, 灰度只对灰度图像有效.</p>
+  </blockquote><p><strong>说明：</strong>软件LevelRange相关.</p>
+</li></ul><ul><li><h2><font color="#0000FF">Toupcam_GetHistogram</font></h2>
+    <p><strong>返回值：</strong><a href="#hresult">HRESULT</a>类型表示成功或失败</p>
+    <p><strong>参数：</strong></p>
+  <blockquote><p>HToupcam h：相机句柄</p>
+    <p>PITOUPCAM_HISTOGRAM_CALLBACK funHistogram, void* ctxHistogram：直方图数据的回调函数以及回调上下文</p>
+  </blockquote><p><strong>说明：</strong>获取直方图数据</p>
+</li></ul><ul><li><h2><font color="#0000FF">一些参数的范围以及默认值</font></h2>
+<div align="center"><table width="100%" border="1" cellpadding="0" cellspacing="0" bgcolor="#B0D0B0"><tr>
+        <td colspan="3">参数</td><td width="15%">范围</td><td width="9%">默认值</td><td width="19%">获取</td><td width="17%">设置</td><td width="15%">自动</td>
+      </tr><tr>
+        <td colspan="3">Auto Exposure Target<br/>(自动曝光目标亮度)</td>
+        <td>16~220</td><td>120</td>
+        <td>Toupcam_get_AutoExpoTarget</td>
+        <td>Toupcam_put_AutoExpoTarget</td><td></td>
+      </tr><tr>
+        <td colspan="3">Exposure Gain<br/>(曝光增益)</td>
+        <td>100~</td><td>100</td>
+        <td>Toupcam_get_ExpoAGain</td>
+        <td>Toupcam_put_ExpoAGain</td><td></td>
+      </tr><tr>
+        <td width="13%" rowspan="5">白平衡</td>
+        <td width="10%" rowspan="2">Temp/Tint模式</td>
+        <td width="8%">Temp(色温)</td>
+        <td>2000~15000</td><td>6503</td>
+        <td rowspan="2">Toupcam_get_TempTint</td>
+        <td rowspan="2">Toupcam_put_TempTint</td>
+        <td rowspan="2">Toupcam_AwbOnce</td>
+      </tr><tr>
+        <td>Tint</td><td>200~2500</td><td>1000</td>
+      </tr><tr>
+        <td rowspan="3">RGB Gain模式</td>
+        <td>Red Gain</td>
+        <td rowspan="3">-127~127</td>
+        <td rowspan="3">0</td>
+        <td rowspan="3">Toupcam_get_WhiteBalanceGain</td>
+        <td rowspan="3">Toupcam_put_WhiteBalanceGain</td>
+        <td rowspan="3">Toupcam_AwbInit</td>
+      </tr><tr><td>Green Gain</td>
+	  </tr><tr><td>Blue  Gain</td>
+      </tr><tr>
+        <td colspan="3">黑平衡</td>
+        <td>0~255(位深度=8)<br/>
+		0~1023(位深度=8)<br/>
+		0~4095(位深度=8)<br/>
+		0~16383(位深度=8)<br/>
+		0~65535(位深度=8)</td><td>0</td>
+        <td>Toupcam_get_BlackBalance</td><td>Toupcam_put_BlackBalance</td><td>Toupcam_AbbOnce</td>
+      </tr><tr>
+        <td colspan="2" rowspan="2">LevelRange</td>
+		<td>软件</td><td rowspan="2">0~255</td>
+        <td rowspan="2">Low = 0<br/>High = 255</td>
+        <td>Toupcam_get_LevelRange</td><td>Toupcam_put_LevelRange</td><td>Toupcam_LevelRangeAuto</td>
+      </tr><tr>
+		<td>硬件</td><td>Toupcam_get_LevelRangeV2</td>
+        <td colspan="2">Toupcam_put_LevelRangeV2</td>
+	  </tr><tr>
+        <td colspan="3">Contrast(对比度)</td><td>-255~255</td><td>0</td>
+        <td>Toupcam_get_Contrast</td><td>Toupcam_put_Contrast</td><td></td>
+      </tr><tr>
+        <td colspan="3">Hue(色度)</td><td>-180~180</td><td>0</td>
+        <td>Toupcam_get_Hue</td><td>Toupcam_put_Hue</td><td></td>
+      </tr><tr>
+        <td colspan="3">Saturation(饱和度)</td><td>0~255</td><td>128</td>
+        <td>Toupcam_get_Saturation</td><td>Toupcam_put_Saturation</td><td></td>
+      </tr><tr>
+        <td colspan="3">Brightness(亮度)</td><td>-255~255</td><td>0</td>
+        <td>Toupcam_get_Brightness</td><td>Toupcam_put_Brightness</td><td></td>
+      </tr><tr>
+        <td colspan="3">Gamma</td><td>20~180</td><td>100</td><td>Toupcam_get_Gamma</td><td>Toupcam_put_Gamma</td>
+		<td></td></tr><tr><td colspan="3">Black Level(暗电平)</td>
+        <td>0~31 (位深度=8)<br/>0~31 * 4 (位深度=10)<br/>0~31 * 16 (位深度=12)<br/>0~31 * 64 (位深度=14)<br/>0~31 * 256 (位深度=16)</td>
+        <td>型号特定</td><td>Toupcam_get_Option</td><td>Toupcam_put_Option</td>
+<td></td></tr><tr>
+    <td rowspan="5">Auto Exposure<br/>(自动曝光)</td>
+    <td rowspan="2">Max(最大)</td>
+    <td>Exposure Time<br/>(曝光时间)</td>
+    <td rowspan="2">&nbsp;</td><td>350ms</td>
+    <td rowspan="2">Toupcam_get_AutoExpoRange<br/>Toupcam_get_MaxAutoExpoTimeAGain<br/>Toupcam_get_MinAutoExpoTimeAGain</td>
+    <td rowspan="2">Toupcam_put_AutoExpoRange<br/>Toupcam_put_MaxAutoExpoTimeAGain<br/>Toupcam_put_MinAutoExpoTimeAGain</td>
+    <td rowspan="2">&nbsp;</td>
+  </tr><tr>
+    <td>Gain<br/>(增益)</td><td>500</td>
+  </tr><tr>
+    <td rowspan="2">Min(最小)</td>
+    <td>Exposure Time<br/>(曝光时间)</td>
+    <td rowspan="2">&nbsp;</td><td>0</td>
+    <td rowspan="2">Toupcam_get_MinAutoExpoTimeAGain</td>
+    <td rowspan="2">Toupcam_put_MinAutoExpoTimeAGain</td>
+    <td rowspan="2">&nbsp;</td>
+  </tr><tr>
+    <td>Gain<br/>(增益)</td><td>100</td>
+  </tr><tr>
+    <td colspan="2">Percent(百分比)</td><td>0~100</td>
+    <td>0(禁用)<br/>10(启用)</td>
+    <td colspan="2">TOUPCAM_OPTION_AUTOEXPOSURE_PERCENT</td>
+    <td></td></tr>
+  <tr><td colspan="3">TEC目标</td>
+        <td>型号特定</td><td>型号特定</td>
+        <td colspan="2">TOUPCAM_OPTION_TECTARGET</td>
+	<td></td></tr>
+</table></div></li></ul>
+<hr/><h1><font color="#0000FF"><a id="dotnet">5. .NET(C#和VB.NET)</a></font></h1><hr/>
+<p>Toupcam支持.NET开发环境(C#和VB.NET).</p>
+<p>toupcam.cs使用P/Invoke调用至toupcam.dll. 把toupcam.cs拷贝到你的C#工程中使用, 请参考<a href="#dotnetsample">示例代码</a>.</p>
+<p>请主意<strong>Toupcam C#包装类的实例通过静态方法Open或者OpenByIndex得到, 而不是通常的obj = new Toupcam</strong>(构造函数特意是私有的).</p>
+<p>绝大多数Toupcam类的方法和属性都P/Invoke调用至toupcam.dll/so中对应的原生C/C++ Toupcam_xxx函数. 所以, 关于Toupcam_xxx的文档说明都适用于C#中对应的属性或方法, 比如, C#中的Snap方法调用Toupcam_Snap函数, 关于Toupcam_Snap函数的说明同样适用于C# Toupcam类的Snap方法：</p>
+<table width="100%" border="0" bgcolor="#B0D0B0">
+<tr><td><pre>[DllImport(&quot;toupcam.dll&quot;, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
+private static extern int Toupcam_Snap(SafeHToupcamHandle h, uint nResolutionIndex);
+
+public bool Snap(uint nResolutionIndex)
+{
+    if (_handle == null || _handle.IsInvalid || _handle.IsClosed)
+        return false;
+    return (Toupcam_Snap(_handle, nResolutionIndex) &gt;= 0);
+}</pre></td></tr></table>
+<p>VB.NET和C#是类似的, 不另说明.</p>
+<hr/><h1><font color="#0000FF"><a id="python">6. Python</a></font></h1><hr/>
+<p>Toupcam支持Python(版本3.0及以上)开发, 请import toupcam导入toupcam.py, <a href="#demopython">参考示例代码simplest.py, qt5.py, qt6.py</a>.</p>
+<p>请注意<strong>toupcam.Toupcam python包装类的实例通过类方法(classmethod)Open或者OpenByIndex得到, 而不是通常的obj = toupcam.Toupcam()</strong>.</p>
+<p>绝大多数Toupcam类的方法都通过ctypes调用至toupcam.dll/so/dylib中对应的原生C/C++ Toupcam_xxx函数. 所以, 关于Toupcam_xxx的文档说明都适用于python中的对应方法.</p>
+<p>参见toupcam.py中的__errcheck, 原始的HRESULT返回值被映射成HRESULTException异常(win32平台从OSError继承).</p>
+<p>toupcam dll/so/dylib库文件请和toupcam.py存放在同一目录.</p>
+<hr/><h1><font color="#0000FF"><a id="java">7. Java</a></font></h1><hr/>
+<p>Toupcam支持Java开发. toupcam.java使用<a href="https://github.com/java-native-access/jna" target="_blank">JNA</a>调用至toupcam.dll/so/dylib. 把toupcam.java拷贝到你的JAVA工程中使用, 请参考示例代码simplest.java(控制台程序), javafx.java, swing.java.</p>
+<p>请注意<strong>toupcam java包装类的实例通过静态方法Open或者OpenByIndex得到, 而不是通常的obj = new toupcam()</strong>(构造函数特意是私有的).</p>
+<p>绝大多数toupcam类的方法都通过<a href="https://github.com/java-native-access/jna" target="_blank">JNA</a>调用至toupcam.dll/so/dylib中对应的原生C/C++ Toupcam_xxx函数. 所以, 关于Toupcam_xxx的文档说明都适用于java中的对应方法.</p>
+<p>参见toupcam.java中的errcheck, 原始的HRESULT返回值被映射成HRESULTException异常.</p>
+<p>提醒: (1)从github下载jna-*.jar并加入依赖库; (2)toupcam.dll/so/dylib放在合适目录</p>
+<hr/><h1><font color="#0000ff">8. 示例</font></h1><hr/>
+<div align="center"><table width="100%" border="1" cellpadding="0" cellspacing="0" bgcolor="#B0D0B0"><tr>
+        <td width="14%" colspan="2">名称</td>
+        <td width="8%">平台</td>
+        <td width="6%">语言</td>
+        <td width="6%">依赖</td>
+        <td width="6%">界面</td>
+        <td width="60%">描述</td>
+      </tr><tr>
+		<td colspan="2">demosimplest</td>
+		<td rowspan="12">Win32<br/>Linux<br/>macOS<br/>Android</td>
+		<td rowspan="23">C++</td>
+		<td rowspan="12">&nbsp;</td>
+		<td rowspan="12">console</td>
+		<td>最简单的示例, 大约70行代码. <a href="./images/demosimplest.png">截图</a>.</td>
+	  </tr><tr>
+		<td colspan="2">gigesimplest</td>
+		<td>最简单使用GigE相机示例, 大约75行代码</td>
+	  </tr><tr>
+		<td colspan="2">demowait</td>
+		<td>不使用回调函数, 使用Toupcam_WaitImageV4获取图像, 大约60行代码.</td>
+      </tr><tr>
+		<td colspan="2">demomulti</td>
+		<td>打开所有枚举到的相机(可能多台)并获取图像, 大约90行代码.</td>
+      </tr><tr>
+		<td colspan="2">demostill</td>
+		<td>最简单的静态图像抓拍, 大约120行代码.</td>
+      </tr><tr>
+		<td colspan="2">demosofttrigger</td>
+		<td>最简单的软触发示例, 大约80行代码.</td>
+      </tr><tr>
+		<td colspan="2">demotriggersync</td>
+		<td>同步软触发(TriggerSync)示例, 大约80行代码.</td>
+      </tr><tr>
+		<td colspan="2"><a id="democfg">democfg</a></td>
+		<td>配置文件示例(参阅<a href="#cfg">这里</a>), 大约80行代码.</td>
+      </tr><tr>
+		<td colspan="2">demoexternaltrigger</td>
+		<td>最简单的外部触发示例, 大约130行代码.</td>
+      </tr><tr>
+		<td colspan="2">demotriggerout</td>
+		<td>最简单的输出信号示例, 大约150行代码.</td>
+      </tr><tr>
+		<td colspan="2">demoraw</td>
+		<td>RAW数据, 静态抓拍以及保存RAW数据到*.raw文件, 大约140行代码. <a href="./images/demoraw.png">截图</a>.</td>
+	  </tr><tr>
+		<td colspan="2">demostillraw</td>
+		<td>静态RAW抓拍并保存到*.raw文件, 大约140行代码.</td>
+	  </tr><tr>
+		<td colspan="2">demoqt</td>
+		<td rowspan="2">Win32<br/>Linux<br/>macOS</td>
+		<td rowspan="2">Qt</td>
+		<td rowspan="18">GUI</td>
+		<td>Qt示例, <a href="./images/demoqt.png">截图</a>.<br/>枚举设备, 打开设备, 预览视频, 抓拍(静态)图像, 设置分辨率, 保存图像到文件, 设置自动曝光和白平衡, 帧率(fps)计算, 等等. 这个示例使用Pull Mode机制, StartPullModeWithCallback</td>
+	  </tr><tr>
+		<td colspan="2">demotwoqt</td>
+		<td>Qt示例, <a href="./images/demotwoqt.png">截图</a>.<br/>同时打开2台相机</td>
+	  </tr><tr>
+		<td colspan="2">democpp</td>
+		<td rowspan="9">Win32</td>
+		<td rowspan="6">ATL/<a href="http://sourceforge.net/projects/wtl" target="_blank">WTL</a></td>
+		<td><a href="./images/democpp.png">截图</a>. 枚举设备(响应<a href="#hotplugnotify">设备插入/拔出通知</a>), <a href="#apigige">初始化支持GigE</a>, 打开设备, 预览视频, 抓拍图像, 设置分辨率, 触发, 多种图片格式(.bmp, .jpg, .png等)保存图像到文件, wmv格式录像, 触发模式, IO控制, 读写EEPROM/FLASH等等. 这个示例使用Pull Mode机制. 为了保持代码整洁, 示例使用的WTL库可以从这个链接下载<a href="http://sourceforge.net/projects/wtl" target="_blank">http://sourceforge.net/projects/wtl</a></td>
+	  </tr><tr>
+		<td colspan="2">democallback</td>
+		<td><a href="./images/democallback.png">截图</a>. 使用Pull Mode模式, StartPullModeWithCallback</td>
+	  </tr><tr>
+		<td colspan="2">demopush</td>
+		<td><a href="./images/demopush.png">截图</a>. 使用Push Mode机制, StartPushModeV4</td>
+	  </tr><tr>
+		<td colspan="2">demomono</td>
+		<td>演示黑白相机的8和16bits</td>
+	  </tr><tr>
+		<td colspan="2">democns</td>
+		<td><a href="./images/democns.png">截图</a>. 一致性测试: 图像平均划分成m*n个区域, 每个区域取中心的小块区域计算平均值, 把平均值连成线条, 查看线条上下波动幅度.</td>
+	  </tr><tr>
+		<td colspan="2">triggertest</td>
+		<td><a href="./images/triggertest.png">截图</a>. 软触发测试, 使用后台线程保存图像文件到磁盘(推荐SSD, 否则当磁盘速度不足时, 会导致存盘速度跟不上, 队列中的图像越攒越多, 消耗内存也越来越大).</td>
+	  </tr><tr>
+		<td colspan="2">demomfc</td>
+		<td rowspan="3">MFC</td>
+		<td><a href="./images/demomfc.png">截图</a>. 打开设备, 预览视频, 抓拍图像, 设置分辨率, 多种图片格式(.bmp, .jpg, .png等)保存图像到文件, 等等. 这个示例使用Pull Mode机制</td>
+	  </tr><tr>
+		<td colspan="2">demod3d11</td>
+		<td>类似demomfc, 改用D3D11显示视频</td>
+	  </tr><tr>
+		<td colspan="2">autotest</td>
+		<td><a href="./images/autotest.png">截图</a>. 自动测试工具(用于自动测试开关相机, 分辨率切换, 抓拍, ROI, 位深度切换等等)</td>
+	  </tr><tr>
+		<td colspan="2"><a id="dotnetsample">demowpf</a></td>
+		<td rowspan="5">.NET</td>
+		<td rowspan="4">C#</td>
+		<td>WPF</td>
+		<td>winwpf示例, <a href="./images/demowpf.png">截图</a>.<br/>支持枚举设备, 打开设备, 预览视频, 抓拍(静态)图像, 保存图片到文件, 设置自动曝光和白平衡, 帧率(fps)计算, 等等. 这个示例使用Pull Mode机制, StartPullModeWithCallback</td>
+	  </tr><tr>
+		<td colspan="2">demowinformcs</td>
+		<td rowspan="4">WinForm</td>
+		<td>winform示例, <a href="./images/demowinformcs.png">截图</a>.<br/>支持枚举设备, 打开设备, 预览视频, 抓拍(静态)图像, 保存图片到文件, 设置自动曝光和白平衡, 帧率(fps)计算, 等等. 这个示例使用Pull Mode机制, StartPullModeWithCallback</td>
+	  </tr><tr>
+		<td colspan="2">demopushcs</td>
+		<td>winform示例, 使用Push Mode机制</td>
+	  </tr><tr>
+		<td colspan="2">demotwocs</td>
+		<td>winform示例, <a href="./images/demotwocs.png">截图</a>.<br/>同时打开2台相机, 使用Pull Mode机制, StartPullModeWithCallback</td>
+	  </tr><tr>
+		<td colspan="2">demowinformvb</td><td>VB.NET</td>
+		<td>winform示例, <a href="./images/demowinformvb.png">截图</a>.<br/>支持枚举设备, 打开设备, 预览视频, 抓拍(静态)图像, 保存图片到文件, 设置自动曝光和白平衡, 帧率(fps)计算, 等等. 这个示例使用Pull Mode机制, StartPullModeWithCallback</td>
+	  </tr><tr>
+		<td colspan="2">demouwp</td>
+		<td>WinRT</td><td>C#</td>
+		<td rowspan="2">&nbsp;</td>
+		<td>UWP(Universal Windows Platform)简单示例, <a href="./images/demouwp.png">截图</a><br/>编译运行示例之前请注意文件Package.appxmanifest中的DeviceCapability下的vid</td>
+	  </tr><tr>
+		<td colspan="2">demoandroid</td><td>Android</td><td>C++, Java</td>
+		<td>Android示例</td>
+	  </tr><tr>
+		<td rowspan="3"><a id="demojava">demojava</a></td>
+		<td>simplest</td>
+		<td rowspan="5">Win32<br/>Linux<br/>macOS</td>
+		<td rowspan="3">Java</td>
+		<td rowspan="3"><a href="https://github.com/java-native-access/jna" target="_blank">jna</a></td>
+		<td>console</td>
+		<td>最简单java示例. IntelliJ工程</td>
+	  </tr><tr>
+		<td>javafx</td>
+		<td rowspan="2">GUI</td>
+		<td>javafx示例. IntelliJ工程</td>
+	  </tr><tr>
+		<td>swing</td>
+		<td>swing示例. IntelliJ工程</td>
+	  </tr><tr>
+		<td rowspan="2"><a id="demopython">demopython</a></td>
+		<td>simplest</td><td rowspan="2">Python</td>
+		<td></td><td>console</td>
+		<td>最简单python示例</td>
+	  </tr><tr>
+		<td>qt5<br/>qt6</td><td>PyQt</td><td rowspan="12">GUI</td>
+		<td>PyQt示例, <a href="./images/pyqt.png">截图</a>.</td>
+	  </tr><tr>
+		<td colspan="2"><a id="demodshow">demodshow</a></td>
+		<td rowspan="2">DirectShow</td><td rowspan="2">C++</td><td>MFC</td>
+		<td>DirectShow示例</td>
+	  </tr><tr>
+		<td colspan="2">amcap</td><td></td>
+		<td>微软directshow示例, <a href="https://github.com/microsoft/Windows-classic-samples/tree/main/Samples/Win7Samples/multimedia/directshow/capture/amcap" target="_blank">https://github.com/microsoft/Windows-classic-samples/tree/main/Samples/Win7Samples/multimedia/directshow/capture/amcap</a></td>
+	  </tr><tr>
+		<td colspan="2"><a id="demolabview">LVDemo1</a></td>
+		<td rowspan="3">LabView</td>
+		<td rowspan="3">&nbsp;</td>
+		<td rowspan="3">&nbsp;</td>
+		<td>Labview示例单台相机, <a href="./images/lvdemo1.png">截图</a></td>
+	  </tr><tr>
+		<td colspan="2">LVDemo2</td>
+		<td>Labview示例同时打开两台相机</td>
+	  </tr><tr>
+        <td colspan="2">LVDemo3</td>
+        <td>Labview示例, <a href="./images/lvdemo3.png">截图</a>.<br />打开设备, 预览视频, 抓拍(静态)图像, 设置分辨率, 设置自动曝光, 位深度切换, 颜色调整, 白(黑)平衡设置, 数字binning设置, 平场(暗场)校正, 等等.</td>
+	  </tr><tr>
+		<td colspan="2">demoopencv4</td>
+		<td>Win32<br/>Linux<br/>macOS</td>
+		<td>C++</td>
+		<td>OpenCV</td>
+		<td>opencv示例</td>
+	  </tr><tr>
+		<td rowspan="5">imagepro</td>
+		<td rowspan="2">liveedf</td>
+		<td rowspan="5">Win32</td>
+		<td>C++</td><td>Qt</td>
+		<td>Qt示例, <a href="./images/liveedfqt.png">snapshot</a>.</td>
+	  </tr><tr>
+		<td>C#</td><td>WinForm</td>
+		<td>C#示例, <a href="./images/liveedfcs.png">snapshot</a>.</td>
+	  </tr><tr>
+		<td rowspan="2">livestack</td>
+		<td>C++</td><td>Qt</td>
+		<td>Qt示例, <a href="./images/livestackqt.png">snapshot</a>.</td>
+	  </tr><tr>
+	  <td>C#</td><td>WinForm</td>
+		<td>C#示例, <a href="./images/livestackcs.png">snapshot</a>.</td>
+	  </tr><tr>
+		<td>demostitch</td>
+		<td>C++</td><td>Qt</td>
+		<td>Qt示例</td>
+</tr></table></div>
+<hr/><h1><font color="#0000ff">9. 杂项</font></h1><hr/>
+<h2><font color="#0000FF">a. <a id="mtu">Windows设置网卡MTU, 开启巨帧</a></font></h2>
+(1) 启动"设备管理器", 展开"网络适配器". <a href="./images/devmgr.png">截图</a><br/>
+(2) 右键单击目标网卡, 然后选择右键菜单"属性"<br/>
+(3) 选择"高级"选项卡, 在属性框中选择"巨型数据包"(Jumbo Frame), 然后在右侧的值中选择"9014字节"(不同网卡型号可能数值稍有不同), 单击"确定"保存更改. <a href="./images/mtu.png">截图</a><br/>
+(4) 执行以下命令查看网卡MTU. <a href="./images/mtushow.png">截图</a><br/><table width="100%" border="0" bgcolor="#B0D0B0"><tr><td align="center"><pre>netsh interface ipv4 show subinterface</pre></td></tr></table>
+<hr/><h1><font color="#0000ff">10. 更新历史</font></h1><hr/>
+<p>v59: 增加RAW=-1模式, 参阅<a href="#rawo">这里</a></p>
+<p>v58: 通过sn, name (GigE: ip, mac)参数Open相机</p>
+<p>v57: 增加Toupcam_PullImageV4, ToupcamFrameInfoV4, GPS</p>
+<p>v56: 性能提升: RAW模式下减少帧数据copy</p>
+<p>v55: 增加支持HDR Pixel Format</p>
+<p>v54: 增加支持GigE. 请参阅<a href="#apigige">这里</a></p>
+<p>v53: 增加ToupcamFrameInfoV3, Toupcam_PullImageV3, Toupcam_StartPushModeV4</p>
+<p>v52: 安卓Java侧传递文件描述符给<a href="#apiopen">Toupcam_Open</a>打开相机. 请参阅<a href="#androidopen">这里</a></p>
+<p>v51: 支持自动曝光“单次”模式. 请参阅<a href="#aexpo">这里</a></p>
+<p>v50: Windows(x86/x64), Linux(x64), Android(x64)平台上SIMD加速<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;前端和后端队列长度: <a href="#frontend">TOUPCAM_OPTION_FRONTEND_DEQUE_LENGTH</a>和<a href="#backend">TOUPCAM_OPTION_BACKEND_DEQUE_LENGTH</a></p>
+<p>v49: 增加支持相机配置的保存和加载. 请参阅<a href="#cfg">这里</a></p>
+<p>v48: 硬件事件. 请参阅<a href="#hwflag">这里</a>和<a href="#hwevent">这里</a>和<a href="#hwoption">这里</a></p>
+<p>v47: 硬件Level Range. 请参阅<a href="#hwlevelrange">这里</a>和<a href="#levelrangev2">这里</a></p>
+<p>v46: 增加Denose支持, 请参阅<a href="#denoise">这里</a></p>
+<p>v45: 增加支持sequencer trigger, UART, 混合触发(<a href="#mix">外触发同时启用软件触发</a>)</p>
+<p>v44: 扩充了实时realtime模式, 请参阅<a href="#realtime">这里</a><br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;增加TOUPCAM_OPTION_CALLBACK_THREAD和TOUPCAM_OPTION_FRAME_DEQUE_LENGTH</p>
+<p>v43: 触发模式下发生错误时, 可以用<a href="#reload">TOUPCAM_OPTION_RELOAD</a>恢复最后一帧的数据</p>
+<p>v42: 帧率精确控制和带宽, 请参阅<a href="#precise">这里</a>和TOUPCAM_FLAG_PRECISE_FRAMERATE</p>
+<p>v41: 增加包超时, 请参阅<a href="#nopacket">这里</a></p>
+<p>v40: 增加自动测试工具, 见samples\autotest</p>
+<p>v39: 更新C#/VB.NET/Java/Python</p>
+<p>v38: 增加运行时修改字节序, BGR/RGB, 请参阅<a href="#bgr">这里</a></p>
+<p>v37: 增加Android支持<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;增加Toupcam_StartPushModeV3 (Toupcam_StartPushModeV2和Toupcam_StartPushMode过时)</p>
+<p>v36: 增加Java支持. 请参阅<a href="#java">这里</a></p>
+<p>v35: 增加Python支持. 请参阅<a href="#python">这里</a></p>
+<p>v34: 自动对焦和对焦马达</p>
+<p>v33: 扩充TOUPCAM_OPTION_AGAIN至TOUPCAM_OPTION_AUTOEXP_POLICY, 支持更多选项. 请参阅<a href="#aepolicy">这里</a></p>
+<p>v32: 增加支持Windows 10 on ARM和ARM64, 包括Desktop和WinRT</p>
+<p>v31: 增加Toupcam_deBayerV2, 支持RGB48和RGB64</p>
+<p>v30: 增加TOUPCAM_FLAG_CGHDR</p>
+<p>v29: 增加ToupcamFrameInfoV2以及PullImageV2和StartPushModeV2一组函数, 一些相机支持帧序号和帧时间戳. 请参阅<a href="#infov2">这里</a></p>
+<p>v28: 增加Toupcam_read_Pipe/Toupcam_write_Pipe/Toupcam_feed_Pipe</p>
+<p>v27: 增加Toupcam_SnapN, 静态抓拍支持多张图片, 请参阅<a href="#snapn">这里</a>和decmpcpp</p>
+<p>v26: 增加恢复出厂设置, TOUPCAM_OPTION_FACTORY</p>
+<p>v25: 增加锐化, TOUPCAM_OPTION_SHARPENING</p>
+<p>v24: 增加曝光时间的50/60HZ约束</p>
+<p>v23: 增加Linux armhf、armel和arm64的支持<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;增加FFC和DFC, 请参阅<a href="#ffc">这里</a>和<a href="#dfc">这里</a></p>
+<p>v22: 增加TOUPCAM_OPTION_DDR_DEPTH, 请参阅<a href="#ddrdepth">这里</a></p>
+<p>v21: 增加Toupcam_IoControl</p>
+<p>v20: 增加Toupcam_EnumV2, ToupcamModelV2, ToupcamDeviceV2; (Toupcam_Enum, ToupcamModel和ToupcamInst过时)<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;增加Pixel Format, 见TOUPCAM_OPTION_PIXEL_FORMAT; (TOUPCAM_OPTION_BITDEPTH的超集)<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;增加平场校正(Flat Field Correction)</p>
+<p>v19: 增加黑平衡: 请参阅<a href="#black">这里</a></p>
+<p>v18: 增加Toupcam_get_Revision</p>
+<p>v17: 增加<a href="#rotate">TOUPCAM_OPTION_ROTATE</a></p>
+<p>v16: 增加<a href="#ddr">TOUPCAM_FLAG_DDR</a>, 使用超大容量DDR(Double Data Rate SDRAM)作帧缓冲</p>
+<p>v15: 增加<a href="#binning">TOUPCAM_OPTION_BINNING</a></p>
+<p>v14: 增加对WinRT / UWP (Universal Windows Platform) / Windows Store App的支持</p>
+<p>v13: 支持行间隔(Row Pitch, Stride), 请参阅<a href="#rowpitch1">Toupcam_PullImageWithRowPitch</a>和<a href="#rowpitch2">Toupcam_PullStillImageWithRowPitch</a></p>
+<p>v12: 支持RGB32, 8位灰度, 16位灰度, 请参阅<a href="#rgb">这里</a></p>
+<p>v11: 暗电平(Black Level), 请参阅<a href="#blacklevel">这里</a></p>
+<p>v10: Demosaic算法, 请参阅<a href="#demosaic">这里</a></p>
+<p>v9: 直方图数据类型从double改成float</p>
+<p>v8: 支持模拟触发模式, 请参阅<a href="#trigger">这里</a></p>
+<p>v7: 位深度&gt;8时支持RGB48输出, 请参阅<a href="#rgb">这里</a></p>
+<p>v6: 支持触发(Trigger)模式, 请参阅<a href="#trigger">这里</a></p>
+<p>v5: 白平衡的两种模式: Temp/Tint模式 vs RGB Gain模式, 请参阅<a href="#wb">这里</a></p>
+<p>v4: 支持ROI (Region Of Interest), 请参阅<a href="#roi">这里</a></p>
+<p>v3: 支持更多的位深度(bitdepth): 10bits, 12bits, 14bits, 16bits</p>
+<p>v2: 支持RAW模式, 请参阅<a href="#raw">这里</a>和<a href="#rawo">这里</a>；增加对Linux和macOS的支持</p>
+<p>v1: 初始发布</p>
+</body>
+</html>

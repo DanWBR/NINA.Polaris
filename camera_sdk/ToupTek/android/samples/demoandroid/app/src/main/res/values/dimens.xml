@@ -1,0 +1,4 @@
+<resources>
+    <dimen name="camitem_width">136dp</dimen>
+    <dimen name="padding">10dp</dimen>
+</resources>
