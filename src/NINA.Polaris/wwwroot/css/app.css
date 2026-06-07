@@ -3329,6 +3329,45 @@ label select.input-sm {
     width: 100%;
 }
 
+/* Compact focus slider (PREVIEW "Focus" groupbox). appearance:none strips
+   the native range decorations — some Linux/Chromium (GTK) themes draw -/+
+   stepper buttons on the ends of range inputs — leaving a clean track + an
+   accent-coloured round thumb consistent with the rest of the UI. */
+.focus-slider {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--border);
+    cursor: pointer;
+    margin: 0;
+}
+.focus-slider:disabled { opacity: 0.5; cursor: default; }
+.focus-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 15px;
+    height: 15px;
+    border: none;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+}
+.focus-slider::-moz-range-thumb {
+    width: 15px;
+    height: 15px;
+    border: none;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+}
+.focus-slider::-moz-range-track {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--border);
+}
+
 /* Full statistics panel */
 .full-stats-panel {
     margin: 8px 14px;
