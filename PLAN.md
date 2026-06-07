@@ -12498,3 +12498,33 @@ Phase 3; true streaming/tiling stays a follow-up. File:
 
 Verified: full build clean; live-stack/SNR/statistics tests (32) + batch/
 integration tests (31, +1 pre-existing STA skip) green.
+
+---
+
+## PERF3: FITS I/O, editor passes, endpoint/relay/WS, spatial index (#363-#366)
+
+Cleared the deferred perf TODOs from the bottleneck sweep (all #362 video
+hardening excepted).
+
+- #363 FITS I/O: FITSReader integer (8/16/32) + float (-32/-64) decode
+  loops parallelized (float min/max via per-partition reduction); FITSWriter
+  encodes the whole Int16-BE plane into one buffer (parallel) and writes it
+  in a single Stream.Write instead of per-pixel. Byte-identical output.
+- #364 Editor: BoxBlurH/V, ApplyColor, ApplyMedian, ApplyLocalContrast,
+  ApplyVignette parallelized exactly (thread-local 3x3 scratch). Faster
+  slider renders; bit-identical; degrades to serial on WASM.
+- #365 quick wins: SkyEndpoints /catalog/near awaits instead of blocking
+  the request thread; ImageBuffer.ToLz4Compressed rents its two scratch
+  buffers from ArrayPool; StatusStreamHandler serializes the status payload
+  once per tick and shares the bytes across clients (shared lock-guarded
+  debug cursor).
+- #366 spatial index: new SpatialGrid<T> (uniform-cell hash, expanding-ring
+  exact nearest) replaces the O(n*m) PCC catalog->detected match and the
+  batch-stack alignment-residual scan; SpatialGridTests pin equivalence vs
+  brute force.
+
+Verified: Portable + NINA.Polaris + WASM build clean; targeted suites green
+(FITS 67, editor 61, relay/sky 69, PCC/batch 18, SpatialGrid 4, live-stack
+32). The 4 remaining full-suite failures are pre-existing env/data issues
+(CometService comets.json not shipped to the test output; HostMetrics reads
+real host memory) in code untouched by this work.
