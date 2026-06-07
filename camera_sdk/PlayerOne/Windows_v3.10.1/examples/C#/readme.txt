@@ -1,0 +1,1 @@
+Please put the "PlayerOneCamera.dll" and "PlayerOneCamera_x64.dll" into the executable directory(bin/debug, bin/release)

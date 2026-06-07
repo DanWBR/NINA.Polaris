@@ -12556,3 +12556,39 @@ Benefits all backends (INDI/Alpaca/ASCOM). Files:
 Services/Planetary/VideoRecordingService.cs, SerFileWriter.cs. Verified:
 build clean; 26 SER/Planetary tests green. Measure the real ceiling with the
 benchmark video probe (ROI + MeasureRecording) on the rig.
+
+---
+
+## NATIVESDK: native vendor camera backends (SVBony + ZWO) — #362 item 3
+
+Talk to SVBony / ZWO cameras through their native USB SDKs, bypassing the
+INDI per-exposure round-trip (which capped the SV405CC at 0.8 fps in loop
+mode). Each vendor is a small managed project (mirrors NINA.Camera.SonySdk),
+referenced by NINA.Polaris, with a runtime Registry availability probe — no
+OS attribute, compiles cross-platform.
+
+- src/NINA.Camera.SvbonySdk: SvbonyNative ([DllImport] SVBCameraSDK + CLong
+  for the C `long` ABI), SvbonyRegistry (probe + SetDllImportResolver to the
+  app base dir), SvbonyDiscovery, SvbonySdkCamera : ICamera (still capture,
+  gain/exposure/cooler/ROI/binning, native video streaming via a dedicated
+  SVBGetVideoData pull thread → SupportsVideoStream=true).
+- src/NINA.Camera.ZwoSdk: same shape against ASICamera2 (ASIInitCamera after
+  open, ASISetStartPos for ROI origin, RAW16=2, ASI control indices).
+- EquipmentManager: SelectCamera "svbony-sdk"/"zwo-sdk" + Create helpers
+  (DllNotFound→NotSupported), GetAvailableCameraDrivers gated on
+  Registry.IsAvailable (cross-platform), GetDiscoveredCamerasFor. Referenced
+  from NINA.Polaris.csproj. RIGS driver picker lists them automatically.
+- Packaging: per-RID native .so/.dll copied into the app output via
+  RID-conditioned Content items (linux-arm64 → armv8, linux-x64, win-x64).
+  udev rules (packaging/deb/lib/udev/rules.d/99-polaris-{svbony,asi}.rules)
+  grant non-root USB access + bump usbfs_memory_mb=200 for high-fps USB3;
+  postinst runs `udevadm control --reload-rules && udevadm trigger`.
+- Tests: NativeCameraSdkTests (Registry probes don't throw → false without
+  the lib; discovery empty; constructors safe). Build clean across the new
+  projects + NINA.Polaris.
+
+CameraStreamService now gets the native path (not loop) for these cameras,
+and VideoRecordingService (items 1+2) drains them without dropping. ToupTek
+remains a follow-up. The SV405CC is sensor-limited; ZWO planetary cams are
+where 100 fps becomes attainable. Measure on the rig with the benchmark
+video probe (ROI + Measure recording).

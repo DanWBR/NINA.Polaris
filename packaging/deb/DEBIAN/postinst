@@ -102,6 +102,17 @@ case "$1" in
             systemctl restart polkit.service >/dev/null 2>&1 || true
         fi
 
+        # ---- 5b. Camera USB udev rules ----
+        # /lib/udev/rules.d/99-polaris-{svbony,asi}.rules grant the polaris
+        # user libusb access to SVBony / ZWO cameras (and bump usbfs memory
+        # for high-fps USB3 streaming). Reload so they apply without a
+        # reboot; harmless when udev isn't present (minimal containers).
+        if command -v udevadm >/dev/null 2>&1; then
+            udevadm control --reload-rules >/dev/null 2>&1 || true
+            udevadm trigger >/dev/null 2>&1 || true
+            echo "polaris: reloaded camera USB udev rules"
+        fi
+
         # ---- 6. systemd ----
         if [ -d /run/systemd/system ]; then
             systemctl daemon-reload
