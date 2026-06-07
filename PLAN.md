@@ -12791,4 +12791,13 @@ guide.
   Dec-reverse, RA-direction inversion, double-flip identity, invalid stays
   invalid).
 
-Still deferred: ZFilter, GaussianProcess (RA), SynScan pulse guide.
+Still deferred: ZFilter, GaussianProcess (RA).
+
+Out of scope (will not implement): native pulse guide over SynScan WiFi. The
+SynScan WiFi/UDP app protocol has no clean timed-pulse primitive, so
+SynScanWifiTelescope leaves PulseGuideAsync unsupported (interface default
+throws; MountCapabilities.SupportsPulseGuide stays false). Sky-Watcher mounts
+that need guiding are guided through INDI/EQMod (which expose
+TELESCOPE_TIMED_GUIDE_*), or via ASCOM/Alpaca, all of which the native guider
+already supports. PHD2 itself guides those mounts the same way, not through the
+WiFi app protocol.
