@@ -4182,10 +4182,20 @@
 
                                 <!-- Vendor SDK path: dropdown is populated by
                                      the "Detect" button below. Stays empty
-                                     until the user clicks it. -->
-                                <select class="equip-select" x-model="equipCameraChoice"
+                                     until the user clicks it.
+                                     Bound via @change + :selected (NOT x-model)
+                                     for the same reason as the INDI select
+                                     above: x-model fights the dynamic x-for
+                                     options. A reactive re-render (WS tick or
+                                     re-discovery) made x-model write the empty
+                                     string back, so the pick reverted to
+                                     "Select camera" and the connect toggle
+                                     stayed disabled. :selected self-declares
+                                     the picked row regardless of render order. -->
+                                <select class="equip-select"
                                         x-show="cameraDriver !== 'indi'"
-                                        :disabled="cameraDiscovering">
+                                        :disabled="cameraDiscovering"
+                                        @change="equipCameraChoice = $event.target.value">
                                     <option value="">
                                         <template x-if="cameraDiscovering">
                                             <span>Detecting…</span>
@@ -4198,7 +4208,9 @@
                                         </template>
                                     </option>
                                     <template x-for="c in cameraVendorDevices" :key="c.id">
-                                        <option :value="c.id" x-text="c.model + ' (' + c.detail + ')'"></option>
+                                        <option :value="c.id"
+                                                :selected="equipCameraChoice === c.id"
+                                                x-text="c.model + ' (' + c.detail + ')'"></option>
                                     </template>
                                 </select>
 
