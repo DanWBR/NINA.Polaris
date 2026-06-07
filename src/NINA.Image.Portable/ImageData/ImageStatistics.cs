@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Threading.Tasks;
 using NINA.Image.Interfaces;
 
 namespace NINA.Image.ImageData;
@@ -151,11 +153,11 @@ public class ImageStatistics : IImageStatistics {
     }
 
     private static double ComputeMedianViaHistogram(ushort[] data) {
-        var histogram = new int[65536];
-        for (int i = 0; i < data.Length; i++) {
-            histogram[data[i]]++;
-        }
-
+        // BENCH-PERF: parallel partition-local histogram, merged once.
+        // Counts are order-independent so the result is identical to the
+        // old serial scan; on the per-frame live-stack path this is one
+        // of three full-frame passes, so fanning it out matters.
+        var histogram = BuildHistogramParallel(data);
         long half = data.Length / 2;
         long cumulative = 0;
         for (int i = 0; i < histogram.Length; i++) {
@@ -166,22 +168,44 @@ public class ImageStatistics : IImageStatistics {
     }
 
     private static double ComputeMAD(ushort[] data, double median) {
-        var deviations = new ushort[data.Length];
-        for (int i = 0; i < data.Length; i++) {
-            deviations[i] = (ushort)Math.Abs(data[i] - median);
-        }
-
+        // BENCH-PERF: build the |v - median| histogram directly in a
+        // parallel pass. The old code first allocated a full ushort[N]
+        // deviations array (e.g. 32 MB for a 16 MP frame) and made an
+        // extra pass to fill it; counting in-place removes that
+        // allocation and pass while producing the identical histogram.
+        int med = (int)median;
         var histogram = new int[65536];
-        for (int i = 0; i < deviations.Length; i++) {
-            histogram[deviations[i]]++;
-        }
+        var hl = new object();
+        Parallel.ForEach(Partitioner.Create(0, data.Length), () => new int[65536],
+            (range, _, bins) => {
+                for (int i = range.Item1; i < range.Item2; i++) {
+                    int d = Math.Abs(data[i] - med);
+                    if (d < 65536) bins[d]++;
+                }
+                return bins;
+            },
+            bins => { lock (hl) { for (int b = 0; b < 65536; b++) histogram[b] += bins[b]; } });
 
-        long half = deviations.Length / 2;
+        long half = data.Length / 2;
         long cumulative = 0;
         for (int i = 0; i < histogram.Length; i++) {
             cumulative += histogram[i];
             if (cumulative > half) return i;
         }
         return 0;
+    }
+
+    /// <summary>Parallel partition-local value histogram (0..65535).
+    /// Merged once; identical to a serial count.</summary>
+    private static int[] BuildHistogramParallel(ushort[] data) {
+        var histogram = new int[65536];
+        var hl = new object();
+        Parallel.ForEach(Partitioner.Create(0, data.Length), () => new int[65536],
+            (range, _, bins) => {
+                for (int i = range.Item1; i < range.Item2; i++) bins[data[i]]++;
+                return bins;
+            },
+            bins => { lock (hl) { for (int b = 0; b < 65536; b++) histogram[b] += bins[b]; } });
+        return histogram;
     }
 }

@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Threading.Tasks;
 using NINA.Core.Enum;
 using NINA.Image.ImageAnalysis;
 using NINA.Image.ImageData;
@@ -690,57 +692,42 @@ public class LiveStackingService {
     }
 
     private double ComputeFrameSnr(ushort[] data) {
-        // Quick passes for median + MAD. ImageStatistics.Create does
-        // the same work but allocates an ImageStatistics object and
-        // a 65536-int histogram twice — for the live stack we run
-        // per-frame so we keep it lean: a single histogram + the
-        // existing helper to extract median, then a second use of
-        // the same histogram for MAD. The 65536 int histogram is ~0.25
-        // MB which is fine.
+        // BENCH-PERF: delegate to the shared ImageStatistics path, which
+        // now computes median + MAD via parallel partition-local
+        // histograms (no per-frame deviations[] allocation). This used to
+        // be hand-inlined here with two serial full-frame histogram
+        // passes; the shared helper is identical numerically and runs
+        // multi-core, which matters because it fires on every frame.
         if (data == null || data.Length == 0) return 0;
-        var hist = new int[65536];
-        for (int i = 0; i < data.Length; i++) hist[data[i]]++;
-        long half = data.Length / 2;
-        long cum = 0;
-        int median = 0;
-        for (int i = 0; i < hist.Length; i++) {
-            cum += hist[i];
-            if (cum > half) { median = i; break; }
-        }
-        // MAD via a second histogram of |v − median|.
-        var devHist = new int[65536];
-        for (int i = 0; i < data.Length; i++) {
-            int d = Math.Abs(data[i] - median);
-            if (d < devHist.Length) devHist[d]++;
-        }
-        cum = 0;
-        int mad = 0;
-        for (int i = 0; i < devHist.Length; i++) {
-            cum += devHist[i];
-            if (cum > half) { mad = i; break; }
-        }
-        return ImageStatistics.ComputeBackgroundSnr(data, median, mad);
+        return ImageStatistics.ComputeBackgroundSnrFromData(data);
     }
 
     private double ComputeCumulativeSnrFromAccumulator() {
-        // Reconstruct the current running-mean stack on the fly from
-        // _stackBuffer / _countBuffer (same math as GetStackedResult
-        // but inlined so we don't allocate an extra ushort[]). For
-        // small / medium frames this is ~40 ms on a Pi 4 — runs
-        // once per integration which is well within budget.
+        // Reconstruct the current running-mean stack from _stackBuffer /
+        // _countBuffer, then run the same background-SNR path used per
+        // frame so the two numbers are comparable.
+        //
+        // BENCH-PERF: the reconstruction is parallelized and the heavy
+        // SNR computation now runs OUTSIDE _lock. Previously the whole
+        // ~40 ms (Pi 4) reconstruct+SNR ran while holding _lock, which
+        // serialized it against the next frame's accumulate. Now the lock
+        // is held only for the parallel reconstruction; the three SNR
+        // passes happen on the local snapshot with the lock released.
+        ushort[] stacked;
         lock (_lock) {
             if (_stackBuffer == null || _countBuffer == null) return 0;
             var n = _stackBuffer.Length;
-            // Build the stacked ushort[] view, then drop it into the
-            // same background SNR computation we use per-frame so the
-            // two numbers are directly comparable.
-            var stacked = new ushort[n];
-            for (int i = 0; i < n; i++) {
-                if (_countBuffer[i] > 0)
-                    stacked[i] = (ushort)Math.Clamp(_stackBuffer[i] / _countBuffer[i], 0, 65535);
-            }
-            return ComputeFrameSnr(stacked);
+            var sb = _stackBuffer;
+            var cb = _countBuffer;
+            stacked = new ushort[n];
+            Parallel.ForEach(Partitioner.Create(0, n), range => {
+                for (int i = range.Item1; i < range.Item2; i++) {
+                    if (cb[i] > 0)
+                        stacked[i] = (ushort)Math.Clamp(sb[i] / cb[i], 0, 65535);
+                }
+            });
         }
+        return ComputeFrameSnr(stacked);
     }
 
     private void RecordSnrSample(int frame, double snr) {

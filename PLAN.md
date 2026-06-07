@@ -12458,3 +12458,43 @@ to decide the next step (background writer queue / zero-copy vs a native
 ASI SDK path). Files: `Services/BenchmarkService.cs` (ProfileService inject
 + ROI/recording probe + DTOs), `wwwroot/index.html` + `js/app.js` (inputs +
 result row; cache-bust 20260607-vidprobe).
+
+---
+
+## PERF2: live-stack stats + batch-stacking memory
+
+Follow-up to the image-kernel parallelization, from a bottleneck sweep of
+the live-stack / I/O / web / editor subsystems. Two highest-ROI, lowest-risk
+items implemented now; the rest captured as TODO tasks (#362-#366).
+
+### Per-frame SNR / statistics (live-stack hot path)
+`ImageStatistics.ComputeMAD` allocated a full `ushort[N]` deviations array
+(e.g. 32 MB / 16 MP frame) plus an extra pass; now it builds the |v-median|
+histogram directly in a parallel partition-local pass (no alloc, identical
+result). `ComputeMedianViaHistogram` is parallel too. `LiveStackingService.
+ComputeFrameSnr` now delegates to the shared (parallel) `ComputeBackgroundSnrFromData`
+instead of two hand-inlined serial histograms. `ComputeCumulativeSnrFromAccumulator`
+parallelizes the accumulator->ushort reconstruction and, crucially, releases
+`_lock` before the SNR passes (it used to hold the lock for the whole ~40 ms
+reconstruct+SNR, serializing against the next frame's accumulate). Files:
+`NINA.Image.Portable/ImageData/ImageStatistics.cs`, `Services/LiveStackingService.cs`.
+
+### Batch stacking peak memory (OOM guard)
+`BatchStackingService` held all N original frames AND all N aligned copies in
+RAM simultaneously through Phase 2 (~2N peak; ~2.4 GB for 30x20 MP), only
+freeing originals after the whole alignment loop. Now each original's pixel
+buffer is released the moment it's resampled into `aligned`, holding peak at
+~N frames -- the difference between completing and OOM-ing a large batch on a
+4 GB Pi. Median/SigmaClip still need all N aligned frames for the per-pixel
+Phase 3; true streaming/tiling stays a follow-up. File:
+`Services/Studio/BatchStackingService.cs`.
+
+### Deferred (TODO tasks)
+- #363 FITS read/write parallelize + Span/BinaryPrimitives.
+- #364 Editor fuse per-slider full-frame passes.
+- #365 async sky endpoint, relay ArrayPool, WS serialize-once (WS measured at
+  ~1 ms/client/tick -> only worth it for many simultaneous clients).
+- #366 PCC/photometry spatial index for O(n*m) star matching.
+
+Verified: full build clean; live-stack/SNR/statistics tests (32) + batch/
+integration tests (31, +1 pre-existing STA skip) green.

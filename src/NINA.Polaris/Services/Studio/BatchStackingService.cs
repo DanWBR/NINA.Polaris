@@ -183,6 +183,18 @@ public class BatchStackingService {
                         totalExposure += loaded[i].Img.MetaData.Exposure.ExposureTime;
                     }
                 }
+                // PERF/mem: release this frame's original pixel buffer now
+                // that it has been resampled into `aligned`. (The reference
+                // frame's buffer is owned by aligned[] via the Add above, so
+                // nulling the slot here can't collect it.) Without this the
+                // originals (N frames) and the aligned copies (up to N) are
+                // alive simultaneously through Phase 2 — a ~2N peak. Freeing
+                // each original as we go holds peak at ~N frames, which is
+                // the difference between completing and OOM-ing a large
+                // batch on a 4 GB Pi. Median / SigmaClip still need all N
+                // aligned frames in RAM for Phase 3 (per-pixel across
+                // frames); true streaming/tiling stays a follow-up.
+                loaded[i] = (null!, null!, loaded[i].Name);
                 _jobs[jobId] = _jobs[jobId] with { Done = i + 1, Dropped = dropped };
             }
 
