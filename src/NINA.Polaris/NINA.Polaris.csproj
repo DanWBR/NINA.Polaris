@@ -80,6 +80,11 @@
     <ProjectReference Include="..\NINA.Camera.CanonEdsdk\NINA.Camera.CanonEdsdk.csproj" />
     <ProjectReference Include="..\NINA.Camera.NikonSdk\NINA.Camera.NikonSdk.csproj" />
     <ProjectReference Include="..\NINA.Camera.SonySdk\NINA.Camera.SonySdk.csproj" />
+    <!-- Native vendor astro-camera SDKs (SVBony / ZWO). Managed projects
+         are cross-platform; the per-RID native .so/.dll is bundled into the
+         published output and SvbonyRegistry/ZwoRegistry gate availability
+         at runtime. Direct USB path for high-fps video, bypassing INDI. -->
+    <ProjectReference Include="..\NINA.Camera.SvbonySdk\NINA.Camera.SvbonySdk.csproj" />
     <!-- Direct-WiFi mount drivers. Pure managed code, cross-platform. -->
     <ProjectReference Include="..\NINA.Mount.SynScanWifi\NINA.Mount.SynScanWifi.csproj" />
     <!-- ASCOM Platform COM-interop adapter (Windows-only at runtime,

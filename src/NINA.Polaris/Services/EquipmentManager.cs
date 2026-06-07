@@ -75,6 +75,7 @@ public class EquipmentManager : IDisposable {
             "canon-edsdk" => CreateCanonCamera(deviceId),
             "nikon-sdk"   => CreateNikonCamera(deviceId),
             "sony-sdk"    => new NINA.Camera.SonySdk.SonySdkCamera(deviceId),
+            "svbony-sdk"  => CreateSvbonyCamera(deviceId),
             "ascom-com"   => CreateAscomCamera(deviceId),
             "alpaca"      => AlpacaCamera.FromDeviceId(deviceId),
             _ => throw new NotSupportedException(
@@ -116,6 +117,19 @@ public class EquipmentManager : IDisposable {
                 "use 'indi' or 'alpaca' instead.");
         }
         return new NINA.Ascom.Com.AscomComCamera(progId);
+    }
+
+    /// <summary>SVBony camera over the native USB SDK (libSVBCameraSDK).
+    /// Cross-platform (Linux arm64/x64 + Windows x64); the native lib is
+    /// bundled in the per-RID app output. Bypasses INDI for high-fps video.</summary>
+    private static ICamera CreateSvbonyCamera(string deviceId) {
+        try {
+            return new NINA.Camera.SvbonySdk.SvbonySdkCamera(deviceId);
+        } catch (DllNotFoundException ex) {
+            throw new NotSupportedException(
+                "SVBony SDK native library not found for this platform/arch. " +
+                "Reinstall the Polaris package, or use the INDI driver instead.", ex);
+        }
     }
 
     /// <summary>List of camera driver kinds the host can offer. Always
@@ -164,6 +178,13 @@ public class EquipmentManager : IDisposable {
                 "docs/dslr-windows-sony.md (two complementary paths: " +
                 "Wi-Fi Camera Remote API for older bodies, USB SCRSDK " +
                 "v2.x for current bodies)."));
+        // SVBony native USB SDK. Cross-platform (Linux arm64/x64 + Windows
+        // x64); bypasses INDI for high-fps planetary video. Available when
+        // the bundled native lib loads on this host/arch.
+        list.Add(new("svbony-sdk", "SVBony (SDK, native)",
+            Available: NINA.Camera.SvbonySdk.SvbonyRegistry.IsAvailable,
+            Description: "SVBony cameras via the native USB SDK. Direct, " +
+                "low-overhead path for high-fps video (bypasses INDI)."));
         return list;
     }
 
@@ -201,6 +222,16 @@ public class EquipmentManager : IDisposable {
                     .ToList();
             } catch (Exception ex) {
                 _logger.LogWarning(ex, "Sony SDK discovery failed");
+                return Array.Empty<DiscoveredCamera>();
+            }
+        }
+        if (driver == "svbony-sdk") {
+            try {
+                return NINA.Camera.SvbonySdk.SvbonyDiscovery.Enumerate()
+                    .Select(e => new DiscoveredCamera(e.Id, e.Model, e.Sn))
+                    .ToList();
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "SVBony SDK discovery failed");
                 return Array.Empty<DiscoveredCamera>();
             }
         }

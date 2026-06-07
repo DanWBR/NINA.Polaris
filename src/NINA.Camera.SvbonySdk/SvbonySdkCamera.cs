@@ -1,0 +1,339 @@
+using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
+using NINA.Camera.SvbonySdk.Native;
+using NINA.Core.Enum;
+using NINA.Image.ImageData;
+using NINA.Image.Interfaces;
+using static NINA.Camera.SvbonySdk.Native.SvbonyNative;
+
+namespace NINA.Camera.SvbonySdk;
+
+/// <summary>
+/// <see cref="ICamera"/> backend that talks to a SVBony camera through its
+/// native USB SDK, bypassing the INDI transport. The point is high-fps
+/// planetary video: native streaming runs a dedicated pull thread
+/// (SVBStartVideoCapture → loop SVBGetVideoData → fan out) so CameraStream-
+/// Service gets the native path instead of the slow per-exposure INDI loop.
+/// Still capture, gain, cooler and ROI all go through the SDK too, so the
+/// rig can select this as its camera entirely.
+/// </summary>
+public sealed class SvbonySdkCamera : ICamera {
+    private readonly int _cameraId;
+    private bool _connected;
+
+    private int _maxX, _maxY, _maxBitDepth = 16;
+    private double _pixelSize;
+    private BayerPatternEnum _bayer = BayerPatternEnum.None;
+    private bool _isColor;
+    private int _gainMin, _gainMax;
+    private bool _supportsCooler;
+
+    private int _gain;
+    private double _exposureSec = 0.03;
+    private int _roiX, _roiY, _roiW, _roiH, _bin = 1;
+    private SVB_IMG_TYPE _imgType = SVB_IMG_TYPE.SVB_IMG_RAW16;
+
+    private readonly ConcurrentDictionary<int, Action<IImageData>> _streamSubs = new();
+    private int _nextSubId;
+    private volatile bool _streaming;
+    private Thread? _streamThread;
+    private CancellationTokenSource? _streamCts;
+    private readonly object _gate = new();
+
+    public SvbonySdkCamera(string deviceId) {
+        SvbonyRegistry.EnsureResolver();
+        _cameraId = int.TryParse(deviceId, out var id) ? id : 0;
+        DeviceName = $"SVBony #{_cameraId}";
+    }
+
+    public string DeviceName { get; private set; }
+    public bool IsConnected => _connected;
+    public CameraStates State { get; private set; } = CameraStates.NoState;
+
+    public double Temperature => _connected ? ReadControl(SVB_CONTROL_TYPE.SVB_CURRENT_TEMPERATURE) / 10.0 : double.NaN;
+    public bool CoolerOn => _connected && _supportsCooler && ReadControl(SVB_CONTROL_TYPE.SVB_COOLER_ENABLE) != 0;
+    public double CoolerPower => _connected && _supportsCooler ? ReadControl(SVB_CONTROL_TYPE.SVB_COOLER_POWER) : 0;
+    public int BinX => _bin;
+    public int BinY => _bin;
+    public int BitDepth => _maxBitDepth > 8 ? 16 : 8;
+    public int MaxX => _maxX;
+    public int MaxY => _maxY;
+    public double PixelSizeX => _pixelSize;
+    public double PixelSizeY => _pixelSize;
+    public int Gain => _gain;
+    public int GainMin => _gainMin;
+    public int GainMax => _gainMax;
+    public IReadOnlyList<int> IsoOptions { get; } = Array.Empty<int>();
+    public int SelectedIso => 0;
+
+    public CameraCapabilities Capabilities => new(
+        SupportsCooler: _supportsCooler,
+        SupportsBinning: true,
+        SupportsRoi: true,
+        SupportsIso: false,
+        SupportsBulb: false,
+        SupportsVideoStream: true,
+        SupportsWhiteBalance: false);
+
+    // ----- connect / disconnect -----
+
+    public Task ConnectAsync(CancellationToken ct = default) => Task.Run(() => {
+        Check(SVBOpenCamera(_cameraId), "SVBOpenCamera");
+
+        var info = new SVB_CAMERA_INFO();
+        if (SVBGetCameraInfo(ref info, _cameraId) == SVB_ERROR_CODE.SVB_SUCCESS
+                && !string.IsNullOrWhiteSpace(info.FriendlyName)) {
+            DeviceName = info.FriendlyName;
+        }
+
+        var prop = new SVB_CAMERA_PROPERTY();
+        Check(SVBGetCameraProperty(_cameraId, ref prop), "SVBGetCameraProperty");
+        _maxX = (int)prop.MaxWidth.Value;
+        _maxY = (int)prop.MaxHeight.Value;
+        _maxBitDepth = prop.MaxBitDepth;
+        _isColor = prop.IsColorCam != 0;
+        _bayer = _isColor ? MapBayer((SVB_BAYER_PATTERN)prop.BayerPattern) : BayerPatternEnum.None;
+
+        // Gain range + cooler support from the control caps table.
+        if (SVBGetNumOfControls(_cameraId, out var nCtrl) == SVB_ERROR_CODE.SVB_SUCCESS) {
+            for (int i = 0; i < nCtrl; i++) {
+                var caps = new SVB_CONTROL_CAPS();
+                if (SVBGetControlCaps(_cameraId, i, ref caps) != SVB_ERROR_CODE.SVB_SUCCESS) continue;
+                switch ((SVB_CONTROL_TYPE)caps.ControlType) {
+                    case SVB_CONTROL_TYPE.SVB_GAIN:
+                        _gainMin = (int)caps.MinValue.Value;
+                        _gainMax = (int)caps.MaxValue.Value;
+                        break;
+                    case SVB_CONTROL_TYPE.SVB_COOLER_ENABLE:
+                        _supportsCooler = true;
+                        break;
+                }
+            }
+        }
+
+        if (SVBGetSensorPixelSize(_cameraId, out var px) == SVB_ERROR_CODE.SVB_SUCCESS) _pixelSize = px;
+
+        _imgType = _maxBitDepth > 8 ? SVB_IMG_TYPE.SVB_IMG_RAW16 : SVB_IMG_TYPE.SVB_IMG_RAW8;
+        SVBSetCameraMode(_cameraId, SVB_CAMERA_MODE.SVB_MODE_NORMAL);
+        SVBSetOutputImageType(_cameraId, _imgType);
+
+        _roiX = 0; _roiY = 0; _roiW = _maxX; _roiH = _maxY; _bin = 1;
+        SVBSetROIFormat(_cameraId, 0, 0, _maxX, _maxY, 1);
+
+        _gain = ReadControl(SVB_CONTROL_TYPE.SVB_GAIN);
+        _connected = true;
+        State = CameraStates.Idle;
+    }, ct);
+
+    public Task DisconnectAsync(CancellationToken ct = default) => Task.Run(() => {
+        try { StopStreamCore(); } catch { }
+        if (_connected) { try { SVBCloseCamera(_cameraId); } catch { } }
+        _connected = false;
+        State = CameraStates.NoState;
+    }, ct);
+
+    // ----- controls -----
+
+    public Task SetBinningAsync(int binX, int binY, CancellationToken ct = default) {
+        _bin = Math.Max(1, binX);
+        ApplyRoi();
+        return Task.CompletedTask;
+    }
+
+    public Task SetTemperatureAsync(double temperature, CancellationToken ct = default) {
+        if (_supportsCooler)
+            SVBSetControlValue(_cameraId, SVB_CONTROL_TYPE.SVB_TARGET_TEMPERATURE,
+                new CLong((nint)Math.Round(temperature * 10)), 0);
+        return Task.CompletedTask;
+    }
+
+    public Task SetCoolerAsync(bool on, CancellationToken ct = default) {
+        if (_supportsCooler)
+            SVBSetControlValue(_cameraId, SVB_CONTROL_TYPE.SVB_COOLER_ENABLE, new CLong(on ? 1 : 0), 0);
+        return Task.CompletedTask;
+    }
+
+    public Task SetIsoAsync(int iso, CancellationToken ct = default) => Task.CompletedTask;
+
+    public Task AbortExposureAsync(CancellationToken ct = default) {
+        try { SVBStopVideoCapture(_cameraId); } catch { }
+        State = CameraStates.Idle;
+        return Task.CompletedTask;
+    }
+
+    public Task SetSubframeAsync(int x, int y, int width, int height, CancellationToken ct = default) {
+        if (width <= 0 || height <= 0) { _roiX = 0; _roiY = 0; _roiW = _maxX; _roiH = _maxY; }
+        else { _roiX = x; _roiY = y; _roiW = width; _roiH = height; }
+        ApplyRoi();
+        return Task.CompletedTask;
+    }
+
+    private void ApplyRoi() {
+        if (!_connected) return;
+        // SVB wants output (post-bin) dims rounded to multiples of 8.
+        int w = Math.Max(8, (_roiW / _bin) & ~7);
+        int h = Math.Max(2, (_roiH / _bin) & ~1);
+        SVBSetROIFormat(_cameraId, _roiX, _roiY, w, h, _bin);
+    }
+
+    // ----- still capture -----
+
+    public Task<IImageData> CaptureAsync(double exposureSeconds, CaptureOptions? opts = null,
+                                         CancellationToken ct = default) => Task.Run<IImageData>(() => {
+        lock (_gate) {
+            if (_streaming) throw new InvalidOperationException(
+                "Stop the video stream before taking a still exposure.");
+            ApplyExposureGain(exposureSeconds, opts?.Gain);
+            SVBSetOutputImageType(_cameraId, _imgType);
+
+            GetRoi(out var w, out var h);
+            var bytes = new byte[(long)w * h * BytesPerPixel()];
+            int waitMs = (int)(exposureSeconds * 1000 * 2 + 500);
+
+            State = CameraStates.Exposing;
+            Check(SVBStartVideoCapture(_cameraId), "SVBStartVideoCapture");
+            try {
+                var err = SVBGetVideoData(_cameraId, bytes, new CLong(bytes.Length), waitMs);
+                Check(err, "SVBGetVideoData");
+            } finally {
+                try { SVBStopVideoCapture(_cameraId); } catch { }
+                State = CameraStates.Idle;
+            }
+            return WrapFrame(bytes, w, h);
+        }
+    }, ct);
+
+    // ----- native video streaming -----
+
+    public bool IsStreaming => _streaming;
+
+    public IDisposable SubscribeVideoFrames(Action<IImageData> handler) {
+        var id = Interlocked.Increment(ref _nextSubId);
+        _streamSubs[id] = handler;
+        return new Sub(this, id);
+    }
+
+    public Task StartVideoStreamAsync(VideoStreamOptions? opts = null, CancellationToken ct = default)
+        => Task.Run(() => {
+            lock (_gate) {
+                if (_streaming) return;
+                ApplyExposureGain(opts?.ExposureSeconds ?? _exposureSec, opts?.Gain);
+                if (opts?.BinX is int b && b != _bin) { _bin = Math.Max(1, b); ApplyRoi(); }
+                SVBSetOutputImageType(_cameraId, _imgType);
+
+                _streamCts = new CancellationTokenSource();
+                _streaming = true;
+                State = CameraStates.Exposing;
+                Check(SVBStartVideoCapture(_cameraId), "SVBStartVideoCapture");
+                _streamThread = new Thread(() => PullLoop(_streamCts.Token)) {
+                    IsBackground = true, Name = "SVBony-stream"
+                };
+                _streamThread.Start();
+            }
+        }, ct);
+
+    public Task StopVideoStreamAsync(CancellationToken ct = default) => Task.Run(StopStreamCore, ct);
+
+    private void StopStreamCore() {
+        Thread? t;
+        lock (_gate) {
+            if (!_streaming) return;
+            _streaming = false;
+            _streamCts?.Cancel();
+            t = _streamThread;
+            _streamThread = null;
+        }
+        try { t?.Join(2000); } catch { }
+        try { SVBStopVideoCapture(_cameraId); } catch { }
+        State = CameraStates.Idle;
+    }
+
+    private void PullLoop(CancellationToken ct) {
+        GetRoi(out var w, out var h);
+        var buf = new byte[(long)w * h * BytesPerPixel()];
+        int waitMs = (int)(_exposureSec * 1000 * 2 + 500);
+        while (!ct.IsCancellationRequested && _streaming) {
+            var err = SVBGetVideoData(_cameraId, buf, new CLong(buf.Length), waitMs);
+            if (err == SVB_ERROR_CODE.SVB_ERROR_TIMEOUT) continue;
+            if (err != SVB_ERROR_CODE.SVB_SUCCESS) continue;
+            IImageData frame;
+            try { frame = WrapFrame(buf, w, h); } catch { continue; }
+            foreach (var s in _streamSubs.Values) {
+                try { s(frame); } catch { }
+            }
+        }
+    }
+
+    // ----- helpers -----
+
+    private void ApplyExposureGain(double exposureSeconds, int? gainOverride) {
+        _exposureSec = exposureSeconds > 0 ? exposureSeconds : _exposureSec;
+        SVBSetControlValue(_cameraId, SVB_CONTROL_TYPE.SVB_EXPOSURE,
+            new CLong((nint)Math.Round(_exposureSec * 1_000_000)), 0); // microseconds
+        if (gainOverride is int g) _gain = g;
+        SVBSetControlValue(_cameraId, SVB_CONTROL_TYPE.SVB_GAIN, new CLong(_gain), 0);
+    }
+
+    private int BytesPerPixel() => _imgType == SVB_IMG_TYPE.SVB_IMG_RAW16 ? 2 : 1;
+
+    private void GetRoi(out int w, out int h) {
+        if (SVBGetROIFormat(_cameraId, out _, out _, out var rw, out var rh, out _) == SVB_ERROR_CODE.SVB_SUCCESS
+                && rw > 0 && rh > 0) {
+            w = rw; h = rh;
+        } else {
+            w = _roiW > 0 ? _roiW / _bin : _maxX;
+            h = _roiH > 0 ? _roiH / _bin : _maxY;
+        }
+    }
+
+    private IImageData WrapFrame(byte[] bytes, int w, int h) {
+        var pixels = new ushort[(long)w * h];
+        if (_imgType == SVB_IMG_TYPE.SVB_IMG_RAW16) {
+            Buffer.BlockCopy(bytes, 0, pixels, 0, pixels.Length * 2);
+        } else {
+            // RAW8 → scale into the 16-bit range so the rest of the pipeline
+            // (auto-stretch, stats) sees a consistent depth.
+            for (int i = 0; i < pixels.Length; i++) pixels[i] = (ushort)(bytes[i] << 8);
+        }
+        var props = new ImageProperties {
+            Width = w, Height = h,
+            BitDepth = BitDepth,
+            IsBayered = _bayer != BayerPatternEnum.None,
+            BayerPattern = _bayer,
+        };
+        var meta = new ImageMetaData();
+        meta.Camera.Name = DeviceName;
+        meta.Camera.Gain = _gain;
+        meta.Camera.PixelSizeX = _pixelSize;
+        meta.Camera.PixelSizeY = _pixelSize;
+        return new BaseImageData(pixels, props, meta);
+    }
+
+    private int ReadControl(SVB_CONTROL_TYPE t) {
+        try {
+            if (SVBGetControlValue(_cameraId, t, out var v, out _) == SVB_ERROR_CODE.SVB_SUCCESS)
+                return (int)v.Value;
+        } catch { }
+        return 0;
+    }
+
+    private static BayerPatternEnum MapBayer(SVB_BAYER_PATTERN p) => p switch {
+        SVB_BAYER_PATTERN.SVB_BAYER_RG => BayerPatternEnum.RGGB,
+        SVB_BAYER_PATTERN.SVB_BAYER_BG => BayerPatternEnum.BGGR,
+        SVB_BAYER_PATTERN.SVB_BAYER_GR => BayerPatternEnum.GRBG,
+        SVB_BAYER_PATTERN.SVB_BAYER_GB => BayerPatternEnum.GBRG,
+        _ => BayerPatternEnum.None
+    };
+
+    private static void Check(SVB_ERROR_CODE err, string op) {
+        if (err != SVB_ERROR_CODE.SVB_SUCCESS)
+            throw new InvalidOperationException($"SVBony {op} failed: {err}");
+    }
+
+    private sealed class Sub : IDisposable {
+        private readonly SvbonySdkCamera _cam;
+        private readonly int _id;
+        public Sub(SvbonySdkCamera cam, int id) { _cam = cam; _id = id; }
+        public void Dispose() => _cam._streamSubs.TryRemove(_id, out _);
+    }
+}

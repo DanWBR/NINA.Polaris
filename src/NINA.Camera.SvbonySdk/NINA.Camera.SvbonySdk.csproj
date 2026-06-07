@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>NINA.Camera.SvbonySdk</RootNamespace>
+    <AssemblyName>NINA.Camera.SvbonySdk</AssemblyName>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- The SVBony SDK ships native binaries for Windows (x64/x86) and
+         Linux (armv6/7/8, x64/x86). This managed project targets net10.0
+         with NO OS attribute so it compiles cross-platform; SvbonyRegistry
+         probes at runtime and the EquipmentManager only reaches the
+         P/Invoke surface when the native lib actually loads. The per-RID
+         native .so/.dll is copied into the app output by the items below. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NINA.Core.Portable\NINA.Core.Portable.csproj" />
+    <ProjectReference Include="..\NINA.Image.Portable\NINA.Image.Portable.csproj" />
+  </ItemGroup>
+
+  <!-- Native SVBony SDK libraries, copied to the app output per RID so the
+       default native-library loader (dlopen / LoadLibrary, plus the
+       SetDllImportResolver fallback in SvbonyRegistry) resolves them next
+       to the executable. The .deb build chmod +x's *.so under /opt/polaris. -->
+  <PropertyGroup>
+    <SvbSdk>$(MSBuildThisFileDirectory)..\..\camera_sdk\SVBony</SvbSdk>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-arm64'">
+    <Content Include="$(SvbSdk)\SVBony_Linux\SVBCameraSDK\lib\armv8\libSVBCameraSDK.so">
+      <Link>libSVBCameraSDK.so</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64'">
+    <Content Include="$(SvbSdk)\SVBony_Linux\SVBCameraSDK\lib\x64\libSVBCameraSDK.so">
+      <Link>libSVBCameraSDK.so</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64'">
+    <Content Include="$(SvbSdk)\SVBony_Windows\SVBONY\lib\x64\SVBCameraSDK.dll">
+      <Link>SVBCameraSDK.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>
