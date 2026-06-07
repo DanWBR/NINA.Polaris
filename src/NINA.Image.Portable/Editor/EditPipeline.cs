@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Threading.Tasks;
 using NINA.Image.ImageAnalysis;
 
 namespace NINA.Image.Editor;
@@ -267,7 +269,12 @@ public static class EditPipeline {
         double vibStrength = c.Vibrance;
         double hueDelta = c.Hue;
 
-        for (int i = 0; i < buf.Length; i += 3) {
+        // PERF #364: RGB<->HSL round-trip per pixel is the cost; pixels are
+        // independent (3-stride), so fan out across cores. Bit-identical.
+        int pixelCount = buf.Length / 3;
+        Parallel.ForEach(Partitioner.Create(0, pixelCount), range => {
+        for (int pidx = range.Item1; pidx < range.Item2; pidx++) {
+            int i = pidx * 3;
             double r = buf[i] / 255.0;
             double g = buf[i + 1] / 255.0;
             double b = buf[i + 2] / 255.0;
@@ -294,6 +301,7 @@ public static class EditPipeline {
             buf[i + 1] = Clamp8(ng * 255);
             buf[i + 2] = Clamp8(nb * 255);
         }
+        });
     }
 
     private static void ApplyLocalContrast(byte[] buf, int width, int height, int channels,
@@ -305,25 +313,32 @@ public static class EditPipeline {
         if (channels == 1) {
             Array.Copy(buf, lum, lum.Length);
         } else {
-            for (int i = 0, j = 0; i < buf.Length; i += 3, j++) {
-                lum[j] = Clamp8(0.2126 * buf[i] + 0.7152 * buf[i + 1] + 0.0722 * buf[i + 2]);
-            }
+            // PERF #364: per-pixel luminance, independent → parallel.
+            Parallel.ForEach(Partitioner.Create(0, lum.Length), range => {
+                for (int j = range.Item1; j < range.Item2; j++) {
+                    int i = j * 3;
+                    lum[j] = Clamp8(0.2126 * buf[i] + 0.7152 * buf[i + 1] + 0.0722 * buf[i + 2]);
+                }
+            });
         }
         var blurred = BoxBlur(lum, width, height, radius);
 
-        for (int j = 0; j < lum.Length; j++) {
-            int diff = lum[j] - blurred[j];
-            if (thresholdAdu > 0 && Math.Abs(diff) < thresholdAdu) continue;
-            double boost = amount * diff;
-            if (channels == 1) {
-                buf[j] = Clamp8(buf[j] + boost);
-            } else {
-                int o = j * 3;
-                buf[o]     = Clamp8(buf[o]     + boost);
-                buf[o + 1] = Clamp8(buf[o + 1] + boost);
-                buf[o + 2] = Clamp8(buf[o + 2] + boost);
+        // PERF #364: add-back is per-pixel independent → parallel.
+        Parallel.ForEach(Partitioner.Create(0, lum.Length), range => {
+            for (int j = range.Item1; j < range.Item2; j++) {
+                int diff = lum[j] - blurred[j];
+                if (thresholdAdu > 0 && Math.Abs(diff) < thresholdAdu) continue;
+                double boost = amount * diff;
+                if (channels == 1) {
+                    buf[j] = Clamp8(buf[j] + boost);
+                } else {
+                    int o = j * 3;
+                    buf[o]     = Clamp8(buf[o]     + boost);
+                    buf[o + 1] = Clamp8(buf[o + 1] + boost);
+                    buf[o + 2] = Clamp8(buf[o + 2] + boost);
+                }
             }
-        }
+        });
     }
 
     private static void ApplyDehaze(byte[] buf, int channels, double amount) {
@@ -356,10 +371,12 @@ public static class EditPipeline {
     private static void ApplyMedian(byte[] buf, int width, int height, int channels, double strength) {
         // 3x3 median on luminance plane; blend with original by strength.
         // Conservative on purpose (the user has GraXpert for the heavy lifting).
+        // PERF #364: rows are independent (read from the cloned src, write
+        // to buf/plane), so the median sweep parallelizes over y. The 9-elem
+        // neighbor scratch becomes thread-local. Output is bit-identical.
         if (channels == 1) {
             var src = (byte[])buf.Clone();
-            var nbrs = new byte[9];
-            for (int y = 1; y < height - 1; y++) {
+            Parallel.For(1, height - 1, () => new byte[9], (y, _, nbrs) => {
                 for (int x = 1; x < width - 1; x++) {
                     int k = 0;
                     for (int dy = -1; dy <= 1; dy++)
@@ -369,15 +386,15 @@ public static class EditPipeline {
                     int o = y * width + x;
                     buf[o] = Clamp8(src[o] * (1 - strength) + nbrs[4] * strength);
                 }
-            }
+                return nbrs;
+            }, _ => { });
         } else {
-            // For RGB, median each channel separately (acceptable speed for v1).
+            // For RGB, median each channel separately.
             for (int c = 0; c < 3; c++) {
                 var plane = new byte[width * height];
                 for (int i = 0; i < plane.Length; i++) plane[i] = buf[i * 3 + c];
                 var src = (byte[])plane.Clone();
-                var nbrs = new byte[9];
-                for (int y = 1; y < height - 1; y++) {
+                Parallel.For(1, height - 1, () => new byte[9], (y, _, nbrs) => {
                     for (int x = 1; x < width - 1; x++) {
                         int k = 0;
                         for (int dy = -1; dy <= 1; dy++)
@@ -387,7 +404,8 @@ public static class EditPipeline {
                         int o = y * width + x;
                         plane[o] = Clamp8(src[o] * (1 - strength) + nbrs[4] * strength);
                     }
-                }
+                    return nbrs;
+                }, _ => { });
                 for (int i = 0; i < plane.Length; i++) buf[i * 3 + c] = plane[i];
             }
         }
@@ -399,7 +417,8 @@ public static class EditPipeline {
         double cy = height * 0.5;
         double maxR = Math.Sqrt(cx * cx + cy * cy);
         double inner = Math.Clamp(feather, 0, 1) * maxR;
-        for (int y = 0; y < height; y++) {
+        // PERF #364: rows independent (each pixel scaled by its own radius).
+        Parallel.For(0, height, y => {
             for (int x = 0; x < width; x++) {
                 double dx = x - cx;
                 double dy = y - cy;
@@ -415,7 +434,7 @@ public static class EditPipeline {
                     buf[idx + c] = Clamp8(buf[idx + c] * m);
                 }
             }
-        }
+        });
     }
 
     /// <summary>
@@ -437,7 +456,11 @@ public static class EditPipeline {
 
     private static void BoxBlurH(byte[] src, byte[] dst, int width, int height, int r) {
         double iarr = 1.0 / (r + r + 1);
-        for (int y = 0; y < height; y++) {
+        // PERF #364: rows are independent (each uses its own ti/li/ri),
+        // so the horizontal pass parallelizes exactly. This blur runs 3
+        // passes x (H+V) per clarity/texture/sharpen step, so it dominates
+        // editor render time. Output is bit-identical to the serial loop.
+        Parallel.For(0, height, y => {
             int ti = y * width;
             int li = ti;
             int ri = ti + r;
@@ -457,12 +480,14 @@ public static class EditPipeline {
                 val += lv - src[li++];
                 dst[ti++] = Clamp8(val * iarr);
             }
-        }
+        });
     }
 
     private static void BoxBlurV(byte[] src, byte[] dst, int width, int height, int r) {
         double iarr = 1.0 / (r + r + 1);
-        for (int x = 0; x < width; x++) {
+        // PERF #364: columns are independent, so the vertical pass
+        // parallelizes exactly (bit-identical to the serial loop).
+        Parallel.For(0, width, x => {
             int ti = x;
             int li = ti;
             int ri = ti + r * width;
@@ -482,7 +507,7 @@ public static class EditPipeline {
                 val += lv - src[li]; li += width;
                 dst[ti] = Clamp8(val * iarr); ti += width;
             }
-        }
+        });
     }
 
     private static byte Clamp8(double v) {
