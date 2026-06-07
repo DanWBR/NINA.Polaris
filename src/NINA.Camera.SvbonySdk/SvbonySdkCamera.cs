@@ -86,10 +86,19 @@ public sealed class SvbonySdkCamera : ICamera {
                 "driver for this camera is connected, disconnect it (or remove it " +
                 "from the running indiserver profile) before using the native SDK backend.");
 
-        var info = new SVB_CAMERA_INFO();
-        if (SVBGetCameraInfo(ref info, _cameraId) == SVB_ERROR_CODE.SVB_SUCCESS
-                && !string.IsNullOrWhiteSpace(info.FriendlyName)) {
-            DeviceName = info.FriendlyName;
+        // SVBGetCameraInfo takes an enumeration INDEX, not the CameraID, so we
+        // can't pass _cameraId here (for the SV405CC the CameraID is 1 while
+        // the index is 0, which made the lookup miss and the name fall back to
+        // "SVBony #1"). Match by CameraID across indices, like the ZWO backend.
+        int nCams = SVBGetNumOfConnectedCameras();
+        for (int i = 0; i < nCams; i++) {
+            var probe = new SVB_CAMERA_INFO();
+            if (SVBGetCameraInfo(ref probe, i) == SVB_ERROR_CODE.SVB_SUCCESS
+                    && probe.CameraID == _cameraId
+                    && !string.IsNullOrWhiteSpace(probe.FriendlyName)) {
+                DeviceName = probe.FriendlyName;
+                break;
+            }
         }
 
         var prop = new SVB_CAMERA_PROPERTY();
