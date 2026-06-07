@@ -378,18 +378,30 @@ public class BenchmarkService {
         GC.KeepAlive(sink + mtSink);
         onProgress?.Invoke(0.8);
 
-        // Memory bandwidth: stream a large buffer a few times.
+        // Memory bandwidth: stream a large buffer across ALL cores. A
+        // single thread cannot saturate a modern memory controller - it
+        // caps at single-core copy speed (~10-15 GB/s) regardless of the
+        // platform's real bandwidth, which made a DDR5 desktop report the
+        // same ~12 GB/s as a Pi 5. Splitting the copy across cores measures
+        // the platform's aggregate bandwidth (STREAM-style), which is what
+        // actually differentiates the boards. Each thread streams its own
+        // contiguous chunk bwPasses times; the per-thread Array.Copy uses
+        // the runtime's vectorized memmove.
         ct.ThrowIfCancellationRequested();
-        const int bw = 16_000_000; // 16M doubles = 128 MB
+        const int bw = 16_000_000; // 16M doubles = 128 MB (exceeds any L3)
         const int bwPasses = 6;
         var src = new double[bw];
         var dst = new double[bw];
-        Array.Copy(src, dst, bw); // warmup
+        Array.Copy(src, dst, bw); // warmup + page-in
+        var bwOpts = new ParallelOptions { MaxDegreeOfParallelism = cores, CancellationToken = ct };
         sw.Restart();
-        for (int p = 0; p < bwPasses; p++) {
-            ct.ThrowIfCancellationRequested();
-            Array.Copy(src, dst, bw);
-        }
+        Parallel.For(0, cores, bwOpts, t => {
+            int chunk = bw / cores;
+            int start = t * chunk;
+            int len = (t == cores - 1) ? bw - start : chunk;
+            for (int p = 0; p < bwPasses; p++)
+                Array.Copy(src, start, dst, start, len);
+        });
         sw.Stop();
         // Each copy touches read+write = 2 * bytes.
         double movedBytes = (double)bw * 8 * 2 * bwPasses;
