@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260607-phd2view2">
+    <link rel="stylesheet" href="/css/app.css?v=20260607-phd2view3">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -3364,9 +3364,23 @@
             <!-- GUIDER (PHD2) -->
             <div x-show="tab === 'guide'" class="tab-panel tab-panel-guide">
                 <div class="panel-header">
-                    Guider (PHD2)
+                    <span x-text="guider.backend === 'native' ? 'Guider (Native)' : 'Guider (PHD2)'">Guider</span>
                     <span class="status-indicator-sm" :class="guider.connected ? (guider.guiding ? 'ok' : 'warn') : 'error'"
                           x-text="guider.connected ? guider.appState : 'Disconnected'"></span>
+                    <span class="text-muted" style="font-size:11px;margin-left:8px"
+                          x-text="'backend: ' + (guider.backend || '?')"></span>
+                </div>
+
+                <!-- Diagnostic: the rig is set to the native guider but the
+                     server still reports the PHD2 backend. Means the rig change
+                     didn't reach the active profile (or the server predates the
+                     native build). -->
+                <div x-show="guiderDriver === 'native' && guider.backend && guider.backend !== 'native'"
+                     class="warn-banner" style="margin:0.5rem 0">
+                    This rig is set to the <strong>Native</strong> guider, but the server is reporting the
+                    <strong>PHD2</strong> backend. Re-pick <em>Native (built-in)</em> in RIGS → Guider (and
+                    confirm it saves), restart the Polaris server if you just rebuilt it, then hard-refresh
+                    (Ctrl+F5).
                 </div>
 
                 <!-- Tabstrip: PHD2 GUI (iframe via reverse-proxy to xpra HTML5 client)
@@ -12272,7 +12286,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260607-phd2view2"></script>
+    <script src="/js/app.js?v=20260607-phd2view3"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
