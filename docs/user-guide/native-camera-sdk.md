@@ -51,11 +51,57 @@ Run the Hardware Benchmark video probe (Settings → Hardware Benchmark →
 **Measure recording**) before/after switching from INDI to the SDK backend
 to compare capture fps, transmit fps, record fps and dropped frames.
 
+## Maturity & on-hardware status
+
+| Backend   | Native libs bundled            | Validated on hardware |
+|-----------|--------------------------------|-----------------------|
+| SVBony    | Linux arm64/x64, Windows x64   | SV405CC (Pi 5, USB3)  |
+| ZWO ASI   | Linux arm64/x64, Windows x64   | not yet               |
+| PlayerOne | Linux arm64/arm32/x64/x86, Win x64 | not yet           |
+| ToupTek   | Linux arm64/x64, Windows x64   | not yet               |
+
+The ZWO, PlayerOne and ToupTek backends are written to the vendor SDKs and
+compile + pass managed smoke tests, but have **not** been exercised on real
+cameras yet. Treat the first connect/capture/stream as a shakedown. If you
+hit a bug, capture the Polaris log (`journalctl -u polaris.service -f` on the
+Pi) around connect/capture and file it — the fragile spots below are the
+first places to look.
+
+## Known fragile spots (first-test checklist)
+
+These are the parts most likely to need a fix once a real camera is plugged
+in. Documented so whoever debugs the first session knows where to start.
+
+- **ToupTek — raw format / bit depth.** The backend forces raw Bayer output
+  (`OPTION_RAW=1`) at max bit depth (`OPTION_BITDEPTH=1`) and reads the actual
+  depth + Bayer pattern back from `get_RawFormat` on connect. Some models only
+  deliver 8-bit, ignore the bit-depth option, or report a different FourCC —
+  if the image is mono-looking, half-height, or has wrong colors, this is the
+  first thing to verify (log the FourCC + bitdepth from connect).
+- **ToupTek — live ROI.** `put_Roi` is applied without stopping pull mode and
+  the frame buffer re-sizes from `get_Size` per frame. On sensors that won't
+  change ROI live, this may need a stop/restart-pull around `ApplyRoi`.
+- **ToupTek — OEM rebadges.** Altair / Omegon / RisingCam etc. are ToupTek-
+  based and enumerate under the same SDK, but only genuine ToupTek units are
+  expected to work as-is; OEM PIDs may need adding to the udev rule.
+- **PlayerOne — config-value union.** `POAConfigValue` (a C `union` of
+  `long`/`double`/`POABool`) is marshalled via an explicit-layout struct
+  overlapping `int`/`double` at offset 0. If gain, exposure or temperature
+  come back with nonsensical values, this marshalling is the prime suspect.
+- **ROI alignment (all SDK backends).** Sub-frame width/height are snapped to
+  the vendor's required multiples (ZWO width%8/height%2; PlayerOne width%4/
+  height%2; ToupTek even). A camera that rejects a subframe or returns a
+  shifted image usually means the alignment/offset math needs tightening for
+  that sensor.
+- **USB udev IDs (Linux).** PlayerOne vendor id `a0a0` is confirmed from the
+  SDK header; ToupTek uses `04b4`/`0547`. A camera that connects as root but
+  not as the `polaris` service user means its vendor/product id isn't covered
+  by `/lib/udev/rules.d/99-polaris-{playerone,touptek}.rules` — add it and
+  reload udev.
+
 ## Notes
 
 - The ToupTek backend uses the vendor's official cross-platform C# binding
-  (`camera_sdk/ToupTek/dotnet/toupcam.cs`) in callback (pull) mode. Many OEM
-  cameras are ToupTek-based (Altair, Omegon, RisingCam, etc.) and enumerate
-  under the same SDK, but only genuine ToupTek units are validated here.
+  (`camera_sdk/ToupTek/dotnet/toupcam.cs`) in callback (pull) mode.
 - Vendor SDK binaries under `camera_sdk/` are redistributed under their
   respective vendor licenses (see that folder's vendor readme files).
