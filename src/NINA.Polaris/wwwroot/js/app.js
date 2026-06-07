@@ -2345,7 +2345,7 @@ function ninaApp() {
         // Camera sensor analysis (photon-transfer-curve). state/progress/
         // phase fed by WS; lastResult pulled over REST when a run ends.
         sensorAnalysis: {
-            open: false, state: 'idle', progress: 0, phase: '', lastResult: null,
+            open: false, state: 'idle', progress: 0, phase: '', lastResult: null, history: [],
             req: { minGain: 0, maxGain: 1000, gainSteps: 8,
                    minExposureSec: 0.01, maxExposureSec: 2.0, exposureSteps: 7 }
         },
@@ -11269,6 +11269,13 @@ function ninaApp() {
         // ─── Sensor analysis (camera card) ─────────────────────────────
         openSensorAnalysis() {
             this.sensorAnalysis.open = true;
+            // Pre-fill the gain sweep from the camera's reported range.
+            const gmin = this.equipCameraInfo?.gainMin || 0;
+            const gmax = this.equipCameraInfo?.gainMax || 0;
+            if (gmax > gmin) {
+                this.sensorAnalysis.req.minGain = gmin;
+                this.sensorAnalysis.req.maxGain = gmax;
+            }
             this.loadSensorAnalysis();
         },
 
@@ -11279,12 +11286,46 @@ function ninaApp() {
                     this.sensorAnalysis.state = st.state ?? this.sensorAnalysis.state;
                     this.sensorAnalysis.progress = st.progress ?? 0;
                     this.sensorAnalysis.phase = st.phase ?? '';
-                    if (st.lastResult) {
-                        this.sensorAnalysis.lastResult = st.lastResult;
-                        this.$nextTick(() => this._renderSensorChart());
-                    }
                 }
+                // Prefer the latest saved run for THIS camera over whatever
+                // ran last (which may have been a different camera).
+                const cam = this.selectedCamera || this.equipCameraInfo?.name;
+                let result = st?.lastResult || null;
+                if (cam) {
+                    const latest = await this.apiGet('/api/sensor-analysis/latest?camera=' + encodeURIComponent(cam));
+                    if (latest) result = latest;
+                }
+                if (result) {
+                    this.sensorAnalysis.lastResult = result;
+                    this.$nextTick(() => this._renderSensorChart());
+                }
+                this.sensorAnalysis.history = (await this.apiGet('/api/sensor-analysis/history')) || [];
             } catch (e) { /* leave as-is */ }
+        },
+
+        async exportSensorAnalysis() {
+            try {
+                const resp = await this.apiFetch('/api/sensor-analysis/export');
+                if (!resp || !resp.ok) { this.toast('Export failed', 'error'); return; }
+                const blob = await resp.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = 'polaris-sensor-analysis.json';
+                document.body.appendChild(a); a.click(); a.remove();
+                URL.revokeObjectURL(url);
+            } catch (e) { this.toast('Export failed: ' + (e.message || ''), 'error'); }
+        },
+
+        async clearSensorAnalysisHistory() {
+            const ok = await this._confirmAsync(
+                'Clear sensor analysis history?',
+                'Removes all saved sensor-analysis runs on this device. This cannot be undone.',
+                'Clear history');
+            if (!ok) return;
+            try {
+                const r = await this.apiFetch('/api/sensor-analysis/history', { method: 'DELETE' });
+                if (r && r.ok) { this.sensorAnalysis.history = []; this.toast('History cleared', 'success'); }
+            } catch (e) { this.toast('Failed to clear history: ' + (e.message || ''), 'error'); }
         },
 
         async runSensorAnalysis() {
@@ -21106,6 +21147,8 @@ function ninaApp() {
                     binX: eq.camera.binX || 0,
                     binY: eq.camera.binY || 0,
                     bitDepth: eq.camera.bitDepth || 0,
+                    gainMin: eq.camera.gainMin || 0,
+                    gainMax: eq.camera.gainMax || 0,
                     sensorWidthMm: eq.camera.sensorWidthMm || 0,
                     sensorHeightMm: eq.camera.sensorHeightMm || 0,
                     pixelSizeUm: eq.camera.pixelSizeX || 0,

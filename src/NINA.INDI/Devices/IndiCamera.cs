@@ -167,6 +167,22 @@ public class IndiCamera : ICamera {
         return null;
     }
 
+    /// <summary>Gain range from the CCD_CONTROLS gain element (the key
+    /// varies by driver: Gain / gain / GAIN). 0/0 when the driver doesn't
+    /// publish CCD_CONTROLS or a gain element (e.g. the CCD Simulator).</summary>
+    public int GainMin => GainElement() is { } el ? (int)el.Min : 0;
+    public int GainMax {
+        get { var el = GainElement(); return el != null && el.Max > el.Min ? (int)el.Max : 0; }
+    }
+
+    private IndiNumberElement? GainElement() {
+        var ctrl = _client.GetProperty(DeviceName, "CCD_CONTROLS") as IndiNumberProperty;
+        if (ctrl == null) return null;
+        foreach (var k in new[] { "Gain", "gain", "GAIN" })
+            if (ctrl.Values.TryGetValue(k, out var el)) return el;
+        return null;
+    }
+
     /// <summary>Write gain into CCD_CONTROLS only if the driver actually
     /// advertises that property + a matching element. Some drivers
     /// (notably indi_simulator_ccd) never publish CCD_CONTROLS at all,

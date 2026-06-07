@@ -112,6 +112,11 @@ public sealed class AscomComCamera : ICamera, IDisposable {
         : _disp.Invoke<int>(() => SafeGet<int>(() => (int)(short)_driver!.Gain))
             .GetAwaiter().GetResult();
 
+    // Gain bounds probed at connect (GainMin/GainMax). 0/0 when the driver
+    // doesn't expose a gain range; used to pre-fill the sensor-analysis sweep.
+    public int GainMin => _hasGain ? _gainMin : 0;
+    public int GainMax => _hasGain ? _gainMax : 0;
+
     public IReadOnlyList<int> IsoOptions => Array.Empty<int>();
     public int SelectedIso => 0;
 

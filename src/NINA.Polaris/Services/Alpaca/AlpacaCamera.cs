@@ -124,6 +124,11 @@ public sealed class AlpacaCamera : ICamera, IDisposable {
 
     public int Gain => _hasGain ? SafeGet(() => _client.GetAsync<int>("gain"), 0) : 0;
 
+    // Gain bounds cached at connect (gainmin/gainmax). 0/0 when the driver
+    // doesn't expose a gain range; used to pre-fill the sensor-analysis sweep.
+    public int GainMin => _hasGain ? _gainMin : 0;
+    public int GainMax => _hasGain ? _gainMax : 0;
+
     /// <summary>Alpaca cameras report gain, not ISO -- empty list signals
     /// the UI to hide the ISO dropdown.</summary>
     public IReadOnlyList<int> IsoOptions => Array.Empty<int>();

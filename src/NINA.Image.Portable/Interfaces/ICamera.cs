@@ -35,6 +35,13 @@ public interface ICamera {
     /// Backends that don't expose gain return 0.</summary>
     int Gain { get; }
 
+    /// <summary>Driver-reported gain range. Both 0 when the backend does
+    /// not expose gain bounds (DSLRs, some SDKs). The UI uses this to
+    /// pre-fill the Sensor Analysis gain sweep so the user doesn't have to
+    /// look the numbers up.</summary>
+    int GainMin => 0;
+    int GainMax => 0;
+
     /// <summary>ISO values the camera supports, in ASA. Empty list
     /// means the backend doesn't expose ISO (typical for dedicated
     /// astronomy cameras).</summary>

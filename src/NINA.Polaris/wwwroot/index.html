@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260607-sensoranalysis">
+    <link rel="stylesheet" href="/css/app.css?v=20260607-sensorgain">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -6421,7 +6421,11 @@
                         </div>
                     </template>
 
-                    <div class="editor-export-actions" style="margin-top:12px">
+                    <div class="editor-export-actions" style="margin-top:12px; gap:8px; flex-wrap:wrap">
+                        <button class="btn btn-sm" x-show="sensorAnalysis.history && sensorAnalysis.history.length"
+                                @click="exportSensorAnalysis()">⤓ Export JSON</button>
+                        <button class="btn btn-sm btn-danger" x-show="sensorAnalysis.history && sensorAnalysis.history.length"
+                                @click="clearSensorAnalysisHistory()">🗑 Clear history</button>
                         <button class="btn" :disabled="sensorAnalysis.state === 'running'"
                                 @click="sensorAnalysis.open = false">Close</button>
                     </div>
@@ -11995,7 +11999,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260607-sensoranalysis"></script>
+    <script src="/js/app.js?v=20260607-sensorgain"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

@@ -23,5 +23,19 @@ public static class SensorAnalysisEndpoints {
             svc.Cancel();
             return Results.Ok(new { cancelled = true });
         });
+
+        // Saved run history (optionally filtered to one camera) + export +
+        // clear, so a camera's measured curve survives restarts.
+        group.MapGet("/history", (SensorAnalysisStore store, string? camera) =>
+            Results.Ok(store.LoadHistory(camera)));
+
+        group.MapGet("/latest", (SensorAnalysisStore store, string? camera) =>
+            Results.Ok(string.IsNullOrWhiteSpace(camera) ? null : store.LatestForCamera(camera)));
+
+        group.MapGet("/export", (SensorAnalysisStore store) =>
+            Results.File(store.ExportAllJson(), "application/json", "polaris-sensor-analysis.json"));
+
+        group.MapDelete("/history", (SensorAnalysisStore store) =>
+            Results.Ok(new { cleared = store.ClearHistory() }));
     }
 }

@@ -35,6 +35,7 @@ public class SensorAnalysisService {
     private readonly EquipmentManager _equipment;
     private readonly CameraStreamService _cameraStream;
     private readonly LiveStackingService _liveStack;
+    private readonly SensorAnalysisStore _store;
 
     private readonly object _gate = new();
     private CancellationTokenSource? _cts;
@@ -55,11 +56,13 @@ public class SensorAnalysisService {
         ILogger<SensorAnalysisService> logger,
         EquipmentManager equipment,
         CameraStreamService cameraStream,
-        LiveStackingService liveStack) {
+        LiveStackingService liveStack,
+        SensorAnalysisStore store) {
         _logger = logger;
         _equipment = equipment;
         _cameraStream = cameraStream;
         _liveStack = liveStack;
+        _store = store;
     }
 
     public object GetStatus() => new {
@@ -174,6 +177,9 @@ public class SensorAnalysisService {
                 LinearToPercent: satAdu > 0 ? Math.Round(100.0 * maxLinearMean / satAdu, 1) : 0,
                 UnityGain: FindUnityGain(rows),
                 Rows: rows);
+
+            try { await _store.SaveResultAsync(result, ct); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to persist sensor analysis result"); }
 
             LastResult = result;
             State = "complete";
