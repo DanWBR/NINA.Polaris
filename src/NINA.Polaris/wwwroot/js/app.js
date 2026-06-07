@@ -12646,13 +12646,19 @@ function ninaApp() {
         _syncEquipChoicesFromConnected() {
             if (!Array.isArray(this.devices) || this.devices.length === 0) return;
             const names = new Set(this.devices.filter(d => d && d.name).map(d => d.name));
-            // Camera
-            if (this.equipCameraChoice && !names.has(this.equipCameraChoice)) {
-                this.equipCameraChoice = '';
-            }
-            if (!this.equipCameraChoice && this.selectedCamera
-                && names.has(this.selectedCamera)) {
-                this.equipCameraChoice = this.selectedCamera;
+            // Camera — only reconcile against the INDI device list when the
+            // INDI driver is active. For vendor-SDK drivers the choice holds a
+            // device id from cameraVendorDevices (e.g. "1") that never appears
+            // in the INDI `devices` list, so this clamp would wipe it every
+            // tick and the dropdown would snap back to "Select camera".
+            if (this.cameraDriver === 'indi' || !this.cameraDriver) {
+                if (this.equipCameraChoice && !names.has(this.equipCameraChoice)) {
+                    this.equipCameraChoice = '';
+                }
+                if (!this.equipCameraChoice && this.selectedCamera
+                    && names.has(this.selectedCamera)) {
+                    this.equipCameraChoice = this.selectedCamera;
+                }
             }
             // Mount
             if (this.equipMountChoice && !names.has(this.equipMountChoice)) {
