@@ -16447,7 +16447,13 @@ function ninaApp() {
         // across browser reloads without forcing the user to remember
         // hitting "💾 Save selections".
         _persistRigSelection(patch) {
-            const rig = this.activeRig;
+            // NB: `activeRig` is a getter that returns the rig *name* (string)
+            // for display. Persisting needs the rig *object*, so look it up by
+            // id. Using activeRig here silently no-op'd every save (Object.assign
+            // on a string + saveRig's `!rig?.id` guard), so per-device picks
+            // (guider driver, camera, native settings) never stuck across a
+            // refresh.
+            const rig = this.rigs?.find(x => x.id === this.activeRigId);
             if (!rig) return;
             Object.assign(rig, patch);
             this.saveRig(rig);
