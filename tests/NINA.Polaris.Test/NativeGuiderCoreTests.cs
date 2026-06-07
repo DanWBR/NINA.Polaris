@@ -189,6 +189,72 @@ public class NativeGuiderCoreTests {
             Is.EqualTo(0));
     }
 
+    // ---- Pier-side flip (meridian flip calibration mirroring) ----
+
+    [Test]
+    public void FlipForPierChange_AddsPiToRa_KeepsDec_WhenNoDecReverse() {
+        var cal = new GuideCalibration(
+            XAngle: 0.30, YAngle: 0.30 + Math.PI / 2,
+            XRate: 0.02, YRate: 0.018, DeclinationRad: 0.4, IsValid: true,
+            BacklashMs: 500, CalibrationPierSide: PierSide.pierEast);
+
+        var flipped = MountCoordTransform.FlipForPierChange(cal, reverseDec: false);
+
+        // RA angle rotates by pi (mod 2pi); Dec angle unchanged.
+        Assert.That(MountCoordTransform.NormAngle(flipped.XAngle - cal.XAngle),
+            Is.EqualTo(Math.PI).Within(1e-9).Or.EqualTo(-Math.PI).Within(1e-9));
+        Assert.That(flipped.YAngle, Is.EqualTo(cal.YAngle).Within(1e-12));
+        // Rates / dec / backlash preserved.
+        Assert.That(flipped.XRate, Is.EqualTo(cal.XRate));
+        Assert.That(flipped.YRate, Is.EqualTo(cal.YRate));
+        Assert.That(flipped.DeclinationRad, Is.EqualTo(cal.DeclinationRad));
+        Assert.That(flipped.BacklashMs, Is.EqualTo(cal.BacklashMs));
+        Assert.That(flipped.IsValid, Is.True);
+    }
+
+    [Test]
+    public void FlipForPierChange_AlsoFlipsDec_WhenReverseDecRequested() {
+        var cal = new GuideCalibration(0.30, 0.30 + Math.PI / 2, 0.02, 0.018, 0.4, true);
+
+        var flipped = MountCoordTransform.FlipForPierChange(cal, reverseDec: true);
+
+        Assert.That(MountCoordTransform.NormAngle(flipped.YAngle - cal.YAngle),
+            Is.EqualTo(Math.PI).Within(1e-9).Or.EqualTo(-Math.PI).Within(1e-9));
+    }
+
+    [Test]
+    public void FlipForPierChange_ReversesRaCorrectionDirection() {
+        // A meridian flip reverses the RA sense in the camera, so the same
+        // camera-x offset must map to the opposite RA correction sign.
+        var cal = new GuideCalibration(0.0, Math.PI / 2, 0.02, 0.02, 0.0, true);
+        var (raBefore, _) = MountCoordTransform.CameraToMount(cal, 10.0, 0.0);
+
+        var flipped = MountCoordTransform.FlipForPierChange(cal, reverseDec: false);
+        var (raAfter, _) = MountCoordTransform.CameraToMount(flipped, 10.0, 0.0);
+
+        Assert.That(Math.Sign(raAfter), Is.EqualTo(-Math.Sign(raBefore)));
+        Assert.That(Math.Abs(raAfter), Is.EqualTo(Math.Abs(raBefore)).Within(1e-9));
+    }
+
+    [Test]
+    public void FlipForPierChange_TwiceReturnsToOriginalAngles() {
+        var cal = new GuideCalibration(0.65, 0.65 + Math.PI / 2, 0.02, 0.018, 0.2, true);
+
+        var twice = MountCoordTransform.FlipForPierChange(
+            MountCoordTransform.FlipForPierChange(cal, true), true);
+
+        Assert.That(MountCoordTransform.NormAngle(twice.XAngle - cal.XAngle),
+            Is.EqualTo(0.0).Within(1e-9));
+        Assert.That(MountCoordTransform.NormAngle(twice.YAngle - cal.YAngle),
+            Is.EqualTo(0.0).Within(1e-9));
+    }
+
+    [Test]
+    public void FlipForPierChange_InvalidCalibration_StaysInvalid() {
+        var flipped = MountCoordTransform.FlipForPierChange(GuideCalibration.Invalid, false);
+        Assert.That(flipped.IsValid, Is.False);
+    }
+
     // ---- RmsCalculator ----
 
     [Test]

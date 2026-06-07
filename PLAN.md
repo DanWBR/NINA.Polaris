@@ -12760,3 +12760,35 @@ SynScan pulse guide.
 
 Still deferred: ZFilter, GaussianProcess (RA), pier-side/parity, SynScan pulse
 guide.
+
+### NATIVE GUIDER follow-up: Pier-side (meridian flip) handling
+
+- GuideCalibration gained `CalibrationPierSide` (stamped from `mount.SideOfPier`
+  when calibration completes). `ITelescope.SideOfPier` + the `PierSide` enum
+  already existed and all adapters (INDI/ASCOM/Alpaca) already report it, so no
+  adapter plumbing was needed.
+- `MountCoordTransform.FlipForPierChange(cal, reverseDec)` mirrors a calibration
+  for a German-equatorial flip (PHD2 Mount::FlipCalibration: RA angle + pi; Dec
+  angle + pi only when the mount reverses Dec output). Rates / dec / backlash
+  preserved.
+- NativeGuider.HandlePierSideChangeAsync runs each guide frame: when the live
+  SideOfPier differs from the calibration's side (both known), it reacts per the
+  rig setting. No-op when either side is pierUnknown, so a driver that does not
+  report side-of-pier never triggers a bogus flip. Detection via SideOfPier
+  covers both sequencer-driven and manual flips.
+- Two strategies, user-selectable per rig (both requested):
+  - "mirror" (default): adjust the existing calibration in place, re-select the
+    star + multi-star set on the new side, reset algorithms. Calibrate once,
+    guide all night.
+  - "recalibrate": clear the lock and run a fresh calibration on the new side
+    (the safe path for mounts whose flip geometry is unusual).
+  - "off": ignore (manual recalibration).
+- Per-rig fields: NativePierSideHandling (default "mirror") +
+  NativeReverseDecAfterFlip (default off), persisted via the rig PUT; RIGS tab
+  gained an "On meridian flip" dropdown + conditional "Reverse Dec after flip"
+  checkbox.
+- Tests: NativeGuiderCoreTests now 34 (FlipForPierChange RA+pi/Dec-kept,
+  Dec-reverse, RA-direction inversion, double-flip identity, invalid stays
+  invalid).
+
+Still deferred: ZFilter, GaussianProcess (RA), SynScan pulse guide.

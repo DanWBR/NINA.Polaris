@@ -166,6 +166,9 @@ public static class EquipmentEndpoints {
                 r.NativeMultiStar = update.NativeMultiStar;
                 if (update.NativeMaxGuideStars > 0)
                     r.NativeMaxGuideStars = Math.Clamp(update.NativeMaxGuideStars, 1, 12);
+                if (!string.IsNullOrWhiteSpace(update.NativePierSideHandling))
+                    r.NativePierSideHandling = update.NativePierSideHandling.Trim().ToLowerInvariant();
+                r.NativeReverseDecAfterFlip = update.NativeReverseDecAfterFlip;
                 // New guide-scope metadata fields (RIGS tab card).
                 // Defensive: clamp aperture to a sane lower bound so
                 // a stray zero doesn't blow up the f-ratio calc on the UI.

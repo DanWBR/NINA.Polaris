@@ -5074,6 +5074,21 @@
                                                @change="setNativeMultiStar($event.target.checked)">
                                         <span style="font-size:12px">Multi-star guiding</span>
                                     </label>
+                                    <div class="equip-driver-row" style="margin-top:6px">
+                                        <label class="equip-driver-label">On meridian flip</label>
+                                        <select class="equip-select equip-driver-select"
+                                                @change="setNativePierSideHandling($event.target.value)">
+                                            <option value="mirror" :selected="nativePierSideHandling === 'mirror'">Mirror calibration</option>
+                                            <option value="recalibrate" :selected="nativePierSideHandling === 'recalibrate'">Recalibrate</option>
+                                            <option value="off" :selected="nativePierSideHandling === 'off'">Do nothing</option>
+                                        </select>
+                                    </div>
+                                    <label class="equip-driver-row" style="margin-top:6px; gap:6px; cursor:pointer"
+                                           x-show="nativePierSideHandling === 'mirror'">
+                                        <input type="checkbox" :checked="nativeReverseDecAfterFlip"
+                                               @change="setNativeReverseDecAfterFlip($event.target.checked)">
+                                        <span style="font-size:12px">Reverse Dec after flip</span>
+                                    </label>
                                 </div>
                             </template>
                         </div>

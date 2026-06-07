@@ -274,6 +274,8 @@ public class ProfileService {
             NativeBacklashMaxMs = src.NativeBacklashMaxMs,
             NativeMultiStar = src.NativeMultiStar,
             NativeMaxGuideStars = src.NativeMaxGuideStars,
+            NativePierSideHandling = src.NativePierSideHandling,
+            NativeReverseDecAfterFlip = src.NativeReverseDecAfterFlip,
             PHD2Host = src.PHD2Host, PHD2Port = src.PHD2Port,
             // PHD2 deep-integration fields (cloned rig starts un-matched,
             // it will run its own first-time profile lookup the first time
@@ -919,6 +921,17 @@ public class EquipmentProfile {
     /// <summary>Maximum number of guide stars to track when multi-star is on
     /// (primary + secondaries). Clamped to [1, 12].</summary>
     public int NativeMaxGuideStars { get; set; } = 8;
+
+    /// <summary>How the native guider reacts to a German-equatorial pier-side
+    /// change (meridian flip) detected mid-session: "mirror" (auto-adjust the
+    /// existing calibration, default), "recalibrate" (run a fresh calibration),
+    /// or "off" (ignore; the user recalibrates manually).</summary>
+    public string NativePierSideHandling { get; set; } = "mirror";
+
+    /// <summary>When mirroring the calibration on a pier flip, also reverse the
+    /// Dec axis. Needed for mounts that reverse Dec guide output after a flip;
+    /// off for most mounts.</summary>
+    public bool NativeReverseDecAfterFlip { get; set; } = false;
 
     // Per-rig PHD2 settings
     public string PHD2Host { get; set; } = "localhost";

@@ -1,6 +1,8 @@
 // Camera<->mount coordinate transform + calibration model. Math ported from
 // PHD2 (OpenPHDGuiding) mount.cpp, BSD-3-Clause. See licenses/PHD2-LICENSE.txt.
 
+using NINA.Core.Enum;
+
 namespace NINA.Guider.Portable;
 
 /// <summary>Mount calibration: axis angles (radians) of RA/Dec in the guide-camera
@@ -12,7 +14,8 @@ public readonly record struct GuideCalibration(
     double YRate,         // Dec rate px/ms
     double DeclinationRad, // dec at calibration time (NaN = unknown)
     bool IsValid,
-    double BacklashMs = 0) {  // measured Dec backlash (slack take-up) in ms
+    double BacklashMs = 0,  // measured Dec backlash (slack take-up) in ms
+    PierSide CalibrationPierSide = PierSide.pierUnknown) {  // pier side when calibrated
 
     public static readonly GuideCalibration Invalid =
         new(0, 0, 0, 0, double.NaN, false);
@@ -55,6 +58,23 @@ public static class MountCoordTransform {
         if (Math.Abs(yAngleError) > Math.PI / 2.0) mountTheta = -mountTheta;
         double xa = mountTheta + cal.XAngle;
         return (Math.Cos(xa) * hyp, Math.Sin(xa) * hyp);
+    }
+
+    /// <summary>
+    /// Adjust a calibration for a German-equatorial meridian flip (pier-side
+    /// change). After a flip the OTA rotates 180 deg about the RA axis, so the
+    /// RA direction reverses in the camera frame: add pi to the RA angle. The
+    /// Dec angle is normally preserved; some mounts reverse the Dec output after
+    /// a flip, in which case pi is also added to the Dec angle. Rates, the
+    /// calibration declination and the measured backlash are unchanged. This
+    /// mirrors PHD2's Mount::FlipCalibration (xAngle += pi, yAngle += pi only
+    /// when the mount requires a Dec flip).
+    /// </summary>
+    public static GuideCalibration FlipForPierChange(in GuideCalibration cal, bool reverseDec) {
+        if (!cal.IsValid) return cal;
+        double newX = NormAngle(cal.XAngle + Math.PI);
+        double newY = reverseDec ? NormAngle(cal.YAngle + Math.PI) : cal.YAngle;
+        return cal with { XAngle = newX, YAngle = newY };
     }
 
     /// <summary>RA rate corrected for the current declination (xRate / cos dec).</summary>

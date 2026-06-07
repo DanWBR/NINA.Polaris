@@ -680,6 +680,8 @@ function ninaApp() {
         nativeDecAlgorithm: 'resistswitch',
         nativeBacklashComp: false,
         nativeMultiStar: true,
+        nativePierSideHandling: 'mirror',
+        nativeReverseDecAfterFlip: false,
         nativeGuideAlgorithms: [
             { id: 'hysteresis', name: 'Hysteresis' },
             { id: 'resistswitch', name: 'Resist Switch' },
@@ -11855,6 +11857,8 @@ function ninaApp() {
             this.nativeDecAlgorithm = rig.nativeDecAlgorithm || 'resistswitch';
             this.nativeBacklashComp = !!rig.nativeBacklashComp;
             this.nativeMultiStar = rig.nativeMultiStar !== false;
+            this.nativePierSideHandling = rig.nativePierSideHandling || 'mirror';
+            this.nativeReverseDecAfterFlip = !!rig.nativeReverseDecAfterFlip;
             this.equipMountChoice = rig.telescope || '';
             // Same pattern for the mount driver. For direct WiFi drivers
             // (synscan-wifi, nexstar-wifi, lx200-tcp) the "device name"
@@ -16367,6 +16371,18 @@ function ninaApp() {
         setNativeMultiStar(enabled) {
             this.nativeMultiStar = !!enabled;
             this._persistRigSelection({ nativeMultiStar: this.nativeMultiStar });
+        },
+
+        // How the native guider reacts to a meridian flip (pier-side change).
+        setNativePierSideHandling(mode) {
+            this.nativePierSideHandling = mode || 'mirror';
+            this._persistRigSelection({ nativePierSideHandling: this.nativePierSideHandling });
+        },
+
+        // Reverse Dec when mirroring the calibration after a flip.
+        setNativeReverseDecAfterFlip(enabled) {
+            this.nativeReverseDecAfterFlip = !!enabled;
+            this._persistRigSelection({ nativeReverseDecAfterFlip: this.nativeReverseDecAfterFlip });
         },
 
         // Native guide-camera driver kind (indi / alpaca / vendor SDK).

@@ -355,6 +355,9 @@ public sealed class NativeGuider : IGuider, IDisposable {
 
         _calibration = process.Result;
         if (_calibration.IsValid) {
+            // Stamp the pier side this calibration was measured on so a later
+            // meridian flip can mirror it instead of forcing a recalibration.
+            _calibration = _calibration with { CalibrationPierSide = mount.SideOfPier };
             // Re-lock at the recentred position.
             _lockX = curX; _lockY = curY;
             _logger.LogInformation(
@@ -423,6 +426,11 @@ public sealed class NativeGuider : IGuider, IDisposable {
 
     private async Task GuideOnceAsync(ICamera cam, ITelescope? mount, CancellationToken ct) {
         int expMs = Math.Max(50, Rig.NativeGuideExposureMs);
+
+        // React to a German-equatorial meridian flip (pier-side change) before
+        // measuring, so this frame's correction uses the adjusted calibration.
+        await HandlePierSideChangeAsync(cam, mount, ct);
+
         var (curX, curY, found, snr, hfd) = await MeasureGuideStarAsync(cam, ct);
 
         if (!found) {
@@ -522,6 +530,57 @@ public sealed class NativeGuider : IGuider, IDisposable {
             _logger.LogWarning(ex, "Guide capture failed");
             return null;
         }
+    }
+
+    /// <summary>
+    /// Detect a German-equatorial pier-side change (meridian flip) mid-session
+    /// and react per the rig setting: "mirror" adjusts the existing calibration
+    /// in place (PHD2-style: RA angle + 180 deg, optional Dec flip), avoiding a
+    /// recalibration; "recalibrate" runs a fresh calibration; "off" ignores it.
+    /// No-op when either the calibration side or the current side is unknown, so
+    /// a driver that doesn't report SideOfPier never triggers a bogus flip.
+    /// </summary>
+    private async Task HandlePierSideChangeAsync(ICamera cam, ITelescope? mount, CancellationToken ct) {
+        if (mount == null || !_calibration.IsValid) return;
+        var mode = (Rig.NativePierSideHandling ?? "mirror").Trim().ToLowerInvariant();
+        if (mode == "off") return;
+
+        var calSide = _calibration.CalibrationPierSide;
+        var nowSide = mount.SideOfPier;
+        if (calSide == PierSide.pierUnknown || nowSide == PierSide.pierUnknown) return;
+        if (nowSide == calSide) return; // no flip
+
+        if (mode == "recalibrate") {
+            RaiseAlert($"Pier side changed to {nowSide}; recalibrating.");
+            // Force a fresh star pick + calibration on the new side.
+            _haveLock = false;
+            _multiStar.Clear();
+            await CalibrateAsync(ct);
+            if (_calibration.IsValid) {
+                await BuildMultiStarAsync(ct);
+                _raAlgo.Reset();
+                _decAlgo.Reset();
+                _backlashComp.Reset();
+                SetAppState("Guiding");
+            } else {
+                RaiseAlert("Recalibration after pier flip failed; guiding paused.");
+            }
+            return;
+        }
+
+        // Default: mirror the calibration in place.
+        _calibration = MountCoordTransform
+            .FlipForPierChange(_calibration, Rig.NativeReverseDecAfterFlip)
+            with { CalibrationPierSide = nowSide };
+        _raAlgo.Reset();
+        _decAlgo.Reset();
+        _backlashComp.Reset();
+        // The field also rotated 180 deg, so re-seed the multi-star set and the
+        // lock star on the new side.
+        _haveLock = false;
+        await AutoSelectStarAsync(ct);
+        if (_haveLock) await BuildMultiStarAsync(ct);
+        RaiseAlert($"Pier side changed to {nowSide}; calibration mirrored.");
     }
 
     /// <summary>Measure the guide-star field offset this frame. When multi-star
