@@ -68,13 +68,12 @@ function ninaApp() {
         imageHistory: [],
 
         // Live stacking
-        // Default true: stacking is continuous + automatic out of
-        // the box. The pause toggle in the LIVE tab lets the user
-        // flip to raw passthrough when they specifically don't
-        // want stacking (rare). Hydrated from the WS status payload
-        // on first connect so what the browser shows matches the
-        // server's actual state.
-        liveStackEnabled: true,
+        // Default false: the session comes up disarmed (matches the
+        // server's LiveStackingService default). The user arms it from
+        // the LIVE tab Start toggle when they want stacking. Hydrated
+        // from the WS status payload on first connect so what the
+        // browser shows matches the server's actual state.
+        liveStackEnabled: false,
 
         // Collapse state for the LIVE / PREVIEW / VIDEO right-side
         // floating control panels. true = panel slid out to the right,

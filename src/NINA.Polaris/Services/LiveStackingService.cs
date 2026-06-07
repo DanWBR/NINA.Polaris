@@ -82,11 +82,12 @@ public class LiveStackingService {
     /// Surfaced on the WS status payload + LIVE tab. Reset in
     /// <see cref="Reset"/>.</summary>
     public int MeridianFlipsHandled { get; private set; }
-    // Default: stacking is ON. Live stacking is the user's expected
-    // behaviour the moment they point a camera at the sky — they
-    // shouldn't have to click "Start" first. The toggle still exists
-    // for the rare "I want raw passthrough, no stacking" case.
-    private bool _isRunning = true;
+    // Default: stacking is OFF. The session comes up disarmed so frames
+    // flow through the relay (and are saved when SaveFramesToDisk is on)
+    // without silently integrating into a stack the user never asked
+    // for. The operator explicitly arms it from the LIVE tab via
+    // Start() / Resume() when they want stacking.
+    private bool _isRunning = false;
     private DateTime? _startedAt;
 
     /// <summary>When true, every raw frame received via
