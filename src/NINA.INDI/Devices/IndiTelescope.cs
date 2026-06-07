@@ -42,7 +42,9 @@ public class IndiTelescope : ITelescope {
         SupportsFindHome:        _client.GetProperty(DeviceName, "TELESCOPE_HOME") != null,
         SupportsSetSiteLocation: _client.GetProperty(DeviceName, "GEOGRAPHIC_COORD") != null,
         SupportsSetSiteTime:     _client.GetProperty(DeviceName, "TIME_UTC") != null,
-        SupportsTrackingModes:   _client.GetProperty(DeviceName, "TELESCOPE_TRACK_MODE") != null);
+        SupportsTrackingModes:   _client.GetProperty(DeviceName, "TELESCOPE_TRACK_MODE") != null,
+        SupportsPulseGuide:      _client.GetProperty(DeviceName, "TELESCOPE_TIMED_GUIDE_NS") != null
+                                 && _client.GetProperty(DeviceName, "TELESCOPE_TIMED_GUIDE_WE") != null);
 
     public double RightAscension => _client.GetNumber(DeviceName, "EQUATORIAL_EOD_COORD", "RA");
     public double Declination => _client.GetNumber(DeviceName, "EQUATORIAL_EOD_COORD", "DEC");
@@ -526,5 +528,27 @@ public class IndiTelescope : ITelescope {
         }
         var payload = existing.Values.Keys.ToDictionary(k => k, k => k == match);
         await _client.SetSwitchAsync(DeviceName, "TELESCOPE_TRACK_MODE", payload, ct);
+    }
+
+    /// <summary>Timed guide pulse via the INDI standard
+    /// TELESCOPE_TIMED_GUIDE_NS / _WE number properties (duration in ms).
+    /// Fire-and-forget: drivers run the pulse autonomously, so we set the
+    /// requested element to the duration and the opposite element to 0 and
+    /// return without waiting on Busy/Ok (high-rate guide cadence). Used by
+    /// the native autoguider.</summary>
+    public async Task PulseGuideAsync(GuideDirections direction, int durationMs, CancellationToken ct = default) {
+        if (durationMs <= 0) return;
+        var (prop, elem, opp) = direction switch {
+            GuideDirections.guideNorth => ("TELESCOPE_TIMED_GUIDE_NS", "TIMED_GUIDE_N", "TIMED_GUIDE_S"),
+            GuideDirections.guideSouth => ("TELESCOPE_TIMED_GUIDE_NS", "TIMED_GUIDE_S", "TIMED_GUIDE_N"),
+            GuideDirections.guideWest  => ("TELESCOPE_TIMED_GUIDE_WE", "TIMED_GUIDE_W", "TIMED_GUIDE_E"),
+            _                          => ("TELESCOPE_TIMED_GUIDE_WE", "TIMED_GUIDE_E", "TIMED_GUIDE_W"),
+        };
+        if (_client.GetProperty(DeviceName, prop) == null) {
+            throw new NotSupportedException(
+                $"Mount '{DeviceName}' does not expose {prop} — driver doesn't support pulse guiding.");
+        }
+        await _client.SetNumberAsync(DeviceName, prop,
+            new Dictionary<string, double> { [elem] = durationMs, [opp] = 0 }, ct);
     }
 }

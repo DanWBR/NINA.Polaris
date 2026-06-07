@@ -9,8 +9,11 @@ namespace NINA.Polaris.Services;
 /// Protocol: line-delimited JSON-RPC 2.0 over TCP (default port 4400).
 /// Reference: https://github.com/OpenPHDGuiding/phd2/wiki/EventMonitoring
 /// </summary>
-public class PHD2Client : IDisposable {
+public class PHD2Client : IGuider, IDisposable {
     private readonly ILogger<PHD2Client> _logger;
+
+    /// <summary>Backend identifier for the generic guider surface.</summary>
+    public string Backend => "phd2";
     private TcpClient? _tcp;
     private NetworkStream? _stream;
     private StreamWriter? _writer;
@@ -603,6 +606,36 @@ public class PHD2Client : IDisposable {
             Declination = TryGetDouble(obj, "declination")
         };
     }
+
+    // ----- IGuider adoption -----
+    // Thin explicit-interface shims so PHD2Client satisfies the generic
+    // IGuider contract without changing any existing public behaviour.
+    // ActiveGuiderProvider routes generic guider calls through these.
+
+    Task IGuider.DisconnectAsync(CancellationToken ct) => DisconnectAsync();
+
+    Task IGuider.StartGuidingAsync(double settlePixels, int settleTime, int settleTimeout,
+        bool recalibrate, CancellationToken ct)
+        => StartGuidingAsync(settlePixels, settleTime, settleTimeout, recalibrate);
+
+    Task IGuider.StopAsync(CancellationToken ct) => StopAsync();
+
+    Task IGuider.LoopAsync(CancellationToken ct) => LoopAsync();
+
+    Task IGuider.PauseAsync(CancellationToken ct) => PauseAsync();
+
+    Task IGuider.ResumeAsync(CancellationToken ct) => ResumeAsync();
+
+    Task IGuider.DitherAsync(double pixels, bool raOnly, double settlePixels,
+        int settleTime, int settleTimeout, CancellationToken ct)
+        => DitherAsync(pixels, raOnly, settlePixels, settleTime, settleTimeout);
+
+    Task IGuider.SetExposureAsync(int milliseconds, CancellationToken ct)
+        => SetExposureAsync(milliseconds);
+
+    Task IGuider.AutoSelectStarAsync(CancellationToken ct) => AutoSelectStarAsync();
+
+    Task IGuider.ClearCalibrationAsync(CancellationToken ct) => ClearCalibrationAsync();
 
     public void Dispose() {
         try { DisconnectAsync().Wait(2000); } catch { }

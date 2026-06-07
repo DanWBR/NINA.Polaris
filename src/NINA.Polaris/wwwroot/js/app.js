@@ -664,6 +664,17 @@ function ninaApp() {
         cameraDiscovering: false,
         cameraIso: 800,
 
+        // Guider backend selection (native autoguider vs external PHD2).
+        // guiderDriver picks which backend the rig uses; guideCamera +
+        // guideCameraDriver address the native guide camera (same scheme
+        // as the imaging camera). guideCameraVendorDevices is the per-
+        // driver discovery payload refreshed by the "Detect" button.
+        guiderDriver: 'phd2',
+        guideCamera: '',
+        guideCameraDriver: 'indi',
+        guideCameraVendorDevices: [],
+        guideCameraDiscovering: false,
+
         // Mount driver state, same shape as camera. Today the
         // dropdown shows INDI + synscan-wifi (the rest of the
         // catalogue is "(not installed)"). mountDriver drives the
@@ -11823,6 +11834,10 @@ function ninaApp() {
             // rigs without the field default to "indi" via the
             // backend's ?? coalesce; the UI mirrors that here.
             this.cameraDriver = rig.cameraDriver || 'indi';
+            // Guider backend + native guide-camera selection.
+            this.guiderDriver = rig.guiderDriver || 'phd2';
+            this.guideCamera = rig.guideCamera || '';
+            this.guideCameraDriver = rig.guideCameraDriver || 'indi';
             this.equipMountChoice = rig.telescope || '';
             // Same pattern for the mount driver. For direct WiFi drivers
             // (synscan-wifi, nexstar-wifi, lx200-tcp) the "device name"
@@ -12402,6 +12417,10 @@ function ninaApp() {
                 ...rig,
                 camera: this.equipCameraChoice || rig.camera,
                 cameraDriver: this.cameraDriver || rig.cameraDriver || 'indi',
+                // Guider backend + native guide-camera selection.
+                guiderDriver: this.guiderDriver || rig.guiderDriver || 'phd2',
+                guideCamera: this.guideCamera || rig.guideCamera,
+                guideCameraDriver: this.guideCameraDriver || rig.guideCameraDriver || 'indi',
                 telescope: this.equipMountChoice || rig.telescope,
                 telescopeDriver: this.mountDriver || rig.telescopeDriver || 'indi',
                 focuser: this.equipFocuserChoice || rig.focuser,
@@ -16294,6 +16313,56 @@ function ninaApp() {
                 this.cameraVendorDevices = [];
             } finally {
                 this.cameraDiscovering = false;
+            }
+        },
+
+        // ----- Native guider backend pickers -----
+        // Mirror the imaging-camera picker handlers. All persist via
+        // _persistRigSelection (the same rig-save path the imaging
+        // picker uses) so the choice survives reload + rig switch.
+
+        // Guider backend: 'phd2' (default, external) or 'native'.
+        setGuiderDriver(driver) {
+            this.guiderDriver = driver || 'phd2';
+            this._persistRigSelection({ guiderDriver: this.guiderDriver });
+        },
+
+        // Native guide-camera driver kind (indi / alpaca / vendor SDK).
+        // Resets the pending vendor list + selection like the imaging
+        // picker does, then auto-detects for non-INDI drivers.
+        setGuideCameraDriver(driver) {
+            this.guideCameraDriver = driver || 'indi';
+            this.guideCameraVendorDevices = [];
+            this.guideCamera = '';
+            this._persistRigSelection({
+                guideCameraDriver: this.guideCameraDriver,
+                guideCamera: ''
+            });
+            if (this.guideCameraDriver !== 'indi') this.detectGuideCameras();
+        },
+
+        // Native guide-camera device pick. INDI device name or vendor id.
+        setGuideCamera(id) {
+            this.guideCamera = id || '';
+            this._persistRigSelection({ guideCamera: this.guideCamera });
+        },
+
+        // "Detect" handler for non-INDI guide-camera drivers. Reuses the
+        // same per-driver camera discovery endpoint as the imaging picker.
+        async detectGuideCameras() {
+            this.guideCameraDiscovering = true;
+            try {
+                const list = await this.apiGet(
+                    `/api/camera/discover?driver=${encodeURIComponent(this.guideCameraDriver)}`);
+                this.guideCameraVendorDevices = list || [];
+                if (this.guideCameraVendorDevices.length === 0) {
+                    this.toast('No guide cameras detected for ' + this.guideCameraDriver, 'warn');
+                }
+            } catch (e) {
+                this.toast('Guide camera discovery failed: ' + e.message, 'error');
+                this.guideCameraVendorDevices = [];
+            } finally {
+                this.guideCameraDiscovering = false;
             }
         },
 

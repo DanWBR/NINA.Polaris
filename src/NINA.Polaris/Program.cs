@@ -160,6 +160,9 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Auth.AuthService>();
 builder.Services.AddSingleton<ClockSyncService>();
 builder.Services.AddSingleton<ImageWriterService>();
 builder.Services.AddSingleton<PHD2Client>();
+// Native in-process autoguider (drop-in alternative to PHD2, per-rig).
+builder.Services.AddSingleton<NativeGuider>();
+builder.Services.AddSingleton<ActiveGuiderProvider>();
 builder.Services.AddSingleton<PHD2ProcessManager>();
 builder.Services.AddHostedService<PHD2AutoStartService>();
 

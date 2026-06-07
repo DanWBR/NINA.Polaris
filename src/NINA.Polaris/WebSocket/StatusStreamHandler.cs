@@ -44,6 +44,7 @@ public static class StatusStreamHandler {
         var liveStack = context.RequestServices.GetRequiredService<LiveStackingService>();
         var sequence = context.RequestServices.GetRequiredService<SequenceEngine>();
         var phd2 = context.RequestServices.GetRequiredService<PHD2Client>();
+        var guiders = context.RequestServices.GetRequiredService<ActiveGuiderProvider>();
         var profileSync = context.RequestServices.GetRequiredService<PHD2ProfileSyncService>();
         var phd2Calibration = context.RequestServices.GetRequiredService<PHD2CalibrationOrchestrator>();
         var phd2Gui = context.RequestServices.GetRequiredService<Phd2GuiSessionService>();
@@ -144,30 +145,36 @@ public static class StatusStreamHandler {
                         lastError = phd2Vnc.LastError
                     };
 
-                    // Compact guider payload: last 60 samples for inline chart
-                    object? guiderPayload = null;
-                    if (phd2.IsConnected) {
-                        var steps = phd2.SnapshotSteps();
+                    // Compact guider payload: last 60 samples for inline
+                    // chart. Generic fields are sourced from the active
+                    // guider (PHD2 or native) so the GUIDE tab works
+                    // unchanged for both backends; the PHD2-only sub-
+                    // objects (profileSync/guiSession/vncSession/
+                    // calibrateJob) stay PHD2-sourced and the frontend
+                    // ignores them when backend == "native".
+                    var activeGuider = guiders.Active;
+                    object? guiderPayload;
+                    if (activeGuider.IsConnected) {
+                        var steps = activeGuider.SnapshotSteps();
                         var tail = steps.Skip(Math.Max(0, steps.Count - 60));
                         guiderPayload = new {
+                            backend = activeGuider.Backend,
                             connected = true,
-                            host = phd2.Host,
-                            port = phd2.Port,
-                            appState = phd2.AppState,
-                            guiding = phd2.IsGuiding,
-                            calibrating = phd2.IsCalibrating,
-                            paused = phd2.IsPaused,
-                            looping = phd2.IsLooping,
-                            settling = phd2.IsSettling,
-                            pixelScale = phd2.PixelScale,
-                            rmsRA = phd2.RmsRA,
-                            rmsDec = phd2.RmsDec,
-                            rmsTotal = phd2.RmsTotal,
-                            peakRA = phd2.PeakRA,
-                            peakDec = phd2.PeakDec,
+                            appState = activeGuider.AppState,
+                            guiding = activeGuider.IsGuiding,
+                            calibrating = activeGuider.IsCalibrating,
+                            paused = activeGuider.IsPaused,
+                            looping = activeGuider.IsLooping,
+                            settling = activeGuider.IsSettling,
+                            pixelScale = activeGuider.PixelScale,
+                            rmsRA = activeGuider.RmsRA,
+                            rmsDec = activeGuider.RmsDec,
+                            rmsTotal = activeGuider.RmsTotal,
+                            peakRA = activeGuider.PeakRA,
+                            peakDec = activeGuider.PeakDec,
                             stepCount = steps.Count,
-                            lastAlert = phd2.LastAlert,
-                            lastSettleStatus = phd2.LastSettleStatus,
+                            lastAlert = activeGuider.LastAlert,
+                            lastSettleStatus = activeGuider.LastSettleStatus,
                             recentSteps = tail.Select(s => new {
                                 t = ((DateTimeOffset)s.Timestamp).ToUnixTimeMilliseconds(),
                                 ra = s.RaArcsec,
@@ -180,6 +187,7 @@ public static class StatusStreamHandler {
                         };
                     } else {
                         guiderPayload = new {
+                            backend = activeGuider.Backend,
                             connected = false, appState = "Stopped",
                             profileSync = profileSyncPayload,
                             calibrateJob = calibrateJobPayload,

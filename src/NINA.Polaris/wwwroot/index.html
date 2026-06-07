@@ -3377,13 +3377,21 @@
                      after PHD2 is already running.
                      guideTab state is on app.js (default 'gui'). -->
                 <div class="guide-tabstrip">
+                    <!-- PHD2 GUI tab is PHD2-only; hidden when the active
+                         rig uses the native autoguider (it has no external
+                         GUI to embed). -->
                     <button class="guide-tab" :class="{ active: guideTab === 'gui' }"
+                            x-show="guider.backend !== 'native'"
                             @click="guideTab = 'gui'; loadPhd2GuiStatus(); loadPhd2VncStatus()">PHD2 GUI</button>
                     <button class="guide-tab" :class="{ active: guideTab === 'control' }"
                             @click="guideTab = 'control'">Control</button>
+                    <span class="guide-tab-backend-chip"
+                          x-show="guider.backend === 'native'"
+                          style="margin-left:8px;font-size:11px;opacity:.7">Native guider</span>
                     <!-- Profile-sync indicator chip, lives in the strip so
-                         it's visible from either tab. -->
-                    <span class="profile-sync-indicator" x-show="guider.profileSync"
+                         it's visible from either tab. PHD2-only. -->
+                    <span class="profile-sync-indicator"
+                          x-show="guider.backend !== 'native' && guider.profileSync"
                           :class="{
                               'sync-ok': guider.profileSync?.phase === 'ok',
                               'sync-warn': guider.profileSync?.profileMissing,
@@ -3601,7 +3609,7 @@
                      falls through to the "use native PHD2 window" banner.
                      guiSession/vncSession come from /api/guider/*-session/
                      status + the StatusStreamHandler 1Hz payload. -->
-                <div x-show="guideTab === 'gui'" class="phd2-gui-tab">
+                <div x-show="guideTab === 'gui' && guider.backend !== 'native'" class="phd2-gui-tab">
                     <!-- ── Neither backend supported on this OS (macOS) ── -->
                     <div x-show="phd2GuiSession && phd2VncSession
                                  && !phd2GuiSession.supportedOs
@@ -4968,10 +4976,76 @@
                             </div>
                             <p class="hint" style="margin:4px 0 0;font-size:11px"
                                x-show="guider.connected && guider.pixelScale">
-                                PHD2 currently reports
+                                Guider currently reports
                                 <strong x-text="guider.pixelScale?.toFixed(3) + '&quot;/px'"></strong>
                                 at this guide scope.
                             </p>
+
+                            <!-- Guider backend picker. PHD2 (default) uses
+                                 the external PHD2 process; "native" uses the
+                                 in-process autoguider with the guide camera
+                                 selected below. @change writes guiderDriver +
+                                 persists the rig. -->
+                            <div class="equip-driver-row" style="margin-top:8px">
+                                <label class="equip-driver-label">Guider</label>
+                                <select class="equip-select equip-driver-select"
+                                        @change="setGuiderDriver($event.target.value)">
+                                    <option value="phd2" :selected="guiderDriver === 'phd2'">PHD2 (external)</option>
+                                    <option value="native" :selected="guiderDriver === 'native'">Native (built-in)</option>
+                                </select>
+                            </div>
+
+                            <!-- Native-only guide camera picker. Mirrors the
+                                 imaging-camera picker exactly: driver dropdown
+                                 + device dropdown, both @change + :selected so
+                                 dynamic option lists don't revert the pick. -->
+                            <template x-if="guiderDriver === 'native'">
+                                <div style="margin-top:8px">
+                                    <div class="equip-driver-row" x-show="cameraDrivers.length > 1">
+                                        <label class="equip-driver-label">Cam driver</label>
+                                        <select class="equip-select equip-driver-select"
+                                                @change="setGuideCameraDriver($event.target.value)">
+                                            <template x-for="d in cameraDrivers" :key="'gcd-'+d.id">
+                                                <option :value="d.id" :disabled="!d.available"
+                                                        :selected="guideCameraDriver === d.id"
+                                                        x-text="d.name + (d.available ? '' : ' (not installed)')"></option>
+                                            </template>
+                                        </select>
+                                    </div>
+                                    <div class="equip-select-row" style="margin-top:6px">
+                                        <select class="equip-select"
+                                                x-show="guideCameraDriver === 'indi'"
+                                                @change="setGuideCamera($event.target.value)">
+                                            <option value="">Select guide camera</option>
+                                            <template x-for="dev in devices" :key="'gcam-'+dev.name">
+                                                <option :value="dev.name"
+                                                        :selected="guideCamera === dev.name"
+                                                        x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
+                                            </template>
+                                        </select>
+                                        <select class="equip-select"
+                                                x-show="guideCameraDriver !== 'indi'"
+                                                :disabled="guideCameraDiscovering"
+                                                @change="setGuideCamera($event.target.value)">
+                                            <option value="" x-text="guideCameraDiscovering ? 'Detecting…' : 'Select guide camera'"></option>
+                                            <template x-for="c in guideCameraVendorDevices" :key="'gcv-'+c.id">
+                                                <option :value="c.id"
+                                                        :selected="guideCamera === c.id"
+                                                        x-text="c.model + ' (' + c.detail + ')'"></option>
+                                            </template>
+                                        </select>
+                                        <button class="btn btn-sm"
+                                                x-show="guideCameraDriver !== 'indi'"
+                                                @click="detectGuideCameras()"
+                                                :disabled="guideCameraDiscovering">Detect</button>
+                                    </div>
+                                    <p class="hint" style="margin:4px 0 0;font-size:11px">
+                                        The native guider uses this camera + the rig's
+                                        mount (pulse guide via INDI). Must differ from
+                                        the imaging camera.
+                                    </p>
+                                </div>
+                            </template>
                         </div>
                     </div>
 
@@ -12079,7 +12153,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260607-vidprobe"></script>
+    <script src="/js/app.js?v=20260607-nativeguider"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

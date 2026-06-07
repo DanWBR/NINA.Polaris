@@ -1831,3 +1831,14 @@ images calibrated with PCC, please credit:
 ## License
 
 This project is licensed under the Mozilla Public License 2.0.
+
+### Third-party licenses
+
+- **PHD2 (OpenPHDGuiding)** -- BSD-3-Clause. The native autoguider
+  (`NINA.Guider.Portable`) ports PHD2's core guiding math (single-star
+  centroid, calibration, Hysteresis + Resist-Switch algorithms,
+  camera/mount transforms) to C#. Each ported file carries the PHD2
+  BSD-3 header; the full license text is in
+  [`licenses/PHD2-LICENSE.txt`](licenses/PHD2-LICENSE.txt). PHD2 is
+  Copyright (c) the Open PHD Guiding development team and the Max Planck
+  Society. See https://openphdguiding.org.

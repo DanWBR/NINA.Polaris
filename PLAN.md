@@ -12627,3 +12627,68 @@ vendored under `camera_sdk/`:
 - Tests: NativeCameraSdkTests extended (Registry false without lib, discovery
   empty, constructors safe) — 9 pass. All four SDK projects + NINA.Polaris
   build clean.
+
+## NATIVE GUIDER: in-process C# autoguider (drop-in PHD2 alternative)
+
+A native autoguider that runs inside Polaris, ported from PHD2's core
+guiding math (PHD2 is BSD-3-Clause). It is a per-rig selectable alternative
+to the external PHD2 integration; PHD2 stays the default everywhere and its
+path is untouched.
+
+MVP scope shipped:
+- src/NINA.Guider.Portable: pure, unit-tested math (ported from PHD2,
+  per-file BSD-3 headers). GuideStar.Find (single-star weighted centroid +
+  SNR + HFD), HysteresisAlgorithm (RA) + ResistSwitchAlgorithm (DEC) +
+  IdentityAlgorithm, MountCoordTransform (camera<->mount rotation +
+  orthogonality, RaRateAtDec = xRate/cos dec, ComputeMoveDurationMs clamp),
+  CalibrationProcess (WEST -> EAST recenter -> SOUTH state machine),
+  RmsCalculator + GuidingSettler + GuideStep.
+- IGuider (src/NINA.Polaris/Services/IGuider.cs): backend-agnostic guider
+  contract reusing the existing PHD2 DTO shapes (GuideStep / SettleResult /
+  CalibrationData) so the WebSocket JSON stays byte-identical. PHD2Client
+  implements it (Backend="phd2") via thin explicit-interface shims; no
+  behaviour change.
+- NativeGuider (Backend="native"): single-CTS guide loop. Capture guide
+  frame (small ROI around the lock star, full-frame+crop fallback) ->
+  GuideStar.Find -> camera->mount offset -> per-axis algorithm (Hysteresis
+  RA from NativeRaAggression/Hysteresis/MinMove, ResistSwitch DEC) ->
+  ComputeMoveDurationMs (RA rate dec-corrected, clamp <= exposure period) ->
+  Telescope.PulseGuideAsync per axis. AutoSelectStar uses the existing
+  StarDetector to pick a bright interior non-saturated star. Calibrate pulses
+  through CalibrationProcess. Dither offsets the lock + runs GuidingSettler ->
+  Settled. PixelScale = 206.265 * guideCam.PixelSizeX / GuiderFocalLengthMm.
+  Safety: one loop at a time, guide-cam must differ from imaging-cam, clamped
+  pulses, divide-by-zero guards, never throws out of the loop.
+- ActiveGuiderProvider singleton: Active => rig.GuiderDriver=="native" ?
+  NativeGuider : PHD2Client. GuiderEndpoints routes the generic operations
+  (status/steps/connect/disconnect/guide/stop/loop/pause/resume/dither/
+  exposure/find-star/clear-calibration/clear-history) through it; PHD2-only
+  routes (profiles, gui/vnc sessions, algo presets, smart calibrate, process
+  lifecycle) stay bound to PHD2Client. StatusStreamHandler sources the guider
+  sub-object from the active backend and adds a `backend` field; PHD2-only
+  sub-objects stay PHD2-sourced (UI ignores them when native).
+- EquipmentManager: SelectCamera's switch refactored into a private
+  CreateCamera(driver, deviceId); added GuideCamera + GuideCameraDriver +
+  SelectGuideCamera (reuses CreateCamera, rejects guide==imaging), plus an
+  optional guideCamera status sub-object. HardwareAutoConnectService auto-
+  selects + connects the guide camera for native rigs.
+- EquipmentProfile fields: GuiderDriver="phd2", GuideCamera,
+  GuideCameraDriver="indi", NativeGuideExposureMs=2000,
+  NativeCalibrationStepMs=1000, NativeMinMoveRaPx/DecPx=0.15,
+  NativeRaAggression=0.70, NativeRaHysteresis=0.10. Round-trip through the
+  rig PUT + clone.
+- RIGS UI: a "Guider" picker (phd2 | native) on the Guidescope card and,
+  when native, a guide-camera driver + device picker mirroring the imaging
+  camera picker (@change + :selected, not x-model). GUIDE-tab PHD2-only
+  sub-panels (PHD2 GUI tab, profile-sync chip) hide when backend==native.
+- Licensing: licenses/PHD2-LICENSE.txt + a "PHD2 (OpenPHDGuiding) -
+  BSD-3-Clause" third-party entry in the README.
+- Tests: NativeGuiderCoreTests (15) cover the portable core (centroid,
+  low-mass/low-SNR, Hysteresis shape + deadband + reset, ResistSwitch veto,
+  transform round-trip + RaRateAtDec + duration clamp, RMS window,
+  CalibrationProcess WEST->SOUTH) + the ActiveGuiderProvider switch.
+
+INDI-only pulse guide for now (TELESCOPE_TIMED_GUIDE_*). Deferred:
+ZFilter/GaussianProcess/Lowpass2, multi-star, backlash comp, pier-side/
+parity handling, ASCOM/Alpaca/SynScan pulse guide. On-rig E2E (calibrate +
+guide + dither against an INDI mount + guide camera) is the next validation.

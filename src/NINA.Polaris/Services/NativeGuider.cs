@@ -1,0 +1,615 @@
+using NINA.Core.Enum;
+using NINA.Guider.Portable;
+using NINA.Image.Interfaces;
+using PortableGuideStep = NINA.Guider.Portable.GuideStep;
+
+namespace NINA.Polaris.Services;
+
+/// <summary>
+/// In-process native autoguider. A drop-in alternative to the external
+/// PHD2 integration, selected per-rig via <c>EquipmentProfile.GuiderDriver
+/// == "native"</c>. Drives the rig's own guide camera + mount pulse
+/// guiding through the ported PHD2 math in <c>NINA.Guider.Portable</c>.
+///
+/// <para>Implements <see cref="IGuider"/> so GuiderEndpoints, the status
+/// WebSocket and the GUIDE tab consume it identically to PHD2. The DTO
+/// shapes it emits (<see cref="GuideStep"/>, <see cref="SettleResult"/>,
+/// <see cref="CalibrationData"/>) are the existing PHD2 records, so the
+/// WebSocket JSON is byte-identical.</para>
+///
+/// <para>MVP scope: single-star centroid, RA+Dec calibration,
+/// Hysteresis(RA) + ResistSwitch(Dec), INDI-only pulse guide, basic
+/// dither. Deferred: multi-star, backlash comp, pier-side/parity,
+/// ZFilter/GaussianProcess.</para>
+/// </summary>
+public sealed class NativeGuider : IGuider, IDisposable {
+    private readonly EquipmentManager _equipment;
+    private readonly ProfileService _profiles;
+    private readonly ILogger<NativeGuider> _logger;
+
+    private const int MaxSteps = 300;
+    private const double Deg2Rad = Math.PI / 180.0;
+    // Star search half-window (px) around the lock position each frame.
+    private const int SearchRegion = 15;
+    // Default guide-scope focal length when the rig hasn't set one.
+    private const double DefaultGuiderFocalLengthMm = 200.0;
+
+    private readonly object _stepsLock = new();
+    private readonly List<GuideStep> _recentSteps = new();
+    private readonly RmsCalculator _rms = new(100);
+
+    private CancellationTokenSource? _loopCts;
+    private Task? _loopTask;
+    private readonly SemaphoreSlim _gate = new(1, 1);
+
+    // Lock-position + calibration state (guarded by the loop being single).
+    private double _lockX, _lockY;
+    private bool _haveLock;
+    private GuideCalibration _calibration = GuideCalibration.Invalid;
+
+    // Per-axis algorithms (rebuilt from profile on guiding start).
+    private IGuideAlgorithm _raAlgo = new HysteresisAlgorithm();
+    private IGuideAlgorithm _decAlgo = new ResistSwitchAlgorithm();
+
+    // Dither bookkeeping.
+    private volatile bool _paused;
+    private GuidingSettler? _settler;
+    private double _settleThresholdPx = 1.5;
+    private int _starLostCount;
+
+    public string Backend => "native";
+
+    public bool IsConnected { get; private set; }
+    public string AppState { get; private set; } = "Stopped";
+    public bool IsGuiding => AppState == "Guiding";
+    public bool IsCalibrating => AppState == "Calibrating";
+    public bool IsPaused => AppState == "Paused";
+    public bool IsLooping => AppState == "Looping";
+    public bool IsSettling { get; private set; }
+
+    public double PixelScale { get; private set; }
+    public string? LastAlert { get; private set; }
+    public DateTime? LastAlertAt { get; private set; }
+    public string? LastSettleStatus { get; private set; }
+
+    public double RmsRA { get; private set; }
+    public double RmsDec { get; private set; }
+    public double RmsTotal { get; private set; }
+    public double PeakRA { get; private set; }
+    public double PeakDec { get; private set; }
+
+    public event Action<string>? AppStateChanged;
+    public event Action<GuideStep>? GuideStepReceived;
+    public event Action<string>? Alert;
+    public event Action<SettleResult>? Settled;
+
+    public NativeGuider(EquipmentManager equipment, ProfileService profiles,
+                        ILogger<NativeGuider> logger) {
+        _equipment = equipment;
+        _profiles = profiles;
+        _logger = logger;
+    }
+
+    private EquipmentProfile Rig => _profiles.ActiveEquipmentProfile;
+
+    private void SetAppState(string s) {
+        if (AppState == s) return;
+        AppState = s;
+        AppStateChanged?.Invoke(s);
+    }
+
+    private void RaiseAlert(string msg) {
+        LastAlert = msg;
+        LastAlertAt = DateTime.UtcNow;
+        _logger.LogWarning("Native guider alert: {Msg}", msg);
+        Alert?.Invoke(msg);
+    }
+
+    private void RecomputePixelScale() {
+        var cam = _equipment.GuideCamera;
+        var fl = Rig.GuiderFocalLengthMm;
+        if (fl <= 0) {
+            _logger.LogWarning(
+                "GuiderFocalLengthMm is {Fl}; falling back to {Default}mm for pixel scale",
+                fl, DefaultGuiderFocalLengthMm);
+            fl = DefaultGuiderFocalLengthMm;
+        }
+        if (cam != null && cam.PixelSizeX > 0 && fl > 0) {
+            PixelScale = 206.265 * cam.PixelSizeX / fl;
+        } else {
+            PixelScale = 0;
+        }
+    }
+
+    // ----- Connection -----
+
+    public async Task ConnectAsync(string host = "localhost", int port = 4400,
+                                   CancellationToken ct = default) {
+        var cam = _equipment.GuideCamera;
+        if (cam == null) {
+            throw new InvalidOperationException(
+                "No guide camera selected for native guiding. Pick one in RIGS.");
+        }
+        if (_equipment.Camera != null &&
+            ReferenceEquals(_equipment.Camera, cam)) {
+            throw new InvalidOperationException(
+                "Guide camera must be different from the imaging camera.");
+        }
+        if (!cam.IsConnected) {
+            await cam.ConnectAsync(ct);
+        }
+        RecomputePixelScale();
+        IsConnected = true;
+        SetAppState("Stopped");
+        _logger.LogInformation(
+            "Native guider connected: cam={Cam}, pixelScale={Scale:F2} arcsec/px",
+            cam.DeviceName, PixelScale);
+    }
+
+    public async Task DisconnectAsync(CancellationToken ct = default) {
+        await StopLoopAsync();
+        IsConnected = false;
+        IsSettling = false;
+        _haveLock = false;
+        SetAppState("Stopped");
+        _logger.LogInformation("Native guider disconnected");
+    }
+
+    // ----- Commands -----
+
+    public async Task StartGuidingAsync(double settlePixels = 1.5, int settleTime = 10,
+            int settleTimeout = 40, bool recalibrate = false, CancellationToken ct = default) {
+        EnsureConnected();
+        if (recalibrate || !_calibration.IsValid) {
+            await CalibrateAsync(ct);
+            if (!_calibration.IsValid) {
+                RaiseAlert("Native guiding aborted: calibration failed.");
+                return;
+            }
+        }
+        if (!_haveLock) {
+            await AutoSelectStarAsync(ct);
+            if (!_haveLock) {
+                RaiseAlert("Native guiding aborted: no guide star found.");
+                return;
+            }
+        }
+        BuildAlgorithms();
+        _settleThresholdPx = settlePixels;
+        _settler = new GuidingSettler(settlePixels, settleTime, settleTimeout, NowMs());
+        await StartLoopAsync(LoopMode.Guide);
+    }
+
+    public Task StopAsync(CancellationToken ct = default) => StopLoopAsync();
+
+    public Task LoopAsync(CancellationToken ct = default) {
+        EnsureConnected();
+        return StartLoopAsync(LoopMode.Loop);
+    }
+
+    public Task PauseAsync(CancellationToken ct = default) {
+        if (IsGuiding) {
+            _paused = true;
+            SetAppState("Paused");
+        }
+        return Task.CompletedTask;
+    }
+
+    public Task ResumeAsync(CancellationToken ct = default) {
+        if (IsPaused) {
+            _paused = false;
+            SetAppState("Guiding");
+        }
+        return Task.CompletedTask;
+    }
+
+    public Task DitherAsync(double pixels = 5.0, bool raOnly = false, double settlePixels = 1.5,
+            int settleTime = 10, int settleTimeout = 40, CancellationToken ct = default) {
+        if (!IsGuiding || !_haveLock) {
+            return Task.CompletedTask;
+        }
+        // Offset the lock position by a random vector of the requested
+        // magnitude; the guide loop then chases the star back, and the
+        // settler reports done/timeout. raOnly restricts the offset to
+        // the camera X axis as an MVP approximation of RA-only dithering.
+        var rng = Random.Shared;
+        double angle = raOnly ? 0.0 : rng.NextDouble() * 2.0 * Math.PI;
+        double mag = pixels * (0.5 + rng.NextDouble() * 0.5);
+        _lockX += mag * Math.Cos(angle);
+        _lockY += raOnly ? 0.0 : mag * Math.Sin(angle);
+        _raAlgo.Reset();
+        _decAlgo.Reset();
+        IsSettling = true;
+        LastSettleStatus = "settling";
+        _settleThresholdPx = settlePixels;
+        _settler = new GuidingSettler(settlePixels, settleTime, settleTimeout, NowMs());
+        _logger.LogInformation("Native dither: {Px}px (raOnly={RaOnly})", pixels, raOnly);
+        return Task.CompletedTask;
+    }
+
+    public async Task SetExposureAsync(int milliseconds, CancellationToken ct = default) {
+        if (milliseconds <= 0) return;
+        _profiles.UpdateEquipmentProfile(Rig.Id, r => r.NativeGuideExposureMs = milliseconds);
+        await Task.CompletedTask;
+    }
+
+    public async Task AutoSelectStarAsync(CancellationToken ct = default) {
+        EnsureConnected();
+        var cam = _equipment.GuideCamera!;
+        // Clear any ROI so detection sees the full sensor.
+        try { await cam.SetSubframeAsync(0, 0, 0, 0, ct); } catch { }
+        var img = await CaptureFullAsync(cam, ct);
+        if (img == null) {
+            RaiseAlert("Auto-select failed: no guide frame.");
+            return;
+        }
+        int w = img.Properties.Width, h = img.Properties.Height;
+        var detector = new NINA.Image.ImageAnalysis.StarDetector();
+        var stars = detector.Detect(img.Data, w, h);
+
+        // Pick the brightest, non-saturated, interior star (away from
+        // edges so the search window stays in-frame).
+        int margin = SearchRegion + 5;
+        double satGuard = (1 << Math.Max(1, img.Properties.BitDepth)) - 1;
+        NINA.Image.ImageAnalysis.DetectedStar? best = null;
+        double bestFlux = -1;
+        foreach (var s in stars) {
+            if (s.X < margin || s.Y < margin || s.X > w - margin || s.Y > h - margin) continue;
+            if (satGuard > 1 && s.Peak >= satGuard * 0.95) continue;
+            if (s.Flux > bestFlux) { bestFlux = s.Flux; best = s; }
+        }
+        if (best == null) {
+            RaiseAlert("Auto-select failed: no suitable guide star.");
+            return;
+        }
+        _lockX = best.X;
+        _lockY = best.Y;
+        _haveLock = true;
+        SetAppState("Selected");
+        _logger.LogInformation("Native guide star locked at ({X:F1},{Y:F1})", _lockX, _lockY);
+    }
+
+    public Task ClearCalibrationAsync(CancellationToken ct = default) {
+        _calibration = GuideCalibration.Invalid;
+        _logger.LogInformation("Native calibration cleared");
+        return Task.CompletedTask;
+    }
+
+    public List<GuideStep> SnapshotSteps() {
+        lock (_stepsLock) return new List<GuideStep>(_recentSteps);
+    }
+
+    public void ClearStepHistory() {
+        lock (_stepsLock) {
+            _recentSteps.Clear();
+            _rms.Reset();
+            RmsRA = RmsDec = RmsTotal = PeakRA = PeakDec = 0;
+        }
+    }
+
+    // ----- Calibration -----
+
+    private async Task CalibrateAsync(CancellationToken ct) {
+        EnsureConnected();
+        var cam = _equipment.GuideCamera!;
+        var mount = _equipment.Telescope;
+        if (mount == null || !mount.IsConnected || !mount.Capabilities.SupportsPulseGuide) {
+            RaiseAlert("Calibration needs a connected, pulse-guide-capable mount.");
+            return;
+        }
+        if (!_haveLock) {
+            await AutoSelectStarAsync(ct);
+            if (!_haveLock) return;
+        }
+
+        SetAppState("Calibrating");
+        try { await cam.SetSubframeAsync(0, 0, 0, 0, ct); } catch { }
+
+        double decRad = double.IsNaN(mount.Declination) ? double.NaN : mount.Declination * Deg2Rad;
+        int stepMs = Math.Max(50, Rig.NativeCalibrationStepMs);
+        // Threshold scales with frame so big sensors don't undershoot.
+        var process = new CalibrationProcess(stepMs, 25.0, 60, decRad);
+
+        // Seed the process with the current centroid.
+        var (curX, curY, found) = await FindStarAsync(cam, ct);
+        if (!found) { RaiseAlert("Calibration failed: star lost at start."); SetAppState("Stopped"); return; }
+
+        for (int i = 0; i < 200 && !ct.IsCancellationRequested; i++) {
+            var step = process.Tick(curX, curY);
+            if (step.Failed) {
+                RaiseAlert($"Calibration failed: {step.Phase}");
+                SetAppState("Stopped");
+                return;
+            }
+            if (step.Done) break;
+            if (step.Pulse && step.DurationMs > 0) {
+                try {
+                    await mount.PulseGuideAsync(step.Direction, step.DurationMs, ct);
+                } catch (Exception ex) {
+                    RaiseAlert($"Calibration pulse failed: {ex.Message}");
+                    SetAppState("Stopped");
+                    return;
+                }
+                await SettleAfterPulse(step.DurationMs, ct);
+            }
+            (curX, curY, found) = await FindStarAsync(cam, ct);
+            if (!found) {
+                RaiseAlert("Calibration failed: star lost mid-sequence.");
+                SetAppState("Stopped");
+                return;
+            }
+        }
+
+        _calibration = process.Result;
+        if (_calibration.IsValid) {
+            // Re-lock at the recentred position.
+            _lockX = curX; _lockY = curY;
+            _logger.LogInformation(
+                "Native calibration complete: xAngle={Xa:F3} xRate={Xr:F5} yAngle={Ya:F3} yRate={Yr:F5}",
+                _calibration.XAngle, _calibration.XRate, _calibration.YAngle, _calibration.YRate);
+        } else {
+            RaiseAlert("Calibration did not complete.");
+        }
+        SetAppState("Stopped");
+    }
+
+    // ----- Guide loop -----
+
+    private enum LoopMode { Loop, Guide }
+
+    private async Task StartLoopAsync(LoopMode mode) {
+        await StopLoopAsync();
+        _loopCts = new CancellationTokenSource();
+        var token = _loopCts.Token;
+        _paused = false;
+        _starLostCount = 0;
+        SetAppState(mode == LoopMode.Guide ? "Guiding" : "Looping");
+        _loopTask = Task.Run(() => LoopAsync(mode, token), token);
+    }
+
+    private async Task StopLoopAsync() {
+        var cts = _loopCts;
+        var task = _loopTask;
+        if (cts == null) return;
+        try { cts.Cancel(); } catch { }
+        if (task != null) {
+            try { await task.WaitAsync(TimeSpan.FromSeconds(10)); } catch { }
+        }
+        _loopCts = null;
+        _loopTask = null;
+        if (AppState is "Guiding" or "Looping" or "Paused") SetAppState("Stopped");
+    }
+
+    private async Task LoopAsync(LoopMode mode, CancellationToken ct) {
+        var cam = _equipment.GuideCamera!;
+        var mount = _equipment.Telescope;
+        try {
+            while (!ct.IsCancellationRequested) {
+                try {
+                    if (mode == LoopMode.Loop) {
+                        await CaptureFullAsync(cam, ct);
+                        continue;
+                    }
+                    if (_paused) {
+                        await SettleAfterPulse(200, ct);
+                        continue;
+                    }
+                    await GuideOnceAsync(cam, mount, ct);
+                } catch (OperationCanceledException) {
+                    break;
+                } catch (Exception ex) {
+                    // Never throw out of the loop. Log + continue.
+                    _logger.LogError(ex, "Native guide loop iteration failed");
+                    await SettleAfterPulse(500, ct);
+                }
+            }
+        } finally {
+            _logger.LogInformation("Native guide loop exited");
+        }
+    }
+
+    private async Task GuideOnceAsync(ICamera cam, ITelescope? mount, CancellationToken ct) {
+        int expMs = Math.Max(50, Rig.NativeGuideExposureMs);
+        var (curX, curY, found, snr, hfd) = await FindStarDetailedAsync(cam, ct);
+
+        if (!found) {
+            _starLostCount++;
+            // Keep guiding state but skip the pulse; alert occasionally.
+            if (_starLostCount % 5 == 1) RaiseAlert("Guide star lost; skipping correction.");
+            PushStep(new PortableGuideStep(NowMs(), 0, 0, 0, 0, 0, 0, snr, hfd, false));
+            return;
+        }
+        _starLostCount = 0;
+
+        double dx = curX - _lockX;
+        double dy = curY - _lockY;
+        var (raPx, decPx) = MountCoordTransform.CameraToMount(_calibration, dx, dy);
+
+        // Per-axis algorithm: correction (pixels) to apply this frame.
+        double raCorr = _raAlgo.Result(raPx);
+        double decCorr = _decAlgo.Result(decPx);
+
+        // Rates: RA scaled for declination, Dec from calibration.
+        double decRad = (mount != null && !double.IsNaN(mount.Declination))
+            ? mount.Declination * Deg2Rad : _calibration.DeclinationRad;
+        double raRate = MountCoordTransform.RaRateAtDec(_calibration, decRad);
+        double decRate = _calibration.YRate;
+
+        int minMoveRaMs = RateToMs(Rig.NativeMinMoveRaPx, raRate);
+        int minMoveDecMs = RateToMs(Rig.NativeMinMoveDecPx, decRate);
+        // Clamp pulse to the exposure period so corrections can't run away.
+        int maxMs = expMs;
+
+        int raMs = MountCoordTransform.ComputeMoveDurationMs(raCorr, raRate, minMoveRaMs, maxMs);
+        int decMs = MountCoordTransform.ComputeMoveDurationMs(decCorr, decRate, minMoveDecMs, maxMs);
+
+        // Direction: correction moves the star back toward lock. PHD2
+        // calibration measured WEST as +X-rate and SOUTH as +Y-rate, so a
+        // positive RA error (star drifted +RA-px) is corrected by pulsing
+        // EAST, positive Dec by NORTH.
+        var raDir = raCorr >= 0 ? GuideDirections.guideEast : GuideDirections.guideWest;
+        var decDir = decCorr >= 0 ? GuideDirections.guideNorth : GuideDirections.guideSouth;
+
+        if (mount != null && mount.IsConnected && mount.Capabilities.SupportsPulseGuide) {
+            try {
+                if (raMs > 0) await mount.PulseGuideAsync(raDir, raMs, ct);
+                if (decMs > 0) await mount.PulseGuideAsync(decDir, decMs, ct);
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "Pulse guide failed");
+            }
+        }
+
+        double scale = PixelScale > 0 ? PixelScale : 1.0;
+        var step = new PortableGuideStep(
+            NowMs(),
+            raPx * scale, decPx * scale,
+            raPx, decPx,
+            raMs, decMs,
+            snr, hfd, true);
+        PushStep(step);
+
+        // Settle progress (dither / start).
+        if (_settler != null) {
+            double totalErrPx = Math.Sqrt(raPx * raPx + decPx * decPx);
+            var state = _settler.Update(totalErrPx, NowMs());
+            if (state != GuidingSettler.State.Settling) {
+                IsSettling = false;
+                bool ok = state == GuidingSettler.State.Done;
+                LastSettleStatus = ok ? "done" : "failed";
+                Settled?.Invoke(new SettleResult {
+                    Status = ok ? 0 : 1,
+                    Error = ok ? null : "Settle timed out",
+                    TotalFrames = 0,
+                    DroppedFrames = 0
+                });
+                _settler = null;
+            } else {
+                IsSettling = true;
+            }
+        }
+
+        // Delay so the loop cadence ≈ exposure period (capture already
+        // consumed most of it; the camera blocks for the exposure).
+        await Task.CompletedTask;
+    }
+
+    // ----- Capture + centroid helpers -----
+
+    private async Task<IImageData?> CaptureFullAsync(ICamera cam, CancellationToken ct) {
+        int expMs = Math.Max(50, Rig.NativeGuideExposureMs);
+        try {
+            return await cam.CaptureAsync(expMs / 1000.0, null, ct);
+        } catch (OperationCanceledException) {
+            throw;
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "Guide capture failed");
+            return null;
+        }
+    }
+
+    private async Task<(double x, double y, bool found)> FindStarAsync(ICamera cam, CancellationToken ct) {
+        var (x, y, found, _, _) = await FindStarDetailedAsync(cam, ct);
+        return (x, y, found);
+    }
+
+    private async Task<(double x, double y, bool found, double snr, double hfd)>
+            FindStarDetailedAsync(ICamera cam, CancellationToken ct) {
+        // Try a small ROI around the lock star to cut latency; fall back to
+        // full-frame + crop offset on drivers that don't honour ROI.
+        IImageData? img = null;
+        int offsetX = 0, offsetY = 0;
+        double baseX = _lockX, baseY = _lockY;
+        if (cam.Capabilities.SupportsRoi && _haveLock) {
+            int roi = SearchRegion * 4;
+            int rx = Math.Max(0, (int)_lockX - roi);
+            int ry = Math.Max(0, (int)_lockY - roi);
+            int rw = roi * 2, rh = roi * 2;
+            try {
+                await cam.SetSubframeAsync(rx, ry, rw, rh, ct);
+                img = await CaptureFullAsync(cam, ct);
+                if (img != null) {
+                    offsetX = rx; offsetY = ry;
+                    baseX = _lockX - rx; baseY = _lockY - ry;
+                }
+            } catch {
+                img = null;
+            }
+        }
+        if (img == null) {
+            try { await cam.SetSubframeAsync(0, 0, 0, 0, ct); } catch { }
+            img = await CaptureFullAsync(cam, ct);
+            offsetX = 0; offsetY = 0;
+            baseX = _lockX; baseY = _lockY;
+        }
+        if (img == null) return (_lockX, _lockY, false, 0, 0);
+
+        int w = img.Properties.Width, h = img.Properties.Height;
+        var result = GuideStar.Find(img.Data, w, h, baseX, baseY, SearchRegion);
+        if (!result.Found) {
+            return (_lockX, _lockY, false, result.Snr, result.Hfd);
+        }
+        return (result.X + offsetX, result.Y + offsetY, true, result.Snr, result.Hfd);
+    }
+
+    // ----- Internals -----
+
+    private void BuildAlgorithms() {
+        _raAlgo = new HysteresisAlgorithm(
+            hysteresis: Math.Clamp(Rig.NativeRaHysteresis, 0.0, 0.99),
+            aggression: Math.Clamp(Rig.NativeRaAggression, 0.0, 2.0),
+            minMove: Math.Max(0.0, Rig.NativeMinMoveRaPx));
+        _decAlgo = new ResistSwitchAlgorithm(
+            minMove: Math.Max(0.0, Rig.NativeMinMoveDecPx));
+        _raAlgo.Reset();
+        _decAlgo.Reset();
+    }
+
+    private static int RateToMs(double px, double ratePxPerMs) {
+        if (ratePxPerMs <= 0) return 0;
+        return (int)Math.Round(px / ratePxPerMs);
+    }
+
+    private void PushStep(PortableGuideStep p) {
+        var step = new GuideStep {
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(p.TimestampMs).UtcDateTime,
+            RaPixels = p.RaRawPx,
+            DecPixels = p.DecRawPx,
+            RaArcsec = p.RaArcsec,
+            DecArcsec = p.DecArcsec,
+            SNR = p.Snr,
+            Mass = 0,
+            RaDuration = p.RaDurationMs,
+            DecDuration = p.DecDurationMs,
+            RaDirection = null,
+            DecDirection = null
+        };
+        lock (_stepsLock) {
+            _recentSteps.Add(step);
+            if (_recentSteps.Count > MaxSteps) _recentSteps.RemoveAt(0);
+            if (p.StarFound) _rms.Add(p.RaArcsec, p.DecArcsec);
+            var (rRa, rDec, rTot, pRa, pDec) = _rms.Compute();
+            RmsRA = rRa; RmsDec = rDec; RmsTotal = rTot; PeakRA = pRa; PeakDec = pDec;
+        }
+        if (IsGuiding) SetAppState("Guiding");
+        GuideStepReceived?.Invoke(step);
+    }
+
+    private void EnsureConnected() {
+        if (!IsConnected)
+            throw new InvalidOperationException("Native guider not connected.");
+    }
+
+    private static long NowMs() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+    private static async Task SettleAfterPulse(int pulseMs, CancellationToken ct) {
+        // Small dwell after a pulse so the mount applies it before the next
+        // measurement. Cap so calibration doesn't crawl.
+        int dwell = Math.Clamp(pulseMs + 250, 100, 3000);
+        try { await Task.Delay(dwell, ct); } catch (OperationCanceledException) { }
+    }
+
+    public void Dispose() {
+        try { StopLoopAsync().Wait(2000); } catch { }
+        _gate.Dispose();
+    }
+}

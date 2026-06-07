@@ -223,6 +223,10 @@ public class HardwareAutoConnectService : IHostedService {
         // today so we don't pass a driver.
         var devices = new (string Label, string? Name, Func<string, Task> Bind)[] {
             ("Camera",       rig.Camera,      async name => { var c = _equip.SelectCamera(rig.CameraDriver ?? "indi", name);    await c.ConnectAsync(ct); }),
+            // Guide camera only auto-connects for native-guider rigs; PHD2
+            // owns its own guide cam. Name is null (skipped) otherwise.
+            ("Guide camera", string.Equals(rig.GuiderDriver, "native", StringComparison.OrdinalIgnoreCase) ? rig.GuideCamera : null,
+                             async name => { var c = _equip.SelectGuideCamera(rig.GuideCameraDriver ?? "indi", name); await c.ConnectAsync(ct); }),
             ("Mount",        rig.Telescope,   async name => {
                 var t = _equip.SelectTelescope(rig.TelescopeDriver ?? "indi", name);
                 await t.ConnectAsync(ct);
@@ -252,6 +256,7 @@ public class HardwareAutoConnectService : IHostedService {
             // the binder, the available[] set is INDI-only.
             bool isIndi = label switch {
                 "Camera" => (rig.CameraDriver ?? "indi") == "indi",
+                "Guide camera" => (rig.GuideCameraDriver ?? "indi") == "indi",
                 "Mount"  => (rig.TelescopeDriver ?? "indi") == "indi",
                 _        => true,
             };

@@ -70,7 +70,20 @@ public class EquipmentManager : IDisposable {
     /// serial number reported by the SDK enumeration call.</summary>
     public ICamera SelectCamera(string driver, string deviceId) {
         driver = (driver ?? "indi").Trim().ToLowerInvariant();
-        Camera = driver switch {
+        Camera = CreateCamera(driver, deviceId);
+        CameraDriver = driver;
+        _logger.LogInformation("Camera selected: driver={Driver}, id={DeviceId}",
+            driver, deviceId);
+        return Camera;
+    }
+
+    /// <summary>Construct an <see cref="ICamera"/> for the given driver kind
+    /// without binding it to the imaging slot. Shared by
+    /// <see cref="SelectCamera(string,string)"/> and
+    /// <see cref="SelectGuideCamera"/> so both paths instantiate every
+    /// backend identically. Caller normalises <paramref name="driver"/>.</summary>
+    private ICamera CreateCamera(string driver, string deviceId) {
+        return driver switch {
             "indi" => new IndiCamera(_indiClient, deviceId),
             "canon-edsdk" => CreateCanonCamera(deviceId),
             "nikon-sdk"   => CreateNikonCamera(deviceId),
@@ -85,10 +98,35 @@ public class EquipmentManager : IDisposable {
                 $"Camera driver '{driver}' is not implemented yet. " +
                 "Use 'indi', 'alpaca', or install the matching vendor SDK."),
         };
-        CameraDriver = driver;
-        _logger.LogInformation("Camera selected: driver={Driver}, id={DeviceId}",
+    }
+
+    /// <summary>Currently-selected guide camera for the native autoguider.
+    /// Separate slot from <see cref="Camera"/> so a rig can run native
+    /// guiding on its own dedicated guide cam while the imaging cam shoots
+    /// lights. Null when no guide camera is bound. PHD2-driven rigs leave
+    /// this unused (PHD2 owns its own guide camera).</summary>
+    public ICamera? GuideCamera { get; private set; }
+
+    /// <summary>Driver kind bound to <see cref="GuideCamera"/>. Mirrors
+    /// <c>EquipmentProfile.GuideCameraDriver</c>. Null when unset.</summary>
+    public string? GuideCameraDriver { get; private set; }
+
+    /// <summary>Select the native guider's guide camera. Reuses
+    /// <see cref="CreateCamera"/> so the full backend matrix is available.
+    /// Rejects selecting the same device the imaging camera is bound to so
+    /// a single sensor isn't driven from two loops at once.</summary>
+    public ICamera SelectGuideCamera(string driver, string deviceId) {
+        driver = (driver ?? "indi").Trim().ToLowerInvariant();
+        if (Camera != null && CameraDriver == driver &&
+            string.Equals(Camera.DeviceName, deviceId, StringComparison.OrdinalIgnoreCase)) {
+            throw new InvalidOperationException(
+                "Guide camera must be different from the imaging camera.");
+        }
+        GuideCamera = CreateCamera(driver, deviceId);
+        GuideCameraDriver = driver;
+        _logger.LogInformation("Guide camera selected: driver={Driver}, id={DeviceId}",
             driver, deviceId);
-        return Camera;
+        return GuideCamera;
     }
 
     private static ICamera CreateCanonCamera(string deviceId) {
@@ -626,6 +664,32 @@ public class EquipmentManager : IDisposable {
                 pixelSizeY = Safe(pxY),
                 sensorWidthMm = Safe(sensorWmm),
                 sensorHeightMm = Safe(sensorHmm)
+            };
+        }
+
+        if (GuideCamera != null) {
+            // Same shape as the imaging-camera block above so the RIGS
+            // guide-camera card can render with the same template. Only
+            // populated when a native guide camera is selected.
+            var gpxX = GuideCamera.PixelSizeX;
+            var gpxY = GuideCamera.PixelSizeY;
+            status["guideCamera"] = new {
+                name = GuideCamera.DeviceName,
+                connected = GuideCamera.IsConnected,
+                state = GuideCamera.State.ToString(),
+                temperature = Safe(GuideCamera.Temperature),
+                coolerOn = GuideCamera.CoolerOn,
+                coolerPower = Safe(GuideCamera.CoolerPower),
+                binX = GuideCamera.BinX,
+                binY = GuideCamera.BinY,
+                gain = GuideCamera.Gain,
+                gainMin = GuideCamera.GainMin,
+                gainMax = GuideCamera.GainMax,
+                bitDepth = GuideCamera.BitDepth,
+                maxX = GuideCamera.MaxX,
+                maxY = GuideCamera.MaxY,
+                pixelSizeX = Safe(gpxX),
+                pixelSizeY = Safe(gpxY)
             };
         }
 

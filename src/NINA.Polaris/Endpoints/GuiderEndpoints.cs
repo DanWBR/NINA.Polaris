@@ -6,34 +6,36 @@ public static class GuiderEndpoints {
     public static void MapGuiderEndpoints(this WebApplication app) {
         var group = app.MapGroup("/api/guider");
 
-        group.MapGet("/status", (PHD2Client phd2) => {
-            if (!phd2.IsConnected)
+        group.MapGet("/status", (ActiveGuiderProvider guiders, PHD2Client phd2) => {
+            var g = guiders.Active;
+            if (!g.IsConnected)
                 return Results.Ok(new {
+                    backend = g.Backend,
                     connected = false,
                     appState = "Stopped"
                 });
 
             return Results.Ok(new {
+                backend = g.Backend,
                 connected = true,
-                host = phd2.Host,
-                port = phd2.Port,
-                appState = phd2.AppState,
-                guiding = phd2.IsGuiding,
-                calibrating = phd2.IsCalibrating,
-                paused = phd2.IsPaused,
-                looping = phd2.IsLooping,
-                settling = phd2.IsSettling,
-                pixelScale = phd2.PixelScale,
-                rmsRA = phd2.RmsRA,
-                rmsDec = phd2.RmsDec,
-                rmsTotal = phd2.RmsTotal,
-                peakRA = phd2.PeakRA,
-                peakDec = phd2.PeakDec,
-                stepCount = phd2.RecentSteps.Count,
-                lastAlert = phd2.LastAlert,
-                lastAlertAt = phd2.LastAlertAt,
-                lastSettleStatus = phd2.LastSettleStatus,
-                calibration = phd2.Calibration
+                appState = g.AppState,
+                guiding = g.IsGuiding,
+                calibrating = g.IsCalibrating,
+                paused = g.IsPaused,
+                looping = g.IsLooping,
+                settling = g.IsSettling,
+                pixelScale = g.PixelScale,
+                rmsRA = g.RmsRA,
+                rmsDec = g.RmsDec,
+                rmsTotal = g.RmsTotal,
+                peakRA = g.PeakRA,
+                peakDec = g.PeakDec,
+                stepCount = g.SnapshotSteps().Count,
+                lastAlert = g.LastAlert,
+                lastAlertAt = g.LastAlertAt,
+                lastSettleStatus = g.LastSettleStatus,
+                // PHD2-only calibration snapshot (null when native).
+                calibration = g.Backend == "phd2" ? phd2.Calibration : null
             });
         });
 
@@ -50,8 +52,8 @@ public static class GuiderEndpoints {
             });
         });
 
-        group.MapGet("/steps", (PHD2Client phd2, int? limit) => {
-            var snapshot = phd2.SnapshotSteps();
+        group.MapGet("/steps", (ActiveGuiderProvider guiders, int? limit) => {
+            var snapshot = guiders.Active.SnapshotSteps();
             var take = limit.HasValue && limit.Value > 0 ? Math.Min(limit.Value, snapshot.Count) : snapshot.Count;
             var slice = snapshot.Skip(Math.Max(0, snapshot.Count - take)).Select(s => new {
                 t = ((DateTimeOffset)s.Timestamp).ToUnixTimeMilliseconds(),
@@ -62,26 +64,28 @@ public static class GuiderEndpoints {
             return Results.Ok(new { count = snapshot.Count, steps = slice });
         });
 
-        group.MapPost("/connect", async (PHD2Client phd2, ConnectGuiderRequest? request) => {
+        group.MapPost("/connect", async (ActiveGuiderProvider guiders, ConnectGuiderRequest? request) => {
+            var g = guiders.Active;
             var host = string.IsNullOrWhiteSpace(request?.Host) ? "localhost" : request!.Host!;
             var port = request?.Port is > 0 ? request.Port!.Value : 4400;
             try {
-                await phd2.ConnectAsync(host, port);
-                return Results.Ok(new { status = "connected", host, port, appState = phd2.AppState });
+                await g.ConnectAsync(host, port);
+                return Results.Ok(new { status = "connected", backend = g.Backend, host, port, appState = g.AppState });
             } catch (Exception ex) {
-                return Results.Problem($"PHD2 connect failed: {ex.Message}");
+                return Results.Problem($"Guider connect failed: {ex.Message}");
             }
         });
 
-        group.MapPost("/disconnect", async (PHD2Client phd2) => {
-            await phd2.DisconnectAsync();
+        group.MapPost("/disconnect", async (ActiveGuiderProvider guiders) => {
+            await guiders.Active.DisconnectAsync();
             return Results.Ok(new { status = "disconnected" });
         });
 
-        group.MapPost("/guide", async (PHD2Client phd2, GuideRequest? request) => {
-            if (!phd2.IsConnected) return Results.BadRequest(new { error = "PHD2 not connected" });
+        group.MapPost("/guide", async (ActiveGuiderProvider guiders, GuideRequest? request) => {
+            var g = guiders.Active;
+            if (!g.IsConnected) return Results.BadRequest(new { error = "Guider not connected" });
             try {
-                await phd2.StartGuidingAsync(
+                await g.StartGuidingAsync(
                     settlePixels: request?.SettlePixels ?? 1.5,
                     settleTime: request?.SettleTime ?? 10,
                     settleTimeout: request?.SettleTimeout ?? 40,
@@ -92,42 +96,47 @@ public static class GuiderEndpoints {
             }
         });
 
-        group.MapPost("/stop", async (PHD2Client phd2) => {
-            if (!phd2.IsConnected) return Results.BadRequest(new { error = "PHD2 not connected" });
+        group.MapPost("/stop", async (ActiveGuiderProvider guiders) => {
+            var g = guiders.Active;
+            if (!g.IsConnected) return Results.BadRequest(new { error = "Guider not connected" });
             try {
-                await phd2.StopAsync();
+                await g.StopAsync();
                 return Results.Ok(new { status = "stopped" });
             } catch (Exception ex) { return Results.Problem(ex.Message); }
         });
 
-        group.MapPost("/loop", async (PHD2Client phd2) => {
-            if (!phd2.IsConnected) return Results.BadRequest(new { error = "PHD2 not connected" });
+        group.MapPost("/loop", async (ActiveGuiderProvider guiders) => {
+            var g = guiders.Active;
+            if (!g.IsConnected) return Results.BadRequest(new { error = "Guider not connected" });
             try {
-                await phd2.LoopAsync();
+                await g.LoopAsync();
                 return Results.Ok(new { status = "looping" });
             } catch (Exception ex) { return Results.Problem(ex.Message); }
         });
 
-        group.MapPost("/pause", async (PHD2Client phd2) => {
-            if (!phd2.IsConnected) return Results.BadRequest(new { error = "PHD2 not connected" });
+        group.MapPost("/pause", async (ActiveGuiderProvider guiders) => {
+            var g = guiders.Active;
+            if (!g.IsConnected) return Results.BadRequest(new { error = "Guider not connected" });
             try {
-                await phd2.PauseAsync();
+                await g.PauseAsync();
                 return Results.Ok(new { status = "paused" });
             } catch (Exception ex) { return Results.Problem(ex.Message); }
         });
 
-        group.MapPost("/resume", async (PHD2Client phd2) => {
-            if (!phd2.IsConnected) return Results.BadRequest(new { error = "PHD2 not connected" });
+        group.MapPost("/resume", async (ActiveGuiderProvider guiders) => {
+            var g = guiders.Active;
+            if (!g.IsConnected) return Results.BadRequest(new { error = "Guider not connected" });
             try {
-                await phd2.ResumeAsync();
+                await g.ResumeAsync();
                 return Results.Ok(new { status = "resumed" });
             } catch (Exception ex) { return Results.Problem(ex.Message); }
         });
 
-        group.MapPost("/dither", async (PHD2Client phd2, DitherRequest? request) => {
-            if (!phd2.IsConnected) return Results.BadRequest(new { error = "PHD2 not connected" });
+        group.MapPost("/dither", async (ActiveGuiderProvider guiders, DitherRequest? request) => {
+            var g = guiders.Active;
+            if (!g.IsConnected) return Results.BadRequest(new { error = "Guider not connected" });
             try {
-                await phd2.DitherAsync(
+                await g.DitherAsync(
                     pixels: request?.Pixels ?? 5.0,
                     raOnly: request?.RaOnly ?? false,
                     settlePixels: request?.SettlePixels ?? 1.5,
@@ -137,32 +146,35 @@ public static class GuiderEndpoints {
             } catch (Exception ex) { return Results.Problem(ex.Message); }
         });
 
-        group.MapPost("/exposure/{ms:int}", async (int ms, PHD2Client phd2) => {
-            if (!phd2.IsConnected) return Results.BadRequest(new { error = "PHD2 not connected" });
+        group.MapPost("/exposure/{ms:int}", async (int ms, ActiveGuiderProvider guiders) => {
+            var g = guiders.Active;
+            if (!g.IsConnected) return Results.BadRequest(new { error = "Guider not connected" });
             try {
-                await phd2.SetExposureAsync(ms);
+                await g.SetExposureAsync(ms);
                 return Results.Ok(new { exposure = ms });
             } catch (Exception ex) { return Results.Problem(ex.Message); }
         });
 
-        group.MapPost("/find-star", async (PHD2Client phd2) => {
-            if (!phd2.IsConnected) return Results.BadRequest(new { error = "PHD2 not connected" });
+        group.MapPost("/find-star", async (ActiveGuiderProvider guiders) => {
+            var g = guiders.Active;
+            if (!g.IsConnected) return Results.BadRequest(new { error = "Guider not connected" });
             try {
-                await phd2.AutoSelectStarAsync();
+                await g.AutoSelectStarAsync();
                 return Results.Ok(new { status = "find_star" });
             } catch (Exception ex) { return Results.Problem(ex.Message); }
         });
 
-        group.MapPost("/clear-calibration", async (PHD2Client phd2) => {
-            if (!phd2.IsConnected) return Results.BadRequest(new { error = "PHD2 not connected" });
+        group.MapPost("/clear-calibration", async (ActiveGuiderProvider guiders) => {
+            var g = guiders.Active;
+            if (!g.IsConnected) return Results.BadRequest(new { error = "Guider not connected" });
             try {
-                await phd2.ClearCalibrationAsync();
+                await g.ClearCalibrationAsync();
                 return Results.Ok(new { status = "calibration_cleared" });
             } catch (Exception ex) { return Results.Problem(ex.Message); }
         });
 
-        group.MapPost("/clear-history", (PHD2Client phd2) => {
-            phd2.ClearStepHistory();
+        group.MapPost("/clear-history", (ActiveGuiderProvider guiders) => {
+            guiders.Active.ClearStepHistory();
             return Results.Ok(new { status = "cleared" });
         });
 

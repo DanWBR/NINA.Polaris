@@ -259,6 +259,15 @@ public class ProfileService {
             AccessoryFactor = src.AccessoryFactor,
             RequiredBackspacingMm = src.RequiredBackspacingMm,
             GuiderFocalLengthMm = src.GuiderFocalLengthMm,
+            // Native guider backend selection + tunables.
+            GuiderDriver = src.GuiderDriver,
+            GuideCamera = src.GuideCamera, GuideCameraDriver = src.GuideCameraDriver,
+            NativeGuideExposureMs = src.NativeGuideExposureMs,
+            NativeCalibrationStepMs = src.NativeCalibrationStepMs,
+            NativeMinMoveRaPx = src.NativeMinMoveRaPx,
+            NativeMinMoveDecPx = src.NativeMinMoveDecPx,
+            NativeRaAggression = src.NativeRaAggression,
+            NativeRaHysteresis = src.NativeRaHysteresis,
             PHD2Host = src.PHD2Host, PHD2Port = src.PHD2Port,
             // PHD2 deep-integration fields (cloned rig starts un-matched,
             // it will run its own first-time profile lookup the first time
@@ -836,6 +845,48 @@ public class EquipmentProfile {
 
     /// <summary>Model of the guide telescope. Optional, free-form.</summary>
     public string? GuideTelescopeModel { get; set; }
+
+    // ----- Guider backend selection (native vs PHD2) -----
+
+    /// <summary>Which autoguider drives this rig. <c>phd2</c> (default)
+    /// uses the external PHD2 process via <see cref="PHD2Client"/>;
+    /// <c>native</c> uses the in-process <c>NativeGuider</c> (ported PHD2
+    /// math) with the rig's own guide camera + mount pulse guiding.
+    /// Selectable per-rig; PHD2 stays the default everywhere.</summary>
+    public string GuiderDriver { get; set; } = "phd2";
+
+    /// <summary>Guide-camera device id used by the native guider. Same
+    /// addressing scheme as <see cref="Camera"/> (INDI device name, vendor
+    /// SDK serial, host:port:devnum for Alpaca). Null = no guide camera
+    /// selected (native guiding cannot start). Unused when
+    /// <see cref="GuiderDriver"/> is <c>phd2</c> (PHD2 owns its own cam).</summary>
+    public string? GuideCamera { get; set; }
+
+    /// <summary>Guide-camera backend kind. Same enum as
+    /// <see cref="CameraDriver"/>. Defaults to <c>indi</c>.</summary>
+    public string GuideCameraDriver { get; set; } = "indi";
+
+    /// <summary>Native guider exposure per frame (ms). Default 2 s.</summary>
+    public int NativeGuideExposureMs { get; set; } = 2000;
+
+    /// <summary>Native guider calibration step pulse length (ms). Default 1 s.</summary>
+    public int NativeCalibrationStepMs { get; set; } = 1000;
+
+    /// <summary>Native guider RA minimum-move deadband (pixels). Errors
+    /// below this are not corrected. Default 0.15 px.</summary>
+    public double NativeMinMoveRaPx { get; set; } = 0.15;
+
+    /// <summary>Native guider Dec minimum-move deadband (pixels).
+    /// Default 0.15 px.</summary>
+    public double NativeMinMoveDecPx { get; set; } = 0.15;
+
+    /// <summary>Native guider RA hysteresis-algorithm aggression
+    /// (0..2, fraction of the error corrected each frame). Default 0.70.</summary>
+    public double NativeRaAggression { get; set; } = 0.70;
+
+    /// <summary>Native guider RA hysteresis weight (0..0.99, fraction of
+    /// the previous move blended into this one). Default 0.10.</summary>
+    public double NativeRaHysteresis { get; set; } = 0.10;
 
     // Per-rig PHD2 settings
     public string PHD2Host { get; set; } = "localhost";

@@ -158,6 +158,19 @@ public interface ITelescope {
     Task SetSlewRateAsync(string elementName, CancellationToken ct = default) =>
         throw new NotSupportedException(
             "SetSlewRate not supported by this mount driver");
+
+    /// <summary>True while a guide pulse is in progress (best-effort; most
+    /// drivers fire-and-forget so this is informational).</summary>
+    bool IsPulseGuiding => false;
+
+    /// <summary>Issue a timed guide pulse on one axis. Drives the native
+    /// autoguider's corrections. <paramref name="direction"/> is the mount
+    /// axis/direction, <paramref name="durationMs"/> the pulse length in
+    /// milliseconds. Fire-and-forget per INDI semantics. Default impl throws
+    /// so the native guider surfaces a clear error on mounts without it; the
+    /// guider checks <see cref="MountCapabilities.SupportsPulseGuide"/> first.</summary>
+    Task PulseGuideAsync(GuideDirections direction, int durationMs, CancellationToken ct = default) =>
+        throw new NotSupportedException("PulseGuide not supported by this mount driver");
 }
 
 /// <summary>One discrete step of a mount's <c>TELESCOPE_SLEW_RATE</c>
@@ -189,7 +202,8 @@ public record MountCapabilities(
     bool SupportsFindHome = false,
     bool SupportsSetSiteLocation = false,
     bool SupportsSetSiteTime = false,
-    bool SupportsTrackingModes = false) {
+    bool SupportsTrackingModes = false,
+    bool SupportsPulseGuide = false) {
     /// <summary>Typical equatorial GEM profile (INDI / ASCOM / direct
     /// WiFi serial-protocol mounts), everything available.
     /// FindHome defaults true here -- most GEM mounts expose it via

@@ -136,6 +136,26 @@ public static class EquipmentEndpoints {
                 r.AccessoryFactor = update.AccessoryFactor > 0 ? update.AccessoryFactor : 1.0;
                 r.RequiredBackspacingMm = update.RequiredBackspacingMm;
                 r.GuiderFocalLengthMm = update.GuiderFocalLengthMm;
+                // Native guider backend selection + tunables. Empty/zero
+                // from an old client leaves the existing values alone so a
+                // pre-native PUT doesn't clobber the new state.
+                if (!string.IsNullOrWhiteSpace(update.GuiderDriver))
+                    r.GuiderDriver = update.GuiderDriver.Trim().ToLowerInvariant();
+                r.GuideCamera = update.GuideCamera;
+                if (!string.IsNullOrWhiteSpace(update.GuideCameraDriver))
+                    r.GuideCameraDriver = update.GuideCameraDriver.Trim().ToLowerInvariant();
+                if (update.NativeGuideExposureMs > 0)
+                    r.NativeGuideExposureMs = update.NativeGuideExposureMs;
+                if (update.NativeCalibrationStepMs > 0)
+                    r.NativeCalibrationStepMs = update.NativeCalibrationStepMs;
+                if (update.NativeMinMoveRaPx >= 0)
+                    r.NativeMinMoveRaPx = update.NativeMinMoveRaPx;
+                if (update.NativeMinMoveDecPx >= 0)
+                    r.NativeMinMoveDecPx = update.NativeMinMoveDecPx;
+                if (update.NativeRaAggression > 0)
+                    r.NativeRaAggression = update.NativeRaAggression;
+                if (update.NativeRaHysteresis >= 0)
+                    r.NativeRaHysteresis = update.NativeRaHysteresis;
                 // New guide-scope metadata fields (RIGS tab card).
                 // Defensive: clamp aperture to a sane lower bound so
                 // a stray zero doesn't blow up the f-ratio calc on the UI.
