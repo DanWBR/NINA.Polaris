@@ -12660,29 +12660,36 @@ function ninaApp() {
                     this.equipCameraChoice = this.selectedCamera;
                 }
             }
-            // Mount
-            if (this.equipMountChoice && !names.has(this.equipMountChoice)) {
-                this.equipMountChoice = '';
-            }
-            if (!this.equipMountChoice && this.selectedTelescope
-                && names.has(this.selectedTelescope)) {
-                this.equipMountChoice = this.selectedTelescope;
+            // Mount — same INDI-only guard: ASCOM/Alpaca choices are ids that
+            // aren't in the INDI device list, so don't clamp them here.
+            if (this.mountDriver === 'indi' || !this.mountDriver) {
+                if (this.equipMountChoice && !names.has(this.equipMountChoice)) {
+                    this.equipMountChoice = '';
+                }
+                if (!this.equipMountChoice && this.selectedTelescope
+                    && names.has(this.selectedTelescope)) {
+                    this.equipMountChoice = this.selectedTelescope;
+                }
             }
             // Focuser
-            if (this.equipFocuserChoice && !names.has(this.equipFocuserChoice)) {
-                this.equipFocuserChoice = '';
-            }
-            if (!this.equipFocuserChoice && this.selectedFocuser
-                && names.has(this.selectedFocuser)) {
-                this.equipFocuserChoice = this.selectedFocuser;
+            if (this.focuserDriver === 'indi' || !this.focuserDriver) {
+                if (this.equipFocuserChoice && !names.has(this.equipFocuserChoice)) {
+                    this.equipFocuserChoice = '';
+                }
+                if (!this.equipFocuserChoice && this.selectedFocuser
+                    && names.has(this.selectedFocuser)) {
+                    this.equipFocuserChoice = this.selectedFocuser;
+                }
             }
             // Filter wheel
-            if (this.equipFilterChoice && !names.has(this.equipFilterChoice)) {
-                this.equipFilterChoice = '';
-            }
-            if (!this.equipFilterChoice && this.selectedFilterWheel
-                && names.has(this.selectedFilterWheel)) {
-                this.equipFilterChoice = this.selectedFilterWheel;
+            if (this.filterWheelDriver === 'indi' || !this.filterWheelDriver) {
+                if (this.equipFilterChoice && !names.has(this.equipFilterChoice)) {
+                    this.equipFilterChoice = '';
+                }
+                if (!this.equipFilterChoice && this.selectedFilterWheel
+                    && names.has(this.selectedFilterWheel)) {
+                    this.equipFilterChoice = this.selectedFilterWheel;
+                }
             }
         },
 

@@ -4458,7 +4458,7 @@
                                      SOFTWARE\ASCOM\Telescope Drivers. -->
                                 <select class="equip-select"
                                         x-show="mountDriver === 'ascom-com' || mountDriver === 'alpaca'"
-                                        x-model="equipMountChoice"
+                                        @change="equipMountChoice = $event.target.value"
                                         :disabled="mountDiscovering">
                                     <option value="">
                                         <span x-show="mountDiscovering">Detecting…</span>
@@ -4466,7 +4466,8 @@
                                         <span x-show="!mountDiscovering && mountVendorDevices.length > 0">Select driver</span>
                                     </option>
                                     <template x-for="d in mountVendorDevices" :key="d.id">
-                                        <option :value="d.id" x-text="d.model + ' (' + d.id + ')'"></option>
+                                        <option :value="d.id" :selected="equipMountChoice === d.id"
+                                                x-text="d.model + ' (' + d.id + ')'"></option>
                                     </template>
                                 </select>
 
@@ -4634,7 +4635,8 @@
 
                                 <!-- ASCOM / Alpaca path: dropdown auto-populated
                                      when the user switches driver. -->
-                                <select class="equip-select" x-model="equipFocuserChoice"
+                                <select class="equip-select"
+                                        @change="equipFocuserChoice = $event.target.value"
                                         x-show="focuserDriver !== 'indi'"
                                         :disabled="focuserDiscovering">
                                     <option value="">
@@ -4649,7 +4651,8 @@
                                         </template>
                                     </option>
                                     <template x-for="f in focuserVendorDevices" :key="f.id">
-                                        <option :value="f.id" x-text="f.model + ' (' + f.detail + ')'"></option>
+                                        <option :value="f.id" :selected="equipFocuserChoice === f.id"
+                                                x-text="f.model + ' (' + f.detail + ')'"></option>
                                     </template>
                                 </select>
 
@@ -4809,7 +4812,8 @@
                                     </template>
                                 </select>
 
-                                <select class="equip-select" x-model="equipFilterChoice"
+                                <select class="equip-select"
+                                        @change="equipFilterChoice = $event.target.value"
                                         x-show="filterWheelDriver !== 'indi'"
                                         :disabled="filterWheelDiscovering">
                                     <option value="">
@@ -4824,7 +4828,8 @@
                                         </template>
                                     </option>
                                     <template x-for="f in filterWheelVendorDevices" :key="f.id">
-                                        <option :value="f.id" x-text="f.model + ' (' + f.detail + ')'"></option>
+                                        <option :value="f.id" :selected="equipFilterChoice === f.id"
+                                                x-text="f.model + ' (' + f.detail + ')'"></option>
                                     </template>
                                 </select>
 
