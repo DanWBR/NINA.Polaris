@@ -172,7 +172,7 @@ public static class SkyEndpoints {
         // mag-limited. Used for "what's in my FOV" overlays + future
         // Mosaic auto-suggest. Returns 503 when the expanded DB
         // isn't available (legacy fallback can't answer this).
-        group.MapGet("/catalog/near", (double ra, double dec, double radius,
+        group.MapGet("/catalog/near", async (double ra, double dec, double radius,
             double? maxMag, int? limit,
             NINA.Polaris.Services.Sky.DsoCatalog dso) => {
             if (!dso.IsAvailable) {
@@ -181,10 +181,12 @@ public static class SkyEndpoints {
                             "Run `python scripts/build-dso-catalog.py` to populate it."
                 }, statusCode: 503);
             }
-            var hits = dso.QueryRegionAsync(ra, dec,
+            // PERF #365: await the query instead of blocking the Kestrel
+            // request thread with .GetAwaiter().GetResult() (which starved
+            // the thread pool on large cone searches).
+            var hits = await dso.QueryRegionAsync(ra, dec,
                 Math.Max(0.01, radius), maxMag,
-                Math.Clamp(limit ?? 200, 1, 1000)
-            ).GetAwaiter().GetResult();
+                Math.Clamp(limit ?? 200, 1, 1000));
             return Results.Ok(new {
                 count = hits.Count,
                 results = hits.Select(o => new {

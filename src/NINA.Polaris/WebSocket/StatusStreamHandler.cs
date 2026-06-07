@@ -13,6 +13,19 @@ public static class StatusStreamHandler {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
+    // PERF #365: serialize the status payload at most once per tick and
+    // share the resulting bytes across all connected clients, instead of
+    // every client loop building + serializing the full ~50-100 KB payload
+    // independently. The only per-client part of the old payload was the
+    // debugLog cursor; it becomes a shared cursor here (the frontend dedups
+    // log entries by id, so shared delivery is safe — a client that misses
+    // a window backfills via GET /api/logs). Keyed by 1-second tick so two
+    // clients within the same second reuse one serialization.
+    private static readonly object _statusCacheLock = new();
+    private static byte[]? _statusCacheBytes;
+    private static long _statusCacheTick = -1;
+    private static long _sharedDebugCursor;
+
     public static async Task Handle(HttpContext context) {
         if (!context.WebSockets.IsWebSocketRequest) {
             context.Response.StatusCode = 400;
@@ -54,12 +67,6 @@ public static class StatusStreamHandler {
         var logService = context.RequestServices.GetRequiredService<NINA.Polaris.Services.Logging.LogService>();
         var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
 
-        // DBGLOG-5: per-connection cursor. Each client tick we ship
-        // entries with Id > debugLogCursor (capped at 50) so reconnecting
-        // browsers catch up without re-streaming the whole buffer, and
-        // chatty servers don't blow a single tick's payload over 100 KB.
-        long debugLogCursor = 0;
-
         using var ws = await context.WebSockets.AcceptWebSocketAsync(new WebSocketAcceptContext {
             KeepAliveInterval = PingInterval
         });
@@ -75,6 +82,19 @@ public static class StatusStreamHandler {
         var sendTask = Task.Run(async () => {
             while (!cts.Token.IsCancellationRequested && ws.State == WebSocketState.Open) {
                 try {
+                    // PERF #365: reuse this tick's already-serialized payload
+                    // if another client (or this one) built it within the
+                    // current 1-second window.
+                    long tick = DateTime.UtcNow.Ticks / StatusInterval.Ticks;
+                    byte[]? payload = null;
+                    long localDebugCursor = 0;
+                    lock (_statusCacheLock) {
+                        if (_statusCacheTick == tick && _statusCacheBytes != null)
+                            payload = _statusCacheBytes;
+                        else
+                            localDebugCursor = _sharedDebugCursor;
+                    }
+                    if (payload == null) {
                     var seqStatus = sequence.GetStatus();
 
                     // Compact summaries of PH2X-3/4/6 services, surface
@@ -518,10 +538,23 @@ public static class StatusStreamHandler {
                         // cursor fell behind the ring-buffer head so the
                         // client knows it missed entries and should
                         // refetch via GET /api/logs.
-                        debugLog = BuildDebugLogPayload(logService, ref debugLogCursor)
+                        debugLog = BuildDebugLogPayload(logService, ref localDebugCursor)
                     };
 
-                    await SendJsonAsync(ws, status, cts.Token);
+                    payload = JsonSerializer.SerializeToUtf8Bytes(status, JsonOpts);
+                    lock (_statusCacheLock) {
+                        _statusCacheBytes = payload;
+                        _statusCacheTick = tick;
+                        // Advance the shared cursor monotonically; if two
+                        // clients raced this tick they both built, take the
+                        // furthest. Long read/write under the lock is also
+                        // what keeps the cursor torn-free on 32-bit ARM.
+                        if (localDebugCursor > _sharedDebugCursor)
+                            _sharedDebugCursor = localDebugCursor;
+                    }
+                    }
+
+                    await SendBytesAsync(ws, payload!, cts.Token);
                     await Task.Delay(StatusInterval, cts.Token);
                 } catch (OperationCanceledException) {
                     break;
@@ -590,6 +623,14 @@ public static class StatusStreamHandler {
         using var sendCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         sendCts.CancelAfter(SendTimeout);
         await ws.SendAsync(Encoding.UTF8.GetBytes(json), WebSocketMessageType.Text, true, sendCts.Token);
+    }
+
+    /// <summary>PERF #365: send already-serialized UTF-8 JSON bytes (the
+    /// per-tick shared status payload) without re-serializing per client.</summary>
+    private static async Task SendBytesAsync(System.Net.WebSockets.WebSocket ws, byte[] utf8Json, CancellationToken ct) {
+        using var sendCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        sendCts.CancelAfter(SendTimeout);
+        await ws.SendAsync(utf8Json, WebSocketMessageType.Text, true, sendCts.Token);
     }
 
     private static async Task CloseGracefully(System.Net.WebSockets.WebSocket ws) {

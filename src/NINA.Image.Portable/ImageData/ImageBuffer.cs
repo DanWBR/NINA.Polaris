@@ -49,16 +49,35 @@ public class ImageBuffer : IImageBuffer {
     }
 
     public byte[] ToLz4Compressed() {
-        var sourceBytes = new byte[_pixels.Length * 2];
-        Buffer.BlockCopy(_pixels, 0, sourceBytes, 0, sourceBytes.Length);
-
-        int maxLen = LZ4Codec.MaximumOutputSize(sourceBytes.Length);
-        var compressed = new byte[maxLen];
-        int compressedLen = LZ4Codec.Encode(sourceBytes, compressed, LZ4Level.L00_FAST);
-
-        var result = new byte[compressedLen];
-        Array.Copy(compressed, result, compressedLen);
-        return result;
+        // PERF #365: rent the two scratch buffers (the ushort->byte copy
+        // and the LZ4 max-size target) from the shared ArrayPool instead
+        // of allocating them per frame. On the streaming path this used to
+        // churn ~3 large arrays/frame (tens of MB on a full-frame OSC),
+        // pressuring the Pi GC. Only the trimmed `result` is a real
+        // allocation now (it outlives this call — it's sent over the WS).
+        int srcLen = _pixels.Length * 2;
+        var pool = System.Buffers.ArrayPool<byte>.Shared;
+        var sourceBytes = pool.Rent(srcLen);
+        try {
+            Buffer.BlockCopy(_pixels, 0, sourceBytes, 0, srcLen);
+            int maxLen = LZ4Codec.MaximumOutputSize(srcLen);
+            var compressed = pool.Rent(maxLen);
+            try {
+                // Rented arrays are oversized; slice to exact lengths so
+                // the codec compresses the right source span.
+                int compressedLen = LZ4Codec.Encode(
+                    sourceBytes.AsSpan(0, srcLen),
+                    compressed.AsSpan(0, maxLen),
+                    LZ4Level.L00_FAST);
+                var result = new byte[compressedLen];
+                Array.Copy(compressed, result, compressedLen);
+                return result;
+            } finally {
+                pool.Return(compressed);
+            }
+        } finally {
+            pool.Return(sourceBytes);
+        }
     }
 
     /// <summary>
