@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260607-benchbar">
+    <link rel="stylesheet" href="/css/app.css?v=20260607-vidprobe">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -9338,6 +9338,15 @@
                             <input type="number" min="0" x-model.number="benchGain" placeholder="auto"
                                    style="width:70px;margin-left:4px">
                         </label>
+                        <label class="hint" title="Centered square ROI for the high-fps video probe. 0 = full frame. Planetary high-fps needs a small ROI (e.g. 640).">Video ROI (px)
+                            <input type="number" min="0" step="64" x-model.number="benchVideoRoi" placeholder="0 = full"
+                                   style="width:80px;margin-left:4px">
+                        </label>
+                        <label class="checkbox-label hint" style="align-self:center"
+                               title="Also write a real SER recording to the image-output volume during the video probe, to measure sustainable record fps + dropped frames.">
+                            <input type="checkbox" x-model="benchMeasureRecording">
+                            Measure recording
+                        </label>
                     </div>
 
                     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
@@ -9424,6 +9433,12 @@
                                             <span x-text="bench.lastResult.cameraVideo.transmitFps"></span> fps sent ·
                                             <span x-text="bench.lastResult.cameraVideo.width + '×' + bench.lastResult.cameraVideo.height"></span>
                                             (<span x-text="bench.lastResult.cameraVideo.mbPerSec"></span> MB/s)</td></tr>
+                                </template>
+                                <template x-if="bench.lastResult.cameraVideo && !bench.lastResult.cameraVideo.error && bench.lastResult.cameraVideo.recordFps > 0">
+                                    <tr><td class="hint" style="padding-left:10px">Recording (SER)</td>
+                                        <td><span x-text="bench.lastResult.cameraVideo.recordFps"></span> fps written ·
+                                            <span x-text="bench.lastResult.cameraVideo.droppedFrames"></span> dropped ·
+                                            <span x-text="bench.lastResult.cameraVideo.meanWriteMs"></span> ms/write</td></tr>
                                 </template>
                                 <template x-if="bench.lastResult.cameraVideo && bench.lastResult.cameraVideo.error">
                                     <tr><td class="hint" style="padding-left:10px">Video stream</td>
@@ -12038,7 +12053,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260607-benchbar"></script>
+    <script src="/js/app.js?v=20260607-vidprobe"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

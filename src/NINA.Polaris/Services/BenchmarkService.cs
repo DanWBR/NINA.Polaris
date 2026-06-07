@@ -33,6 +33,7 @@ public class BenchmarkService {
     private readonly EquipmentManager _equipment;
     private readonly CameraStreamService _cameraStream;
     private readonly LiveStackingService _liveStack;
+    private readonly ProfileService _profiles;
 
     private readonly object _gate = new();
     private CancellationTokenSource? _cts;
@@ -70,12 +71,14 @@ public class BenchmarkService {
         BenchmarkResultsStore store,
         EquipmentManager equipment,
         CameraStreamService cameraStream,
-        LiveStackingService liveStack) {
+        LiveStackingService liveStack,
+        ProfileService profiles) {
         _logger = logger;
         _store = store;
         _equipment = equipment;
         _cameraStream = cameraStream;
         _liveStack = liveStack;
+        _profiles = profiles;
     }
 
     public object GetStatus() => new {
@@ -509,7 +512,32 @@ public class BenchmarkService {
         const double streamExposure = 0.03;
         const int warmupMaxTicks = 60;  // up to 6s for the first frame
         const int windowTicks = 50;     // 5s measurement window
+        bool roiSet = false;
+
+        // Recording probe state (only used when req.MeasureRecording). The
+        // sink mirrors VideoRecordingService.OnFrame exactly: try the write
+        // lock with a 5 ms budget, drop the frame if the writer is busy,
+        // and time each real SER write. Writing under ImageOutputDir (not
+        // /tmp, which is tmpfs/RAM on a Pi and would fake the disk speed)
+        // so the number reflects the rig's actual storage.
+        Planetary.SerFileWriter? recWriter = null;
+        string? recPath = null;
+        IDisposable? recSub = null;
+        var recLock = new object();
+        long recorded = 0, dropped = 0;
+        double writeMsTotal = 0;
+        bool recording = false;
+
         try {
+            // High-fps planetary video needs a small ROI; a full-frame OSC
+            // simply can't deliver 100 fps no matter the host. Center it.
+            if (req.VideoRoi > 0 && cam.MaxX > 0 && cam.MaxY > 0) {
+                int roi = Math.Min(req.VideoRoi, Math.Min(cam.MaxX, cam.MaxY));
+                int rx = (cam.MaxX - roi) / 2, ry = (cam.MaxY - roi) / 2;
+                try { await cam.SetSubframeAsync(rx, ry, roi, roi, ct); roiSet = true; }
+                catch (Exception ex) { _logger.LogDebug(ex, "Benchmark: ROI set failed (full-frame)"); }
+            }
+
             _cameraStream.Start(new StreamConfig(ExposureSeconds: streamExposure, Gain: req.CameraGain));
 
             // Warmup: wait until the first frame actually lands (skips the
@@ -520,6 +548,32 @@ public class BenchmarkService {
                 await Task.Delay(100, ct);
                 warm++;
                 onProgress?.Invoke(0.1 * warm / warmupMaxTicks);
+            }
+
+            // Attach the recording sink AFTER warmup so every recorded frame
+            // falls inside the measurement window.
+            if (req.MeasureRecording && _cameraStream.FrameCount > 0) {
+                recording = true;
+                recSub = _cameraStream.SubscribeFrames(frame => {
+                    if (!Monitor.TryEnter(recLock, 5)) { Interlocked.Increment(ref dropped); return; }
+                    try {
+                        if (recWriter == null) {
+                            var dir = Path.Combine(_profiles.Active.ImageOutputDir, "planetary");
+                            Directory.CreateDirectory(dir);
+                            recPath = Path.Combine(dir, $".benchmark-probe-{Guid.NewGuid():N}.ser.tmp");
+                            recWriter = new Planetary.SerFileWriter(recPath,
+                                frame.Properties.Width, frame.Properties.Height,
+                                frame.Properties.BitDepth > 0 ? frame.Properties.BitDepth : 16,
+                                Planetary.SerColorMode.Mono, "Polaris-bench", cam.DeviceName, "");
+                        }
+                        var wsw = Stopwatch.StartNew();
+                        recWriter.WriteFrame(frame.Data, DateTime.UtcNow);
+                        wsw.Stop();
+                        writeMsTotal += wsw.Elapsed.TotalMilliseconds;
+                        recorded++;
+                    } catch { Interlocked.Increment(ref dropped); }
+                    finally { Monitor.Exit(recLock); }
+                });
             }
 
             // Measurement window: rate = frame-count delta / elapsed, so
@@ -534,6 +588,11 @@ public class BenchmarkService {
             }
             clock.Stop();
 
+            // Detach + close the recording writer before reading counters.
+            recSub?.Dispose();
+            recSub = null;
+            lock (recLock) { try { recWriter?.Dispose(); } catch { } recWriter = null; }
+
             double secs = Math.Max(0.001, clock.Elapsed.TotalSeconds);
             long capFrames = _cameraStream.FrameCount - capStart;
             long txFrames = _cameraStream.TransmittedFrames - txStart;
@@ -545,6 +604,11 @@ public class BenchmarkService {
             string mode = _cameraStream.Mode;
             double mbps = raw > 0 && captureFps > 0
                 ? (raw / (1024.0 * 1024.0)) * captureFps : 0;
+
+            long recCount = Interlocked.Read(ref recorded);
+            long dropCount = Interlocked.Read(ref dropped);
+            double recordFps = recording ? recCount / secs : 0;
+            double meanWriteMs = recCount > 0 ? writeMsTotal / recCount : 0;
 
             string? err = capFrames == 0
                 ? "The camera produced no video frames (driver may not support streaming)."
@@ -559,14 +623,26 @@ public class BenchmarkService {
                 MBPerSec: Math.Round(mbps, 1),
                 Frames: capFrames,
                 DurationSec: (int)Math.Round(secs),
-                Error: err);
+                Error: err,
+                RecordFps: Math.Round(recordFps, 2),
+                DroppedFrames: dropCount,
+                MeanWriteMs: Math.Round(meanWriteMs, 2));
         } catch (OperationCanceledException) {
             throw;
         } catch (Exception ex) {
             return new CameraVideoResult("idle", 0, 0, 0, 0, 0, 0, 0, ex.Message);
         } finally {
+            try { recSub?.Dispose(); } catch { }
+            lock (recLock) { try { recWriter?.Dispose(); } catch { } }
+            if (recPath != null) { try { File.Delete(recPath); } catch { } }
             try { await _cameraStream.StopAsync(); }
             catch (Exception ex) { _logger.LogDebug(ex, "Benchmark: stopping video stream failed"); }
+            // Restore the full frame so the probe doesn't leave the camera
+            // stuck in a small ROI for the next real capture.
+            if (roiSet) {
+                try { await cam.SetSubframeAsync(0, 0, cam.MaxX, cam.MaxY, CancellationToken.None); }
+                catch (Exception ex) { _logger.LogDebug(ex, "Benchmark: ROI restore failed"); }
+            }
         }
     }
 
@@ -632,7 +708,14 @@ public record BenchmarkRequest(
     bool IncludeCamera = false,
     double CameraExposure = 1.0,
     int? CameraGain = null,
-    int CameraFrames = 5);
+    int CameraFrames = 5,
+    // High-fps planetary video probe. VideoRoi > 0 sets a centered square
+    // subframe before the video test (small ROI is what lets a camera hit
+    // 100+ fps; a full-frame OSC can't). MeasureRecording also runs a real
+    // SER write to the image-output volume during the window so the report
+    // includes the recording path's sustainable fps + dropped frames.
+    int VideoRoi = 0,
+    bool MeasureRecording = false);
 
 public record BenchmarkDevice(
     string Kind, string Model, string Os, string Architecture,
@@ -657,7 +740,11 @@ public record CameraResult(
 public record CameraVideoResult(
     string Mode, double CaptureFps, double TransmitFps,
     int Width, int Height, double MBPerSec,
-    long Frames, int DurationSec, string? Error);
+    long Frames, int DurationSec, string? Error,
+    // Recording path (only populated when MeasureRecording was requested):
+    // RecordFps = SER frames actually written/sec, DroppedFrames = frames
+    // the writer couldn't keep up with, MeanWriteMs = avg per-frame write.
+    double RecordFps = 0, long DroppedFrames = 0, double MeanWriteMs = 0);
 
 public record BenchmarkResult(
     string Timestamp,

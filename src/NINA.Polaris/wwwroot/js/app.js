@@ -2340,6 +2340,8 @@ function ninaApp() {
         benchIncludeCamera: false,
         benchExposure: 1.0,
         benchGain: null,
+        benchVideoRoi: 0,
+        benchMeasureRecording: false,
         _benchWasRunning: false,
 
         // Camera sensor analysis (photon-transfer-curve). state/progress/
@@ -11203,7 +11205,9 @@ function ninaApp() {
                 cameraExposure: Number(this.benchExposure) || 1.0,
                 cameraGain: (this.benchGain === null || this.benchGain === '')
                     ? null : Number(this.benchGain),
-                cameraFrames: 5
+                cameraFrames: 5,
+                videoRoi: Number(this.benchVideoRoi) || 0,
+                measureRecording: !!this.benchMeasureRecording
             };
             try {
                 const r = await this.apiPost('/api/benchmark/run', body);

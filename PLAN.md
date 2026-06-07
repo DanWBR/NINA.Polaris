@@ -12431,3 +12431,30 @@ Files: `NINA.Image.Portable/ImageAnalysis/{ImageResampler,BayerDebayer,
 AutoStretch,StarDetector}.cs`. Verified: Portable + NINA.Polaris + WASM
 build clean; 53 image-kernel tests + 19 benchmark/sensor tests green
 (output determinism preserved).
+
+---
+
+## BENCH-VID2: high-fps video/recording probe (measure-first)
+
+Before deciding whether to re-architect the video pipeline for ASIAIR-class
+100 fps, we need the real ceiling on the rig (the synthetic benchmark only
+tests full-frame 16 MP; high-fps planetary uses a small ROI). Extended the
+optional camera-video benchmark to measure exactly that:
+
+- `BenchmarkRequest.VideoRoi` (px): sets a centered square subframe via
+  `ICamera.SetSubframeAsync` before the video probe so the camera can
+  actually reach high fps; restored to full frame afterwards. 0 = full.
+- `BenchmarkRequest.MeasureRecording`: during the 5 s window, runs a real
+  SER write (mirroring `VideoRecordingService.OnFrame`'s 5 ms try-lock +
+  drop-on-busy) to a temp `.ser` under `ImageOutputDir` (NOT /tmp, which is
+  tmpfs/RAM on a Pi and would fake the disk speed). Temp file deleted after.
+- `CameraVideoResult` gains `RecordFps`, `DroppedFrames`, `MeanWriteMs`.
+  UI shows a "Recording (SER)" row; inputs for ROI + "Measure recording"
+  appear under the existing "measure camera" checkbox.
+
+This tells us, per board + camera, the sustained capture fps, preview
+(transmit) fps, record fps and dropped frames at a chosen ROI -- the data
+to decide the next step (background writer queue / zero-copy vs a native
+ASI SDK path). Files: `Services/BenchmarkService.cs` (ProfileService inject
++ ROI/recording probe + DTOs), `wwwroot/index.html` + `js/app.js` (inputs +
+result row; cache-bust 20260607-vidprobe).
