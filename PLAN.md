@@ -12761,6 +12761,28 @@ SynScan pulse guide.
 Still deferred: ZFilter, GaussianProcess (RA), pier-side/parity, SynScan pulse
 guide.
 
+### NATIVE GUIDER follow-up: PHD2-style GUIDE UI
+
+A PHD2-like dashboard for the native backend (PHD2 backend keeps its own GUI
+and the simple inline chart). All four PHD2 panels:
+- Backend: enriched WS recentSteps (raPx/decPx, snr, mass, raDur/decDur,
+  raDir/decDir); IGuider.ViewState (native override) exposes a live guide-frame
+  view = geometry/origin + lock + tracked star markers (full-sensor coords) +
+  mid-row star-profile cross-section + FWHM; GET /api/guider/frame.jpg streams
+  the latest native guide frame as an auto-stretched JPEG (FitsThumbnailer).
+  NativeGuider keeps a reference to the latest captured frame and rebuilds the
+  overlay each guide/loop iteration.
+- Frontend (native only, gated on guider.backend === "native"): custom-canvas
+  history graph (RA/Dec lines + correction impulse bars + RMS HUD + y-scale
+  buttons), guide-cam image with crosshair/lock-box/star markers overlay,
+  RA/Dec target bullseye scatter with reference circles, star-profile curve +
+  FWHM, and a PHD2-style status bar (SNR/mass/pulse/star-count). Frame image
+  refreshed only on frameId change via authUrl(); overlays mapped from
+  full-sensor coords through the frame origin.
+
+Still deferred: ZFilter, GaussianProcess (RA), pier-side/parity, SynScan pulse
+guide.
+
 ### NATIVE GUIDER follow-up: Pier-side (meridian flip) handling
 
 - GuideCalibration gained `CalibrationPierSide` (stamped from `mount.SideOfPier`

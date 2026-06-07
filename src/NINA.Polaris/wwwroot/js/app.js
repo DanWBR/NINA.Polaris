@@ -1067,6 +1067,8 @@ function ninaApp() {
         guideChartH: 160,
         guideChartScale: 2.0, // arcsec range each direction (auto-expands)
         guideChartTickCount: 0, // visible heartbeat for the guide chart
+        guidePhdScale: 4,       // PHD2-style history y-range (arcsec, ±)
+        _guidePhdFrameId: -1,   // last guide-frame id we requested an image for
         guiderEquipment: { camera: null, mount: null, auxMount: null, ao: null },
 
         // PHD2 management state
@@ -11606,6 +11608,212 @@ function ninaApp() {
             this.guideChartTickCount = (this.guideChartTickCount || 0) + 1;
         },
 
+        // ----- PHD2-style native guiding view -----
+
+        // Last guide step in the ring buffer (for the status bar readouts).
+        guideLastStep() {
+            const s = this.guider.recentSteps;
+            return (s && s.length) ? s[s.length - 1] : null;
+        },
+
+        // "E 1.09px 30ms" style pulse label for one axis. Direction is derived
+        // from the raw-pixel error sign when the backend doesn't send it.
+        guidePulseLabel(axis) {
+            const s = this.guideLastStep();
+            if (!s) return axis === 'ra' ? 'RA --' : 'Dec --';
+            if (axis === 'ra') {
+                const dur = s.raDur || 0;
+                const dir = s.raDir || ((s.raPx ?? 0) >= 0 ? 'E' : 'W');
+                return `${dir} ${Math.abs(s.raPx ?? 0).toFixed(2)}px ${dur}ms`;
+            }
+            const dur = s.decDur || 0;
+            const dir = s.decDir || ((s.decPx ?? 0) >= 0 ? 'N' : 'S');
+            return `${dir} ${Math.abs(s.decPx ?? 0).toFixed(2)}px ${dur}ms`;
+        },
+
+        // Master render for the native PHD2-style view. Called ~1Hz from the
+        // status handler while the GUIDE tab is open and the backend is native.
+        renderGuideView() {
+            try { this.drawGuidePhdGraph(); } catch (e) {}
+            try { this.drawGuideBullseye(); } catch (e) {}
+            try { this.drawGuideProfile(); } catch (e) {}
+            // Refresh the guide-cam image only when a new frame arrived.
+            const v = this.guider.view;
+            if (v && v.frameId !== this._guidePhdFrameId) {
+                this._guidePhdFrameId = v.frameId;
+                const img = this.$refs.guidePhdCamImg;
+                if (img) img.src = this.authUrl(`/api/guider/frame.jpg?id=${v.frameId}`);
+            }
+        },
+
+        // Size a canvas to its CSS box at devicePixelRatio. Returns {ctx,w,h}.
+        _fitCanvas(canvas) {
+            const dpr = window.devicePixelRatio || 1;
+            const r = canvas.getBoundingClientRect();
+            const w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height));
+            if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+                canvas.width = w * dpr; canvas.height = h * dpr;
+            }
+            const ctx = canvas.getContext('2d');
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            return { ctx, w, h };
+        },
+
+        // History graph: RA (red) + Dec (blue) error lines over time plus
+        // per-frame correction impulse bars, on a symmetric arcsec scale.
+        drawGuidePhdGraph() {
+            const canvas = this.$refs.guidePhdGraph;
+            if (!canvas) return;
+            const { ctx, w, h } = this._fitCanvas(canvas);
+            ctx.clearRect(0, 0, w, h);
+            const mid = h / 2;
+            const scale = this.guidePhdScale || 4;
+            const yOf = v => mid - (v / scale) * (h / 2 - 6);
+
+            // grid
+            ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for (const f of [-1, -0.5, 0, 0.5, 1]) {
+                const y = mid - f * (h / 2 - 6);
+                ctx.moveTo(0, y); ctx.lineTo(w, y);
+            }
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+            ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(w, mid); ctx.stroke();
+
+            const steps = this.guider.recentSteps || [];
+            if (!steps.length) return;
+            const n = steps.length;
+            const dx = n > 1 ? w / (n - 1) : w;
+
+            // correction impulse bars (RA + Dec durations, scaled to a fraction
+            // of the half-height so they read as activity, not absolute ms).
+            const maxDur = Math.max(1, ...steps.map(s => Math.max(s.raDur || 0, s.decDur || 0)));
+            for (let i = 0; i < n; i++) {
+                const x = i * dx;
+                const s = steps[i];
+                const raB = ((s.raDur || 0) / maxDur) * (h / 2 - 8);
+                const decB = ((s.decDur || 0) / maxDur) * (h / 2 - 8);
+                if (raB > 0) {
+                    ctx.fillStyle = 'rgba(229,115,115,0.30)';
+                    const dir = (s.raPx ?? 0) >= 0 ? -1 : 1;
+                    ctx.fillRect(x - 1, mid, 2, dir * raB);
+                }
+                if (decB > 0) {
+                    ctx.fillStyle = 'rgba(100,181,246,0.30)';
+                    const dir = (s.decPx ?? 0) >= 0 ? -1 : 1;
+                    ctx.fillRect(x - 1, mid, 2, dir * decB);
+                }
+            }
+
+            const line = (key, color) => {
+                ctx.strokeStyle = color; ctx.lineWidth = 1.4;
+                ctx.beginPath();
+                for (let i = 0; i < n; i++) {
+                    const x = i * dx;
+                    const y = yOf(Number(steps[i][key]) || 0);
+                    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            };
+            line('ra', '#e57373');
+            line('dec', '#64b5f6');
+        },
+
+        // Target bullseye: scatter of recent RA/Dec error in arcsec with
+        // reference circles, newest point brightest.
+        drawGuideBullseye() {
+            const canvas = this.$refs.guidePhdBullseye;
+            if (!canvas) return;
+            const { ctx, w, h } = this._fitCanvas(canvas);
+            ctx.clearRect(0, 0, w, h);
+            const cx = w / 2, cy = h / 2;
+            const rng = this.guidePhdScale || 4;
+            const rad = Math.min(w, h) / 2 - 4;
+            const rOf = a => (a / rng) * rad;
+
+            ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+            ctx.lineWidth = 1;
+            for (const a of [rng * 0.25, rng * 0.5, rng]) {
+                ctx.beginPath(); ctx.arc(cx, cy, rOf(a), 0, Math.PI * 2); ctx.stroke();
+            }
+            ctx.beginPath();
+            ctx.moveTo(cx - rad, cy); ctx.lineTo(cx + rad, cy);
+            ctx.moveTo(cx, cy - rad); ctx.lineTo(cx, cy + rad);
+            ctx.stroke();
+
+            const steps = this.guider.recentSteps || [];
+            const tail = steps.slice(-60);
+            for (let i = 0; i < tail.length; i++) {
+                const s = tail[i];
+                const x = cx + rOf(Number(s.ra) || 0);
+                const y = cy - rOf(Number(s.dec) || 0);
+                const age = (i + 1) / tail.length;
+                ctx.fillStyle = `rgba(120,200,255,${0.15 + 0.7 * age})`;
+                ctx.beginPath(); ctx.arc(x, y, i === tail.length - 1 ? 3 : 1.6, 0, Math.PI * 2); ctx.fill();
+            }
+        },
+
+        // Star profile: the mid-row intensity cross-section from the backend.
+        drawGuideProfile() {
+            const canvas = this.$refs.guidePhdProfile;
+            if (!canvas) return;
+            const { ctx, w, h } = this._fitCanvas(canvas);
+            ctx.clearRect(0, 0, w, h);
+            const p = this.guider.view?.profile;
+            if (!p || !p.length) return;
+            ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+            ctx.beginPath(); ctx.moveTo(0, h * 0.5); ctx.lineTo(w, h * 0.5); ctx.stroke();
+            ctx.strokeStyle = '#ff5252'; ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            for (let i = 0; i < p.length; i++) {
+                const x = (i / (p.length - 1)) * w;
+                const y = h - 4 - (Math.max(0, Math.min(1, p[i]))) * (h - 8);
+                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        },
+
+        // Draw lock crosshair/box + star markers over the guide-cam image.
+        drawGuideCamOverlay() {
+            const img = this.$refs.guidePhdCamImg;
+            const canvas = this.$refs.guidePhdCamOverlay;
+            const v = this.guider.view;
+            if (!img || !canvas || !v) return;
+            const dpr = window.devicePixelRatio || 1;
+            const dw = img.clientWidth, dh = img.clientHeight;
+            if (dw < 2 || dh < 2) return;
+            canvas.style.width = dw + 'px';
+            canvas.style.height = dh + 'px';
+            canvas.width = dw * dpr; canvas.height = dh * dpr;
+            const ctx = canvas.getContext('2d');
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, dw, dh);
+            // The image shows the buffer (view.width x view.height) whose top-left
+            // maps to (originX, originY) in full-sensor coords.
+            const sx = dw / v.width, sy = dh / v.height;
+            const toX = fx => (fx - (v.originX || 0)) * sx;
+            const toY = fy => (fy - (v.originY || 0)) * sy;
+
+            if (v.lockX != null) {
+                const lx = toX(v.lockX), ly = toY(v.lockY);
+                ctx.strokeStyle = 'rgba(120,255,120,0.7)'; ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(lx, 0); ctx.lineTo(lx, dh);
+                ctx.moveTo(0, ly); ctx.lineTo(dw, ly);
+                ctx.stroke();
+                ctx.strokeStyle = '#4caf50'; ctx.lineWidth = 1.5;
+                ctx.strokeRect(lx - 9, ly - 9, 18, 18);
+            }
+            for (const s of (v.stars || [])) {
+                const x = toX(s.x), y = toY(s.y);
+                ctx.strokeStyle = !s.found ? '#ef5350' : (s.primary ? '#69f0ae' : '#ffd54f');
+                ctx.lineWidth = 1.2;
+                ctx.beginPath(); ctx.arc(x, y, s.primary ? 7 : 5, 0, Math.PI * 2); ctx.stroke();
+            }
+        },
+
         // Auto-Focus V-curve: HFR vs Position, scatter + fit overlay
         updateAfChart() {
             const t = this._chartTheme();
@@ -21843,7 +22051,10 @@ function ninaApp() {
             // Refresh charts once per status frame (1Hz), only if their canvas
             // is currently in the DOM, otherwise Chart.js skips silently.
             this.$nextTick(() => {
-                if (this.guider.connected && this.tab === 'guide') this.updateGuideChart();
+                if (this.guider.connected && this.tab === 'guide') {
+                    if (this.guider.backend === 'native') this.renderGuideView();
+                    else this.updateGuideChart();
+                }
                 if ((this.autoFocus.points || []).length > 0 && this.tab === 'focus') this.updateAfChart();
                 if (this.tempHistory.length >= 2 && this.tab === 'equip') this.updateTempChart();
             });

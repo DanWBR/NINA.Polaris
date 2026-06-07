@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260607-vidprobe">
+    <link rel="stylesheet" href="/css/app.css?v=20260607-phd2view">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -3496,8 +3496,68 @@
                     <div class="info-row" x-show="guider.lastAlert"><span class="text-danger">Alert:</span><strong class="text-danger" x-text="guider.lastAlert"></strong></div>
                 </div>
 
-                <!-- Chart.js error graph -->
-                <div x-show="guider.connected" class="guide-chart">
+                <!-- PHD2-style guiding view (native backend only): history
+                     graph with correction impulses + RMS overlay, guide-cam
+                     image with crosshair/lock/star markers, RA/Dec bullseye
+                     scatter, and a star-profile cross-section. -->
+                <div x-show="guider.connected && guider.backend === 'native'" class="phd2-view">
+                    <!-- History graph -->
+                    <div class="phd2-graph">
+                        <canvas x-ref="guidePhdGraph" class="phd2-graph-canvas"></canvas>
+                        <div class="phd2-graph-hud">
+                            <div class="phd2-rms">
+                                <span><i style="color:#e57373">RA</i> <span x-text="guider.rmsRA?.toFixed(2)"></span>"</span>
+                                <span><i style="color:#64b5f6">Dec</i> <span x-text="guider.rmsDec?.toFixed(2)"></span>"</span>
+                                <span><i>Tot</i> <span x-text="guider.rmsTotal?.toFixed(2)"></span>"</span>
+                            </div>
+                            <div class="phd2-scale">
+                                <span class="text-muted">y ±</span>
+                                <template x-for="s in [1,2,4,8]" :key="s">
+                                    <button class="phd2-scale-btn" :class="guidePhdScale===s ? 'active':''"
+                                            @click="guidePhdScale=s; renderGuideView()" x-text="s"></button>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Camera view + right column (bullseye + profile) -->
+                    <div class="phd2-grid">
+                        <div class="phd2-cam">
+                            <img x-ref="guidePhdCamImg" class="phd2-cam-img" alt="guide frame"
+                                 @load="drawGuideCamOverlay()">
+                            <canvas x-ref="guidePhdCamOverlay" class="phd2-cam-overlay"></canvas>
+                            <div class="phd2-cam-empty" x-show="!guider.view"
+                                 class="text-muted">Loop or guide to see the guide frame</div>
+                        </div>
+                        <div class="phd2-rightcol">
+                            <div class="phd2-bullseye">
+                                <div class="phd2-panel-title">Target</div>
+                                <canvas x-ref="guidePhdBullseye" class="phd2-sq-canvas"></canvas>
+                            </div>
+                            <div class="phd2-profile">
+                                <div class="phd2-panel-title">Star Profile
+                                    <span class="text-muted" style="float:right"
+                                          x-show="guider.view?.fwhm"
+                                          x-text="'FWHM ' + (guider.view?.fwhm?.toFixed(2)) + ' px'"></span>
+                                </div>
+                                <canvas x-ref="guidePhdProfile" class="phd2-prof-canvas"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Status bar -->
+                    <div class="phd2-statusbar">
+                        <span x-text="'SNR ' + (guideLastStep()?.snr?.toFixed(1) ?? '--')"></span>
+                        <span x-text="'mass ' + (guideLastStep()?.mass ? Math.round(guideLastStep().mass) : '--')"></span>
+                        <span x-text="guidePulseLabel('ra')"></span>
+                        <span x-text="guidePulseLabel('dec')"></span>
+                        <span class="text-muted" x-text="(guider.view?.stars?.length || 0) + ' stars'"></span>
+                        <span class="text-muted" style="margin-left:auto"
+                              x-text="(guider.recentSteps?.length || 0) + ' samples'"></span>
+                    </div>
+                </div>
+
+                <!-- Chart.js error graph (PHD2 backend; native uses the
+                     PHD2-style view above) -->
+                <div x-show="guider.connected && guider.backend !== 'native'" class="guide-chart">
                     <div class="chart-container">
                         <canvas x-ref="guideChart" id="guideChart"></canvas>
                     </div>
@@ -12198,7 +12258,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260607-nativeguider"></script>
+    <script src="/js/app.js?v=20260607-phd2view"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

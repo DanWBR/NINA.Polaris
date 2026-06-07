@@ -10981,3 +10981,30 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     text-decoration: underline dotted rgba(255,255,255,0.4);
     text-underline-offset: 4px;
 }
+
+/* ----- PHD2-style native guiding view ----- */
+.phd2-view { display:flex; flex-direction:column; gap:8px; margin-top:8px; }
+.phd2-graph { position:relative; background:#0a0a0c; border:1px solid #222; border-radius:6px; height:200px; }
+.phd2-graph-canvas { width:100%; height:100%; display:block; }
+.phd2-graph-hud { position:absolute; top:6px; left:8px; right:8px; display:flex;
+    justify-content:space-between; pointer-events:none; font-size:11px; }
+.phd2-rms { display:flex; gap:12px; }
+.phd2-rms i { font-style:normal; opacity:0.8; }
+.phd2-scale { display:flex; gap:4px; align-items:center; pointer-events:auto; }
+.phd2-scale-btn { background:#1a1a1f; color:#aaa; border:1px solid #333; border-radius:3px;
+    font-size:10px; padding:1px 6px; cursor:pointer; }
+.phd2-scale-btn.active { background:#2962ff; color:#fff; border-color:#2962ff; }
+.phd2-grid { display:grid; grid-template-columns:1fr 220px; gap:8px; }
+@media (max-width:760px){ .phd2-grid { grid-template-columns:1fr; } }
+.phd2-cam { position:relative; background:#000; border:1px solid #222; border-radius:6px;
+    min-height:260px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
+.phd2-cam-img { max-width:100%; max-height:420px; display:block; image-rendering:pixelated; }
+.phd2-cam-overlay { position:absolute; inset:0; pointer-events:none; }
+.phd2-cam-empty { position:absolute; font-size:12px; }
+.phd2-rightcol { display:flex; flex-direction:column; gap:8px; }
+.phd2-bullseye, .phd2-profile { background:#0a0a0c; border:1px solid #222; border-radius:6px; padding:6px; }
+.phd2-panel-title { font-size:11px; color:#888; margin-bottom:4px; }
+.phd2-sq-canvas { width:100%; aspect-ratio:1/1; display:block; }
+.phd2-prof-canvas { width:100%; height:90px; display:block; }
+.phd2-statusbar { display:flex; gap:16px; flex-wrap:wrap; font-size:11px; color:#bbb;
+    background:#0a0a0c; border:1px solid #222; border-radius:6px; padding:5px 10px; font-family:monospace; }
