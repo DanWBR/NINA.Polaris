@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260607-lsoff">
+    <link rel="stylesheet" href="/css/app.css?v=20260607-benchvid">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -9217,6 +9217,23 @@
                                     <tr><td class="hint" style="padding-left:10px">Camera</td>
                                         <td class="text-warn" x-text="bench.lastResult.camera.error"></td></tr>
                                 </template>
+
+                                <template x-if="bench.lastResult.cameraVideo">
+                                    <tr><td colspan="2" style="padding-top:6px"><strong>Camera video stream</strong>
+                                        <span class="hint">(camera-dependent)</span></td></tr>
+                                </template>
+                                <template x-if="bench.lastResult.cameraVideo && !bench.lastResult.cameraVideo.error">
+                                    <tr><td class="hint" style="padding-left:10px">Stream
+                                        (<span x-text="bench.lastResult.cameraVideo.mode"></span>)</td>
+                                        <td><span x-text="bench.lastResult.cameraVideo.captureFps"></span> fps capture ·
+                                            <span x-text="bench.lastResult.cameraVideo.transmitFps"></span> fps sent ·
+                                            <span x-text="bench.lastResult.cameraVideo.width + '×' + bench.lastResult.cameraVideo.height"></span>
+                                            (<span x-text="bench.lastResult.cameraVideo.mbPerSec"></span> MB/s)</td></tr>
+                                </template>
+                                <template x-if="bench.lastResult.cameraVideo && bench.lastResult.cameraVideo.error">
+                                    <tr><td class="hint" style="padding-left:10px">Video stream</td>
+                                        <td class="text-warn" x-text="bench.lastResult.cameraVideo.error"></td></tr>
+                                </template>
                             </table>
                         </div>
                     </template>
@@ -11826,7 +11843,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260607-lsoff"></script>
+    <script src="/js/app.js?v=20260607-benchvid"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

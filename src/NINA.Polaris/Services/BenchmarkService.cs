@@ -124,9 +124,12 @@ public class BenchmarkService {
             }, ct);
 
             CameraResult? camera = null;
+            CameraVideoResult? cameraVideo = null;
             if (req.IncludeCamera) {
-                SetPhase("Live camera", 88);
+                SetPhase("Live camera (capture)", 86);
                 camera = await RunCameraWorkloadAsync(req, ct);
+                SetPhase("Live camera (video stream)", 93);
+                cameraVideo = await RunCameraVideoWorkloadAsync(req, ct);
             }
 
             var dev = HostInfo.Current;
@@ -146,7 +149,8 @@ public class BenchmarkService {
                 Encode: encode,
                 Cpu: cpu,
                 CompositeScore: Math.Round(composite, 1),
-                Camera: camera);
+                Camera: camera,
+                CameraVideo: cameraVideo);
 
             try { await _store.SaveResultAsync(result, ct); }
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to persist benchmark result"); }
@@ -446,6 +450,62 @@ public class BenchmarkService {
             Error: null);
     }
 
+    /// <summary>Measures the real camera video-stream path end to end:
+    /// starts CameraStreamService (native CCD_VIDEO_STREAM when the driver
+    /// supports it, else the server-side capture loop), lets it run for a
+    /// few seconds, then samples the achieved capture FPS, the transmitted
+    /// (downscaled-JPEG) FPS, the frame size and the raw on-wire MB/s.
+    /// Camera + USB dependent, so reported separately and not part of the
+    /// host composite score.</summary>
+    private async Task<CameraVideoResult> RunCameraVideoWorkloadAsync(BenchmarkRequest req, CancellationToken ct) {
+        var cam = _equipment.Camera;
+        if (cam == null || !cam.IsConnected)
+            return new CameraVideoResult("idle", 0, 0, 0, 0, 0, 0, 0, "No camera connected.");
+        if (_cameraStream.IsRunning)
+            return new CameraVideoResult("idle", 0, 0, 0, 0, 0, 0, 0, "A video stream is already running.");
+
+        // Short exposures suit streaming; cap so a long requested exposure
+        // doesn't make the whole test crawl.
+        double exposure = Math.Clamp(req.CameraExposure <= 0 ? 0.05 : req.CameraExposure, 0.0, 5.0);
+        const int sampleSeconds = 5;
+        try {
+            _cameraStream.Start(new StreamConfig(ExposureSeconds: exposure, Gain: req.CameraGain));
+            // Sample for a fixed window, bailing out early on cancellation.
+            for (int i = 0; i < sampleSeconds * 10; i++) {
+                ct.ThrowIfCancellationRequested();
+                await Task.Delay(100, ct);
+            }
+
+            double captureFps = _cameraStream.Fps;
+            double transmitFps = _cameraStream.TransmitFps;
+            int w = _cameraStream.LastFrameWidth;
+            int h = _cameraStream.LastFrameHeight;
+            long raw = _cameraStream.LastFrameRawBytes;
+            long frames = _cameraStream.FrameCount;
+            string mode = _cameraStream.Mode;
+            double mbps = raw > 0 && captureFps > 0
+                ? (raw / (1024.0 * 1024.0)) * captureFps : 0;
+
+            return new CameraVideoResult(
+                Mode: mode,
+                CaptureFps: Math.Round(captureFps, 2),
+                TransmitFps: Math.Round(transmitFps, 2),
+                Width: w,
+                Height: h,
+                MBPerSec: Math.Round(mbps, 1),
+                Frames: frames,
+                DurationSec: sampleSeconds,
+                Error: null);
+        } catch (OperationCanceledException) {
+            throw;
+        } catch (Exception ex) {
+            return new CameraVideoResult("idle", 0, 0, 0, 0, 0, 0, 0, ex.Message);
+        } finally {
+            try { await _cameraStream.StopAsync(); }
+            catch (Exception ex) { _logger.LogDebug(ex, "Benchmark: stopping video stream failed"); }
+        }
+    }
+
     // ----- composite + synthetic frame generation -----
 
     private static double ComputeComposite(StackingResult s, EncodeResult e, CpuResult c) {
@@ -530,6 +590,11 @@ public record CameraResult(
     int Frames, double MeanCaptureMs, double Fps,
     int Width, int Height, double MBPerSec, string? Error);
 
+public record CameraVideoResult(
+    string Mode, double CaptureFps, double TransmitFps,
+    int Width, int Height, double MBPerSec,
+    long Frames, int DurationSec, string? Error);
+
 public record BenchmarkResult(
     string Timestamp,
     BenchmarkDevice Device,
@@ -538,4 +603,5 @@ public record BenchmarkResult(
     EncodeResult Encode,
     CpuResult Cpu,
     double CompositeScore,
-    CameraResult? Camera);
+    CameraResult? Camera,
+    CameraVideoResult? CameraVideo = null);

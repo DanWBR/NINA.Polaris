@@ -48,11 +48,22 @@ the equation and measures only the computer.
 ### Optional: measure the connected camera
 
 If you do want to see real capture timing, tick **Also measure the
-connected camera** before running (and set an exposure/gain). Polaris will
-time a few real exposures and report the mean capture time, achievable
-frame rate and frame size. These numbers are **camera-dependent** and are
-shown separately — do not use them to compare different computers unless
-you move the same camera between them.
+connected camera** before running (and set an exposure/gain). Polaris
+then runs two camera measurements:
+
+- **Capture** — times a few real still exposures and reports the mean
+  capture time, achievable frame rate and frame size.
+- **Video stream** — starts the live video stream (the camera's native
+  video mode when supported, otherwise the server capture loop), runs it
+  for a few seconds, and reports the achieved **capture FPS**, the
+  **transmitted FPS** (the downscaled JPEG actually sent to the browser),
+  the frame size and the raw on-wire MB/s. This is the number that tells
+  you how smooth the live view will be on a given board.
+
+These numbers are **camera-dependent** and are shown separately — do not
+use them to compare different computers unless you move the same camera
+between them. The video-stream test needs the live stream and the regular
+video tab to be stopped first.
 
 ## Comparing your machines
 

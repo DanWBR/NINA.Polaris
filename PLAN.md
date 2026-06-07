@@ -12348,3 +12348,20 @@ ICamera.CaptureAsync, BaseImageData.
 
 ### Operator note
 Rebuild the .deb (backend changed); web cache-bust covers the frontend.
+
+---
+
+## BENCH-VID: camera video-streaming measurement
+
+Added a video-streaming test to the optional live-camera section of the
+benchmark. When "Also measure the connected camera" is on, after the
+still-capture timing it now starts CameraStreamService (native
+CCD_VIDEO_STREAM when supported, else the server loop), samples ~5s, and
+reports capture FPS, transmitted (downscaled-JPEG) FPS, frame size and
+raw on-wire MB/s, then stops the stream. Camera/USB dependent, reported
+separately, not part of the host composite score.
+
+Files: `Services/BenchmarkService.cs` (RunCameraVideoWorkloadAsync +
+CameraVideoResult DTO + BenchmarkResult.CameraVideo; reuses the already-
+injected CameraStreamService), `wwwroot/index.html` (camera-video rows in
+the results table; cache-bust 20260607-benchvid), `docs/user-guide/benchmark.md`.
