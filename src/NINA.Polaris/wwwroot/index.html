@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260607-holdrepeat">
+    <link rel="stylesheet" href="/css/app.css?v=20260607-focushold">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -2054,15 +2054,27 @@
                          buttons (SLOW + FAST) plus the live position
                          readout in the middle. -->
                     <div class="stepper stepper-compact">
-                        <button class="btn" @click="focusMove(-focusStepFast)" :disabled="!focusConnected"
-                                :title="'Move OUT by ' + focusStepFast + ' steps (FAST)'">&laquo;</button>
-                        <button class="btn" @click="focusMove(-focusStepSlow)" :disabled="!focusConnected"
-                                :title="'Move OUT by ' + focusStepSlow + ' steps (SLOW)'">&lt;</button>
+                        <button class="btn" style="touch-action:none" :disabled="!focusConnected"
+                                @pointerdown.prevent="startFocusNudgeRepeat(-focusStepFast)"
+                                @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
+                                @pointercancel="stopFocusNudgeRepeat()"
+                                :title="'Move OUT by ' + focusStepFast + ' steps (FAST, hold to repeat)'">&laquo;</button>
+                        <button class="btn" style="touch-action:none" :disabled="!focusConnected"
+                                @pointerdown.prevent="startFocusNudgeRepeat(-focusStepSlow)"
+                                @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
+                                @pointercancel="stopFocusNudgeRepeat()"
+                                :title="'Move OUT by ' + focusStepSlow + ' steps (SLOW, hold to repeat)'">&lt;</button>
                         <span class="stepper-value" x-text="focusPosition">0</span>
-                        <button class="btn" @click="focusMove(focusStepSlow)" :disabled="!focusConnected"
-                                :title="'Move IN by ' + focusStepSlow + ' steps (SLOW)'">&gt;</button>
-                        <button class="btn" @click="focusMove(focusStepFast)" :disabled="!focusConnected"
-                                :title="'Move IN by ' + focusStepFast + ' steps (FAST)'">&raquo;</button>
+                        <button class="btn" style="touch-action:none" :disabled="!focusConnected"
+                                @pointerdown.prevent="startFocusNudgeRepeat(focusStepSlow)"
+                                @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
+                                @pointercancel="stopFocusNudgeRepeat()"
+                                :title="'Move IN by ' + focusStepSlow + ' steps (SLOW, hold to repeat)'">&gt;</button>
+                        <button class="btn" style="touch-action:none" :disabled="!focusConnected"
+                                @pointerdown.prevent="startFocusNudgeRepeat(focusStepFast)"
+                                @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
+                                @pointercancel="stopFocusNudgeRepeat()"
+                                :title="'Move IN by ' + focusStepFast + ' steps (FAST, hold to repeat)'">&raquo;</button>
                     </div>
                     <!-- Inline meta strip: SLOW/FAST inputs use
                          label-on-the-left so each occupies ~110 px
@@ -2559,10 +2571,16 @@
                              not snap the thumb under your finger; the move
                              commits on release (@change). -->
                         <div class="control-row preview-focus-slider-row" style="align-items:center; gap:6px">
-                            <button class="btn btn-sm" @click="focusMove(-focusStepFast)"
-                                    :disabled="focusMoving" :title="'Out ' + focusStepFast + ' (fast)'">&laquo;</button>
-                            <button class="btn btn-sm" @click="focusMove(-focusStepSlow)"
-                                    :disabled="focusMoving" :title="'Out ' + focusStepSlow + ' (slow)'">&lt;</button>
+                            <button class="btn btn-sm" style="touch-action:none" :disabled="focusMoving"
+                                    @pointerdown.prevent="startFocusNudgeRepeat(-focusStepFast)"
+                                    @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
+                                    @pointercancel="stopFocusNudgeRepeat()"
+                                    :title="'Out ' + focusStepFast + ' (fast, hold to repeat)'">&laquo;</button>
+                            <button class="btn btn-sm" style="touch-action:none" :disabled="focusMoving"
+                                    @pointerdown.prevent="startFocusNudgeRepeat(-focusStepSlow)"
+                                    @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
+                                    @pointercancel="stopFocusNudgeRepeat()"
+                                    :title="'Out ' + focusStepSlow + ' (slow, hold to repeat)'">&lt;</button>
                             <input type="range" class="focus-slider" style="flex:1 1 auto; min-width:60px"
                                    min="0" :max="focusMaxPosition > 0 ? focusMaxPosition : 100000" step="1"
                                    :value="focusSliderDirty ? focusSliderTarget : focusPosition"
@@ -2570,10 +2588,16 @@
                                    @input="focusSliderTarget = +$event.target.value; focusSliderDirty = true"
                                    @change="focusMoveTo(focusSliderTarget); focusSliderDirty = false"
                                    title="Drag to focus position">
-                            <button class="btn btn-sm" @click="focusMove(focusStepSlow)"
-                                    :disabled="focusMoving" :title="'In ' + focusStepSlow + ' (slow)'">&gt;</button>
-                            <button class="btn btn-sm" @click="focusMove(focusStepFast)"
-                                    :disabled="focusMoving" :title="'In ' + focusStepFast + ' (fast)'">&raquo;</button>
+                            <button class="btn btn-sm" style="touch-action:none" :disabled="focusMoving"
+                                    @pointerdown.prevent="startFocusNudgeRepeat(focusStepSlow)"
+                                    @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
+                                    @pointercancel="stopFocusNudgeRepeat()"
+                                    :title="'In ' + focusStepSlow + ' (slow, hold to repeat)'">&gt;</button>
+                            <button class="btn btn-sm" style="touch-action:none" :disabled="focusMoving"
+                                    @pointerdown.prevent="startFocusNudgeRepeat(focusStepFast)"
+                                    @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
+                                    @pointercancel="stopFocusNudgeRepeat()"
+                                    :title="'In ' + focusStepFast + ' (fast, hold to repeat)'">&raquo;</button>
                         </div>
                         <!-- Type an absolute position + Goto. -->
                         <div class="control-row preview-focus-goto-row" style="align-items:center; gap:6px; margin-top:4px">
@@ -12014,7 +12038,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260607-holdrepeat"></script>
+    <script src="/js/app.js?v=20260607-focushold"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

@@ -14643,6 +14643,42 @@ function ninaApp() {
             }
         },
 
+        // Press-and-hold auto-repeat for the focus nudge buttons (« ‹ › »
+        // in FOCUS + PREVIEW). Each tick accumulates into focusSliderTarget
+        // for immediate slider feedback (no per-tick API call); a single
+        // absolute move is sent on release, so holding ramps focus quickly
+        // without spamming the focuser endpoint. A single tap = one nudge.
+        startFocusNudgeRepeat(delta) {
+            this.stopFocusNudgeRepeat();
+            this._focusNudgePending = false;
+            this._focusNudgeTick(delta);
+            this._focusNudgeTimer = setTimeout(() => {
+                this._focusNudgeInterval = setInterval(() => this._focusNudgeTick(delta), 80);
+            }, 400);
+        },
+
+        _focusNudgeTick(delta) {
+            if (this.focusMoving) return;
+            const base = this.focusSliderDirty ? this.focusSliderTarget : this.focusPosition;
+            let p = (base | 0) + delta;
+            p = this.focusMaxPosition > 0
+                ? Math.min(this.focusMaxPosition, Math.max(0, p))
+                : Math.max(0, p);
+            this.focusSliderTarget = p;
+            this.focusSliderDirty = true;
+            this._focusNudgePending = true;
+        },
+
+        stopFocusNudgeRepeat() {
+            if (this._focusNudgeTimer) { clearTimeout(this._focusNudgeTimer); this._focusNudgeTimer = null; }
+            if (this._focusNudgeInterval) { clearInterval(this._focusNudgeInterval); this._focusNudgeInterval = null; }
+            if (this._focusNudgePending) {
+                this._focusNudgePending = false;
+                this.focusMoveTo(this.focusSliderTarget);
+                this.focusSliderDirty = false;
+            }
+        },
+
         async focusMoveTo(position) {
             try {
                 await this.apiPost('/api/focuser/move/absolute', { position });
