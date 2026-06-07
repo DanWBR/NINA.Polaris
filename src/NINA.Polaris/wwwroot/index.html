@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260606-wifiap">
+    <link rel="stylesheet" href="/css/app.css?v=20260606-benchmark">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -9118,6 +9118,129 @@
                     </div>
                 </div>
 
+                <div class="settings-section" x-init="loadBenchmark()">
+                    <h3><span class="settings-card-icon">📊</span>Hardware benchmark</h3>
+                    <p class="hint" style="margin-top:0">
+                        Measures how fast this machine runs the Polaris image
+                        pipeline (stacking, capture/video encode) plus a raw
+                        CPU/memory test, so you can compare different boards
+                        (Raspberry Pi, Orange Pi, mini-PC, etc.). The synthetic
+                        test runs the same fixed workload everywhere, so the
+                        scores are directly comparable. No camera needed.
+                    </p>
+
+                    <label class="checkbox-label" style="margin-top:4px"
+                           title="Also time real exposures from the connected camera. Camera/USB dependent, so not comparable across machines.">
+                        <input type="checkbox" x-model="benchIncludeCamera">
+                        Also measure the connected camera (not comparable across machines)
+                    </label>
+                    <div x-show="benchIncludeCamera" style="display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 2px 22px">
+                        <label class="hint">Exposure (s)
+                            <input type="number" min="0" step="0.1" x-model.number="benchExposure"
+                                   style="width:70px;margin-left:4px">
+                        </label>
+                        <label class="hint">Gain
+                            <input type="number" min="0" x-model.number="benchGain" placeholder="auto"
+                                   style="width:70px;margin-left:4px">
+                        </label>
+                    </div>
+
+                    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+                        <button class="btn btn-primary btn-sm"
+                                :disabled="bench.state === 'running'"
+                                @click="runBenchmark()"
+                                x-text="bench.state === 'running' ? 'Running…' : '▶ Run benchmark'"></button>
+                        <button class="btn btn-sm" x-show="bench.state === 'running'"
+                                @click="cancelBenchmark()">Cancel</button>
+                        <button class="btn btn-sm" @click="loadBenchmark()">↻ Refresh</button>
+                    </div>
+
+                    <div x-show="bench.state === 'running'" style="margin-top:10px">
+                        <div class="hint" x-text="(bench.phase || 'Working') + '… ' + (bench.progress || 0) + '%'"></div>
+                        <div style="width:100%;height:6px;background:var(--border,#333);border-radius:3px;overflow:hidden;margin-top:4px">
+                            <div style="height:100%;background:var(--accent,#3a9);border-radius:3px;transition:width .3s"
+                                 :style="'width:' + (bench.progress || 0) + '%'"></div>
+                        </div>
+                    </div>
+
+                    <template x-if="bench.lastResult">
+                        <div style="margin-top:14px">
+                            <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+                                <span style="font-size:26px;font-weight:700"
+                                      x-text="Math.round(bench.lastResult.compositeScore)"></span>
+                                <span class="hint">Polaris score
+                                    (<strong x-text="bench.lastResult.device?.shortLabel || bench.lastResult.device?.model || 'this device'"></strong>,
+                                    <span x-text="bench.lastResult.device?.cores + ' cores'"></span>)
+                                </span>
+                            </div>
+                            <table style="width:100%;font-size:12px;margin-top:8px;border-collapse:collapse">
+                                <tr><td colspan="2" style="padding-top:6px"><strong>Stacking</strong>
+                                    (<span x-text="bench.lastResult.megapixels"></span> MP frames)</td></tr>
+                                <tr><td class="hint" style="padding-left:10px">Throughput</td>
+                                    <td><span x-text="bench.lastResult.stacking.fps"></span> fps ·
+                                        <span x-text="bench.lastResult.stacking.mpxPerSec"></span> Mpx/s</td></tr>
+                                <tr><td class="hint" style="padding-left:10px">Detect / align / resample / stats (ms)</td>
+                                    <td><span x-text="bench.lastResult.stacking.detectMs"></span> /
+                                        <span x-text="bench.lastResult.stacking.matchMs"></span> /
+                                        <span x-text="bench.lastResult.stacking.resampleMs"></span> /
+                                        <span x-text="bench.lastResult.stacking.statsMs"></span></td></tr>
+
+                                <tr><td colspan="2" style="padding-top:6px"><strong>Capture / video encode</strong></td></tr>
+                                <tr><td class="hint" style="padding-left:10px">Throughput</td>
+                                    <td><span x-text="bench.lastResult.encode.fps"></span> fps ·
+                                        <span x-text="bench.lastResult.encode.mpxPerSec"></span> Mpx/s</td></tr>
+                                <tr><td class="hint" style="padding-left:10px">Debayer / JPEG / LZ4 (ms)</td>
+                                    <td><span x-text="bench.lastResult.encode.debayerMs"></span> /
+                                        <span x-text="bench.lastResult.encode.jpegMs"></span> /
+                                        <span x-text="bench.lastResult.encode.lz4Ms"></span>
+                                        (<span x-text="bench.lastResult.encode.lz4MBps"></span> MB/s)</td></tr>
+
+                                <tr><td colspan="2" style="padding-top:6px"><strong>CPU / memory</strong></td></tr>
+                                <tr><td class="hint" style="padding-left:10px">Single / multi-thread (MFLOPS)</td>
+                                    <td><span x-text="bench.lastResult.cpu.singleThreadMflops"></span> /
+                                        <span x-text="bench.lastResult.cpu.multiThreadMflops"></span>
+                                        (<span x-text="bench.lastResult.cpu.coreScaling"></span>× scaling)</td></tr>
+                                <tr><td class="hint" style="padding-left:10px">Memory bandwidth</td>
+                                    <td><span x-text="bench.lastResult.cpu.memBandwidthGBps"></span> GB/s</td></tr>
+
+                                <template x-if="bench.lastResult.camera">
+                                    <tr><td colspan="2" style="padding-top:6px"><strong>Camera</strong>
+                                        <span class="hint">(camera-dependent)</span></td></tr>
+                                </template>
+                                <template x-if="bench.lastResult.camera && !bench.lastResult.camera.error">
+                                    <tr><td class="hint" style="padding-left:10px">Capture</td>
+                                        <td><span x-text="bench.lastResult.camera.meanCaptureMs"></span> ms ·
+                                            <span x-text="bench.lastResult.camera.fps"></span> fps ·
+                                            <span x-text="bench.lastResult.camera.width + '×' + bench.lastResult.camera.height"></span></td></tr>
+                                </template>
+                                <template x-if="bench.lastResult.camera && bench.lastResult.camera.error">
+                                    <tr><td class="hint" style="padding-left:10px">Camera</td>
+                                        <td class="text-warn" x-text="bench.lastResult.camera.error"></td></tr>
+                                </template>
+                            </table>
+                        </div>
+                    </template>
+
+                    <template x-if="bench.history && bench.history.length">
+                        <div style="margin-top:14px">
+                            <div class="hint" style="margin-bottom:4px">History (this device's recent runs)</div>
+                            <table style="width:100%;font-size:12px;border-collapse:collapse">
+                                <template x-for="(h, i) in bench.history.slice(0, 10)" :key="i">
+                                    <tr>
+                                        <td x-text="benchTimeLabel(h.timestamp)"></td>
+                                        <td x-text="(h.device?.shortLabel || h.device?.model || '')"></td>
+                                        <td style="text-align:right;font-weight:600" x-text="Math.round(h.compositeScore)"></td>
+                                    </tr>
+                                </template>
+                            </table>
+                            <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+                                <button class="btn btn-sm" @click="exportBenchmark()">⤓ Export JSON</button>
+                                <button class="btn btn-sm btn-danger" @click="clearBenchmarkHistory()">🗑 Clear history</button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
                 <div class="settings-section">
                     <h3><span class="settings-card-icon">⚙</span>Hardware</h3>
                     <label class="checkbox-label" title="When Polaris starts up, automatically connect to INDI, run an Alpaca discovery on the local network, and connect every device saved on the active rig. Toasts surface each step.">
@@ -11703,7 +11826,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260606-wifiap"></script>
+    <script src="/js/app.js?v=20260606-benchmark"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

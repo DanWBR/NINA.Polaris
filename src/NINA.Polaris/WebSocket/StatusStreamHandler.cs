@@ -47,6 +47,7 @@ public static class StatusStreamHandler {
         var simulator = context.RequestServices
             .GetRequiredService<NINA.Polaris.Services.Simulator.SimulatorService>();
         var network = context.RequestServices.GetRequiredService<NetworkManagerService>();
+        var benchmark = context.RequestServices.GetRequiredService<BenchmarkService>();
         var notifications = context.RequestServices.GetRequiredService<NotificationService>();
         var polarAlign = context.RequestServices.GetRequiredService<PolarAlignmentService>();
         var logService = context.RequestServices.GetRequiredService<NINA.Polaris.Services.Logging.LogService>();
@@ -468,6 +469,13 @@ public static class StatusStreamHandler {
                             // show "Hotspot started automatically".
                             autoHotspotFallback = network.AutoHotspotFallback,
                             fallbackEngaged     = network.HotspotFallbackEngaged
+                        },
+                        // BENCH: compact progress for the Settings card.
+                        // Full results are fetched over REST.
+                        benchmark = new {
+                            state    = benchmark.State,
+                            progress = benchmark.Progress,
+                            phase    = benchmark.Phase
                         },
                         // PA-4: TPPA orchestrator state. CurrentJob is
                         // null until the user clicks Start; serialise a

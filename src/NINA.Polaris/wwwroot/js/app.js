@@ -2334,6 +2334,15 @@ function ninaApp() {
         cacheStats: null,
         cacheClearing: false,
 
+        // BENCH: hardware benchmark card. `bench.state/progress/phase`
+        // are fed from the WS status; lastResult + history are pulled
+        // over REST after a run finishes (or on first open).
+        bench: { state: 'idle', progress: 0, phase: '', lastResult: null, history: [] },
+        benchIncludeCamera: false,
+        benchExposure: 1.0,
+        benchGain: null,
+        _benchWasRunning: false,
+
         // End-of-run actions (post-sequence housekeeping). Default = nothing.
         // Mirrors the SequenceEndActions DTO on the server.
         endActions: {
@@ -11162,6 +11171,90 @@ function ninaApp() {
             } finally {
                 this.cacheClearing = false;
             }
+        },
+
+        // ─── BENCH: hardware benchmark ─────────────────────────────────
+        async loadBenchmark() {
+            try {
+                const st = await this.apiGet('/api/benchmark/status');
+                if (st) {
+                    this.bench.state = st.state ?? this.bench.state;
+                    this.bench.progress = st.progress ?? 0;
+                    this.bench.phase = st.phase ?? '';
+                    this.bench.lastResult = st.lastResult ?? this.bench.lastResult;
+                }
+                this.bench.history = (await this.apiGet('/api/benchmark/history')) || [];
+            } catch (e) { /* leave card as-is */ }
+        },
+
+        async runBenchmark() {
+            if (this.bench.state === 'running') return;
+            const body = {
+                includeCamera: !!this.benchIncludeCamera,
+                cameraExposure: Number(this.benchExposure) || 1.0,
+                cameraGain: (this.benchGain === null || this.benchGain === '')
+                    ? null : Number(this.benchGain),
+                cameraFrames: 5
+            };
+            try {
+                const r = await this.apiPost('/api/benchmark/run', body);
+                if (r && !r.ok) {
+                    let msg = 'Could not start benchmark';
+                    try { const d = await r.json(); if (d && d.error) msg = d.error; } catch {}
+                    this.toast(msg, 'error');
+                    return;
+                }
+                this.bench.state = 'running';
+                this.bench.progress = 0;
+                this._benchWasRunning = true;
+                this.toast('Benchmark started', 'info');
+            } catch (e) {
+                this.toast('Benchmark error: ' + (e.message || ''), 'error');
+            }
+        },
+
+        async cancelBenchmark() {
+            try { await this.apiPost('/api/benchmark/cancel'); } catch {}
+        },
+
+        async exportBenchmark() {
+            try {
+                const resp = await this.apiFetch('/api/benchmark/export');
+                if (!resp || !resp.ok) { this.toast('Export failed', 'error'); return; }
+                const blob = await resp.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'polaris-benchmarks.json';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            } catch (e) {
+                this.toast('Export failed: ' + (e.message || ''), 'error');
+            }
+        },
+
+        async clearBenchmarkHistory() {
+            const ok = await this._confirmAsync(
+                'Clear benchmark history?',
+                'Removes all saved benchmark runs on this device. This cannot be undone.',
+                'Clear history');
+            if (!ok) return;
+            try {
+                const r = await this.apiFetch('/api/benchmark/history', { method: 'DELETE' });
+                if (r && r.ok) {
+                    this.bench.history = [];
+                    this.toast('Benchmark history cleared', 'success');
+                }
+            } catch (e) {
+                this.toast('Failed to clear history: ' + (e.message || ''), 'error');
+            }
+        },
+
+        benchTimeLabel(iso) {
+            if (!iso) return '';
+            try { return new Date(iso).toLocaleString(); } catch { return iso; }
         },
 
         // Part B4: one-click meridian flip from the LIVE panel. The server
@@ -21243,6 +21336,18 @@ function ninaApp() {
                 // Preserve last-known values so the button label stays
                 // readable while the stream service initialises.
                 this.cameraStream = Object.assign({}, this.cameraStream, msg.cameraStream);
+            }
+            // BENCH: live progress for the Settings card. When a run
+            // finishes, pull the full result + history once over REST.
+            if (msg.benchmark) {
+                this.bench.state = msg.benchmark.state;
+                this.bench.progress = msg.benchmark.progress;
+                this.bench.phase = msg.benchmark.phase;
+                if (msg.benchmark.state === 'running') this._benchWasRunning = true;
+                else if (this._benchWasRunning) {
+                    this._benchWasRunning = false;
+                    this.loadBenchmark();
+                }
             }
             // KC-1: Keep Centered loop status. Always emitted (running
             // = false when idle) so the VIDEO sidebar button can react

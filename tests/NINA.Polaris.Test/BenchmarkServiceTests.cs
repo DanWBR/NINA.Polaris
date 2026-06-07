@@ -1,0 +1,144 @@
+using System.Text.Json;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
+using NUnit.Framework;
+using NINA.Polaris.Services;
+
+namespace NINA.Polaris.Test;
+
+/// <summary>
+/// Unit tests for the synthetic benchmark workloads + the results store.
+/// The workload methods are internal static so they can run on a small
+/// frame with a tiny time budget here without spinning up the full
+/// service graph. Determinism of the synthetic frame generator is the
+/// load-bearing property: it is what makes the score comparable across
+/// machines.
+/// </summary>
+[TestFixture]
+public class BenchmarkServiceTests {
+
+    private readonly List<string> _tempDirs = new();
+
+    [TearDown]
+    public void Cleanup() {
+        foreach (var d in _tempDirs) {
+            try { Directory.Delete(d, true); } catch { }
+        }
+        _tempDirs.Clear();
+    }
+
+    // ----- synthetic frame generator -----
+
+    [Test]
+    public void GenerateStarField_SameSeed_IsDeterministic() {
+        var a = BenchmarkService.GenerateStarField(256, 256, 0x5EED, 0, 0);
+        var b = BenchmarkService.GenerateStarField(256, 256, 0x5EED, 0, 0);
+        Assert.That(a.Length, Is.EqualTo(256 * 256));
+        Assert.That(a, Is.EqualTo(b), "same seed must yield identical pixels");
+    }
+
+    [Test]
+    public void GenerateStarField_DifferentShift_DiffersButHasStars() {
+        var a = BenchmarkService.GenerateStarField(256, 256, 0x5EED, 0, 0);
+        var b = BenchmarkService.GenerateStarField(256, 256, 0x5EED, 7, -5);
+        Assert.That(a, Is.Not.EqualTo(b), "a shifted field must differ");
+        // The field must actually contain bright stars above the
+        // background, otherwise the stacking workload has nothing to do.
+        ushort max = 0;
+        foreach (var v in a) if (v > max) max = v;
+        Assert.That(max, Is.GreaterThan(2000));
+    }
+
+    // ----- workloads return positive, finite metrics -----
+
+    [Test]
+    public void StackingWorkload_ProducesPositiveThroughput() {
+        var r = BenchmarkService.RunStackingWorkload(
+            512, 512, TimeSpan.FromMilliseconds(200), CancellationToken.None);
+        Assert.That(r.Iterations, Is.GreaterThanOrEqualTo(2));
+        Assert.That(r.Fps, Is.GreaterThan(0));
+        Assert.That(r.MpxPerSec, Is.GreaterThan(0));
+        Assert.That(r.TotalMs, Is.GreaterThan(0));
+        Assert.That(r.StarCount, Is.GreaterThan(0), "synthetic field must yield detectable stars");
+        Assert.That(double.IsFinite(r.Fps));
+    }
+
+    [Test]
+    public void EncodeWorkload_ProducesPositiveThroughput() {
+        var r = BenchmarkService.RunEncodeWorkload(
+            512, 512, TimeSpan.FromMilliseconds(200), CancellationToken.None);
+        Assert.That(r.Iterations, Is.GreaterThanOrEqualTo(2));
+        Assert.That(r.Fps, Is.GreaterThan(0));
+        Assert.That(r.MpxPerSec, Is.GreaterThan(0));
+        Assert.That(r.Lz4MBps, Is.GreaterThan(0));
+        Assert.That(double.IsFinite(r.Fps));
+    }
+
+    [Test]
+    public void CpuWorkload_ProducesPositiveScores() {
+        var r = BenchmarkService.RunCpuWorkload(CancellationToken.None);
+        Assert.That(r.Cores, Is.GreaterThanOrEqualTo(1));
+        Assert.That(r.SingleThreadMflops, Is.GreaterThan(0));
+        Assert.That(r.MultiThreadMflops, Is.GreaterThan(0));
+        Assert.That(r.MemBandwidthGBps, Is.GreaterThan(0));
+        Assert.That(r.CoreScaling, Is.GreaterThan(0));
+    }
+
+    // ----- results store round-trip -----
+
+    private BenchmarkResultsStore NewStore() {
+        var dir = Path.Combine(Path.GetTempPath(), "polaris-bench-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        _tempDirs.Add(dir);
+        var cfg = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> {
+                ["Profiles:Directory"] = dir
+            })
+            .Build();
+        var profiles = new ProfileService(cfg, NullLogger<ProfileService>.Instance);
+        return new BenchmarkResultsStore(profiles, NullLogger<BenchmarkResultsStore>.Instance);
+    }
+
+    private static BenchmarkResult SampleResult(double score) => new(
+        Timestamp: DateTime.UtcNow.ToString("o"),
+        Device: new BenchmarkDevice("raspberry-pi", "Raspberry Pi 5", "Linux", "arm64", 4, "Raspberry Pi 5", "ARM Cortex-A76", null),
+        FrameWidth: 4096, FrameHeight: 4096, Megapixels: 16.78,
+        Stacking: new StackingResult(10, 1, 20, 5, 36, 27.7, 465, 6, 400),
+        Encode: new EncodeResult(15, 25, 8, 48, 20.8, 349, 1000, 6),
+        Cpu: new CpuResult(1200, 4200, 3.5, 5.2, 4),
+        CompositeScore: score,
+        Camera: null);
+
+    [Test]
+    public async Task Store_SaveLoad_RoundTrips() {
+        var store = NewStore();
+        await store.SaveResultAsync(SampleResult(101.5));
+        var history = store.LoadHistory();
+        Assert.That(history, Has.Count.EqualTo(1));
+        Assert.That(history[0].CompositeScore, Is.EqualTo(101.5));
+        Assert.That(history[0].Device.Model, Is.EqualTo("Raspberry Pi 5"));
+        Assert.That(history[0].Stacking.Fps, Is.EqualTo(27.7));
+    }
+
+    [Test]
+    public async Task Store_Export_IsValidJsonArray() {
+        var store = NewStore();
+        await store.SaveResultAsync(SampleResult(50));
+        await store.SaveResultAsync(SampleResult(60));
+        var bytes = store.ExportAllJson();
+        var parsed = JsonSerializer.Deserialize<List<BenchmarkResult>>(bytes,
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.That(parsed, Is.Not.Null);
+        Assert.That(parsed!, Has.Count.EqualTo(2));
+    }
+
+    [Test]
+    public async Task Store_Clear_RemovesAll() {
+        var store = NewStore();
+        await store.SaveResultAsync(SampleResult(1));
+        await store.SaveResultAsync(SampleResult(2));
+        var cleared = store.ClearHistory();
+        Assert.That(cleared, Is.EqualTo(2));
+        Assert.That(store.LoadHistory(), Is.Empty);
+    }
+}

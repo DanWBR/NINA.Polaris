@@ -12297,3 +12297,54 @@ updated bootstrap (delete `/var/lib/polaris/wifi-bootstrap.done` and
 the old `polaris-hotspot` connection to re-seed, or set the priority
 manually with `nmcli connection modify polaris-hotspot
 connection.autoconnect-priority -10`).
+
+---
+
+## BENCH: Hardware benchmark (capture/video + stacking + CPU)
+
+### Goal
+Let the user compare the performance of different host machines (RPi5,
+RPi4, Orange Pi 5 Pro, Intel PC stick) from inside Polaris, focused on
+image/video capture and frame stacking, shown in the UI.
+
+### Approach
+Deterministic *synthetic* benchmark (fair, hardware-comparable, no camera)
+plus an optional *live-camera* measurement. The synthetic suite runs the
+real Polaris code paths over a fixed in-memory star field so every device
+runs the identical workload; results normalise to Mpx/s + a composite
+"Polaris score". Real-camera numbers are reported separately and labelled
+camera-dependent (camera/USB dominated, not host-comparable).
+
+### Workloads
+- **Stacking**: StarDetector.Detect -> StarMatcher.Match -> ImageResampler
+  .ApplyTransform -> accumulate -> ImageStatistics SNR.
+- **Capture/video encode**: BayerDebayer.Bilinear + FitsThumbnailer
+  .RenderJpegFromImageData + ImageBuffer.ToLz4Compressed.
+- **CPU/memory**: single- vs multi-thread float throughput (+ core
+  scaling) + memory bandwidth.
+Each workload is time-budgeted (~3s) with a warmup; metrics are per-frame
+ms, fps and Mpx/s. Frame fixed at 4096x4096 for comparability.
+
+### Files
+- New `Services/BenchmarkService.cs` (on-demand, not hosted; internal
+  static workloads + deterministic GenerateStarField; optional camera via
+  EquipmentManager.Camera; guards against running during live stack /
+  stream), `Services/BenchmarkResultsStore.cs` (JSON history under
+  {ProfileService.DataDir}/benchmarks/), `Endpoints/BenchmarkEndpoints.cs`
+  (/api/benchmark status/run/cancel/history/export/clear),
+  `tests/.../BenchmarkServiceTests.cs` (8 tests: determinism, workload
+  metrics, store round-trip/export/clear).
+- Edit `Program.cs` (DI + map), `WebSocket/StatusStreamHandler.cs`
+  (benchmark {state,progress,phase}), `wwwroot/index.html` +
+  `wwwroot/js/app.js` (Settings card + Alpine methods + cache-bust
+  20260606-benchmark), `docs/user-guide/benchmark.md`.
+
+### Reused (not reimplemented)
+HostInfo.Current, StarDetector/StarMatcher/ImageResampler/AffineTransform,
+ImageStatistics.ComputeBackgroundSnrFromData, BayerDebayer.Bilinear,
+AutoStretch, ImageBuffer.ToLz4Compressed,
+FitsThumbnailer.RenderJpegFromImageData, ProfileService.DataDir,
+ICamera.CaptureAsync, BaseImageData.
+
+### Operator note
+Rebuild the .deb (backend changed); web cache-bust covers the frontend.

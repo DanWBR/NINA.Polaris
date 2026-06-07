@@ -1,0 +1,523 @@
+using System.Diagnostics;
+using NINA.Core.Enum;
+using NINA.Image.ImageAnalysis;
+using NINA.Image.ImageData;
+using NINA.Image.Interfaces;
+using NINA.Polaris.Services.Studio;
+
+namespace NINA.Polaris.Services;
+
+/// <summary>
+/// On-demand hardware benchmark. Runs the *real* Polaris processing code
+/// paths (star detection + alignment + resample for stacking, debayer +
+/// autostretch + JPEG + LZ4 for the capture/video stream) over a
+/// deterministic, in-memory synthetic frame, plus a raw CPU/memory
+/// micro-bench, and reports throughput so the user can compare the
+/// performance of different host machines (e.g. a Raspberry Pi 5 vs a
+/// Pi 4 vs an Orange Pi 5 Pro vs an Intel mini-PC).
+///
+/// Why synthetic? Real-camera capture throughput is dominated by the
+/// camera + USB link, not the host, so it is NOT comparable across
+/// boards. The synthetic suite isolates the host CPU/RAM and runs the
+/// identical workload everywhere, so the numbers are directly
+/// comparable. An optional live-camera measurement is reported
+/// separately and clearly labelled as camera-dependent.
+///
+/// Not a hosted service: it does nothing until <see cref="Start"/> is
+/// called from the Settings UI. Work runs on a background task; progress
+/// is surfaced via the /ws/status payload + the REST status endpoint.
+/// </summary>
+public class BenchmarkService {
+    private readonly ILogger<BenchmarkService> _logger;
+    private readonly BenchmarkResultsStore _store;
+    private readonly EquipmentManager _equipment;
+    private readonly CameraStreamService _cameraStream;
+    private readonly LiveStackingService _liveStack;
+
+    private readonly object _gate = new();
+    private CancellationTokenSource? _cts;
+
+    // Fixed workload size: every device runs the identical frame so the
+    // results compare apples to apples. Metrics are also normalised to
+    // Mpx/s so a future size change stays comparable. 4096x4096 = 16.78
+    // MP, in the ballpark of a mid-size OSC sensor.
+    private const int FrameW = 4096;
+    private const int FrameH = 4096;
+    private const int Seed = 0x5EED;
+
+    private static readonly TimeSpan WorkloadBudget = TimeSpan.FromSeconds(3);
+    private const int MinIters = 2;
+    private const int MaxIters = 60;
+
+    // Composite-score baselines (rough Raspberry Pi 5 throughput) so a
+    // Pi 5 scores ~100. Purely relative; the detailed table is the
+    // substance.
+    private const double StackBaselineMpxS = 4.0;
+    private const double EncodeBaselineMpxS = 8.0;
+    private const double CpuBaselineMflops = 1500.0;
+
+    public string State { get; private set; } = "idle"; // idle|running|complete|error
+    public int Progress { get; private set; }
+    public string Phase { get; private set; } = "";
+    public string? LastError { get; private set; }
+    public BenchmarkResult? LastResult { get; private set; }
+
+    public bool IsRunning => State == "running";
+
+    public BenchmarkService(
+        ILogger<BenchmarkService> logger,
+        BenchmarkResultsStore store,
+        EquipmentManager equipment,
+        CameraStreamService cameraStream,
+        LiveStackingService liveStack) {
+        _logger = logger;
+        _store = store;
+        _equipment = equipment;
+        _cameraStream = cameraStream;
+        _liveStack = liveStack;
+    }
+
+    public object GetStatus() => new {
+        state = State,
+        progress = Progress,
+        phase = Phase,
+        lastError = LastError,
+        lastResult = LastResult
+    };
+
+    /// <summary>Kick off a benchmark run on a background task. Returns
+    /// null on success, or an error string if it cannot start (already
+    /// running, or a live capture/stack is active).</summary>
+    public string? Start(BenchmarkRequest req) {
+        lock (_gate) {
+            if (State == "running") return "A benchmark is already running.";
+            if (_liveStack.IsRunning) return "Stop live stacking before running a benchmark.";
+            if (_cameraStream.IsRunning) return "Stop the video stream before running a benchmark.";
+
+            _cts = new CancellationTokenSource();
+            State = "running";
+            Progress = 0;
+            Phase = "Starting";
+            LastError = null;
+            var ct = _cts.Token;
+            _ = Task.Run(() => RunInternalAsync(req ?? new BenchmarkRequest(), ct));
+            return null;
+        }
+    }
+
+    public void Cancel() => _cts?.Cancel();
+
+    private async Task RunInternalAsync(BenchmarkRequest req, CancellationToken ct) {
+        try {
+            SetPhase("Generating frames", 3);
+            // The whole synthetic suite is CPU-bound; run it off the
+            // thread-pool entry so the await chain stays responsive.
+            var (stacking, encode, cpu) = await Task.Run(() => {
+                SetPhase("Stacking pipeline", 10);
+                var s = RunStackingWorkload(FrameW, FrameH, WorkloadBudget, ct);
+                SetPhase("Capture / video encode", 45);
+                var e = RunEncodeWorkload(FrameW, FrameH, WorkloadBudget, ct);
+                SetPhase("CPU / memory", 70);
+                var c = RunCpuWorkload(ct);
+                return (s, e, c);
+            }, ct);
+
+            CameraResult? camera = null;
+            if (req.IncludeCamera) {
+                SetPhase("Live camera", 88);
+                camera = await RunCameraWorkloadAsync(req, ct);
+            }
+
+            var dev = HostInfo.Current;
+            var device = new BenchmarkDevice(
+                dev.Kind, dev.Model, dev.Os, dev.Architecture, dev.Cores,
+                dev.ShortLabel, dev.Cpu, dev.CpuLabel);
+            double mpx = (double)FrameW * FrameH / 1_000_000.0;
+            double composite = ComputeComposite(stacking, encode, cpu);
+
+            var result = new BenchmarkResult(
+                Timestamp: DateTime.UtcNow.ToString("o"),
+                Device: device,
+                FrameWidth: FrameW,
+                FrameHeight: FrameH,
+                Megapixels: Math.Round(mpx, 2),
+                Stacking: stacking,
+                Encode: encode,
+                Cpu: cpu,
+                CompositeScore: Math.Round(composite, 1),
+                Camera: camera);
+
+            try { await _store.SaveResultAsync(result, ct); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to persist benchmark result"); }
+
+            LastResult = result;
+            State = "complete";
+            Progress = 100;
+            Phase = "Done";
+            _logger.LogInformation(
+                "Benchmark complete on {Device}: score {Score}, stacking {Sfps:n1} fps, encode {Efps:n1} fps",
+                device.ShortLabel, composite, stacking.Fps, encode.Fps);
+        } catch (OperationCanceledException) {
+            State = "idle";
+            Progress = 0;
+            Phase = "Cancelled";
+        } catch (Exception ex) {
+            _logger.LogError(ex, "Benchmark failed");
+            LastError = ex.Message;
+            State = "error";
+            Phase = "Error";
+        } finally {
+            lock (_gate) { _cts?.Dispose(); _cts = null; }
+        }
+    }
+
+    private void SetPhase(string phase, int progress) {
+        Phase = phase;
+        Progress = progress;
+    }
+
+    // ----- Workload A: stacking pipeline -----
+
+    internal static StackingResult RunStackingWorkload(int w, int h, TimeSpan budget, CancellationToken ct) {
+        var reference = GenerateStarField(w, h, Seed, 0, 0);
+        // A small known shift so StarMatcher has a real translation to
+        // recover (and ImageResampler real work to do).
+        var current = GenerateStarField(w, h, Seed, 7, -5);
+
+        var detector = new StarDetector();
+        var refStars = detector.Detect(reference, w, h);
+
+        var accum = new float[w * h];
+        var count = new int[w * h];
+
+        // Warmup (JIT + caches) - not measured.
+        {
+            var cur = detector.Detect(current, w, h);
+            var t0 = StarMatcher.Match(refStars, cur, maxSearchRadius: 60);
+            var aligned0 = t0 != null
+                ? ImageResampler.ApplyTransform(current, w, h, t0)
+                : current;
+            Accumulate(accum, count, aligned0);
+            _ = ImageStatistics.ComputeBackgroundSnrFromData(current);
+        }
+
+        double detectMs = 0, matchMs = 0, resampleMs = 0, statsMs = 0;
+        int iters = 0, starCount = refStars.Count;
+        var clock = Stopwatch.StartNew();
+        var sw = new Stopwatch();
+        while (iters < MaxIters && (iters < MinIters || clock.Elapsed < budget)) {
+            ct.ThrowIfCancellationRequested();
+
+            sw.Restart();
+            var curStars = detector.Detect(current, w, h);
+            sw.Stop(); detectMs += sw.Elapsed.TotalMilliseconds;
+            starCount = curStars.Count;
+
+            sw.Restart();
+            var t = StarMatcher.Match(refStars, curStars, maxSearchRadius: 60);
+            sw.Stop(); matchMs += sw.Elapsed.TotalMilliseconds;
+
+            sw.Restart();
+            var aligned = t != null
+                ? ImageResampler.ApplyTransform(current, w, h, t)
+                : current;
+            Accumulate(accum, count, aligned);
+            sw.Stop(); resampleMs += sw.Elapsed.TotalMilliseconds;
+
+            sw.Restart();
+            _ = ImageStatistics.ComputeBackgroundSnrFromData(current);
+            sw.Stop(); statsMs += sw.Elapsed.TotalMilliseconds;
+
+            iters++;
+        }
+
+        double n = Math.Max(1, iters);
+        double totalPerFrame = (detectMs + matchMs + resampleMs + statsMs) / n;
+        double fps = totalPerFrame > 0 ? 1000.0 / totalPerFrame : 0;
+        double mpx = (double)w * h / 1_000_000.0;
+        return new StackingResult(
+            DetectMs: Math.Round(detectMs / n, 2),
+            MatchMs: Math.Round(matchMs / n, 2),
+            ResampleMs: Math.Round(resampleMs / n, 2),
+            StatsMs: Math.Round(statsMs / n, 2),
+            TotalMs: Math.Round(totalPerFrame, 2),
+            Fps: Math.Round(fps, 2),
+            MpxPerSec: Math.Round(mpx * fps, 1),
+            Iterations: iters,
+            StarCount: starCount);
+    }
+
+    private static void Accumulate(float[] accum, int[] count, ushort[] frame) {
+        for (int i = 0; i < frame.Length; i++) {
+            accum[i] += frame[i];
+            count[i]++;
+        }
+    }
+
+    // ----- Workload B: capture / video encode -----
+
+    internal static EncodeResult RunEncodeWorkload(int w, int h, TimeSpan budget, CancellationToken ct) {
+        var frame = GenerateStarField(w, h, Seed, 0, 0);
+        const BayerPatternEnum pattern = BayerPatternEnum.RGGB;
+        var props = new ImageProperties {
+            Width = w, Height = h, BitDepth = 16,
+            IsBayered = true, BayerPattern = pattern, Channels = 1
+        };
+        var img = new BaseImageData(frame, props);
+        var buffer = new ImageBuffer(frame, w, h, 16, pattern);
+        long uncompressedBytes = (long)w * h * 2;
+
+        // Warmup.
+        _ = BayerDebayer.Bilinear(frame, w, h, pattern);
+        _ = FitsThumbnailer.RenderJpegFromImageData(img, 1280, 70);
+        _ = buffer.ToLz4Compressed();
+
+        double debayerMs = 0, jpegMs = 0, lz4Ms = 0;
+        int iters = 0;
+        var clock = Stopwatch.StartNew();
+        var sw = new Stopwatch();
+        while (iters < MaxIters && (iters < MinIters || clock.Elapsed < budget)) {
+            ct.ThrowIfCancellationRequested();
+
+            sw.Restart();
+            _ = BayerDebayer.Bilinear(frame, w, h, pattern);
+            sw.Stop(); debayerMs += sw.Elapsed.TotalMilliseconds;
+
+            sw.Restart();
+            _ = FitsThumbnailer.RenderJpegFromImageData(img, 1280, 70);
+            sw.Stop(); jpegMs += sw.Elapsed.TotalMilliseconds;
+
+            sw.Restart();
+            _ = buffer.ToLz4Compressed();
+            sw.Stop(); lz4Ms += sw.Elapsed.TotalMilliseconds;
+
+            iters++;
+        }
+
+        double n = Math.Max(1, iters);
+        double totalPerFrame = (debayerMs + jpegMs + lz4Ms) / n;
+        double fps = totalPerFrame > 0 ? 1000.0 / totalPerFrame : 0;
+        double mpx = (double)FrameW * FrameH / 1_000_000.0;
+        double lz4SecPerFrame = (lz4Ms / n) / 1000.0;
+        double lz4MBps = lz4SecPerFrame > 0
+            ? (uncompressedBytes / (1024.0 * 1024.0)) / lz4SecPerFrame : 0;
+        return new EncodeResult(
+            DebayerMs: Math.Round(debayerMs / n, 2),
+            JpegMs: Math.Round(jpegMs / n, 2),
+            Lz4Ms: Math.Round(lz4Ms / n, 2),
+            TotalMs: Math.Round(totalPerFrame, 2),
+            Fps: Math.Round(fps, 2),
+            MpxPerSec: Math.Round(mpx * fps, 1),
+            Lz4MBps: Math.Round(lz4MBps, 1),
+            Iterations: iters);
+    }
+
+    // ----- Workload C: raw CPU / memory baseline -----
+
+    internal static CpuResult RunCpuWorkload(CancellationToken ct) {
+        int cores = Math.Max(1, Environment.ProcessorCount);
+        const int size = 2_000_000;
+        const int passes = 60;
+        // 2 flops per element per pass (a multiply + an add).
+        double totalFlops = (double)size * passes * 2.0;
+
+        var buf = new double[size];
+        for (int i = 0; i < size; i++) buf[i] = i % 1000 + 1;
+
+        // Single-thread warmup + measure.
+        FloatKernel(buf, 0, size, 2);
+        ct.ThrowIfCancellationRequested();
+        var sw = Stopwatch.StartNew();
+        FloatKernel(buf, 0, size, passes);
+        sw.Stop();
+        double singleMflops = sw.Elapsed.TotalSeconds > 0
+            ? totalFlops / sw.Elapsed.TotalSeconds / 1e6 : 0;
+
+        // Multi-thread: same total work split across all cores.
+        ct.ThrowIfCancellationRequested();
+        sw.Restart();
+        var opts = new ParallelOptions { MaxDegreeOfParallelism = cores, CancellationToken = ct };
+        int chunk = (size + cores - 1) / cores;
+        Parallel.For(0, cores, opts, c => {
+            int start = c * chunk;
+            int len = Math.Min(chunk, size - start);
+            if (len > 0) FloatKernel(buf, start, len, passes);
+        });
+        sw.Stop();
+        double multiMflops = sw.Elapsed.TotalSeconds > 0
+            ? totalFlops / sw.Elapsed.TotalSeconds / 1e6 : 0;
+
+        // Memory bandwidth: stream a large buffer a few times.
+        ct.ThrowIfCancellationRequested();
+        const int bw = 16_000_000; // 16M doubles = 128 MB
+        const int bwPasses = 6;
+        var src = new double[bw];
+        var dst = new double[bw];
+        Array.Copy(src, dst, bw); // warmup
+        sw.Restart();
+        for (int p = 0; p < bwPasses; p++) {
+            ct.ThrowIfCancellationRequested();
+            Array.Copy(src, dst, bw);
+        }
+        sw.Stop();
+        // Each copy touches read+write = 2 * bytes.
+        double movedBytes = (double)bw * 8 * 2 * bwPasses;
+        double memGBps = sw.Elapsed.TotalSeconds > 0
+            ? movedBytes / sw.Elapsed.TotalSeconds / 1e9 : 0;
+
+        double scaling = singleMflops > 0 ? multiMflops / singleMflops : 0;
+        return new CpuResult(
+            SingleThreadMflops: Math.Round(singleMflops, 0),
+            MultiThreadMflops: Math.Round(multiMflops, 0),
+            CoreScaling: Math.Round(scaling, 2),
+            MemBandwidthGBps: Math.Round(memGBps, 1),
+            Cores: cores);
+    }
+
+    private static void FloatKernel(double[] buf, int start, int len, int passes) {
+        for (int p = 0; p < passes; p++) {
+            for (int i = start; i < start + len; i++) {
+                buf[i] = buf[i] * 1.0000001 + 1.0;
+            }
+        }
+    }
+
+    // ----- Optional live-camera workload -----
+
+    private async Task<CameraResult> RunCameraWorkloadAsync(BenchmarkRequest req, CancellationToken ct) {
+        var cam = _equipment.Camera;
+        if (cam == null || !cam.IsConnected)
+            return new CameraResult(0, 0, 0, 0, 0, 0, "No camera connected.");
+
+        int frames = Math.Clamp(req.CameraFrames, 1, 30);
+        double exposure = Math.Clamp(req.CameraExposure, 0.0, 60.0);
+        var opts = new CaptureOptions(Gain: req.CameraGain, ImageType: "LIGHT");
+        var times = new List<double>(frames);
+        int w = 0, h = 0;
+        long bytes = 0;
+        try {
+            // Warmup capture (driver spin-up, buffer alloc) - discarded.
+            await cam.CaptureAsync(exposure, opts, ct);
+            for (int i = 0; i < frames; i++) {
+                ct.ThrowIfCancellationRequested();
+                var sw = Stopwatch.StartNew();
+                var frame = await cam.CaptureAsync(exposure, opts, ct);
+                sw.Stop();
+                times.Add(sw.Elapsed.TotalMilliseconds);
+                w = frame.Properties.Width;
+                h = frame.Properties.Height;
+                bytes = (long)frame.Data.Length * 2;
+            }
+        } catch (OperationCanceledException) {
+            throw;
+        } catch (Exception ex) {
+            return new CameraResult(times.Count, 0, 0, w, h, 0, ex.Message);
+        }
+
+        double meanMs = times.Count > 0 ? times.Average() : 0;
+        double fps = meanMs > 0 ? 1000.0 / meanMs : 0;
+        double mbps = meanMs > 0
+            ? (bytes / (1024.0 * 1024.0)) / (meanMs / 1000.0) : 0;
+        return new CameraResult(
+            Frames: times.Count,
+            MeanCaptureMs: Math.Round(meanMs, 1),
+            Fps: Math.Round(fps, 2),
+            Width: w,
+            Height: h,
+            MBPerSec: Math.Round(mbps, 1),
+            Error: null);
+    }
+
+    // ----- composite + synthetic frame generation -----
+
+    private static double ComputeComposite(StackingResult s, EncodeResult e, CpuResult c) {
+        double sn = s.MpxPerSec / StackBaselineMpxS;
+        double en = e.MpxPerSec / EncodeBaselineMpxS;
+        double cn = c.MultiThreadMflops / CpuBaselineMflops;
+        if (sn <= 0 || en <= 0 || cn <= 0) return 0;
+        return 100.0 * Math.Pow(sn * en * cn, 1.0 / 3.0);
+    }
+
+    /// <summary>Deterministic synthetic star field: uniform background +
+    /// a jittered grid of round Gaussian stars. Same (seed, dx, dy) always
+    /// yields identical pixels so the workload is repeatable across
+    /// devices and runs. dx/dy shift every star, used to give the stacker
+    /// a real translation to recover.</summary>
+    internal static ushort[] GenerateStarField(int w, int h, int seed, int dx, int dy) {
+        const ushort bg = 200;
+        var data = new ushort[w * h];
+        for (int i = 0; i < data.Length; i++) data[i] = bg;
+
+        var rng = new Random(seed);
+        const int cols = 24, rows = 24;
+        for (int gy = 1; gy < rows; gy++) {
+            for (int gx = 1; gx < cols; gx++) {
+                double cx = (double)gx * w / cols + dx + (rng.NextDouble() - 0.5) * 3;
+                double cy = (double)gy * h / rows + dy + (rng.NextDouble() - 0.5) * 3;
+                double sigma = 1.5 + rng.NextDouble() * 1.5;
+                double amp = 3000 + rng.NextDouble() * 20000;
+                PlantStar(data, w, h, cx, cy, sigma, amp, bg);
+            }
+        }
+        return data;
+    }
+
+    /// <summary>Adds a round 2D Gaussian to the buffer over a small window
+    /// (ported from the FrameAnalysis test fixture). Clamps to ushort.</summary>
+    private static void PlantStar(ushort[] data, int w, int h,
+                                  double cx, double cy, double sigma, double amp, ushort bg) {
+        int radius = (int)Math.Ceiling(sigma * 3);
+        int x0 = Math.Max(0, (int)cx - radius);
+        int x1 = Math.Min(w - 1, (int)cx + radius);
+        int y0 = Math.Max(0, (int)cy - radius);
+        int y1 = Math.Min(h - 1, (int)cy + radius);
+        double twoSigma2 = 2 * sigma * sigma;
+        for (int y = y0; y <= y1; y++) {
+            for (int x = x0; x <= x1; x++) {
+                double dx = x - cx, dy = y - cy;
+                double g = amp * Math.Exp(-(dx * dx + dy * dy) / twoSigma2);
+                int idx = y * w + x;
+                double v = data[idx] + g;
+                data[idx] = v >= 65535 ? (ushort)65535 : (ushort)v;
+            }
+        }
+    }
+}
+
+// ----- DTOs -----
+
+public record BenchmarkRequest(
+    bool IncludeCamera = false,
+    double CameraExposure = 1.0,
+    int? CameraGain = null,
+    int CameraFrames = 5);
+
+public record BenchmarkDevice(
+    string Kind, string Model, string Os, string Architecture,
+    int Cores, string ShortLabel, string? Cpu, string? CpuLabel);
+
+public record StackingResult(
+    double DetectMs, double MatchMs, double ResampleMs, double StatsMs,
+    double TotalMs, double Fps, double MpxPerSec, int Iterations, int StarCount);
+
+public record EncodeResult(
+    double DebayerMs, double JpegMs, double Lz4Ms, double TotalMs,
+    double Fps, double MpxPerSec, double Lz4MBps, int Iterations);
+
+public record CpuResult(
+    double SingleThreadMflops, double MultiThreadMflops,
+    double CoreScaling, double MemBandwidthGBps, int Cores);
+
+public record CameraResult(
+    int Frames, double MeanCaptureMs, double Fps,
+    int Width, int Height, double MBPerSec, string? Error);
+
+public record BenchmarkResult(
+    string Timestamp,
+    BenchmarkDevice Device,
+    int FrameWidth, int FrameHeight, double Megapixels,
+    StackingResult Stacking,
+    EncodeResult Encode,
+    CpuResult Cpu,
+    double CompositeScore,
+    CameraResult? Camera);

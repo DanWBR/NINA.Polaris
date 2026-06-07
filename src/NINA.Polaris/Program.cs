@@ -267,6 +267,11 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Tls.DuckDnsClient>();
 // folds into the per-second WS broadcast.
 builder.Services.AddResourceMonitoring();
 builder.Services.AddSingleton<HostMetricsService>();
+// BENCH: on-demand hardware benchmark (Settings -> Hardware Benchmark).
+// Not a hosted service; runs only when the user clicks Run. The results
+// store persists run history under {ProfileService.DataDir}/benchmarks/.
+builder.Services.AddSingleton<BenchmarkResultsStore>();
+builder.Services.AddSingleton<BenchmarkService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<HostMetricsService>());
 builder.Services.AddSingleton<MdnsService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<MdnsService>());
@@ -847,6 +852,7 @@ app.MapEditorEndpoints();
 app.MapOnnxEndpoints();
 app.MapFilesEndpoints();
 app.MapCacheEndpoints();
+app.MapBenchmarkEndpoints();
 app.MapSirilEndpoints();
 app.MapGraXpertEndpoints();
 app.MapCropEndpoints();
