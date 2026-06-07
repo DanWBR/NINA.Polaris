@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260607-focushold">
+    <link rel="stylesheet" href="/css/app.css?v=20260607-benchbar">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -6417,7 +6417,7 @@
                     <div x-show="sensorAnalysis.state === 'running'"
                          style="width:100%;height:6px;background:var(--border,#333);border-radius:3px;overflow:hidden;margin-top:8px">
                         <div style="height:100%;background:var(--accent,#3a9);border-radius:3px;transition:width .3s"
-                             :style="'width:' + (sensorAnalysis.progress || 0) + '%'"></div>
+                             :style="{ width: (sensorAnalysis.progress || 0) + '%' }"></div>
                     </div>
 
                     <template x-if="sensorAnalysis.lastResult">
@@ -9354,7 +9354,7 @@
                         <div class="hint" x-text="(bench.phase || 'Working') + '… ' + (bench.progress || 0) + '%'"></div>
                         <div style="width:100%;height:6px;background:var(--border,#333);border-radius:3px;overflow:hidden;margin-top:4px">
                             <div style="height:100%;background:var(--accent,#3a9);border-radius:3px;transition:width .3s"
-                                 :style="'width:' + (bench.progress || 0) + '%'"></div>
+                                 :style="{ width: (bench.progress || 0) + '%' }"></div>
                         </div>
                     </div>
 
@@ -12038,7 +12038,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260607-focushold"></script>
+    <script src="/js/app.js?v=20260607-benchbar"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
