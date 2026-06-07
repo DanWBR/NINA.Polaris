@@ -2557,12 +2557,20 @@
                          absolute position while reviewing a snap, without
                          leaving PREVIEW. Shares the FOCUS tab's state +
                          endpoints; only shown when a focuser is connected. -->
-                    <div class="preview-focus-block" x-show="focusConnected">
-                        <div class="control-row" style="align-items:center; gap:6px; margin-bottom:4px">
-                            <span class="text-muted">Focus</span>
-                            <span class="stepper-value" style="margin-left:auto" x-text="focusPosition">0</span>
+                    <!-- WinForms-style groupbox: a fieldset border with the
+                         "Focus" legend cutting into it (works on the
+                         translucent sidebar — the legend interrupts the border
+                         instead of needing a solid background). Live position
+                         is centered + accent-coloured below the legend. -->
+                    <fieldset class="preview-focus-block" x-show="focusConnected"
+                              style="border:1px solid var(--border); border-radius:8px; margin:8px 0 0; padding:2px 10px 10px; min-width:0">
+                        <legend style="padding:0 6px; font-size:12px; color:var(--text-muted)">Focus</legend>
+                        <div style="text-align:center; margin:2px 0 8px">
+                            <span class="stepper-value"
+                                  style="font-size:26px; color:var(--accent); font-variant-numeric:tabular-nums"
+                                  x-text="focusPosition">0</span>
                             <span class="focus-readout-warn" x-show="focusMoving"
-                                  style="font-size:11px">MOVING</span>
+                                  style="font-size:11px; margin-left:6px">MOVING</span>
                         </div>
                         <!-- Slider flanked by fast/slow nudge buttons on
                              each side. The slider stays in sync with the
@@ -2611,7 +2619,7 @@
                             <button class="btn btn-sm" style="flex:0 0 auto" :disabled="focusMoving"
                                     @click="focusMoveTo(focusGotoTarget)" title="Go to the entered position">Go</button>
                         </div>
-                    </div>
+                    </fieldset>
                     </div><!-- /.shutter-inputs -->
 
                     <!-- SHUT-2: Polaris Shutter for snap + loop + abort.
