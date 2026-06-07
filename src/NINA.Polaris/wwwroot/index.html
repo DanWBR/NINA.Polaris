@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260607-phd2view">
+    <link rel="stylesheet" href="/css/app.css?v=20260607-phd2view2">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -3377,6 +3377,13 @@
                      after PHD2 is already running.
                      guideTab state is on app.js (default 'gui'). -->
                 <div class="guide-tabstrip">
+                    <!-- Native autoguider: a single "PHD2 Native" tab with the
+                         in-app PHD2-style dashboard. The PHD2 GUI + Control tabs
+                         are PHD2-only and hidden in native mode (and vice
+                         versa). -->
+                    <button class="guide-tab" :class="{ active: guideTab === 'native' }"
+                            x-show="guider.backend === 'native'"
+                            @click="guideTab = 'native'">PHD2 Native</button>
                     <!-- PHD2 GUI tab is PHD2-only; hidden when the active
                          rig uses the native autoguider (it has no external
                          GUI to embed). -->
@@ -3384,10 +3391,8 @@
                             x-show="guider.backend !== 'native'"
                             @click="guideTab = 'gui'; loadPhd2GuiStatus(); loadPhd2VncStatus()">PHD2 GUI</button>
                     <button class="guide-tab" :class="{ active: guideTab === 'control' }"
+                            x-show="guider.backend !== 'native'"
                             @click="guideTab = 'control'">Control</button>
-                    <span class="guide-tab-backend-chip"
-                          x-show="guider.backend === 'native'"
-                          style="margin-left:8px;font-size:11px;opacity:.7">Native guider</span>
                     <!-- Profile-sync indicator chip, lives in the strip so
                          it's visible from either tab. PHD2-only. -->
                     <span class="profile-sync-indicator"
@@ -3406,11 +3411,15 @@
                     </span>
                 </div>
 
-                <!-- ===== TAB 1: Control (everything that was here before) ===== -->
-                <div x-show="guideTab === 'control'">
+                <!-- ===== TAB 1: Control (PHD2) / PHD2 Native dashboard =====
+                     Shared shell: connection, metrics, settle, control buttons
+                     serve both backends. PHD2-only sub-panels are gated to
+                     backend !== 'native'; the PHD2-style view is gated to
+                     backend === 'native'. -->
+                <div x-show="guideTab === 'control' || guideTab === 'native'">
 
                 <!-- "PHD2 not installed" banner -->
-                <div x-show="!guider.connected && phd2Install && !phd2Install.installed"
+                <div x-show="guider.backend !== 'native' && !guider.connected && phd2Install && !phd2Install.installed"
                      class="warn-banner" style="margin-bottom:0.5rem">
                     PHD2 not detected on this machine.
                     <a :href="phd2Install.downloadUrl" target="_blank" rel="noopener">Download PHD2</a>
@@ -3420,21 +3429,26 @@
 
                 <!-- Connection panel -->
                 <div x-show="!guider.connected" class="guide-connect-row">
-                    <label>Host<input type="text" x-model="guiderHost" class="input-md"></label>
-                    <label>Port<input type="number" x-model.number="guiderPort" class="input-sm"></label>
+                    <!-- Host/Port + Launch are PHD2-only; the native guider
+                         uses the rig's guide camera + mount, so it just connects. -->
+                    <label x-show="guider.backend !== 'native'">Host<input type="text" x-model="guiderHost" class="input-md"></label>
+                    <label x-show="guider.backend !== 'native'">Port<input type="number" x-model.number="guiderPort" class="input-sm"></label>
                     <button class="btn btn-primary" @click="guiderConnect()">Connect</button>
-                    <button class="btn" @click="launchPhd2()" :disabled="!phd2Process.executableConfigured"
+                    <span class="text-muted" x-show="guider.backend === 'native'" style="font-size:11px">
+                        Uses the rig's guide camera + mount (set in RIGS).
+                    </span>
+                    <button class="btn" x-show="guider.backend !== 'native'" @click="launchPhd2()" :disabled="!phd2Process.executableConfigured"
                             :title="phd2Process.executableConfigured ? 'Launch PHD2 then connect' : 'Set PHD2:ExecutablePath in appsettings'">
                         ▶ Launch PHD2
                     </button>
-                    <label class="checkbox-label" title="Auto-launch PHD2 and connect when the Headless server starts">
+                    <label class="checkbox-label" x-show="guider.backend !== 'native'" title="Auto-launch PHD2 and connect when the Headless server starts">
                         <input type="checkbox" x-model="phd2AutoStart" @change="setPhd2AutoStart($event.target.checked)">
                         Auto-start on boot
                     </label>
                 </div>
 
-                <!-- PHD2 management panel (visible only when connected) -->
-                <div x-show="guider.connected" class="phd2-mgmt">
+                <!-- PHD2 management panel (visible only when connected; PHD2-only) -->
+                <div x-show="guider.connected && guider.backend !== 'native'" class="phd2-mgmt">
                     <div class="phd2-mgmt-row">
                         <label>PHD2 profile
                             <select class="input-md" x-model.number="phd2SelectedProfileId"
@@ -3602,7 +3616,7 @@
                      Visible whenever PHD2 is connected, these wrap the
                      RPC-only orchestrations that PHD2 doesn't expose in
                      its own UI as a single button. -->
-                <div class="phd2-smart-block" x-show="guider.connected" style="margin-top:10px">
+                <div class="phd2-smart-block" x-show="guider.connected && guider.backend !== 'native'" style="margin-top:10px">
                     <div class="phd2-smart-row">
                         <button class="btn btn-primary"
                                 @click="phd2SmartCalibrate()"
@@ -12258,7 +12272,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260607-phd2view"></script>
+    <script src="/js/app.js?v=20260607-phd2view2"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

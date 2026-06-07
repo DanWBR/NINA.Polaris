@@ -21825,6 +21825,10 @@ function ninaApp() {
             }
             if (msg.guider) {
                 const g = msg.guider;
+                // Backend identity is present whether or not connected; it
+                // drives the GUIDE tabstrip (native shows a single "PHD2
+                // Native" tab; PHD2 shows "PHD2 GUI" + "Control").
+                this.guider.backend = g.backend || this.guider.backend || 'phd2';
                 if (!g.connected) {
                     if (this.guider.connected) {
                         // server-side disconnect (PHD2 crashed?)
@@ -21847,6 +21851,8 @@ function ninaApp() {
                     if (wasDisconnected) this.fetchGuiderEquipment();
                     this.guider = {
                         connected: true,
+                        backend: g.backend || 'phd2',
+                        view: g.view || null,
                         host: g.host || this.guider.host,
                         port: g.port || this.guider.port,
                         appState: g.appState || 'Stopped',
@@ -21873,6 +21879,13 @@ function ninaApp() {
                     // Auto-expand chart scale based on peak (with floor of 2")
                     const need = Math.max(this.guider.peakRA, this.guider.peakDec, 1.0) * 1.2;
                     if (need > this.guideChartScale) this.guideChartScale = Math.ceil(need);
+                }
+                // Keep guideTab valid for the active backend: native has a
+                // single "PHD2 Native" tab; PHD2 has "PHD2 GUI" + "Control".
+                if (this.guider.backend === 'native') {
+                    if (this.guideTab !== 'native') this.guideTab = 'native';
+                } else if (this.guideTab === 'native') {
+                    this.guideTab = 'gui';
                 }
                 // Even on disconnect, surface the sync/calibrate/gui-session
                 // sub-objects so the chips + GUI tab still update.
