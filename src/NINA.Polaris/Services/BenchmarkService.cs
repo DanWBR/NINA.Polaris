@@ -489,11 +489,12 @@ public class BenchmarkService {
         if (_cameraStream.IsRunning)
             return new CameraVideoResult("idle", 0, 0, 0, 0, 0, 0, 0, "A video stream is already running.");
 
-        // Force a short streaming exposure. The still-capture test already
-        // covers the user's exposure; a video benchmark with a 1s exposure
-        // would only ever manage ~1 fps and tells us nothing about the
-        // streaming path.
-        const double streamExposure = 0.1;
+        // Force a short streaming exposure representative of real
+        // planetary video (typically ~25-40 ms). The still-capture test
+        // already covers the user's chosen exposure; a video benchmark at
+        // a 1s exposure would only ever manage ~1 fps and tells us nothing
+        // about the streaming path.
+        const double streamExposure = 0.03;
         const int warmupMaxTicks = 60;  // up to 6s for the first frame
         const int windowTicks = 50;     // 5s measurement window
         try {
