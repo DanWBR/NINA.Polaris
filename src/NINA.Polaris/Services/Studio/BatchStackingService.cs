@@ -360,17 +360,19 @@ public class BatchStackingService {
             IReadOnlyList<DetectedStar> curStars,
             AffineTransform transform) {
         if (refStars.Count == 0 || curStars.Count == 0) return double.NaN;
+        // PERF #366: index the reference stars in a spatial grid so each
+        // projected current star finds its nearest by scanning nearby cells
+        // (expanding-ring search returns the exact global nearest), instead
+        // of an O(cur * ref) brute-force scan per frame.
+        var refGrid = new SpatialGrid<byte>(8.0);
+        foreach (var rs in refStars) refGrid.Add(rs.X, rs.Y, 0);
         var residuals = new List<double>(curStars.Count);
         foreach (var cs in curStars) {
             var (tx, ty) = transform.Apply(cs.X, cs.Y);
-            double best = double.PositiveInfinity;
-            foreach (var rs in refStars) {
-                double dx = rs.X - tx, dy = rs.Y - ty;
-                double d2 = dx * dx + dy * dy;
-                if (d2 < best) best = d2;
-            }
-            residuals.Add(Math.Sqrt(best));
+            if (refGrid.TryNearest(tx, ty, double.PositiveInfinity, out _, out double best2))
+                residuals.Add(Math.Sqrt(best2));
         }
+        if (residuals.Count == 0) return double.NaN;
         residuals.Sort();
         return residuals[residuals.Count / 2];
     }

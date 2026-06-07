@@ -336,24 +336,18 @@ public class ColorCalibrationService {
         // and find the nearest detected star within 3 px.
         var matched = new List<ColorCalibrationMath.CalibrationStar>();
         const double matchRadiusPx = 3.0;
+        // PERF #366: index the (non-saturated) detected stars in a spatial
+        // grid so each catalog star is matched by scanning only nearby
+        // cells, instead of the full O(catalog * detected) brute force.
+        // Same result: TryNearest returns the exact nearest within radius.
+        var detectedGrid = new NINA.Image.ImageAnalysis.SpatialGrid<StarPhotometer.StarPhotometry>(matchRadiusPx);
+        foreach (var p in phots)
+            if (!p.Saturated) detectedGrid.Add(p.X, p.Y, p);
         foreach (var c in catalogStars) {
             if (c.Bv == null) continue;
             var (px, py) = wcs.RaDecToPixel(c.Ra, c.Dec);
             if (double.IsNaN(px) || double.IsNaN(py)) continue;
-            // Find nearest detected star within radius.
-            StarPhotometer.StarPhotometry? best = null;
-            double bestDist2 = matchRadiusPx * matchRadiusPx;
-            foreach (var p in phots) {
-                if (p.Saturated) continue;
-                double dx = p.X - px;
-                double dy = p.Y - py;
-                double d2 = dx * dx + dy * dy;
-                if (d2 <= bestDist2) {
-                    bestDist2 = d2;
-                    best = p;
-                }
-            }
-            if (best != null) {
+            if (detectedGrid.TryNearest(px, py, matchRadiusPx, out var best, out _)) {
                 matched.Add(new ColorCalibrationMath.CalibrationStar(
                     Photometry: best, Bv: c.Bv.Value));
             }
