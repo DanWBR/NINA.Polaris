@@ -48,6 +48,11 @@ public class CameraStreamService : IDisposable {
     public int BinX { get; private set; } = 1;
     public int BinY { get; private set; } = 1;
     public long FrameCount => Interlocked.Read(ref _frameCount);
+    /// <summary>Cumulative count of downscaled-JPEG frames actually
+    /// rendered + broadcast to clients. Exposed (alongside FrameCount) so
+    /// callers can measure a windowed transmit rate by deltaing it over a
+    /// time slice instead of relying on the since-start average.</summary>
+    public long TransmittedFrames => Interlocked.Read(ref _transmittedFrames);
     public DateTime StartedAt => _startedAt;
     public DateTime LastFrameAt => _lastFrameAt;
     public string? LastError { get; private set; }

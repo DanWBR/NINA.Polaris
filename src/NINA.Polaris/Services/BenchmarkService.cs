@@ -471,13 +471,17 @@ public class BenchmarkService {
             Error: null);
     }
 
-    /// <summary>Measures the real camera video-stream path end to end:
-    /// starts CameraStreamService (native CCD_VIDEO_STREAM when the driver
-    /// supports it, else the server-side capture loop), lets it run for a
-    /// few seconds, then samples the achieved capture FPS, the transmitted
-    /// (downscaled-JPEG) FPS, the frame size and the raw on-wire MB/s.
-    /// Camera + USB dependent, so reported separately and not part of the
-    /// host composite score.</summary>
+    /// <summary>Measures the real camera video-stream path: starts
+    /// CameraStreamService (native CCD_VIDEO_STREAM when the driver
+    /// supports it, else the server capture loop), waits for the stream to
+    /// actually start producing frames (so a slow start or a native->loop
+    /// fallback does not count against the result), then measures the
+    /// capture FPS, transmitted (downscaled-JPEG) FPS, frame size and raw
+    /// on-wire MB/s over a fixed window using frame-count deltas. A short
+    /// streaming exposure is forced regardless of the requested still
+    /// exposure, since streaming is about frame rate, not depth. Camera +
+    /// USB dependent, so reported separately and not in the composite
+    /// score.</summary>
     private async Task<CameraVideoResult> RunCameraVideoWorkloadAsync(BenchmarkRequest req, CancellationToken ct, Action<double>? onProgress = null) {
         var cam = _equipment.Camera;
         if (cam == null || !cam.IsConnected)
@@ -485,29 +489,53 @@ public class BenchmarkService {
         if (_cameraStream.IsRunning)
             return new CameraVideoResult("idle", 0, 0, 0, 0, 0, 0, 0, "A video stream is already running.");
 
-        // Short exposures suit streaming; cap so a long requested exposure
-        // doesn't make the whole test crawl.
-        double exposure = Math.Clamp(req.CameraExposure <= 0 ? 0.05 : req.CameraExposure, 0.0, 5.0);
-        const int sampleSeconds = 5;
-        const int ticks = sampleSeconds * 10;
+        // Force a short streaming exposure. The still-capture test already
+        // covers the user's exposure; a video benchmark with a 1s exposure
+        // would only ever manage ~1 fps and tells us nothing about the
+        // streaming path.
+        const double streamExposure = 0.1;
+        const int warmupMaxTicks = 60;  // up to 6s for the first frame
+        const int windowTicks = 50;     // 5s measurement window
         try {
-            _cameraStream.Start(new StreamConfig(ExposureSeconds: exposure, Gain: req.CameraGain));
-            // Sample for a fixed window, bailing out early on cancellation.
-            for (int i = 0; i < ticks; i++) {
+            _cameraStream.Start(new StreamConfig(ExposureSeconds: streamExposure, Gain: req.CameraGain));
+
+            // Warmup: wait until the first frame actually lands (skips the
+            // native->loop fallback dead time) or give up after the cap.
+            int warm = 0;
+            while (warm < warmupMaxTicks && _cameraStream.FrameCount == 0) {
                 ct.ThrowIfCancellationRequested();
                 await Task.Delay(100, ct);
-                onProgress?.Invoke((i + 1) / (double)ticks);
+                warm++;
+                onProgress?.Invoke(0.1 * warm / warmupMaxTicks);
             }
 
-            double captureFps = _cameraStream.Fps;
-            double transmitFps = _cameraStream.TransmitFps;
+            // Measurement window: rate = frame-count delta / elapsed, so
+            // the warmup/fallback time never drags the number down.
+            long capStart = _cameraStream.FrameCount;
+            long txStart = _cameraStream.TransmittedFrames;
+            var clock = Stopwatch.StartNew();
+            for (int i = 0; i < windowTicks; i++) {
+                ct.ThrowIfCancellationRequested();
+                await Task.Delay(100, ct);
+                onProgress?.Invoke(0.1 + 0.9 * (i + 1) / windowTicks);
+            }
+            clock.Stop();
+
+            double secs = Math.Max(0.001, clock.Elapsed.TotalSeconds);
+            long capFrames = _cameraStream.FrameCount - capStart;
+            long txFrames = _cameraStream.TransmittedFrames - txStart;
+            double captureFps = capFrames / secs;
+            double transmitFps = txFrames / secs;
             int w = _cameraStream.LastFrameWidth;
             int h = _cameraStream.LastFrameHeight;
             long raw = _cameraStream.LastFrameRawBytes;
-            long frames = _cameraStream.FrameCount;
             string mode = _cameraStream.Mode;
             double mbps = raw > 0 && captureFps > 0
                 ? (raw / (1024.0 * 1024.0)) * captureFps : 0;
+
+            string? err = capFrames == 0
+                ? "The camera produced no video frames (driver may not support streaming)."
+                : null;
 
             return new CameraVideoResult(
                 Mode: mode,
@@ -516,9 +544,9 @@ public class BenchmarkService {
                 Width: w,
                 Height: h,
                 MBPerSec: Math.Round(mbps, 1),
-                Frames: frames,
-                DurationSec: sampleSeconds,
-                Error: null);
+                Frames: capFrames,
+                DurationSec: (int)Math.Round(secs),
+                Error: err);
         } catch (OperationCanceledException) {
             throw;
         } catch (Exception ex) {
