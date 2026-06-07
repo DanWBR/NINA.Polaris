@@ -76,6 +76,7 @@ public class EquipmentManager : IDisposable {
             "nikon-sdk"   => CreateNikonCamera(deviceId),
             "sony-sdk"    => new NINA.Camera.SonySdk.SonySdkCamera(deviceId),
             "svbony-sdk"  => CreateSvbonyCamera(deviceId),
+            "zwo-sdk"     => CreateZwoCamera(deviceId),
             "ascom-com"   => CreateAscomCamera(deviceId),
             "alpaca"      => AlpacaCamera.FromDeviceId(deviceId),
             _ => throw new NotSupportedException(
@@ -128,6 +129,19 @@ public class EquipmentManager : IDisposable {
         } catch (DllNotFoundException ex) {
             throw new NotSupportedException(
                 "SVBony SDK native library not found for this platform/arch. " +
+                "Reinstall the Polaris package, or use the INDI driver instead.", ex);
+        }
+    }
+
+    /// <summary>ZWO ASI camera over the native ASICamera2 SDK. Cross-
+    /// platform; native lib bundled per-RID. The high-fps path for ZWO
+    /// planetary cameras.</summary>
+    private static ICamera CreateZwoCamera(string deviceId) {
+        try {
+            return new NINA.Camera.ZwoSdk.AsiSdkCamera(deviceId);
+        } catch (DllNotFoundException ex) {
+            throw new NotSupportedException(
+                "ZWO ASI SDK native library not found for this platform/arch. " +
                 "Reinstall the Polaris package, or use the INDI driver instead.", ex);
         }
     }
@@ -185,6 +199,12 @@ public class EquipmentManager : IDisposable {
             Available: NINA.Camera.SvbonySdk.SvbonyRegistry.IsAvailable,
             Description: "SVBony cameras via the native USB SDK. Direct, " +
                 "low-overhead path for high-fps video (bypasses INDI)."));
+        // ZWO ASI native USB SDK. Cross-platform; the high-fps path for ZWO
+        // planetary cameras (ASI462/678 etc).
+        list.Add(new("zwo-sdk", "ZWO ASI (SDK, native)",
+            Available: NINA.Camera.ZwoSdk.ZwoRegistry.IsAvailable,
+            Description: "ZWO ASI cameras via the native ASICamera2 SDK. " +
+                "Direct, low-overhead path for high-fps video (bypasses INDI)."));
         return list;
     }
 
@@ -232,6 +252,16 @@ public class EquipmentManager : IDisposable {
                     .ToList();
             } catch (Exception ex) {
                 _logger.LogWarning(ex, "SVBony SDK discovery failed");
+                return Array.Empty<DiscoveredCamera>();
+            }
+        }
+        if (driver == "zwo-sdk") {
+            try {
+                return NINA.Camera.ZwoSdk.ZwoDiscovery.Enumerate()
+                    .Select(e => new DiscoveredCamera(e.Id, e.Model, e.Info))
+                    .ToList();
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "ZWO SDK discovery failed");
                 return Array.Empty<DiscoveredCamera>();
             }
         }

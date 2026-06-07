@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>NINA.Camera.ZwoSdk</RootNamespace>
+    <AssemblyName>NINA.Camera.ZwoSdk</AssemblyName>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- ZWO ASI SDK ships native binaries for Windows (x64/x86) and Linux
+         (armv6/7/8, x64/x86) + macOS. net10.0, no OS attribute: compiles
+         cross-platform, ZwoRegistry probes at runtime. The per-RID native
+         lib is copied into the app output by the items below. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NINA.Core.Portable\NINA.Core.Portable.csproj" />
+    <ProjectReference Include="..\NINA.Image.Portable\NINA.Image.Portable.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <AsiSdk>$(MSBuildThisFileDirectory)..\..\camera_sdk\ZWO</AsiSdk>
+    <AsiLinux>$(AsiSdk)\ASI_linux_mac_SDK_V1.41\lib</AsiLinux>
+    <AsiWin>$(AsiSdk)\ASI_Windows_SDK_V1.41\ASI SDK\lib</AsiWin>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-arm64'">
+    <Content Include="$(AsiLinux)\armv8\libASICamera2.so*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>%(Filename)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64'">
+    <Content Include="$(AsiLinux)\x64\libASICamera2.so*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>%(Filename)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64'">
+    <Content Include="$(AsiWin)\x64\ASICamera2.dll">
+      <Link>ASICamera2.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>
