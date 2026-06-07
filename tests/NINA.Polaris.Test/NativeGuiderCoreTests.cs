@@ -311,4 +311,107 @@ public class NativeGuiderCoreTests {
         Assert.That(GuideAlgorithmFactory.Create("identity", 0.1, 0.7, 0.1), Is.TypeOf<IdentityAlgorithm>());
         Assert.That(GuideAlgorithmFactory.Create("bogus", 0.1, 0.7, 0.1), Is.TypeOf<IdentityAlgorithm>()); // fallback
     }
+
+    // ---- BacklashComp ----
+
+    [Test]
+    public void BacklashComp_DisabledWhenMeasuredZero_PassesThrough() {
+        var bc = new BacklashComp(0);
+        Assert.That(bc.Enabled, Is.False);
+        // No comp ever added, regardless of direction changes.
+        Assert.That(bc.Adjust(GuideDirections.guideNorth, 500), Is.EqualTo(500));
+        Assert.That(bc.Adjust(GuideDirections.guideSouth, 500), Is.EqualTo(500));
+        Assert.That(bc.Adjust(GuideDirections.guideNorth, 500), Is.EqualTo(500));
+    }
+
+    [Test]
+    public void BacklashComp_AddsOnReversal_NotOnSameDirection() {
+        var bc = new BacklashComp(300);
+        Assert.That(bc.Enabled, Is.True);
+        // First move establishes direction, no comp.
+        Assert.That(bc.Adjust(GuideDirections.guideNorth, 400), Is.EqualTo(400));
+        // Same direction again: still no comp.
+        Assert.That(bc.Adjust(GuideDirections.guideNorth, 400), Is.EqualTo(400));
+        // Reversal: add the measured backlash (300).
+        Assert.That(bc.Adjust(GuideDirections.guideSouth, 400), Is.EqualTo(700));
+        // Continue same (south) direction: no further comp.
+        Assert.That(bc.Adjust(GuideDirections.guideSouth, 400), Is.EqualTo(400));
+    }
+
+    [Test]
+    public void BacklashComp_ZeroRequest_DoesNotConsumeDirectionState() {
+        var bc = new BacklashComp(200);
+        bc.Adjust(GuideDirections.guideNorth, 400); // set last dir = north
+        // A zero-length move must not flip the remembered direction.
+        Assert.That(bc.Adjust(GuideDirections.guideSouth, 0), Is.EqualTo(0));
+        // Next north move is still "same direction" -> no comp.
+        Assert.That(bc.Adjust(GuideDirections.guideNorth, 400), Is.EqualTo(400));
+    }
+
+    [Test]
+    public void BacklashComp_CapsAddedAmountAtMaxMs() {
+        // measured 1000ms but capped at 250ms.
+        var bc = new BacklashComp(1000, maxMs: 250);
+        bc.Adjust(GuideDirections.guideNorth, 400);
+        // Reversal adds at most maxMs.
+        Assert.That(bc.Adjust(GuideDirections.guideSouth, 400), Is.EqualTo(650));
+    }
+
+    [Test]
+    public void BacklashComp_TrimsAppliedAmountOnChatter() {
+        var bc = new BacklashComp(400);
+        int first = bc.AppliedMs;
+        Assert.That(first, Is.EqualTo(400));
+        // Drive repeated reversals; after 3 in a row the applied amount trims.
+        bc.Adjust(GuideDirections.guideNorth, 300);
+        bc.Adjust(GuideDirections.guideSouth, 300); // reversal 1
+        bc.Adjust(GuideDirections.guideNorth, 300); // reversal 2
+        bc.Adjust(GuideDirections.guideSouth, 300); // reversal 3 -> trim to 300
+        Assert.That(bc.AppliedMs, Is.LessThan(first));
+    }
+
+    // ---- CalibrationProcess backlash measurement ----
+
+    [Test]
+    public void CalibrationProcess_MeasuresDecBacklash_FromSyntheticSlack() {
+        // Model gear slack: the first N SOUTH pulses take up backlash and the
+        // star does NOT move; after that the star tracks at a fixed rate.
+        const int pulseMs = 1000;
+        const int slackSteps = 3;       // backlash = 3 pulses = 3000ms
+        const double perStep = 5.0;
+        var proc = new CalibrationProcess(pulseMs, distThresholdPx: 25.0,
+            maxSteps: 80, declinationRad: 0.0, catchThresholdPx: 3.0);
+
+        double x = 100, y = 100;
+        int southSeen = 0;
+        bool decClearing = false;
+        CalibrationStep step = default;
+        for (int i = 0; i < 400; i++) {
+            step = proc.Tick(x, y);
+            if (step.Done || step.Failed) break;
+            if (!step.Pulse) continue;
+            switch (step.Direction) {
+                case GuideDirections.guideWest: x += perStep; break;
+                case GuideDirections.guideEast: x -= perStep; break;
+                case GuideDirections.guideSouth:
+                    southSeen++;
+                    // Absorb the first slackSteps SOUTH pulses (no motion).
+                    if (southSeen > slackSteps) y += perStep;
+                    decClearing = true;
+                    break;
+                case GuideDirections.guideNorth: y -= perStep; break;
+            }
+        }
+
+        Assert.That(decClearing, Is.True);
+        Assert.That(step.Done, Is.True, "calibration should complete");
+        Assert.That(proc.Result.IsValid, Is.True);
+        // Backlash should reflect the slack pulses consumed before the star
+        // started moving (3 pulses * 1000ms), allowing one catch-step tolerance.
+        Assert.That(proc.Result.BacklashMs, Is.GreaterThan(0));
+        // Catch detection lags the actual take-up by up to one tick, so allow
+        // a couple of pulses of slack around the true value.
+        Assert.That(proc.Result.BacklashMs,
+            Is.EqualTo(slackSteps * (double)pulseMs).Within(2.0 * pulseMs));
+    }
 }

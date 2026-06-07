@@ -270,6 +270,8 @@ public class ProfileService {
             NativeRaHysteresis = src.NativeRaHysteresis,
             NativeRaAlgorithm = src.NativeRaAlgorithm,
             NativeDecAlgorithm = src.NativeDecAlgorithm,
+            NativeBacklashComp = src.NativeBacklashComp,
+            NativeBacklashMaxMs = src.NativeBacklashMaxMs,
             PHD2Host = src.PHD2Host, PHD2Port = src.PHD2Port,
             // PHD2 deep-integration fields (cloned rig starts un-matched,
             // it will run its own first-time profile lookup the first time
@@ -897,6 +899,15 @@ public class EquipmentProfile {
     /// <summary>Native guider Dec-axis algorithm: resistswitch (default),
     /// lowpass, lowpass2, hysteresis, or identity.</summary>
     public string NativeDecAlgorithm { get; set; } = "resistswitch";
+
+    /// <summary>Apply Dec backlash compensation (the amount is auto-measured
+    /// during calibration). Off by default — an over-large value oscillates
+    /// worse than no compensation.</summary>
+    public bool NativeBacklashComp { get; set; } = false;
+
+    /// <summary>Hard ceiling (ms) on the applied Dec backlash pulse. 0 = use
+    /// the measured value (capped internally at 2x).</summary>
+    public int NativeBacklashMaxMs { get; set; } = 0;
 
     // Per-rig PHD2 settings
     public string PHD2Host { get; set; } = "localhost";

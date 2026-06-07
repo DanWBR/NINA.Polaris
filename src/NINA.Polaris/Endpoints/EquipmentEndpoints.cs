@@ -160,6 +160,9 @@ public static class EquipmentEndpoints {
                     r.NativeRaAlgorithm = update.NativeRaAlgorithm.Trim().ToLowerInvariant();
                 if (!string.IsNullOrWhiteSpace(update.NativeDecAlgorithm))
                     r.NativeDecAlgorithm = update.NativeDecAlgorithm.Trim().ToLowerInvariant();
+                r.NativeBacklashComp = update.NativeBacklashComp;
+                if (update.NativeBacklashMaxMs >= 0)
+                    r.NativeBacklashMaxMs = update.NativeBacklashMaxMs;
                 // New guide-scope metadata fields (RIGS tab card).
                 // Defensive: clamp aperture to a sane lower bound so
                 // a stray zero doesn't blow up the f-ratio calc on the UI.

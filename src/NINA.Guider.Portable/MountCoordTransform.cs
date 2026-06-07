@@ -11,7 +11,8 @@ public readonly record struct GuideCalibration(
     double XRate,         // RA rate px/ms at calibration dec
     double YRate,         // Dec rate px/ms
     double DeclinationRad, // dec at calibration time (NaN = unknown)
-    bool IsValid) {
+    bool IsValid,
+    double BacklashMs = 0) {  // measured Dec backlash (slack take-up) in ms
 
     public static readonly GuideCalibration Invalid =
         new(0, 0, 0, 0, double.NaN, false);

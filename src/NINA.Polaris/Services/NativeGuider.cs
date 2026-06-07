@@ -50,6 +50,7 @@ public sealed class NativeGuider : IGuider, IDisposable {
     // Per-axis algorithms (rebuilt from profile on guiding start).
     private IGuideAlgorithm _raAlgo = new HysteresisAlgorithm();
     private IGuideAlgorithm _decAlgo = new ResistSwitchAlgorithm();
+    private BacklashComp _backlashComp = new(0);
 
     // Dither bookkeeping.
     private volatile bool _paused;
@@ -450,6 +451,10 @@ public sealed class NativeGuider : IGuider, IDisposable {
         var raDir = raCorr >= 0 ? GuideDirections.guideEast : GuideDirections.guideWest;
         var decDir = decCorr >= 0 ? GuideDirections.guideNorth : GuideDirections.guideSouth;
 
+        // Dec backlash compensation: on a direction reversal, add the measured
+        // slack take-up, re-clamped to the runaway guard.
+        if (decMs > 0) decMs = Math.Min(_backlashComp.Adjust(decDir, decMs), maxMs);
+
         if (mount != null && mount.IsConnected && mount.Capabilities.SupportsPulseGuide) {
             try {
                 if (raMs > 0) await mount.PulseGuideAsync(raDir, raMs, ct);
@@ -568,6 +573,12 @@ public sealed class NativeGuider : IGuider, IDisposable {
             hysteresis: Math.Clamp(Rig.NativeRaHysteresis, 0.0, 0.99));
         _raAlgo.Reset();
         _decAlgo.Reset();
+        // Dec backlash compensation: only when enabled on the rig AND the
+        // calibration actually measured a backlash. Disabled by default
+        // because an over-large value oscillates worse than no comp.
+        double measuredBacklash = Rig.NativeBacklashComp ? _calibration.BacklashMs : 0;
+        _backlashComp = new BacklashComp(measuredBacklash, Rig.NativeBacklashMaxMs);
+        _backlashComp.Reset();
     }
 
     private static int RateToMs(double px, double ratePxPerMs) {

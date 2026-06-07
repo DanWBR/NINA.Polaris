@@ -12711,5 +12711,25 @@ is the next validation.
 - Tests: NativeGuiderCoreTests now 18 (added lowpass deadband+cap, lowpass2
   attenuation+no-reverse, factory mapping).
 
-Still deferred: ZFilter, GaussianProcess (RA), multi-star, backlash comp,
-pier-side/parity, SynScan pulse guide.
+Still deferred: ZFilter, GaussianProcess (RA), multi-star, pier-side/parity,
+SynScan pulse guide.
+
+### NATIVE GUIDER follow-up: Dec backlash compensation
+
+- Auto-measured during calibration: `CalibrationProcess` gained a DecClear phase
+  that pulses SOUTH counting the slack take-up (no motion) until the star catches
+  (>= catchThresholdPx), then a DecMeasure phase for Dec angle/rate. The measured
+  backlash (clearing pulses * pulseMs) rides on `GuideCalibration.BacklashMs`.
+- Safe apply: new `BacklashComp` (ported concept from PHD2 backlash_comp.cpp) adds
+  the measured slack to a Dec pulse only on a real direction reversal, capped at a
+  per-rig max, and self-trims the applied amount on reversal chatter so an
+  over-large value cannot drive oscillation (the failure mode that makes bad
+  backlash comp worse than none). NativeGuider applies it after computing decDir.
+- Per-rig toggle: EquipmentProfile.NativeBacklashComp (default off) +
+  NativeBacklashMaxMs, persisted via the rig PUT; RIGS tab gained a "Dec backlash
+  comp (auto-measured)" checkbox under the native guider settings.
+- Tests: NativeGuiderCoreTests now 24 (added BacklashComp disabled/reversal/
+  zero-request/cap/trim + CalibrationProcess synthetic-slack backlash measurement).
+
+Still deferred: ZFilter, GaussianProcess (RA), multi-star, pier-side/parity,
+SynScan pulse guide.

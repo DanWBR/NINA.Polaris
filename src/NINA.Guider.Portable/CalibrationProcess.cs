@@ -1,5 +1,6 @@
-// Calibration state machine. Math (rate = dist/(steps*pulseMs), angle = atan2)
-// ported from PHD2 (OpenPHDGuiding) scope.cpp, BSD-3-Clause.
+// Calibration state machine. Math (rate = dist/(steps*pulseMs), angle = atan2,
+// Dec backlash clearing) ported from PHD2 (OpenPHDGuiding) scope.cpp,
+// BSD-3-Clause.
 
 using NINA.Core.Enum;
 
@@ -11,30 +12,36 @@ public readonly record struct CalibrationStep(
 
 /// <summary>
 /// Drives mount calibration: pulse WEST until the star moves a threshold distance
-/// (measure RA angle+rate), recenter EAST, pulse SOUTH (measure Dec angle+rate).
+/// (measure RA angle+rate), recenter EAST, clear Dec backlash going SOUTH (count
+/// the slack take-up = backlash), then continue SOUTH to measure Dec angle+rate.
 /// The host feeds the current star centroid each tick and applies the returned
-/// pulse. MVP happy-path port of PHD2's calibration.
+/// pulse. Happy-path port of PHD2's calibration incl. backlash measurement.
 /// </summary>
 public sealed class CalibrationProcess {
-    private enum Phase { Init, West, EastRecenter, South, Done, Failed }
+    private enum Phase { Init, West, EastRecenter, DecClear, DecMeasure, Done, Failed }
 
     private readonly int _pulseMs;
     private readonly double _distThresholdPx;
+    private readonly double _catchThresholdPx; // motion that means backlash is taken up
     private readonly int _maxSteps;
     private readonly double _decRad;
 
     private Phase _phase = Phase.Init;
-    private double _startX, _startY;        // phase start position
+    private double _startX, _startY;     // phase start position
+    private double _decStartX, _decStartY; // Dec measure start (after backlash cleared)
     private int _stepCount;
-    private int _westSteps;                 // steps used in WEST (for EAST recenter)
-    private double _xAngle, _xRate, _yAngle, _yRate;
+    private int _westSteps;
+    private int _backlashSteps;
+    private double _xAngle, _xRate, _yAngle, _yRate, _backlashMs;
 
     public GuideCalibration Result { get; private set; } = GuideCalibration.Invalid;
 
     public CalibrationProcess(int pulseMs = 1000, double distThresholdPx = 25.0,
-                              int maxSteps = 60, double declinationRad = double.NaN) {
+                              int maxSteps = 60, double declinationRad = double.NaN,
+                              double catchThresholdPx = 3.0) {
         _pulseMs = Math.Max(50, pulseMs);
         _distThresholdPx = Math.Max(5.0, distThresholdPx);
+        _catchThresholdPx = Math.Max(1.0, catchThresholdPx);
         _maxSteps = Math.Max(4, maxSteps);
         _decRad = declinationRad;
     }
@@ -45,46 +52,61 @@ public sealed class CalibrationProcess {
             case Phase.Init:
                 _startX = curX; _startY = curY; _stepCount = 0;
                 _phase = Phase.West;
-                return new CalibrationStep(true, GuideDirections.guideWest, _pulseMs, false, false, "RA (west)");
+                return West();
 
             case Phase.West: {
                 _stepCount++;
-                double dx = curX - _startX, dy = curY - _startY;
-                double dist = Math.Sqrt(dx * dx + dy * dy);
-                if (dist >= _distThresholdPx) {
-                    _xAngle = Math.Atan2(dy, dx);
-                    _xRate = dist / (_stepCount * (double)_pulseMs);
+                double d = Dist(curX, curY, _startX, _startY);
+                if (d >= _distThresholdPx) {
+                    _xAngle = Math.Atan2(curY - _startY, curX - _startX);
+                    _xRate = d / (_stepCount * (double)_pulseMs);
                     _westSteps = _stepCount;
                     _phase = Phase.EastRecenter; _stepCount = 0;
-                    return new CalibrationStep(true, GuideDirections.guideEast, _pulseMs, false, false, "RA recenter (east)");
+                    return East();
                 }
                 if (_stepCount >= _maxSteps) { _phase = Phase.Failed; return Fail("RA did not move enough"); }
-                return new CalibrationStep(true, GuideDirections.guideWest, _pulseMs, false, false, "RA (west)");
+                return West();
             }
 
             case Phase.EastRecenter: {
                 _stepCount++;
                 if (_stepCount >= _westSteps) {
-                    _startX = curX; _startY = curY; _stepCount = 0;
-                    _phase = Phase.South;
-                    return new CalibrationStep(true, GuideDirections.guideSouth, _pulseMs, false, false, "Dec (south)");
+                    // Begin Dec: clear backlash going south, counting slack steps.
+                    _startX = curX; _startY = curY;
+                    _stepCount = 0; _backlashSteps = 0;
+                    _phase = Phase.DecClear;
+                    return South();
                 }
-                return new CalibrationStep(true, GuideDirections.guideEast, _pulseMs, false, false, "RA recenter (east)");
+                return East();
             }
 
-            case Phase.South: {
+            case Phase.DecClear: {
+                _backlashSteps++;
+                double moved = Dist(curX, curY, _startX, _startY);
+                if (moved >= _catchThresholdPx) {
+                    // Star caught: slack is taken up. Backlash = clearing pulses so far.
+                    _backlashMs = _backlashSteps * (double)_pulseMs;
+                    _decStartX = curX; _decStartY = curY;
+                    _stepCount = 0;
+                    _phase = Phase.DecMeasure;
+                    return South();
+                }
+                if (_backlashSteps >= _maxSteps) { _phase = Phase.Failed; return Fail("Dec did not move (backlash/jam?)"); }
+                return South();
+            }
+
+            case Phase.DecMeasure: {
                 _stepCount++;
-                double dx = curX - _startX, dy = curY - _startY;
-                double dist = Math.Sqrt(dx * dx + dy * dy);
-                if (dist >= _distThresholdPx) {
-                    _yAngle = Math.Atan2(dy, dx);
-                    _yRate = dist / (_stepCount * (double)_pulseMs);
-                    Result = new GuideCalibration(_xAngle, _yAngle, _xRate, _yRate, _decRad, true);
+                double d = Dist(curX, curY, _decStartX, _decStartY);
+                if (d >= _distThresholdPx) {
+                    _yAngle = Math.Atan2(curY - _decStartY, curX - _decStartX);
+                    _yRate = d / (_stepCount * (double)_pulseMs);
+                    Result = new GuideCalibration(_xAngle, _yAngle, _xRate, _yRate, _decRad, true, _backlashMs);
                     _phase = Phase.Done;
                     return new CalibrationStep(false, GuideDirections.guideNorth, 0, true, false, "Done");
                 }
                 if (_stepCount >= _maxSteps) { _phase = Phase.Failed; return Fail("Dec did not move enough"); }
-                return new CalibrationStep(true, GuideDirections.guideSouth, _pulseMs, false, false, "Dec (south)");
+                return South();
             }
 
             case Phase.Done:
@@ -94,6 +116,14 @@ public sealed class CalibrationProcess {
         }
     }
 
+    private static double Dist(double ax, double ay, double bx, double by) {
+        double dx = ax - bx, dy = ay - by;
+        return Math.Sqrt(dx * dx + dy * dy);
+    }
+    private CalibrationStep West() => new(true, GuideDirections.guideWest, _pulseMs, false, false, "RA (west)");
+    private CalibrationStep East() => new(true, GuideDirections.guideEast, _pulseMs, false, false, "RA recenter (east)");
+    private CalibrationStep South() => new(true, GuideDirections.guideSouth, _pulseMs, false, false,
+        _phase == Phase.DecClear ? "Dec backlash clear" : "Dec (south)");
     private static CalibrationStep Fail(string why) =>
         new(false, GuideDirections.guideNorth, 0, false, true, why);
 }

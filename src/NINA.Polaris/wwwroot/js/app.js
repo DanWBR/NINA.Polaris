@@ -678,6 +678,7 @@ function ninaApp() {
         // hysteresis on RA, resist-switch on Dec).
         nativeRaAlgorithm: 'hysteresis',
         nativeDecAlgorithm: 'resistswitch',
+        nativeBacklashComp: false,
         nativeGuideAlgorithms: [
             { id: 'hysteresis', name: 'Hysteresis' },
             { id: 'resistswitch', name: 'Resist Switch' },
@@ -11851,6 +11852,7 @@ function ninaApp() {
             this.guideCameraDriver = rig.guideCameraDriver || 'indi';
             this.nativeRaAlgorithm = rig.nativeRaAlgorithm || 'hysteresis';
             this.nativeDecAlgorithm = rig.nativeDecAlgorithm || 'resistswitch';
+            this.nativeBacklashComp = !!rig.nativeBacklashComp;
             this.equipMountChoice = rig.telescope || '';
             // Same pattern for the mount driver. For direct WiFi drivers
             // (synscan-wifi, nexstar-wifi, lx200-tcp) the "device name"
@@ -16351,6 +16353,12 @@ function ninaApp() {
                 this.nativeDecAlgorithm = value || 'resistswitch';
                 this._persistRigSelection({ nativeDecAlgorithm: this.nativeDecAlgorithm });
             }
+        },
+
+        // Toggle auto-measured Dec backlash compensation for the native guider.
+        setNativeBacklashComp(enabled) {
+            this.nativeBacklashComp = !!enabled;
+            this._persistRigSelection({ nativeBacklashComp: this.nativeBacklashComp });
         },
 
         // Native guide-camera driver kind (indi / alpaca / vendor SDK).
