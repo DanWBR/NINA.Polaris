@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260607-sensorgain">
+    <link rel="stylesheet" href="/css/app.css?v=20260607-holdrepeat">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -2862,30 +2862,42 @@
          keeps the drum in sync). -->
                         <div class="wheel-picker-group">
                             <div class="wheel-col">
-                                <button class="btn btn-sm wheel-nudge"
+                                <button class="btn btn-sm wheel-nudge" style="touch-action:none"
                                         :disabled="cameraStream.running || videoRecording.recording"
-                                        @click="videoWheelNudge('exp', -1)" title="Exposure -1 ms">&minus;</button>
+                                        @pointerdown.prevent="startWheelRepeat('exp', -1)"
+                                        @pointerup="stopWheelRepeat()" @pointerleave="stopWheelRepeat()"
+                                        @pointercancel="stopWheelRepeat()"
+                                        title="Exposure -1 ms (hold to repeat)">&minus;</button>
                                 <div data-wheel-picker
                                      data-label="Exposure (ms)"
                                      data-min="1" data-max="5000" data-step="1"
                                      data-bind="video.exposure" data-scale="1000"
                                      :data-disabled="cameraStream.running || videoRecording.recording"></div>
-                                <button class="btn btn-sm wheel-nudge"
+                                <button class="btn btn-sm wheel-nudge" style="touch-action:none"
                                         :disabled="cameraStream.running || videoRecording.recording"
-                                        @click="videoWheelNudge('exp', 1)" title="Exposure +1 ms">+</button>
+                                        @pointerdown.prevent="startWheelRepeat('exp', 1)"
+                                        @pointerup="stopWheelRepeat()" @pointerleave="stopWheelRepeat()"
+                                        @pointercancel="stopWheelRepeat()"
+                                        title="Exposure +1 ms (hold to repeat)">+</button>
                             </div>
                             <div class="wheel-col">
-                                <button class="btn btn-sm wheel-nudge"
+                                <button class="btn btn-sm wheel-nudge" style="touch-action:none"
                                         :disabled="cameraStream.running || videoRecording.recording"
-                                        @click="videoWheelNudge('gain', -1)" title="Gain -1">&minus;</button>
+                                        @pointerdown.prevent="startWheelRepeat('gain', -1)"
+                                        @pointerup="stopWheelRepeat()" @pointerleave="stopWheelRepeat()"
+                                        @pointercancel="stopWheelRepeat()"
+                                        title="Gain -1 (hold to repeat)">&minus;</button>
                                 <div data-wheel-picker
                                      data-label="Gain"
                                      data-min="0" data-max="600" data-step="1"
                                      data-bind="video.gain" data-scale="1"
                                      :data-disabled="cameraStream.running || videoRecording.recording"></div>
-                                <button class="btn btn-sm wheel-nudge"
+                                <button class="btn btn-sm wheel-nudge" style="touch-action:none"
                                         :disabled="cameraStream.running || videoRecording.recording"
-                                        @click="videoWheelNudge('gain', 1)" title="Gain +1">+</button>
+                                        @pointerdown.prevent="startWheelRepeat('gain', 1)"
+                                        @pointerup="stopWheelRepeat()" @pointerleave="stopWheelRepeat()"
+                                        @pointercancel="stopWheelRepeat()"
+                                        title="Gain +1 (hold to repeat)">+</button>
                             </div>
                             <!-- Wrapped in template x-if (rather than
              x-show) because the WheelPicker
@@ -2904,9 +2916,12 @@
              _mountWheelPickers() runs. -->
                             <template x-if="focusConnected && focusMaxPosition > 0">
                                 <div class="wheel-col">
-                                    <button class="btn btn-sm wheel-nudge"
+                                    <button class="btn btn-sm wheel-nudge" style="touch-action:none"
                                             :disabled="focusMoving"
-                                            @click="videoWheelNudge('focus', -1)" title="Focus -10">&minus;</button>
+                                            @pointerdown.prevent="startWheelRepeat('focus', -1)"
+                                            @pointerup="stopWheelRepeat()" @pointerleave="stopWheelRepeat()"
+                                            @pointercancel="stopWheelRepeat()"
+                                            title="Focus -10 (hold to repeat)">&minus;</button>
                                     <div data-wheel-picker
                                          data-label="Focus"
                                          data-min="0"
@@ -11999,7 +12014,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260607-sensorgain"></script>
+    <script src="/js/app.js?v=20260607-holdrepeat"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

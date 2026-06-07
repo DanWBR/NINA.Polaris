@@ -14677,6 +14677,42 @@ function ninaApp() {
             }
         },
 
+        // Press-and-hold auto-repeat for the wheel (-)/(+) buttons: one
+        // immediate nudge on press, then after a short delay it keeps
+        // nudging ~12x/s until release. Focus is special-cased: holding
+        // only moves the wheel locally (no API spam) and the absolute move
+        // is sent once on release.
+        startWheelRepeat(which, dir) {
+            this.stopWheelRepeat();
+            this._wheelRepeatFocus = (which === 'focus');
+            this._wheelTick(which, dir);
+            this._wheelRepeatTimer = setTimeout(() => {
+                this._wheelRepeatInterval = setInterval(() => this._wheelTick(which, dir), 80);
+            }, 400);
+        },
+
+        _wheelTick(which, dir) {
+            if (which === 'focus') {
+                if (this.focusMoving || !(this.focusMaxPosition > 0)) return;
+                const base = this.focusSliderDirty ? this.focusSliderTarget : this.focusPosition;
+                const p = Math.min(this.focusMaxPosition, Math.max(0, (base | 0) + dir * 10));
+                this.focusSliderTarget = p;
+                this.focusSliderDirty = true;
+            } else {
+                this.videoWheelNudge(which, dir);
+            }
+        },
+
+        stopWheelRepeat() {
+            if (this._wheelRepeatTimer) { clearTimeout(this._wheelRepeatTimer); this._wheelRepeatTimer = null; }
+            if (this._wheelRepeatInterval) { clearInterval(this._wheelRepeatInterval); this._wheelRepeatInterval = null; }
+            if (this._wheelRepeatFocus && this.focusSliderDirty) {
+                this.focusMoveTo(this.focusSliderTarget);
+                this.focusSliderDirty = false;
+            }
+            this._wheelRepeatFocus = false;
+        },
+
         async focusAbort() {
             try { await this.apiPost('/api/focuser/abort'); } catch (e) { }
         },
