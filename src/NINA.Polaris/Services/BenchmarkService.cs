@@ -49,12 +49,13 @@ public class BenchmarkService {
     private const int MinIters = 2;
     private const int MaxIters = 60;
 
-    // Composite-score baselines (rough Raspberry Pi 5 throughput) so a
+    // Composite-score baselines (measured Raspberry Pi 5 throughput) so a
     // Pi 5 scores ~100. Purely relative; the detailed table is the
-    // substance.
-    private const double StackBaselineMpxS = 4.0;
-    private const double EncodeBaselineMpxS = 8.0;
-    private const double CpuBaselineMflops = 1500.0;
+    // substance, and these constants are identical on every device so the
+    // ranking between boards is unaffected by their exact values.
+    private const double StackBaselineMpxS = 20.0;   // Pi 5 ~20 Mpx/s
+    private const double EncodeBaselineMpxS = 13.0;  // Pi 5 ~13 Mpx/s
+    private const double CpuBaselineMflops = 5000.0; // Pi 5 ~5 GFLOPS multi (compute-bound)
 
     public string State { get; private set; } = "idle"; // idle|running|complete|error
     public int Progress { get; private set; }
@@ -316,36 +317,43 @@ public class BenchmarkService {
 
     internal static CpuResult RunCpuWorkload(CancellationToken ct) {
         int cores = Math.Max(1, Environment.ProcessorCount);
-        const int size = 2_000_000;
-        const int passes = 60;
-        // 2 flops per element per pass (a multiply + an add).
-        double totalFlops = (double)size * passes * 2.0;
+        // Compute-bound FLOP kernel: a tight loop over four independent
+        // accumulator chains held in registers (no large array), so this
+        // measures CPU floating-point throughput, NOT memory bandwidth.
+        // That distinction matters: a memory-bound kernel saturates the
+        // shared bus with one thread on bandwidth-limited SBCs (Pi 5
+        // ~12 GB/s), so spreading it across cores adds contention and
+        // shows <1x "scaling" - misleading for a CPU score. With a
+        // register-bound kernel the multi-thread run scales ~core-count.
+        const long iters = 120_000_000;   // per single-thread run
+        const double flopsPerIter = 8.0;  // 4 chains x (multiply + add)
+        double singleFlops = iters * flopsPerIter;
 
-        var buf = new double[size];
-        for (int i = 0; i < size; i++) buf[i] = i % 1000 + 1;
-
-        // Single-thread warmup + measure.
-        FloatKernel(buf, 0, size, 2);
+        FloatChains(2_000_000); // warmup (JIT)
         ct.ThrowIfCancellationRequested();
         var sw = Stopwatch.StartNew();
-        FloatKernel(buf, 0, size, passes);
+        double sink = FloatChains(iters);
         sw.Stop();
         double singleMflops = sw.Elapsed.TotalSeconds > 0
-            ? totalFlops / sw.Elapsed.TotalSeconds / 1e6 : 0;
+            ? singleFlops / sw.Elapsed.TotalSeconds / 1e6 : 0;
 
-        // Multi-thread: same total work split across all cores.
+        // Multi-thread: every core runs the full per-core workload
+        // independently (no shared data), so total work = perCore * cores.
         ct.ThrowIfCancellationRequested();
-        sw.Restart();
         var opts = new ParallelOptions { MaxDegreeOfParallelism = cores, CancellationToken = ct };
-        int chunk = (size + cores - 1) / cores;
-        Parallel.For(0, cores, opts, c => {
-            int start = c * chunk;
-            int len = Math.Min(chunk, size - start);
-            if (len > 0) FloatKernel(buf, start, len, passes);
+        long perCore = iters;
+        double multiFlops = (double)perCore * flopsPerIter * cores;
+        double mtSink = 0;
+        var mtLock = new object();
+        sw.Restart();
+        Parallel.For(0, cores, opts, _ => {
+            double s = FloatChains(perCore);
+            lock (mtLock) { mtSink += s; }
         });
         sw.Stop();
         double multiMflops = sw.Elapsed.TotalSeconds > 0
-            ? totalFlops / sw.Elapsed.TotalSeconds / 1e6 : 0;
+            ? multiFlops / sw.Elapsed.TotalSeconds / 1e6 : 0;
+        GC.KeepAlive(sink + mtSink);
 
         // Memory bandwidth: stream a large buffer a few times.
         ct.ThrowIfCancellationRequested();
@@ -374,12 +382,22 @@ public class BenchmarkService {
             Cores: cores);
     }
 
-    private static void FloatKernel(double[] buf, int start, int len, int passes) {
-        for (int p = 0; p < passes; p++) {
-            for (int i = start; i < start + len; i++) {
-                buf[i] = buf[i] * 1.0000001 + 1.0;
-            }
+    /// <summary>Compute-bound FLOP loop: four independent multiply+add
+    /// accumulator chains kept in registers. Independent chains give the
+    /// CPU instruction-level parallelism to fill its FP pipeline, while
+    /// the lack of any array access keeps it off the memory bus so it
+    /// scales with core count when run on multiple threads. Returns the
+    /// accumulated value so the JIT cannot elide the loop. Factors are a
+    /// mix above and below 1.0 so the values stay finite over the run.</summary>
+    private static double FloatChains(long iters) {
+        double a = 1.0, b = 1.0001, c = 0.9999, d = 1.00002;
+        for (long i = 0; i < iters; i++) {
+            a = a * 1.0000001 + 0.5;
+            b = b * 0.9999999 + 0.25;
+            c = c * 1.0000002 + 0.125;
+            d = d * 0.9999998 + 0.0625;
         }
+        return a + b + c + d;
     }
 
     // ----- Optional live-camera workload -----
