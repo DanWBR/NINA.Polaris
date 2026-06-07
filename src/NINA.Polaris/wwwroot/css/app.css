@@ -11008,3 +11008,7 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .phd2-prof-canvas { width:100%; height:90px; display:block; }
 .phd2-statusbar { display:flex; gap:16px; flex-wrap:wrap; font-size:11px; color:#bbb;
     background:#0a0a0c; border:1px solid #222; border-radius:6px; padding:5px 10px; font-family:monospace; }
+
+/* Guiding config block in the GUIDE tab (backend picker + native settings) */
+.guide-config-block { background:#0a0a0c; border:1px solid #222; border-radius:6px;
+    padding:8px 10px; margin-bottom:8px; }

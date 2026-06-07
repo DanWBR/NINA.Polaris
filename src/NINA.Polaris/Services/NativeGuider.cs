@@ -552,8 +552,12 @@ public sealed class NativeGuider : IGuider, IDisposable {
 
     private async Task<IImageData?> CaptureFullAsync(ICamera cam, CancellationToken ct) {
         int expMs = Math.Max(50, Rig.NativeGuideExposureMs);
+        int bin = Math.Clamp(Rig.NativeGuideBin <= 0 ? 1 : Rig.NativeGuideBin, 1, 4);
+        var opts = new CaptureOptions(
+            Gain: Rig.NativeGuideGain > 0 ? Rig.NativeGuideGain : (int?)null,
+            BinX: bin, BinY: bin);
         try {
-            return await cam.CaptureAsync(expMs / 1000.0, null, ct);
+            return await cam.CaptureAsync(expMs / 1000.0, opts, ct);
         } catch (OperationCanceledException) {
             throw;
         } catch (Exception ex) {

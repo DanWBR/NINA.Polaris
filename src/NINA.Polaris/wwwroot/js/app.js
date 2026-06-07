@@ -674,6 +674,8 @@ function ninaApp() {
         guideCameraDriver: 'indi',
         guideCameraVendorDevices: [],
         guideCameraDiscovering: false,
+        guideGain: 0,   // native guide-camera gain (0 = camera default)
+        guideBin: 1,    // native guide-camera binning (1 or 2)
         // Native guider per-axis algorithm selection (PHD2 defaults:
         // hysteresis on RA, resist-switch on Dec).
         nativeRaAlgorithm: 'hysteresis',
@@ -12061,6 +12063,8 @@ function ninaApp() {
             this.guiderDriver = rig.guiderDriver || 'phd2';
             this.guideCamera = rig.guideCamera || '';
             this.guideCameraDriver = rig.guideCameraDriver || 'indi';
+            this.guideGain = rig.nativeGuideGain || 0;
+            this.guideBin = rig.nativeGuideBin || 1;
             this.nativeRaAlgorithm = rig.nativeRaAlgorithm || 'hysteresis';
             this.nativeDecAlgorithm = rig.nativeDecAlgorithm || 'resistswitch';
             this.nativeBacklashComp = !!rig.nativeBacklashComp;
@@ -16617,6 +16621,46 @@ function ninaApp() {
         setGuideCamera(id) {
             this.guideCamera = id || '';
             this._persistRigSelection({ guideCamera: this.guideCamera });
+        },
+
+        // Native guide-camera gain + binning (mirrors the imaging camera's
+        // per-capture tunables, persisted on the rig).
+        setGuideGain(v) {
+            this.guideGain = Math.max(0, Number(v) || 0);
+            this._persistRigSelection({ nativeGuideGain: this.guideGain });
+        },
+        setGuideBin(v) {
+            this.guideBin = (Number(v) === 2) ? 2 : 1;
+            this._persistRigSelection({ nativeGuideBin: this.guideBin });
+        },
+
+        // Connect/disconnect the native guide camera (its own switch on the
+        // RIGS Guide Camera card). Mirrors equipConnectCamera: select by
+        // (device, driver) then connect; the WS guider.guideCameraConnected
+        // flag drives the switch state.
+        async equipConnectGuideCamera() {
+            if (!this.guideCamera) { this.toast('Select a guide camera first', 'warn'); return; }
+            try {
+                const qs = this.guideCameraDriver && this.guideCameraDriver !== 'indi'
+                    ? `?driver=${encodeURIComponent(this.guideCameraDriver)}` : '';
+                await this.apiPost(`/api/guider/camera/select/${encodeURIComponent(this.guideCamera)}${qs}`);
+                await this.apiPost('/api/guider/camera/connect');
+                this._persistRigSelection({
+                    guideCamera: this.guideCamera,
+                    guideCameraDriver: this.guideCameraDriver || 'indi'
+                });
+                this.toast('Guide camera connected: ' + this.guideCamera, 'ok');
+            } catch (e) {
+                this.toast('Guide camera connection failed: ' + (e.message || e), 'error');
+            }
+        },
+        async equipDisconnectGuideCamera() {
+            try {
+                await this.apiPost('/api/guider/camera/disconnect');
+                this.toast('Guide camera disconnected', 'ok');
+            } catch (e) {
+                this.toast('Guide camera disconnect failed: ' + (e.message || e), 'error');
+            }
         },
 
         // "Detect" handler for non-INDI guide-camera drivers. Reuses the

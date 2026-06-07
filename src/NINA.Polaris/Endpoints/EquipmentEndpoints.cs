@@ -169,6 +169,10 @@ public static class EquipmentEndpoints {
                 if (!string.IsNullOrWhiteSpace(update.NativePierSideHandling))
                     r.NativePierSideHandling = update.NativePierSideHandling.Trim().ToLowerInvariant();
                 r.NativeReverseDecAfterFlip = update.NativeReverseDecAfterFlip;
+                if (update.NativeGuideGain >= 0)
+                    r.NativeGuideGain = update.NativeGuideGain;
+                if (update.NativeGuideBin > 0)
+                    r.NativeGuideBin = Math.Clamp(update.NativeGuideBin, 1, 4);
                 // New guide-scope metadata fields (RIGS tab card).
                 // Defensive: clamp aperture to a sane lower bound so
                 // a stray zero doesn't blow up the f-ratio calc on the UI.

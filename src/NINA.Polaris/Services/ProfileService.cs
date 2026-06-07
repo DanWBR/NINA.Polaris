@@ -276,6 +276,8 @@ public class ProfileService {
             NativeMaxGuideStars = src.NativeMaxGuideStars,
             NativePierSideHandling = src.NativePierSideHandling,
             NativeReverseDecAfterFlip = src.NativeReverseDecAfterFlip,
+            NativeGuideGain = src.NativeGuideGain,
+            NativeGuideBin = src.NativeGuideBin,
             PHD2Host = src.PHD2Host, PHD2Port = src.PHD2Port,
             // PHD2 deep-integration fields (cloned rig starts un-matched,
             // it will run its own first-time profile lookup the first time
@@ -921,6 +923,14 @@ public class EquipmentProfile {
     /// <summary>Maximum number of guide stars to track when multi-star is on
     /// (primary + secondaries). Clamped to [1, 12].</summary>
     public int NativeMaxGuideStars { get; set; } = 8;
+
+    /// <summary>Guide-camera gain for native guiding. 0 = leave the camera's
+    /// current/default gain.</summary>
+    public int NativeGuideGain { get; set; } = 0;
+
+    /// <summary>Guide-camera binning for native guiding (1 = 1x1, 2 = 2x2).
+    /// Bin 2 lowers resolution but boosts SNR + frame rate, common for guiding.</summary>
+    public int NativeGuideBin { get; set; } = 1;
 
     /// <summary>How the native guider reacts to a German-equatorial pier-side
     /// change (meridian flip) detected mid-session: "mirror" (auto-adjust the

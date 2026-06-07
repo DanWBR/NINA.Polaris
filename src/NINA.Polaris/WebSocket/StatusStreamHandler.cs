@@ -190,6 +190,9 @@ public static class StatusStreamHandler {
                             }),
                             // Live guide-frame view (native backend only; null for PHD2).
                             view = activeGuider.ViewState,
+                            // Native guide-camera connection state (its own connect switch).
+                            guideCameraConnected = equip.GuideCamera?.IsConnected ?? false,
+                            guideCameraName = equip.GuideCamera?.DeviceName,
                             profileSync = profileSyncPayload,
                             calibrateJob = calibrateJobPayload,
                             guiSession = guiSessionPayload,
@@ -199,6 +202,8 @@ public static class StatusStreamHandler {
                         guiderPayload = new {
                             backend = activeGuider.Backend,
                             connected = false, appState = "Stopped",
+                            guideCameraConnected = equip.GuideCamera?.IsConnected ?? false,
+                            guideCameraName = equip.GuideCamera?.DeviceName,
                             profileSync = profileSyncPayload,
                             calibrateJob = calibrateJobPayload,
                             guiSession = guiSessionPayload,

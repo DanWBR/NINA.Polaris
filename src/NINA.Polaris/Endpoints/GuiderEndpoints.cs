@@ -77,6 +77,32 @@ public static class GuiderEndpoints {
             return Results.File(bytes, "image/jpeg");
         });
 
+        // ----- Native guide-camera selection + connection -----
+        // Mirrors the imaging-camera select/connect/disconnect so the guide
+        // camera has its own connect switch independent of starting guiding.
+        group.MapPost("/camera/select/{deviceName}", (EquipmentManager equip, string deviceName, string? driver) => {
+            try {
+                equip.SelectGuideCamera(driver ?? "indi", deviceName);
+                return Results.Ok(new { selected = deviceName, driver = driver ?? "indi" });
+            } catch (Exception ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        group.MapPost("/camera/connect", async (EquipmentManager equip) => {
+            if (equip.GuideCamera == null)
+                return Results.BadRequest(new { error = "No guide camera selected. Use POST /api/guider/camera/select/{name} first" });
+            await equip.GuideCamera.ConnectAsync();
+            return Results.Ok(new { status = "connected", device = equip.GuideCamera.DeviceName });
+        });
+
+        group.MapPost("/camera/disconnect", async (EquipmentManager equip) => {
+            if (equip.GuideCamera == null)
+                return Results.Ok(new { status = "disconnected" });
+            await equip.GuideCamera.DisconnectAsync();
+            return Results.Ok(new { status = "disconnected" });
+        });
+
         group.MapPost("/connect", async (ActiveGuiderProvider guiders, ConnectGuiderRequest? request) => {
             var g = guiders.Active;
             var host = string.IsNullOrWhiteSpace(request?.Host) ? "localhost" : request!.Host!;
