@@ -1,3 +1,6 @@
+using System.Collections.Concurrent;
+using System.Threading.Tasks;
+
 namespace NINA.Image.ImageAnalysis;
 
 public class StarDetector {
@@ -152,13 +155,32 @@ public class StarDetector {
     }
 
     private static (double median, double mad) ComputeStats(ushort[] data) {
+        // BENCH-PERF: two full-frame histogram passes dominate ComputeStats
+        // on a 16 MP frame. Build per-partition local bins and merge once;
+        // the merged counts are identical to the serial scan (sums are
+        // order-independent). The flood-fill detection below stays serial
+        // because it shares the visited[] mask.
         var histogram = new int[65536];
-        int nonZero = 0;
-        for (int i = 0; i < data.Length; i++) {
-            var v = data[i];
-            histogram[v]++;
-            if (v > 0) nonZero++;
-        }
+        long nonZeroL = 0;
+        object statLock = new object();
+        Parallel.ForEach(Partitioner.Create(0, data.Length), () => (new int[65536], 0L),
+            (range, _, tl) => {
+                var (bins, nz) = tl;
+                for (int i = range.Item1; i < range.Item2; i++) {
+                    var v = data[i];
+                    bins[v]++;
+                    if (v > 0) nz++;
+                }
+                return (bins, nz);
+            },
+            tl => {
+                lock (statLock) {
+                    var (bins, nz) = tl;
+                    for (int b = 0; b < 65536; b++) histogram[b] += bins[b];
+                    nonZeroL += nz;
+                }
+            });
+        int nonZero = (int)Math.Min(nonZeroL, int.MaxValue);
 
         // If the zero bucket dominates the buffer (subframe black
         // border, un-touched live-stack accumulator cells from
@@ -183,12 +205,24 @@ public class StarDetector {
         }
 
         var devHist = new int[65536];
-        for (int i = 0; i < data.Length; i++) {
-            var v = data[i];
-            if (excludeZeros && v == 0) continue;
-            int dev = (int)Math.Abs(v - median);
-            if (dev < 65536) devHist[dev]++;
-        }
+        bool excludeZeros0 = excludeZeros;
+        double median1 = median;
+        object devStatLock = new object();
+        Parallel.ForEach(Partitioner.Create(0, data.Length), () => new int[65536],
+            (range, _, bins) => {
+                for (int i = range.Item1; i < range.Item2; i++) {
+                    var v = data[i];
+                    if (excludeZeros0 && v == 0) continue;
+                    int dev = (int)Math.Abs(v - median1);
+                    if (dev < 65536) bins[dev]++;
+                }
+                return bins;
+            },
+            bins => {
+                lock (devStatLock) {
+                    for (int b = 0; b < 65536; b++) devHist[b] += bins[b];
+                }
+            });
 
         cumulative = 0;
         double mad = 0;

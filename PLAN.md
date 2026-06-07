@@ -12397,3 +12397,37 @@ button + modal with Chart.js curves + per-gain table; cache-bust
 chart), tests `SensorAnalysisServiceTests` (11 cases: LinFit, BuildRow,
 DetectQuantStep, BuildGainList, FindUnityGain, RegionDiffVar),
 docs/user-guide/sensor-analysis.md.
+
+---
+
+## PERF: parallelize the image pipeline hot loops
+
+The Hardware Benchmark exposed that the capture/stacking pipeline ran
+almost entirely single-threaded: a 16 MP frame took ~520 ms to resample,
+~240 ms to detect stars, and ~1450 ms to render the preview JPEG even on a
+24-core i9, because each kernel iterated the whole frame on one thread. On
+a 4-core Pi this left 3 cores idle; on the i9 it left 23 idle, so the
+synthetic stacking/encode throughput barely beat a Pi 5 despite the raw
+CPU score being ~4x higher.
+
+Fix: fan the per-pixel kernels in `NINA.Image.Portable/ImageAnalysis` out
+across cores with `Parallel.For` / `Parallel.ForEach(Partitioner.Create...)`.
+Every change keeps the output bit-for-bit identical to the old serial
+version (rows are independent; histogram/max reductions use per-partition
+local accumulators merged once, and sums/maxima are order-independent), and
+degrades cleanly to sequential on the single-threaded WASM runtime.
+
+- `ImageResampler.ApplyTransform`: row-parallel affine resample (the
+  per-frame alignment step in live stacking). Per-pixel math unchanged.
+- `BayerDebayer.Bilinear`: row-parallel AND the per-pixel colour delegate
+  (invoked ~3x per pixel = ~50M indirect calls/frame) replaced by a
+  length-4 int[] 2x2 block table read.
+- `AutoStretch`: parallel LUT apply (runs 3x per RGB preview), parallel
+  observed-max scan and parallel median/MAD histogram passes.
+- `StarDetector.ComputeStats`: parallel histogram + dev-histogram passes
+  (the flood-fill detection stays serial since it shares the visited mask).
+
+Files: `NINA.Image.Portable/ImageAnalysis/{ImageResampler,BayerDebayer,
+AutoStretch,StarDetector}.cs`. Verified: Portable + NINA.Polaris + WASM
+build clean; 53 image-kernel tests + 19 benchmark/sensor tests green
+(output determinism preserved).

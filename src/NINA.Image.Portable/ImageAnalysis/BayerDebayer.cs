@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using NINA.Core.Enum;
 
 namespace NINA.Image.ImageAnalysis;
@@ -37,17 +38,25 @@ public static class BayerDebayer {
         var b = new ushort[n];
 
         // For each output pixel, identify which CFA colour it has and
-        // bilinear-interpolate the other two from neighbours.
-        // ColorAt(x, y) returns the channel index 0=R, 1=G, 2=B for the
-        // raw pixel at (x, y) under the chosen pattern. Edges fall back
-        // to clamping; demosaic noise on the 1-pixel border is fine for
-        // a preview path.
-        Func<int, int, int> colorAt = ColorMapFor(pattern);
+        // bilinear-interpolate the other two from neighbours. The colour
+        // at (x, y) depends only on (x&1, y&1), so the whole pattern is a
+        // 2x2 lookup table (block[(y&1)*2 + (x&1)] = 0=R/1=G/2=B). This
+        // replaces the per-pixel delegate invocation that the old loop
+        // paid 3x per pixel (~50M indirect calls on a 16 MP frame); the
+        // table read is a couple of branch-free integer ops instead.
+        //
+        // BENCH-PERF: rows are independent, so the loop fans out across
+        // cores. Output is bit-for-bit identical to the old serial path.
+        // On WASM (single-threaded mono) it degrades to sequential.
+        int[] block = ColorBlockFor(pattern);
 
-        for (int y = 0; y < height; y++) {
+        Parallel.For(0, height, y => {
+            int yp = y & 1;
+            int rowBase = yp << 1;
             for (int x = 0; x < width; x++) {
                 int idx = y * width + x;
-                int colour = colorAt(x, y);
+                int xp = x & 1;
+                int colour = block[rowBase + xp];
                 ushort raw = cfa[idx];
 
                 switch (colour) {
@@ -60,9 +69,9 @@ public static class BayerDebayer {
                              // horizontal/vertical neighbours depending
                              // on which row we're on.
                         g[idx] = raw;
-                        // Use the colour map to find which axis has R
-                        // vs B around this green pixel.
-                        if (HasColourOnRow(colorAt, x, y, 0, width)) {
+                        // The other-parity column on this row carries R or
+                        // B; if it is R, reds are horizontal from here.
+                        if (block[rowBase + (xp ^ 1)] == 0) {
                             // Reds on the same row (left/right), blues
                             // above/below.
                             r[idx] = AvgH(cfa, x, y, width);
@@ -79,7 +88,7 @@ public static class BayerDebayer {
                         break;
                 }
             }
-        }
+        });
 
         return new Channels(r, g, b);
     }
@@ -100,34 +109,21 @@ public static class BayerDebayer {
 
     // --- internals ---
 
-    private static Func<int, int, int> ColorMapFor(BayerPatternEnum pattern) {
-        // 2×2 block read row-major: returns 0=R, 1=G, 2=B for each
-        // (x % 2, y % 2). Each pattern is fully described by its
-        // top-left block.
+    /// <summary>
+    /// The 2x2 colour block for a pattern, flattened row-major as
+    /// <c>block[(y&amp;1)*2 + (x&amp;1)]</c> = 0=R / 1=G / 2=B. Each pattern is
+    /// fully described by its top-left 2x2 block, so a length-4 int[]
+    /// replaces the old per-pixel delegate entirely.
+    /// </summary>
+    private static int[] ColorBlockFor(BayerPatternEnum pattern) {
+        // Layout: index 0 = (x0,y0), 1 = (x1,y0), 2 = (x0,y1), 3 = (x1,y1).
         return pattern switch {
-            BayerPatternEnum.RGGB => (x, y) => ((y & 1) == 0)
-                ? ((x & 1) == 0 ? 0 : 1)
-                : ((x & 1) == 0 ? 1 : 2),
-            BayerPatternEnum.GRBG => (x, y) => ((y & 1) == 0)
-                ? ((x & 1) == 0 ? 1 : 0)
-                : ((x & 1) == 0 ? 2 : 1),
-            BayerPatternEnum.GBRG => (x, y) => ((y & 1) == 0)
-                ? ((x & 1) == 0 ? 1 : 2)
-                : ((x & 1) == 0 ? 0 : 1),
-            BayerPatternEnum.BGGR => (x, y) => ((y & 1) == 0)
-                ? ((x & 1) == 0 ? 2 : 1)
-                : ((x & 1) == 0 ? 1 : 0),
+            BayerPatternEnum.RGGB => new[] { 0, 1, 1, 2 },
+            BayerPatternEnum.GRBG => new[] { 1, 0, 2, 1 },
+            BayerPatternEnum.GBRG => new[] { 1, 2, 0, 1 },
+            BayerPatternEnum.BGGR => new[] { 2, 1, 1, 0 },
             _ => throw new ArgumentException($"Unsupported pattern {pattern}")
         };
-    }
-
-    /// <summary>Is the queried <paramref name="colour"/> present on the
-    /// same row as the pixel at (x, y)? Used at green sites to figure
-    /// out whether R is horizontal or vertical from this green.</summary>
-    private static bool HasColourOnRow(Func<int, int, int> map, int x, int y, int colour, int width) {
-        if (x + 1 < width  && map(x + 1, y) == colour) return true;
-        if (x - 1 >= 0      && map(x - 1, y) == colour) return true;
-        return false;
     }
 
     private static ushort AvgN4(ushort[] cfa, int x, int y, int w, int h) {

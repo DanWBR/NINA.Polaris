@@ -1,3 +1,6 @@
+using System.Collections.Concurrent;
+using System.Threading.Tasks;
+
 namespace NINA.Image.ImageAnalysis;
 
 public static class AutoStretch {
@@ -50,9 +53,15 @@ public static class AutoStretch {
             lut[i] = (byte)(stretched * 255);
         }
 
-        for (int i = 0; i < data.Length && i < pixelCount; i++) {
-            result[i] = lut[data[i]];
-        }
+        // BENCH-PERF: the LUT apply is a pure per-pixel map (each output
+        // cell depends only on its own input), so it fans out across cores.
+        // For an RGB preview this runs three times over the full frame, so
+        // it is one of the hottest pixel loops in the encode path.
+        int n = Math.Min(data.Length, pixelCount);
+        Parallel.ForEach(Partitioner.Create(0, n), range => {
+            for (int i = range.Item1; i < range.Item2; i++)
+                result[i] = lut[data[i]];
+        });
         return result;
     }
 
@@ -115,9 +124,16 @@ public static class AutoStretch {
         // black, making the user see the image as "smaller".
         ushort observedMax = 0;
         int limit = Math.Min(data.Length, pixelCount);
-        for (int i = 0; i < limit; i++) {
-            if (data[i] > observedMax) observedMax = data[i];
-        }
+        // BENCH-PERF: max-reduction over range partitions, merged once per
+        // partition. Identical result to the serial scan, just fanned out.
+        object maxLock = new object();
+        Parallel.ForEach(Partitioner.Create(0, limit), () => (ushort)0,
+            (range, _, local) => {
+                for (int i = range.Item1; i < range.Item2; i++)
+                    if (data[i] > local) local = data[i];
+                return local;
+            },
+            local => { lock (maxLock) { if (local > observedMax) observedMax = local; } });
         ushort wallThreshold = (ushort)(topVal * 0.99);
         ushort satThreshold = (observedMax >= wallThreshold && observedMax < topVal)
             ? observedMax : topVal;
@@ -126,14 +142,31 @@ public static class AutoStretch {
         // (drop 0 and anything at the OBSERVED saturation point).
         // Black borders from a crop / dead pixel rows shouldn't
         // bias the background; nor should saturated highlights.
+        // BENCH-PERF: build the histogram with per-partition local bins
+        // then merge once. Sums are order-independent so the merged
+        // histogram (and sampleCount) match the serial version exactly.
         var histogram = new int[65536];
         long sampleCount = 0;
-        for (int i = 0; i < limit; i++) {
-            ushort v = data[i];
-            if (v == 0 || v >= satThreshold) continue;
-            histogram[v]++;
-            sampleCount++;
-        }
+        ushort satThreshold0 = satThreshold;
+        object histLock = new object();
+        Parallel.ForEach(Partitioner.Create(0, limit), () => (new int[65536], 0L),
+            (range, _, tl) => {
+                var (bins, cnt) = tl;
+                for (int i = range.Item1; i < range.Item2; i++) {
+                    ushort v = data[i];
+                    if (v == 0 || v >= satThreshold0) continue;
+                    bins[v]++;
+                    cnt++;
+                }
+                return (bins, cnt);
+            },
+            tl => {
+                lock (histLock) {
+                    var (bins, cnt) = tl;
+                    for (int b = 0; b < 65536; b++) histogram[b] += bins[b];
+                    sampleCount += cnt;
+                }
+            });
         if (sampleCount == 0) {
             // Uniformly saturated (or uniformly zero) image. Set
             // white = the observed brightness so overexposed frames
@@ -162,12 +195,23 @@ public static class AutoStretch {
         // satThreshold above — using topVal here would re-include
         // saturated pixels and pull MAD toward zero).
         var devHistogram = new int[65536];
-        for (int i = 0; i < limit; i++) {
-            ushort v = data[i];
-            if (v == 0 || v >= satThreshold) continue;
-            int dev = (int)Math.Abs(v - median);
-            if (dev < 65536) devHistogram[dev]++;
-        }
+        double median0 = median;
+        object devLock = new object();
+        Parallel.ForEach(Partitioner.Create(0, limit), () => new int[65536],
+            (range, _, bins) => {
+                for (int i = range.Item1; i < range.Item2; i++) {
+                    ushort v = data[i];
+                    if (v == 0 || v >= satThreshold0) continue;
+                    int dev = (int)Math.Abs(v - median0);
+                    if (dev < 65536) bins[dev]++;
+                }
+                return bins;
+            },
+            bins => {
+                lock (devLock) {
+                    for (int b = 0; b < 65536; b++) devHistogram[b] += bins[b];
+                }
+            });
         cumulative = 0;
         double mad = 0;
         for (int i = 0; i < devHistogram.Length; i++) {
