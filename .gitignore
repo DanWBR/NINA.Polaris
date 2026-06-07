@@ -434,3 +434,11 @@ scripts/.apass-cache/
 /external_tools
 /build/deb-arm64
 /scripts/.dso-cache
+
+# --- Vendored camera SDK native libraries (force-tracked) ---
+# The generic `x64/` and `[Aa][Rr][Mm]64/` build-output ignores above also
+# match the vendored SDK arch folders under camera_sdk/ (e.g.
+# camera_sdk/ToupTek/linux/arm64/), which silently dropped the bundled .so/.dll
+# from the repo and broke per-RID packaging (ToupTek showed "not installed").
+# The shipped libs are committed via `git add -f` and stay tracked; if you add
+# a new vendor/arch the build packages, force-add its lib the same way.
