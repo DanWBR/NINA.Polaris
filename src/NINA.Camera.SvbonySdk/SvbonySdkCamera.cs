@@ -78,7 +78,13 @@ public sealed class SvbonySdkCamera : ICamera {
     // ----- connect / disconnect -----
 
     public Task ConnectAsync(CancellationToken ct = default) => Task.Run(() => {
-        Check(SVBOpenCamera(_cameraId), "SVBOpenCamera");
+        var openErr = SVBOpenCamera(_cameraId);
+        if (openErr != SVB_ERROR_CODE.SVB_SUCCESS)
+            throw new InvalidOperationException(
+                $"Failed to open the SVBony camera (SVBOpenCamera: {openErr}). " +
+                "The camera may already be in use by another process. If an INDI " +
+                "driver for this camera is connected, disconnect it (or remove it " +
+                "from the running indiserver profile) before using the native SDK backend.");
 
         var info = new SVB_CAMERA_INFO();
         if (SVBGetCameraInfo(ref info, _cameraId) == SVB_ERROR_CODE.SVB_SUCCESS

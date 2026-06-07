@@ -2570,45 +2570,46 @@
                              focusSliderTarget so the ~1Hz status push does
                              not snap the thumb under your finger; the move
                              commits on release (@change). -->
-                        <div class="control-row preview-focus-slider-row" style="align-items:center; gap:6px">
-                            <button class="btn btn-sm" style="touch-action:none" :disabled="focusMoving"
+                        <div class="control-row preview-focus-slider-row" style="align-items:center; gap:4px; flex-wrap:nowrap">
+                            <button class="btn btn-sm" style="touch-action:none; flex:0 0 auto" :disabled="focusMoving"
                                     @pointerdown.prevent="startFocusNudgeRepeat(-focusStepFast)"
                                     @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
                                     @pointercancel="stopFocusNudgeRepeat()"
                                     :title="'Out ' + focusStepFast + ' (fast, hold to repeat)'">&laquo;</button>
-                            <button class="btn btn-sm" style="touch-action:none" :disabled="focusMoving"
+                            <button class="btn btn-sm" style="touch-action:none; flex:0 0 auto" :disabled="focusMoving"
                                     @pointerdown.prevent="startFocusNudgeRepeat(-focusStepSlow)"
                                     @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
                                     @pointercancel="stopFocusNudgeRepeat()"
                                     :title="'Out ' + focusStepSlow + ' (slow, hold to repeat)'">&lt;</button>
-                            <input type="range" class="focus-slider" style="flex:1 1 auto; min-width:60px"
+                            <input type="range" class="focus-slider" style="flex:1 1 auto; min-width:40px"
                                    min="0" :max="focusMaxPosition > 0 ? focusMaxPosition : 100000" step="1"
                                    :value="focusSliderDirty ? focusSliderTarget : focusPosition"
                                    :disabled="focusMoving || !(focusMaxPosition > 0)"
                                    @input="focusSliderTarget = +$event.target.value; focusSliderDirty = true"
                                    @change="focusMoveTo(focusSliderTarget); focusSliderDirty = false"
                                    title="Drag to focus position">
-                            <button class="btn btn-sm" style="touch-action:none" :disabled="focusMoving"
+                            <button class="btn btn-sm" style="touch-action:none; flex:0 0 auto" :disabled="focusMoving"
                                     @pointerdown.prevent="startFocusNudgeRepeat(focusStepSlow)"
                                     @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
                                     @pointercancel="stopFocusNudgeRepeat()"
                                     :title="'In ' + focusStepSlow + ' (slow, hold to repeat)'">&gt;</button>
-                            <button class="btn btn-sm" style="touch-action:none" :disabled="focusMoving"
+                            <button class="btn btn-sm" style="touch-action:none; flex:0 0 auto" :disabled="focusMoving"
                                     @pointerdown.prevent="startFocusNudgeRepeat(focusStepFast)"
                                     @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
                                     @pointercancel="stopFocusNudgeRepeat()"
                                     :title="'In ' + focusStepFast + ' (fast, hold to repeat)'">&raquo;</button>
                         </div>
-                        <!-- Type an absolute position + Goto. -->
-                        <div class="control-row preview-focus-goto-row" style="align-items:center; gap:6px; margin-top:4px">
+                        <!-- Absolute go-to row: label + input + Go, on one line. -->
+                        <div class="control-row preview-focus-goto-row" style="align-items:center; gap:6px; margin-top:4px; flex-wrap:nowrap">
+                            <span class="text-muted" style="font-size:12px; flex:0 0 auto; white-space:nowrap">GoTo Position</span>
                             <input type="number" min="0" step="1"
-                                   class="input-sm focus-goto-inline" style="flex:1 1 auto"
+                                   class="input-sm focus-goto-inline" style="flex:1 1 auto; min-width:40px"
                                    x-model.number="focusGotoTarget"
                                    :disabled="focusMoving"
                                    @keydown.enter.prevent="focusMoveTo(focusGotoTarget)"
                                    title="Type an absolute position">
-                            <button class="btn btn-sm" :disabled="focusMoving"
-                                    @click="focusMoveTo(focusGotoTarget)" title="Go to the entered position">Goto</button>
+                            <button class="btn btn-sm" style="flex:0 0 auto" :disabled="focusMoving"
+                                    @click="focusMoveTo(focusGotoTarget)" title="Go to the entered position">Go</button>
                         </div>
                     </div>
                     </div><!-- /.shutter-inputs -->

@@ -86,7 +86,13 @@ public sealed class AsiSdkCamera : ICamera {
         }
         if (!found) throw new InvalidOperationException($"ASI camera id {_cameraId} not found.");
 
-        Check(ASIOpenCamera(_cameraId), "ASIOpenCamera");
+        var openErr = ASIOpenCamera(_cameraId);
+        if (openErr != ASI_ERROR_CODE.ASI_SUCCESS)
+            throw new InvalidOperationException(
+                $"Failed to open the ZWO ASI camera (ASIOpenCamera: {openErr}). " +
+                "The camera may already be in use by another process. If an INDI " +
+                "driver for this camera is connected, disconnect it (or remove it " +
+                "from the running indiserver profile) before using the native SDK backend.");
         Check(ASIInitCamera(_cameraId), "ASIInitCamera");
 
         if (!string.IsNullOrWhiteSpace(info.Name)) DeviceName = info.Name;

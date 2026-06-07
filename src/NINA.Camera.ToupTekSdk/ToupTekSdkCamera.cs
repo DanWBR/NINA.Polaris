@@ -102,7 +102,11 @@ public sealed class ToupTekSdkCamera : ICamera {
         } catch { }
 
         var cam = Toupcam.Open(_camId);
-        if (cam == null) throw new InvalidOperationException($"ToupTek camera '{_camId}' could not be opened.");
+        if (cam == null) throw new InvalidOperationException(
+            $"Failed to open the ToupTek camera '{_camId}'. The camera may already " +
+            "be in use by another process. If an INDI driver for this camera is " +
+            "connected, disconnect it (or remove it from the running indiserver " +
+            "profile) before using the native SDK backend.");
         _cam = cam;
 
         _isColor = (flag & (ulong)Toupcam.eFLAG.FLAG_MONO) == 0;

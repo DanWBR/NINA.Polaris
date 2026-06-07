@@ -77,7 +77,13 @@ public sealed class PlayerOneSdkCamera : ICamera {
         if (POAGetCameraPropertiesByID(_cameraId, ref info) != POAErrors.POA_OK)
             throw new InvalidOperationException($"PlayerOne camera id {_cameraId} not found.");
 
-        Check(POAOpenCamera(_cameraId), "POAOpenCamera");
+        var openErr = POAOpenCamera(_cameraId);
+        if (openErr != POAErrors.POA_OK)
+            throw new InvalidOperationException(
+                $"Failed to open the PlayerOne camera (POAOpenCamera: {openErr}). " +
+                "The camera may already be in use by another process. If an INDI " +
+                "driver for this camera is connected, disconnect it (or remove it " +
+                "from the running indiserver profile) before using the native SDK backend.");
         Check(POAInitCamera(_cameraId), "POAInitCamera");
 
         if (!string.IsNullOrWhiteSpace(info.cameraModelName)) DeviceName = info.cameraModelName;
