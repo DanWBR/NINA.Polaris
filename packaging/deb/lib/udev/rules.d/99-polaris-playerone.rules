@@ -1,0 +1,7 @@
+# N.I.N.A. Polaris — PlayerOne camera USB access (from the PlayerOne SDK).
+# Bumps usbfs memory so high-fps USB3 streaming has enough buffer (the
+# 16 MB default drops frames on large/fast ROIs), and grants non-root
+# access to PlayerOne devices (vendor id 0xA0A0). Reloaded by the package
+# postinst.
+ACTION=="add", ATTRS{idVendor}=="a0a0", RUN+="/bin/sh -c '/bin/echo 256 >/sys/module/usbcore/parameters/usbfs_memory_mb'"
+SUBSYSTEMS=="usb", ATTR{idVendor}=="a0a0", MODE="0666"

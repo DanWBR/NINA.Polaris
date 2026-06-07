@@ -35,10 +35,32 @@ public class NativeCameraSdkTests {
     }
 
     [Test]
+    public void PlayerOneRegistry_IsAvailable_DoesNotThrow() {
+        Assert.That(NINA.Camera.PlayerOneSdk.PlayerOneRegistry.IsAvailable, Is.False);
+    }
+
+    [Test]
+    public void ToupTekRegistry_IsAvailable_DoesNotThrow() {
+        Assert.That(NINA.Camera.ToupTekSdk.ToupTekRegistry.IsAvailable, Is.False);
+    }
+
+    [Test]
+    public void PlayerOneDiscovery_Enumerate_EmptyWhenUnavailable() {
+        Assert.That(NINA.Camera.PlayerOneSdk.PlayerOneDiscovery.Enumerate(), Is.Empty);
+    }
+
+    [Test]
+    public void ToupTekDiscovery_Enumerate_EmptyWhenUnavailable() {
+        Assert.That(NINA.Camera.ToupTekSdk.ToupTekDiscovery.Enumerate(), Is.Empty);
+    }
+
+    [Test]
     public void Cameras_ConstructWithoutNativeLib() {
         // Constructors must not touch the native lib (only EnsureResolver,
         // which is guarded). Connect would throw, but construction is safe.
         Assert.That(() => new NINA.Camera.SvbonySdk.SvbonySdkCamera("0"), Throws.Nothing);
         Assert.That(() => new NINA.Camera.ZwoSdk.AsiSdkCamera("0"), Throws.Nothing);
+        Assert.That(() => new NINA.Camera.PlayerOneSdk.PlayerOneSdkCamera("0"), Throws.Nothing);
+        Assert.That(() => new NINA.Camera.ToupTekSdk.ToupTekSdkCamera("dev0"), Throws.Nothing);
     }
 }

@@ -77,6 +77,8 @@ public class EquipmentManager : IDisposable {
             "sony-sdk"    => new NINA.Camera.SonySdk.SonySdkCamera(deviceId),
             "svbony-sdk"  => CreateSvbonyCamera(deviceId),
             "zwo-sdk"     => CreateZwoCamera(deviceId),
+            "playerone-sdk" => CreatePlayerOneCamera(deviceId),
+            "touptek-sdk"   => CreateToupTekCamera(deviceId),
             "ascom-com"   => CreateAscomCamera(deviceId),
             "alpaca"      => AlpacaCamera.FromDeviceId(deviceId),
             _ => throw new NotSupportedException(
@@ -146,6 +148,32 @@ public class EquipmentManager : IDisposable {
         }
     }
 
+    /// <summary>PlayerOne camera over the native PlayerOneCamera SDK. Cross-
+    /// platform (Linux arm64/arm32/x64/x86 + Windows x64); native lib bundled
+    /// per-RID. The high-fps path for PlayerOne planetary cameras.</summary>
+    private static ICamera CreatePlayerOneCamera(string deviceId) {
+        try {
+            return new NINA.Camera.PlayerOneSdk.PlayerOneSdkCamera(deviceId);
+        } catch (DllNotFoundException ex) {
+            throw new NotSupportedException(
+                "PlayerOne SDK native library not found for this platform/arch. " +
+                "Reinstall the Polaris package, or use the INDI driver instead.", ex);
+        }
+    }
+
+    /// <summary>ToupTek camera over the native toupcam SDK. Cross-platform
+    /// (Linux arm64/x64 + Windows x64); native lib bundled per-RID. The
+    /// high-fps path for ToupTek planetary cameras.</summary>
+    private static ICamera CreateToupTekCamera(string deviceId) {
+        try {
+            return new NINA.Camera.ToupTekSdk.ToupTekSdkCamera(deviceId);
+        } catch (DllNotFoundException ex) {
+            throw new NotSupportedException(
+                "ToupTek SDK native library not found for this platform/arch. " +
+                "Reinstall the Polaris package, or use the INDI driver instead.", ex);
+        }
+    }
+
     /// <summary>List of camera driver kinds the host can offer. Always
     /// includes <c>indi</c>; vendor SDK drivers are listed only when
     /// the matching native dependency is present on the current OS.</summary>
@@ -205,6 +233,18 @@ public class EquipmentManager : IDisposable {
             Available: NINA.Camera.ZwoSdk.ZwoRegistry.IsAvailable,
             Description: "ZWO ASI cameras via the native ASICamera2 SDK. " +
                 "Direct, low-overhead path for high-fps video (bypasses INDI)."));
+        // PlayerOne native USB SDK. Cross-platform (Linux arm64/arm32/x64/x86
+        // + Windows x64); the high-fps path for PlayerOne planetary cameras.
+        list.Add(new("playerone-sdk", "PlayerOne (SDK, native)",
+            Available: NINA.Camera.PlayerOneSdk.PlayerOneRegistry.IsAvailable,
+            Description: "PlayerOne cameras via the native PlayerOneCamera SDK. " +
+                "Direct, low-overhead path for high-fps video (bypasses INDI)."));
+        // ToupTek native SDK. Cross-platform (Linux arm64/x64 + Windows x64);
+        // the high-fps path for ToupTek planetary cameras.
+        list.Add(new("touptek-sdk", "ToupTek (SDK, native)",
+            Available: NINA.Camera.ToupTekSdk.ToupTekRegistry.IsAvailable,
+            Description: "ToupTek cameras via the native toupcam SDK. " +
+                "Direct, low-overhead path for high-fps video (bypasses INDI)."));
         return list;
     }
 
@@ -262,6 +302,26 @@ public class EquipmentManager : IDisposable {
                     .ToList();
             } catch (Exception ex) {
                 _logger.LogWarning(ex, "ZWO SDK discovery failed");
+                return Array.Empty<DiscoveredCamera>();
+            }
+        }
+        if (driver == "playerone-sdk") {
+            try {
+                return NINA.Camera.PlayerOneSdk.PlayerOneDiscovery.Enumerate()
+                    .Select(e => new DiscoveredCamera(e.Id, e.Model, e.Info))
+                    .ToList();
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "PlayerOne SDK discovery failed");
+                return Array.Empty<DiscoveredCamera>();
+            }
+        }
+        if (driver == "touptek-sdk") {
+            try {
+                return NINA.Camera.ToupTekSdk.ToupTekDiscovery.Enumerate()
+                    .Select(e => new DiscoveredCamera(e.Id, e.Model, e.Info))
+                    .ToList();
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "ToupTek SDK discovery failed");
                 return Array.Empty<DiscoveredCamera>();
             }
         }

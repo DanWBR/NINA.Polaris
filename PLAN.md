@@ -12559,7 +12559,7 @@ benchmark video probe (ROI + MeasureRecording) on the rig.
 
 ---
 
-## NATIVESDK: native vendor camera backends (SVBony + ZWO) — #362 item 3
+## NATIVESDK: native vendor camera backends (SVBony + ZWO + PlayerOne + ToupTek) — #362 item 3
 
 Talk to SVBony / ZWO cameras through their native USB SDKs, bypassing the
 INDI per-exposure round-trip (which capped the SV405CC at 0.8 fps in loop
@@ -12588,7 +12588,42 @@ OS attribute, compiles cross-platform.
   projects + NINA.Polaris.
 
 CameraStreamService now gets the native path (not loop) for these cameras,
-and VideoRecordingService (items 1+2) drains them without dropping. ToupTek
-remains a follow-up. The SV405CC is sensor-limited; ZWO planetary cams are
-where 100 fps becomes attainable. Measure on the rig with the benchmark
-video probe (ROI + Measure recording).
+and VideoRecordingService (items 1+2) drains them without dropping. The
+SV405CC is sensor-limited; ZWO planetary cams are where 100 fps becomes
+attainable. Measure on the rig with the benchmark video probe (ROI + Measure
+recording).
+
+### NATIVESDK follow-up: PlayerOne + ToupTek backends
+
+Extended the same pattern to two more vendors after their Linux SDKs were
+vendored under `camera_sdk/`:
+
+- src/NINA.Camera.PlayerOneSdk: PoaNative ([DllImport] PlayerOneCamera +
+  CLong for the buffer size; the POAConfigValue C union is marshalled via an
+  explicit-layout struct overlapping int/double at offset 0). PlayerOneRegistry
+  (probe + SetDllImportResolver), PlayerOneDiscovery, PlayerOneSdkCamera :
+  ICamera. POA API is ASI-like: POAOpenCamera+POAInitCamera, POASetConfig/
+  POAGetConfig (EXPOSURE µs, GAIN, TEMPERATURE float, COOLER/TARGET_TEMP),
+  POASetImageSize/StartPos/Bin/Format, POAStartExposure(bSingleFrame) then a
+  POAGetImageData pull thread for video. Gain range from
+  POAGetConfigAttributesByConfigID. Linux arm64/arm32/x64/x86 + Windows x64.
+- src/NINA.Camera.ToupTekSdk: vendors the official cross-platform binding
+  (camera_sdk/ToupTek/dotnet/toupcam.cs) compiled in directly, with a `<Using>`
+  for System.Runtime.ConstrainedExecution (the binding applies an unguarded
+  [ReliabilityContract] while its using is #if-excluded on NETCOREAPP) and the
+  LINUX symbol defined for linux RIDs so it picks libtoupcam.so + LPStr.
+  ToupTekRegistry/Discovery + ToupTekSdkCamera : ICamera. ToupTek is
+  callback-driven (pull): StartPullModeWithCallback fires EVENT_IMAGE on an SDK
+  thread → PullImage(buf, 0, bits, 0, out FrameInfoV4) → fan out; CaptureAsync
+  waits one frame via a TaskCompletionSource. put_ExpoTime (µs) / put_ExpoAGain
+  (percent) / put_Roi / OPTION_TEC; bayer from the raw FourCC. Linux arm64/x64
+  + Windows x64.
+- EquipmentManager: SelectCamera "playerone-sdk"/"touptek-sdk" + Create
+  helpers, GetAvailableCameraDrivers + GetDiscoveredCamerasFor gated on the
+  respective Registry.IsAvailable. Both referenced from NINA.Polaris.csproj.
+- Packaging: per-RID native libs copied to output; udev rules
+  99-polaris-{playerone,touptek}.rules (PlayerOne vid a0a0 + usbfs bump;
+  ToupTek vids 04b4/0547); postinst comment updated.
+- Tests: NativeCameraSdkTests extended (Registry false without lib, discovery
+  empty, constructors safe) — 9 pass. All four SDK projects + NINA.Polaris
+  build clean.

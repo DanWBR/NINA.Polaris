@@ -86,6 +86,8 @@
          at runtime. Direct USB path for high-fps video, bypassing INDI. -->
     <ProjectReference Include="..\NINA.Camera.SvbonySdk\NINA.Camera.SvbonySdk.csproj" />
     <ProjectReference Include="..\NINA.Camera.ZwoSdk\NINA.Camera.ZwoSdk.csproj" />
+    <ProjectReference Include="..\NINA.Camera.PlayerOneSdk\NINA.Camera.PlayerOneSdk.csproj" />
+    <ProjectReference Include="..\NINA.Camera.ToupTekSdk\NINA.Camera.ToupTekSdk.csproj" />
     <!-- Direct-WiFi mount drivers. Pure managed code, cross-platform. -->
     <ProjectReference Include="..\NINA.Mount.SynScanWifi\NINA.Mount.SynScanWifi.csproj" />
     <!-- ASCOM Platform COM-interop adapter (Windows-only at runtime,

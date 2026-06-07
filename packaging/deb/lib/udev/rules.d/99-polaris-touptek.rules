@@ -1,0 +1,6 @@
+# N.I.N.A. Polaris — ToupTek camera USB access (from the toupcam SDK).
+# Grants non-root read/write so the polaris service user can open the
+# camera over libusb. ToupTek (and OEM-rebadged) cameras enumerate under
+# Cypress vendor ids 0x04b4 / 0x0547. Reloaded by the package postinst.
+SUBSYSTEMS=="usb", ATTR{idVendor}=="04b4", MODE="0666"
+SUBSYSTEMS=="usb", ATTR{idVendor}=="0547", MODE="0666"

@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>NINA.Camera.PlayerOneSdk</RootNamespace>
+    <AssemblyName>NINA.Camera.PlayerOneSdk</AssemblyName>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- PlayerOne SDK ships native binaries for Windows (x64/x86) and Linux
+         (arm64/arm32/x64/x86). net10.0, no OS attribute: compiles
+         cross-platform, PlayerOneRegistry probes at runtime. The per-RID
+         native lib is copied into the app output by the items below. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NINA.Core.Portable\NINA.Core.Portable.csproj" />
+    <ProjectReference Include="..\NINA.Image.Portable\NINA.Image.Portable.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <PoaSdk>$(MSBuildThisFileDirectory)..\..\camera_sdk\PlayerOne</PoaSdk>
+    <PoaLinux>$(PoaSdk)\Linux_v3.10.1\lib</PoaLinux>
+    <PoaWin>$(PoaSdk)\Windows_v3.10.1\lib</PoaWin>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-arm64'">
+    <Content Include="$(PoaLinux)\arm64\libPlayerOneCamera.so*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>%(Filename)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64'">
+    <Content Include="$(PoaLinux)\x64\libPlayerOneCamera.so*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>%(Filename)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64'">
+    <Content Include="$(PoaWin)\x64\PlayerOneCamera.dll">
+      <Link>PlayerOneCamera.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>
