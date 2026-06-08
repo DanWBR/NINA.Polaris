@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260608-mountdrvsel">
+    <link rel="stylesheet" href="/css/app.css?v=20260608-settingsaccordion">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -9034,9 +9034,9 @@
                      the root and install it so subsequent connections
                      show the lock icon. Auto-detects current OS for
                      the default install-instructions tab. -->
-                <div class="settings-section"
+                <details class="settings-section accordion-card"
                      x-init="tlsInit()">
-                    <h3><span class="settings-card-icon">🔒</span>HTTPS Certificate</h3>
+                    <summary><span class="settings-card-icon">🔒</span>HTTPS Certificate</summary>
                     <p class="hint" style="margin-top:0">
                         Polaris uses a self-signed certificate so the
                         connection is encrypted on your LAN. Install the
@@ -9094,7 +9094,7 @@
                             </div>
                         </template>
                     </div>
-                </div>
+                </details>
 
                 <!-- Appearance / interface scale. Slider writes to a
                      draft value (uiZoomDraft) while you drag, the
@@ -9102,8 +9102,8 @@
                      Apply. The real-time variant we had before made
                      the slider impossible to aim because the UI
                      reflowed under your cursor on every input tick. -->
-                <div class="settings-section">
-                    <h3><span class="settings-card-icon">🎨</span>Appearance</h3>
+                <details class="settings-section accordion-card">
+                    <summary><span class="settings-card-icon">🎨</span>Appearance</summary>
                     <label style="display:flex; align-items:center; gap:12px; max-width:560px">
                         <span style="min-width:90px">UI scale</span>
                         <input type="range" min="0.5" max="1.5" step="0.05"
@@ -9187,7 +9187,7 @@
                         (so pair it with <strong>Native</strong> for the full effect).
                         Mono cameras are unaffected.
                     </p>
-                </div>
+                </details>
 
                 <!-- Remote terminal, opens an SSH shell from the
                      browser via xterm.js + a WebSocket bridge to
@@ -9199,8 +9199,8 @@
                      returns 403 otherwise.
                      No auto-login: every Connect prompts for user +
                      password again, and credentials never persist. -->
-                <div class="settings-section">
-                    <h3><span class="settings-card-icon">🖥</span>Remote terminal</h3>
+                <details class="settings-section accordion-card">
+                    <summary><span class="settings-card-icon">🖥</span>Remote terminal</summary>
                     <p class="text-muted" style="font-size: 12px; max-width:560px">
                         SSH into the Polaris host (or any other Linux box on your LAN)
                         from the browser. Credentials are sent per-session and never
@@ -9247,10 +9247,10 @@
                          render an empty black box on first paint. -->
                     <div class="term-mount" x-show="term.connected || term.lastError"
                          x-cloak x-ref="termMount"></div>
-                </div>
+                </details>
 
-                <div class="settings-section">
-                    <h3><span class="settings-card-icon">🔌</span>INDI Server</h3>
+                <details class="settings-section accordion-card">
+                    <summary><span class="settings-card-icon">🔌</span>INDI Server</summary>
                     <label>Host<input type="text" x-model="settings.indiHost" class="input-md"></label>
                     <label>Port<input type="number" x-model.number="settings.indiPort" class="input-sm"></label>
                     <div class="control-row actions">
@@ -9258,16 +9258,16 @@
                         <button class="btn btn-danger" @click="disconnectIndi()" x-show="indiConnected">Disconnect</button>
                         <button class="btn" @click="refreshDevices()" x-show="indiConnected">Refresh Devices</button>
                     </div>
-                </div>
+                </details>
 
-                <div class="settings-section" x-show="indiConnected">
-                    <h3><span class="settings-card-icon">✅</span>INDI Status</h3>
+                <details class="settings-section accordion-card" x-show="indiConnected">
+                    <summary><span class="settings-card-icon">✅</span>INDI Status</summary>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span class="status-indicator ok" style="font-size: 11px;">Connected</span>
                         <span class="text-muted" style="font-size: 12px;" x-text="devices.length + ' devices found'"></span>
                         <button class="btn btn-sm" @click="tab = 'equip'" style="margin-left: auto;">Manage Equipment</button>
                     </div>
-                </div>
+                </details>
 
                 <!-- SIM panel intentionally absent from the Settings UI.
                      End users do not run the built-in simulator; backend
@@ -9283,8 +9283,8 @@
                      Network / Simulator visual pattern. Disable
                      requires confirming the current password so a
                      stolen session token alone can't undo the gate. -->
-                <div class="settings-section">
-                    <h3><span class="settings-card-icon">🔐</span>Authentication</h3>
+                <details class="settings-section accordion-card">
+                    <summary><span class="settings-card-icon">🔐</span>Authentication</summary>
                     <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
                         Password gate for this Polaris server. Loopback
                         (127.0.0.1) always bypasses, so SSH tunnels and
@@ -9390,15 +9390,15 @@
                             </form>
                         </div>
                     </div>
-                </div>
+                </details>
 
                 <!-- Device name: friendly label shown when this Pi is
                      discovered on the network. Each Pi already self-names
                      uniquely (polaris-app-XXXX from its hardware id), so a
                      cloned SD-card image just works; this lets the owner
                      give each one a readable name. -->
-                <div class="settings-section" id="device-name-card">
-                    <h3><span class="settings-card-icon">🔭</span>Device name</h3>
+                <details class="settings-section accordion-card" id="device-name-card">
+                    <summary><span class="settings-card-icon">🔭</span>Device name</summary>
                     <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
                         Shown when phones/tablets discover this telescope
                         computer on the network. Give it a name you'll
@@ -9415,11 +9415,11 @@
                     <p class="text-muted" style="font-size:12px; margin-top:8px" x-show="deviceMdnsName">
                         Network name: <code x-text="deviceMdnsName"></code>
                     </p>
-                </div>
+                </details>
 
                 <!-- Plate solving: pick the solver + tune speed/accuracy. -->
-                <div class="settings-section" id="platesolve-card" x-init="loadPlateSolveConfig()">
-                    <h3><span class="settings-card-icon">🎯</span>Plate solving</h3>
+                <details class="settings-section accordion-card" id="platesolve-card" x-init="loadPlateSolveConfig()">
+                    <summary><span class="settings-card-icon">🎯</span>Plate solving</summary>
                     <p class="text-muted" style="font-size:12px; max-width:600px; margin-top:4px">
                         Choose which installed solver to use and how aggressively
                         to downsample. On slower hardware (Pi-class), a higher
@@ -9491,15 +9491,15 @@
                                 :disabled="psSaving" x-text="psSaving ? 'Saving…' : 'Save'"></button>
                         <button class="btn btn-sm" @click="loadPlateSolveConfig()" :disabled="psLoading">↻ Refresh</button>
                     </div>
-                </div>
+                </details>
 
                 <!-- CLOCK-3: server-vs-client wall-clock card. Drift
                      surfaces here so the user can sync explicitly
                      instead of Polaris jumping the wall clock during
                      a running sequence. id="clock-card" so the
                      activity-bar chip can scrollIntoView() on click. -->
-                <div class="settings-section" id="clock-card">
-                    <h3><span class="settings-card-icon">⏰</span>Clock</h3>
+                <details class="settings-section accordion-card" id="clock-card">
+                    <summary><span class="settings-card-icon">⏰</span>Clock</summary>
                     <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
                         Sync the Pi's wall clock from this device when
                         the host is offline (no NTP) and the Pi has no
@@ -9542,10 +9542,10 @@
                     <p class="text-warn" x-show="clockSync.lastError"
                        style="font-size:11px; margin-top:8px"
                        x-text="'⚠ ' + clockSync.lastError"></p>
-                </div>
+                </details>
 
-                <div class="settings-section network-section">
-                    <h3><span class="settings-card-icon">📡</span>Network (WiFi)</h3>
+                <details class="settings-section accordion-card network-section">
+                    <summary><span class="settings-card-icon">📡</span>Network (WiFi)</summary>
                     <!-- Body wrapper: forces consistent padding on the
                          four x-if branches. Without it, the rendered
                          <template> content lands as a direct child of
@@ -10325,7 +10325,7 @@
                 </div>
 
                 </div><!-- /.settings-grid -->
-            </div>
+            </details>
 
             <!-- =================================================
                  HELP-1: in-app tutorials. Two view states:
