@@ -170,6 +170,36 @@ rigs + the new rig's policy auto-loads. Different setups (cold APO vs
 SCT with active dew heater) have different thermal characteristics,
 so per-rig makes sense.
 
+## Auto dither
+
+ASIAIR-style dithering during live stacking: a small random nudge of the mount
+every N integrated frames so the target lands on slightly different pixels each
+time, which lets the stacker reject hot pixels, walking noise and fixed-pattern
+artifacts.
+
+Panel: LIVE tab → "Auto re-focus / re-center / dither" → **Auto dither**.
+
+- **Every N frames** — dither cadence (counts integrated frames).
+- **Amount (px)** — random offset in guide-camera pixels.
+- **RA only** — restrict the nudge to RA (for mounts with sloppy Dec backlash).
+- **Settle px / for (s) / timeout (s)** — the dithered frame waits for the star
+  to settle back within tolerance before the next frame is integrated, exactly
+  like the AUTORUN sequencer.
+
+Requirements + behaviour:
+
+- The guider must be **actively guiding** (native or external PHD2). Dithering is
+  routed through the active guider, so it works on both backends. If the guider
+  isn't guiding, the dither is skipped (and the gate advances so it doesn't
+  re-check every frame).
+- The dither fires *instead of* a recenter on the same frame — a recenter would
+  cancel the offset just applied.
+- Settings live on `EquipmentProfile.LiveStackTriggers` (per rig), same as the
+  re-focus / re-center policy.
+
+The same dither-every-N-frames option also exists for the AUTORUN sequencer
+(GUIDE/AUTORUN), and likewise routes through whichever guider backend is active.
+
 ## Refocus suggestion (trend-based, manual focuser friendly)
 
 The auto re-focus path above only fires when you have a motorized

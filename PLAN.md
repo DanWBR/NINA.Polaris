@@ -12865,3 +12865,66 @@ driver = native -> GUIDE -> Loop -> Start Guiding. No INDI/WSL needed.
 
 Deferred: live SimGearParams editing panel in Settings; auto pier flip on slew
 across the meridian (pier side is settable via SimMount.SetPierSide / state).
+
+## 2026-06-08 session: native-guider polish, dithering, licensing, housekeeping — DONE
+
+Gear simulator (SIMG, above) plus a batch of native-guider, dithering, UI,
+licensing and project-hygiene work.
+
+### Native guider (GUIDE tab)
+- Calibration crosshair stays anchored at the start position during calibration
+  (`_calAnchor*`); the moving star is shown by its marker circle instead of the
+  crosshair following it.
+- Star Profile zoom fixed: the guide JPEG is downscaled to `maxDim`, so the crop
+  now scales sensor coords by `naturalWidth/view.width` (star was off-crop).
+- Guide-camera connect switch no longer reverts: the WS connected-branch rebuild
+  now carries `guideCameraConnected`/`guideCameraName` (and `exposureMs`).
+- `Exp (ms)` exposure field added to the GUIDE bottom bar (IGuider.ExposureMs +
+  WS payload + `/api/guider/exposure/{ms}`); edit-while-focused guard so the
+  ~1Hz status tick can't snap it back.
+- `Gain` + `Bin 2x2` moved from the RIGS Guide Camera card to the GUIDE bottom
+  bar (native only).
+- Guiding aborts with a clear alert when no connected pulse-guide mount is
+  present (covers the restored-calibration path); periodic alert if the mount
+  drops mid-session (pulses were being dropped silently).
+- Correction-pulse impulse bars on the graph: direction fixed (oppose the error)
+  and made thicker + side-by-side (RA left / Dec right of each slot).
+- Guide graph Y axis labelled in arcsec (±full-scale from the "y ±" buttons);
+  RMS legend nudged right so it clears the labels.
+
+### Calibration persistence
+- Review-Calibration RA/Dec scatter now persists (RaPoints/DecPoints) so a
+  restored calibration shows its plot, not just the table.
+- Calibrations are stored PER RIG, keyed by an equipment signature (guide camera
+  + driver, binning, guider focal length, mount + driver):
+  `EquipmentProfile.NativeCalibrations`. Swap equipment + recalibrate, then swap
+  the original gear back -> its matching calibration is restored; a non-matching
+  signature restores nothing (never applies a stale calibration). Legacy single
+  slot kept for pre-migration rigs; Clear removes only the current signature.
+
+### Dithering (ASIAIR-style, every N frames)
+- AUTORUN dither routed through the active guider (ActiveGuiderProvider/IGuider)
+  instead of the concrete PHD2 client, so dither-every-N-frames works on both
+  the native guider and external PHD2 (was silently a no-op on native).
+- Live stacking gained auto-dither: `LiveStackTriggers` Dither block + a per-frame
+  gate in `LiveStackTriggersService` that fires through the active guider and
+  waits for SettleDone before the next frame integrates. UI panel in the LIVE
+  tab triggers section.
+
+### RIGS
+- Equipment cards reordered: Main Telescope, Main Camera, Telescope Mount,
+  Guide Camera, Electronic Focuser, Filter Wheel (titles renamed to match).
+
+### Licensing (MPL-2.0 -> AGPL-3.0)
+- Relicensed the work as a whole to AGPL-3.0; N.I.N.A.-derived files keep their
+  MPL-2.0 Exhibit A header (per MPL-2.0 section 3.3; AGPL is a named Secondary
+  License and upstream NINA is not "Incompatible With Secondary Licenses").
+- `LICENSE.txt` -> AGPL-3.0; `licenses/MPL-2.0.txt`; `NOTICE`;
+  `licenses/LINKING-EXCEPTION.txt` (camera vendor SDKs + plugins);
+  `RELICENSING.md`; per-file headers stamped via `scripts/apply-license-headers.*`
+  (AGPL on original files, MPL on the `*.Portable` libs); README + in-app license
+  text updated. GraXpert NC models confirmed not redistributed (.onnx gitignored).
+
+### Project hygiene
+- Added the 9 missing projects to `NINA.Polaris.slnx` (camera SDKs, Guider.Portable,
+  Mount.SynScanWifi) — they built via ProjectReference but weren't in the solution.
