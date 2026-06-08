@@ -23,7 +23,10 @@ public sealed class SimGearParams {
     public int Height { get; set; } = 580;    // SimCamParams::height
     public int Border { get; set; } = 12;     // keep stars off the edges
     public int Stars { get; set; } = 20;      // NR_STARS_DEFAULT
-    public int HotPixels { get; set; } = 8;   // NR_HOT_PIXELS_DEFAULT
+    // Hot pixels are fixed, fully-saturated points: the auto-selector locks onto
+    // the brightest pixel, so they'd hijack the lock and never move with guiding
+    // (calibration distance stuck at 0). Off by default for the guider sim.
+    public int HotPixels { get; set; } = 0;   // NR_HOT_PIXELS_DEFAULT (8) -> 0 here
 
     /// <summary>Arc-seconds per pixel. The conversion factor between the
     /// arc-second UI tunables below and the pixel-domain shifts the renderer
@@ -71,8 +74,8 @@ public sealed class SimGearParams {
     public double Background { get; set; } = 800.0;
     /// <summary>Per-pixel Gaussian read-noise sigma in ADU, before the
     /// multiplier (NOISE_DEFAULT = 2.0).</summary>
-    public double NoiseSigma { get; set; } = 120.0;
-    public double NoiseMultiplier { get; set; } = 2.0;
+    public double NoiseSigma { get; set; } = 40.0;
+    public double NoiseMultiplier { get; set; } = 1.5;
 
     // ----- Derived (pixel domain) -----
     public double DecBacklashPx => ImageScale > 0 ? DecBacklashArcsec / ImageScale : DecBacklashArcsec;

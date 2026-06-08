@@ -11796,8 +11796,14 @@ function ninaApp() {
             if (!img || !img.naturalWidth || !v || v.lockX == null) return;
 
             const R = 13; // half-window in source px around the star (~26px crop)
-            const cx = (v.lockX - (v.originX || 0));
-            const cy = (v.lockY - (v.originY || 0));
+            // Centre on the detected primary star (what the profile uses) so the
+            // star actually shows; fall back to the lock when none is found yet.
+            const prim = (v.stars || []).find(s => s.primary && s.found)
+                       || (v.stars || []).find(s => s.found);
+            const starX = prim ? prim.x : v.lockX;
+            const starY = prim ? prim.y : v.lockY;
+            const cx = (starX - (v.originX || 0));
+            const cy = (starY - (v.originY || 0));
             const sx = cx - R, sy = cy - R, sw = 2 * R, sh = 2 * R;
             // Cover the whole panel with the square crop (centred, may letterbox
             // horizontally) so the star fills the view like ASIAIR.

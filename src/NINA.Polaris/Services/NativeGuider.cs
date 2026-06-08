@@ -39,6 +39,7 @@ public sealed class NativeGuider : IGuider, IDisposable {
     private readonly RmsCalculator _rms = new(100);
 
     private CancellationTokenSource? _loopCts;
+    private CancellationTokenSource? _calCts;
     private Task? _loopTask;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -204,7 +205,14 @@ public sealed class NativeGuider : IGuider, IDisposable {
             int settleTimeout = 40, bool recalibrate = false, CancellationToken ct = default) {
         EnsureConnected();
         if (recalibrate || !_calibration.IsValid) {
-            await CalibrateAsync(ct);
+            // Run calibration under a cancellable token so the Stop button can
+            // abort it (the request token alone isn't cancelled by /stop).
+            _calCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            try {
+                await CalibrateAsync(_calCts.Token);
+            } finally {
+                _calCts.Dispose(); _calCts = null;
+            }
             if (!_calibration.IsValid) {
                 RaiseAlert("Native guiding aborted: calibration failed.");
                 return;
@@ -224,7 +232,11 @@ public sealed class NativeGuider : IGuider, IDisposable {
         await StartLoopAsync(LoopMode.Guide);
     }
 
-    public Task StopAsync(CancellationToken ct = default) => StopLoopAsync();
+    public Task StopAsync(CancellationToken ct = default) {
+        // Cancel an in-progress calibration too (it runs outside the loop CTS).
+        try { _calCts?.Cancel(); } catch { }
+        return StopLoopAsync();
+    }
 
     public Task LoopAsync(CancellationToken ct = default) {
         EnsureConnected();
@@ -484,6 +496,10 @@ public sealed class NativeGuider : IGuider, IDisposable {
             } else {
                 RaiseAlert("Calibration did not complete.");
             }
+            SetAppState("Stopped");
+        } catch (OperationCanceledException) {
+            // Stop pressed during calibration: clean abort, not an error.
+            _logger.LogInformation("Native calibration cancelled");
             SetAppState("Stopped");
         } finally {
             _calProgress = null;
