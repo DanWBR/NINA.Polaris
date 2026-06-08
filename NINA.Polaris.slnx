@@ -9,6 +9,15 @@
     <Project Path="src/NINA.Image.Portable/NINA.Image.Portable.csproj" />
     <Project Path="src/NINA.INDI/NINA.INDI.csproj" />
     <Project Path="src/NINA.Ascom.Com/NINA.Ascom.Com.csproj" />
+    <Project Path="src/NINA.Guider.Portable/NINA.Guider.Portable.csproj" />
+    <Project Path="src/NINA.Mount.SynScanWifi/NINA.Mount.SynScanWifi.csproj" />
+    <Project Path="src/NINA.Camera.CanonEdsdk/NINA.Camera.CanonEdsdk.csproj" />
+    <Project Path="src/NINA.Camera.NikonSdk/NINA.Camera.NikonSdk.csproj" />
+    <Project Path="src/NINA.Camera.SonySdk/NINA.Camera.SonySdk.csproj" />
+    <Project Path="src/NINA.Camera.ZwoSdk/NINA.Camera.ZwoSdk.csproj" />
+    <Project Path="src/NINA.Camera.PlayerOneSdk/NINA.Camera.PlayerOneSdk.csproj" />
+    <Project Path="src/NINA.Camera.ToupTekSdk/NINA.Camera.ToupTekSdk.csproj" />
+    <Project Path="src/NINA.Camera.SvbonySdk/NINA.Camera.SvbonySdk.csproj" />
     <Project Path="src/NINA.Relay.Protocol/NINA.Relay.Protocol.csproj" />
     <Project Path="src/NINA.Relay.Server/NINA.Relay.Server.csproj" />
   </Folder>
