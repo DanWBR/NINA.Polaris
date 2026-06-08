@@ -132,8 +132,16 @@ public class AstapSolver : IPlateSolver {
         }
         if (options.FovDeg > 0)
             args += $" -fov {options.FovDeg.ToString(CultureInfo.InvariantCulture)}";
-        if (options.Downsample > 0)
-            args += $" -z {options.Downsample}";
+        // Downsample factor (ASTAP -z). A config value overrides the per-call
+        // default so weak hardware (Pi, ASIAIR-mini-class boards) can solve a
+        // big sensor far faster by binning the frame before star detection.
+        // 0 = ASTAP auto-downsample (scales with image size); 1 = none;
+        // 2/3/4 = fixed. Default keeps the previous behaviour (2).
+        var downsample = _config.GetValue<int?>("PlateSolve:Downsample") ?? options.Downsample;
+        if (downsample > 0)
+            args += $" -z {downsample}";
+        else if (downsample == 0)
+            args += " -z 0"; // explicit auto-downsample
 
         // Point ASTAP at the star-database directory when we can locate one.
         // Running headless as the 'polaris' service user, ASTAP's own search
