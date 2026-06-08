@@ -11699,6 +11699,22 @@ function ninaApp() {
             ctx.strokeStyle = 'rgba(255,255,255,0.25)';
             ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(w, mid); ctx.stroke();
 
+            // Y-axis labels: the axis is guide error in arcsec, symmetric about
+            // the lock (0), full-scale = the selected "y ±" value. Drawn at the
+            // top/half/centre grid lines so the scale is self-evident.
+            ctx.fillStyle = 'rgba(255,255,255,0.5)';
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'left';
+            const lbl = (v, baseline) => {
+                ctx.textBaseline = baseline;
+                ctx.fillText((v > 0 ? '+' : '') + v + '"', 3, mid - (v / scale) * (h / 2 - 6));
+            };
+            lbl(scale, 'top');
+            lbl(scale / 2, 'middle');
+            lbl(0, 'middle');
+            lbl(-scale / 2, 'middle');
+            lbl(-scale, 'bottom');
+
             const steps = this.guider.recentSteps || [];
             if (!steps.length) return;
             const n = steps.length;
