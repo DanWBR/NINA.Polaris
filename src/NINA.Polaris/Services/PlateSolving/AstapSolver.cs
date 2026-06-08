@@ -135,6 +135,15 @@ public class AstapSolver : IPlateSolver {
         if (options.Downsample > 0)
             args += $" -z {options.Downsample}";
 
+        // Point ASTAP at the star-database directory when we can locate one.
+        // Running headless as the 'polaris' service user, ASTAP's own search
+        // (relative to the binary / installer's HOME) often misses a database
+        // installed system-wide (e.g. the V50 .deb), giving an end-of-solve
+        // "no star database" failure even though the DB is present.
+        var dataDir = ResolveAstapDataDir();
+        if (!string.IsNullOrEmpty(dataDir))
+            args += $" -d \"{dataDir}\"";
+
         args += " -update";
         return args;
     }
@@ -250,6 +259,56 @@ public class AstapSolver : IPlateSolver {
     private static string GetDefaultAstapPath() {
         if (OperatingSystem.IsWindows()) return @"C:\Program Files\astap\astap_cli.exe";
         return "/usr/bin/astap_cli";
+    }
+
+    /// <summary>Locate the directory holding an ASTAP star database (the
+    /// <c>*.290</c> / <c>*.1476</c> / <c>*.001</c> files of H17/H18/V50/D50/...).
+    /// An explicit <c>PlateSolve:AstapDataDir</c> config wins; otherwise scan
+    /// the binary's own folder and the standard system/user locations. Returns
+    /// "" when nothing is found (ASTAP then falls back to its own search).</summary>
+    private string ResolveAstapDataDir() {
+        var configured = _config.GetValue<string?>("PlateSolve:AstapDataDir", null);
+        if (!string.IsNullOrWhiteSpace(configured)) return configured!;
+
+        foreach (var dir in AstapDataDirCandidates()) {
+            if (DirHasStarDatabase(dir)) return dir;
+        }
+        return "";
+    }
+
+    private IEnumerable<string> AstapDataDirCandidates() {
+        // The folder the executable lives in is where ASTAP's own installer
+        // drops databases, so check it first.
+        var exeDir = Path.GetDirectoryName(SolverPath);
+        if (!string.IsNullOrEmpty(exeDir)) yield return exeDir;
+
+        if (OperatingSystem.IsWindows()) {
+            yield return @"C:\Program Files\astap";
+            yield return @"C:\Program Files (x86)\astap";
+        } else {
+            yield return "/usr/share/astap";
+            yield return "/usr/share/astap/data";
+            yield return "/usr/local/share/astap";
+            yield return "/opt/astap";
+        }
+
+        // Per-user data dir of whatever account the server runs as.
+        var home = Environment.GetEnvironmentVariable("HOME");
+        if (!string.IsNullOrEmpty(home))
+            yield return Path.Combine(home, ".local", "share", "astap");
+        // Common service-account home on the Pi/.deb install.
+        yield return "/home/polaris/.local/share/astap";
+    }
+
+    private static bool DirHasStarDatabase(string dir) {
+        try {
+            if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return false;
+            // ASTAP star-database file extensions across the H/V/D/G series.
+            foreach (var pattern in new[] { "*.290", "*.1476", "*.001", "*.0_5" }) {
+                if (Directory.EnumerateFiles(dir, pattern).Any()) return true;
+            }
+        } catch { /* unreadable dir, skip */ }
+        return false;
     }
 
     private static string Tail(string s, int maxChars) {
