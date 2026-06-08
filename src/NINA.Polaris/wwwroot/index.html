@@ -3892,6 +3892,8 @@
                 <div class="guide-bottombar" x-show="guider.connected">
                     <label class="gb-field">Exp (ms)<input type="number" min="50" max="10000" step="50"
                                :value="guider.exposureMs || 1000"
+                               @focus="_expEditing = true"
+                               @blur="_expEditing = false"
                                @change="setGuideExposure($event.target.value)"
                                title="Guide-camera exposure per frame"></label>
                     <label class="gb-field" x-show="guiderDriver === 'native'">Gain<input type="number"
@@ -12405,7 +12407,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260608-yaxis"></script>
+    <script src="/js/app.js?v=20260608-expedit"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

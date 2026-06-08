@@ -16778,6 +16778,7 @@ function ninaApp() {
         async setGuideExposure(value) {
             const v = Math.max(50, Math.min(10000, Math.round(Number(value) || 0)));
             this.guider.exposureMs = v;
+            this._expEditing = false;   // commit done; let WS sync resume
             try {
                 await this.apiPost(`/api/guider/exposure/${v}`);
                 this.toast('Guide exposure: ' + v + ' ms', 'ok');
@@ -22119,7 +22120,7 @@ function ninaApp() {
                 // Exposure is reported in both branches; keep the field in sync but
                 // don't clobber a value the user is actively editing (we set it
                 // optimistically in setGuideExposure).
-                if (g.exposureMs != null) this.guider.exposureMs = g.exposureMs;
+                if (g.exposureMs != null && !this._expEditing) this.guider.exposureMs = g.exposureMs;
                 if (!g.connected) {
                     if (this.guider.connected) {
                         // server-side disconnect (PHD2 crashed?)
