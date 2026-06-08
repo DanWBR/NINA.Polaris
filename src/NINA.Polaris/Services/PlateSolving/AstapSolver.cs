@@ -36,8 +36,18 @@ public class AstapSolver : IPlateSolver {
     public string DisplayName => "ASTAP";
     public bool SupportsBlindSolve => true;
 
-    public string SolverPath =>
-        _config.GetValue("PlateSolve:AstapPath", GetDefaultAstapPath())!;
+    public string SolverPath {
+        get {
+            // An explicit config path always wins (PlateSolve:AstapPath in
+            // appsettings.json or the PlateSolve__AstapPath env var).
+            var configured = _config.GetValue<string?>("PlateSolve:AstapPath", null);
+            if (!string.IsNullOrWhiteSpace(configured)) return configured!;
+            // Otherwise auto-detect: prefer an actually-existing candidate so a
+            // user who installed the GUI binary as /usr/local/bin/astap (instead
+            // of the headless /usr/bin/astap_cli) is still picked up.
+            return ResolveAstapPath();
+        }
+    }
 
     public bool IsAvailable => !string.IsNullOrEmpty(SolverPath) && File.Exists(SolverPath);
 
@@ -185,6 +195,56 @@ public class AstapSolver : IPlateSolver {
                 if (File.Exists(path)) File.Delete(path);
             } catch { }
         }
+    }
+
+    /// <summary>Locate an ASTAP executable. Returns the first candidate that
+    /// exists on disk, else the conventional default (used only for the
+    /// "not found at: X" error message). Covers both the headless
+    /// <c>astap_cli</c> and the GUI <c>astap</c> binary (which also solves from
+    /// the command line) under both <c>/usr/bin</c> and <c>/usr/local/bin</c>,
+    /// since the official ASTAP .deb installs the GUI binary as
+    /// <c>/usr/local/bin/astap</c> and ships no <c>astap_cli</c>.</summary>
+    private static string ResolveAstapPath() {
+        foreach (var c in AstapCandidates()) {
+            if (File.Exists(c)) return c;
+        }
+        // Last resort: search PATH for either name.
+        foreach (var name in OperatingSystem.IsWindows()
+                     ? new[] { "astap_cli.exe", "astap.exe" }
+                     : new[] { "astap_cli", "astap" }) {
+            var onPath = FindOnPath(name);
+            if (onPath != null) return onPath;
+        }
+        return GetDefaultAstapPath();
+    }
+
+    private static IEnumerable<string> AstapCandidates() {
+        if (OperatingSystem.IsWindows()) {
+            yield return @"C:\Program Files\astap\astap_cli.exe";
+            yield return @"C:\Program Files\astap\astap.exe";
+            yield return @"C:\Program Files (x86)\astap\astap_cli.exe";
+            yield return @"C:\Program Files (x86)\astap\astap.exe";
+        } else {
+            yield return "/usr/bin/astap_cli";
+            yield return "/usr/local/bin/astap_cli";
+            yield return "/usr/bin/astap";
+            yield return "/usr/local/bin/astap";
+            yield return "/opt/astap/astap_cli";
+            yield return "/opt/astap/astap";
+        }
+    }
+
+    private static string? FindOnPath(string fileName) {
+        var pathEnv = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrEmpty(pathEnv)) return null;
+        foreach (var dir in pathEnv.Split(Path.PathSeparator)) {
+            if (string.IsNullOrWhiteSpace(dir)) continue;
+            try {
+                var full = Path.Combine(dir.Trim(), fileName);
+                if (File.Exists(full)) return full;
+            } catch { /* skip malformed PATH entries */ }
+        }
+        return null;
     }
 
     private static string GetDefaultAstapPath() {
