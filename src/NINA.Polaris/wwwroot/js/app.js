@@ -11786,6 +11786,10 @@ function ninaApp() {
             const dpr = window.devicePixelRatio || 1;
             const dw = img.clientWidth, dh = img.clientHeight;
             if (dw < 2 || dh < 2) return;
+            // Position the overlay exactly over the (letterboxed) image inside
+            // the centered .phd2-cam box, not the box itself, so markers line up.
+            canvas.style.left = img.offsetLeft + 'px';
+            canvas.style.top = img.offsetTop + 'px';
             canvas.style.width = dw + 'px';
             canvas.style.height = dh + 'px';
             canvas.width = dw * dpr; canvas.height = dh * dpr;
@@ -11814,6 +11818,39 @@ function ninaApp() {
                 ctx.lineWidth = 1.2;
                 ctx.beginPath(); ctx.arc(x, y, s.primary ? 7 : 5, 0, Math.PI * 2); ctx.stroke();
             }
+        },
+
+        // Click/tap the guide frame to lock the nearest detected star. Maps the
+        // click from displayed pixels back to full-sensor coords (inverse of the
+        // overlay transform) and asks the server to pick the closest star.
+        async guideSelectStarAt(ev) {
+            const v = this.guider.view;
+            const img = this.$refs.guidePhdCamImg;
+            if (!v || !img) return;
+            const r = img.getBoundingClientRect();
+            const px = (ev.clientX ?? (ev.touches && ev.touches[0]?.clientX)) - r.left;
+            const py = (ev.clientY ?? (ev.touches && ev.touches[0]?.clientY)) - r.top;
+            if (!(r.width > 0) || !(r.height > 0)) return;
+            const fx = (v.originX || 0) + px * (v.width / r.width);
+            const fy = (v.originY || 0) + py * (v.height / r.height);
+            try {
+                await this.apiPost('/api/guider/select-star', { x: fx, y: fy });
+            } catch (e) {
+                this.toast('Select star failed: ' + (e.message || e), 'error');
+            }
+        },
+
+        // Recalibrate: clear the calibration and run a fresh one, then guide.
+        async guiderRecalibrate() {
+            try {
+                await this.apiPost('/api/guider/guide', {
+                    settlePixels: this.guiderSettlePixels,
+                    settleTime: this.guiderSettleTime,
+                    settleTimeout: this.guiderSettleTimeout,
+                    recalibrate: true
+                });
+                this.toast('Recalibrating…', 'ok');
+            } catch (e) { this.toast('Recalibrate failed: ' + (e.message || e), 'error'); }
         },
 
         // Auto-Focus V-curve: HFR vs Position, scatter + fit overlay

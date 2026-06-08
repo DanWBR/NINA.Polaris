@@ -103,6 +103,18 @@ public static class GuiderEndpoints {
             return Results.Ok(new { status = "disconnected" });
         });
 
+        // Lock the guide star nearest a clicked point (native guider only).
+        group.MapPost("/select-star", async (ActiveGuiderProvider guiders, SelectStarRequest req) => {
+            if (guiders.Active is not NativeGuider ng)
+                return Results.BadRequest(new { error = "Click-to-select is only available on the native guider." });
+            try {
+                await ng.SelectStarNearAsync(req.X, req.Y);
+                return Results.Ok(new { ok = true });
+            } catch (Exception ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
         group.MapPost("/connect", async (ActiveGuiderProvider guiders, ConnectGuiderRequest? request) => {
             var g = guiders.Active;
             var host = string.IsNullOrWhiteSpace(request?.Host) ? "localhost" : request!.Host!;
@@ -634,6 +646,7 @@ public static class GuiderEndpoints {
     public record ConnectGuiderRequest(string? Host, int? Port);
     public record GuideRequest(double? SettlePixels, int? SettleTime, int? SettleTimeout, bool? Recalibrate);
     public record DitherRequest(double? Pixels, bool? RaOnly, double? SettlePixels, int? SettleTime, int? SettleTimeout);
+    public record SelectStarRequest(double X, double Y);
     public record SyncProfileRequest(string? RigId);
     public record AlgoParamRequest(string Axis, string Name, double Value);
 }

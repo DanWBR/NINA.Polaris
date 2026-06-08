@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260607-guidebar">
+    <link rel="stylesheet" href="/css/app.css?v=20260608-guideclick">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -3537,7 +3537,10 @@
                     <div class="phd2-grid">
                         <div class="phd2-cam">
                             <img x-ref="guidePhdCamImg" class="phd2-cam-img" alt="guide frame"
-                                 @load="drawGuideCamOverlay()">
+                                 style="cursor:crosshair"
+                                 title="Click a star to select it for guiding"
+                                 @load="drawGuideCamOverlay()"
+                                 @click="guideSelectStarAt($event)">
                             <canvas x-ref="guidePhdCamOverlay" class="phd2-cam-overlay"></canvas>
                             <div class="phd2-cam-empty" x-show="!guider.view"
                                  class="text-muted">Loop or guide to see the guide frame</div>
@@ -3683,6 +3686,12 @@
                     </div>
 
                     <div x-show="guiderDriver === 'native'">
+                    <button class="btn btn-sm" style="width:100%;margin-bottom:10px"
+                            @click="guiderRecalibrate()"
+                            :disabled="!guider.connected || guider.calibrating"
+                            title="Clear the calibration and run a fresh one, then guide">
+                        ↻ Recalibrate
+                    </button>
                     <div class="guide-side-title">Guiding parameters</div>
                     <div class="equip-driver-row">
                         <label class="equip-driver-label">RA algo</label>
@@ -3742,8 +3751,8 @@
                     <label class="gb-field">Settle px<input type="number" x-model.number="guiderSettlePixels" step="0.1"></label>
                     <label class="gb-field">Settle s<input type="number" x-model.number="guiderSettleTime" step="1"></label>
                     <label class="gb-field">Timeout<input type="number" x-model.number="guiderSettleTimeout" step="1"></label>
-                    <button class="btn btn-sm btn-primary" @click="guiderStart()" :disabled="guider.guiding || guider.calibrating">Start Guiding</button>
                     <button class="btn btn-sm" @click="guiderLoop()" :disabled="guider.looping">Loop</button>
+                    <button class="btn btn-sm btn-primary" @click="guiderStart()" :disabled="guider.guiding || guider.calibrating">Start Guiding</button>
                     <button class="btn btn-sm" @click="guiderFindStar()" :disabled="guider.guiding">Auto-select Star</button>
                     <button class="btn btn-sm" @click="guiderPause()" x-show="guider.guiding && !guider.paused">Pause</button>
                     <button class="btn btn-sm" @click="guiderResume()" x-show="guider.paused">Resume</button>
@@ -12252,7 +12261,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260607-guidebar"></script>
+    <script src="/js/app.js?v=20260608-guideclick"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

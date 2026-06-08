@@ -306,6 +306,45 @@ public sealed class NativeGuider : IGuider, IDisposable {
         _logger.LogInformation("Native guide star locked at ({X:F1},{Y:F1})", _lockX, _lockY);
     }
 
+    /// <summary>Lock the detected star nearest to a clicked full-sensor point.
+    /// Captures a fresh frame, detects stars and picks the closest interior,
+    /// non-saturated one to (targetX, targetY). Rebuilds the view so the
+    /// overlay updates immediately.</summary>
+    public async Task SelectStarNearAsync(double targetX, double targetY, CancellationToken ct = default) {
+        EnsureConnected();
+        var cam = _equipment.GuideCamera!;
+        try { await cam.SetSubframeAsync(0, 0, 0, 0, ct); } catch { }
+        var img = await CaptureFullAsync(cam, ct);
+        if (img == null) { RaiseAlert("Select star failed: no guide frame."); return; }
+
+        int w = img.Properties.Width, h = img.Properties.Height;
+        _lastFrame = img; _lastFrameOriginX = 0; _lastFrameOriginY = 0;
+        var detector = new NINA.Image.ImageAnalysis.StarDetector();
+        var stars = detector.Detect(img.Data, w, h);
+
+        int margin = SearchRegion + 5;
+        double satGuard = (1 << Math.Max(1, img.Properties.BitDepth)) - 1;
+        NINA.Image.ImageAnalysis.DetectedStar? best = null;
+        double bestDist = double.MaxValue;
+        foreach (var s in stars) {
+            if (s.X < margin || s.Y < margin || s.X > w - margin || s.Y > h - margin) continue;
+            if (satGuard > 1 && s.Peak >= satGuard * 0.95) continue;
+            double dx = s.X - targetX, dy = s.Y - targetY;
+            double d = dx * dx + dy * dy;
+            if (d < bestDist) { bestDist = d; best = s; }
+        }
+        if (best == null) { RaiseAlert("No suitable star near the click."); return; }
+
+        _lockX = best.X;
+        _lockY = best.Y;
+        _haveLock = true;
+        _multiStar.Clear();
+        SetAppState("Selected");
+        BuildView(_lockX, _lockY, 0, true);
+        _logger.LogInformation("Native guide star picked near ({Tx:F0},{Ty:F0}) -> ({X:F1},{Y:F1})",
+            targetX, targetY, _lockX, _lockY);
+    }
+
     public Task ClearCalibrationAsync(CancellationToken ct = default) {
         _calibration = GuideCalibration.Invalid;
         _logger.LogInformation("Native calibration cleared");

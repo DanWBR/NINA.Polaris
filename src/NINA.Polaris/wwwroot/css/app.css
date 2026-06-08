@@ -10999,7 +10999,7 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .phd2-cam { position:relative; background:#000; border:1px solid #222; border-radius:6px;
     min-height:260px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
 .phd2-cam-img { max-width:100%; max-height:420px; display:block; image-rendering:pixelated; }
-.phd2-cam-overlay { position:absolute; inset:0; pointer-events:none; }
+.phd2-cam-overlay { position:absolute; left:0; top:0; pointer-events:none; }
 .phd2-cam-empty { position:absolute; font-size:12px; }
 .phd2-rightcol { display:flex; flex-direction:column; gap:8px; }
 .phd2-bullseye, .phd2-profile { background:#0a0a0c; border:1px solid #222; border-radius:6px; padding:6px; }
@@ -11030,8 +11030,13 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .guide-bottombar { flex:0 0 auto; display:flex; flex-wrap:wrap; align-items:flex-end;
     gap:8px; padding:8px 10px; margin-top:8px; border-top:1px solid #222;
     background:#0c0c10; border-radius:6px; }
-.guide-bottombar .gb-field { display:flex; flex-direction:column; font-size:11px; color:#888; gap:2px; }
-.guide-bottombar .gb-field input { width:64px; }
-.guide-bottombar .gb-check { display:flex; align-items:center; gap:4px; font-size:12px; }
+.guide-bottombar .gb-field { display:flex; flex-direction:column; font-size:10px;
+    color:#8a93a6; gap:3px; text-transform:uppercase; letter-spacing:.04em; }
+.guide-bottombar .gb-field input { width:64px; background:#11151c; color:#e6e9ef;
+    border:1px solid #2a3140; border-radius:5px; padding:5px 7px; font-size:13px;
+    outline:none; transition:border-color .12s; }
+.guide-bottombar .gb-field input:focus { border-color:#2962ff; }
+.guide-bottombar .gb-check { display:flex; align-items:center; gap:5px; font-size:12px;
+    color:#cdd3de; cursor:pointer; align-self:flex-end; padding-bottom:6px; }
 .guide-bottombar .gb-sep { width:1px; align-self:stretch; background:#222; margin:0 4px; }
 @media (max-width:900px){ .guide-pane { flex-direction:column; } .guide-side { width:auto; flex:none; } }
