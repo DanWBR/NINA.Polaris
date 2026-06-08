@@ -25,9 +25,20 @@ public class SequenceTemplateStore {
     private readonly string _dir;
     private readonly ILogger<SequenceTemplateStore> _logger;
 
-    public SequenceTemplateStore(IConfiguration config, ILogger<SequenceTemplateStore> logger) {
-        _dir = config.GetValue<string?>("Sequencer:TemplateDir") ?? "sequencer-templates";
+    public SequenceTemplateStore(IConfiguration config, ProfileService profiles,
+                                 ILogger<SequenceTemplateStore> logger) {
         _logger = logger;
+        var configured = config.GetValue<string?>("Sequencer:TemplateDir");
+        if (!string.IsNullOrWhiteSpace(configured)) {
+            // Respect an explicit config path verbatim (absolute or relative).
+            _dir = configured!;
+        } else {
+            // Default under the writable per-user data dir, NOT the process
+            // working directory. As a systemd service that CWD is the (root-
+            // owned) install dir /opt/polaris, so a relative "sequencer-templates"
+            // failed to create with UnauthorizedAccessException.
+            _dir = Path.Combine(profiles.DataDir, "sequencer-templates");
+        }
         try { Directory.CreateDirectory(_dir); }
         catch (Exception ex) { _logger.LogWarning(ex, "Could not create template dir {Dir}", _dir); }
     }

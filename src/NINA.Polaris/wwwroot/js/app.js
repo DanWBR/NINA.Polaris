@@ -13888,8 +13888,10 @@ function ninaApp() {
                     body.hintRa = this.mount.ra;
                     body.hintDec = this.mount.dec;
                 }
+                // See solve-file: a Pi solve can exceed the default 15s
+                // client timeout, so allow up to 180s (server caps at 120s).
                 const resp = await this.apiPost(
-                    '/api/platesolve/solve-latest', body);
+                    '/api/platesolve/solve-latest', body, { timeout: 180000 });
                 const r = await resp.json();
                 this.previewSolveResult = r || { success: false, error: 'No response' };
                 if (this.previewSolveResult.success) {
@@ -14039,8 +14041,13 @@ function ninaApp() {
                     body.hintRa = this.mount.ra;
                     body.hintDec = this.mount.dec;
                 }
+                // Plate solving on a Pi can take well over the default 15s
+                // apiFetch timeout (4K frame, wide search radius), so the
+                // client was aborting the request mid-solve (HTTP 499 /
+                // AbortError). Give it 180s, comfortably above the server's
+                // own PlateSolve:TimeoutSeconds (120s default).
                 const resp = await this.apiPost(
-                    '/api/platesolve/solve-file', body);
+                    '/api/platesolve/solve-file', body, { timeout: 180000 });
                 const r = await resp.json();
                 this.filesSolveResult = r || { success: false, error: 'No response' };
                 if (this.filesSolveResult.success) {
