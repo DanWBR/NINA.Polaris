@@ -3835,6 +3835,11 @@
                                :value="guider.exposureMs || 1000"
                                @change="setGuideExposure($event.target.value)"
                                title="Guide-camera exposure per frame"></label>
+                    <label class="gb-field" x-show="guiderDriver === 'native'">Gain<input type="number"
+                               x-model.number="guideGain" @change="setGuideGain(guideGain)"
+                               step="10" min="0" title="Guide-camera gain"></label>
+                    <label class="gb-check" x-show="guiderDriver === 'native'"><input type="checkbox"
+                               :checked="guideBin === 2" @change="setGuideBin($event.target.checked ? 2 : 1)"> Bin 2x2</label>
                     <label class="gb-field">Settle px<input type="number" x-model.number="guiderSettlePixels" step="0.1"></label>
                     <label class="gb-field">Settle s<input type="number" x-model.number="guiderSettleTime" step="1"></label>
                     <label class="gb-field">Timeout<input type="number" x-model.number="guiderSettleTimeout" step="1"></label>
@@ -5306,18 +5311,6 @@
                                         <div class="equip-detail-props" x-show="guider.pixelScale">
                                             Scale: <strong x-text="guider.pixelScale?.toFixed(3) + '&quot;/px'"></strong>
                                         </div>
-                                    </div>
-                                    <div class="equip-meta-row" style="margin-top:8px">
-                                        <label>Gain
-                                            <input type="number" x-model.number="guideGain"
-                                                   @change="setGuideGain(guideGain)"
-                                                   step="10" min="0" class="input-sm" style="width:80px">
-                                        </label>
-                                        <label class="equip-driver-row" style="gap:6px; cursor:pointer; margin:0">
-                                            <input type="checkbox" :checked="guideBin === 2"
-                                                   @change="setGuideBin($event.target.checked ? 2 : 1)">
-                                            <span style="font-size:12px">Bin 2x2</span>
-                                        </label>
                                     </div>
                                     <p class="hint" style="margin:4px 0 0;font-size:11px">
                                         Must differ from the imaging camera. Used with the rig's
@@ -12353,7 +12346,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260608-guideexp"></script>
+    <script src="/js/app.js?v=20260608-guidegainbin"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
