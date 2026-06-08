@@ -39,6 +39,11 @@ public interface IGuider {
     DateTime? LastAlertAt { get; }
     string? LastSettleStatus { get; }
 
+    /// <summary>Human-readable calibration step shown in the GUIDE UI while
+    /// calibrating (e.g. "Dec (south): step 4, dist 12.3 px"). Null when not
+    /// calibrating. Default null for backends that don't report it (PHD2).</summary>
+    string? CalibrationProgress => null;
+
     // Rolling guiding metrics (arcsec).
     double RmsRA { get; }
     double RmsDec { get; }

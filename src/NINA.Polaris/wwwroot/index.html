@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260608-starzoom">
+    <link rel="stylesheet" href="/css/app.css?v=20260608-calsteps">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -3545,6 +3545,8 @@
                             <canvas x-ref="guidePhdCamOverlay" class="phd2-cam-overlay"
                                     x-show="guider.view"></canvas>
                             <div class="phd2-cam-empty text-muted" x-show="!guider.view">Loop or guide to see the guide frame</div>
+                            <div class="phd2-cal-banner" x-show="guider.calibrating && guider.calProgress"
+                                 x-text="'Calibrating — ' + guider.calProgress"></div>
                         </div>
                         <div class="phd2-rightcol">
                             <div class="phd2-bullseye">
@@ -3557,11 +3559,9 @@
                                           x-show="guider.view?.fwhm"
                                           x-text="'FWHM ' + (guider.view?.fwhm?.toFixed(2)) + ' px'"></span>
                                 </div>
-                                <div class="phd2-prof-row">
-                                    <canvas x-ref="guidePhdStarZoom" class="phd2-starzoom"
-                                            title="Zoom of the locked guide star"></canvas>
-                                    <canvas x-ref="guidePhdProfile" class="phd2-prof-canvas"></canvas>
-                                </div>
+                                <canvas x-ref="guidePhdStarZoom" class="phd2-starzoom"
+                                        title="Locked guide star (profile overlaid)"></canvas>
+                                <canvas x-ref="guidePhdProfile" style="display:none"></canvas>
                             </div>
                         </div>
                     </div>
@@ -12266,7 +12266,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260608-starzoom"></script>
+    <script src="/js/app.js?v=20260608-calsteps"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

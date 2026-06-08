@@ -46,6 +46,9 @@ public sealed class NativeGuider : IGuider, IDisposable {
     private double _lockX, _lockY;
     private bool _haveLock;
     private GuideCalibration _calibration = GuideCalibration.Invalid;
+    // Human-readable calibration step, surfaced to the GUIDE UI so the user
+    // sees what's happening (ASIAIR-style "Dec (south) step 4, dist 12.3 px").
+    private volatile string? _calProgress;
 
     // Multi-star field tracker (primary + secondaries). Engaged only when the
     // rig enables it and more than one star was locked; otherwise the single
@@ -91,6 +94,7 @@ public sealed class NativeGuider : IGuider, IDisposable {
     public string AppState { get; private set; } = "Stopped";
     public bool IsGuiding => AppState == "Guiding";
     public bool IsCalibrating => AppState == "Calibrating";
+    public string? CalibrationProgress => _calProgress;
     public bool IsPaused => AppState == "Paused";
     public bool IsLooping => AppState == "Looping";
     public bool IsSettling { get; private set; }
@@ -386,50 +390,71 @@ public sealed class NativeGuider : IGuider, IDisposable {
         // Threshold scales with frame so big sensors don't undershoot.
         var process = new CalibrationProcess(stepMs, 25.0, 60, decRad);
 
-        // Seed the process with the current centroid.
-        var (curX, curY, found) = await FindStarAsync(cam, ct);
-        if (!found) { RaiseAlert("Calibration failed: star lost at start."); SetAppState("Stopped"); return; }
+        _calProgress = "Calibrating: locating star...";
+        try {
+            // Seed the process with the current centroid.
+            var (curX, curY, found) = await FindStarAsync(cam, ct);
+            if (!found) { RaiseAlert("Calibration failed: star lost at start."); SetAppState("Stopped"); return; }
 
-        for (int i = 0; i < 200 && !ct.IsCancellationRequested; i++) {
-            var step = process.Tick(curX, curY);
-            if (step.Failed) {
-                RaiseAlert($"Calibration failed: {step.Phase}");
-                SetAppState("Stopped");
-                return;
-            }
-            if (step.Done) break;
-            if (step.Pulse && step.DurationMs > 0) {
-                try {
-                    await mount.PulseGuideAsync(step.Direction, step.DurationMs, ct);
-                } catch (Exception ex) {
-                    RaiseAlert($"Calibration pulse failed: {ex.Message}");
+            string? lastPhase = null;
+            double phStartX = curX, phStartY = curY;
+            int phaseStep = 0;
+
+            for (int i = 0; i < 200 && !ct.IsCancellationRequested; i++) {
+                var step = process.Tick(curX, curY);
+                if (step.Failed) {
+                    RaiseAlert($"Calibration failed: {step.Phase}");
                     SetAppState("Stopped");
                     return;
                 }
-                await SettleAfterPulse(step.DurationMs, ct);
-            }
-            (curX, curY, found) = await FindStarAsync(cam, ct);
-            if (!found) {
-                RaiseAlert("Calibration failed: star lost mid-sequence.");
-                SetAppState("Stopped");
-                return;
-            }
-        }
+                if (step.Done) break;
 
-        _calibration = process.Result;
-        if (_calibration.IsValid) {
-            // Stamp the pier side this calibration was measured on so a later
-            // meridian flip can mirror it instead of forcing a recalibration.
-            _calibration = _calibration with { CalibrationPierSide = mount.SideOfPier };
-            // Re-lock at the recentred position.
-            _lockX = curX; _lockY = curY;
-            _logger.LogInformation(
-                "Native calibration complete: xAngle={Xa:F3} xRate={Xr:F5} yAngle={Ya:F3} yRate={Yr:F5}",
-                _calibration.XAngle, _calibration.XRate, _calibration.YAngle, _calibration.YRate);
-        } else {
-            RaiseAlert("Calibration did not complete.");
+                // Reset the per-phase step counter + reference position whenever
+                // the calibration phase changes (West -> East -> Dec ...).
+                if (step.Phase != lastPhase) {
+                    lastPhase = step.Phase; phStartX = curX; phStartY = curY; phaseStep = 0;
+                }
+                phaseStep++;
+                double dx = curX - phStartX, dy = curY - phStartY;
+                double dist = Math.Sqrt(dx * dx + dy * dy);
+                _calProgress = $"{step.Phase}: step {phaseStep}, dist {dist:F1} px";
+
+                if (step.Pulse && step.DurationMs > 0) {
+                    try {
+                        await mount.PulseGuideAsync(step.Direction, step.DurationMs, ct);
+                    } catch (Exception ex) {
+                        RaiseAlert($"Calibration pulse failed: {ex.Message}");
+                        SetAppState("Stopped");
+                        return;
+                    }
+                    await SettleAfterPulse(step.DurationMs, ct);
+                }
+                (curX, curY, found) = await FindStarAsync(cam, ct);
+                if (!found) {
+                    RaiseAlert("Calibration failed: star lost mid-sequence.");
+                    SetAppState("Stopped");
+                    return;
+                }
+            }
+
+            _calibration = process.Result;
+            if (_calibration.IsValid) {
+                // Stamp the pier side this calibration was measured on so a later
+                // meridian flip can mirror it instead of forcing a recalibration.
+                _calibration = _calibration with { CalibrationPierSide = mount.SideOfPier };
+                // Re-lock at the recentred position.
+                _lockX = curX; _lockY = curY;
+                _calProgress = "Calibration complete";
+                _logger.LogInformation(
+                    "Native calibration complete: xAngle={Xa:F3} xRate={Xr:F5} yAngle={Ya:F3} yRate={Yr:F5}",
+                    _calibration.XAngle, _calibration.XRate, _calibration.YAngle, _calibration.YRate);
+            } else {
+                RaiseAlert("Calibration did not complete.");
+            }
+            SetAppState("Stopped");
+        } finally {
+            _calProgress = null;
         }
-        SetAppState("Stopped");
     }
 
     // ----- Guide loop -----

@@ -1055,7 +1055,7 @@ function ninaApp() {
             paused: false, looping: false, settling: false,
             pixelScale: 0, rmsRA: 0, rmsDec: 0, rmsTotal: 0,
             peakRA: 0, peakDec: 0, stepCount: 0,
-            lastAlert: null, lastSettleStatus: null,
+            lastAlert: null, lastSettleStatus: null, calProgress: null,
             recentSteps: []
         },
         guiderHost: 'localhost',
@@ -11794,16 +11794,34 @@ function ninaApp() {
             const cx = (v.lockX - (v.originX || 0));
             const cy = (v.lockY - (v.originY || 0));
             const sx = cx - R, sy = cy - R, sw = 2 * R, sh = 2 * R;
+            // Cover the whole panel with the square crop (centred, may letterbox
+            // horizontally) so the star fills the view like ASIAIR.
             const side = Math.min(w, h);
             const ox = (w - side) / 2, oy = (h - side) / 2;
             ctx.imageSmoothingEnabled = false;
             try { ctx.drawImage(img, sx, sy, sw, sh, ox, oy, side, side); } catch (e) { return; }
-            // Centre crosshair so the user sees the star sit on the lock point.
-            ctx.strokeStyle = 'rgba(120,255,120,0.55)'; ctx.lineWidth = 1;
+
+            // Centre crosshair on the lock point.
+            ctx.strokeStyle = 'rgba(120,255,120,0.45)'; ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.moveTo(ox + side / 2, oy); ctx.lineTo(ox + side / 2, oy + side);
             ctx.moveTo(ox, oy + side / 2); ctx.lineTo(ox + side, oy + side / 2);
             ctx.stroke();
+
+            // Overlay the intensity cross-section (red), ASIAIR-style, along the
+            // bottom of the star image.
+            const p = v.profile;
+            if (p && p.length) {
+                const base = h - 4, span = h * 0.42;
+                ctx.strokeStyle = '#ff5252'; ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                for (let i = 0; i < p.length; i++) {
+                    const x = (i / (p.length - 1)) * w;
+                    const y = base - Math.max(0, Math.min(1, p[i])) * span;
+                    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            }
         },
 
         // Draw lock crosshair/box + star markers over the guide-cam image.
@@ -21986,6 +22004,7 @@ function ninaApp() {
                         stepCount: g.stepCount || 0,
                         lastAlert: g.lastAlert || null,
                         lastSettleStatus: g.lastSettleStatus || null,
+                        calProgress: g.calProgress || null,
                         recentSteps: g.recentSteps || [],
                         // PH2X-9 sub-objects, UI binds chips + state to these.
                         profileSync: g.profileSync || null,
