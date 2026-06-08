@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260608-calstopstar">
+    <link rel="stylesheet" href="/css/app.css?v=20260608-mountdrvsel">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -4664,14 +4664,20 @@
                                  available. -->
                             <div class="equip-driver-row" x-show="mountDrivers.length > 1">
                                 <label class="equip-driver-label">Driver</label>
+                                <!-- @change + :selected (NOT x-model): x-model fights
+                                     the x-for re-render and the displayed value
+                                     resets to the first option (INDI) on a WS
+                                     tick while the bound state stays put, which
+                                     made the "sim" hint show under "INDI". -->
                                 <select class="equip-select equip-driver-select"
-                                        x-model="mountDriver"
-                                        @change="mountVendorDevices = []; equipMountChoice = '';
+                                        @change="mountDriver = $event.target.value;
+                                                  mountVendorDevices = []; equipMountChoice = '';
                                                   if ((mountDriver === 'ascom-com' || mountDriver === 'alpaca')
                                                       && mountDriverInfo?.available)
                                                       detectVendorMounts()">
                                     <template x-for="d in mountDrivers" :key="d.id">
                                         <option :value="d.id" :disabled="!d.available"
+                                                :selected="mountDriver === d.id"
                                                 x-text="d.name + (d.available ? '' : ' (not installed)')"></option>
                                     </template>
                                 </select>
@@ -12343,7 +12349,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260608-calstopstar"></script>
+    <script src="/js/app.js?v=20260608-mountdrvsel"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
