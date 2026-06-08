@@ -46,6 +46,13 @@ public sealed class NativeGuider : IGuider, IDisposable {
     // Lock-position + calibration state (guarded by the loop being single).
     private double _lockX, _lockY;
     private bool _haveLock;
+    // During calibration the star deliberately sweeps the frame and _lockX/_lockY
+    // follow it (so the search window tracks the moving star). The displayed
+    // crosshair, however, must stay pinned at the position where calibration
+    // began -- the moving star is shown by its own marker circle. These hold that
+    // fixed display anchor while _calAnchorActive is set.
+    private double _calAnchorX, _calAnchorY;
+    private bool _calAnchorActive;
     private GuideCalibration _calibration = GuideCalibration.Invalid;
     // Human-readable calibration step, surfaced to the GUIDE UI so the user
     // sees what's happening (ASIAIR-style "Dec (south) step 4, dist 12.3 px").
@@ -427,6 +434,10 @@ public sealed class NativeGuider : IGuider, IDisposable {
             if (!found) { RaiseAlert("Calibration failed: star lost at start."); SetAppState("Stopped"); return; }
             // Track the star: re-centre the search window on the last position.
             _lockX = curX; _lockY = curY;
+            // Pin the displayed crosshair here for the whole calibration; the star
+            // itself is shown moving via its marker circle each step.
+            _calAnchorX = curX; _calAnchorY = curY; _calAnchorActive = true;
+            BuildView(curX, curY, 0, true);
 
             string? lastPhase = null;
             double phStartX = curX, phStartY = curY;
@@ -473,6 +484,9 @@ public sealed class NativeGuider : IGuider, IDisposable {
                 // Re-centre the (wide) search window on the new position so the
                 // next step keeps following the star as it sweeps.
                 _lockX = curX; _lockY = curY;
+                // Refresh the live view: crosshair stays at the anchor (see
+                // BuildView), the star marker moves to its new measured spot.
+                BuildView(curX, curY, 0, true);
                 // Record the measured points per axis for the Review-Calibration plot.
                 if (lastPhase != null && lastPhase.StartsWith("RA (") && raPts.Count < 80)
                     raPts.Add(new[] { curX - oX, curY - oY });
@@ -503,6 +517,9 @@ public sealed class NativeGuider : IGuider, IDisposable {
             SetAppState("Stopped");
         } finally {
             _calProgress = null;
+            // Release the crosshair anchor so the live lock drives it again
+            // (guiding pins the crosshair to the lock the star is held at).
+            _calAnchorActive = false;
         }
     }
 
@@ -984,7 +1001,11 @@ public sealed class NativeGuider : IGuider, IDisposable {
             BitDepth = img.Properties.BitDepth,
             OriginX = _lastFrameOriginX,
             OriginY = _lastFrameOriginY,
-            LockX = _lockX, LockY = _lockY, HaveLock = _haveLock,
+            // Pin the crosshair to the calibration anchor while calibrating so it
+            // stays put; the moving star is conveyed by its marker (below).
+            LockX = _calAnchorActive ? _calAnchorX : _lockX,
+            LockY = _calAnchorActive ? _calAnchorY : _lockY,
+            HaveLock = _haveLock,
             FrameId = ++_viewSeq
         };
         bool multi = Rig.NativeMultiStar && _multiStar.Count > 1;

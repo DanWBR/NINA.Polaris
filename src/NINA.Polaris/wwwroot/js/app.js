@@ -11802,9 +11802,16 @@ function ninaApp() {
                        || (v.stars || []).find(s => s.found);
             const starX = prim ? prim.x : v.lockX;
             const starY = prim ? prim.y : v.lockY;
-            const cx = (starX - (v.originX || 0));
-            const cy = (starY - (v.originY || 0));
-            const sx = cx - R, sy = cy - R, sw = 2 * R, sh = 2 * R;
+            // The JPEG is downscaled to maxDim (~600px) on the server, so its
+            // natural size is smaller than the sensor (v.width x v.height). Star
+            // coords are in sensor px -- scale them into JPEG px or the crop lands
+            // off-image (star never shows, especially on the right/bottom).
+            const scaleX = img.naturalWidth / (v.width || img.naturalWidth);
+            const scaleY = img.naturalHeight / (v.height || img.naturalHeight);
+            const cx = (starX - (v.originX || 0)) * scaleX;
+            const cy = (starY - (v.originY || 0)) * scaleY;
+            const Rx = R * scaleX, Ry = R * scaleY;
+            const sx = cx - Rx, sy = cy - Ry, sw = 2 * Rx, sh = 2 * Ry;
             // Cover the whole panel with the square crop (centred, may letterbox
             // horizontally) so the star fills the view like ASIAIR.
             const side = Math.min(w, h);
@@ -22103,6 +22110,12 @@ function ninaApp() {
                         lastSettleStatus: g.lastSettleStatus || null,
                         calProgress: g.calProgress || null,
                         calDetails: g.calDetails || null,
+                        // Carry the guide-camera connection through the rebuild --
+                        // otherwise once the native guider auto-connects (g.connected
+                        // true) this object replaces the field set above with
+                        // undefined and the RIGS card switch snaps back to "off".
+                        guideCameraConnected: !!g.guideCameraConnected,
+                        guideCameraName: g.guideCameraName || null,
                         recentSteps: g.recentSteps || [],
                         // PH2X-9 sub-objects, UI binds chips + state to these.
                         profileSync: g.profileSync || null,
