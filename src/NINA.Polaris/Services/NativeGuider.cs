@@ -107,6 +107,7 @@ public sealed class NativeGuider : IGuider, IDisposable {
     public bool IsCalibrating => AppState == "Calibrating";
     public string? CalibrationProgress => _calProgress;
     public object? CalibrationDetails => _calDetails;
+    public int ExposureMs => Math.Max(50, Rig.NativeGuideExposureMs);
     public bool IsPaused => AppState == "Paused";
     public bool IsLooping => AppState == "Looping";
     public bool IsSettling { get; private set; }

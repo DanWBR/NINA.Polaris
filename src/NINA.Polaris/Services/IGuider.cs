@@ -49,6 +49,10 @@ public interface IGuider {
     /// panel. Null until one completes. Default null (PHD2).</summary>
     object? CalibrationDetails => null;
 
+    /// <summary>Current guide-camera exposure in milliseconds, surfaced to the
+    /// GUIDE panel's exposure field. 0 when not reported by the backend.</summary>
+    int ExposureMs => 0;
+
     // Rolling guiding metrics (arcsec).
     double RmsRA { get; }
     double RmsDec { get; }

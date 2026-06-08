@@ -16737,6 +16737,20 @@ function ninaApp() {
             this._persistRigSelection({ [field]: v });
         },
 
+        // Set the guide-camera exposure (ms) on the active guider. Works for both
+        // backends via /api/guider/exposure/{ms}; for native it persists to the
+        // rig (NativeGuideExposureMs) and applies on the next frame.
+        async setGuideExposure(value) {
+            const v = Math.max(50, Math.min(10000, Math.round(Number(value) || 0)));
+            this.guider.exposureMs = v;
+            try {
+                await this.apiPost(`/api/guider/exposure/${v}`);
+                this.toast('Guide exposure: ' + v + ' ms', 'ok');
+            } catch (e) {
+                this.toast('Set guide exposure failed: ' + (e.message || e), 'error');
+            }
+        },
+
         // Toggle auto-measured Dec backlash compensation for the native guider.
         setNativeBacklashComp(enabled) {
             this.nativeBacklashComp = !!enabled;
@@ -22067,6 +22081,10 @@ function ninaApp() {
                 // every tick regardless of guider connection state.
                 this.guider.guideCameraConnected = !!g.guideCameraConnected;
                 this.guider.guideCameraName = g.guideCameraName || null;
+                // Exposure is reported in both branches; keep the field in sync but
+                // don't clobber a value the user is actively editing (we set it
+                // optimistically in setGuideExposure).
+                if (g.exposureMs != null) this.guider.exposureMs = g.exposureMs;
                 if (!g.connected) {
                     if (this.guider.connected) {
                         // server-side disconnect (PHD2 crashed?)

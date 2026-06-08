@@ -177,6 +177,7 @@ public static class StatusStreamHandler {
                             lastSettleStatus = activeGuider.LastSettleStatus,
                             calProgress = activeGuider.CalibrationProgress,
                             calDetails = activeGuider.CalibrationDetails,
+                            exposureMs = activeGuider.ExposureMs,
                             recentSteps = tail.Select(s => new {
                                 t = ((DateTimeOffset)s.Timestamp).ToUnixTimeMilliseconds(),
                                 ra = s.RaArcsec,
@@ -204,6 +205,7 @@ public static class StatusStreamHandler {
                         guiderPayload = new {
                             backend = activeGuider.Backend,
                             connected = false, appState = "Stopped",
+                            exposureMs = activeGuider.ExposureMs,
                             guideCameraConnected = equip.GuideCamera?.IsConnected ?? false,
                             guideCameraName = equip.GuideCamera?.DeviceName,
                             profileSync = profileSyncPayload,
