@@ -11639,6 +11639,7 @@ function ninaApp() {
             try { this.drawGuidePhdGraph(); } catch (e) {}
             try { this.drawGuideBullseye(); } catch (e) {}
             try { this.drawGuideProfile(); } catch (e) {}
+            try { this.drawGuideStarZoom(); } catch (e) {}
             // Refresh the guide-cam image only when a new frame arrived.
             const v = this.guider.view;
             if (v && v.frameId !== this._guidePhdFrameId) {
@@ -11774,6 +11775,34 @@ function ninaApp() {
                 const y = h - 4 - (Math.max(0, Math.min(1, p[i]))) * (h - 8);
                 if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
             }
+            ctx.stroke();
+        },
+
+        // ASIAIR-style zoomed crop of the locked guide star, taken from the
+        // guide-cam image around the lock position (image natural pixels are the
+        // capture buffer, whose top-left maps to originX/originY).
+        drawGuideStarZoom() {
+            const canvas = this.$refs.guidePhdStarZoom;
+            if (!canvas) return;
+            const { ctx, w, h } = this._fitCanvas(canvas);
+            ctx.clearRect(0, 0, w, h);
+            const img = this.$refs.guidePhdCamImg;
+            const v = this.guider.view;
+            if (!img || !img.naturalWidth || !v || v.lockX == null) return;
+
+            const R = 13; // half-window in source px around the star (~26px crop)
+            const cx = (v.lockX - (v.originX || 0));
+            const cy = (v.lockY - (v.originY || 0));
+            const sx = cx - R, sy = cy - R, sw = 2 * R, sh = 2 * R;
+            const side = Math.min(w, h);
+            const ox = (w - side) / 2, oy = (h - side) / 2;
+            ctx.imageSmoothingEnabled = false;
+            try { ctx.drawImage(img, sx, sy, sw, sh, ox, oy, side, side); } catch (e) { return; }
+            // Centre crosshair so the user sees the star sit on the lock point.
+            ctx.strokeStyle = 'rgba(120,255,120,0.55)'; ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(ox + side / 2, oy); ctx.lineTo(ox + side / 2, oy + side);
+            ctx.moveTo(ox, oy + side / 2); ctx.lineTo(ox + side, oy + side / 2);
             ctx.stroke();
         },
 

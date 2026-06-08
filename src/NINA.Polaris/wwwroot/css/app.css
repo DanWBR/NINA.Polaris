@@ -11005,7 +11005,10 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .phd2-bullseye, .phd2-profile { background:#0a0a0c; border:1px solid #222; border-radius:6px; padding:6px; }
 .phd2-panel-title { font-size:11px; color:#888; margin-bottom:4px; }
 .phd2-sq-canvas { width:100%; aspect-ratio:1/1; display:block; }
-.phd2-prof-canvas { width:100%; height:90px; display:block; }
+.phd2-prof-row { display:flex; gap:6px; align-items:stretch; }
+.phd2-starzoom { flex:0 0 90px; width:90px; height:90px; display:block;
+    background:#000; border:1px solid #222; border-radius:4px; image-rendering:pixelated; }
+.phd2-prof-canvas { flex:1 1 auto; width:auto; height:90px; display:block; }
 .phd2-statusbar { display:flex; gap:16px; flex-wrap:wrap; font-size:11px; color:#bbb;
     background:#0a0a0c; border:1px solid #222; border-radius:6px; padding:5px 10px; font-family:monospace; }
 
