@@ -684,6 +684,10 @@ function ninaApp() {
         guideCameraVendorDevices: [],
         guideCameraDiscovering: false,
         guideGain: 0,   // native guide-camera gain (0 = camera default)
+        // Guide-camera gain range, hydrated from eq.guideCamera each WS tick.
+        // Drives the Gain dropdown (min, max + evenly spaced intermediates).
+        guideCameraGainMin: 0,
+        guideCameraGainMax: 0,
         guideBin: 1,    // native guide-camera binning (1 or 2)
         // Local scalar (ms) backing the GUIDE "Exp (s)" dropdown. The dropdown
         // shows seconds but the value/backend are ms; WS syncs it each tick,
@@ -16883,6 +16887,27 @@ function ninaApp() {
             this.guideGain = Math.max(0, Number(v) || 0);
             this._persistRigSelection({ nativeGuideGain: this.guideGain });
         },
+        // Gain values offered by the GUIDE Gain dropdown: the guide camera's
+        // reported min and max plus evenly spaced intermediates. The current
+        // guideGain is always folded in (sorted, deduped) so a persisted value
+        // that doesn't land on a step still shows as the selected option. Falls
+        // back to a single [0] entry when the camera reports no usable range.
+        get guideGainOptions() {
+            const lo = Math.round(Number(this.guideCameraGainMin) || 0);
+            const hi = Math.round(Number(this.guideCameraGainMax) || 0);
+            const cur = Math.max(0, Math.round(Number(this.guideGain) || 0));
+            const set = new Set();
+            if (hi > lo) {
+                const STEPS = 10; // min, max + 9 intermediates
+                for (let i = 0; i <= STEPS; i++) {
+                    set.add(Math.round(lo + (hi - lo) * i / STEPS));
+                }
+            } else {
+                set.add(lo);
+            }
+            set.add(cur); // keep a persisted off-step value visible/selectable
+            return Array.from(set).sort((a, b) => a - b);
+        },
         setGuideBin(v) {
             this.guideBin = (Number(v) === 2) ? 2 : 1;
             this._persistRigSelection({ nativeGuideBin: this.guideBin });
@@ -21942,6 +21967,13 @@ function ninaApp() {
                     if (this.tempHistory.length > 120) this.tempHistory.shift(); // ~10 min @ 5s
                     this._tempLastSample = now;
                 }
+            }
+            // Guide-camera gain range for the GUIDE Gain dropdown. Mirrors the
+            // imaging-camera gain hydration above but from the dedicated guide
+            // cam slot. Only present when a native guide camera is selected.
+            if (eq.guideCamera) {
+                this.guideCameraGainMin = eq.guideCamera.gainMin || 0;
+                this.guideCameraGainMax = eq.guideCamera.gainMax || 0;
             }
             if (eq.telescope) {
                 const prevRa = this.mount.ra, prevDec = this.mount.dec;

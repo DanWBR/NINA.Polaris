@@ -3903,9 +3903,13 @@
                         <option :value="3000">3.0</option>
                         <option :value="5000">5.0</option>
                     </select></label>
-                    <label class="gb-field" x-show="guiderDriver === 'native'">Gain<input type="number"
-                               x-model.number="guideGain" @change="setGuideGain(guideGain)"
-                               step="10" min="0" title="Guide-camera gain"></label>
+                    <label class="gb-field" x-show="guiderDriver === 'native'">Gain<select
+                               @change="setGuideGain(Number($event.target.value))"
+                               title="Guide-camera gain (range read from the camera)">
+                        <template x-for="g in guideGainOptions" :key="g">
+                            <option :value="g" :selected="guideGain === g" x-text="g"></option>
+                        </template>
+                    </select></label>
                     <label class="gb-check" x-show="guiderDriver === 'native'"><input type="checkbox"
                                :checked="guideBin === 2" @change="setGuideBin($event.target.checked ? 2 : 1)"> Bin 2x2</label>
                     <label class="gb-field">Settle px<input type="number" x-model.number="guiderSettlePixels" step="0.1"></label>
@@ -12417,7 +12421,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260608-expdropdown"></script>
+    <script src="/js/app.js?v=20260608-gaindropdown"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

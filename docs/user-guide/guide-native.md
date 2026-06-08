@@ -25,7 +25,7 @@ guide camera is on and the GUIDE backend is `native`.
 | Control | Meaning |
 |---|---|
 | **Exp (s)** | Guide-camera exposure per frame, picked from a dropdown of presets (0.1, 0.2, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0 s). Persists to the rig. |
-| **Gain** | Guide-camera gain (native only). |
+| **Gain** | Guide-camera gain (native only), picked from a dropdown built from the camera's reported min/max plus evenly spaced intermediate values. |
 | **Bin 2x2** | Bin the guide camera 2×2 for a brighter, smaller frame. |
 | **Settle px / s / Timeout** | Settle tolerance, minimum settled time, hard timeout used after calibration starts and after a dither. |
 | **Loop** | Capture continuously without guiding (framing, focusing the guide scope). |
