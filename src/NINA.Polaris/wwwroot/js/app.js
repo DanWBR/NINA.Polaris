@@ -12278,6 +12278,22 @@ function ninaApp() {
             this.focuserDriver = rig.focuserDriver || 'indi';
             this.equipFilterChoice = rig.filterWheel || '';
             this.filterWheelDriver = rig.filterWheelDriver || 'indi';
+            // Vendor/SDK devices are listed by discovery (runs on driver change),
+            // so a rig saved with a non-INDI focuser/filter wheel/mount would show
+            // an empty list until the user re-picks the driver. Kick discovery on
+            // rig load too, so the saved device populates and :selected matches it.
+            if (this.focuserDriver !== 'indi') {
+                this.focuserVendorDevices = [];
+                try { this.detectVendorFocusers(); } catch (e) {}
+            }
+            if (this.filterWheelDriver !== 'indi') {
+                this.filterWheelVendorDevices = [];
+                try { this.detectVendorFilterWheels(); } catch (e) {}
+            }
+            if (this.mountDriver === 'ascom-com' || this.mountDriver === 'alpaca') {
+                this.mountVendorDevices = [];
+                try { this.detectVendorMounts(); } catch (e) {}
+            }
             this.equipRotatorChoice = rig.rotator || '';
             this.equipFlatChoice = rig.flatDevice || '';
             this.equipDomeChoice = rig.dome || '';

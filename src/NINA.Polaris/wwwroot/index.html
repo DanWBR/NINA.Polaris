@@ -5062,12 +5062,13 @@
                             <div class="equip-driver-row" x-show="focuserDrivers.length > 1">
                                 <label class="equip-driver-label">Driver</label>
                                 <select class="equip-select equip-driver-select"
-                                        x-model="focuserDriver"
-                                        @change="focuserVendorDevices = []; equipFocuserChoice = '';
+                                        @change="focuserDriver = $event.target.value;
+                                                  focuserVendorDevices = []; equipFocuserChoice = '';
                                                   if (focuserDriver !== 'indi' && focuserDriverInfo?.available)
                                                       detectVendorFocusers()">
                                     <template x-for="d in focuserDrivers" :key="d.id">
                                         <option :value="d.id" :disabled="!d.available"
+                                                :selected="focuserDriver === d.id"
                                                 x-text="d.name + (d.available ? '' : ' (not installed)')"></option>
                                     </template>
                                 </select>
@@ -5242,12 +5243,13 @@
                             <div class="equip-driver-row" x-show="filterWheelDrivers.length > 1">
                                 <label class="equip-driver-label">Driver</label>
                                 <select class="equip-select equip-driver-select"
-                                        x-model="filterWheelDriver"
-                                        @change="filterWheelVendorDevices = []; equipFilterChoice = '';
+                                        @change="filterWheelDriver = $event.target.value;
+                                                  filterWheelVendorDevices = []; equipFilterChoice = '';
                                                   if (filterWheelDriver !== 'indi' && filterWheelDriverInfo?.available)
                                                       detectVendorFilterWheels()">
                                     <template x-for="d in filterWheelDrivers" :key="d.id">
                                         <option :value="d.id" :disabled="!d.available"
+                                                :selected="filterWheelDriver === d.id"
                                                 x-text="d.name + (d.available ? '' : ' (not installed)')"></option>
                                     </template>
                                 </select>
@@ -12408,7 +12410,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260608-camload"></script>
+    <script src="/js/app.js?v=20260608-driversel"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
