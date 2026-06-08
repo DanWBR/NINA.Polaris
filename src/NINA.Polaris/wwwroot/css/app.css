@@ -11017,7 +11017,8 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .cal-review-table td:nth-child(odd) { color:#9aa; width:22%; }
 .cal-restored-tag { font-size:10px; color:#69f0ae; border:1px solid #2e6; border-radius:4px;
     padding:1px 6px; margin-left:8px; vertical-align:middle; text-transform:uppercase; }
-.cal-corr-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:6px; }
+.cal-corr-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:6px;
+    align-items:end; }
 .cal-corr-grid .gb-field { display:flex; flex-direction:column; gap:4px; font-size:10px;
     color:#8a93a6; text-transform:uppercase; letter-spacing:.04em; }
 .cal-corr-grid .gb-field input { width:100%; background:#11151c; color:#e6e9ef;
