@@ -33,6 +33,10 @@ FOCUS Manual, and VIDEO:
   the next starts; effective fps bounded by exposure + transfer
   + render. Anel âmbar durante o hold confirma o arming.
 - **Tap during snap or loop**, aborts.
+- **🔁 Continuous preview** checkbox, the same loop as the long-press
+  gesture but as an explicit toggle: check it to keep snapping
+  back-to-back (using the exposure / gain / bin / filter above) until
+  unchecked. Disabled while Stream is running.
 
 ### Other controls
 

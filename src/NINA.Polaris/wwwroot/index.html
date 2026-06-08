@@ -2742,6 +2742,19 @@
                         <button class="btn" @click="openImageViewer()"
                                 :disabled="!selectedCamera"
                                 title="Full-resolution zoom/pan viewer">⛶ View</button>
+                        <!-- Continuous preview: re-snaps automatically after each
+                             frame (same chain as the shutter long-press Loop).
+                             Distinct from Stream, which is the server-side video
+                             loop; this keeps the snap pipeline (HFR/stars/solve
+                             hint) running shot after shot. -->
+                        <label class="seq-dither-checkbox"
+                               title="Keep taking snaps back-to-back until unchecked (continuous loop). Uses the exposure/gain/bin/filter above.">
+                            <input type="checkbox"
+                                   :checked="preview.looping"
+                                   @change="previewToggleLoop()"
+                                   :disabled="!selectedCamera || cameraStream.running">
+                            🔁 Continuous preview
+                        </label>
                         <!-- FIELD4-4: one-shot plate solve of the currently
                              displayed frame. Hint comes from the mount
                              pointing (when connected) so the solver doesn't
