@@ -75,7 +75,7 @@ while IFS= read -r -d '' f; do
   if [ "$apply" = "1" ]; then
     printf '%s\n%s' "$hdr" "$(cat "$f")" > "$f.tmp" && mv "$f.tmp" "$f"
   fi
-done < <(find "$root/src" -name '*.cs' -print0)
+done < <(find "$root/src" "$root/tests" -name '*.cs' -print0)
 
 echo ""
 if [ "$apply" = "1" ]; then echo "APPLIED: MPL=$mpl AGPL=$agpl already-headed(skipped)=$skipped";

@@ -71,7 +71,8 @@ function Is-Derived($relPath) {
   return $false
 }
 
-$files = Get-ChildItem -Path (Join-Path $root 'src') -Recurse -Filter *.cs -File |
+$scanDirs = @((Join-Path $root 'src'), (Join-Path $root 'tests')) | Where-Object { Test-Path $_ }
+$files = Get-ChildItem -Path $scanDirs -Recurse -Filter *.cs -File |
   Where-Object {
     $_.FullName -notmatch '\\(obj|bin)\\' -and
     $_.Name -notmatch '\.(g|Designer|AssemblyInfo|GlobalUsings)\.cs$' -and
