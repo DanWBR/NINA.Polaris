@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260608-caltrack">
+    <link rel="stylesheet" href="/css/app.css?v=20260608-guidecamdetect">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -5282,10 +5282,6 @@
                                                         x-text="c.model + ' (' + c.detail + ')'"></option>
                                             </template>
                                         </select>
-                                        <button class="btn btn-sm"
-                                                x-show="guideCameraDriver !== 'indi'"
-                                                @click="detectGuideCameras()"
-                                                :disabled="guideCameraDiscovering">Detect</button>
                                         <!-- Connect/disconnect switch (mirrors the imaging camera). -->
                                         <label class="equip-toggle"
                                                :aria-disabled="(!guideCamera && !guider.guideCameraConnected).toString()"
@@ -12350,7 +12346,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260608-caltrack"></script>
+    <script src="/js/app.js?v=20260608-guidecamdetect"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
