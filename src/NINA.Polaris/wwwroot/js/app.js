@@ -11707,23 +11707,30 @@ function ninaApp() {
             // correction impulse bars (RA + Dec durations, scaled to a fraction
             // of the half-height so they read as activity, not absolute ms).
             const maxDur = Math.max(1, ...steps.map(s => Math.max(s.raDur || 0, s.decDur || 0)));
+            // Bar width adapts to sample spacing so the impulses read clearly
+            // (RA + Dec sit side by side within each slot). Clamped so a sparse
+            // history doesn't draw fat slabs and a dense one stays legible.
+            const bw = Math.max(3, Math.min(9, dx * 0.7));
+            const half = bw / 2;
             for (let i = 0; i < n; i++) {
                 const x = i * dx;
                 const s = steps[i];
                 const raB = ((s.raDur || 0) / maxDur) * (h / 2 - 8);
                 const decB = ((s.decDur || 0) / maxDur) * (h / 2 - 8);
+                // RA bar nudged left of the slot centre, Dec right, so both are
+                // visible when the same frame pulses on both axes.
                 if (raB > 0) {
-                    ctx.fillStyle = 'rgba(229,115,115,0.30)';
+                    ctx.fillStyle = 'rgba(229,115,115,0.35)';
                     // The pulse opposes the error (pushes the star back toward
                     // lock), so a positive RA error draws a downward bar. Canvas
                     // +y is down, so positive error (line up) -> +raB (bar down).
                     const dir = (s.raPx ?? 0) >= 0 ? 1 : -1;
-                    ctx.fillRect(x - 1, mid, 2, dir * raB);
+                    ctx.fillRect(x - half, mid, half, dir * raB);
                 }
                 if (decB > 0) {
-                    ctx.fillStyle = 'rgba(100,181,246,0.30)';
+                    ctx.fillStyle = 'rgba(100,181,246,0.35)';
                     const dir = (s.decPx ?? 0) >= 0 ? 1 : -1;
-                    ctx.fillRect(x - 1, mid, 2, dir * decB);
+                    ctx.fillRect(x, mid, half, dir * decB);
                 }
             }
 
