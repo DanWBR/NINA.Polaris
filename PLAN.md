@@ -12823,3 +12823,45 @@ that need guiding are guided through INDI/EQMod (which expose
 TELESCOPE_TIMED_GUIDE_*), or via ASCOM/Alpaca, all of which the native guider
 already supports. PHD2 itself guides those mounts the same way, not through the
 WiFi app protocol.
+
+---
+
+## SIMG: Built-in gear simulator for native-guider testing (PHD2 gear_simulator port) — DONE
+
+Goal: validate the native autoguider (calibration, guiding, Dec backlash comp,
+multi-star, pier-side handling) indoors with no hardware and no clear sky, by
+porting PHD2's gear simulator (`gear_simulator.cpp`, BSD-3) as a pure-C#,
+fully-offline `"sim"` driver. The simulator is a guide camera + ST4 guide port
+sharing one virtual-sky state, so a pulse guide on the mount visibly shifts the
+star field the camera captures — the coupling that makes calibration meaningful.
+
+New files in `src/NINA.Polaris/Services/Simulator/Gear/` (PHD2 BSD-3 headers):
+- `SimGearParams` — tunables with PHD2 defaults (image scale, guide rate 15 a-s/s,
+  PE 5 a-s, Dec drift 5 a-s/min, seeing 2 a-s FWHM, Dec backlash 5 a-s, cam angle
+  15deg, 20 stars, 8 hot px); each error source can be toggled off for tests.
+- `SimGearState` — shared state behind a lock: cumulative RA offset + Dec offset
+  via ported `BacklashVal` hysteresis; `St4Pulse` (port of ST4PulseGuideScope:
+  `d = guideRate*bin*ms/1000/scale`, RA*cos(dec), pier-west N/S reversal);
+  `AdvanceAndComputeShift` (PE multi-harmonic + Dec drift + Box-Muller seeing);
+  injectable elapsed-seconds clock (Stopwatch default).
+- `SimStarField` — deterministic star list (seed 2) + `FillImage` (5x5 PSF splat,
+  camera rotation +pi on pier-west, noise, hot pixels), pure given a time.
+- `SimGuideCamera : ICamera`, `SimMount : ITelescope` (GEM with SupportsPulseGuide,
+  `SetPierSide` to rehearse a flip), `SimGearService` (DI singleton, shared state).
+
+Wiring: `EquipmentManager` gets `SimGearService` injected; `"sim"` cases in
+`CreateCamera`/`SelectTelescope`, plus entries in the camera + mount driver
+registries and discovery lists (so the RIGS dropdowns show "Simulator"
+automatically). `SimGearService` registered as a singleton in `Program.cs`.
+
+Tests: `tests/NINA.Polaris.Test/SimGearTests.cs` — BacklashVal deadband, ST4
+West-pulse magnitude, RA cos(dec) scaling, pier-west Dec reversal, stable
+star-field centroid, and the camera+mount coupling (capture -> pulse West ->
+re-capture: centroid shifts +15 px on the RA axis). 5 EquipmentManager test
+call-sites updated for the new ctor arg.
+
+Usage: RIGS -> mount driver = Simulator, guide-camera driver = Simulator, guider
+driver = native -> GUIDE -> Loop -> Start Guiding. No INDI/WSL needed.
+
+Deferred: live SimGearParams editing panel in Settings; auto pier flip on slew
+across the meridian (pier side is settable via SimMount.SetPierSide / state).

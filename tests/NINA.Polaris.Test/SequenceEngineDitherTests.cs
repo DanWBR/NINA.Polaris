@@ -11,7 +11,8 @@ public class SequenceEngineDitherTests {
     private SequenceEngine MakeEngine() {
         var indi = new IndiClient("localhost", 7624);
         var equip = new EquipmentManager(indi, NullLogger<EquipmentManager>.Instance,
-            new NINA.Polaris.Services.Alpaca.AlpacaDiscoveryCache());
+            new NINA.Polaris.Services.Alpaca.AlpacaDiscoveryCache(),
+            new NINA.Polaris.Services.Simulator.Gear.SimGearService());
         var relay = new ImageRelayService(NullLogger<ImageRelayService>.Instance);
         var liveStack = new LiveStackingService(relay, NullLogger<LiveStackingService>.Instance);
         var phd2 = new PHD2Client(NullLogger<PHD2Client>.Instance);

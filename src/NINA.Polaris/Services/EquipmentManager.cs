@@ -2,6 +2,7 @@ using NINA.Image.Interfaces;
 using NINA.INDI.Client;
 using NINA.INDI.Devices;
 using NINA.Polaris.Services.Alpaca;
+using NINA.Polaris.Services.Simulator.Gear;
 
 namespace NINA.Polaris.Services;
 
@@ -9,6 +10,7 @@ public class EquipmentManager : IDisposable {
     private readonly IndiClient _indiClient;
     private readonly ILogger<EquipmentManager> _logger;
     private readonly AlpacaDiscoveryCache _alpacaCache;
+    private readonly SimGearService _simGear;
 
     /// <summary>Currently-selected camera, regardless of backend.
     /// Concrete implementations are <see cref="IndiCamera"/> for
@@ -48,10 +50,11 @@ public class EquipmentManager : IDisposable {
     public IndiWeather? Weather { get; private set; }
 
     public EquipmentManager(IndiClient indiClient, ILogger<EquipmentManager> logger,
-                            AlpacaDiscoveryCache alpacaCache) {
+                            AlpacaDiscoveryCache alpacaCache, SimGearService simGear) {
         _indiClient = indiClient;
         _logger = logger;
         _alpacaCache = alpacaCache;
+        _simGear = simGear;
         _indiClient.DeviceFound += OnDeviceFound;
     }
 
@@ -94,6 +97,7 @@ public class EquipmentManager : IDisposable {
             "touptek-sdk"   => CreateToupTekCamera(deviceId),
             "ascom-com"   => CreateAscomCamera(deviceId),
             "alpaca"      => AlpacaCamera.FromDeviceId(deviceId),
+            "sim"         => new SimGuideCamera(_simGear),
             _ => throw new NotSupportedException(
                 $"Camera driver '{driver}' is not implemented yet. " +
                 "Use 'indi', 'alpaca', or install the matching vendor SDK."),
@@ -228,6 +232,8 @@ public class EquipmentManager : IDisposable {
                 Description: alpacaCount > 0
                     ? $"ASCOM-over-HTTP cameras. {alpacaCount} discovered."
                     : "Run Alpaca Discover in RIGS first to populate this list."),
+            new("sim", "Simulator", Available: true,
+                Description: "Built-in synthetic guide camera (PHD2-style star field with periodic error, drift, seeing). Pair with the Simulator mount to test the native guider offline."),
         };
         if (OperatingSystem.IsWindows()) {
             // Direct ASCOM Platform COM-interop. Available iff the
@@ -300,6 +306,11 @@ public class EquipmentManager : IDisposable {
             return GetDeviceNames()
                 .Select(n => new DiscoveredCamera(n, n, n))
                 .ToList();
+        }
+        if (driver == "sim") {
+            return new List<DiscoveredCamera> {
+                new("sim", "Simulator", "Built-in synthetic guide camera"),
+            };
         }
         if (driver == "canon-edsdk" && OperatingSystem.IsWindows()) {
             try {
@@ -392,6 +403,11 @@ public class EquipmentManager : IDisposable {
     /// empty and the user types the device id manually.</summary>
     public IReadOnlyList<DiscoveredCamera> GetDiscoveredTelescopesFor(string driver) {
         driver = (driver ?? "").Trim().ToLowerInvariant();
+        if (driver == "sim") {
+            return new List<DiscoveredCamera> {
+                new("sim", "Simulator", "Built-in simulated GEM mount"),
+            };
+        }
         if (driver == "alpaca") {
             return _alpacaCache.ByType("Telescope")
                 .Select(d => new DiscoveredCamera(d.DeviceId, d.DeviceName, d.ServerName))
@@ -485,6 +501,7 @@ public class EquipmentManager : IDisposable {
             "synscan-wifi" => new NINA.Mount.SynScanWifi.SynScanWifiTelescope(deviceId),
             "ascom-com" => CreateAscomTelescope(deviceId),
             "alpaca" => AlpacaTelescope.FromDeviceId(deviceId),
+            "sim" => new SimMount(_simGear),
             // NexStar TCP + LX200 TCP still pending, see
             // docs/mounts-wifi.md for the backlog.
             _ => throw new NotSupportedException(
@@ -514,6 +531,8 @@ public class EquipmentManager : IDisposable {
                     : "Run Alpaca Discover in RIGS first to populate this list."),
             new("synscan-wifi", "Sky-Watcher SynScan (Wi-Fi UDP)", Available: true,
                 Description: "Direct UDP to AZ-GTi / EQ6-R Pro / EQ8-R Pro / AllView / GoTo Dob (port 11880). Likely also drives ZWO AM5N / AM7 in SynScan-compat mode. Device id format: host[:port], defaults to 192.168.4.1:11880 (factory AP)."),
+            new("sim", "Simulator", Available: true,
+                Description: "Built-in simulated GEM mount with pulse-guide support. Pair with the Simulator camera to test the native guider offline."),
             new("nexstar-wifi", "Celestron NexStar (Wi-Fi TCP)", Available: false,
                 Description: "Direct TCP to SkyPortal Wi-Fi accessory / StarSense Explorer Wi-Fi. Driver pending, see docs/mounts-wifi.md."),
             new("lx200-tcp", "Meade / LX200 (TCP)", Available: false,

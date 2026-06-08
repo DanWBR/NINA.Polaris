@@ -325,7 +325,8 @@ public class NativeGuiderCoreTests {
             var profiles = new ProfileService(config, NullLogger<ProfileService>.Instance);
             var indi = new IndiClient();
             var alpaca = new AlpacaDiscoveryCache();
-            var equip = new EquipmentManager(indi, NullLogger<EquipmentManager>.Instance, alpaca);
+            var equip = new EquipmentManager(indi, NullLogger<EquipmentManager>.Instance, alpaca,
+                new NINA.Polaris.Services.Simulator.Gear.SimGearService());
             var phd2 = new PHD2Client(NullLogger<PHD2Client>.Instance);
             var native = new NativeGuider(equip, profiles, NullLogger<NativeGuider>.Instance);
             var provider = new ActiveGuiderProvider(profiles, phd2, native);

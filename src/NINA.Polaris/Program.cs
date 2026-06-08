@@ -135,6 +135,9 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<SlewPreviewService
 // Reset clears it when LiveStackingService.Reset is called.
 builder.Services.AddSingleton<LiveStackPreProcessor>();
 builder.Services.AddSingleton<LiveStackingService>();
+// Built-in gear simulator: one shared virtual-sky state so the simulated guide
+// camera and mount (driver "sim") couple pulse guides to the star field.
+builder.Services.AddSingleton<NINA.Polaris.Services.Simulator.Gear.SimGearService>();
 builder.Services.AddSingleton<EquipmentManager>();
 builder.Services.AddSingleton<SequenceEngine>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Sequencer.SequenceTemplateStore>();
