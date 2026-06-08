@@ -96,9 +96,19 @@ Run: 2026-06-08 (2 consecutive runs, both scored 110).
 | CPU single / multi-thread | 1797 / 6804 MFLOPS (3.79× scaling) |
 | Memory bandwidth | 4.7 GB/s |
 
-### Raspberry Pi 5 4GB
+### Raspberry Pi 5 Model B (4 cores)
 
-_Pending hardware._
+Run: 2026-06-08.
+
+| Metric | Value |
+|---|---|
+| **Polaris score** | **172** |
+| Stacking throughput | 2.01 fps · 33.7 Mpx/s (16.78 MP frames) |
+| Stacking detect / align / resample / stats | 91.13 / 0.46 / 248.62 / 157.32 ms |
+| Capture/video throughput | 1.35 fps · 22.7 Mpx/s |
+| Debayer / JPEG / LZ4 | 110.47 / 611.77 / 16.26 ms (LZ4 1968.2 MB/s) |
+| CPU single / multi-thread | 2884 / 8581 MFLOPS (2.98× scaling) |
+| Memory bandwidth | 8.1 GB/s |
 
 ### Orange Pi 5 Pro
 
