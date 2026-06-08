@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260608-guidecamload">
+    <link rel="stylesheet" href="/css/app.css?v=20260608-nativeautoconn">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -3457,10 +3457,12 @@
                          uses the rig's guide camera + mount, so it just connects. -->
                     <label x-show="guider.backend !== 'native'">Host<input type="text" x-model="guiderHost" class="input-md"></label>
                     <label x-show="guider.backend !== 'native'">Port<input type="number" x-model.number="guiderPort" class="input-sm"></label>
-                    <button class="btn btn-primary" @click="guiderConnect()">Connect</button>
-                    <span class="text-muted" x-show="guider.backend === 'native'" style="font-size:11px">
-                        Uses the rig's guide camera + mount (set in RIGS).
-                    </span>
+                    <button class="btn btn-primary" x-show="guider.backend !== 'native'" @click="guiderConnect()">Connect</button>
+                    <!-- Native needs no explicit connect: it just uses the rig's
+                         guide camera + mount and auto-connects once the guide cam
+                         is on. Show status instead of a Connect button. -->
+                    <span class="text-muted" x-show="guider.backend === 'native'" style="font-size:12px"
+                          x-text="guider.guideCameraConnected ? 'Starting native guider…' : 'Connect the guide camera in RIGS to start guiding.'"></span>
                     <button class="btn" x-show="guider.backend !== 'native'" @click="launchPhd2()" :disabled="!phd2Process.executableConfigured"
                             :title="phd2Process.executableConfigured ? 'Launch PHD2 then connect' : 'Set PHD2:ExecutablePath in appsettings'">
                         ▶ Launch PHD2
@@ -12346,7 +12348,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260608-guidecamload"></script>
+    <script src="/js/app.js?v=20260608-nativeautoconn"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

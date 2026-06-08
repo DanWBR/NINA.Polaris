@@ -19036,16 +19036,33 @@ function ninaApp() {
 
         // --- Guider (PHD2) ---
         async guiderConnect() {
+            const native = this.guider.backend === 'native';
             try {
                 await this.apiPost('/api/guider/connect', { host: this.guiderHost, port: this.guiderPort });
                 this.guider.connected = true;
                 this.guider.host = this.guiderHost;
                 this.guider.port = this.guiderPort;
-                this.toast(`PHD2 connected at ${this.guiderHost}:${this.guiderPort}`, 'ok');
+                this.toast(native ? 'Native guider connected'
+                                  : `PHD2 connected at ${this.guiderHost}:${this.guiderPort}`, 'ok');
                 this.fetchGuiderEquipment();
             } catch (e) {
-                this.toast('PHD2 connect failed: ' + e.message, 'error');
+                this.toast((native ? 'Guider' : 'PHD2') + ' connect failed: ' + e.message, 'error');
             }
+        },
+
+        // The native guider needs no explicit connect step -- it just drives the
+        // rig's guide camera + mount. Auto-connect it once the guide camera is on
+        // (and the GUIDE tab/backend is native), so the user never sees a Connect
+        // button. Guarded + cooled-down so a failure doesn't spam.
+        maybeAutoConnectNativeGuider() {
+            if (this.guider.backend !== 'native') return;
+            if (this.guider.connected || this._nativeConnecting) return;
+            if (!this.guider.guideCameraConnected) return;
+            this._nativeConnecting = true;
+            this.apiPost('/api/guider/connect', {})
+                .then(() => { this.guider.connected = true; this.fetchGuiderEquipment(); })
+                .catch(() => {})
+                .finally(() => { setTimeout(() => { this._nativeConnecting = false; }, 3000); });
         },
 
         async fetchGuiderEquipment() {
@@ -22092,6 +22109,9 @@ function ninaApp() {
                 if (g.profileSync)  this.guider.profileSync = g.profileSync;
                 if (g.calibrateJob) this.guider.calibrateJob = g.calibrateJob;
                 if (g.guiSession)   this.phd2GuiSession = g.guiSession;
+                // Native guider needs no manual connect: bring it up as soon as
+                // the guide camera is on.
+                this.maybeAutoConnectNativeGuider();
                 // PH2VNC: same shape as guiSession; UI branches by OS
                 // on these two snapshots inside the GUIDE tab.
                 if (g.vncSession)   this.phd2VncSession = g.vncSession;
