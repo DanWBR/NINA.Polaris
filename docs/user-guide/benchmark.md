@@ -76,6 +76,38 @@ scores and the Mpx/s figures.
   for your records.
 - **Clear history** — removes the saved runs on the current device.
 
+## Reference results
+
+Scores collected on real hardware, for picking a board. Higher Polaris
+score is better. (More boards added as they arrive: RPi 5 4GB, Orange Pi
+5 Pro, x86 PC stick.)
+
+### Raspberry Pi 4 Model B (4 cores)
+
+Run: 2026-06-08 (2 consecutive runs, both scored 110).
+
+| Metric | Value |
+|---|---|
+| **Polaris score** | **110** |
+| Stacking throughput | 1.32 fps · 22.2 Mpx/s (16.78 MP frames) |
+| Stacking detect / align / resample / stats | 170.39 / 0.97 / 277.37 / 306.44 ms |
+| Capture/video throughput | 0.68 fps · 11.5 Mpx/s |
+| Debayer / JPEG / LZ4 | 199.61 / 1233.65 / 29.29 ms (LZ4 1092.4 MB/s) |
+| CPU single / multi-thread | 1797 / 6804 MFLOPS (3.79× scaling) |
+| Memory bandwidth | 4.7 GB/s |
+
+### Raspberry Pi 5 4GB
+
+_Pending hardware._
+
+### Orange Pi 5 Pro
+
+_Pending hardware._
+
+### x86 PC stick
+
+_Pending hardware._
+
 ## Reading the numbers
 
 - **Stacking Mpx/s** — higher means live stacking keeps up with shorter
