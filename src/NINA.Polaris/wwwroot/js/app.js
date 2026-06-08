@@ -22044,6 +22044,11 @@ function ninaApp() {
                 // drives the GUIDE tabstrip (native shows a single "PHD2
                 // Native" tab; PHD2 shows "PHD2 GUI" + "Control").
                 this.guider.backend = g.backend || this.guider.backend || 'phd2';
+                // Guide-camera connection is reported in BOTH branches and drives
+                // the native auto-connect + the connect-row status, so sync it
+                // every tick regardless of guider connection state.
+                this.guider.guideCameraConnected = !!g.guideCameraConnected;
+                this.guider.guideCameraName = g.guideCameraName || null;
                 if (!g.connected) {
                     if (this.guider.connected) {
                         // server-side disconnect (PHD2 crashed?)
