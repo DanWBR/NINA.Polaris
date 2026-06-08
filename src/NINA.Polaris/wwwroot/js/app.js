@@ -11714,12 +11714,15 @@ function ninaApp() {
                 const decB = ((s.decDur || 0) / maxDur) * (h / 2 - 8);
                 if (raB > 0) {
                     ctx.fillStyle = 'rgba(229,115,115,0.30)';
-                    const dir = (s.raPx ?? 0) >= 0 ? -1 : 1;
+                    // The pulse opposes the error (pushes the star back toward
+                    // lock), so a positive RA error draws a downward bar. Canvas
+                    // +y is down, so positive error (line up) -> +raB (bar down).
+                    const dir = (s.raPx ?? 0) >= 0 ? 1 : -1;
                     ctx.fillRect(x - 1, mid, 2, dir * raB);
                 }
                 if (decB > 0) {
                     ctx.fillStyle = 'rgba(100,181,246,0.30)';
-                    const dir = (s.decPx ?? 0) >= 0 ? -1 : 1;
+                    const dir = (s.decPx ?? 0) >= 0 ? 1 : -1;
                     ctx.fillRect(x - 1, mid, 2, dir * decB);
                 }
             }
