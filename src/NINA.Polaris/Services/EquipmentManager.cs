@@ -39,6 +39,14 @@ public class EquipmentManager : IDisposable {
     /// camera is selected.</summary>
     public string? CameraDriver { get; private set; }
 
+    /// <summary>Driver-specific device id the imaging <see cref="Camera"/> was
+    /// selected with (the same value saved as <c>EquipmentProfile.Camera</c>
+    /// and used as the RIGS dropdown option value). Tracked so vendor-SDK
+    /// discovery can return the live camera without re-enumerating the USB bus,
+    /// which on SVBony/ASI-class SDKs resets an already-open handle and silently
+    /// disconnects the connected camera. Null when no camera is selected.</summary>
+    public string? CameraDeviceId { get; private set; }
+
     /// <summary>Currently-selected mount, regardless of backend.
     /// Today only <see cref="IndiTelescope"/> implements it; direct
     /// WiFi / Bluetooth drivers (SynScan UDP, NexStar TCP, LX200 TCP)
@@ -89,6 +97,7 @@ public class EquipmentManager : IDisposable {
         driver = (driver ?? "indi").Trim().ToLowerInvariant();
         Camera = CreateCamera(driver, deviceId);
         CameraDriver = driver;
+        CameraDeviceId = deviceId;
         _logger.LogInformation("Camera selected: driver={Driver}, id={DeviceId}",
             driver, deviceId);
         return Camera;
@@ -129,6 +138,11 @@ public class EquipmentManager : IDisposable {
     /// <c>EquipmentProfile.GuideCameraDriver</c>. Null when unset.</summary>
     public string? GuideCameraDriver { get; private set; }
 
+    /// <summary>Driver-specific device id the <see cref="GuideCamera"/> was
+    /// selected with. Tracked for the same vendor-SDK rescan guard as
+    /// <see cref="CameraDeviceId"/>. Null when no guide camera is selected.</summary>
+    public string? GuideCameraDeviceId { get; private set; }
+
     /// <summary>Select the native guider's guide camera. Reuses
     /// <see cref="CreateCamera"/> so the full backend matrix is available.
     /// Rejects selecting the same device the imaging camera is bound to only
@@ -146,6 +160,7 @@ public class EquipmentManager : IDisposable {
         }
         GuideCamera = CreateCamera(driver, deviceId);
         GuideCameraDriver = driver;
+        GuideCameraDeviceId = deviceId;
         _logger.LogInformation("Guide camera selected: driver={Driver}, id={DeviceId}",
             driver, deviceId);
         return GuideCamera;
@@ -325,6 +340,30 @@ public class EquipmentManager : IDisposable {
             return new List<DiscoveredCamera> {
                 new("sim", "Simulator", "Built-in synthetic guide camera"),
             };
+        }
+        // Vendor-SDK rescan guard. SVBony/ASI-class SDKs re-enumerate the USB
+        // bus on the "get number of connected cameras" call, which resets an
+        // already-open device handle and silently disconnects the live camera.
+        // The RIGS tab fires this discovery on every page load (to populate the
+        // saved selection in the dropdown), so without this guard a refresh-
+        // while-connected kicks the camera offline. When a camera of the
+        // requested driver is already connected (imaging and/or guide slot),
+        // skip the rescan and return those live cameras using the id each was
+        // selected with, so the dropdown's :selected match and the saved rig
+        // selection still line up. INDI/Alpaca/sim don't open a USB handle, so
+        // they fall through to their normal (non-destructive) discovery.
+        if (driver != "indi" && driver != "alpaca" && driver != "sim") {
+            var live = new List<DiscoveredCamera>();
+            if (Camera != null && Camera.IsConnected && CameraDriver == driver
+                && !string.IsNullOrEmpty(CameraDeviceId)) {
+                live.Add(new(CameraDeviceId, Camera.DeviceName, "connected"));
+            }
+            if (GuideCamera != null && GuideCamera.IsConnected && GuideCameraDriver == driver
+                && !string.IsNullOrEmpty(GuideCameraDeviceId)
+                && !live.Any(c => c.Id == GuideCameraDeviceId)) {
+                live.Add(new(GuideCameraDeviceId, GuideCamera.DeviceName, "connected"));
+            }
+            if (live.Count > 0) return live;
         }
         if (driver == "canon-edsdk" && OperatingSystem.IsWindows()) {
             try {
