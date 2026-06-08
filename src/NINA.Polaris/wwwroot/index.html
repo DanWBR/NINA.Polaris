@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260608-guideclick">
+    <link rel="stylesheet" href="/css/app.css?v=20260608-guideframefix">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -3536,14 +3536,15 @@
                     <!-- Camera view + right column (bullseye + profile) -->
                     <div class="phd2-grid">
                         <div class="phd2-cam">
-                            <img x-ref="guidePhdCamImg" class="phd2-cam-img" alt="guide frame"
+                            <img x-ref="guidePhdCamImg" class="phd2-cam-img" alt=""
+                                 x-show="guider.view"
                                  style="cursor:crosshair"
                                  title="Click a star to select it for guiding"
                                  @load="drawGuideCamOverlay()"
                                  @click="guideSelectStarAt($event)">
-                            <canvas x-ref="guidePhdCamOverlay" class="phd2-cam-overlay"></canvas>
-                            <div class="phd2-cam-empty" x-show="!guider.view"
-                                 class="text-muted">Loop or guide to see the guide frame</div>
+                            <canvas x-ref="guidePhdCamOverlay" class="phd2-cam-overlay"
+                                    x-show="guider.view"></canvas>
+                            <div class="phd2-cam-empty text-muted" x-show="!guider.view">Loop or guide to see the guide frame</div>
                         </div>
                         <div class="phd2-rightcol">
                             <div class="phd2-bullseye">
@@ -12261,7 +12262,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260608-guideclick"></script>
+    <script src="/js/app.js?v=20260608-guideframefix"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
