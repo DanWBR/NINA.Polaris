@@ -16891,6 +16891,23 @@ function ninaApp() {
             }
         },
 
+        // ----- Settings accordion (FAQ-style collapsible cards) -----
+        // Event-delegated on the grid: a click on a card's <h3> header
+        // toggles that card collapsed/expanded. No per-card markup needed.
+        settingsAccordionClick(ev) {
+            const h3 = ev.target.closest('.settings-section > h3, .settings-section > h3 *');
+            if (!h3) return;
+            const card = ev.target.closest('.settings-section');
+            if (card) card.classList.toggle('is-collapsed');
+        },
+        // Start every settings card collapsed (called from the grid's x-init).
+        collapseAllSettings(gridEl) {
+            if (!gridEl) return;
+            gridEl.querySelectorAll(':scope > .settings-section').forEach(c => {
+                c.classList.add('is-collapsed');
+            });
+        },
+
         async setGuideExposure(value) {
             const v = Math.max(50, Math.min(10000, Math.round(Number(value) || 0)));
             this.guideExp = v;

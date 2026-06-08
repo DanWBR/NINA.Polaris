@@ -4707,54 +4707,35 @@ label select.input-sm {
     padding-bottom: 12px;
 }
 
-/* ---- FAQ-style accordion (settings cards as native <details>) ---- */
-/* Collapsed cards shrink to just the summary band; open cards flow to
-   their natural height instead of the fixed 400px internal-scroll box. */
-details.settings-section.accordion-card {
-    height: auto;
+/* ---- FAQ-style accordion (settings cards) ----
+   Class-based (NOT <details>) so we never touch the existing card markup
+   / closing tags. The grid adds .settings-accordion; clicking a card's
+   <h3> toggles .is-collapsed on that card (see settingsAccordionClick).
+   Collapsed cards hide everything but the h3 header and shrink to it. */
+.settings-accordion .settings-section {
+    height: auto;            /* drop the fixed 400px scroll box */
     overflow: visible;
 }
-/* The <summary> reuses the old <h3> header-band look + adds a chevron. */
-.settings-section > summary {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin: 0;
-    padding: 10px 32px 10px 14px;
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border);
-    position: sticky;
-    top: 0;
-    z-index: 1;
+.settings-accordion .settings-section > h3 {
     cursor: pointer;
+    padding-right: 32px;     /* room for the chevron */
     user-select: none;
-    list-style: none;            /* hide default triangle (Firefox) */
 }
-.settings-section > summary::-webkit-details-marker { display: none; } /* Chrome/Safari */
-.settings-section > summary::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.18);
-    z-index: -1;
-}
-.settings-section > summary::after {
-    content: "\25B8";           /* ▸ */
+.settings-accordion .settings-section > h3::after {
+    content: "\25B8";        /* ▸ collapsed */
     position: absolute;
     right: 12px;
     color: var(--text-muted);
     transition: transform var(--transition);
+    transform: rotate(90deg);/* ▾ expanded by default */
 }
-details.settings-section[open] > summary::after { transform: rotate(90deg); }
-/* When open, drop the bottom border so the band joins the body cleanly. */
-.settings-section > summary ~ * { padding-left: 14px; padding-right: 14px; }
-.settings-section > summary ~ *:first-of-type,
-.settings-section > summary + * { padding-top: 12px; }
+.settings-accordion .settings-section.is-collapsed > h3::after {
+    transform: rotate(0deg);
+}
+/* Hide the card body when collapsed (everything that isn't the header). */
+.settings-accordion .settings-section.is-collapsed > *:not(h3) {
+    display: none !important;
+}
 /* Explicit body wrapper used by sections whose content lives inside
    <template x-if> branches (Network). The template-rendered children
    would otherwise sit as direct children of .settings-section and

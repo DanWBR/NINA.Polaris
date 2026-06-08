@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260608-settingsaccordion">
+    <link rel="stylesheet" href="/css/app.css?v=20260608-settingsaccordion2">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -9020,11 +9020,14 @@
                  x-init="$watch('tab', t => { if (t === 'settings') loadSimulatorSettings(); })">
                 <div class="panel-header">Settings</div>
 
-                <!-- Card grid (parallels the RIGS tab layout). Each
-                     .settings-section below renders as its own card
-                     via the .settings-section CSS rules; long forms
-                     opt into a full-row span with .settings-section--wide. -->
-                <div class="settings-grid">
+                <!-- Card grid, FAQ-style accordion. Each .settings-section
+                     collapses to its <h3> header; clicking the header toggles
+                     it (event-delegated to settingsAccordionClick, so no card
+                     markup changes). collapseAllSettings() starts them all
+                     collapsed on first render. -->
+                <div class="settings-grid settings-accordion"
+                     @click="settingsAccordionClick($event)"
+                     x-init="$nextTick(() => collapseAllSettings($el))">
 
                 <!-- TLS-A2: HTTPS certificate install wizard. Shipped
                      near the top of Settings because it's the first
@@ -9034,9 +9037,9 @@
                      the root and install it so subsequent connections
                      show the lock icon. Auto-detects current OS for
                      the default install-instructions tab. -->
-                <details class="settings-section accordion-card"
+                <div class="settings-section"
                      x-init="tlsInit()">
-                    <summary><span class="settings-card-icon">🔒</span>HTTPS Certificate</summary>
+                    <h3><span class="settings-card-icon">🔒</span>HTTPS Certificate</h3>
                     <p class="hint" style="margin-top:0">
                         Polaris uses a self-signed certificate so the
                         connection is encrypted on your LAN. Install the
@@ -9094,7 +9097,7 @@
                             </div>
                         </template>
                     </div>
-                </details>
+                </div>
 
                 <!-- Appearance / interface scale. Slider writes to a
                      draft value (uiZoomDraft) while you drag, the
@@ -9102,8 +9105,8 @@
                      Apply. The real-time variant we had before made
                      the slider impossible to aim because the UI
                      reflowed under your cursor on every input tick. -->
-                <details class="settings-section accordion-card">
-                    <summary><span class="settings-card-icon">🎨</span>Appearance</summary>
+                <div class="settings-section">
+                    <h3><span class="settings-card-icon">🎨</span>Appearance</h3>
                     <label style="display:flex; align-items:center; gap:12px; max-width:560px">
                         <span style="min-width:90px">UI scale</span>
                         <input type="range" min="0.5" max="1.5" step="0.05"
@@ -9187,7 +9190,7 @@
                         (so pair it with <strong>Native</strong> for the full effect).
                         Mono cameras are unaffected.
                     </p>
-                </details>
+                </div>
 
                 <!-- Remote terminal, opens an SSH shell from the
                      browser via xterm.js + a WebSocket bridge to
@@ -9199,8 +9202,8 @@
                      returns 403 otherwise.
                      No auto-login: every Connect prompts for user +
                      password again, and credentials never persist. -->
-                <details class="settings-section accordion-card">
-                    <summary><span class="settings-card-icon">🖥</span>Remote terminal</summary>
+                <div class="settings-section">
+                    <h3><span class="settings-card-icon">🖥</span>Remote terminal</h3>
                     <p class="text-muted" style="font-size: 12px; max-width:560px">
                         SSH into the Polaris host (or any other Linux box on your LAN)
                         from the browser. Credentials are sent per-session and never
@@ -9247,10 +9250,10 @@
                          render an empty black box on first paint. -->
                     <div class="term-mount" x-show="term.connected || term.lastError"
                          x-cloak x-ref="termMount"></div>
-                </details>
+                </div>
 
-                <details class="settings-section accordion-card">
-                    <summary><span class="settings-card-icon">🔌</span>INDI Server</summary>
+                <div class="settings-section">
+                    <h3><span class="settings-card-icon">🔌</span>INDI Server</h3>
                     <label>Host<input type="text" x-model="settings.indiHost" class="input-md"></label>
                     <label>Port<input type="number" x-model.number="settings.indiPort" class="input-sm"></label>
                     <div class="control-row actions">
@@ -9258,16 +9261,16 @@
                         <button class="btn btn-danger" @click="disconnectIndi()" x-show="indiConnected">Disconnect</button>
                         <button class="btn" @click="refreshDevices()" x-show="indiConnected">Refresh Devices</button>
                     </div>
-                </details>
+                </div>
 
-                <details class="settings-section accordion-card" x-show="indiConnected">
-                    <summary><span class="settings-card-icon">✅</span>INDI Status</summary>
+                <div class="settings-section" x-show="indiConnected">
+                    <h3><span class="settings-card-icon">✅</span>INDI Status</h3>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span class="status-indicator ok" style="font-size: 11px;">Connected</span>
                         <span class="text-muted" style="font-size: 12px;" x-text="devices.length + ' devices found'"></span>
                         <button class="btn btn-sm" @click="tab = 'equip'" style="margin-left: auto;">Manage Equipment</button>
                     </div>
-                </details>
+                </div>
 
                 <!-- SIM panel intentionally absent from the Settings UI.
                      End users do not run the built-in simulator; backend
@@ -9283,8 +9286,8 @@
                      Network / Simulator visual pattern. Disable
                      requires confirming the current password so a
                      stolen session token alone can't undo the gate. -->
-                <details class="settings-section accordion-card">
-                    <summary><span class="settings-card-icon">🔐</span>Authentication</summary>
+                <div class="settings-section">
+                    <h3><span class="settings-card-icon">🔐</span>Authentication</h3>
                     <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
                         Password gate for this Polaris server. Loopback
                         (127.0.0.1) always bypasses, so SSH tunnels and
@@ -9390,15 +9393,15 @@
                             </form>
                         </div>
                     </div>
-                </details>
+                </div>
 
                 <!-- Device name: friendly label shown when this Pi is
                      discovered on the network. Each Pi already self-names
                      uniquely (polaris-app-XXXX from its hardware id), so a
                      cloned SD-card image just works; this lets the owner
                      give each one a readable name. -->
-                <details class="settings-section accordion-card" id="device-name-card">
-                    <summary><span class="settings-card-icon">🔭</span>Device name</summary>
+                <div class="settings-section" id="device-name-card">
+                    <h3><span class="settings-card-icon">🔭</span>Device name</h3>
                     <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
                         Shown when phones/tablets discover this telescope
                         computer on the network. Give it a name you'll
@@ -9415,11 +9418,11 @@
                     <p class="text-muted" style="font-size:12px; margin-top:8px" x-show="deviceMdnsName">
                         Network name: <code x-text="deviceMdnsName"></code>
                     </p>
-                </details>
+                </div>
 
                 <!-- Plate solving: pick the solver + tune speed/accuracy. -->
-                <details class="settings-section accordion-card" id="platesolve-card" x-init="loadPlateSolveConfig()">
-                    <summary><span class="settings-card-icon">🎯</span>Plate solving</summary>
+                <div class="settings-section" id="platesolve-card" x-init="loadPlateSolveConfig()">
+                    <h3><span class="settings-card-icon">🎯</span>Plate solving</h3>
                     <p class="text-muted" style="font-size:12px; max-width:600px; margin-top:4px">
                         Choose which installed solver to use and how aggressively
                         to downsample. On slower hardware (Pi-class), a higher
@@ -9491,15 +9494,15 @@
                                 :disabled="psSaving" x-text="psSaving ? 'Saving…' : 'Save'"></button>
                         <button class="btn btn-sm" @click="loadPlateSolveConfig()" :disabled="psLoading">↻ Refresh</button>
                     </div>
-                </details>
+                </div>
 
                 <!-- CLOCK-3: server-vs-client wall-clock card. Drift
                      surfaces here so the user can sync explicitly
                      instead of Polaris jumping the wall clock during
                      a running sequence. id="clock-card" so the
                      activity-bar chip can scrollIntoView() on click. -->
-                <details class="settings-section accordion-card" id="clock-card">
-                    <summary><span class="settings-card-icon">⏰</span>Clock</summary>
+                <div class="settings-section" id="clock-card">
+                    <h3><span class="settings-card-icon">⏰</span>Clock</h3>
                     <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
                         Sync the Pi's wall clock from this device when
                         the host is offline (no NTP) and the Pi has no
@@ -9542,10 +9545,10 @@
                     <p class="text-warn" x-show="clockSync.lastError"
                        style="font-size:11px; margin-top:8px"
                        x-text="'⚠ ' + clockSync.lastError"></p>
-                </details>
+                </div>
 
-                <details class="settings-section accordion-card network-section">
-                    <summary><span class="settings-card-icon">📡</span>Network (WiFi)</summary>
+                <div class="settings-section network-section">
+                    <h3><span class="settings-card-icon">📡</span>Network (WiFi)</h3>
                     <!-- Body wrapper: forces consistent padding on the
                          four x-if branches. Without it, the rendered
                          <template> content lands as a direct child of
@@ -10325,7 +10328,7 @@
                 </div>
 
                 </div><!-- /.settings-grid -->
-            </details>
+            </div>
 
             <!-- =================================================
                  HELP-1: in-app tutorials. Two view states:
@@ -12510,7 +12513,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260608-platesolvecard"></script>
+    <script src="/js/app.js?v=20260608-settingsaccordion2"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
