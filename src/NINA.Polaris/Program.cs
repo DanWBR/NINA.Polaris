@@ -56,6 +56,13 @@ var httpsPort    = builder.Configuration.GetValue("Server:Https:Port", 5000);
 // clients) flip Server:Http:Bind = "any".
 var httpBindAny  = builder.Configuration.GetValue("Server:Http:Bind", "loopback")
                        .Equals("any", StringComparison.OrdinalIgnoreCase);
+// Redirect plaintext HTTP to HTTPS (default on). When enabled with HTTPS, the
+// HTTP listener is exposed on the LAN too, but it only ever issues 307s to the
+// HTTPS endpoint -- no real content is served over plaintext -- so a user who
+// browses http://<host>:<httpPort> lands on https automatically instead of a
+// "connection refused" / "not found".
+var httpRedirect = httpsEnabled &&
+    builder.Configuration.GetValue("Server:Http:RedirectToHttps", true);
 var certService = new NINA.Polaris.Services.SelfSignedCertService(
     builder.Configuration,
     Microsoft.Extensions.Logging.Abstractions.NullLogger<NINA.Polaris.Services.SelfSignedCertService>.Instance);
@@ -64,8 +71,10 @@ builder.Services.AddSingleton(certService);
 builder.WebHost.ConfigureKestrel(options =>
 {
     if (httpEnabled) {
-        if (httpBindAny) options.ListenAnyIP(httpPort);
-        else             options.ListenLocalhost(httpPort);
+        // Expose HTTP on the LAN when it's only acting as an HTTPS redirector,
+        // otherwise honour the loopback-only default (plaintext off the LAN).
+        if (httpBindAny || httpRedirect) options.ListenAnyIP(httpPort);
+        else                             options.ListenLocalhost(httpPort);
     }
     if (httpsEnabled) {
         var cert = certService.GetOrCreate();
@@ -311,6 +320,24 @@ builder.Services.AddSingleton(sp =>
 });
 
 var app = builder.Build();
+
+// HTTP -> HTTPS redirect. Runs first so any plaintext request (LAN client that
+// typed http://) is bounced to the HTTPS endpoint, preserving host + path +
+// query. WebSocket upgrades only happen after the page loads over HTTPS, so
+// they're unaffected.
+if (httpRedirect) {
+    app.Use(async (ctx, next) => {
+        if (!ctx.Request.IsHttps) {
+            var host = ctx.Request.Host.Host;
+            var portSuffix = httpsPort == 443 ? "" : $":{httpsPort}";
+            var location = $"https://{host}{portSuffix}{ctx.Request.Path}{ctx.Request.QueryString}";
+            ctx.Response.StatusCode = StatusCodes.Status307TemporaryRedirect;
+            ctx.Response.Headers.Location = location;
+            return;
+        }
+        await next();
+    });
+}
 
 // Eagerly resolve PHD2ProfileSyncService so its constructor wires the
 // ProfileService.EquipmentProfileActivated event subscription. Without
