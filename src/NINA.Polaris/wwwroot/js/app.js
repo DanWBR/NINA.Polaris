@@ -685,6 +685,10 @@ function ninaApp() {
         guideCameraDiscovering: false,
         guideGain: 0,   // native guide-camera gain (0 = camera default)
         guideBin: 1,    // native guide-camera binning (1 or 2)
+        // Local scalar for the GUIDE "Exp (ms)" input. Bound with x-model (like
+        // Settle px/s) so the ~1Hz guider-object rebuild can't re-apply :value
+        // and wipe what the user is typing. WS syncs it only when not editing.
+        guideExp: 1000,
         // Native guider per-axis algorithm selection (PHD2 defaults:
         // hysteresis on RA, resist-switch on Dec).
         nativeRaAlgorithm: 'hysteresis',
@@ -16777,6 +16781,7 @@ function ninaApp() {
         // rig (NativeGuideExposureMs) and applies on the next frame.
         async setGuideExposure(value) {
             const v = Math.max(50, Math.min(10000, Math.round(Number(value) || 0)));
+            this.guideExp = v;
             this.guider.exposureMs = v;
             this._expEditing = false;   // commit done; let WS sync resume
             try {
@@ -22120,7 +22125,12 @@ function ninaApp() {
                 // Exposure is reported in both branches; keep the field in sync but
                 // don't clobber a value the user is actively editing (we set it
                 // optimistically in setGuideExposure).
-                if (g.exposureMs != null && !this._expEditing) this.guider.exposureMs = g.exposureMs;
+                if (g.exposureMs != null) {
+                    this.guider.exposureMs = g.exposureMs;
+                    // Only refresh the input-bound scalar when the user isn't
+                    // editing, so typing isn't overwritten by the status tick.
+                    if (!this._expEditing) this.guideExp = g.exposureMs;
+                }
                 if (!g.connected) {
                     if (this.guider.connected) {
                         // server-side disconnect (PHD2 crashed?)
