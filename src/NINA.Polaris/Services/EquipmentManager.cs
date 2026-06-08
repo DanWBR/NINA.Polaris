@@ -113,14 +113,18 @@ public class EquipmentManager : IDisposable {
 
     /// <summary>Select the native guider's guide camera. Reuses
     /// <see cref="CreateCamera"/> so the full backend matrix is available.
-    /// Rejects selecting the same device the imaging camera is bound to so
-    /// a single sensor isn't driven from two loops at once.</summary>
+    /// Rejects selecting the same device the imaging camera is bound to only
+    /// when the imaging camera is actually connected, so a single sensor isn't
+    /// driven from two loops at once. When the imaging camera is disconnected
+    /// the device is free, allowing e.g. a single CCD Simulator to be used for
+    /// both during testing.</summary>
     public ICamera SelectGuideCamera(string driver, string deviceId) {
         driver = (driver ?? "indi").Trim().ToLowerInvariant();
-        if (Camera != null && CameraDriver == driver &&
+        if (Camera != null && Camera.IsConnected && CameraDriver == driver &&
             string.Equals(Camera.DeviceName, deviceId, StringComparison.OrdinalIgnoreCase)) {
             throw new InvalidOperationException(
-                "Guide camera must be different from the imaging camera.");
+                "Guide camera must differ from the imaging camera while it is connected. "
+                + "Disconnect the imaging camera first to share one device.");
         }
         GuideCamera = CreateCamera(driver, deviceId);
         GuideCameraDriver = driver;
