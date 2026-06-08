@@ -16790,6 +16790,10 @@ function ninaApp() {
                     ? `?driver=${encodeURIComponent(this.guideCameraDriver)}` : '';
                 await this.apiPost(`/api/guider/camera/select/${encodeURIComponent(this.guideCamera)}${qs}`);
                 await this.apiPost('/api/guider/camera/connect');
+                // Optimistic: flip the switch immediately so it doesn't bounce
+                // back to red before the next WS tick confirms.
+                this.guider.guideCameraConnected = true;
+                this.guider.guideCameraName = this.guideCamera;
                 this._persistRigSelection({
                     guideCamera: this.guideCamera,
                     guideCameraDriver: this.guideCameraDriver || 'indi'
@@ -16802,6 +16806,7 @@ function ninaApp() {
         async equipDisconnectGuideCamera() {
             try {
                 await this.apiPost('/api/guider/camera/disconnect');
+                this.guider.guideCameraConnected = false;
                 this.toast('Guide camera disconnected', 'ok');
             } catch (e) {
                 this.toast('Guide camera disconnect failed: ' + (e.message || e), 'error');
