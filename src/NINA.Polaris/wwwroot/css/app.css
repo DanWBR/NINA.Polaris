@@ -11013,14 +11013,25 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .guide-config-block { background:#0a0a0c; border:1px solid #222; border-radius:6px;
     padding:8px 10px; margin-bottom:8px; }
 
-/* GUIDE tab two-column layout: main dashboard + right parameters panel */
-.guide-pane { display:flex; flex-direction:row; gap:12px; align-items:flex-start; }
-.guide-main { flex:1; min-width:0; }
+/* GUIDE tab: fixed-height column (no panel scroll), pane fills, bar pinned. */
+.tab-panel-guide { display:flex; flex-direction:column; min-height:0; }
+.guide-shell { display:flex; flex-direction:column; flex:1; min-height:0; }
+.guide-pane { display:flex; flex-direction:row; gap:12px; align-items:stretch;
+    flex:1; min-height:0; }
+.guide-main { flex:1; min-width:0; overflow-y:auto; }
 .guide-side { width:280px; flex:0 0 280px; background:#0a0a0c; border:1px solid #222;
-    border-radius:6px; padding:10px 12px; align-self:flex-start; }
+    border-radius:6px; padding:10px 12px; overflow-y:auto; }
 .guide-side-title { font-size:12px; color:#888; margin-bottom:8px;
     text-transform:uppercase; letter-spacing:.04em; }
 .guide-backend-radios { display:inline-flex; align-items:center; gap:10px;
     margin-left:12px; font-size:12px; }
 .guide-backend-radios label { display:inline-flex; align-items:center; gap:4px; cursor:pointer; }
+/* Single-row control bar pinned to the bottom of the GUIDE panel. */
+.guide-bottombar { flex:0 0 auto; display:flex; flex-wrap:wrap; align-items:flex-end;
+    gap:8px; padding:8px 10px; margin-top:8px; border-top:1px solid #222;
+    background:#0c0c10; border-radius:6px; }
+.guide-bottombar .gb-field { display:flex; flex-direction:column; font-size:11px; color:#888; gap:2px; }
+.guide-bottombar .gb-field input { width:64px; }
+.guide-bottombar .gb-check { display:flex; align-items:center; gap:4px; font-size:12px; }
+.guide-bottombar .gb-sep { width:1px; align-self:stretch; background:#222; margin:0 4px; }
 @media (max-width:900px){ .guide-pane { flex-direction:column; } .guide-side { width:auto; flex:none; } }

@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260607-guidemetrics">
+    <link rel="stylesheet" href="/css/app.css?v=20260607-guidebar">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -3438,7 +3438,8 @@
                      serve both backends. PHD2-only sub-panels are gated to
                      backend !== 'native'; the PHD2-style view is gated to
                      backend === 'native'. -->
-                <div x-show="guideTab === 'control' || guideTab === 'native'" class="guide-pane">
+                <div x-show="guideTab === 'control' || guideTab === 'native'" class="guide-shell">
+                <div class="guide-pane">
                 <div class="guide-main">
 
                 <!-- "PHD2 not installed" banner -->
@@ -3587,29 +3588,6 @@
                     </div>
                 </div>
 
-                <!-- Settle parameters -->
-                <div x-show="guider.connected" class="guide-settle-row">
-                    <label>Settle px<input type="number" x-model.number="guiderSettlePixels" step="0.1" class="input-sm"></label>
-                    <label>Settle time (s)<input type="number" x-model.number="guiderSettleTime" step="1" class="input-sm"></label>
-                    <label>Timeout (s)<input type="number" x-model.number="guiderSettleTimeout" step="1" class="input-sm"></label>
-                </div>
-
-                <!-- Control buttons -->
-                <div x-show="guider.connected" class="control-row actions" style="margin-top: 1rem;">
-                    <button class="btn btn-primary" @click="guiderStart()" :disabled="guider.guiding || guider.calibrating">Start Guiding</button>
-                    <button class="btn" @click="guiderLoop()" :disabled="guider.looping">Loop</button>
-                    <button class="btn" @click="guiderFindStar()" :disabled="guider.guiding">Auto-select Star</button>
-                    <button class="btn" @click="guiderPause()" x-show="guider.guiding && !guider.paused">Pause</button>
-                    <button class="btn" @click="guiderResume()" x-show="guider.paused">Resume</button>
-                    <button class="btn btn-danger" @click="guiderStop()">Stop</button>
-                </div>
-                <div x-show="guider.connected" class="control-row actions">
-                    <label>Dither px<input type="number" x-model.number="guiderDitherPx" step="0.5" min="0.5" max="20" class="input-sm"></label>
-                    <label><input type="checkbox" x-model="guiderDitherRaOnly"> RA only</label>
-                    <button class="btn" @click="guiderDither()" :disabled="!guider.guiding">Dither</button>
-                    <button class="btn btn-sm" @click="guiderClearHistory()" style="margin-left: auto;">Clear History</button>
-                    <button class="btn btn-sm btn-danger" @click="guiderDisconnect()">Disconnect</button>
-                </div>
 
                 <!-- Smart Calibrate + Algo Preset block (PH2X-4 + PH2X-5).
                      Visible whenever PHD2 is connected, these wrap the
@@ -3758,6 +3736,27 @@
                 </div>
 
                 </div><!-- /guide-pane -->
+
+                <!-- Single-row control bar, pinned to the bottom of the panel. -->
+                <div class="guide-bottombar" x-show="guider.connected">
+                    <label class="gb-field">Settle px<input type="number" x-model.number="guiderSettlePixels" step="0.1"></label>
+                    <label class="gb-field">Settle s<input type="number" x-model.number="guiderSettleTime" step="1"></label>
+                    <label class="gb-field">Timeout<input type="number" x-model.number="guiderSettleTimeout" step="1"></label>
+                    <button class="btn btn-sm btn-primary" @click="guiderStart()" :disabled="guider.guiding || guider.calibrating">Start Guiding</button>
+                    <button class="btn btn-sm" @click="guiderLoop()" :disabled="guider.looping">Loop</button>
+                    <button class="btn btn-sm" @click="guiderFindStar()" :disabled="guider.guiding">Auto-select Star</button>
+                    <button class="btn btn-sm" @click="guiderPause()" x-show="guider.guiding && !guider.paused">Pause</button>
+                    <button class="btn btn-sm" @click="guiderResume()" x-show="guider.paused">Resume</button>
+                    <button class="btn btn-sm btn-danger" @click="guiderStop()">Stop</button>
+                    <span class="gb-sep"></span>
+                    <label class="gb-field">Dither px<input type="number" x-model.number="guiderDitherPx" step="0.5" min="0.5" max="20"></label>
+                    <label class="gb-check"><input type="checkbox" x-model="guiderDitherRaOnly"> RA only</label>
+                    <button class="btn btn-sm" @click="guiderDither()" :disabled="!guider.guiding">Dither</button>
+                    <button class="btn btn-sm" @click="guiderClearHistory()" style="margin-left:auto">Clear History</button>
+                    <button class="btn btn-sm btn-danger" @click="guiderDisconnect()">Disconnect</button>
+                </div>
+
+                </div><!-- /guide-shell -->
 
                 <!-- ===== TAB 2: PHD2 GUI ===== -->
                 <!-- Backend by OS: Linux uses xpra + HTML5 client (PH2X);
@@ -12253,7 +12252,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260607-guidemetrics"></script>
+    <script src="/js/app.js?v=20260607-guidebar"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
