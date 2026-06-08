@@ -83,12 +83,15 @@ public sealed class AlpacaCamera : ICamera, IDisposable {
 
     public string DeviceName => _deviceName;
 
-    public bool IsConnected {
-        get {
-            try { return _client.GetAsync<bool>("connected").GetAwaiter().GetResult(); }
-            catch { return false; }
-        }
-    }
+    // Cached connection state. A successful Connect/Disconnect sets this;
+    // IsConnected returns it instead of doing a blocking HTTP GET on every
+    // status tick. Polling per tick is both slow (blocks the WS thread) and
+    // unreliable with ASCOM Remote / Platform 7 connection-manager drivers
+    // that can answer GET connected=false right after accepting a
+    // PUT connected=true, which made the connect switch snap back to red.
+    private volatile bool _connected;
+
+    public bool IsConnected => _connected;
 
     public CameraStates State {
         get {
@@ -148,6 +151,7 @@ public sealed class AlpacaCamera : ICamera, IDisposable {
     public async Task ConnectAsync(CancellationToken ct = default) {
         await _client.PutAsync("connected",
             new Dictionary<string, string> { ["Connected"] = "true" }, ct);
+        _connected = true;
 
         try { _deviceName = await _client.GetAsync<string>("name", ct) ?? "Alpaca Camera"; }
         catch { /* leave default */ }
@@ -215,6 +219,7 @@ public sealed class AlpacaCamera : ICamera, IDisposable {
     }
 
     public async Task DisconnectAsync(CancellationToken ct = default) {
+        _connected = false;
         try {
             await _client.PutAsync("connected",
                 new Dictionary<string, string> { ["Connected"] = "false" }, ct);
