@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260607-noguidecard">
+    <link rel="stylesheet" href="/css/app.css?v=20260607-guidemetrics">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -3508,30 +3508,6 @@
                     </div>
                 </div>
 
-                <!-- Live metrics -->
-                <div x-show="guider.connected" class="guide-info">
-                    <div class="info-row"><span>State:</span><strong x-text="guider.appState"></strong></div>
-                    <div class="info-row" x-show="guiderEquipment.camera">
-                        <span>Guide Camera:</span>
-                        <strong x-text="guiderEquipment.camera?.name"
-                                :class="guiderEquipment.camera?.connected ? 'text-ok' : 'text-warn'"></strong>
-                    </div>
-                    <div class="info-row" x-show="guiderEquipment.mount">
-                        <span>Mount (PHD2):</span>
-                        <strong x-text="guiderEquipment.mount?.name"
-                                :class="guiderEquipment.mount?.connected ? 'text-ok' : 'text-warn'"></strong>
-                    </div>
-                    <div class="info-row"><span>Pixel Scale:</span><strong x-text="guider.pixelScale ? guider.pixelScale.toFixed(3) + '&quot;/px' : '--'"></strong></div>
-                    <div class="info-row"><span>RMS RA:</span><strong x-text="guider.rmsRA?.toFixed(2) + '&quot;'" :class="guider.rmsRA < 1 ? 'text-ok' : 'text-warn'"></strong></div>
-                    <div class="info-row"><span>RMS Dec:</span><strong x-text="guider.rmsDec?.toFixed(2) + '&quot;'" :class="guider.rmsDec < 1 ? 'text-ok' : 'text-warn'"></strong></div>
-                    <div class="info-row"><span>Total RMS:</span><strong x-text="guider.rmsTotal?.toFixed(2) + '&quot;'" :class="guider.rmsTotal < 1.5 ? 'text-ok' : 'text-warn'"></strong></div>
-                    <div class="info-row"><span>Peak RA:</span><strong x-text="guider.peakRA?.toFixed(2) + '&quot;'"></strong></div>
-                    <div class="info-row"><span>Peak Dec:</span><strong x-text="guider.peakDec?.toFixed(2) + '&quot;'"></strong></div>
-                    <div class="info-row" x-show="guider.settling"><span class="text-warn">Settling…</span></div>
-                    <div class="info-row" x-show="guider.lastSettleStatus === 'done'"><span class="text-ok">Settled</span></div>
-                    <div class="info-row" x-show="guider.lastSettleStatus === 'failed'"><span class="text-danger">Settle failed</span></div>
-                    <div class="info-row" x-show="guider.lastAlert"><span class="text-danger">Alert:</span><strong class="text-danger" x-text="guider.lastAlert"></strong></div>
-                </div>
 
                 <!-- PHD2-style guiding view (native backend only): history
                      graph with correction impulses + RMS overlay, guide-cam
@@ -3702,7 +3678,33 @@
 
                 <!-- Right-side guiding parameters panel (native guider only),
                      mirrors the PREVIEW/LIVE side panel placement. -->
-                <div class="guide-side" x-show="guiderDriver === 'native'">
+                <div class="guide-side" x-show="guider.connected || guiderDriver === 'native'">
+                    <!-- Live metrics (moved from the main column) -->
+                    <div x-show="guider.connected" class="guide-info" style="margin-bottom:10px">
+                        <div class="info-row"><span>State:</span><strong x-text="guider.appState"></strong></div>
+                        <div class="info-row" x-show="guiderEquipment.camera">
+                            <span>Guide Camera:</span>
+                            <strong x-text="guiderEquipment.camera?.name"
+                                    :class="guiderEquipment.camera?.connected ? 'text-ok' : 'text-warn'"></strong>
+                        </div>
+                        <div class="info-row" x-show="guiderEquipment.mount">
+                            <span>Mount (PHD2):</span>
+                            <strong x-text="guiderEquipment.mount?.name"
+                                    :class="guiderEquipment.mount?.connected ? 'text-ok' : 'text-warn'"></strong>
+                        </div>
+                        <div class="info-row"><span>Pixel Scale:</span><strong x-text="guider.pixelScale ? guider.pixelScale.toFixed(3) + '&quot;/px' : '--'"></strong></div>
+                        <div class="info-row"><span>RMS RA:</span><strong x-text="guider.rmsRA?.toFixed(2) + '&quot;'" :class="guider.rmsRA < 1 ? 'text-ok' : 'text-warn'"></strong></div>
+                        <div class="info-row"><span>RMS Dec:</span><strong x-text="guider.rmsDec?.toFixed(2) + '&quot;'" :class="guider.rmsDec < 1 ? 'text-ok' : 'text-warn'"></strong></div>
+                        <div class="info-row"><span>Total RMS:</span><strong x-text="guider.rmsTotal?.toFixed(2) + '&quot;'" :class="guider.rmsTotal < 1.5 ? 'text-ok' : 'text-warn'"></strong></div>
+                        <div class="info-row"><span>Peak RA:</span><strong x-text="guider.peakRA?.toFixed(2) + '&quot;'"></strong></div>
+                        <div class="info-row"><span>Peak Dec:</span><strong x-text="guider.peakDec?.toFixed(2) + '&quot;'"></strong></div>
+                        <div class="info-row" x-show="guider.settling"><span class="text-warn">Settling…</span></div>
+                        <div class="info-row" x-show="guider.lastSettleStatus === 'done'"><span class="text-ok">Settled</span></div>
+                        <div class="info-row" x-show="guider.lastSettleStatus === 'failed'"><span class="text-danger">Settle failed</span></div>
+                        <div class="info-row" x-show="guider.lastAlert"><span class="text-danger">Alert:</span><strong class="text-danger" x-text="guider.lastAlert"></strong></div>
+                    </div>
+
+                    <div x-show="guiderDriver === 'native'">
                     <div class="guide-side-title">Guiding parameters</div>
                     <div class="equip-driver-row">
                         <label class="equip-driver-label">RA algo</label>
@@ -3752,6 +3754,7 @@
                         <a href="#" @click.prevent="tab = 'rigs'" style="color:var(--accent)">RIGS</a>
                         before connecting the guider.
                     </p>
+                    </div><!-- /native params -->
                 </div>
 
                 </div><!-- /guide-pane -->
@@ -12250,7 +12253,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260607-noguidecard"></script>
+    <script src="/js/app.js?v=20260607-guidemetrics"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
