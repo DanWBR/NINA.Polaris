@@ -11108,12 +11108,12 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     your browser's cert-details dialog):</span>
                 <br>
                 <code style="user-select:all; word-break:break-all; font-size:11px"
-                      x-text="httpsInfo.fingerprintSha256"></code>
+                      x-text="httpsInfo?.fingerprintSha256"></code>
             </p>
             <p style="margin-left:8px; opacity:0.6" x-show="httpsInfo?.fingerprint">
                 SHA-1 (legacy):
                 <code style="user-select:all; font-size:11px"
-                      x-text="httpsInfo.fingerprint"></code>
+                      x-text="httpsInfo?.fingerprint"></code>
             </p>
             <p class="hint">
                 Match means you installed the right file. Mismatch
@@ -11309,8 +11309,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                            && httpsInfo?.exampleHttpsUrls?.length"
                    style="margin-top:8px; color:var(--accent-warn,#f59e0b)">
                     ⚠ You're on the slow address. Open
-                    <a :href="httpsInfo.exampleHttpsUrls[0]"
-                       x-text="httpsInfo.exampleHttpsUrls[0]"
+                    <a :href="httpsInfo?.exampleHttpsUrls?.[0]"
+                       x-text="httpsInfo?.exampleHttpsUrls?.[0]"
                        style="color:inherit; text-decoration: underline"></a>
                     instead to use your device's graphics card,
                     much faster. (The browser will ask you to trust
@@ -11470,7 +11470,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 </div>
                 <p class="hint" x-show="graxpert.currentJob?.currentlyProcessing?.length > 0">
                     Processing:
-                    <code x-text="graxpert.currentJob.currentlyProcessing.map(p =>
+                    <code x-text="(graxpert.currentJob?.currentlyProcessing || []).map(p =>
                         p.split(/[\\/]+/).pop()).join(', ')"></code>
                 </p>
             </div>
