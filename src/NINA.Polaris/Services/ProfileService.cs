@@ -721,6 +721,10 @@ public class NativeCalibrationData {
     public double PixelScale { get; set; }
     public int Binning { get; set; } = 1;
     public string SavedAtUtc { get; set; } = "";
+    // Measured per-step plot points (camera-frame offsets from the calibration
+    // origin) so the "Review Calibration" RA/Dec scatter plot survives a restore.
+    public double[][] RaPoints { get; set; } = Array.Empty<double[]>();
+    public double[][] DecPoints { get; set; } = Array.Empty<double[]>();
 }
 
 /// <summary>

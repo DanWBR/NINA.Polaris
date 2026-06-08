@@ -504,7 +504,7 @@ public sealed class NativeGuider : IGuider, IDisposable {
                 _lockX = curX; _lockY = curY;
                 _calProgress = "Calibration complete";
                 _calDetails = BuildCalibrationDetails(process, raPts, decPts, mount);
-                PersistCalibration(process);
+                PersistCalibration(process, raPts, decPts);
                 _logger.LogInformation(
                     "Native calibration complete: xAngle={Xa:F3} xRate={Xr:F5} yAngle={Ya:F3} yRate={Yr:F5}",
                     _calibration.XAngle, _calibration.XRate, _calibration.YAngle, _calibration.YRate);
@@ -561,7 +561,8 @@ public sealed class NativeGuider : IGuider, IDisposable {
 
     /// <summary>Save the just-completed calibration to the active rig profile so
     /// it can be restored after an app restart.</summary>
-    private void PersistCalibration(CalibrationProcess process) {
+    private void PersistCalibration(CalibrationProcess process,
+            List<double[]> raPts, List<double[]> decPts) {
         var cal = _calibration;
         if (!cal.IsValid) return;
         var data = new NativeCalibrationData {
@@ -574,6 +575,9 @@ public sealed class NativeGuider : IGuider, IDisposable {
             PixelScale = PixelScale,
             Binning = Math.Clamp(Rig.NativeGuideBin <= 0 ? 1 : Rig.NativeGuideBin, 1, 4),
             SavedAtUtc = DateTime.UtcNow.ToString("o"),
+            // Persist the measured scatter so the restored Review panel can plot it.
+            RaPoints = raPts.ToArray(),
+            DecPoints = decPts.ToArray(),
         };
         try { _profiles.UpdateEquipmentProfile(Rig.Id, r => r.NativeCalibration = data); }
         catch (Exception ex) { _logger.LogWarning(ex, "Failed to persist native calibration"); }
@@ -606,8 +610,8 @@ public sealed class NativeGuider : IGuider, IDisposable {
             declinationDeg = double.IsNaN(d.DeclinationRad) ? double.NaN : d.DeclinationRad * 180.0 / Math.PI,
             pierSide = ((PierSide)d.PierSide).ToString().Replace("pier", ""),
             createdAtUtc = d.SavedAtUtc,
-            raPoints = Array.Empty<double[]>(),
-            decPoints = Array.Empty<double[]>(),
+            raPoints = d.RaPoints ?? Array.Empty<double[]>(),
+            decPoints = d.DecPoints ?? Array.Empty<double[]>(),
         };
         _logger.LogInformation("Restored saved native calibration from {When}", d.SavedAtUtc);
         return true;
