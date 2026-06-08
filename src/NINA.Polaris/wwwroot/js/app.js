@@ -12238,6 +12238,14 @@ function ninaApp() {
             // rigs without the field default to "indi" via the
             // backend's ?? coalesce; the UI mirrors that here.
             this.cameraDriver = rig.cameraDriver || 'indi';
+            // Vendor/SDK imaging cameras are listed by discovery, which only
+            // runs on driver change -- so populate the dropdown on rig load too,
+            // otherwise a rig saved with a non-INDI camera (e.g. svbony-sdk
+            // SV405CC) shows "No devices found" and the saved selection is lost.
+            if (this.cameraDriver !== 'indi') {
+                this.cameraVendorDevices = [];
+                try { this.detectVendorCameras(); } catch (e) {}
+            }
             // Guider backend + native guide-camera selection.
             this.guiderDriver = rig.guiderDriver || 'phd2';
             this.guideCamera = rig.guideCamera || '';

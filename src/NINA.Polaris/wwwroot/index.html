@@ -4459,12 +4459,13 @@
                             <div class="equip-driver-row" x-show="cameraDrivers.length > 1">
                                 <label class="equip-driver-label">Driver</label>
                                 <select class="equip-select equip-driver-select"
-                                        x-model="cameraDriver"
-                                        @change="cameraVendorDevices = []; equipCameraChoice = '';
+                                        @change="cameraDriver = $event.target.value;
+                                                  cameraVendorDevices = []; equipCameraChoice = '';
                                                   if (cameraDriver !== 'indi' && cameraDriverInfo?.available)
                                                       detectVendorCameras()">
                                     <template x-for="d in cameraDrivers" :key="d.id">
                                         <option :value="d.id" :disabled="!d.available"
+                                                :selected="cameraDriver === d.id"
                                                 x-text="d.name + (d.available ? '' : ' (not installed)')"></option>
                                     </template>
                                 </select>
@@ -12407,7 +12408,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260608-expmodel"></script>
+    <script src="/js/app.js?v=20260608-camload"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
