@@ -26,10 +26,13 @@ namespace NINA.Polaris.Services.PlateSolving;
 public class AstapSolver : IPlateSolver {
     private readonly IConfiguration _config;
     private readonly ILogger<AstapSolver> _logger;
+    private readonly ProfileService? _profiles;
 
-    public AstapSolver(IConfiguration config, ILogger<AstapSolver> logger) {
+    public AstapSolver(IConfiguration config, ILogger<AstapSolver> logger,
+                       ProfileService? profiles = null) {
         _config = config;
         _logger = logger;
+        _profiles = profiles;
     }
 
     public string Id => "astap";
@@ -38,8 +41,9 @@ public class AstapSolver : IPlateSolver {
 
     public string SolverPath {
         get {
-            // An explicit config path always wins (PlateSolve:AstapPath in
-            // appsettings.json or the PlateSolve__AstapPath env var).
+            // A path set in the UI (profile) wins, then appsettings config.
+            var fromProfile = _profiles?.Active.AstapPath;
+            if (!string.IsNullOrWhiteSpace(fromProfile)) return fromProfile!;
             var configured = _config.GetValue<string?>("PlateSolve:AstapPath", null);
             if (!string.IsNullOrWhiteSpace(configured)) return configured!;
             // Otherwise auto-detect: prefer an actually-existing candidate so a
@@ -137,7 +141,9 @@ public class AstapSolver : IPlateSolver {
         // big sensor far faster by binning the frame before star detection.
         // 0 = ASTAP auto-downsample (scales with image size); 1 = none;
         // 2/3/4 = fixed. Default keeps the previous behaviour (2).
-        var downsample = _config.GetValue<int?>("PlateSolve:Downsample") ?? options.Downsample;
+        var downsample = _profiles?.Active.PlateSolveDownsample
+                         ?? _config.GetValue<int?>("PlateSolve:Downsample")
+                         ?? options.Downsample;
         if (downsample > 0)
             args += $" -z {downsample}";
         else if (downsample == 0)
@@ -275,6 +281,8 @@ public class AstapSolver : IPlateSolver {
     /// the binary's own folder and the standard system/user locations. Returns
     /// "" when nothing is found (ASTAP then falls back to its own search).</summary>
     private string ResolveAstapDataDir() {
+        var fromProfile = _profiles?.Active.AstapDataDir;
+        if (!string.IsNullOrWhiteSpace(fromProfile)) return fromProfile!;
         var configured = _config.GetValue<string?>("PlateSolve:AstapDataDir", null);
         if (!string.IsNullOrWhiteSpace(configured)) return configured!;
 

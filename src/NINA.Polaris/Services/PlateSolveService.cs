@@ -32,13 +32,16 @@ namespace NINA.Polaris.Services;
 public class PlateSolveService {
     private readonly IConfiguration _config;
     private readonly ILogger<PlateSolveService> _logger;
+    private readonly ProfileService? _profiles;
     private readonly IReadOnlyDictionary<string, IPlateSolver> _solvers;
 
     public PlateSolveService(IConfiguration config, ILogger<PlateSolveService> logger,
         AstapSolver astap, PlateSolve3Solver ps3,
-        AstrometryNetOnlineSolver netOnline, AstrometryNetLocalSolver netLocal) {
+        AstrometryNetOnlineSolver netOnline, AstrometryNetLocalSolver netLocal,
+        ProfileService? profiles = null) {
         _config = config;
         _logger = logger;
+        _profiles = profiles;
         _solvers = new Dictionary<string, IPlateSolver>(StringComparer.OrdinalIgnoreCase) {
             [astap.Id] = astap,
             [ps3.Id] = ps3,
@@ -59,14 +62,20 @@ public class PlateSolveService {
 
     public IPlateSolver PrimarySolver {
         get {
-            var id = _config.GetValue("PlateSolve:PrimarySolver", "astap")!;
+            // UI (profile) choice wins, then appsettings config.
+            var id = !string.IsNullOrWhiteSpace(_profiles?.Active.PlateSolvePrimary)
+                ? _profiles!.Active.PlateSolvePrimary
+                : _config.GetValue("PlateSolve:PrimarySolver", "astap")!;
             return _solvers.TryGetValue(id, out var s) ? s : _solvers["astap"];
         }
     }
 
     public IPlateSolver? BlindSolver {
         get {
-            if (!_config.GetValue("PlateSolve:UseBlindFallback", true)) return null;
+            var useBlind = _profiles != null
+                ? _profiles.Active.PlateSolveUseBlindFallback
+                : _config.GetValue("PlateSolve:UseBlindFallback", true);
+            if (!useBlind) return null;
             var id = _config.GetValue("PlateSolve:BlindSolver", "astrometry-net-online")!;
             return _solvers.TryGetValue(id, out var s) && s.SupportsBlindSolve ? s : null;
         }

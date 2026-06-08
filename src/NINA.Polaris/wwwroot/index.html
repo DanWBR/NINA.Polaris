@@ -9417,6 +9417,82 @@
                     </p>
                 </div>
 
+                <!-- Plate solving: pick the solver + tune speed/accuracy. -->
+                <div class="settings-section" id="platesolve-card" x-init="loadPlateSolveConfig()">
+                    <h3><span class="settings-card-icon">🎯</span>Plate solving</h3>
+                    <p class="text-muted" style="font-size:12px; max-width:600px; margin-top:4px">
+                        Choose which installed solver to use and how aggressively
+                        to downsample. On slower hardware (Pi-class), a higher
+                        downsample solves a big sensor much faster (ASIAIR-style).
+                    </p>
+
+                    <label style="display:flex; align-items:center; gap:12px; max-width:600px; margin-top:10px">
+                        <span style="min-width:120px">Solver</span>
+                        <select class="input-sm" style="flex:1"
+                                @change="psConfig.primary = $event.target.value">
+                            <template x-for="s in psSolvers" :key="s.id">
+                                <option :value="s.id" :selected="psConfig.primary === s.id"
+                                        x-text="s.name + (s.available ? '' : ' (not installed)')"></option>
+                            </template>
+                        </select>
+                    </label>
+                    <p class="text-muted" style="font-size:11px; margin:4px 0 0 132px"
+                       x-show="psSelectedSolver">
+                        <span x-show="psSelectedSolver?.available" class="text-ok">✓ ready</span>
+                        <span x-show="!psSelectedSolver?.available" class="text-warn">⚠ not detected on this system</span>
+                        <span x-show="psSelectedSolver?.path" class="text-muted"> · <code x-text="psSelectedSolver?.path"></code></span>
+                    </p>
+
+                    <label style="display:flex; align-items:center; gap:12px; max-width:600px; margin-top:10px">
+                        <span style="min-width:120px">Downsample</span>
+                        <select class="input-sm" style="flex:1"
+                                @change="psConfig.downsample = Number($event.target.value)">
+                            <option :value="0" :selected="psConfig.downsample === 0">Auto (ASTAP picks)</option>
+                            <option :value="1" :selected="psConfig.downsample === 1">1 — none (slowest, most precise)</option>
+                            <option :value="2" :selected="psConfig.downsample === 2">2</option>
+                            <option :value="3" :selected="psConfig.downsample === 3">3</option>
+                            <option :value="4" :selected="psConfig.downsample === 4">4 — fastest (recommended on Pi)</option>
+                        </select>
+                    </label>
+
+                    <label style="display:flex; align-items:center; gap:12px; max-width:600px; margin-top:10px">
+                        <span style="min-width:120px">Search radius (°)</span>
+                        <input type="number" class="input-sm" style="flex:1" min="1" max="180" step="1"
+                               x-model.number="psConfig.searchRadiusDeg">
+                    </label>
+
+                    <label class="seq-dither-checkbox" style="margin-top:10px"
+                           title="If the primary solver fails, retry with a blind-capable solver (e.g. online astrometry.net).">
+                        <input type="checkbox" x-model="psConfig.useBlindFallback">
+                        Blind fallback if primary fails
+                    </label>
+
+                    <details style="margin-top:12px; max-width:600px">
+                        <summary class="text-muted" style="cursor:pointer; font-size:12px">ASTAP path overrides (advanced)</summary>
+                        <label style="display:flex; align-items:center; gap:12px; margin-top:8px">
+                            <span style="min-width:120px">ASTAP binary</span>
+                            <input type="text" class="input-sm" style="flex:1"
+                                   x-model="psConfig.astapPath"
+                                   placeholder="auto-detect (e.g. /usr/local/bin/astap)">
+                        </label>
+                        <label style="display:flex; align-items:center; gap:12px; margin-top:8px">
+                            <span style="min-width:120px">Star DB dir</span>
+                            <input type="text" class="input-sm" style="flex:1"
+                                   x-model="psConfig.astapDataDir"
+                                   placeholder="auto-detect (e.g. /opt/astap)">
+                        </label>
+                        <p class="text-muted" style="font-size:11px; margin-top:6px">
+                            Leave blank to auto-detect. Set these only if Polaris can't find your install.
+                        </p>
+                    </details>
+
+                    <div style="margin-top:12px; display:flex; gap:8px; align-items:center">
+                        <button class="btn btn-sm btn-primary" @click="savePlateSolveConfig()"
+                                :disabled="psSaving" x-text="psSaving ? 'Saving…' : 'Save'"></button>
+                        <button class="btn btn-sm" @click="loadPlateSolveConfig()" :disabled="psLoading">↻ Refresh</button>
+                    </div>
+                </div>
+
                 <!-- CLOCK-3: server-vs-client wall-clock card. Drift
                      surfaces here so the user can sync explicitly
                      instead of Polaris jumping the wall clock during
@@ -12434,7 +12510,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260608-solvetimeout"></script>
+    <script src="/js/app.js?v=20260608-platesolvecard"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

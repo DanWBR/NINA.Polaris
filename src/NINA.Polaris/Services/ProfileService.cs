@@ -579,6 +579,20 @@ public class UserProfile {
     // Plate solver
     public string? AstapPath { get; set; }
     public double SolveToleranceArcsec { get; set; } = 30;
+    /// <summary>Star-database directory override for ASTAP (the dir holding the
+    /// *.290 / *.1476 files). Empty/null = auto-detect.</summary>
+    public string? AstapDataDir { get; set; }
+    /// <summary>Solver id used first (matches IPlateSolver.Id, e.g. "astap",
+    /// "platesolve3", "astrometry-net-local", "astrometry-net-online").</summary>
+    public string PlateSolvePrimary { get; set; } = "astap";
+    /// <summary>ASTAP downsample factor: 0 = auto (scales with image size),
+    /// 1 = none, 2/3/4 = fixed binning before star detection. Higher is faster
+    /// on weak hardware (Pi-class boards) at some accuracy cost.</summary>
+    public int PlateSolveDownsample { get; set; } = 2;
+    /// <summary>Search radius in degrees around the RA/Dec hint.</summary>
+    public double PlateSolveSearchRadiusDeg { get; set; } = 30;
+    /// <summary>Fall back to a blind-capable solver if the primary fails.</summary>
+    public bool PlateSolveUseBlindFallback { get; set; } = true;
 
     // TLS-1: Let's Encrypt via DuckDNS DNS-01 challenge. Replaces the
     // self-signed cert with a real publicly-trusted cert when the user

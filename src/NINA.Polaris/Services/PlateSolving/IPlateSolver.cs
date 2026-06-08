@@ -29,6 +29,11 @@ public interface IPlateSolver {
     /// <summary>True when the backend is installed/configured and ready to run.</summary>
     bool IsAvailable { get; }
 
+    /// <summary>Resolved executable / endpoint path, when applicable (shown in
+    /// the Settings plate-solve card). Null for solvers without a local binary
+    /// (e.g. the online astrometry.net API).</summary>
+    string? SolverPath => null;
+
     /// <summary>
     /// True if this backend can solve "blind" (without RA/Dec hints + FOV).
     /// Used by the dispatcher to pick a sensible fallback.

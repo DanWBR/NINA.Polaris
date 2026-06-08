@@ -41,11 +41,51 @@ public static class PlateSolveEndpoints {
     public static void MapPlateSolveEndpoints(this WebApplication app) {
         var group = app.MapGroup("/api/platesolve");
 
+        // List every plate-solving backend with its install status, so the
+        // Settings card can show what's available and let the user pick one.
+        group.MapGet("/solvers", (PlateSolveService solver) => {
+            return Results.Ok(solver.AllSolvers.Select(s => new {
+                id = s.Id,
+                name = s.DisplayName,
+                available = s.IsAvailable,
+                supportsBlind = s.SupportsBlindSolve,
+                path = s.SolverPath
+            }));
+        });
+
+        // Current plate-solve settings (from the active profile).
+        group.MapGet("/config", (ProfileService profiles) => {
+            var p = profiles.Active;
+            return Results.Ok(new {
+                primary = p.PlateSolvePrimary,
+                downsample = p.PlateSolveDownsample,
+                searchRadiusDeg = p.PlateSolveSearchRadiusDeg,
+                useBlindFallback = p.PlateSolveUseBlindFallback,
+                astapPath = p.AstapPath,
+                astapDataDir = p.AstapDataDir
+            });
+        });
+
+        // Update plate-solve settings. Any field left null is unchanged.
+        group.MapPut("/config", (PlateSolveConfigUpdate update, ProfileService profiles) => {
+            profiles.UpdateSettings(p => {
+                if (!string.IsNullOrWhiteSpace(update.Primary)) p.PlateSolvePrimary = update.Primary!.Trim();
+                if (update.Downsample.HasValue) p.PlateSolveDownsample = Math.Clamp(update.Downsample.Value, 0, 4);
+                if (update.SearchRadiusDeg.HasValue) p.PlateSolveSearchRadiusDeg = Math.Clamp(update.SearchRadiusDeg.Value, 1, 180);
+                if (update.UseBlindFallback.HasValue) p.PlateSolveUseBlindFallback = update.UseBlindFallback.Value;
+                // Empty string clears the override (back to auto-detect); null leaves as-is.
+                if (update.AstapPath != null) p.AstapPath = string.IsNullOrWhiteSpace(update.AstapPath) ? null : update.AstapPath.Trim();
+                if (update.AstapDataDir != null) p.AstapDataDir = string.IsNullOrWhiteSpace(update.AstapDataDir) ? null : update.AstapDataDir.Trim();
+            });
+            return Results.Ok(new { message = "Plate solve settings saved" });
+        });
+
         group.MapPost("/solve-latest", async (
                 SolveLatestRequest? request,
                 ImageRelayService relay,
                 PlateSolveService solver,
                 EquipmentManager equip,
+                ProfileService profiles,
                 ILogger<PlateSolveStatusMarker> logger,
                 CancellationToken ct) => {
             var image = relay.LatestImageData;
@@ -88,7 +128,7 @@ public static class PlateSolveEndpoints {
                 var options = new PlateSolveOptions {
                     HintRa = hintRa,
                     HintDec = hintDec,
-                    SearchRadiusDeg = request?.SearchRadiusDeg ?? 30
+                    SearchRadiusDeg = request?.SearchRadiusDeg ?? profiles.Active.PlateSolveSearchRadiusDeg
                 };
                 logger.LogInformation(
                     "PREVIEW plate solve: hint RA={Ra} Dec={Dec} radius={Rad}°",
@@ -235,7 +275,7 @@ public static class PlateSolveEndpoints {
                     HintRa = hintRa,
                     HintDec = hintDec,
                     FovDeg = fovDeg,
-                    SearchRadiusDeg = request.SearchRadiusDeg ?? 30
+                    SearchRadiusDeg = request.SearchRadiusDeg ?? profiles.Active.PlateSolveSearchRadiusDeg
                 };
                 logger.LogInformation(
                     "FILES plate solve: {Path} hint RA={Ra} Dec={Dec} fov={Fov:F2}° radius={Rad}°",
@@ -287,6 +327,17 @@ public static class PlateSolveEndpoints {
         double? HintRa = null,
         double? HintDec = null,
         double? SearchRadiusDeg = null);
+
+    /// <summary>PUT body for <c>/api/platesolve/config</c>. Every field is
+    /// optional; null leaves the corresponding setting unchanged. Empty string
+    /// on the path fields clears the override (back to auto-detect).</summary>
+    public record PlateSolveConfigUpdate(
+        string? Primary = null,
+        int? Downsample = null,
+        double? SearchRadiusDeg = null,
+        bool? UseBlindFallback = null,
+        string? AstapPath = null,
+        string? AstapDataDir = null);
 
     /// <summary>Marker type for the ILogger&lt;T&gt; category --
     /// the static endpoint class itself can't be used as a generic

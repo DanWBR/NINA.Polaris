@@ -701,6 +701,17 @@ function ninaApp() {
         // Retained for back-compat with the WS sync/guider-rebuild guards;
         // the dropdown commits atomically so it stays false in practice.
         _expEditing: false,
+
+        // Settings → Plate solving card. psSolvers is the list of installed
+        // backends (from /api/platesolve/solvers); psConfig is the editable
+        // settings persisted via PUT /api/platesolve/config.
+        psSolvers: [],
+        psConfig: {
+            primary: 'astap', downsample: 2, searchRadiusDeg: 30,
+            useBlindFallback: true, astapPath: '', astapDataDir: ''
+        },
+        psLoading: false,
+        psSaving: false,
         // Native guider per-axis algorithm selection (PHD2 defaults:
         // hysteresis on RA, resist-switch on Dec).
         nativeRaAlgorithm: 'hysteresis',
@@ -16829,6 +16840,55 @@ function ninaApp() {
             if (!Number.isFinite(n)) return this.guideExp;
             return this._expPresetsMs.reduce((best, p) =>
                 Math.abs(p - n) < Math.abs(best - n) ? p : best, this._expPresetsMs[0]);
+        },
+
+        // ----- Settings → Plate solving -----
+        get psSelectedSolver() {
+            return this.psSolvers.find(s => s.id === this.psConfig.primary) || null;
+        },
+        async loadPlateSolveConfig() {
+            this.psLoading = true;
+            try {
+                const [solvers, cfg] = await Promise.all([
+                    this.apiGet('/api/platesolve/solvers'),
+                    this.apiGet('/api/platesolve/config')
+                ]);
+                this.psSolvers = solvers || [];
+                if (cfg) {
+                    this.psConfig = {
+                        primary: cfg.primary || 'astap',
+                        downsample: cfg.downsample ?? 2,
+                        searchRadiusDeg: cfg.searchRadiusDeg ?? 30,
+                        useBlindFallback: cfg.useBlindFallback !== false,
+                        astapPath: cfg.astapPath || '',
+                        astapDataDir: cfg.astapDataDir || ''
+                    };
+                }
+            } catch (e) {
+                this.toast('Failed to load plate solve settings: ' + (e.message || e), 'error');
+            } finally {
+                this.psLoading = false;
+            }
+        },
+        async savePlateSolveConfig() {
+            this.psSaving = true;
+            try {
+                await this.apiPut('/api/platesolve/config', {
+                    primary: this.psConfig.primary,
+                    downsample: Number(this.psConfig.downsample),
+                    searchRadiusDeg: Number(this.psConfig.searchRadiusDeg),
+                    useBlindFallback: !!this.psConfig.useBlindFallback,
+                    // Empty string clears the override server-side (back to auto).
+                    astapPath: this.psConfig.astapPath || '',
+                    astapDataDir: this.psConfig.astapDataDir || ''
+                });
+                this.toast('Plate solve settings saved', 'ok');
+                await this.loadPlateSolveConfig();
+            } catch (e) {
+                this.toast('Save failed: ' + (e.message || e), 'error');
+            } finally {
+                this.psSaving = false;
+            }
         },
 
         async setGuideExposure(value) {
