@@ -126,7 +126,16 @@ function ninaApp() {
             recenterEveryNFrames: 50,
             recenterEveryMinutes: 0,
             recenterDriftArcsec: 0,
-            recenterToleranceArcsec: 30
+            recenterToleranceArcsec: 30,
+            // Auto dither (ASIAIR-style, every N integrated frames). Routed
+            // through the active guider (native or external PHD2).
+            ditherEnabled: false,
+            ditherEveryNFrames: 3,
+            ditherPixels: 5.0,
+            ditherRaOnly: false,
+            ditherSettlePixels: 1.5,
+            ditherSettleTime: 10,
+            ditherSettleTimeout: 40
         },
         // LSPP-3 + LSPP-6: per-frame pre-processing settings. Local
         // copy of the EquipmentProfile.LiveStackPreProcessing state.

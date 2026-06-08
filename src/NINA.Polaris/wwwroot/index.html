@@ -1174,8 +1174,8 @@
                          on/off state, user might want to configure before
                          starting). Banner-style status when an action runs. -->
                     <details class="livestack-triggers"
-                             :open="liveStackTriggers.refocusEnabled || liveStackTriggers.recenterEnabled">
-                        <summary>⚡ Auto re-focus / re-center</summary>
+                             :open="liveStackTriggers.refocusEnabled || liveStackTriggers.recenterEnabled || liveStackTriggers.ditherEnabled">
+                        <summary>⚡ Auto re-focus / re-center / dither</summary>
 
                         <div class="livestack-triggers-row text-warn"
                              x-show="liveStackStatus?.triggers?.isExecuting">
@@ -1340,6 +1340,65 @@
                                 <strong x-text="formatRelativeTime(liveStackStatus?.triggers?.lastRecenterAt)"></strong>
                                 at frame <strong x-text="liveStackStatus?.triggers?.lastRecenterFrame ?? ', '"></strong>
                                 (drift <strong x-text="liveStackStatus?.triggers?.lastRecenterDriftArcsec?.toFixed?.(1) || ', '"></strong>")
+                            </div>
+                        </fieldset>
+
+                        <!-- Auto dither: dither every N integrated frames,
+                             routed through the active guider (native or PHD2). -->
+                        <fieldset class="livestack-triggers-group">
+                            <legend>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" x-model="liveStackTriggers.ditherEnabled"
+                                           @change="saveLiveStackTriggers()">
+                                    Auto dither
+                                </label>
+                            </legend>
+                            <div class="livestack-triggers-row">
+                                <label>Every
+                                    <input type="number" min="1" step="1"
+                                           x-model.number="liveStackTriggers.ditherEveryNFrames"
+                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:70px">
+                                    frames
+                                </label>
+                                <label>Amount
+                                    <input type="number" min="0.5" step="0.5"
+                                           x-model.number="liveStackTriggers.ditherPixels"
+                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:70px">
+                                    px
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" x-model="liveStackTriggers.ditherRaOnly"
+                                           @change="saveLiveStackTriggers()">
+                                    RA only
+                                </label>
+                            </div>
+                            <div class="livestack-triggers-row">
+                                <label>Settle
+                                    <input type="number" min="0.1" step="0.1"
+                                           x-model.number="liveStackTriggers.ditherSettlePixels"
+                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:60px">
+                                    px
+                                </label>
+                                <label>for
+                                    <input type="number" min="0" step="1"
+                                           x-model.number="liveStackTriggers.ditherSettleTime"
+                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:60px">
+                                    s
+                                </label>
+                                <label>timeout
+                                    <input type="number" min="5" step="5"
+                                           x-model.number="liveStackTriggers.ditherSettleTimeout"
+                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:60px">
+                                    s
+                                </label>
+                            </div>
+                            <div class="livestack-triggers-row text-muted" style="font-size:11px">
+                                Needs the guider actively guiding (native or PHD2). Dithered
+                                frames wait to settle before stacking.
+                            </div>
+                            <div class="livestack-triggers-row text-muted"
+                                 x-show="liveStackStatus?.triggers?.executingKind === 'dither'">
+                                Dithering…
                             </div>
                         </fieldset>
                     </details>
@@ -12346,7 +12405,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260608-guidegainbin"></script>
+    <script src="/js/app.js?v=20260608-dither"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

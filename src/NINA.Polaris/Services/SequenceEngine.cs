@@ -26,6 +26,9 @@ public class SequenceEngine {
     private readonly ImageRelayService _relay;
     private readonly LiveStackingService _liveStack;
     private readonly PHD2Client _phd2;
+    // Dithering/guider control goes through the active guider (native or PHD2),
+    // not the concrete PHD2 client, so dither-every-N-frames works on both.
+    private readonly ActiveGuiderProvider _guiders;
     private readonly MeridianFlipService _meridianFlip;
     private readonly ImageWriterService _imageWriter;
     private readonly ILogger<SequenceEngine> _logger;
@@ -58,7 +61,8 @@ public class SequenceEngine {
     private readonly FlatWizardService _flatWizard;
 
     public SequenceEngine(EquipmentManager equip, ImageRelayService relay,
-        LiveStackingService liveStack, PHD2Client phd2, MeridianFlipService meridianFlip,
+        LiveStackingService liveStack, PHD2Client phd2, ActiveGuiderProvider guiders,
+        MeridianFlipService meridianFlip,
         ImageWriterService imageWriter,
         NINA.Polaris.Services.External.GraXpertService graXpert,
         FlatWizardService flatWizard,
@@ -67,6 +71,7 @@ public class SequenceEngine {
         _relay = relay;
         _liveStack = liveStack;
         _phd2 = phd2;
+        _guiders = guiders;
         _meridianFlip = meridianFlip;
         _imageWriter = imageWriter;
         _graXpert = graXpert;
@@ -464,10 +469,11 @@ public class SequenceEngine {
             }
         }
 
-        if (ea.DisconnectGuider && _phd2.IsConnected) {
+        var endGuider = _guiders.Active;
+        if (ea.DisconnectGuider && endGuider.IsConnected) {
             try {
-                _logger.LogInformation("End-action: stopping PHD2 guiding");
-                await _phd2.StopAsync();
+                _logger.LogInformation("End-action: stopping guiding ({Backend})", endGuider.Backend);
+                await endGuider.StopAsync();
             } catch (Exception ex) {
                 _logger.LogWarning(ex, "End-action stop-guider failed");
             }
@@ -495,33 +501,38 @@ public class SequenceEngine {
         if (Dither.EveryNFrames <= 0) return;
         if (_framesSinceDither < Dither.EveryNFrames) return;
 
-        if (!_phd2.IsConnected) {
-            _logger.LogDebug("Dither skipped: PHD2 not connected");
+        // Route through the active guider (native or external PHD2) so the
+        // dither-every-N-frames cadence works on whichever backend is selected.
+        var g = _guiders.Active;
+
+        if (!g.IsConnected) {
+            _logger.LogDebug("Dither skipped: guider ({Backend}) not connected", g.Backend);
             _framesSinceDither = 0;
             return;
         }
 
-        if (!_phd2.IsGuiding) {
-            _logger.LogDebug("Dither skipped: PHD2 not guiding (state={State})", _phd2.AppState);
+        if (!g.IsGuiding) {
+            _logger.LogDebug("Dither skipped: guider not guiding (state={State})", g.AppState);
             _framesSinceDither = 0;
             return;
         }
 
-        _logger.LogInformation("Dithering {Px}px (after {N} frames, raOnly={RaOnly})",
-            Dither.Pixels, _framesSinceDither, Dither.RaOnly);
+        _logger.LogInformation("Dithering {Px}px (after {N} frames, raOnly={RaOnly}, backend={Backend})",
+            Dither.Pixels, _framesSinceDither, Dither.RaOnly, g.Backend);
 
         // Hook up SettleDone before we issue the dither to avoid race
         var settled = new TaskCompletionSource<SettleResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         void OnSettled(SettleResult r) => settled.TrySetResult(r);
-        _phd2.Settled += OnSettled;
+        g.Settled += OnSettled;
 
         try {
-            await _phd2.DitherAsync(
+            await g.DitherAsync(
                 pixels: Dither.Pixels,
                 raOnly: Dither.RaOnly,
                 settlePixels: Dither.SettlePixels,
                 settleTime: Dither.SettleTime,
-                settleTimeout: Dither.SettleTimeout);
+                settleTimeout: Dither.SettleTimeout,
+                ct: ct);
 
             DithersIssued++;
 

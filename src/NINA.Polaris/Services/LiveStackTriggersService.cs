@@ -25,6 +25,7 @@ public class LiveStackTriggersService : IDisposable {
     private readonly AutoFocusService _autoFocus;
     private readonly SlewCenterService _slewCenter;
     private readonly PlateSolveService _solver;
+    private readonly ActiveGuiderProvider _guiders;
     private readonly ILogger<LiveStackTriggersService> _logger;
 
     private readonly IDisposable _frameSub;
@@ -39,6 +40,7 @@ public class LiveStackTriggersService : IDisposable {
     private DateTime _lastRecenterAt = DateTime.MinValue;
     private int _lastRecenterFrame;
     private double _lastRecenterDriftArcsec;
+    private int _lastDitherFrame;
 
     private double? _referenceRaHours;
     private double? _referenceDecDeg;
@@ -85,6 +87,7 @@ public class LiveStackTriggersService : IDisposable {
                                     AutoFocusService autoFocus,
                                     SlewCenterService slewCenter,
                                     PlateSolveService solver,
+                                    ActiveGuiderProvider guiders,
                                     ILogger<LiveStackTriggersService> logger) {
         _stack = stack;
         _profiles = profiles;
@@ -92,6 +95,7 @@ public class LiveStackTriggersService : IDisposable {
         _autoFocus = autoFocus;
         _slewCenter = slewCenter;
         _solver = solver;
+        _guiders = guiders;
         _logger = logger;
         _frameSub = _stack.SubscribeFrameIntegrated(OnFrameIntegratedAsync);
         // Reset trigger state when the user switches rigs, they get a
@@ -110,6 +114,7 @@ public class LiveStackTriggersService : IDisposable {
             _lastRecenterAt = DateTime.MinValue;
             _lastRecenterFrame = 0;
             _lastRecenterDriftArcsec = 0;
+            _lastDitherFrame = 0;
             _referenceRaHours = null;
             _referenceDecDeg = null;
             _referenceSolved = false;
@@ -139,6 +144,15 @@ public class LiveStackTriggersService : IDisposable {
         // amortises the pause better than splitting across two frames.
         if (cfg.RefocusEnabled && ShouldRefocus(info, cfg)) {
             await ExecuteRefocusAsync(info, cfg);
+            return;
+        }
+
+        // Dither (ASIAIR-style, every N frames). Return after firing so we don't
+        // also recenter the same frame -- a recenter would cancel the dither
+        // offset we just applied.
+        if (cfg.DitherEnabled && cfg.DitherEveryNFrames > 0
+            && info.FrameCount - _lastDitherFrame >= cfg.DitherEveryNFrames) {
+            await ExecuteDitherAsync(info, cfg);
             return;
         }
 
@@ -270,6 +284,56 @@ public class LiveStackTriggersService : IDisposable {
             _lastError = "Recenter exception: " + ex.Message;
             _logger.LogError(ex, "Live-stack recenter crashed");
         } finally {
+            _isExecuting = false;
+            _executingKind = null;
+            Notify();
+        }
+    }
+
+    private async Task ExecuteDitherAsync(LiveStackFrameInfo info, LiveStackTriggers cfg) {
+        var g = _guiders.Active;
+        // No guider guiding -> nothing to dither; advance the gate so we don't
+        // re-check every single frame, and surface why it was skipped.
+        if (!g.IsConnected || !g.IsGuiding) {
+            lock (_stateLock) _lastDitherFrame = info.FrameCount;
+            _lastError = "Dither skipped: guider not guiding";
+            _logger.LogDebug("Live-stack dither skipped: guider ({Backend}) not guiding", g.Backend);
+            return;
+        }
+
+        _isExecuting = true;
+        _executingKind = "dither";
+        Notify();
+
+        // Wait for SettleDone before the next frame integrates, exactly like the
+        // AUTORUN sequencer, so the dithered frame isn't stacked mid-slew.
+        var settled = new TaskCompletionSource<SettleResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnSettled(SettleResult r) => settled.TrySetResult(r);
+        g.Settled += OnSettled;
+        try {
+            _logger.LogInformation("Live-stack dither: {Px}px at frame {N} (raOnly={Ra}, backend={Backend})",
+                cfg.DitherPixels, info.FrameCount, cfg.DitherRaOnly, g.Backend);
+            await g.DitherAsync(
+                pixels: cfg.DitherPixels,
+                raOnly: cfg.DitherRaOnly,
+                settlePixels: cfg.DitherSettlePixels,
+                settleTime: cfg.DitherSettleTime,
+                settleTimeout: cfg.DitherSettleTimeout);
+            using var cts = new CancellationTokenSource(
+                TimeSpan.FromSeconds(cfg.DitherSettleTimeout + 5));
+            try {
+                var r = await settled.Task.WaitAsync(cts.Token);
+                if (r.Status != 0)
+                    _logger.LogWarning("Live-stack dither settle status {S}: {E}", r.Status, r.Error);
+            } catch (OperationCanceledException) {
+                _logger.LogWarning("Live-stack dither settle timed out, continuing");
+            }
+        } catch (Exception ex) {
+            _lastError = "Dither exception: " + ex.Message;
+            _logger.LogWarning(ex, "Live-stack dither crashed");
+        } finally {
+            g.Settled -= OnSettled;
+            lock (_stateLock) _lastDitherFrame = info.FrameCount;
             _isExecuting = false;
             _executingKind = null;
             Notify();

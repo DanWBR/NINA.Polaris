@@ -61,6 +61,29 @@ public class LiveStackTriggers {
     /// <summary>Convergence tolerance passed to <see cref="SlewCenterService.StartJob"/>.</summary>
     public double RecenterToleranceArcsec { get; set; } = 30;
 
+    // ----- Auto dither block (ASIAIR-style: dither every N frames) -----
+
+    /// <summary>Master switch for dithering during live stacking.</summary>
+    public bool DitherEnabled { get; set; }
+
+    /// <summary>Dither after the integrated-frame counter advances by this
+    /// much since the last dither. 0 = disabled. Routed through the active
+    /// guider (native or external PHD2); a no-op when not guiding.</summary>
+    public int DitherEveryNFrames { get; set; } = 1;
+
+    /// <summary>Random dither offset in guide-camera pixels.</summary>
+    public double DitherPixels { get; set; } = 5.0;
+
+    /// <summary>Dither only in RA (for mounts with sloppy Dec backlash).</summary>
+    public bool DitherRaOnly { get; set; }
+
+    /// <summary>Settle tolerance (px) / min settled time (s) / hard timeout (s),
+    /// passed to the guider's dither so the next frame waits for the star to
+    /// settle, exactly like the AUTORUN sequencer.</summary>
+    public double DitherSettlePixels { get; set; } = 1.5;
+    public int DitherSettleTime { get; set; } = 10;
+    public int DitherSettleTimeout { get; set; } = 40;
+
     // ----- One-shot "before starting stack" prep -----
 
     /// <summary>When true, the LIVE tab's "Stack ON" handler triggers

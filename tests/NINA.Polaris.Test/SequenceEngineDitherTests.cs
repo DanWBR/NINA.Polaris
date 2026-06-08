@@ -29,7 +29,9 @@ public class SequenceEngineDitherTests {
             NullLogger<NINA.Polaris.Services.External.GraXpertService>.Instance);
         var flatWizard = new FlatWizardService(equip, imageWriter, profile,
             NullLogger<FlatWizardService>.Instance, emptyConfig);
-        return new SequenceEngine(equip, relay, liveStack, phd2, meridianFlip, imageWriter,
+        var native = new NativeGuider(equip, profile, NullLogger<NativeGuider>.Instance);
+        var guiders = new ActiveGuiderProvider(profile, phd2, native);
+        return new SequenceEngine(equip, relay, liveStack, phd2, guiders, meridianFlip, imageWriter,
             graXpert, flatWizard, NullLogger<SequenceEngine>.Instance);
     }
 

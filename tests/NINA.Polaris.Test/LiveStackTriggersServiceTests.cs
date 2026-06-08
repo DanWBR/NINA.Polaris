@@ -106,7 +106,10 @@ public class LiveStackTriggersServiceTests {
             NullLogger<CameraStreamService>.Instance);
         var slew = new SlewCenterService(equip, solver, profiles, stream,
             NullLogger<SlewCenterService>.Instance);
+        var phd2 = new PHD2Client(NullLogger<PHD2Client>.Instance);
+        var native = new NativeGuider(equip, profiles, NullLogger<NativeGuider>.Instance);
+        var guiders = new ActiveGuiderProvider(profiles, phd2, native);
         return new LiveStackTriggersService(stack, profiles, equip, autoFocus, slew, solver,
-            NullLogger<LiveStackTriggersService>.Instance);
+            guiders, NullLogger<LiveStackTriggersService>.Instance);
     }
 }
