@@ -22170,6 +22170,13 @@ function ninaApp() {
                         // undefined and the RIGS card switch snaps back to "off".
                         guideCameraConnected: !!g.guideCameraConnected,
                         guideCameraName: g.guideCameraName || null,
+                        // Preserve the exposure field across the rebuild. While the
+                        // user is editing keep the in-progress client value; only
+                        // pull the server value when not editing, so typing isn't
+                        // clobbered by the ~1Hz status tick.
+                        exposureMs: this._expEditing
+                            ? this.guider.exposureMs
+                            : (g.exposureMs ?? this.guider.exposureMs),
                         recentSteps: g.recentSteps || [],
                         // PH2X-9 sub-objects, UI binds chips + state to these.
                         profileSync: g.profileSync || null,
