@@ -294,6 +294,7 @@ public class ProfileService {
             NativeReverseDecAfterFlip = src.NativeReverseDecAfterFlip,
             // A cloned rig starts un-calibrated (geometry differs per setup).
             NativeCalibration = null,
+            NativeCalibrations = new(),
             NativeGuideGain = src.NativeGuideGain,
             NativeGuideBin = src.NativeGuideBin,
             PHD2Host = src.PHD2Host, PHD2Port = src.PHD2Port,
@@ -723,6 +724,12 @@ public class UserProfile {
 /// <c>GuideCalibration</c>) plus metadata for the restore prompt. Stored on the
 /// rig so it survives app restarts.</summary>
 public class NativeCalibrationData {
+    /// <summary>Equipment signature this calibration was measured with
+    /// (guide camera + driver + binning + guider focal length + mount + driver).
+    /// Lets a rig keep several calibrations and restore the one matching the
+    /// equipment currently fitted, so swapping gear and back reuses the right
+    /// calibration. Empty/null for legacy single-slot data.</summary>
+    public string? Key { get; set; }
     public double XAngle { get; set; }
     public double YAngle { get; set; }
     public double XRate { get; set; }   // px/ms
@@ -995,6 +1002,13 @@ public class EquipmentProfile {
     /// so it can be auto-restored on connect across app restarts (PHD2-style
     /// "restore calibration"). Null until the rig has been calibrated once.</summary>
     public NativeCalibrationData? NativeCalibration { get; set; }
+
+    /// <summary>All saved native-guider calibrations for this rig, keyed by
+    /// equipment signature (see <see cref="NativeCalibrationData.Key"/>). When
+    /// you swap equipment and recalibrate, a new keyed entry is stored without
+    /// clobbering the old one; swapping the original gear back restores its
+    /// matching calibration. Capped to a handful of most-recent entries.</summary>
+    public List<NativeCalibrationData> NativeCalibrations { get; set; } = new();
 
     // Per-rig PHD2 settings
     public string PHD2Host { get; set; } = "localhost";

@@ -405,11 +405,33 @@ public sealed class NativeGuider : IGuider, IDisposable {
     public Task ClearCalibrationAsync(CancellationToken ct = default) {
         _calibration = GuideCalibration.Invalid;
         _calDetails = null;
-        // Also drop the persisted copy so it isn't restored next connect.
-        try { _profiles.UpdateEquipmentProfile(Rig.Id, r => r.NativeCalibration = null); }
-        catch (Exception ex) { _logger.LogWarning(ex, "Failed to clear persisted calibration"); }
-        _logger.LogInformation("Native calibration cleared");
+        // Drop only the calibration for the CURRENT equipment signature, plus the
+        // legacy single slot. Other rigs' / other equipment's saved calibrations
+        // are left intact so they can still be restored later.
+        var key = CalibrationKey();
+        try {
+            _profiles.UpdateEquipmentProfile(Rig.Id, r => {
+                r.NativeCalibrations?.RemoveAll(c =>
+                    string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase));
+                r.NativeCalibration = null;
+            });
+        } catch (Exception ex) { _logger.LogWarning(ex, "Failed to clear persisted calibration"); }
+        _logger.LogInformation("Native calibration cleared for {Key}", key);
         return Task.CompletedTask;
+    }
+
+    /// <summary>Equipment signature for the active rig: identifies the gear whose
+    /// geometry/rates a calibration is valid for. Swapping any of these (guide
+    /// camera, its driver, binning, guider focal length, mount, its driver)
+    /// yields a different key, so a stale calibration is never reused and the
+    /// matching one is restored when the original gear is refitted.</summary>
+    private string CalibrationKey() {
+        static string N(string? v) => (v ?? "").Trim().ToLowerInvariant();
+        int focal = (int)Math.Round(Rig.GuiderFocalLengthMm);
+        int bin = Math.Clamp(Rig.NativeGuideBin <= 0 ? 1 : Rig.NativeGuideBin, 1, 4);
+        return $"cam={N(Rig.GuideCameraDriver)}:{N(Rig.GuideCamera)}"
+             + $"|bin={bin}|fl={focal}"
+             + $"|mount={N(Rig.TelescopeDriver)}:{N(Rig.Telescope)}";
     }
 
     public List<GuideStep> SnapshotSteps() {
@@ -604,15 +626,43 @@ public sealed class NativeGuider : IGuider, IDisposable {
             RaPoints = raPts.ToArray(),
             DecPoints = decPts.ToArray(),
         };
-        try { _profiles.UpdateEquipmentProfile(Rig.Id, r => r.NativeCalibration = data); }
-        catch (Exception ex) { _logger.LogWarning(ex, "Failed to persist native calibration"); }
+        var key = CalibrationKey();
+        data.Key = key;
+        const int cap = 12;  // keep a handful of equipment combos per rig
+        try {
+            _profiles.UpdateEquipmentProfile(Rig.Id, r => {
+                r.NativeCalibration = data;          // legacy single slot (last cal)
+                r.NativeCalibrations ??= new();
+                // Replace any prior calibration for this exact equipment, then add.
+                r.NativeCalibrations.RemoveAll(c =>
+                    string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase));
+                r.NativeCalibrations.Add(data);
+                if (r.NativeCalibrations.Count > cap)
+                    r.NativeCalibrations.RemoveRange(0, r.NativeCalibrations.Count - cap);
+            });
+        } catch (Exception ex) { _logger.LogWarning(ex, "Failed to persist native calibration"); }
     }
 
     /// <summary>Restore the last saved calibration for this rig (if any) into the
     /// in-memory state, so guiding can start without recalibrating after a
     /// restart. Returns true when a calibration was restored.</summary>
     private bool TryRestoreCalibration() {
-        var d = Rig.NativeCalibration;
+        // Prefer the calibration whose equipment signature matches the gear
+        // currently fitted. This is what lets a rig hold several calibrations
+        // and restore the right one after swapping equipment back and forth.
+        var key = CalibrationKey();
+        var list = Rig.NativeCalibrations;
+        NativeCalibrationData? d = null;
+        if (list is { Count: > 0 }) {
+            d = list.LastOrDefault(c =>
+                string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase));
+            // Keyed entries exist but none match the current equipment -> the
+            // gear changed; do NOT restore a stale calibration.
+            if (d == null) return false;
+        } else {
+            // No keyed entries (pre-migration rig): fall back to the legacy slot.
+            d = Rig.NativeCalibration;
+        }
         if (d == null) return false;
         _calibration = new GuideCalibration(d.XAngle, d.YAngle, d.XRate, d.YRate,
             d.DeclinationRad, true, d.BacklashMs, (PierSide)d.PierSide);
