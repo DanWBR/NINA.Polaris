@@ -4448,7 +4448,7 @@
                     <div class="equip-card">
                         <div class="equip-card-header">
                             <span class="equip-card-icon">&#x1F4F7;</span>
-                            <span class="equip-card-title">Camera</span>
+                            <span class="equip-card-title">Main Camera</span>
                             <span class="equip-status-dot" :class="selectedCamera ? 'connected' : 'disconnected'"></span>
                         </div>
                         <div class="equip-card-body">
@@ -4723,7 +4723,7 @@
                     <div class="equip-card">
                         <div class="equip-card-header">
                             <span class="equip-card-icon">&#x1F52D;</span>
-                            <span class="equip-card-title">Mount</span>
+                            <span class="equip-card-title">Telescope Mount</span>
                             <span class="equip-status-dot" :class="mount.connected ? 'connected' : 'disconnected'"></span>
                         </div>
                         <div class="equip-card-body">
@@ -4923,11 +4923,135 @@
                         </div>
                     </div>
 
+                    <!-- Guidescope (OTA optics for the guide setup,
+                         metadata only, no hardware connection). The
+                         guide camera itself is owned by PHD2 (next
+                         card). The pixel scale we display here is what
+                         PHD2 would derive from this focal length +
+                         camera pixel size. -->
+                    <div class="equip-card equip-card-metadata">
+                        <div class="equip-card-header">
+                            <span class="equip-card-icon">&#x1F52D;</span>
+                            <span class="equip-card-title">Guide Camera</span>
+                            <span class="equip-status-dot"
+                                  :class="guider.guideCameraConnected ? 'connected' : (settings.guiderFocalLengthMm > 0 ? 'configured' : 'disconnected')"></span>
+                        </div>
+                        <div class="equip-card-body">
+                            <div class="equip-meta-row">
+                                <label>Focal length (mm)
+                                    <input type="number" x-model.number="settings.guiderFocalLengthMm"
+                                           @change="saveOpticsDebounced()"
+                                           step="10" min="0" class="input-sm" style="width:90px">
+                                </label>
+                                <label>Aperture (mm)
+                                    <input type="number" x-model.number="settings.guiderApertureMm"
+                                           @change="saveOpticsDebounced()"
+                                           step="5" min="0" class="input-sm" style="width:80px">
+                                </label>
+                                <span class="equip-meta-derived"
+                                      x-show="settings.guiderFocalLengthMm > 0 && settings.guiderApertureMm > 0">
+                                    f/<strong x-text="(settings.guiderFocalLengthMm / settings.guiderApertureMm).toFixed(1)"></strong>
+                                </span>
+                            </div>
+                            <div class="equip-meta-row">
+                                <label>Brand
+                                    <input type="text" x-model="settings.guideTelescopeBrand"
+                                           @change="saveOpticsDebounced()"
+                                           class="input-sm" placeholder="e.g. SVBony">
+                                </label>
+                                <label>Model
+                                    <input type="text" x-model="settings.guideTelescopeModel"
+                                           @change="saveOpticsDebounced()"
+                                           class="input-sm" placeholder="e.g. SV165">
+                                </label>
+                            </div>
+                            <p class="hint" style="margin:4px 0 0;font-size:11px"
+                               x-show="guider.connected && guider.pixelScale">
+                                Guider currently reports
+                                <strong x-text="guider.pixelScale?.toFixed(3) + '&quot;/px'"></strong>
+                                at this guide scope.
+                            </p>
+
+                            <!-- The guider backend + algorithms now live in the
+                                 GUIDE tab. This card is the guide camera itself:
+                                 PHD2 owns its own guide cam, so the hardware
+                                 controls show only for the native guider. -->
+                            <p class="hint" x-show="guiderDriver !== 'native'" style="margin:6px 0 0;font-size:11px">
+                                This rig uses the <strong>PHD2</strong> guider, which owns its own
+                                guide camera. Switch to the <strong>Native</strong> guider in the
+                                GUIDE tab to manage the guide camera here.
+                            </p>
+
+                            <!-- Native guide camera: mirrors the imaging-camera
+                                 card (driver + device + connect switch) plus
+                                 guide-specific Gain + Bin2. -->
+                            <template x-if="guiderDriver === 'native'">
+                                <div style="margin-top:8px">
+                                    <div class="equip-driver-row" x-show="cameraDrivers.length > 1">
+                                        <label class="equip-driver-label">Cam driver</label>
+                                        <select class="equip-select equip-driver-select"
+                                                @change="setGuideCameraDriver($event.target.value)">
+                                            <template x-for="d in cameraDrivers" :key="'gcd-'+d.id">
+                                                <option :value="d.id" :disabled="!d.available"
+                                                        :selected="guideCameraDriver === d.id"
+                                                        x-text="d.name + (d.available ? '' : ' (not installed)')"></option>
+                                            </template>
+                                        </select>
+                                    </div>
+                                    <div class="equip-select-row" style="margin-top:6px">
+                                        <select class="equip-select"
+                                                x-show="guideCameraDriver === 'indi'"
+                                                @change="setGuideCamera($event.target.value)">
+                                            <option value="">Select guide camera</option>
+                                            <template x-for="dev in devices" :key="'gcam-'+dev.name">
+                                                <option :value="dev.name"
+                                                        :selected="guideCamera === dev.name"
+                                                        x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
+                                            </template>
+                                        </select>
+                                        <select class="equip-select"
+                                                x-show="guideCameraDriver !== 'indi'"
+                                                :disabled="guideCameraDiscovering"
+                                                @change="setGuideCamera($event.target.value)">
+                                            <option value="" x-text="guideCameraDiscovering ? 'Detecting…' : 'Select guide camera'"></option>
+                                            <template x-for="c in guideCameraVendorDevices" :key="'gcv-'+c.id">
+                                                <option :value="c.id"
+                                                        :selected="guideCamera === c.id"
+                                                        x-text="c.model + ' (' + c.detail + ')'"></option>
+                                            </template>
+                                        </select>
+                                        <!-- Connect/disconnect switch (mirrors the imaging camera). -->
+                                        <label class="equip-toggle"
+                                               :aria-disabled="(!guideCamera && !guider.guideCameraConnected).toString()"
+                                               :title="guider.guideCameraConnected ? 'Disconnect guide camera' : 'Connect guide camera'">
+                                            <input type="checkbox"
+                                                   :checked="guider.guideCameraConnected"
+                                                   :disabled="!guideCamera && !guider.guideCameraConnected"
+                                                   @change="$event.target.checked ? equipConnectGuideCamera() : equipDisconnectGuideCamera()">
+                                            <span class="equip-toggle-track"></span>
+                                            <span class="equip-toggle-thumb"></span>
+                                        </label>
+                                    </div>
+                                    <div class="equip-detail" x-show="guider.guideCameraConnected" style="margin-top:4px">
+                                        <div class="equip-detail-name" x-text="guider.guideCameraName || guideCamera"></div>
+                                        <div class="equip-detail-props" x-show="guider.pixelScale">
+                                            Scale: <strong x-text="guider.pixelScale?.toFixed(3) + '&quot;/px'"></strong>
+                                        </div>
+                                    </div>
+                                    <p class="hint" style="margin:4px 0 0;font-size:11px">
+                                        Must differ from the imaging camera. Used with the rig's
+                                        mount for pulse guiding.
+                                    </p>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
                     <!-- Focuser -->
                     <div class="equip-card">
                         <div class="equip-card-header">
                             <span class="equip-card-icon">&#x1F50D;</span>
-                            <span class="equip-card-title">Focuser</span>
+                            <span class="equip-card-title">Electronic Focuser</span>
                             <span class="equip-status-dot" :class="focusConnected ? 'connected' : 'disconnected'"></span>
                         </div>
                         <div class="equip-card-body">
@@ -5255,130 +5379,6 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Guidescope (OTA optics for the guide setup,
-                         metadata only, no hardware connection). The
-                         guide camera itself is owned by PHD2 (next
-                         card). The pixel scale we display here is what
-                         PHD2 would derive from this focal length +
-                         camera pixel size. -->
-                    <div class="equip-card equip-card-metadata">
-                        <div class="equip-card-header">
-                            <span class="equip-card-icon">&#x1F52D;</span>
-                            <span class="equip-card-title">Guide Camera</span>
-                            <span class="equip-status-dot"
-                                  :class="guider.guideCameraConnected ? 'connected' : (settings.guiderFocalLengthMm > 0 ? 'configured' : 'disconnected')"></span>
-                        </div>
-                        <div class="equip-card-body">
-                            <div class="equip-meta-row">
-                                <label>Focal length (mm)
-                                    <input type="number" x-model.number="settings.guiderFocalLengthMm"
-                                           @change="saveOpticsDebounced()"
-                                           step="10" min="0" class="input-sm" style="width:90px">
-                                </label>
-                                <label>Aperture (mm)
-                                    <input type="number" x-model.number="settings.guiderApertureMm"
-                                           @change="saveOpticsDebounced()"
-                                           step="5" min="0" class="input-sm" style="width:80px">
-                                </label>
-                                <span class="equip-meta-derived"
-                                      x-show="settings.guiderFocalLengthMm > 0 && settings.guiderApertureMm > 0">
-                                    f/<strong x-text="(settings.guiderFocalLengthMm / settings.guiderApertureMm).toFixed(1)"></strong>
-                                </span>
-                            </div>
-                            <div class="equip-meta-row">
-                                <label>Brand
-                                    <input type="text" x-model="settings.guideTelescopeBrand"
-                                           @change="saveOpticsDebounced()"
-                                           class="input-sm" placeholder="e.g. SVBony">
-                                </label>
-                                <label>Model
-                                    <input type="text" x-model="settings.guideTelescopeModel"
-                                           @change="saveOpticsDebounced()"
-                                           class="input-sm" placeholder="e.g. SV165">
-                                </label>
-                            </div>
-                            <p class="hint" style="margin:4px 0 0;font-size:11px"
-                               x-show="guider.connected && guider.pixelScale">
-                                Guider currently reports
-                                <strong x-text="guider.pixelScale?.toFixed(3) + '&quot;/px'"></strong>
-                                at this guide scope.
-                            </p>
-
-                            <!-- The guider backend + algorithms now live in the
-                                 GUIDE tab. This card is the guide camera itself:
-                                 PHD2 owns its own guide cam, so the hardware
-                                 controls show only for the native guider. -->
-                            <p class="hint" x-show="guiderDriver !== 'native'" style="margin:6px 0 0;font-size:11px">
-                                This rig uses the <strong>PHD2</strong> guider, which owns its own
-                                guide camera. Switch to the <strong>Native</strong> guider in the
-                                GUIDE tab to manage the guide camera here.
-                            </p>
-
-                            <!-- Native guide camera: mirrors the imaging-camera
-                                 card (driver + device + connect switch) plus
-                                 guide-specific Gain + Bin2. -->
-                            <template x-if="guiderDriver === 'native'">
-                                <div style="margin-top:8px">
-                                    <div class="equip-driver-row" x-show="cameraDrivers.length > 1">
-                                        <label class="equip-driver-label">Cam driver</label>
-                                        <select class="equip-select equip-driver-select"
-                                                @change="setGuideCameraDriver($event.target.value)">
-                                            <template x-for="d in cameraDrivers" :key="'gcd-'+d.id">
-                                                <option :value="d.id" :disabled="!d.available"
-                                                        :selected="guideCameraDriver === d.id"
-                                                        x-text="d.name + (d.available ? '' : ' (not installed)')"></option>
-                                            </template>
-                                        </select>
-                                    </div>
-                                    <div class="equip-select-row" style="margin-top:6px">
-                                        <select class="equip-select"
-                                                x-show="guideCameraDriver === 'indi'"
-                                                @change="setGuideCamera($event.target.value)">
-                                            <option value="">Select guide camera</option>
-                                            <template x-for="dev in devices" :key="'gcam-'+dev.name">
-                                                <option :value="dev.name"
-                                                        :selected="guideCamera === dev.name"
-                                                        x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
-                                            </template>
-                                        </select>
-                                        <select class="equip-select"
-                                                x-show="guideCameraDriver !== 'indi'"
-                                                :disabled="guideCameraDiscovering"
-                                                @change="setGuideCamera($event.target.value)">
-                                            <option value="" x-text="guideCameraDiscovering ? 'Detecting…' : 'Select guide camera'"></option>
-                                            <template x-for="c in guideCameraVendorDevices" :key="'gcv-'+c.id">
-                                                <option :value="c.id"
-                                                        :selected="guideCamera === c.id"
-                                                        x-text="c.model + ' (' + c.detail + ')'"></option>
-                                            </template>
-                                        </select>
-                                        <!-- Connect/disconnect switch (mirrors the imaging camera). -->
-                                        <label class="equip-toggle"
-                                               :aria-disabled="(!guideCamera && !guider.guideCameraConnected).toString()"
-                                               :title="guider.guideCameraConnected ? 'Disconnect guide camera' : 'Connect guide camera'">
-                                            <input type="checkbox"
-                                                   :checked="guider.guideCameraConnected"
-                                                   :disabled="!guideCamera && !guider.guideCameraConnected"
-                                                   @change="$event.target.checked ? equipConnectGuideCamera() : equipDisconnectGuideCamera()">
-                                            <span class="equip-toggle-track"></span>
-                                            <span class="equip-toggle-thumb"></span>
-                                        </label>
-                                    </div>
-                                    <div class="equip-detail" x-show="guider.guideCameraConnected" style="margin-top:4px">
-                                        <div class="equip-detail-name" x-text="guider.guideCameraName || guideCamera"></div>
-                                        <div class="equip-detail-props" x-show="guider.pixelScale">
-                                            Scale: <strong x-text="guider.pixelScale?.toFixed(3) + '&quot;/px'"></strong>
-                                        </div>
-                                    </div>
-                                    <p class="hint" style="margin:4px 0 0;font-size:11px">
-                                        Must differ from the imaging camera. Used with the rig's
-                                        mount for pulse guiding.
-                                    </p>
-                                </div>
-                            </template>
                         </div>
                     </div>
 
