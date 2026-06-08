@@ -5,8 +5,8 @@ Maintainer: Daniel Wagner <danielwag@gmail.com>
 Section: science
 Priority: optional
 Homepage: https://github.com/DanWBR/NINA.Polaris
-Depends: libfontconfig1, libssl3, libicu72 | libicu76 | libicu74, indi-bin, python3-venv, python3-pip, adduser, systemd, network-manager, policykit-1 | polkitd
-Recommends: indi-full, astap, phd2, siril, xpra, xserver-xorg-video-dummy, dphys-swapfile, lsof
+Depends: libfontconfig1, libssl3, libicu72 | libicu76 | libicu74, python3-venv, python3-pip, adduser, systemd, network-manager, policykit-1 | polkitd
+Recommends: indi-bin, indi-full, astap, phd2, siril, xpra, xserver-xorg-video-dummy, dphys-swapfile, lsof
 Suggests: graxpert
 Description: N.I.N.A. Polaris astrophotography server
  Browser-controlled astrophotography controller for Raspberry Pi,
