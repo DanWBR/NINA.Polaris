@@ -209,6 +209,8 @@ because the proxy correctly forwards Polaris's pre-check response.
 
 ## See also
 
+- [GUIDE (native)](guide-native.md), the built-in autoguider (no external
+  PHD2 process)
 - [docs/phd2-gui-embedding.md](../phd2-gui-embedding.md), full xpra
   install procedure for Linux hosts
 - [Glossary → PHD2 / Calibration / Dither](GLOSSARY.md#p)

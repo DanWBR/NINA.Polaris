@@ -54,6 +54,10 @@ Each tab in the sidebar has its own page. Read the ones you need:
 - **[ASCOM (direct COM)](ascom-com.md)**, Windows-only path to talk to
   ASCOM Platform drivers directly without going through ASCOM Remote
   or the Alpaca Omni Simulator.
+- **[GUIDE (native)](guide-native.md)**, built-in autoguider (PHD2 math
+  ported to C#) driving the rig's guide camera + mount directly, no
+  external PHD2 needed. Calibration restore per equipment, dithering,
+  multi-star, meridian-flip handling.
 - **[GUIDE (PHD2)](guide-phd2.md)**, full PHD2 integration. Connection
   + management + smart calibration + algorithm presets + embedded xpra
   GUI (Linux only).
