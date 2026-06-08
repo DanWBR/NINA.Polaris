@@ -268,6 +268,8 @@ public class ProfileService {
             NativeMinMoveDecPx = src.NativeMinMoveDecPx,
             NativeRaAggression = src.NativeRaAggression,
             NativeRaHysteresis = src.NativeRaHysteresis,
+            NativeMaxRaDurationMs = src.NativeMaxRaDurationMs,
+            NativeMaxDecDurationMs = src.NativeMaxDecDurationMs,
             NativeRaAlgorithm = src.NativeRaAlgorithm,
             NativeDecAlgorithm = src.NativeDecAlgorithm,
             NativeBacklashComp = src.NativeBacklashComp,
@@ -917,6 +919,14 @@ public class EquipmentProfile {
     /// <summary>Native guider RA hysteresis weight (0..0.99, fraction of
     /// the previous move blended into this one). Default 0.10.</summary>
     public double NativeRaHysteresis { get; set; } = 0.10;
+
+    /// <summary>Max single guide-correction pulse on the RA axis (ms). Caps
+    /// runaway corrections (e.g. on a lost star or wind gust). Default 2.5 s.</summary>
+    public int NativeMaxRaDurationMs { get; set; } = 2500;
+
+    /// <summary>Max single guide-correction pulse on the Dec axis (ms).
+    /// Default 2.5 s.</summary>
+    public int NativeMaxDecDurationMs { get; set; } = 2500;
 
     /// <summary>Native guider RA-axis algorithm: hysteresis (default),
     /// lowpass, lowpass2, or identity.</summary>

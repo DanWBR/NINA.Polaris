@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260608-calpersist">
+    <link rel="stylesheet" href="/css/app.css?v=20260608-caltrack">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -3804,6 +3804,24 @@
                                @change="setNativeReverseDecAfterFlip($event.target.checked)">
                         <span style="font-size:12px">Reverse Dec after flip</span>
                     </label>
+                    <div class="guide-side-title" style="margin-top:12px">Calibration &amp; correction</div>
+                    <div class="cal-corr-grid">
+                        <label class="gb-field">Calibration step (ms)
+                            <input type="number" min="50" max="10000" step="50"
+                                   :value="nativeCalibrationStepMs"
+                                   @change="setNativeCalSetting('nativeCalibrationStepMs', $event.target.value)">
+                        </label>
+                        <label class="gb-field">Max RA duration (ms)
+                            <input type="number" min="50" max="10000" step="50"
+                                   :value="nativeMaxRaDurationMs"
+                                   @change="setNativeCalSetting('nativeMaxRaDurationMs', $event.target.value)">
+                        </label>
+                        <label class="gb-field">Max DEC duration (ms)
+                            <input type="number" min="50" max="10000" step="50"
+                                   :value="nativeMaxDecDurationMs"
+                                   @change="setNativeCalSetting('nativeMaxDecDurationMs', $event.target.value)">
+                        </label>
+                    </div>
                     <p class="hint" x-show="!guider.guideCameraConnected" style="margin:8px 0 0;font-size:11px">
                         Select + connect the guide camera in
                         <a href="#" @click.prevent="tab = 'rigs'" style="color:var(--accent)">RIGS</a>
@@ -12332,7 +12350,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260608-calpersist"></script>
+    <script src="/js/app.js?v=20260608-caltrack"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

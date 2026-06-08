@@ -684,6 +684,10 @@ function ninaApp() {
         nativeMultiStar: true,
         nativePierSideHandling: 'mirror',
         nativeReverseDecAfterFlip: false,
+        // Calibration & correction tunables (ms).
+        nativeCalibrationStepMs: 1000,
+        nativeMaxRaDurationMs: 2500,
+        nativeMaxDecDurationMs: 2500,
         nativeGuideAlgorithms: [
             { id: 'hysteresis', name: 'Hysteresis' },
             { id: 'resistswitch', name: 'Resist Switch' },
@@ -12192,6 +12196,9 @@ function ninaApp() {
             this.nativeDecAlgorithm = rig.nativeDecAlgorithm || 'resistswitch';
             this.nativeBacklashComp = !!rig.nativeBacklashComp;
             this.nativeMultiStar = rig.nativeMultiStar !== false;
+            this.nativeCalibrationStepMs = rig.nativeCalibrationStepMs || 1000;
+            this.nativeMaxRaDurationMs = rig.nativeMaxRaDurationMs || 2500;
+            this.nativeMaxDecDurationMs = rig.nativeMaxDecDurationMs || 2500;
             this.nativePierSideHandling = rig.nativePierSideHandling || 'mirror';
             this.nativeReverseDecAfterFlip = !!rig.nativeReverseDecAfterFlip;
             this.equipMountChoice = rig.telescope || '';
@@ -16700,6 +16707,14 @@ function ninaApp() {
                 this.nativeDecAlgorithm = value || 'resistswitch';
                 this._persistRigSelection({ nativeDecAlgorithm: this.nativeDecAlgorithm });
             }
+        },
+
+        // Calibration step + per-axis max correction duration (ms), persisted
+        // to the active rig. Clamped to sane ranges.
+        setNativeCalSetting(field, value) {
+            const v = Math.max(50, Math.min(10000, Math.round(Number(value) || 0)));
+            this[field] = v;
+            this._persistRigSelection({ [field]: v });
         },
 
         // Toggle auto-measured Dec backlash compensation for the native guider.

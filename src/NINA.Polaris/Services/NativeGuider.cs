@@ -402,11 +402,19 @@ public sealed class NativeGuider : IGuider, IDisposable {
         // Threshold scales with frame so big sensors don't undershoot.
         var process = new CalibrationProcess(stepMs, 25.0, 60, decRad);
 
+        // During calibration the star sweeps well beyond the normal search
+        // window, so widen it to follow the moving star (we also re-centre the
+        // search on the last measured position each step). Size it to cover one
+        // pulse step plus margin so a coarse Calibration Step never loses lock.
+        int calRegion = Math.Max(SearchRegion, 50);
+
         _calProgress = "Calibrating: locating star...";
         try {
             // Seed the process with the current centroid.
             var (curX, curY, found) = await FindStarAsync(cam, ct);
             if (!found) { RaiseAlert("Calibration failed: star lost at start."); SetAppState("Stopped"); return; }
+            // Track the star: re-centre the search window on the last position.
+            _lockX = curX; _lockY = curY;
 
             string? lastPhase = null;
             double phStartX = curX, phStartY = curY;
@@ -444,12 +452,15 @@ public sealed class NativeGuider : IGuider, IDisposable {
                     }
                     await SettleAfterPulse(step.DurationMs, ct);
                 }
-                (curX, curY, found) = await FindStarAsync(cam, ct);
+                (curX, curY, found) = await FindStarAsync(cam, ct, calRegion);
                 if (!found) {
                     RaiseAlert("Calibration failed: star lost mid-sequence.");
                     SetAppState("Stopped");
                     return;
                 }
+                // Re-centre the (wide) search window on the new position so the
+                // next step keeps following the star as it sweeps.
+                _lockX = curX; _lockY = curY;
                 // Record the measured points per axis for the Review-Calibration plot.
                 if (lastPhase != null && lastPhase.StartsWith("RA (") && raPts.Count < 80)
                     raPts.Add(new[] { curX - oX, curY - oY });
@@ -662,11 +673,13 @@ public sealed class NativeGuider : IGuider, IDisposable {
 
         int minMoveRaMs = RateToMs(Rig.NativeMinMoveRaPx, raRate);
         int minMoveDecMs = RateToMs(Rig.NativeMinMoveDecPx, decRate);
-        // Clamp pulse to the exposure period so corrections can't run away.
-        int maxMs = expMs;
+        // Clamp each pulse to the smaller of the exposure period (so corrections
+        // can't run past the next frame) and the per-axis Max Duration cap.
+        int maxRaMs  = Math.Min(expMs, Math.Max(50, Rig.NativeMaxRaDurationMs));
+        int maxDecMs = Math.Min(expMs, Math.Max(50, Rig.NativeMaxDecDurationMs));
 
-        int raMs = MountCoordTransform.ComputeMoveDurationMs(raCorr, raRate, minMoveRaMs, maxMs);
-        int decMs = MountCoordTransform.ComputeMoveDurationMs(decCorr, decRate, minMoveDecMs, maxMs);
+        int raMs = MountCoordTransform.ComputeMoveDurationMs(raCorr, raRate, minMoveRaMs, maxRaMs);
+        int decMs = MountCoordTransform.ComputeMoveDurationMs(decCorr, decRate, minMoveDecMs, maxDecMs);
 
         // Direction: correction moves the star back toward lock. PHD2
         // calibration measured WEST as +X-rate and SOUTH as +Y-rate, so a
@@ -677,7 +690,7 @@ public sealed class NativeGuider : IGuider, IDisposable {
 
         // Dec backlash compensation: on a direction reversal, add the measured
         // slack take-up, re-clamped to the runaway guard.
-        if (decMs > 0) decMs = Math.Min(_backlashComp.Adjust(decDir, decMs), maxMs);
+        if (decMs > 0) decMs = Math.Min(_backlashComp.Adjust(decDir, decMs), maxDecMs);
 
         if (mount != null && mount.IsConnected && mount.Capabilities.SupportsPulseGuide) {
             try {
@@ -859,13 +872,14 @@ public sealed class NativeGuider : IGuider, IDisposable {
         }
     }
 
-    private async Task<(double x, double y, bool found)> FindStarAsync(ICamera cam, CancellationToken ct) {
-        var (x, y, found, _, _) = await FindStarDetailedAsync(cam, ct);
+    private async Task<(double x, double y, bool found)> FindStarAsync(ICamera cam, CancellationToken ct,
+            int? searchRegion = null) {
+        var (x, y, found, _, _) = await FindStarDetailedAsync(cam, ct, searchRegion);
         return (x, y, found);
     }
 
     private async Task<(double x, double y, bool found, double snr, double hfd)>
-            FindStarDetailedAsync(ICamera cam, CancellationToken ct) {
+            FindStarDetailedAsync(ICamera cam, CancellationToken ct, int? searchRegion = null) {
         // Always capture the full frame: GuideStar.Find already searches only a
         // small window around the lock, so a hardware ROI buys little and has two
         // downsides we hit in practice -- the GUIDE view then showed a tiny
@@ -877,7 +891,8 @@ public sealed class NativeGuider : IGuider, IDisposable {
         _lastFrame = img; _lastFrameOriginX = 0; _lastFrameOriginY = 0;
 
         int w = img.Properties.Width, h = img.Properties.Height;
-        var result = GuideStar.Find(img.Data, w, h, _lockX, _lockY, SearchRegion);
+        int sr = searchRegion ?? SearchRegion;
+        var result = GuideStar.Find(img.Data, w, h, _lockX, _lockY, sr);
         if (!result.Found) {
             return (_lockX, _lockY, false, result.Snr, result.Hfd);
         }

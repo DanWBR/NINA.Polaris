@@ -156,6 +156,10 @@ public static class EquipmentEndpoints {
                     r.NativeRaAggression = update.NativeRaAggression;
                 if (update.NativeRaHysteresis >= 0)
                     r.NativeRaHysteresis = update.NativeRaHysteresis;
+                if (update.NativeMaxRaDurationMs > 0)
+                    r.NativeMaxRaDurationMs = update.NativeMaxRaDurationMs;
+                if (update.NativeMaxDecDurationMs > 0)
+                    r.NativeMaxDecDurationMs = update.NativeMaxDecDurationMs;
                 if (!string.IsNullOrWhiteSpace(update.NativeRaAlgorithm))
                     r.NativeRaAlgorithm = update.NativeRaAlgorithm.Trim().ToLowerInvariant();
                 if (!string.IsNullOrWhiteSpace(update.NativeDecAlgorithm))
