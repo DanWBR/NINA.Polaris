@@ -689,6 +689,11 @@ function ninaApp() {
         // Settle px/s) so the ~1Hz guider-object rebuild can't re-apply :value
         // and wipe what the user is typing. WS syncs it only when not editing.
         guideExp: 1000,
+        // True while the Exp (ms) field is focused; gates the WS sync so the
+        // ~1Hz status tick can't overwrite what the user is typing. MUST be
+        // declared here (not created on first @focus) so the WS handler's
+        // `this._expEditing` read sees the same reactive property.
+        _expEditing: false,
         // Native guider per-axis algorithm selection (PHD2 defaults:
         // hysteresis on RA, resist-switch on Dec).
         nativeRaAlgorithm: 'hysteresis',

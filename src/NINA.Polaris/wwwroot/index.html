@@ -3893,7 +3893,7 @@
                     <label class="gb-field">Exp (ms)<input type="number" min="50" max="10000" step="50"
                                x-model.number="guideExp"
                                @focus="_expEditing = true"
-                               @blur="_expEditing = false"
+                               @blur="setTimeout(() => { _expEditing = false }, 1500)"
                                @change="setGuideExposure(guideExp)"
                                title="Guide-camera exposure per frame"></label>
                     <label class="gb-field" x-show="guiderDriver === 'native'">Gain<input type="number"
@@ -12410,7 +12410,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260608-driversel"></script>
+    <script src="/js/app.js?v=20260608-expedit3"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
