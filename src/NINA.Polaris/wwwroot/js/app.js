@@ -12190,6 +12190,13 @@ function ninaApp() {
             this.guiderDriver = rig.guiderDriver || 'phd2';
             this.guideCamera = rig.guideCamera || '';
             this.guideCameraDriver = rig.guideCameraDriver || 'indi';
+            // Vendor/Simulator guide cams are listed by discovery, which only
+            // runs on driver change -- so populate the dropdown on rig load too,
+            // otherwise a rig saved with a non-INDI guide cam shows an empty list.
+            if (this.guideCameraDriver !== 'indi') {
+                this.guideCameraVendorDevices = [];
+                try { this.detectGuideCameras(); } catch (e) {}
+            }
             this.guideGain = rig.nativeGuideGain || 0;
             this.guideBin = rig.nativeGuideBin || 1;
             this.nativeRaAlgorithm = rig.nativeRaAlgorithm || 'hysteresis';
