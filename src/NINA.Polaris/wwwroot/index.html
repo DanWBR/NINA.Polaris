@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260608-settingsaccordion2">
+    <link rel="stylesheet" href="/css/app.css?v=20260608-settingscategories">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -9027,7 +9027,7 @@
                      collapsed on first render. -->
                 <div class="settings-grid settings-accordion"
                      @click="settingsAccordionClick($event)"
-                     x-init="$nextTick(() => collapseAllSettings($el))">
+                     x-init="$nextTick(() => { reorderSettings($el); collapseAllSettings($el); })">
 
                 <!-- TLS-A2: HTTPS certificate install wizard. Shipped
                      near the top of Settings because it's the first
@@ -12513,7 +12513,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260608-settingsaccordion2"></script>
+    <script src="/js/app.js?v=20260608-settingscategories"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

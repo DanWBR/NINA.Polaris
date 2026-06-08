@@ -16907,6 +16907,55 @@ function ninaApp() {
                 c.classList.add('is-collapsed');
             });
         },
+        // Group the settings cards by category (with a header row per group)
+        // and sort alphabetically within each group. Pure DOM reorder of the
+        // existing card nodes — preserves all Alpine bindings/x-init. Runs once.
+        reorderSettings(gridEl) {
+            if (!gridEl || gridEl._settingsReordered) return;
+            // category name -> exact normalized titles it contains (emoji
+            // stripped, lowercased). Category order is the display order.
+            const CATS = [
+                ['Equipment & capture', ['hardware', 'indi server', 'indi status', 'plate solving', 'sequencer']],
+                ['Image processing',    ['ai inference (onnx)', 'external tools', 'image cache', 'image output']],
+                ['Location & time',     ['clock', 'observatory']],
+                ['Appearance & interface', ['appearance', 'device name']],
+                ['Network & security',  ['authentication', 'https certificate',
+                    'https endpoints (for webgpu + multi-thread wasm)', 'network (wifi)', 'remote terminal']],
+                ['System & maintenance', ['debug logging', 'hardware benchmark',
+                    'reset everything to factory defaults']],
+            ];
+            const norm = s => (s || '').replace(/^[^A-Za-z0-9]+/, '').trim().toLowerCase();
+            const cards = Array.from(gridEl.querySelectorAll(':scope > .settings-section'))
+                .map(c => {
+                    const h3 = c.querySelector(':scope > h3');
+                    const display = h3 ? h3.textContent.replace(/^[^A-Za-z0-9]+/, '').trim() : '';
+                    return { card: c, key: norm(display), display };
+                });
+            const used = new Set();
+            const frag = document.createDocumentFragment();
+            const addHeader = (name) => {
+                const h = document.createElement('div');
+                h.className = 'settings-cat-header';
+                h.textContent = name;
+                frag.appendChild(h);
+            };
+            for (const [name, titles] of CATS) {
+                const group = cards.filter(x => titles.includes(x.key));
+                if (!group.length) continue;
+                group.sort((a, b) => a.display.localeCompare(b.display));
+                addHeader(name);
+                group.forEach(x => { frag.appendChild(x.card); used.add(x.card); });
+            }
+            // Any card not matched by a category goes under "Other".
+            const leftovers = cards.filter(x => !used.has(x.card));
+            if (leftovers.length) {
+                leftovers.sort((a, b) => a.display.localeCompare(b.display));
+                addHeader('Other');
+                leftovers.forEach(x => frag.appendChild(x.card));
+            }
+            gridEl.appendChild(frag);
+            gridEl._settingsReordered = true;
+        },
 
         async setGuideExposure(value) {
             const v = Math.max(50, Math.min(10000, Math.round(Number(value) || 0)));

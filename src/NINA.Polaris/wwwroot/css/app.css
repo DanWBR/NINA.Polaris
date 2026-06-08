@@ -4736,6 +4736,20 @@ label select.input-sm {
 .settings-accordion .settings-section.is-collapsed > *:not(h3) {
     display: none !important;
 }
+/* Category group headers injected by reorderSettings(). */
+.settings-accordion .settings-cat-header {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent);
+    padding: 12px 4px 4px;
+    margin-top: 8px;
+    border-bottom: 1px solid var(--border);
+}
+.settings-accordion .settings-cat-header:first-child {
+    margin-top: 0;
+}
 /* Explicit body wrapper used by sections whose content lives inside
    <template x-if> branches (Network). The template-rendered children
    would otherwise sit as direct children of .settings-section and
