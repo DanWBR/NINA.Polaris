@@ -11066,6 +11066,10 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     border:1px solid #2a3140; border-radius:5px; padding:5px 7px; font-size:13px;
     outline:none; transition:border-color .12s; }
 .guide-bottombar .gb-field input:focus { border-color:#2962ff; }
+.guide-bottombar .gb-field select { width:auto; min-width:64px; background:#11151c;
+    color:#e6e9ef; border:1px solid #2a3140; border-radius:5px; padding:5px 7px;
+    font-size:13px; outline:none; transition:border-color .12s; cursor:pointer; }
+.guide-bottombar .gb-field select:focus { border-color:#2962ff; }
 .guide-bottombar .gb-check { display:flex; align-items:center; gap:5px; font-size:12px;
     color:#cdd3de; cursor:pointer; align-self:flex-end; padding-bottom:6px; }
 .guide-bottombar .gb-sep { width:1px; align-self:stretch; background:#222; margin:0 4px; }

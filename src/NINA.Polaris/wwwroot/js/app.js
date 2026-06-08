@@ -685,14 +685,17 @@ function ninaApp() {
         guideCameraDiscovering: false,
         guideGain: 0,   // native guide-camera gain (0 = camera default)
         guideBin: 1,    // native guide-camera binning (1 or 2)
-        // Local scalar for the GUIDE "Exp (ms)" input. Bound with x-model (like
-        // Settle px/s) so the ~1Hz guider-object rebuild can't re-apply :value
-        // and wipe what the user is typing. WS syncs it only when not editing.
+        // Local scalar (ms) backing the GUIDE "Exp (s)" dropdown. The dropdown
+        // shows seconds but the value/backend are ms; WS syncs it each tick,
+        // snapped to the nearest preset so the <select> always has a matching
+        // option (see _expPresetsMs / _snapExpMs).
         guideExp: 1000,
-        // True while the Exp (ms) field is focused; gates the WS sync so the
-        // ~1Hz status tick can't overwrite what the user is typing. MUST be
-        // declared here (not created on first @focus) so the WS handler's
-        // `this._expEditing` read sees the same reactive property.
+        // Preset exposures offered by the Exp (s) dropdown, in ms (seconds:
+        // 0.1, 0.2, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0). Keep in sync with the
+        // <option> list in index.html.
+        _expPresetsMs: [100, 200, 500, 1000, 1500, 2000, 3000, 5000],
+        // Retained for back-compat with the WS sync/guider-rebuild guards;
+        // the dropdown commits atomically so it stays false in practice.
         _expEditing: false,
         // Native guider per-axis algorithm selection (PHD2 defaults:
         // hysteresis on RA, resist-switch on Dec).
@@ -16808,6 +16811,15 @@ function ninaApp() {
         // Set the guide-camera exposure (ms) on the active guider. Works for both
         // backends via /api/guider/exposure/{ms}; for native it persists to the
         // rig (NativeGuideExposureMs) and applies on the next frame.
+        // Snap an exposure in ms to the nearest dropdown preset, so the Exp (s)
+        // <select> always lines up with one of its <option> values.
+        _snapExpMs(ms) {
+            const n = Number(ms);
+            if (!Number.isFinite(n)) return this.guideExp;
+            return this._expPresetsMs.reduce((best, p) =>
+                Math.abs(p - n) < Math.abs(best - n) ? p : best, this._expPresetsMs[0]);
+        },
+
         async setGuideExposure(value) {
             const v = Math.max(50, Math.min(10000, Math.round(Number(value) || 0)));
             this.guideExp = v;
@@ -16815,7 +16827,7 @@ function ninaApp() {
             this._expEditing = false;   // commit done; let WS sync resume
             try {
                 await this.apiPost(`/api/guider/exposure/${v}`);
-                this.toast('Guide exposure: ' + v + ' ms', 'ok');
+                this.toast('Guide exposure: ' + (v / 1000).toFixed(1) + ' s', 'ok');
             } catch (e) {
                 this.toast('Set guide exposure failed: ' + (e.message || e), 'error');
             }
@@ -22156,9 +22168,10 @@ function ninaApp() {
                 // optimistically in setGuideExposure).
                 if (g.exposureMs != null) {
                     this.guider.exposureMs = g.exposureMs;
-                    // Only refresh the input-bound scalar when the user isn't
-                    // editing, so typing isn't overwritten by the status tick.
-                    if (!this._expEditing) this.guideExp = g.exposureMs;
+                    // Snap to the nearest dropdown preset so the <select> always
+                    // resolves to a matching <option> (a restored/odd value like
+                    // 250 ms would otherwise leave the dropdown showing nothing).
+                    if (!this._expEditing) this.guideExp = this._snapExpMs(g.exposureMs);
                 }
                 if (!g.connected) {
                     if (this.guider.connected) {
