@@ -98,6 +98,7 @@ public sealed class NativeGuider : IGuider, IDisposable {
     private GuidingSettler? _settler;
     private double _settleThresholdPx = 1.5;
     private int _starLostCount;
+    private int _mountLostCount;
 
     public string Backend => "native";
 
@@ -212,6 +213,16 @@ public sealed class NativeGuider : IGuider, IDisposable {
     public async Task StartGuidingAsync(double settlePixels = 1.5, int settleTime = 10,
             int settleTimeout = 40, bool recalibrate = false, CancellationToken ct = default) {
         EnsureConnected();
+        // Guard the mount up-front: with a restored calibration we skip the
+        // calibration step (which had its own check), so without this a
+        // disconnected mount would let guiding "run" while every pulse is
+        // silently dropped -- the star drifts uncorrected and RMS explodes.
+        var startMount = _equipment.Telescope;
+        if (startMount == null || !startMount.IsConnected || !startMount.Capabilities.SupportsPulseGuide) {
+            RaiseAlert("Native guiding aborted: connect a pulse-guide-capable mount first.");
+            SetAppState("Stopped");
+            return;
+        }
         if (recalibrate || !_calibration.IsValid) {
             // Run calibration under a cancellable token so the Stop button can
             // abort it (the request token alone isn't cancelled by /stop).
@@ -731,12 +742,19 @@ public sealed class NativeGuider : IGuider, IDisposable {
         if (decMs > 0) decMs = Math.Min(_backlashComp.Adjust(decDir, decMs), maxDecMs);
 
         if (mount != null && mount.IsConnected && mount.Capabilities.SupportsPulseGuide) {
+            _mountLostCount = 0;
             try {
                 if (raMs > 0) await mount.PulseGuideAsync(raDir, raMs, ct);
                 if (decMs > 0) await mount.PulseGuideAsync(decDir, decMs, ct);
             } catch (Exception ex) {
                 _logger.LogWarning(ex, "Pulse guide failed");
             }
+        } else {
+            // Mount went away mid-session: pulses are dropped, so the star drifts
+            // and RMS climbs. Make that visible instead of failing silently.
+            _mountLostCount++;
+            if (_mountLostCount % 5 == 1)
+                RaiseAlert("Mount not connected: guide pulses are being dropped.");
         }
 
         double scale = PixelScale > 0 ? PixelScale : 1.0;
