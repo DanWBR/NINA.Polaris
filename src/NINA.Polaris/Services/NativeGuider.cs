@@ -730,42 +730,22 @@ public sealed class NativeGuider : IGuider, IDisposable {
 
     private async Task<(double x, double y, bool found, double snr, double hfd)>
             FindStarDetailedAsync(ICamera cam, CancellationToken ct) {
-        // Try a small ROI around the lock star to cut latency; fall back to
-        // full-frame + crop offset on drivers that don't honour ROI.
-        IImageData? img = null;
-        int offsetX = 0, offsetY = 0;
-        double baseX = _lockX, baseY = _lockY;
-        if (cam.Capabilities.SupportsRoi && _haveLock) {
-            int roi = SearchRegion * 4;
-            int rx = Math.Max(0, (int)_lockX - roi);
-            int ry = Math.Max(0, (int)_lockY - roi);
-            int rw = roi * 2, rh = roi * 2;
-            try {
-                await cam.SetSubframeAsync(rx, ry, rw, rh, ct);
-                img = await CaptureFullAsync(cam, ct);
-                if (img != null) {
-                    offsetX = rx; offsetY = ry;
-                    baseX = _lockX - rx; baseY = _lockY - ry;
-                }
-            } catch {
-                img = null;
-            }
-        }
-        if (img == null) {
-            try { await cam.SetSubframeAsync(0, 0, 0, 0, ct); } catch { }
-            img = await CaptureFullAsync(cam, ct);
-            offsetX = 0; offsetY = 0;
-            baseX = _lockX; baseY = _lockY;
-        }
+        // Always capture the full frame: GuideStar.Find already searches only a
+        // small window around the lock, so a hardware ROI buys little and has two
+        // downsides we hit in practice -- the GUIDE view then showed a tiny
+        // cropped, dark thumbnail, and SetSubframe mutates the (possibly shared)
+        // INDI device's frame state, which leaked into the imaging camera.
+        try { await cam.SetSubframeAsync(0, 0, 0, 0, ct); } catch { }
+        var img = await CaptureFullAsync(cam, ct);
         if (img == null) return (_lockX, _lockY, false, 0, 0);
-        _lastFrame = img; _lastFrameOriginX = offsetX; _lastFrameOriginY = offsetY;
+        _lastFrame = img; _lastFrameOriginX = 0; _lastFrameOriginY = 0;
 
         int w = img.Properties.Width, h = img.Properties.Height;
-        var result = GuideStar.Find(img.Data, w, h, baseX, baseY, SearchRegion);
+        var result = GuideStar.Find(img.Data, w, h, _lockX, _lockY, SearchRegion);
         if (!result.Found) {
             return (_lockX, _lockY, false, result.Snr, result.Hfd);
         }
-        return (result.X + offsetX, result.Y + offsetY, true, result.Snr, result.Hfd);
+        return (result.X, result.Y, true, result.Snr, result.Hfd);
     }
 
     // ----- Internals -----
