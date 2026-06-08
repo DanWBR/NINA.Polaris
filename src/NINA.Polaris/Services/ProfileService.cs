@@ -276,6 +276,8 @@ public class ProfileService {
             NativeMaxGuideStars = src.NativeMaxGuideStars,
             NativePierSideHandling = src.NativePierSideHandling,
             NativeReverseDecAfterFlip = src.NativeReverseDecAfterFlip,
+            // A cloned rig starts un-calibrated (geometry differs per setup).
+            NativeCalibration = null,
             NativeGuideGain = src.NativeGuideGain,
             NativeGuideBin = src.NativeGuideBin,
             PHD2Host = src.PHD2Host, PHD2Port = src.PHD2Port,
@@ -701,6 +703,24 @@ public class UserProfile {
     public bool LogToDisk { get; set; } = false;
 }
 
+/// <summary>Persisted native-guider calibration (the fields needed to rebuild a
+/// <c>GuideCalibration</c>) plus metadata for the restore prompt. Stored on the
+/// rig so it survives app restarts.</summary>
+public class NativeCalibrationData {
+    public double XAngle { get; set; }
+    public double YAngle { get; set; }
+    public double XRate { get; set; }   // px/ms
+    public double YRate { get; set; }   // px/ms
+    public double DeclinationRad { get; set; }
+    public double BacklashMs { get; set; }
+    public int PierSide { get; set; }   // NINA.Core.Enum.PierSide as int
+    public int RaSteps { get; set; }
+    public int DecSteps { get; set; }
+    public double PixelScale { get; set; }
+    public int Binning { get; set; } = 1;
+    public string SavedAtUtc { get; set; } = "";
+}
+
 /// <summary>
 /// A named equipment set (a "rig"). The user can save the device-name +
 /// per-rig preference pair for any combination of equipment, then switch
@@ -942,6 +962,11 @@ public class EquipmentProfile {
     /// Dec axis. Needed for mounts that reverse Dec guide output after a flip;
     /// off for most mounts.</summary>
     public bool NativeReverseDecAfterFlip { get; set; } = false;
+
+    /// <summary>Last completed native-guider calibration for this rig, persisted
+    /// so it can be auto-restored on connect across app restarts (PHD2-style
+    /// "restore calibration"). Null until the rig has been calibrated once.</summary>
+    public NativeCalibrationData? NativeCalibration { get; set; }
 
     // Per-rig PHD2 settings
     public string PHD2Host { get; set; } = "localhost";

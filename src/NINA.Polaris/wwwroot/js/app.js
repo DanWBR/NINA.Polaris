@@ -11930,6 +11930,15 @@ function ninaApp() {
             } catch (e) { this.toast('Recalibrate failed: ' + (e.message || e), 'error'); }
         },
 
+        async guiderClearCalibration() {
+            try {
+                await this.apiPost('/api/guider/clear-calibration');
+                this.guider.calDetails = null;
+                this.showCalReview = false;
+                this.toast('Calibration cleared (saved copy removed)', 'ok');
+            } catch (e) { this.toast('Clear failed: ' + (e.message || e), 'error'); }
+        },
+
         // Auto-Focus V-curve: HFR vs Position, scatter + fit overlay
         updateAfChart() {
             const t = this._chartTheme();

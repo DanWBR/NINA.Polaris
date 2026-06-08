@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260608-calreview">
+    <link rel="stylesheet" href="/css/app.css?v=20260608-calpersist">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -3709,8 +3709,16 @@
                          @click.self="showCalReview = false">
                         <div class="cal-review" x-show="showCalReview">
                             <div class="cal-review-head">
-                                <span>Review Calibration</span>
-                                <button class="btn btn-sm" @click="showCalReview = false">✕</button>
+                                <span>Review Calibration
+                                    <span x-show="guider.calDetails?.restored" class="cal-restored-tag"
+                                          title="Loaded from the saved calibration for this rig">restored</span>
+                                </span>
+                                <span style="display:flex; gap:8px">
+                                    <button class="btn btn-sm" @click="guiderClearCalibration()"
+                                            :disabled="!guider.calDetails || guider.calibrating"
+                                            title="Forget the saved calibration for this rig">Clear</button>
+                                    <button class="btn btn-sm" @click="showCalReview = false">✕</button>
+                                </span>
                             </div>
                             <div class="cal-review-body" x-show="guider.calDetails">
                                 <canvas x-ref="calReviewPlot" class="cal-review-plot"></canvas>
@@ -12324,7 +12332,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260608-calreview"></script>
+    <script src="/js/app.js?v=20260608-calpersist"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

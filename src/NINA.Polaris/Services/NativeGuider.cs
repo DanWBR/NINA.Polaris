@@ -177,6 +177,10 @@ public sealed class NativeGuider : IGuider, IDisposable {
         RecomputePixelScale();
         IsConnected = true;
         SetAppState("Stopped");
+        // Auto-restore the last saved calibration for this rig so a fresh session
+        // can guide without recalibrating (PHD2-style restore).
+        if (!_calibration.IsValid && TryRestoreCalibration())
+            RaiseAlert("Restored last calibration for this rig. Recalibrate if the setup changed.");
         _logger.LogInformation(
             "Native guider connected: cam={Cam}, pixelScale={Scale:F2} arcsec/px",
             cam.DeviceName, PixelScale);
@@ -356,6 +360,9 @@ public sealed class NativeGuider : IGuider, IDisposable {
     public Task ClearCalibrationAsync(CancellationToken ct = default) {
         _calibration = GuideCalibration.Invalid;
         _calDetails = null;
+        // Also drop the persisted copy so it isn't restored next connect.
+        try { _profiles.UpdateEquipmentProfile(Rig.Id, r => r.NativeCalibration = null); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Failed to clear persisted calibration"); }
         _logger.LogInformation("Native calibration cleared");
         return Task.CompletedTask;
     }
@@ -459,6 +466,7 @@ public sealed class NativeGuider : IGuider, IDisposable {
                 _lockX = curX; _lockY = curY;
                 _calProgress = "Calibration complete";
                 _calDetails = BuildCalibrationDetails(process, raPts, decPts, mount);
+                PersistCalibration(process);
                 _logger.LogInformation(
                     "Native calibration complete: xAngle={Xa:F3} xRate={Xr:F5} yAngle={Ya:F3} yRate={Yr:F5}",
                     _calibration.XAngle, _calibration.XRate, _calibration.YAngle, _calibration.YRate);
@@ -504,6 +512,60 @@ public sealed class NativeGuider : IGuider, IDisposable {
             raPoints = raPts,
             decPoints = decPts,
         };
+    }
+
+    /// <summary>Save the just-completed calibration to the active rig profile so
+    /// it can be restored after an app restart.</summary>
+    private void PersistCalibration(CalibrationProcess process) {
+        var cal = _calibration;
+        if (!cal.IsValid) return;
+        var data = new NativeCalibrationData {
+            XAngle = cal.XAngle, YAngle = cal.YAngle,
+            XRate = cal.XRate, YRate = cal.YRate,
+            DeclinationRad = cal.DeclinationRad,
+            BacklashMs = cal.BacklashMs,
+            PierSide = (int)cal.CalibrationPierSide,
+            RaSteps = process.RaSteps, DecSteps = process.DecSteps,
+            PixelScale = PixelScale,
+            Binning = Math.Clamp(Rig.NativeGuideBin <= 0 ? 1 : Rig.NativeGuideBin, 1, 4),
+            SavedAtUtc = DateTime.UtcNow.ToString("o"),
+        };
+        try { _profiles.UpdateEquipmentProfile(Rig.Id, r => r.NativeCalibration = data); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Failed to persist native calibration"); }
+    }
+
+    /// <summary>Restore the last saved calibration for this rig (if any) into the
+    /// in-memory state, so guiding can start without recalibrating after a
+    /// restart. Returns true when a calibration was restored.</summary>
+    private bool TryRestoreCalibration() {
+        var d = Rig.NativeCalibration;
+        if (d == null) return false;
+        _calibration = new GuideCalibration(d.XAngle, d.YAngle, d.XRate, d.YRate,
+            d.DeclinationRad, true, d.BacklashMs, (PierSide)d.PierSide);
+        // Minimal details snapshot (no plot points) so the Review panel shows the
+        // restored numbers and flags it as restored.
+        double raPxPerSec = d.XRate * 1000.0, decPxPerSec = d.YRate * 1000.0;
+        _calDetails = new {
+            valid = true,
+            restored = true,
+            raSteps = d.RaSteps, decSteps = d.DecSteps,
+            backlashSteps = 0, backlashMs = d.BacklashMs,
+            cameraAngleDeg = d.XAngle * 180.0 / Math.PI,
+            orthoErrorDeg = _calibration.OrthogonalityErrorDeg,
+            raRatePxPerSec = raPxPerSec, decRatePxPerSec = decPxPerSec,
+            raRateArcsecPerSec = raPxPerSec * d.PixelScale,
+            decRateArcsecPerSec = decPxPerSec * d.PixelScale,
+            expectedRateArcsecPerSec = 15.041,
+            pixelScale = d.PixelScale, binning = d.Binning,
+            focalLengthMm = Rig.GuiderFocalLengthMm > 0 ? Rig.GuiderFocalLengthMm : DefaultGuiderFocalLengthMm,
+            declinationDeg = double.IsNaN(d.DeclinationRad) ? double.NaN : d.DeclinationRad * 180.0 / Math.PI,
+            pierSide = ((PierSide)d.PierSide).ToString().Replace("pier", ""),
+            createdAtUtc = d.SavedAtUtc,
+            raPoints = Array.Empty<double[]>(),
+            decPoints = Array.Empty<double[]>(),
+        };
+        _logger.LogInformation("Restored saved native calibration from {When}", d.SavedAtUtc);
+        return true;
     }
 
     // ----- Guide loop -----
