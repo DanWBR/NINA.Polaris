@@ -11012,3 +11012,15 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 /* Guiding config block in the GUIDE tab (backend picker + native settings) */
 .guide-config-block { background:#0a0a0c; border:1px solid #222; border-radius:6px;
     padding:8px 10px; margin-bottom:8px; }
+
+/* GUIDE tab two-column layout: main dashboard + right parameters panel */
+.guide-pane { display:flex; flex-direction:row; gap:12px; align-items:flex-start; }
+.guide-main { flex:1; min-width:0; }
+.guide-side { width:280px; flex:0 0 280px; background:#0a0a0c; border:1px solid #222;
+    border-radius:6px; padding:10px 12px; align-self:flex-start; }
+.guide-side-title { font-size:12px; color:#888; margin-bottom:8px;
+    text-transform:uppercase; letter-spacing:.04em; }
+.guide-backend-radios { display:inline-flex; align-items:center; gap:10px;
+    margin-left:12px; font-size:12px; }
+.guide-backend-radios label { display:inline-flex; align-items:center; gap:4px; cursor:pointer; }
+@media (max-width:900px){ .guide-pane { flex-direction:column; } .guide-side { width:auto; flex:none; } }

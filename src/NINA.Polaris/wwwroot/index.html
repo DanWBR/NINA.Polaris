@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260607-guidecam">
+    <link rel="stylesheet" href="/css/app.css?v=20260607-guideside">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -3367,8 +3367,16 @@
                     <span x-text="guider.backend === 'native' ? 'Guider (Native)' : 'Guider (PHD2)'">Guider</span>
                     <span class="status-indicator-sm" :class="guider.connected ? (guider.guiding ? 'ok' : 'warn') : 'error'"
                           x-text="guider.connected ? guider.appState : 'Disconnected'"></span>
-                    <span class="text-muted" style="font-size:11px;margin-left:8px"
-                          x-text="'backend: ' + (guider.backend || '?')"></span>
+                    <!-- PHD2 backend selector: Built-In (native) vs External (PHD2). -->
+                    <span class="guide-backend-radios">
+                        <span class="text-muted">PHD2 backend:</span>
+                        <label><input type="radio" name="guiderBackend"
+                                      :checked="guiderDriver === 'native'"
+                                      @change="setGuiderDriver('native')"> Built-In</label>
+                        <label><input type="radio" name="guiderBackend"
+                                      :checked="guiderDriver === 'phd2'"
+                                      @change="setGuiderDriver('phd2')"> External</label>
+                    </span>
                 </div>
 
                 <!-- Diagnostic: the rig is set to the native guider but the
@@ -3430,73 +3438,8 @@
                      serve both backends. PHD2-only sub-panels are gated to
                      backend !== 'native'; the PHD2-style view is gated to
                      backend === 'native'. -->
-                <div x-show="guideTab === 'control' || guideTab === 'native'">
-
-                <!-- Guiding configuration: backend picker (always) + native
-                     guider algorithm/behaviour settings (moved here from RIGS;
-                     the guide camera hardware stays on the RIGS card). -->
-                <div class="guide-config-block">
-                    <div class="equip-driver-row">
-                        <label class="equip-driver-label">Guider backend</label>
-                        <select class="equip-select equip-driver-select"
-                                @change="setGuiderDriver($event.target.value)">
-                            <option value="phd2" :selected="guiderDriver === 'phd2'">PHD2 (external)</option>
-                            <option value="native" :selected="guiderDriver === 'native'">Native (built-in)</option>
-                        </select>
-                    </div>
-                    <template x-if="guiderDriver === 'native'">
-                        <div style="margin-top:8px">
-                            <div class="equip-driver-row">
-                                <label class="equip-driver-label">RA algo</label>
-                                <select class="equip-select equip-driver-select"
-                                        @change="setNativeAlgorithm('ra', $event.target.value)">
-                                    <template x-for="a in nativeGuideAlgorithms" :key="'gra-'+a.id">
-                                        <option :value="a.id" :selected="nativeRaAlgorithm === a.id" x-text="a.name"></option>
-                                    </template>
-                                </select>
-                            </div>
-                            <div class="equip-driver-row" style="margin-top:6px">
-                                <label class="equip-driver-label">Dec algo</label>
-                                <select class="equip-select equip-driver-select"
-                                        @change="setNativeAlgorithm('dec', $event.target.value)">
-                                    <template x-for="a in nativeGuideAlgorithms" :key="'gdec-'+a.id">
-                                        <option :value="a.id" :selected="nativeDecAlgorithm === a.id" x-text="a.name"></option>
-                                    </template>
-                                </select>
-                            </div>
-                            <label class="equip-driver-row" style="margin-top:6px; gap:6px; cursor:pointer">
-                                <input type="checkbox" :checked="nativeBacklashComp"
-                                       @change="setNativeBacklashComp($event.target.checked)">
-                                <span style="font-size:12px">Dec backlash comp (auto-measured)</span>
-                            </label>
-                            <label class="equip-driver-row" style="margin-top:6px; gap:6px; cursor:pointer">
-                                <input type="checkbox" :checked="nativeMultiStar"
-                                       @change="setNativeMultiStar($event.target.checked)">
-                                <span style="font-size:12px">Multi-star guiding</span>
-                            </label>
-                            <div class="equip-driver-row" style="margin-top:6px">
-                                <label class="equip-driver-label">On meridian flip</label>
-                                <select class="equip-select equip-driver-select"
-                                        @change="setNativePierSideHandling($event.target.value)">
-                                    <option value="mirror" :selected="nativePierSideHandling === 'mirror'">Mirror calibration</option>
-                                    <option value="recalibrate" :selected="nativePierSideHandling === 'recalibrate'">Recalibrate</option>
-                                    <option value="off" :selected="nativePierSideHandling === 'off'">Do nothing</option>
-                                </select>
-                            </div>
-                            <label class="equip-driver-row" style="margin-top:6px; gap:6px; cursor:pointer"
-                                   x-show="nativePierSideHandling === 'mirror'">
-                                <input type="checkbox" :checked="nativeReverseDecAfterFlip"
-                                       @change="setNativeReverseDecAfterFlip($event.target.checked)">
-                                <span style="font-size:12px">Reverse Dec after flip</span>
-                            </label>
-                            <p class="hint" x-show="!guider.guideCameraConnected" style="margin:6px 0 0;font-size:11px">
-                                Select + connect the guide camera in
-                                <a href="#" @click.prevent="tab = 'rigs'" style="color:var(--accent)">RIGS</a>
-                                before connecting the guider.
-                            </p>
-                        </div>
-                    </template>
-                </div>
+                <div x-show="guideTab === 'control' || guideTab === 'native'" class="guide-pane">
+                <div class="guide-main">
 
                 <!-- "PHD2 not installed" banner -->
                 <div x-show="guider.backend !== 'native' && !guider.connected && phd2Install && !phd2Install.installed"
@@ -3755,7 +3698,63 @@
                     </details>
                 </div>
 
-                </div><!-- /guideTab === 'control' -->
+                </div><!-- /guide-main -->
+
+                <!-- Right-side guiding parameters panel (native guider only),
+                     mirrors the PREVIEW/LIVE side panel placement. -->
+                <div class="guide-side" x-show="guiderDriver === 'native'">
+                    <div class="guide-side-title">Guiding parameters</div>
+                    <div class="equip-driver-row">
+                        <label class="equip-driver-label">RA algo</label>
+                        <select class="equip-select equip-driver-select"
+                                @change="setNativeAlgorithm('ra', $event.target.value)">
+                            <template x-for="a in nativeGuideAlgorithms" :key="'gra-'+a.id">
+                                <option :value="a.id" :selected="nativeRaAlgorithm === a.id" x-text="a.name"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div class="equip-driver-row" style="margin-top:6px">
+                        <label class="equip-driver-label">Dec algo</label>
+                        <select class="equip-select equip-driver-select"
+                                @change="setNativeAlgorithm('dec', $event.target.value)">
+                            <template x-for="a in nativeGuideAlgorithms" :key="'gdec-'+a.id">
+                                <option :value="a.id" :selected="nativeDecAlgorithm === a.id" x-text="a.name"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <label class="equip-driver-row" style="margin-top:8px; gap:6px; cursor:pointer">
+                        <input type="checkbox" :checked="nativeBacklashComp"
+                               @change="setNativeBacklashComp($event.target.checked)">
+                        <span style="font-size:12px">Dec backlash comp (auto-measured)</span>
+                    </label>
+                    <label class="equip-driver-row" style="margin-top:6px; gap:6px; cursor:pointer">
+                        <input type="checkbox" :checked="nativeMultiStar"
+                               @change="setNativeMultiStar($event.target.checked)">
+                        <span style="font-size:12px">Multi-star guiding</span>
+                    </label>
+                    <div class="equip-driver-row" style="margin-top:8px">
+                        <label class="equip-driver-label">On meridian flip</label>
+                        <select class="equip-select equip-driver-select"
+                                @change="setNativePierSideHandling($event.target.value)">
+                            <option value="mirror" :selected="nativePierSideHandling === 'mirror'">Mirror calibration</option>
+                            <option value="recalibrate" :selected="nativePierSideHandling === 'recalibrate'">Recalibrate</option>
+                            <option value="off" :selected="nativePierSideHandling === 'off'">Do nothing</option>
+                        </select>
+                    </div>
+                    <label class="equip-driver-row" style="margin-top:6px; gap:6px; cursor:pointer"
+                           x-show="nativePierSideHandling === 'mirror'">
+                        <input type="checkbox" :checked="nativeReverseDecAfterFlip"
+                               @change="setNativeReverseDecAfterFlip($event.target.checked)">
+                        <span style="font-size:12px">Reverse Dec after flip</span>
+                    </label>
+                    <p class="hint" x-show="!guider.guideCameraConnected" style="margin:8px 0 0;font-size:11px">
+                        Select + connect the guide camera in
+                        <a href="#" @click.prevent="tab = 'rigs'" style="color:var(--accent)">RIGS</a>
+                        before connecting the guider.
+                    </p>
+                </div>
+
+                </div><!-- /guide-pane -->
 
                 <!-- ===== TAB 2: PHD2 GUI ===== -->
                 <!-- Backend by OS: Linux uses xpra + HTML5 client (PH2X);
@@ -12293,7 +12292,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260607-guidecam"></script>
+    <script src="/js/app.js?v=20260607-guideside"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
