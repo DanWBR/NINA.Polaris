@@ -11001,6 +11001,20 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .phd2-cam-img { max-width:100%; max-height:420px; display:block; image-rendering:pixelated; }
 .phd2-cam-overlay { position:absolute; left:0; top:0; pointer-events:none; }
 .phd2-cam-empty { position:absolute; font-size:12px; }
+.cal-review-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000;
+    display:flex; align-items:center; justify-content:center; }
+.cal-review { background:#0d0f15; border:1px solid #333; border-radius:8px; width:min(720px,92vw);
+    max-height:90vh; overflow:auto; box-shadow:0 8px 40px rgba(0,0,0,0.6); }
+.cal-review-head { display:flex; justify-content:space-between; align-items:center;
+    padding:10px 14px; border-bottom:1px solid #222; font-weight:600; }
+.cal-review-body { display:flex; gap:14px; padding:14px; flex-wrap:wrap; }
+.cal-review-plot { width:240px; height:240px; flex:0 0 240px; background:#000;
+    border:1px solid #222; border-radius:6px; }
+.cal-review-tablewrap { flex:1 1 360px; min-width:300px; }
+.cal-review-section { font-size:11px; color:#888; text-transform:uppercase; margin-bottom:4px; }
+.cal-review-table { width:100%; border-collapse:collapse; font-size:12px; }
+.cal-review-table td { border:1px solid #222; padding:4px 8px; }
+.cal-review-table td:nth-child(odd) { color:#9aa; width:22%; }
 .phd2-cal-banner { position:absolute; left:50%; top:10px; transform:translateX(-50%);
     background:rgba(20,22,30,0.85); color:#ffd54f; border:1px solid #4caf50;
     border-radius:6px; padding:4px 12px; font-size:12px; font-family:monospace;

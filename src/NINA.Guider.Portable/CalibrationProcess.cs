@@ -31,10 +31,19 @@ public sealed class CalibrationProcess {
     private double _decStartX, _decStartY; // Dec measure start (after backlash cleared)
     private int _stepCount;
     private int _westSteps;
+    private int _decSteps;
     private int _backlashSteps;
     private double _xAngle, _xRate, _yAngle, _yRate, _backlashMs;
 
     public GuideCalibration Result { get; private set; } = GuideCalibration.Invalid;
+
+    /// <summary>Number of WEST pulses used to measure the RA rate/angle.</summary>
+    public int RaSteps => _westSteps;
+    /// <summary>Number of SOUTH pulses used to measure the Dec rate/angle (after
+    /// backlash was cleared).</summary>
+    public int DecSteps => _decSteps;
+    /// <summary>Backlash-clearing pulses counted before Dec started moving.</summary>
+    public int BacklashSteps => _backlashSteps;
 
     public CalibrationProcess(int pulseMs = 1000, double distThresholdPx = 25.0,
                               int maxSteps = 60, double declinationRad = double.NaN,
@@ -101,6 +110,7 @@ public sealed class CalibrationProcess {
                 if (d >= _distThresholdPx) {
                     _yAngle = Math.Atan2(curY - _decStartY, curX - _decStartX);
                     _yRate = d / (_stepCount * (double)_pulseMs);
+                    _decSteps = _stepCount;
                     Result = new GuideCalibration(_xAngle, _yAngle, _xRate, _yRate, _decRad, true, _backlashMs);
                     _phase = Phase.Done;
                     return new CalibrationStep(false, GuideDirections.guideNorth, 0, true, false, "Done");

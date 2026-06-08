@@ -176,6 +176,7 @@ public static class StatusStreamHandler {
                             lastAlert = activeGuider.LastAlert,
                             lastSettleStatus = activeGuider.LastSettleStatus,
                             calProgress = activeGuider.CalibrationProgress,
+                            calDetails = activeGuider.CalibrationDetails,
                             recentSteps = tail.Select(s => new {
                                 t = ((DateTimeOffset)s.Timestamp).ToUnixTimeMilliseconds(),
                                 ra = s.RaArcsec,

@@ -49,6 +49,9 @@ public sealed class NativeGuider : IGuider, IDisposable {
     // Human-readable calibration step, surfaced to the GUIDE UI so the user
     // sees what's happening (ASIAIR-style "Dec (south) step 4, dist 12.3 px").
     private volatile string? _calProgress;
+    // Snapshot of the last completed calibration (rates, angles, steps, plot
+    // points) for the "Review Calibration" panel. Null until one completes.
+    private object? _calDetails;
 
     // Multi-star field tracker (primary + secondaries). Engaged only when the
     // rig enables it and more than one star was locked; otherwise the single
@@ -95,6 +98,7 @@ public sealed class NativeGuider : IGuider, IDisposable {
     public bool IsGuiding => AppState == "Guiding";
     public bool IsCalibrating => AppState == "Calibrating";
     public string? CalibrationProgress => _calProgress;
+    public object? CalibrationDetails => _calDetails;
     public bool IsPaused => AppState == "Paused";
     public bool IsLooping => AppState == "Looping";
     public bool IsSettling { get; private set; }
@@ -351,6 +355,7 @@ public sealed class NativeGuider : IGuider, IDisposable {
 
     public Task ClearCalibrationAsync(CancellationToken ct = default) {
         _calibration = GuideCalibration.Invalid;
+        _calDetails = null;
         _logger.LogInformation("Native calibration cleared");
         return Task.CompletedTask;
     }
@@ -399,6 +404,9 @@ public sealed class NativeGuider : IGuider, IDisposable {
             string? lastPhase = null;
             double phStartX = curX, phStartY = curY;
             int phaseStep = 0;
+            double oX = curX, oY = curY; // calibration origin for the plot
+            var raPts = new List<double[]>();
+            var decPts = new List<double[]>();
 
             for (int i = 0; i < 200 && !ct.IsCancellationRequested; i++) {
                 var step = process.Tick(curX, curY);
@@ -435,6 +443,11 @@ public sealed class NativeGuider : IGuider, IDisposable {
                     SetAppState("Stopped");
                     return;
                 }
+                // Record the measured points per axis for the Review-Calibration plot.
+                if (lastPhase != null && lastPhase.StartsWith("RA (") && raPts.Count < 80)
+                    raPts.Add(new[] { curX - oX, curY - oY });
+                else if (lastPhase != null && lastPhase.StartsWith("Dec (south") && decPts.Count < 80)
+                    decPts.Add(new[] { curX - oX, curY - oY });
             }
 
             _calibration = process.Result;
@@ -445,6 +458,7 @@ public sealed class NativeGuider : IGuider, IDisposable {
                 // Re-lock at the recentred position.
                 _lockX = curX; _lockY = curY;
                 _calProgress = "Calibration complete";
+                _calDetails = BuildCalibrationDetails(process, raPts, decPts, mount);
                 _logger.LogInformation(
                     "Native calibration complete: xAngle={Xa:F3} xRate={Xr:F5} yAngle={Ya:F3} yRate={Yr:F5}",
                     _calibration.XAngle, _calibration.XRate, _calibration.YAngle, _calibration.YRate);
@@ -455,6 +469,41 @@ public sealed class NativeGuider : IGuider, IDisposable {
         } finally {
             _calProgress = null;
         }
+    }
+
+    /// <summary>Assemble the "Review Calibration" snapshot (rates in px/sec +
+    /// arcsec/sec, angles, steps, geometry, and the measured RA/Dec plot
+    /// points) shown in the GUIDE calibration panel.</summary>
+    private object BuildCalibrationDetails(CalibrationProcess process,
+            List<double[]> raPts, List<double[]> decPts, ITelescope mount) {
+        var cal = _calibration;
+        double scale = PixelScale; // arcsec/px
+        int binning = Math.Clamp(Rig.NativeGuideBin <= 0 ? 1 : Rig.NativeGuideBin, 1, 4);
+        double raPxPerSec = cal.XRate * 1000.0;
+        double decPxPerSec = cal.YRate * 1000.0;
+        double sidereal = 15.041; // arcsec/sec at the celestial equator
+        return new {
+            valid = cal.IsValid,
+            raSteps = process.RaSteps,
+            decSteps = process.DecSteps,
+            backlashSteps = process.BacklashSteps,
+            backlashMs = cal.BacklashMs,
+            cameraAngleDeg = cal.XAngle * 180.0 / Math.PI,
+            orthoErrorDeg = cal.OrthogonalityErrorDeg,
+            raRatePxPerSec = raPxPerSec,
+            decRatePxPerSec = decPxPerSec,
+            raRateArcsecPerSec = raPxPerSec * scale,
+            decRateArcsecPerSec = decPxPerSec * scale,
+            expectedRateArcsecPerSec = sidereal, // mount tracks at ~sidereal; guide rate ~1x
+            pixelScale = scale,
+            binning,
+            focalLengthMm = Rig.GuiderFocalLengthMm > 0 ? Rig.GuiderFocalLengthMm : DefaultGuiderFocalLengthMm,
+            declinationDeg = mount.Declination,
+            pierSide = mount.SideOfPier.ToString().Replace("pier", ""),
+            createdAtUtc = DateTime.UtcNow.ToString("o"),
+            raPoints = raPts,
+            decPoints = decPts,
+        };
     }
 
     // ----- Guide loop -----

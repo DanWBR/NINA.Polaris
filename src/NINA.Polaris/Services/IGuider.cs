@@ -44,6 +44,11 @@ public interface IGuider {
     /// calibrating. Default null for backends that don't report it (PHD2).</summary>
     string? CalibrationProgress => null;
 
+    /// <summary>Snapshot of the last completed calibration (rates, angles,
+    /// steps, geometry, RA/Dec plot points) for the GUIDE "Review Calibration"
+    /// panel. Null until one completes. Default null (PHD2).</summary>
+    object? CalibrationDetails => null;
+
     // Rolling guiding metrics (arcsec).
     double RmsRA { get; }
     double RmsDec { get; }

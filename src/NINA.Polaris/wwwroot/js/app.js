@@ -1055,9 +1055,10 @@ function ninaApp() {
             paused: false, looping: false, settling: false,
             pixelScale: 0, rmsRA: 0, rmsDec: 0, rmsTotal: 0,
             peakRA: 0, peakDec: 0, stepCount: 0,
-            lastAlert: null, lastSettleStatus: null, calProgress: null,
+            lastAlert: null, lastSettleStatus: null, calProgress: null, calDetails: null,
             recentSteps: []
         },
+        showCalReview: false,
         guiderHost: 'localhost',
         guiderPort: 4400,
         guiderSettlePixels: 1.5,
@@ -11824,6 +11825,35 @@ function ninaApp() {
             }
         },
 
+        // Calibration review plot: RA points (blue) + Dec points (red) as PHD2's
+        // "Review Calibration" shows, with the fitted axes through the origin.
+        drawCalReviewPlot() {
+            const canvas = this.$refs.calReviewPlot;
+            const cd = this.guider.calDetails;
+            if (!canvas || !cd) return;
+            const { ctx, w, h } = this._fitCanvas(canvas);
+            ctx.clearRect(0, 0, w, h);
+            const ra = cd.raPoints || [], dec = cd.decPoints || [];
+            let max = 1;
+            for (const p of ra.concat(dec)) max = Math.max(max, Math.abs(p[0]), Math.abs(p[1]));
+            max *= 1.15;
+            const cx = w / 2, cy = h / 2, s = Math.min(w, h) / 2 / max;
+            const X = px => cx + px * s, Y = py => cy + py * s;
+            // axes
+            ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(w, cy);
+            ctx.moveTo(cx, 0); ctx.lineTo(cx, h); ctx.stroke();
+            const plot = (pts, color) => {
+                ctx.fillStyle = color;
+                for (const p of pts) { ctx.beginPath(); ctx.arc(X(p[0]), Y(p[1]), 2.5, 0, Math.PI * 2); ctx.fill(); }
+            };
+            plot(ra, '#5b8dff');   // RA = blue
+            plot(dec, '#ff5252');  // Dec = red
+            ctx.fillStyle = '#5b8dff'; ctx.font = '11px sans-serif';
+            ctx.fillText('RA', 6, h - 16);
+            ctx.fillStyle = '#ff5252'; ctx.fillText('Dec', 34, h - 16);
+        },
+
         // Draw lock crosshair/box + star markers over the guide-cam image.
         drawGuideCamOverlay() {
             const img = this.$refs.guidePhdCamImg;
@@ -16799,6 +16829,9 @@ function ninaApp() {
         },
 
         async equipConnectMount() {
+            // The simulator mount takes no device id; default it so the toggle
+            // connects without the user typing anything.
+            if (this.mountDriver === 'sim' && !this.equipMountChoice) this.equipMountChoice = 'sim';
             if (!this.equipMountChoice) return;
             try {
                 // Pass driver as query param so the backend dispatches
@@ -22005,6 +22038,7 @@ function ninaApp() {
                         lastAlert: g.lastAlert || null,
                         lastSettleStatus: g.lastSettleStatus || null,
                         calProgress: g.calProgress || null,
+                        calDetails: g.calDetails || null,
                         recentSteps: g.recentSteps || [],
                         // PH2X-9 sub-objects, UI binds chips + state to these.
                         profileSync: g.profileSync || null,

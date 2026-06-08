@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260608-calsteps">
+    <link rel="stylesheet" href="/css/app.css?v=20260608-calreview">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -3697,6 +3697,61 @@
                             title="Clear the calibration and run a fresh one, then guide">
                         ↻ Recalibrate
                     </button>
+                    <button class="btn btn-sm" style="width:100%;margin-bottom:10px"
+                            @click="showCalReview = true; $nextTick(() => drawCalReviewPlot())"
+                            :disabled="!guider.calDetails"
+                            title="Review the last calibration (rates, angles, plot)">
+                        ⊹ Calibration details
+                    </button>
+
+                    <!-- Review Calibration modal (ASIAIR / PHD2 style) -->
+                    <div class="cal-review-backdrop" x-show="showCalReview" x-cloak
+                         @click.self="showCalReview = false">
+                        <div class="cal-review" x-show="showCalReview">
+                            <div class="cal-review-head">
+                                <span>Review Calibration</span>
+                                <button class="btn btn-sm" @click="showCalReview = false">✕</button>
+                            </div>
+                            <div class="cal-review-body" x-show="guider.calDetails">
+                                <canvas x-ref="calReviewPlot" class="cal-review-plot"></canvas>
+                                <div class="cal-review-tablewrap">
+                                    <div class="cal-review-section">Last Mount Calibration</div>
+                                    <table class="cal-review-table">
+                                        <tr><td>RA steps</td><td x-text="guider.calDetails?.raSteps"></td>
+                                            <td>Dec steps</td><td x-text="guider.calDetails?.decSteps"></td></tr>
+                                        <tr><td>Camera angle</td><td x-text="(guider.calDetails?.cameraAngleDeg)?.toFixed(1) + '°'"></td>
+                                            <td>Orthogonality err</td><td x-text="(guider.calDetails?.orthoErrorDeg)?.toFixed(1) + '°'"></td></tr>
+                                        <tr><td>RA rate</td>
+                                            <td x-text="(guider.calDetails?.raRateArcsecPerSec)?.toFixed(3) + ' a-s/s'"></td>
+                                            <td>Dec rate</td>
+                                            <td x-text="(guider.calDetails?.decRateArcsecPerSec)?.toFixed(3) + ' a-s/s'"></td></tr>
+                                        <tr><td></td><td x-text="(guider.calDetails?.raRatePxPerSec)?.toFixed(3) + ' px/s'"></td>
+                                            <td></td><td x-text="(guider.calDetails?.decRatePxPerSec)?.toFixed(3) + ' px/s'"></td></tr>
+                                        <tr><td>Dec backlash</td>
+                                            <td x-text="Math.round(guider.calDetails?.backlashMs) + ' ms'"></td>
+                                            <td>Side of pier</td><td x-text="guider.calDetails?.pierSide || '—'"></td></tr>
+                                        <tr><td>Binning</td><td x-text="guider.calDetails?.binning"></td>
+                                            <td>Created</td>
+                                            <td x-text="guider.calDetails?.createdAtUtc ? new Date(guider.calDetails.createdAtUtc).toLocaleString() : '—'"></td></tr>
+                                    </table>
+                                    <div class="cal-review-section" style="margin-top:10px">Configuration</div>
+                                    <table class="cal-review-table">
+                                        <tr><td>Image scale</td>
+                                            <td x-text="(guider.calDetails?.pixelScale)?.toFixed(2) + ' a-s/px'"></td>
+                                            <td>Focal length</td>
+                                            <td x-text="Math.round(guider.calDetails?.focalLengthMm) + ' mm'"></td></tr>
+                                        <tr><td>Declination</td>
+                                            <td x-text="isFinite(guider.calDetails?.declinationDeg) ? (guider.calDetails.declinationDeg).toFixed(1) + '°' : '—'"></td>
+                                            <td>Expected RA</td>
+                                            <td x-text="(guider.calDetails?.expectedRateArcsecPerSec)?.toFixed(2) + ' a-s/s'"></td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="cal-review-body" x-show="!guider.calDetails">
+                                <div class="text-muted" style="padding:20px">No calibration yet. Run a calibration first.</div>
+                            </div>
+                        </div>
+                    </div>
                     <div class="guide-side-title">Guiding parameters</div>
                     <div class="equip-driver-row">
                         <label class="equip-driver-label">RA algo</label>
@@ -4659,12 +4714,15 @@
                                 <input type="text" class="equip-select"
                                        x-show="mountDriver !== 'indi'
                                                 && mountDriver !== 'ascom-com'
-                                                && mountDriver !== 'alpaca'"
+                                                && mountDriver !== 'alpaca'
+                                                && mountDriver !== 'sim'"
                                        x-model="equipMountChoice"
                                        :placeholder="mountDriver === 'synscan-wifi'
                                                      ? '192.168.4.1:11880 (default)'
                                                      : 'host:port'"
                                        title="Mount IP and port. Empty falls back to the driver's default endpoint (e.g. 192.168.4.1:11880 for SynScan factory AP).">
+                                <span class="text-muted" x-show="mountDriver === 'sim'"
+                                      style="align-self:center; font-size:12px">No device needed — just flip the switch to connect.</span>
 
                                 <button class="btn btn-sm"
                                         x-show="mountDriver === 'ascom-com' && equipMountChoice"
@@ -12266,7 +12324,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260608-calsteps"></script>
+    <script src="/js/app.js?v=20260608-calreview"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
