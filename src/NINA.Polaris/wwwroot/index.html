@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260607-guideside">
+    <link rel="stylesheet" href="/css/app.css?v=20260607-noguidecard">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -5427,50 +5427,8 @@
                         </div>
                     </div>
 
-                    <!-- Guider (PHD2) -->
-                    <div class="equip-card">
-                        <div class="equip-card-header">
-                            <span class="equip-card-icon">&#x2B50;</span>
-                            <span class="equip-card-title">Guider (PHD2)</span>
-                            <span class="equip-status-dot" :class="guider.connected ? (guider.guiding ? 'connected' : 'warn') : 'disconnected'"></span>
-                        </div>
-                        <div class="equip-card-body">
-                            <div class="equip-select-row" x-show="!guider.connected">
-                                <label class="equip-temp-label" style="flex:1;">
-                                    Host
-                                    <input type="text" x-model="guiderHost" class="input-md" style="width:auto;">
-                                </label>
-                                <label class="equip-temp-label">
-                                    Port
-                                    <input type="number" x-model.number="guiderPort" class="input-sm">
-                                </label>
-                                <button class="btn btn-sm btn-primary" @click="guiderConnect()">Connect</button>
-                            </div>
-                            <div class="equip-detail" x-show="guider.connected">
-                                <div class="equip-detail-name">
-                                    <span x-text="guider.host + ':' + guider.port"></span>
-                                    <span style="margin-left: 12px;"
-                                          :class="guider.guiding ? 'text-ok' : (guider.calibrating ? 'text-warn' : 'text-muted')"
-                                          x-text="guider.appState"></span>
-                                </div>
-                                <div class="equip-detail-props">
-                                    <span x-show="guider.pixelScale">Scale: <strong x-text="guider.pixelScale?.toFixed(3) + '&quot;/px'"></strong></span>
-                                    <span>RMS: <strong :class="guider.rmsTotal < 1.5 ? 'text-ok' : 'text-warn'"
-                                                       x-text="guider.rmsTotal?.toFixed(2) + '&quot;'"></strong></span>
-                                    <span x-show="guider.settling" class="text-warn">SETTLING</span>
-                                    <span x-show="guider.paused" class="text-warn">PAUSED</span>
-                                </div>
-                                <div class="equip-inline-controls">
-                                    <button class="btn btn-sm btn-primary" @click="guiderStart()"
-                                            :disabled="guider.guiding || guider.calibrating">Guide</button>
-                                    <button class="btn btn-sm" @click="guiderDither()"
-                                            :disabled="!guider.guiding">Dither</button>
-                                    <button class="btn btn-sm btn-danger" @click="guiderStop()">Stop</button>
-                                    <button class="btn btn-sm" @click="guiderDisconnect()" style="margin-left:auto;">Disconnect</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <!-- The standalone Guider card was removed: guiding lives in
+                         the GUIDE tab now (connect/guide/dither/stop there). -->
 
                     </div>
                 </details>
@@ -12292,7 +12250,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260607-guideside"></script>
+    <script src="/js/app.js?v=20260607-noguidecard"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
