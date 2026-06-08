@@ -1830,7 +1830,25 @@ images calibrated with PCC, please credit:
 
 ## License
 
-This project is licensed under the Mozilla Public License 2.0.
+N.I.N.A. Polaris as a whole is licensed under the **GNU Affero General Public
+License v3.0** (AGPL-3.0). See [`LICENSE.txt`](LICENSE.txt) and
+[`NOTICE`](NOTICE).
+
+Portions are derived from [N.I.N.A. - Nighttime Imaging 'N' Astronomy](https://nighttime-imaging.eu/),
+Copyright (C) Stefan Berg and the N.I.N.A. contributors, under the **Mozilla
+Public License 2.0** ([`licenses/MPL-2.0.txt`](licenses/MPL-2.0.txt)). Those
+files keep their MPL header; per MPL-2.0 section 3.3 they are combined into
+this AGPL-3.0 Larger Work and a recipient may use those specific files under
+either the MPL-2.0 or the AGPL-3.0.
+
+A limited additional permission (linking exception) covers proprietary camera
+vendor SDKs and dynamically-loaded plugins - see
+[`licenses/LINKING-EXCEPTION.txt`](licenses/LINKING-EXCEPTION.txt).
+
+> Because Polaris is a network-served application, AGPL-3.0 section 13 applies:
+> if you run a modified version as a service, you must offer its source to
+> users. Releases published before the relicensing remain available under the
+> MPL-2.0.
 
 ### Third-party licenses
 

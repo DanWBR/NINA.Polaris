@@ -1,0 +1,58 @@
+N.I.N.A. Polaris - Additional permission under GNU AGPL version 3 section 7
+===========================================================================
+
+This file grants additional permissions ("linking exceptions") on top of the
+GNU Affero General Public License version 3 (AGPL-3.0) under which N.I.N.A.
+Polaris is distributed. These permissions are granted by the N.I.N.A. Polaris
+copyright holders for code they own. They do NOT, and cannot, grant rights in
+third-party code (for example MPL-2.0 code derived from N.I.N.A., which is
+governed by its own terms).
+
+If you modify N.I.N.A. Polaris, you may extend these exceptions to your
+version of the covered code, but you are not obligated to do so. If you do not
+wish to do so, delete this file and the reference to it in NOTICE.
+
+--------------------------------------------------------------------------
+1. Proprietary camera / device vendor SDKs
+--------------------------------------------------------------------------
+
+As an additional permission under section 7 of the AGPL-3.0, you have
+permission to link or combine N.I.N.A. Polaris with the proprietary native
+SDKs and runtime libraries published by camera and device vendors -
+including but not limited to ZWO (ASICamera2), Player One (PlayerOneCamera),
+ToupTek (toupcam/ogmacam family), SVBony (SVBCameraSDK), Canon (EDSDK),
+Nikon, and Sony - and to convey the resulting executable. The terms of the
+AGPL-3.0 continue to apply to all of the source code of N.I.N.A. Polaris
+itself; this permission applies only to the combination with the
+above-mentioned vendor SDKs, which remain under their respective vendor
+licenses.
+
+--------------------------------------------------------------------------
+2. Dynamically-loaded plugins
+--------------------------------------------------------------------------
+
+As an additional permission under section 7 of the AGPL-3.0, the copyright
+holders give you permission to load N.I.N.A. Polaris plugins (assemblies
+discovered and loaded at runtime through the documented plugin interface)
+that are licensed under terms of your choice, including proprietary terms,
+and to propagate the running combination, provided that:
+
+  (a) the plugin communicates with N.I.N.A. Polaris only through the public,
+      documented plugin interfaces; and
+
+  (b) you do not, by distributing such a plugin, attempt to restrict the
+      rights granted to recipients of N.I.N.A. Polaris under the AGPL-3.0.
+
+This permission is an exception to the AGPL-3.0's treatment of such
+combinations as a single combined work; it does not change the license of
+N.I.N.A. Polaris itself, which remains AGPL-3.0.
+
+--------------------------------------------------------------------------
+Notes
+--------------------------------------------------------------------------
+
+The "system library" and "appropriate legal notices" provisions of the
+AGPL-3.0 are unaffected. Nothing in this file grants rights beyond those of
+the copyright holders of N.I.N.A. Polaris. Where a file is also available
+under the Mozilla Public License v. 2.0 (see NOTICE), recipients retain the
+option to use that file under the MPL-2.0 instead, per MPL-2.0 section 3.3.

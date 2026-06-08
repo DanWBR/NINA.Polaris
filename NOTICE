@@ -1,0 +1,70 @@
+N.I.N.A. Polaris
+================
+
+Copyright (C) 2024-2026 Daniel Wagner (DanWBR) and the N.I.N.A. Polaris
+contributors.
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version. See LICENSE.txt for the full text.
+
+--------------------------------------------------------------------------
+Relationship to N.I.N.A. and the Mozilla Public License 2.0 (MPL-2.0)
+--------------------------------------------------------------------------
+
+Portions of this project are derived from N.I.N.A. - Nighttime Imaging 'N'
+Astronomy (https://nighttime-imaging.eu/), which is:
+
+    Copyright (C) 2016-2026 Stefan Berg <isbeorn86+NINA@googlemail.com>
+    and the N.I.N.A. contributors.
+
+That upstream code is licensed under the Mozilla Public License, v. 2.0
+(MPL-2.0), a copy of which is provided in licenses/MPL-2.0.txt. The MPL-2.0
+covered files in this repository are NOT marked "Incompatible With Secondary
+Licenses" (MPL-2.0 Exhibit B); they carry the standard Exhibit A notice.
+
+Under MPL-2.0 sections 1.12 and 3.3, the GNU Affero General Public License
+v3.0 is a "Secondary License", and MPL-covered code that is not Incompatible
+With Secondary Licenses may be combined into a Larger Work distributed under
+that Secondary License. Accordingly:
+
+  * The work as a whole (N.I.N.A. Polaris) is distributed under the terms
+    of the GNU Affero General Public License v3.0 (see LICENSE.txt).
+
+  * The individual source files derived from N.I.N.A. remain available under
+    the Mozilla Public License v. 2.0. Those files retain their MPL Exhibit A
+    header and the original N.I.N.A. copyright notice. A recipient of the
+    Larger Work may, at their option, use those specific files under either
+    the MPL-2.0 or the AGPL-3.0, as permitted by MPL-2.0 section 3.3.
+
+Files that are original to N.I.N.A. Polaris (not derived from N.I.N.A.) are
+licensed solely under the AGPL-3.0 and carry an AGPL header.
+
+--------------------------------------------------------------------------
+Additional permissions
+--------------------------------------------------------------------------
+
+A limited additional permission (linking exception) applies to combination
+with certain proprietary camera vendor SDKs and to dynamically-loaded
+plugins. See licenses/LINKING-EXCEPTION.txt.
+
+--------------------------------------------------------------------------
+Third-party components
+--------------------------------------------------------------------------
+
+This product bundles or depends on third-party software under their own
+licenses. See README.md ("Third-party licenses") and the per-component
+license files. Notable copyleft / restricted components:
+
+  * stellarium-web-engine .......... AGPL-3.0 (isolated in wwwroot/sky,
+                                      served as a separate document, used
+                                      via postMessage)
+  * noVNC .......................... MPL-2.0 + BSD
+  * PHD2 (ported guiding math) ..... BSD-3-Clause (licenses/PHD2-LICENSE.txt)
+  * GraXpert AI models ............. CC BY-NC-SA 4.0 (NonCommercial) -
+                                      distributed as an OPTIONAL separate
+                                      download, not part of this AGPL work
+  * Camera vendor SDKs (ZWO,
+    PlayerOne, ToupTek, SVBony) .... vendor licenses; see camera_sdk/*/
+                                      and the linking exception above
