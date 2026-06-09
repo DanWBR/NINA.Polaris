@@ -1162,6 +1162,9 @@ function ninaApp() {
         phd2GuiStarting: false,
         phd2GuiIframeSrc: '/phd2-gui/',
         _phd2GuiEnsuring: false,
+        // Set when xpra is up but its HTTP root 404s — the HTML5 client
+        // (xpra-html5) isn't installed. Drives a dedicated install banner.
+        phd2GuiHtml5Missing: false,
         // PH2VNC: Windows TightVNC + noVNC bridge state, sibling of
         // phd2GuiSession. Populated by /api/guider/vnc-session/status
         // and refreshed every 1 Hz via the WS payload's
@@ -19771,8 +19774,8 @@ function ninaApp() {
             try {
                 const r = await fetch('/phd2-gui/?probe=' + Date.now(),
                     { cache: 'no-store', credentials: 'same-origin' });
-                return r.status === 200;
-            } catch (e) { return false; }
+                return r.status; // 200 = ready; 404 = xpra up but no HTML5 client
+            } catch (e) { return 0; }
         },
 
         // Orchestrate the whole bring-up so the operator doesn't have to do
@@ -19785,6 +19788,7 @@ function ninaApp() {
             this._phd2GuiEnsuring = true;
             this.phd2GuiStarting = true;
             this.phd2GuiReady = false;
+            this.phd2GuiHtml5Missing = false;
             try {
                 await this.loadPhd2GuiStatus();
                 let s = this.phd2GuiSession || {};
@@ -19796,6 +19800,7 @@ function ninaApp() {
                 }
 
                 let relaunched = false;
+                let notFoundStreak = 0;
                 // ~25 × 1.5s ≈ 37s budget; xpra + PHD2 cold start on a Pi-
                 // class board is usually ready well within that.
                 for (let i = 0; i < 25; i++) {
@@ -19808,10 +19813,20 @@ function ninaApp() {
                             relaunched = true;
                             try { await this.apiPost('/api/guider/gui-session/relaunch-phd2'); } catch (e) { }
                         }
-                        if (await this.phd2GuiProbeReady()) {
+                        const code = await this.phd2GuiProbeReady();
+                        if (code === 200) {
                             this.phd2GuiReady = true;
                             this._reloadPhd2GuiIframe();
                             return;
+                        }
+                        // xpra is up and answering HTTP but the index 404s →
+                        // the HTML5 client (xpra-html5) isn't installed. This
+                        // never recovers by waiting, so bail early with a
+                        // clear, actionable banner instead of spinning.
+                        if (code === 404) {
+                            if (++notFoundStreak >= 3) { this.phd2GuiHtml5Missing = true; return; }
+                        } else {
+                            notFoundStreak = 0;
                         }
                     }
                     await new Promise(r => setTimeout(r, 1500));

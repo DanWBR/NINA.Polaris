@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260609-phd2gui">
+    <link rel="stylesheet" href="/css/app.css?v=20260609-phd2gui2">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -4018,7 +4018,23 @@
                            style="margin-top:8px" x-text="phd2GuiSession.lastError"></p>
                     </div>
                     <!-- State 4: Session running, iframe + toolbar -->
-                    <div x-show="phd2GuiSession && phd2GuiSession.supportedOs && (phd2GuiSession.running || phd2GuiStarting)" class="phd2-gui-frame-wrap">
+                    <!-- xpra is up but its HTTP root 404s → the HTML5 client
+                         (xpra-html5) isn't installed. Common after a source
+                         build of xpra that didn't include the web client. -->
+                    <div x-show="phd2GuiHtml5Missing" class="phd2-gui-banner phd2-gui-banner-warn">
+                        <strong>xpra is running but its HTML5 web client isn't installed.</strong>
+                        The session is up on port <span x-text="phd2GuiSession?.port"></span>,
+                        but xpra returns 404 for its web root, so there's nothing to embed.
+                        Install <code>xpra-html5</code> on the Polaris host, then click Restart:
+                        <pre style="margin:8px 0 0; white-space:pre-wrap">cd ~/src &amp;&amp; git clone --depth 1 https://github.com/Xpra-org/xpra-html5.git
+cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
+                        <div style="margin-top:10px">
+                            <button class="btn btn-sm" @click="phd2GuiHtml5Missing=false; phd2GuiRestart()"
+                                    :disabled="phd2GuiBusy">↻ Restart &amp; retry</button>
+                        </div>
+                    </div>
+
+                    <div x-show="phd2GuiSession && phd2GuiSession.supportedOs && (phd2GuiSession.running || phd2GuiStarting) && !phd2GuiHtml5Missing" class="phd2-gui-frame-wrap">
                         <div class="phd2-gui-toolbar">
                             <span class="text-ok">✓ xpra v<span x-text="phd2GuiSession?.xpraVersion"></span></span>
                             <span class="text-muted" style="font-size:11px">
@@ -12629,7 +12645,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260609-phd2gui"></script>
+    <script src="/js/app.js?v=20260609-phd2gui2"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
