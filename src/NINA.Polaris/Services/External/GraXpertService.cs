@@ -36,6 +36,7 @@ public class GraXpertService {
     private readonly IConfiguration _config;
     private readonly ProfileService _profile;
     private readonly ILogger<GraXpertService> _logger;
+    private readonly Onnx.OnnxModelRegistry? _models;
 
     private readonly ConcurrentDictionary<string, GraXpertBatchJob> _jobs = new();
     private readonly object _versionLock = new();
@@ -43,10 +44,12 @@ public class GraXpertService {
     private bool _versionChecked;
 
     public GraXpertService(IConfiguration config, ProfileService profile,
-                            ILogger<GraXpertService> logger) {
+                            ILogger<GraXpertService> logger,
+                            Onnx.OnnxModelRegistry? models = null) {
         _config = config;
         _profile = profile;
         _logger = logger;
+        _models = models;
     }
 
     public string? BinaryPath => Locate();
@@ -129,12 +132,18 @@ public class GraXpertService {
             return new GraXpertResult("", null, opts.Operation, 0,
                 "Denoising requires GraXpert v3.0+");
 
-        // Make the host CLI use the SAME model Polaris ships for the
-        // browser/native path: normalise the requested version (GraXpert
-        // doesn't know Polaris's -fp16/-int8 variants) and stage the
-        // vendored model.onnx into GraXpert's own store. This honours the
-        // model dropdown on host runs, keeps results consistent with the
-        // browser, and avoids GraXpert re-downloading (works offline).
+        // Make the host CLI use the SAME model Polaris has for the
+        // browser/native path instead of letting GraXpert pick the latest
+        // and download it. When the caller didn't pin a version, fall back
+        // to the newest model Polaris already has locally for this
+        // operation, so the host run stays offline and consistent with the
+        // browser. Then normalise the version (GraXpert doesn't know
+        // Polaris's -fp16/-int8 variants) and stage the model.onnx into
+        // GraXpert's own store + pass -ai_version so it doesn't re-resolve.
+        if (string.IsNullOrEmpty(opts.AiVersion)) {
+            var local = ResolveLocalAiVersion(opts);
+            if (!string.IsNullOrEmpty(local)) opts = opts with { AiVersion = local };
+        }
         if (!string.IsNullOrEmpty(opts.AiVersion)) {
             var clean = opts.AiVersion;
             var dash = clean.IndexOf('-');
@@ -242,33 +251,108 @@ public class GraXpertService {
     }
 
     /// <summary>
-    /// Stage Polaris's vendored GraXpert model into GraXpert's own model
-    /// store so a host (CLI) run uses the exact file the browser/native
-    /// path uses, instead of GraXpert downloading (or defaulting to) its
-    /// own. Polaris ships the models under
-    ///   wwwroot/graxpert/models/{family-ai-models}/{version}/model.onnx
-    /// which is the SAME layout GraXpert expects under
+    /// Stage Polaris's GraXpert model into GraXpert's own model store so a
+    /// host (CLI) run uses the exact file the browser/native path uses,
+    /// instead of GraXpert downloading (or defaulting to) its own.
+    ///
+    /// The source is resolved through <see cref="Onnx.OnnxModelRegistry"/>,
+    /// which already knows the real on-disk location of every model.onnx
+    /// (the profile's <c>OnnxModelsPath</c>, <c>/home/polaris/models</c>,
+    /// and the bundled <c>wwwroot/graxpert/models</c>, in priority order).
+    /// The previous implementation only ever looked under
+    /// <c>wwwroot/graxpert/models</c>, which is gitignored / empty on a
+    /// normal install, so staging was silently skipped and GraXpert
+    /// re-downloaded the model every run. Using the registry means a model
+    /// the user actually has (anywhere the registry scans) is honoured.
+    ///
+    /// GraXpert's store layout is
     ///   ~/.local/share/GraXpert/{family-ai-models}/{version}/model.onnx
-    /// so we just symlink (or copy, if symlinks are unavailable) the file
-    /// into place when it isn't there already. Best-effort: any failure
-    /// just falls back to GraXpert's normal model resolution.
+    /// (LocalApplicationData/GraXpert/... on Windows), which is the SAME
+    /// family/version layout the registry parses, so we just symlink (or
+    /// copy, if symlinks are unavailable) the resolved file into place when
+    /// it isn't there already. Best-effort: any failure just falls back to
+    /// GraXpert's normal model resolution.
     /// </summary>
+    /// <summary>
+    /// GraXpert's on-disk model dir name for an operation, plus the
+    /// canonical family id the <see cref="Onnx.OnnxModelRegistry"/> indexes
+    /// it under. Returns (null, null) for operations with no model family.
+    /// </summary>
+    private static (string? Dir, string? Id) FamilyFor(GraXpertOptions opts) =>
+        opts.Operation switch {
+            GraXpertOperation.BackgroundExtraction => ("bge-ai-models", "bge"),
+            GraXpertOperation.Denoising            => ("denoise-ai-models", "denoise"),
+            GraXpertOperation.Deconvolution =>
+                string.Equals(opts.DeconTarget, "objects", StringComparison.OrdinalIgnoreCase)
+                    ? ("deconvolution-object-ai-models", "decon-objects")
+                    : ("deconvolution-stars-ai-models", "decon-stars"),
+            _ => (null, null)
+        };
+
+    /// <summary>
+    /// Newest model version Polaris already has locally for this operation,
+    /// per the OnnxModelRegistry. Quantized variants (-fp16 / -int8) are
+    /// ignored because the host GraXpert CLI wants its own (non-quantized)
+    /// model format; the browser/native path uses the quantized ones.
+    /// Returns null when the registry isn't wired or has nothing for the
+    /// family, in which case GraXpert keeps its normal model resolution.
+    /// </summary>
+    private string? ResolveLocalAiVersion(GraXpertOptions opts) {
+        var (_, familyId) = FamilyFor(opts);
+        if (_models == null || familyId == null) return null;
+        try {
+            return _models.All()
+                .Where(m => string.Equals(m.Family, familyId, StringComparison.OrdinalIgnoreCase))
+                .Select(m => m.Version)
+                .Where(v => v.IndexOf('-') < 0) // skip -fp16 / -int8 quantized
+                .OrderByDescending(v => v, new VersionishComparer())
+                .FirstOrDefault();
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "GraXpert local AI-version resolution skipped");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Compares "major.minor.patch"-ish version strings numerically so
+    /// "2.0.0" sorts above "10" only when it should; non-numeric parts fall
+    /// back to ordinal compare. Good enough for the handful of GraXpert
+    /// model versions, without pulling in a SemVer dependency.
+    /// </summary>
+    private sealed class VersionishComparer : IComparer<string> {
+        public int Compare(string? a, string? b) {
+            var pa = (a ?? "").Split('.');
+            var pb = (b ?? "").Split('.');
+            for (int i = 0; i < Math.Max(pa.Length, pb.Length); i++) {
+                var sa = i < pa.Length ? pa[i] : "0";
+                var sb = i < pb.Length ? pb[i] : "0";
+                if (int.TryParse(sa, out var na) && int.TryParse(sb, out var nb)) {
+                    if (na != nb) return na.CompareTo(nb);
+                } else {
+                    var c = string.CompareOrdinal(sa, sb);
+                    if (c != 0) return c;
+                }
+            }
+            return 0;
+        }
+    }
+
     private void StageVendoredModel(GraXpertOptions opts, Action<string>? onLog) {
         try {
-            var familyDir = opts.Operation switch {
-                GraXpertOperation.BackgroundExtraction => "bge-ai-models",
-                GraXpertOperation.Denoising            => "denoise-ai-models",
-                GraXpertOperation.Deconvolution =>
-                    string.Equals(opts.DeconTarget, "objects", StringComparison.OrdinalIgnoreCase)
-                        ? "deconvolution-object-ai-models"
-                        : "deconvolution-stars-ai-models",
-                _ => null
-            };
+            var (familyDir, familyId) = FamilyFor(opts);
             if (familyDir == null || string.IsNullOrEmpty(opts.AiVersion)) return;
 
-            var src = Path.Combine(AppContext.BaseDirectory, "wwwroot", "graxpert",
-                "models", familyDir, opts.AiVersion, "model.onnx");
-            if (!File.Exists(src)) return; // nothing vendored for this version
+            // Resolve the real model.onnx Polaris has for this family/version.
+            // Prefer the registry (covers the profile models dir,
+            // /home/polaris/models AND the bundled wwwroot copy); fall back
+            // to the bundled path directly if the registry isn't wired.
+            var src = _models?.Find(familyId!, opts.AiVersion)?.Path;
+            if (string.IsNullOrEmpty(src) || !File.Exists(src)) {
+                var bundled = Path.Combine(AppContext.BaseDirectory, "wwwroot", "graxpert",
+                    "models", familyDir, opts.AiVersion, "model.onnx");
+                src = File.Exists(bundled) ? bundled : null;
+            }
+            if (string.IsNullOrEmpty(src)) return; // nothing available for this version
 
             var destDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

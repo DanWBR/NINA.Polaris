@@ -65,7 +65,13 @@ public static class GraXpertEndpoints {
                 DeconStrength: req.DeconStrength ?? 0.5,
                 DeconPsfSize: req.DeconPsfSize ?? 4.0,
                 DenoiseStrength: req.DenoiseStrength ?? 0.5,
-                DeconTarget: req.DeconTarget ?? "stars");
+                DeconTarget: req.DeconTarget ?? "stars",
+                // Pass the requested model version through so the host CLI
+                // run pins to (and stages) the exact model Polaris has,
+                // instead of letting GraXpert pick the latest and download
+                // it. Null is fine: the service falls back to the newest
+                // version it can find locally for this operation.
+                AiVersion: req.AiVersion);
             var job = gx.StartBatch(new GraXpertBatchRequest(
                 req.Paths, opts, req.Concurrency ?? 1));
             return Results.Accepted(value: new { jobId = job.JobId });
