@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260608-solveoutput">
+    <link rel="stylesheet" href="/css/app.css?v=20260608-astrokey">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -9506,6 +9506,19 @@
                         <p class="text-muted" style="font-size:11px; margin-top:6px">
                             Leave blank to auto-detect. Set these only if Polaris can't find your install.
                         </p>
+                        <label style="display:flex; align-items:center; gap:12px; margin-top:12px">
+                            <span style="min-width:120px">Astrometry.net key</span>
+                            <input type="password" class="input-sm" style="flex:1"
+                                   autocomplete="off"
+                                   x-model="psConfig.astrometryApiKey"
+                                   placeholder="enables the online solver">
+                        </label>
+                        <p class="text-muted" style="font-size:11px; margin-top:6px">
+                            Free API key from
+                            <a href="https://nova.astrometry.net/api_help" target="_blank" rel="noopener">nova.astrometry.net</a>
+                            (Profile → API Key). Without it the online solver stays "not installed".
+                            It does a blind solve over the internet — slower, but a good fallback when ASTAP can't solve.
+                        </p>
                     </details>
 
                     <div style="margin-top:12px; display:flex; gap:8px; align-items:center">
@@ -12532,7 +12545,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260608-solveoutput"></script>
+    <script src="/js/app.js?v=20260608-astrokey"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

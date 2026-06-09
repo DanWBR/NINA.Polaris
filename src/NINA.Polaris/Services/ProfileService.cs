@@ -593,6 +593,10 @@ public class UserProfile {
     public double PlateSolveSearchRadiusDeg { get; set; } = 30;
     /// <summary>Fall back to a blind-capable solver if the primary fails.</summary>
     public bool PlateSolveUseBlindFallback { get; set; } = true;
+    /// <summary>API key for the nova.astrometry.net online solver (free, from
+    /// the site's Profile → API Key). Empty = the online solver stays disabled
+    /// ("not installed" in the card).</summary>
+    public string? AstrometryApiKey { get; set; }
 
     // TLS-1: Let's Encrypt via DuckDNS DNS-01 challenge. Replaces the
     // self-signed cert with a real publicly-trusted cert when the user

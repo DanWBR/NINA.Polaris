@@ -708,7 +708,8 @@ function ninaApp() {
         psSolvers: [],
         psConfig: {
             primary: 'astap', downsample: 2, searchRadiusDeg: 30,
-            useBlindFallback: true, astapPath: '', astapDataDir: ''
+            useBlindFallback: true, astapPath: '', astapDataDir: '',
+            astrometryApiKey: ''
         },
         psLoading: false,
         psSaving: false,
@@ -16900,7 +16901,8 @@ function ninaApp() {
                         searchRadiusDeg: cfg.searchRadiusDeg ?? 30,
                         useBlindFallback: cfg.useBlindFallback !== false,
                         astapPath: cfg.astapPath || '',
-                        astapDataDir: cfg.astapDataDir || ''
+                        astapDataDir: cfg.astapDataDir || '',
+                        astrometryApiKey: cfg.astrometryApiKey || ''
                     };
                 }
             } catch (e) {
@@ -16919,7 +16921,8 @@ function ninaApp() {
                     useBlindFallback: !!this.psConfig.useBlindFallback,
                     // Empty string clears the override server-side (back to auto).
                     astapPath: this.psConfig.astapPath || '',
-                    astapDataDir: this.psConfig.astapDataDir || ''
+                    astapDataDir: this.psConfig.astapDataDir || '',
+                    astrometryApiKey: this.psConfig.astrometryApiKey || ''
                 });
                 this.toast('Plate solve settings saved', 'ok');
                 await this.loadPlateSolveConfig();

@@ -38,18 +38,27 @@ public class AstrometryNetOnlineSolver : IPlateSolver {
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(5) };
     private readonly IConfiguration _config;
     private readonly ILogger<AstrometryNetOnlineSolver> _logger;
+    private readonly NINA.Polaris.Services.ProfileService? _profiles;
     private string? _sessionKey;
 
-    public AstrometryNetOnlineSolver(IConfiguration config, ILogger<AstrometryNetOnlineSolver> logger) {
+    public AstrometryNetOnlineSolver(IConfiguration config, ILogger<AstrometryNetOnlineSolver> logger,
+                                     NINA.Polaris.Services.ProfileService? profiles = null) {
         _config = config;
         _logger = logger;
+        _profiles = profiles;
     }
 
     public string Id => "astrometry-net-online";
     public string DisplayName => "Astrometry.net (online)";
     public bool SupportsBlindSolve => true;
 
-    public string ApiKey => _config.GetValue("PlateSolve:AstrometryApiKey", "")!;
+    public string ApiKey {
+        get {
+            var fromProfile = _profiles?.Active.AstrometryApiKey;
+            if (!string.IsNullOrWhiteSpace(fromProfile)) return fromProfile!;
+            return _config.GetValue("PlateSolve:AstrometryApiKey", "")!;
+        }
+    }
     public string BaseUrl => _config.GetValue("PlateSolve:AstrometryBaseUrl",
         "https://nova.astrometry.net/api")!;
 
