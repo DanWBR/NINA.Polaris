@@ -497,6 +497,10 @@ function ninaApp() {
         skyShowResults: false,
         slewCenterJobId: null,
         slewCenterStatus: null,
+        // On a FAILED slew & center we keep the solver console around in a
+        // dismissible panel so the user can read why it failed; on success
+        // it's cleared. Holds the captured filesSolveLog at failure time.
+        slewCenterFailedLog: '',
         _slewCenterTimer: null,
         fov: { width: 2.82, height: 1.88 },
 
@@ -20330,6 +20334,9 @@ function ninaApp() {
                 const data = await resp.json();
                 this.slewCenterJobId = data.jobId;
                 this.slewCenterStatus = { state: 'pending', iteration: 0 };
+                // Clear any leftover console from a previous run.
+                this.slewCenterFailedLog = '';
+                this.filesSolveLog = '';
                 this.toast('Slew & center started', 'ok');
                 this.startSlewCenterPolling();
             } catch (e) {
@@ -20408,13 +20415,23 @@ function ninaApp() {
                     this.stopSlewCenterPolling();
                     this.toast(`Centered! Error: ${data.errorArcsec?.toFixed(1)}"`, 'ok', 6000);
                     this.slewCenterJobId = null;
+                    // Success: drop the live console.
+                    this.filesSolveLog = '';
+                    this.slewCenterFailedLog = '';
                 } else if (data.state === 'failed') {
                     this.stopSlewCenterPolling();
                     this.toast('Centering failed: ' + (data.error || 'unknown'), 'error', 6000);
                     this.slewCenterJobId = null;
+                    // Failure: keep the solver output in a dismissible panel
+                    // so the user can read it (the live panel is gated on the
+                    // job id, which just cleared).
+                    this.slewCenterFailedLog = this.filesSolveLog || '';
+                    this.filesSolveLog = '';
                 } else if (data.state === 'cancelled') {
                     this.stopSlewCenterPolling();
                     this.slewCenterJobId = null;
+                    this.filesSolveLog = '';
+                    this.slewCenterFailedLog = '';
                 }
             } catch (e) { }
         },

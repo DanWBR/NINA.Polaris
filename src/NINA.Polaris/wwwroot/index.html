@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260609-pslive2">
+    <link rel="stylesheet" href="/css/app.css?v=20260609-pslive3">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -6409,6 +6409,21 @@
                          class="solver-output-live"></pre>
                 </div>
 
+                <!-- Persistent, dismissible solver console for a FAILED
+                     slew & center. The live panel above is gated on the
+                     job id; once the job ends in failure we keep the
+                     captured output here so the user can read why and
+                     close it manually. On success it's never shown. -->
+                <div class="sky-slew-progress" x-show="slewCenterFailedLog" x-cloak>
+                    <div class="slew-progress-row">
+                        <span class="slew-phase-icon">❌</span>
+                        <span class="slew-state">Slew &amp; center failed — solver output</span>
+                        <button class="btn btn-sm" style="margin-left:auto"
+                                @click="slewCenterFailedLog = ''">Close</button>
+                    </div>
+                    <pre x-text="slewCenterFailedLog" class="solver-output-live"></pre>
+                </div>
+
                 <!-- The old .sky-info-panel sat below the iframe and
                      hosted Slew & Center / Slew Only / Center on mount /
                      Add to Sequence / Tonight's altitude / Plan mosaic.
@@ -12570,7 +12585,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260609-pslive2"></script>
+    <script src="/js/app.js?v=20260609-pslive3"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
