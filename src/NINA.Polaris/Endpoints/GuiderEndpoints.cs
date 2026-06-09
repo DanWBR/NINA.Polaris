@@ -540,15 +540,27 @@ public static class GuiderEndpoints {
         group.MapGet("/gui-session/status", (Phd2GuiSessionService gui) => Results.Ok(new {
             os = System.Runtime.InteropServices.RuntimeInformation.OSDescription,
             supportedOs = gui.IsSupportedOs,
+            // Field names MUST match the /ws/status guider.guiSession payload
+            // (running/port/supportedArch/unsupportedReason). The frontend
+            // and the WS both populate the same phd2GuiSession object, so a
+            // divergent REST shape here clobbered supportedArch/running with
+            // undefined on every poll, making the panel flip between
+            // "Not supported on this CPU architecture" and "session not
+            // running". Canonical names below; legacy aliases kept too.
+            supportedArch = gui.IsSupportedArch,
+            unsupportedReason = gui.UnsupportedReason,
             xpraInstalled = gui.XpraInstalled,
             xpraVersion = gui.XpraVersion,
             xpraPath = gui.XpraPath,
-            sessionRunning = gui.SessionRunning,
+            running = gui.SessionRunning,
+            port = gui.BindPort,
             phd2Running = gui.Phd2Running,
             displayNumber = gui.DisplayNumber,
-            bindPort = gui.BindPort,
             lastHealthCheckAt = gui.LastHealthCheckAt,
             lastError = gui.LastError,
+            // Legacy aliases (older callers / tests).
+            sessionRunning = gui.SessionRunning,
+            bindPort = gui.BindPort,
             // Hint URL the UI iframes, points to the Polaris reverse-proxy
             // so it stays same-origin (sessionStorage works there).
             embedUrl = "/phd2-gui/"
