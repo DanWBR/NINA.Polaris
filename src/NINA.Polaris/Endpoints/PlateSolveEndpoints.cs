@@ -86,6 +86,7 @@ public static class PlateSolveEndpoints {
                 SolveLatestRequest? request,
                 ImageRelayService relay,
                 PlateSolveService solver,
+                PlateSolveProgressService progress,
                 EquipmentManager equip,
                 ProfileService profiles,
                 ILogger<PlateSolveStatusMarker> logger,
@@ -136,7 +137,11 @@ public static class PlateSolveEndpoints {
                     "PREVIEW plate solve: hint RA={Ra} Dec={Dec} radius={Rad}°",
                     hintRa, hintDec, options.SearchRadiusDeg);
 
-                var result = await solver.SolveAsync(tempFits, options, ct);
+                progress.Begin("PREVIEW");
+                PlateSolveResult result;
+                try {
+                    result = await solver.SolveAsync(tempFits, options, ct, progress.Append);
+                } finally { progress.End(); }
 
                 if (!result.Success) {
                     return Results.Ok(new {
@@ -180,6 +185,7 @@ public static class PlateSolveEndpoints {
         group.MapPost("/solve-file", async (
                 SolveFileRequest request,
                 PlateSolveService solver,
+                PlateSolveProgressService progress,
                 EquipmentManager equip,
                 ProfileService profiles,
                 ILogger<PlateSolveStatusMarker> logger,
@@ -283,7 +289,11 @@ public static class PlateSolveEndpoints {
                     "FILES plate solve: {Path} hint RA={Ra} Dec={Dec} fov={Fov:F2}° radius={Rad}°",
                     request.Path, hintRa, hintDec, fovDeg, options.SearchRadiusDeg);
 
-                var result = await solver.SolveAsync(request.Path, options, ct);
+                progress.Begin("FILES");
+                PlateSolveResult result;
+                try {
+                    result = await solver.SolveAsync(request.Path, options, ct, progress.Append);
+                } finally { progress.End(); }
 
                 if (!result.Success) {
                     return Results.Ok(new {

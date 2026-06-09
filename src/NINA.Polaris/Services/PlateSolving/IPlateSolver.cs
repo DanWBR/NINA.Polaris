@@ -45,8 +45,12 @@ public interface IPlateSolver {
     /// implementations should not throw for solver-level failures, only for
     /// programming errors. <paramref name="ct"/> may abort the underlying
     /// process and should always be respected.
+    ///
+    /// <paramref name="onLog"/> (optional) receives the solver's console
+    /// output line-by-line as it runs, so the UI can stream live progress.
     /// </summary>
-    Task<PlateSolveResult> SolveAsync(string fitsPath, PlateSolveOptions options, CancellationToken ct = default);
+    Task<PlateSolveResult> SolveAsync(string fitsPath, PlateSolveOptions options,
+        CancellationToken ct = default, Action<string>? onLog = null);
 }
 
 /// <summary>Shared helpers for the external-process solvers.</summary>

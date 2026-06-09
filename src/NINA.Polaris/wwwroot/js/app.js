@@ -1494,6 +1494,11 @@ function ninaApp() {
         _filesSolveAbort: null,
         _filesSolveTimer: null,
         filesSolveElapsed: 0,
+        // Live solver console, streamed via /ws/status plateSolve.lines so
+        // the UI shows the process output in real time (like GraXpert local).
+        filesSolveLog: '',
+        filesSolveLiveActive: false,
+        _filesSolveRunId: -1,
         // Plate-solve options modal: lets the operator give ASTAP a
         // starting position when the FITS has no RA/DEC header (the
         // common case for old field-test snaps). They can search the
@@ -14063,6 +14068,9 @@ function ninaApp() {
             this.filesSolveResult = null;
             // Live elapsed-seconds feedback + a cancellable request.
             this.filesSolveElapsed = 0;
+            // Clear the live console; the WS plateSolve stream refills it.
+            this.filesSolveLog = '';
+            this.filesSolveLiveActive = true;
             const startedAt = Date.now();
             this._filesSolveTimer = setInterval(() => {
                 this.filesSolveElapsed = Math.round((Date.now() - startedAt) / 1000);
@@ -22063,6 +22071,23 @@ function ninaApp() {
             if (msg.debugLog && Array.isArray(msg.debugLog.entries)) {
                 for (const e of msg.debugLog.entries) this._absorbLogEntry(e);
                 if (msg.debugLog.truncated) this.logs.truncated = true;
+            }
+
+            // Live plate-solve console (STUDIO/FILES). The server streams a
+            // rolling tail of the solver's output; mirror it into
+            // filesSolveLog while a solve is running so the UI panel scrolls
+            // live, the same way the GraXpert local run does. Reset when a
+            // new run starts (runId bump).
+            if (msg.plateSolve) {
+                const ps = msg.plateSolve;
+                if (ps.runId && ps.runId !== this._filesSolveRunId) {
+                    this._filesSolveRunId = ps.runId;
+                    this.filesSolveLog = '';
+                }
+                if (Array.isArray(ps.lines) && (ps.active || ps.lines.length)) {
+                    this.filesSolveLog = (ps.truncated ? '…\n' : '') + ps.lines.join('\n');
+                }
+                this.filesSolveLiveActive = !!ps.active;
             }
 
             const eq = msg.equipment || {};

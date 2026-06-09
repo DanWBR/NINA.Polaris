@@ -87,11 +87,13 @@ public class PlateSolveService {
     /// <summary>Path of the primary solver (back-compat for existing tests).</summary>
     public string SolverPath => PrimarySolver is AstapSolver a ? a.SolverPath : "";
 
-    public async Task<PlateSolveResult> SolveAsync(string fitsPath, PlateSolveOptions options, CancellationToken ct = default) {
+    public async Task<PlateSolveResult> SolveAsync(string fitsPath, PlateSolveOptions options,
+            CancellationToken ct = default, Action<string>? onLog = null) {
         var primary = PrimarySolver;
         string? primaryError = null;
         if (primary.IsAvailable) {
-            var result = await primary.SolveAsync(fitsPath, options, ct);
+            try { onLog?.Invoke($"== {primary.DisplayName} =="); } catch { }
+            var result = await primary.SolveAsync(fitsPath, options, ct, onLog);
             if (result.Success) return result;
             primaryError = result.Error;
             _logger.LogWarning("Primary solver {Name} failed: {Err}", primary.DisplayName, result.Error);
@@ -103,7 +105,8 @@ public class PlateSolveService {
         var blind = BlindSolver;
         if (blind != null && blind.IsAvailable && blind.Id != primary.Id) {
             _logger.LogInformation("Falling back to blind solver {Name}", blind.DisplayName);
-            var blindResult = await blind.SolveAsync(fitsPath, options, ct);
+            try { onLog?.Invoke($"== blind fallback: {blind.DisplayName} =="); } catch { }
+            var blindResult = await blind.SolveAsync(fitsPath, options, ct, onLog);
             if (blindResult.Success) return blindResult;
             return PlateSolveResult.Failed(
                 $"Primary ({primary.DisplayName}) failed: {primaryError}. " +

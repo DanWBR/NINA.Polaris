@@ -55,7 +55,8 @@ public class AstapSolver : IPlateSolver {
 
     public bool IsAvailable => !string.IsNullOrEmpty(SolverPath) && File.Exists(SolverPath);
 
-    public async Task<PlateSolveResult> SolveAsync(string fitsPath, PlateSolveOptions options, CancellationToken ct = default) {
+    public async Task<PlateSolveResult> SolveAsync(string fitsPath, PlateSolveOptions options,
+            CancellationToken ct = default, Action<string>? onLog = null) {
         if (!IsAvailable) return PlateSolveResult.Failed("ASTAP not found at: " + SolverPath);
         if (!File.Exists(fitsPath)) return PlateSolveResult.Failed("FITS file not found: " + fitsPath);
 
@@ -68,11 +69,12 @@ public class AstapSolver : IPlateSolver {
         // the original multi-channel FITS.
         if (NeedsProxyForSolve(fitsPath, out var originalChannels)) {
             return await SolveViaProxyAsync(fitsPath, options,
-                originalChannels, ct);
+                originalChannels, ct, onLog);
         }
 
         var args = BuildArgs(fitsPath, options);
         _logger.LogInformation("Plate solving {File} with ASTAP: {Args}", fitsPath, args);
+        try { onLog?.Invoke($"$ {Path.GetFileName(SolverPath)} {args}"); } catch { }
 
         try {
             using var proc = StartProcess(SolverPath, args);
@@ -90,6 +92,17 @@ public class AstapSolver : IPlateSolver {
             }
 
             _logger.LogDebug("ASTAP exit code: {Code}, stdout: {Out}", proc.ExitCode, stdout);
+
+            // ASTAP runs in a couple of seconds and writes everything at
+            // once, so we stream the captured lines after exit rather than
+            // live; enough for the UI output panel.
+            if (onLog != null) {
+                foreach (var line in (stdout ?? "").Replace("\r", "").Split('\n'))
+                    if (line.Length > 0) onLog(line);
+                foreach (var line in (stderr ?? "").Replace("\r", "").Split('\n'))
+                    if (line.Length > 0) onLog("[stderr] " + line);
+                onLog($"[exit {proc.ExitCode}]");
+            }
 
             // Full process output, surfaced to the UI for every outcome.
             var output = PlateSolveProcessOutput.Combine(SolverPath, args, stdout, stderr, proc.ExitCode);
@@ -374,7 +387,7 @@ public class AstapSolver : IPlateSolver {
     /// </summary>
     private async Task<PlateSolveResult> SolveViaProxyAsync(
             string originalPath, PlateSolveOptions options,
-            int channels, CancellationToken ct) {
+            int channels, CancellationToken ct, Action<string>? onLog = null) {
         BaseImageData full;
         using (var fs = File.OpenRead(originalPath)) {
             full = FITSReader.Read(fs);
@@ -445,6 +458,10 @@ public class AstapSolver : IPlateSolver {
                 "Plate solving {File} via single-channel proxy " +
                 "{Proxy} (channels={N}): {Args}",
                 originalPath, proxyPath, channels, args);
+            try {
+                onLog?.Invoke($"multi-channel FITS: solving via single-channel proxy ({planeStats})");
+                onLog?.Invoke($"$ {Path.GetFileName(SolverPath)} {args}");
+            } catch { }
 
             try {
                 using var proc = StartProcess(SolverPath, args);
@@ -459,6 +476,14 @@ public class AstapSolver : IPlateSolver {
                 catch (OperationCanceledException) {
                     try { proc.Kill(entireProcessTree: true); } catch { }
                     return PlateSolveResult.Failed("ASTAP timed out");
+                }
+
+                if (onLog != null) {
+                    foreach (var line in (stdout ?? "").Replace("\r", "").Split('\n'))
+                        if (line.Length > 0) onLog(line);
+                    foreach (var line in (stderr ?? "").Replace("\r", "").Split('\n'))
+                        if (line.Length > 0) onLog("[stderr] " + line);
+                    onLog($"[exit {proc.ExitCode}]");
                 }
 
                 var output = PlateSolveProcessOutput.Combine(SolverPath, args, stdout, stderr, proc.ExitCode);

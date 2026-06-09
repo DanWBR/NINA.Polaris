@@ -174,6 +174,7 @@ builder.Services.AddSingleton<NINA.Polaris.Services.PlateSolving.PlateSolve3Solv
 builder.Services.AddSingleton<NINA.Polaris.Services.PlateSolving.AstrometryNetOnlineSolver>();
 builder.Services.AddSingleton<NINA.Polaris.Services.PlateSolving.AstrometryNetLocalSolver>();
 builder.Services.AddSingleton<PlateSolveService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.PlateSolving.PlateSolveProgressService>();
 builder.Services.AddSingleton<SlewCenterService>();
 builder.Services.AddSingleton<ProfileService>();
 // AUTH-1: local-server auth (password + session store + rate limit).

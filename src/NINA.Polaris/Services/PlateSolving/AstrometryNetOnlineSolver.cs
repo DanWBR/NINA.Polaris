@@ -64,24 +64,31 @@ public class AstrometryNetOnlineSolver : IPlateSolver {
 
     public bool IsAvailable => !string.IsNullOrEmpty(ApiKey);
 
-    public async Task<PlateSolveResult> SolveAsync(string fitsPath, PlateSolveOptions options, CancellationToken ct = default) {
+    public async Task<PlateSolveResult> SolveAsync(string fitsPath, PlateSolveOptions options,
+            CancellationToken ct = default, Action<string>? onLog = null) {
         if (!IsAvailable) return PlateSolveResult.Failed("Astrometry.net API key not configured");
         if (!File.Exists(fitsPath)) return PlateSolveResult.Failed("FITS file not found: " + fitsPath);
 
+        void Log(string m) { try { onLog?.Invoke(m); } catch { } }
         try {
             // 1. Login
+            Log("nova.astrometry.net: logging in…");
             await LoginAsync(ct);
             if (string.IsNullOrEmpty(_sessionKey)) return PlateSolveResult.Failed("Astrometry.net login failed");
 
             // 2. Upload
+            Log("uploading image…");
             var subId = await UploadAsync(fitsPath, options, ct);
             if (subId == null) return PlateSolveResult.Failed("Astrometry.net upload failed");
+            Log($"submission {subId}: waiting for a job…");
 
             // 3. Poll for job assignment + completion
             var jobId = await WaitForJobAsync(subId.Value, ct);
             if (jobId == null) return PlateSolveResult.Failed("Astrometry.net never assigned a job (queue too long?)");
+            Log($"job {jobId}: solving (this can take a while on the public server)…");
 
             var status = await WaitForJobStatusAsync(jobId.Value, ct);
+            Log($"job {jobId}: status {status}");
             if (status != "success") return PlateSolveResult.Failed($"Astrometry.net job status: {status}");
 
             // 4. Fetch calibration

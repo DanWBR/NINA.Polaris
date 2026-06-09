@@ -53,7 +53,8 @@ public class AstrometryNetLocalSolver : IPlateSolver {
         }
     }
 
-    public async Task<PlateSolveResult> SolveAsync(string fitsPath, PlateSolveOptions options, CancellationToken ct = default) {
+    public async Task<PlateSolveResult> SolveAsync(string fitsPath, PlateSolveOptions options,
+            CancellationToken ct = default, Action<string>? onLog = null) {
         if (!IsAvailable) return PlateSolveResult.Failed("solve-field not configured (PlateSolve:SolveFieldPath)");
         if (!File.Exists(fitsPath)) return PlateSolveResult.Failed("FITS file not found: " + fitsPath);
 
@@ -70,10 +71,29 @@ public class AstrometryNetLocalSolver : IPlateSolver {
                 CreateNoWindow = true
             };
             using var proc = new Process { StartInfo = psi };
-            proc.Start();
 
-            var stdoutTask = proc.StandardOutput.ReadToEndAsync(ct);
-            var stderrTask = proc.StandardError.ReadToEndAsync(ct);
+            // Stream stdout + stderr line-by-line so the UI can show the
+            // solve-field console live (it emits a "did not solve (index ...)"
+            // line per index tried) instead of a silent spinner. Accumulate
+            // the full text too for parsing + the result Output panel.
+            var stdoutSb = new System.Text.StringBuilder();
+            var stderrSb = new System.Text.StringBuilder();
+            proc.OutputDataReceived += (_, e) => {
+                if (e.Data == null) return;
+                lock (stdoutSb) stdoutSb.AppendLine(e.Data);
+                try { onLog?.Invoke(e.Data); } catch { /* logging is best-effort */ }
+            };
+            proc.ErrorDataReceived += (_, e) => {
+                if (e.Data == null) return;
+                lock (stderrSb) stderrSb.AppendLine(e.Data);
+                try { onLog?.Invoke(e.Data); } catch { /* logging is best-effort */ }
+            };
+
+            try { onLog?.Invoke($"$ {Path.GetFileName(SolverPath)} {args}"); } catch { }
+
+            proc.Start();
+            proc.BeginOutputReadLine();
+            proc.BeginErrorReadLine();
 
             var timeout = TimeSpan.FromSeconds(_config.GetValue("PlateSolve:TimeoutSeconds", 180));
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -83,9 +103,12 @@ public class AstrometryNetLocalSolver : IPlateSolver {
                 try { proc.Kill(entireProcessTree: true); } catch { }
                 return PlateSolveResult.Failed("solve-field timed out");
             }
+            // Final synchronous wait flushes the async output handlers.
+            proc.WaitForExit();
 
-            var stdout = await stdoutTask;
-            var stderr = await stderrTask;
+            string stdout, stderr;
+            lock (stdoutSb) stdout = stdoutSb.ToString();
+            lock (stderrSb) stderr = stderrSb.ToString();
             _logger.LogDebug("solve-field exit: {Code}\n{Out}", proc.ExitCode, stdout);
 
             var result = ParseStdout(stdout);

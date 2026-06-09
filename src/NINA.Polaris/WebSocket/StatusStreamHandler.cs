@@ -79,6 +79,8 @@ public static class StatusStreamHandler {
         var sensorAnalysis = context.RequestServices.GetRequiredService<SensorAnalysisService>();
         var notifications = context.RequestServices.GetRequiredService<NotificationService>();
         var polarAlign = context.RequestServices.GetRequiredService<PolarAlignmentService>();
+        var plateSolveProgress = context.RequestServices
+            .GetRequiredService<NINA.Polaris.Services.PlateSolving.PlateSolveProgressService>();
         var logService = context.RequestServices.GetRequiredService<NINA.Polaris.Services.Logging.LogService>();
         var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
 
@@ -579,7 +581,11 @@ public static class StatusStreamHandler {
                         // cursor fell behind the ring-buffer head so the
                         // client knows it missed entries and should
                         // refetch via GET /api/logs.
-                        debugLog = BuildDebugLogPayload(logService, ref localDebugCursor)
+                        debugLog = BuildDebugLogPayload(logService, ref localDebugCursor),
+                        // Live plate-solve console output (STUDIO/FILES),
+                        // streamed so the UI can show the solver running
+                        // the same way the GraXpert local run does.
+                        plateSolve = BuildPlateSolvePayload(plateSolveProgress)
                     };
 
                     payload = JsonSerializer.SerializeToUtf8Bytes(status, JsonOpts);
@@ -656,6 +662,24 @@ public static class StatusStreamHandler {
                 currentCursor = 0L,
                 oldestRetained = 0L
             };
+        }
+    }
+
+    private static object BuildPlateSolvePayload(
+        NINA.Polaris.Services.PlateSolving.PlateSolveProgressService svc) {
+        try {
+            var s = svc.Snapshot();
+            return new {
+                runId = s.RunId,
+                active = s.Active,
+                source = s.Source,
+                seq = s.Seq,
+                truncated = s.Truncated,
+                lines = s.Lines
+            };
+        } catch {
+            return new { runId = 0L, active = false, source = (string?)null,
+                         seq = 0L, truncated = false, lines = System.Array.Empty<string>() };
         }
     }
 

@@ -4753,6 +4753,23 @@ label select.input-sm {
     color: #c9d2e0;
 }
 
+/* Live plate-solve console: streamed solver output while solving. */
+.solver-output-live {
+    margin: 6px 0 0;
+    padding: 8px 10px;
+    max-height: 220px;
+    overflow: auto;
+    background: #0b0e13;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: #c9d2e0;
+}
+
 /* Small inline spinner (plate-solve in-progress banner, etc.). */
 .ps-spinner {
     display: inline-block;

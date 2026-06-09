@@ -50,7 +50,8 @@ public class PlateSolve3Solver : IPlateSolver {
 
     public bool IsAvailable => !string.IsNullOrEmpty(SolverPath) && File.Exists(SolverPath);
 
-    public async Task<PlateSolveResult> SolveAsync(string fitsPath, PlateSolveOptions options, CancellationToken ct = default) {
+    public async Task<PlateSolveResult> SolveAsync(string fitsPath, PlateSolveOptions options,
+            CancellationToken ct = default, Action<string>? onLog = null) {
         if (!IsAvailable) return PlateSolveResult.Failed("PlateSolve3 not configured (PlateSolve:PlateSolve3Path)");
         if (!File.Exists(fitsPath)) return PlateSolveResult.Failed("FITS file not found: " + fitsPath);
         if (!options.HintRa.HasValue || !options.HintDec.HasValue || options.ScaleArcsecPerPixel <= 0) {
@@ -65,6 +66,7 @@ public class PlateSolve3Solver : IPlateSolver {
         if (!string.IsNullOrEmpty(CatalogPath)) args += $" \"{CatalogPath}\"";
 
         _logger.LogInformation("Plate solving {File} with PlateSolve3: {Args}", fitsPath, args);
+        try { onLog?.Invoke($"$ {Path.GetFileName(SolverPath)} {args}"); } catch { }
 
         try {
             var psi = new ProcessStartInfo {
@@ -94,6 +96,11 @@ public class PlateSolve3Solver : IPlateSolver {
             var stdout = await stdoutTask;
             var stderr = await stderrTask;
             _logger.LogDebug("PlateSolve3 exit: {Code}\n{Out}", proc.ExitCode, stdout);
+            if (onLog != null) {
+                foreach (var line in (stdout ?? "").Replace("\r", "").Split('\n'))
+                    if (line.Length > 0) onLog(line);
+                onLog($"[exit {proc.ExitCode}]");
+            }
 
             var result = ParseStdout(stdout, fitsPath);
             result.Output = PlateSolveProcessOutput.Combine(SolverPath, args, stdout, stderr, proc.ExitCode);
