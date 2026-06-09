@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260608-settingscategories">
+    <link rel="stylesheet" href="/css/app.css?v=20260608-solvecancel">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -8292,8 +8292,19 @@
                     </button>
                 </div>
 
+                <!-- Plate solve in-progress banner: elapsed time + Cancel. -->
+                <div x-show="filesSolveBusy" style="padding: 0 8px 8px;">
+                    <div style="display:flex; align-items:center; gap:12px; padding: 8px 10px;
+                                border: 1px solid var(--border); border-radius: 4px; background: var(--bg-elev); font-size: 12px;">
+                        <span class="spinner" aria-hidden="true"></span>
+                        <span>Plate solving… <strong x-text="filesSolveElapsed + 's'"></strong></span>
+                        <button class="btn btn-sm" style="margin-left:auto;"
+                                @click="cancelFilesSolve()">Cancel</button>
+                    </div>
+                </div>
+
                 <!-- Plate solve result card (same shape as PREVIEW). -->
-                <div x-show="filesSolveResult" style="padding: 0 8px 8px;">
+                <div x-show="filesSolveResult && !filesSolveBusy" style="padding: 0 8px 8px;">
                     <div style="padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-elev); font-size: 12px;">
                         <template x-if="filesSolveResult && filesSolveResult.success">
                             <div>
@@ -12513,7 +12524,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260608-settingscategories"></script>
+    <script src="/js/app.js?v=20260608-solvecancel"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

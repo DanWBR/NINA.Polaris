@@ -1486,6 +1486,13 @@ function ninaApp() {
         // PREVIEW but operates on a file path instead of LatestImage).
         filesSolveBusy: false,
         filesSolveResult: null,
+        // Live feedback + cancellation for the STUDIO/FILES plate solve.
+        // _filesSolveAbort is the AbortController for the in-flight request;
+        // aborting it cancels the HTTP call, which makes the server kill the
+        // ASTAP process. filesSolveElapsed is a seconds counter for the UI.
+        _filesSolveAbort: null,
+        _filesSolveTimer: null,
+        filesSolveElapsed: 0,
         // Plate-solve options modal: lets the operator give ASTAP a
         // starting position when the FITS has no RA/DEC header (the
         // common case for old field-test snaps). They can search the
@@ -2838,6 +2845,13 @@ function ninaApp() {
             const timeout = options.timeout || 15000;
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), timeout);
+            // Bridge an external AbortSignal (caller-driven cancellation, e.g.
+            // a Cancel button) into our internal controller so the fetch is
+            // aborted on either the timeout OR the caller's request.
+            if (options.signal) {
+                if (options.signal.aborted) controller.abort();
+                else options.signal.addEventListener('abort', () => controller.abort(), { once: true });
+            }
 
             // AUTH-3: inject the bearer token on every request when we
             // have one. The server's AuthMiddleware accepts the header
@@ -14033,10 +14047,27 @@ function ninaApp() {
             await this.filesPlateSolve(path, opts);
         },
 
+        // Cancel the in-flight STUDIO/FILES plate solve. Aborts the HTTP
+        // request; the server's CancellationToken then kills the ASTAP process.
+        cancelFilesSolve() {
+            if (this._filesSolveAbort) {
+                this._filesSolveAbort.abort();
+                this.toast('Cancelling plate solve…', 'warn');
+            }
+        },
+
         async filesPlateSolve(path, opts) {
             if (!path || this.filesSolveBusy) return;
             this.filesSolveBusy = true;
             this.filesSolveResult = null;
+            // Live elapsed-seconds feedback + a cancellable request.
+            this.filesSolveElapsed = 0;
+            const startedAt = Date.now();
+            this._filesSolveTimer = setInterval(() => {
+                this.filesSolveElapsed = Math.round((Date.now() - startedAt) / 1000);
+            }, 250);
+            const ac = new AbortController();
+            this._filesSolveAbort = ac;
             try {
                 const body = { path };
                 // Explicit hints from the options modal take priority.
@@ -14058,20 +14089,28 @@ function ninaApp() {
                 // AbortError). Give it 180s, comfortably above the server's
                 // own PlateSolve:TimeoutSeconds (120s default).
                 const resp = await this.apiPost(
-                    '/api/platesolve/solve-file', body, { timeout: 180000 });
+                    '/api/platesolve/solve-file', body, { timeout: 180000, signal: ac.signal });
                 const r = await resp.json();
                 this.filesSolveResult = r || { success: false, error: 'No response' };
                 if (this.filesSolveResult.success) {
-                    this.toast('Plate solve succeeded', 'ok');
+                    this.toast('Plate solve succeeded in ' + this.filesSolveElapsed + 's', 'ok');
                 } else {
                     this.toast('Plate solve failed: '
                         + (this.filesSolveResult.error || 'unknown'), 'warn');
                 }
             } catch (e) {
-                this.filesSolveResult = { success: false, error: e.message || 'request failed' };
-                this.toast('Plate solve request failed', 'error');
+                // AbortError = the user cancelled (or the timeout fired).
+                if (e && (e.name === 'AbortError' || /abort/i.test(e.message || ''))) {
+                    this.filesSolveResult = { success: false, error: 'Cancelled' };
+                    this.toast('Plate solve cancelled', 'warn');
+                } else {
+                    this.filesSolveResult = { success: false, error: e.message || 'request failed' };
+                    this.toast('Plate solve request failed', 'error');
+                }
             } finally {
                 this.filesSolveBusy = false;
+                this._filesSolveAbort = null;
+                if (this._filesSolveTimer) { clearInterval(this._filesSolveTimer); this._filesSolveTimer = null; }
             }
         },
 
