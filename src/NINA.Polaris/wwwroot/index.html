@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260609-pslive3">
+    <link rel="stylesheet" href="/css/app.css?v=20260609-skyexp">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -6281,14 +6281,22 @@
                             </summary>
                             <div class="control-row" style="margin-top: 6px; gap: 8px; flex-wrap: wrap">
                                 <label>Exp (s)
-                                    <input type="number" class="input-sm" min="0.1" step="0.5"
-                                           x-model.number="slewCenter.exposureSec"
-                                           @change="saveSlewCenterRigSettings()">
+                                    <select class="input-sm"
+                                            @change="slewCenter.exposureSec = Number($event.target.value); saveSlewCenterRigSettings()"
+                                            title="Solve-frame exposure (1-10 s)">
+                                        <template x-for="s in slewCenterExpOptions" :key="s">
+                                            <option :value="s" :selected="slewCenter.exposureSec === s" x-text="s"></option>
+                                        </template>
+                                    </select>
                                 </label>
                                 <label>Gain
-                                    <input type="number" class="input-sm" min="0" max="600" step="10"
-                                           x-model.number="slewCenter.gain"
-                                           @change="saveSlewCenterRigSettings()">
+                                    <select class="input-sm"
+                                            @change="slewCenter.gain = Number($event.target.value); saveSlewCenterRigSettings()"
+                                            title="Solve-frame gain (range read from the camera)">
+                                        <template x-for="g in slewCenterGainOptions" :key="g">
+                                            <option :value="g" :selected="slewCenter.gain === g" x-text="g"></option>
+                                        </template>
+                                    </select>
                                 </label>
                                 <span class="zwo-gain-presets"
                                       x-show="zwoPresetsForActiveCamera()"
@@ -12585,7 +12593,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260609-pslive3"></script>
+    <script src="/js/app.js?v=20260609-skyexp"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

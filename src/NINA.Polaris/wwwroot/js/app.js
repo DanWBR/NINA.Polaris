@@ -17101,6 +17101,34 @@ function ninaApp() {
             set.add(cur); // keep a persisted off-step value visible/selectable
             return Array.from(set).sort((a, b) => a - b);
         },
+
+        // SKY "Solve frame" Exp dropdown: whole seconds 1..10 (step 1),
+        // same dropdown scheme as GUIDE. A persisted off-grid value (e.g.
+        // an old 0.5s) is folded in so it still shows / round-trips.
+        get slewCenterExpOptions() {
+            const set = new Set();
+            for (let s = 1; s <= 10; s++) set.add(s);
+            const cur = Number(this.slewCenter?.exposureSec);
+            if (Number.isFinite(cur) && cur > 0) set.add(cur);
+            return Array.from(set).sort((a, b) => a - b);
+        },
+        // SKY "Solve frame" Gain dropdown: built from the MAIN camera's
+        // reported min/max (the solve frame is captured by the imaging
+        // camera), min + max + 9 intermediates, plus the persisted value.
+        get slewCenterGainOptions() {
+            const lo = Math.round(Number(this.equipCameraInfo?.gainMin) || 0);
+            const hi = Math.round(Number(this.equipCameraInfo?.gainMax) || 0);
+            const cur = Math.max(0, Math.round(Number(this.slewCenter?.gain) || 0));
+            const set = new Set();
+            if (hi > lo) {
+                const STEPS = 10;
+                for (let i = 0; i <= STEPS; i++) set.add(Math.round(lo + (hi - lo) * i / STEPS));
+            } else {
+                set.add(lo);
+            }
+            set.add(cur);
+            return Array.from(set).sort((a, b) => a - b);
+        },
         setGuideBin(v) {
             this.guideBin = (Number(v) === 2) ? 2 : 1;
             this._persistRigSelection({ nativeGuideBin: this.guideBin });
