@@ -48,3 +48,23 @@ public interface IPlateSolver {
     /// </summary>
     Task<PlateSolveResult> SolveAsync(string fitsPath, PlateSolveOptions options, CancellationToken ct = default);
 }
+
+/// <summary>Shared helpers for the external-process solvers.</summary>
+public static class PlateSolveProcessOutput {
+    /// <summary>Format a solver run (command + stdout + stderr + exit code)
+    /// into a single human-readable block for the UI's "process output" panel.
+    /// Tail-trimmed so a chatty solver doesn't bloat the JSON payload.</summary>
+    public static string Combine(string exe, string args, string? stdout, string? stderr, int? exitCode) {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("$ ").Append(exe).Append(' ').Append(args).Append('\n');
+        if (!string.IsNullOrWhiteSpace(stdout)) sb.Append(Tail(stdout!, 8000)).Append('\n');
+        if (!string.IsNullOrWhiteSpace(stderr)) sb.Append("[stderr] ").Append(Tail(stderr!, 4000)).Append('\n');
+        if (exitCode.HasValue) sb.Append("[exit ").Append(exitCode.Value).Append(']');
+        return sb.ToString().TrimEnd();
+    }
+
+    private static string Tail(string s, int maxChars) {
+        s = s.Replace("\r", "");
+        return s.Length <= maxChars ? s : "…" + s[^maxChars..];
+    }
+}

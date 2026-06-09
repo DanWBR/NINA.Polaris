@@ -92,9 +92,12 @@ public class PlateSolve3Solver : IPlateSolver {
             }
 
             var stdout = await stdoutTask;
+            var stderr = await stderrTask;
             _logger.LogDebug("PlateSolve3 exit: {Code}\n{Out}", proc.ExitCode, stdout);
 
-            return ParseStdout(stdout, fitsPath);
+            var result = ParseStdout(stdout, fitsPath);
+            result.Output = PlateSolveProcessOutput.Combine(SolverPath, args, stdout, stderr, proc.ExitCode);
+            return result;
         } catch (Exception ex) when (ex is not OperationCanceledException) {
             return PlateSolveResult.Failed(ex.Message);
         }

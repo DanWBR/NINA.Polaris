@@ -85,9 +85,12 @@ public class AstrometryNetLocalSolver : IPlateSolver {
             }
 
             var stdout = await stdoutTask;
+            var stderr = await stderrTask;
             _logger.LogDebug("solve-field exit: {Code}\n{Out}", proc.ExitCode, stdout);
 
-            return ParseStdout(stdout);
+            var result = ParseStdout(stdout);
+            result.Output = PlateSolveProcessOutput.Combine(SolverPath, args, stdout, stderr, proc.ExitCode);
+            return result;
         } catch (Exception ex) when (ex is not OperationCanceledException) {
             return PlateSolveResult.Failed(ex.Message);
         }

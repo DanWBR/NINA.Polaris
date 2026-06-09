@@ -138,6 +138,10 @@ public class PlateSolveResult {
     /// <summary>Id of the solver that produced this result (or attempted to).</summary>
     public string? SolverUsed { get; set; }
 
+    /// <summary>Raw solver process output (stdout + stderr), surfaced to the UI
+    /// so the operator can see what the backend did. Null when not captured.</summary>
+    public string? Output { get; set; }
+
     public static PlateSolveResult Failed(string error) =>
         new() { Success = false, Error = error };
 }

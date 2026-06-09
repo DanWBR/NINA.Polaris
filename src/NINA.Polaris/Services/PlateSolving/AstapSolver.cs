@@ -91,6 +91,9 @@ public class AstapSolver : IPlateSolver {
 
             _logger.LogDebug("ASTAP exit code: {Code}, stdout: {Out}", proc.ExitCode, stdout);
 
+            // Full process output, surfaced to the UI for every outcome.
+            var output = PlateSolveProcessOutput.Combine(SolverPath, args, stdout, stderr, proc.ExitCode);
+
             if (proc.ExitCode != 0 && proc.ExitCode != 2) {
                 // ASTAP writes almost everything to stdout, not stderr,
                 // so surfacing only stderr leaves the user with a bare
@@ -100,11 +103,15 @@ public class AstapSolver : IPlateSolver {
                 var detail = !string.IsNullOrWhiteSpace(stderr) ? stderr.Trim()
                            : !string.IsNullOrWhiteSpace(stdout) ? Tail(stdout, 1500)
                            : "(no output)";
-                return PlateSolveResult.Failed(
-                    $"ASTAP failed (exit {proc.ExitCode}): {detail}");
+                return new PlateSolveResult {
+                    Success = false, SolverUsed = Id, Output = output,
+                    Error = $"ASTAP failed (exit {proc.ExitCode}): {detail}"
+                };
             }
 
-            return ParseIniResult(fitsPath);
+            var result = ParseIniResult(fitsPath);
+            result.Output = output;
+            return result;
         } catch (Exception ex) when (ex is not OperationCanceledException) {
             _logger.LogError(ex, "ASTAP plate solve failed");
             return PlateSolveResult.Failed(ex.Message);
@@ -454,17 +461,22 @@ public class AstapSolver : IPlateSolver {
                     return PlateSolveResult.Failed("ASTAP timed out");
                 }
 
+                var output = PlateSolveProcessOutput.Combine(SolverPath, args, stdout, stderr, proc.ExitCode);
+
                 if (proc.ExitCode != 0 && proc.ExitCode != 2) {
                     deleteProxyOnExit = false;
                     var detail = !string.IsNullOrWhiteSpace(stderr) ? stderr.Trim()
                                : !string.IsNullOrWhiteSpace(stdout) ? Tail(stdout, 1500)
                                : "(no output)";
-                    return PlateSolveResult.Failed(
-                        $"ASTAP failed on multi-channel proxy " +
-                        $"(exit {proc.ExitCode}, {planeStats}, proxy={proxyPath}): {detail}");
+                    return new PlateSolveResult {
+                        Success = false, SolverUsed = Id, Output = output,
+                        Error = $"ASTAP failed on multi-channel proxy " +
+                            $"(exit {proc.ExitCode}, {planeStats}, proxy={proxyPath}): {detail}"
+                    };
                 }
 
                 var result = ParseIniResult(proxyPath);
+                result.Output = output;
                 if (!result.Success) return result;
 
                 // Stamp WCS into the ORIGINAL multi-channel FITS so
