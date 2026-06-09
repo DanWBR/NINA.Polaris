@@ -4753,6 +4753,21 @@ label select.input-sm {
     color: #c9d2e0;
 }
 
+/* PHD2 GUI readiness overlay: shown over the embed area while the xpra
+   session + PHD2 are starting and the HTML5 server isn't serving yet. */
+.phd2-gui-starting {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: #0b0e13;
+    color: #c9d2e0;
+    font-size: 13px;
+}
+
 /* HCG (High Conversion Gain) badge shown next to a gain control when the
    selected gain is at/above the camera's HCG threshold. */
 .hcg-badge {
@@ -9274,6 +9289,7 @@ label select.input-sm {
     flex-direction: column;
     flex: 1;
     min-height: 0;
+    position: relative; /* anchor for .phd2-gui-starting overlay */
 }
 .phd2-gui-toolbar {
     display: flex;

@@ -1151,6 +1151,17 @@ function ninaApp() {
         smartCalibrate: { slewToEquator: false },
         phd2GuiSession: null,            // { supportedOs, xpraInstalled, running, port, ... }
         phd2GuiBusy: false,
+        // PH2X: readiness orchestration for the embedded xpra/PHD2 GUI.
+        // The xpra TCP port can be up (SessionRunning=true) a few seconds
+        // before its HTML5 server actually serves the index, so loading the
+        // iframe on "running" alone yielded an xpra 404 / "session not
+        // running" page that only cleared after manual refreshes. We instead
+        // poll a real readiness probe and only point the iframe at the proxy
+        // once it returns 200. phd2GuiStarting drives a "starting…" overlay.
+        phd2GuiReady: false,
+        phd2GuiStarting: false,
+        phd2GuiIframeSrc: '/phd2-gui/',
+        _phd2GuiEnsuring: false,
         // PH2VNC: Windows TightVNC + noVNC bridge state, sibling of
         // phd2GuiSession. Populated by /api/guider/vnc-session/status
         // and refreshed every 1 Hz via the WS payload's
@@ -19752,17 +19763,73 @@ function ninaApp() {
                 this.phd2GuiSession = await this.apiGet('/api/guider/gui-session/status');
             } catch (e) { this.phd2GuiSession = { supportedOs: false, lastError: e.message }; }
         },
-        async phd2GuiStart() {
-            this.phd2GuiBusy = true;
+
+        // Probe whether the xpra HTML5 server is actually serving its index
+        // yet. The TCP port can be up before the HTTP/html5 routes are, so
+        // a 200 here is the only reliable "the iframe will render" signal.
+        async phd2GuiProbeReady() {
             try {
-                const r = await this.apiPost('/api/guider/gui-session/start');
-                if (r.running) {
-                    this.toast('PHD2 GUI session started', 'ok');
-                } else {
-                    this.toast('Start failed: ' + (r.error || 'unknown'), 'error');
+                const r = await fetch('/phd2-gui/?probe=' + Date.now(),
+                    { cache: 'no-store', credentials: 'same-origin' });
+                return r.status === 200;
+            } catch (e) { return false; }
+        },
+
+        // Orchestrate the whole bring-up so the operator doesn't have to do
+        // the start → relaunch → refresh dance: start the session if needed,
+        // launch PHD2 inside it if missing, then poll the readiness probe and
+        // only point the iframe at the proxy once xpra answers 200. Drives a
+        // "starting…" overlay meanwhile. Idempotent / re-entrant-guarded.
+        async phd2GuiEnsureReady() {
+            if (this._phd2GuiEnsuring) return;
+            this._phd2GuiEnsuring = true;
+            this.phd2GuiStarting = true;
+            this.phd2GuiReady = false;
+            try {
+                await this.loadPhd2GuiStatus();
+                let s = this.phd2GuiSession || {};
+                // Unsupported / xpra missing → the static banners handle it.
+                if (!s.supportedOs || !s.supportedArch || !s.xpraInstalled) return;
+
+                if (!s.running) {
+                    try { await this.apiPost('/api/guider/gui-session/start'); } catch (e) { }
                 }
-            } catch (e) { this.toast('Start failed: ' + e.message, 'error'); }
-            finally {
+
+                let relaunched = false;
+                // ~25 × 1.5s ≈ 37s budget; xpra + PHD2 cold start on a Pi-
+                // class board is usually ready well within that.
+                for (let i = 0; i < 25; i++) {
+                    await this.loadPhd2GuiStatus();
+                    s = this.phd2GuiSession || {};
+                    if (s.running) {
+                        // Launch PHD2 once if it isn't up (and we're not
+                        // already talking to it over JSON-RPC).
+                        if (!s.phd2Running && !this.guider?.connected && !relaunched) {
+                            relaunched = true;
+                            try { await this.apiPost('/api/guider/gui-session/relaunch-phd2'); } catch (e) { }
+                        }
+                        if (await this.phd2GuiProbeReady()) {
+                            this.phd2GuiReady = true;
+                            this._reloadPhd2GuiIframe();
+                            return;
+                        }
+                    }
+                    await new Promise(r => setTimeout(r, 1500));
+                }
+                this.toast('PHD2 GUI demorou a iniciar — tente Restart', 'warn');
+            } finally {
+                this.phd2GuiStarting = false;
+                this._phd2GuiEnsuring = false;
+            }
+        },
+        async phd2GuiStart() {
+            // Full bring-up + readiness wait + iframe load, so the user
+            // doesn't have to start/relaunch/refresh manually.
+            this.phd2GuiBusy = true;
+            this.phd2GuiReady = false;
+            try {
+                await this.phd2GuiEnsureReady();
+            } finally {
                 this.phd2GuiBusy = false;
                 await this.loadPhd2GuiStatus();
             }
@@ -19780,17 +19847,16 @@ function ninaApp() {
         },
         async phd2GuiRestart() {
             this.phd2GuiBusy = true;
+            this.phd2GuiReady = false;
             try {
-                const r = await this.apiPost('/api/guider/gui-session/restart');
-                this.toast(r.running ? 'PHD2 GUI restarted' : ('Restart failed: ' + (r.error || '')),
-                    r.running ? 'ok' : 'error');
+                await this.apiPost('/api/guider/gui-session/restart');
+                // Re-run the readiness orchestration so the iframe only
+                // reloads once xpra is serving again (avoids the 404 flash).
+                await this.phd2GuiEnsureReady();
             } catch (e) { this.toast('Restart failed: ' + e.message, 'error'); }
             finally {
                 this.phd2GuiBusy = false;
                 await this.loadPhd2GuiStatus();
-                // Force the iframe to reload so the user sees the
-                // refreshed PHD2 window without having to hard-refresh.
-                this._reloadPhd2GuiIframe();
             }
         },
         async phd2GuiRelaunchPhd2() {
@@ -19799,12 +19865,20 @@ function ninaApp() {
                 const r = await this.apiPost('/api/guider/gui-session/relaunch-phd2');
                 if (r.phd2Running) {
                     this.toast('PHD2 relaunched inside session', 'ok');
-                    // Iframe currently shows a bare xpra desktop; reload
-                    // to pick up the freshly-spawned PHD2 window.
-                    this._reloadPhd2GuiIframe();
                 } else {
-                    this.toast('Relaunch failed: ' + (r.error || 'unknown'), 'error');
+                    // The relaunch may still be settling (xpra dispatch +
+                    // process spawn lag); don't hard-fail. Reload once the
+                    // proxy serves again.
+                    this.toast('Relaunching PHD2…', 'info');
                 }
+                // Reload the iframe only after xpra is serving the fresh
+                // PHD2 window, instead of immediately (which flashed a 404).
+                this.$nextTick(async () => {
+                    for (let i = 0; i < 10; i++) {
+                        if (await this.phd2GuiProbeReady()) { this._reloadPhd2GuiIframe(); break; }
+                        await new Promise(r => setTimeout(r, 1000));
+                    }
+                });
             } catch (e) {
                 this.toast('Relaunch failed: ' + e.message, 'error');
             } finally {
@@ -19813,16 +19887,12 @@ function ninaApp() {
             }
         },
         _reloadPhd2GuiIframe() {
-            // Defer + reassign src so xpra HTML5 client reconnects
-            // after a session restart / phd2 relaunch.
-            this.$nextTick(() => {
-                const iframe = document.querySelector('.phd2-gui-iframe');
-                if (iframe) {
-                    // Cache-buster ensures the iframe actually re-fetches
-                    // even if it would otherwise reuse the existing connection.
-                    iframe.src = '/phd2-gui/?_=' + Date.now();
-                }
-            });
+            // Drive the iframe src from state (Alpine :src binding) with a
+            // cache-buster so xpra's HTML5 client re-fetches after a session
+            // restart / phd2 relaunch. Bound in the template as
+            // :src="phd2GuiReady ? phd2GuiIframeSrc : 'about:blank'".
+            this.phd2GuiReady = true;
+            this.phd2GuiIframeSrc = '/phd2-gui/?_=' + Date.now();
         },
 
         // ----- PH2VNC: Windows TightVNC + noVNC bridge lifecycle -----

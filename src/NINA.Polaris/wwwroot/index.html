@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260609-skygrid">
+    <link rel="stylesheet" href="/css/app.css?v=20260609-phd2gui">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -3496,7 +3496,7 @@
                          GUI to embed). -->
                     <button class="guide-tab" :class="{ active: guideTab === 'gui' }"
                             x-show="guider.backend !== 'native'"
-                            @click="guideTab = 'gui'; loadPhd2GuiStatus(); loadPhd2VncStatus()">PHD2 GUI</button>
+                            @click="guideTab = 'gui'; loadPhd2VncStatus(); phd2GuiEnsureReady()">PHD2 GUI</button>
                     <button class="guide-tab" :class="{ active: guideTab === 'control' }"
                             x-show="guider.backend !== 'native'"
                             @click="guideTab = 'control'">Control</button>
@@ -4004,7 +4004,7 @@
                         Assistant) so you can do everything remotely.
                     </div>
                     <!-- State 3: xpra installed but session not running -->
-                    <div x-show="phd2GuiSession && phd2GuiSession.supportedOs && phd2GuiSession.supportedArch && phd2GuiSession.xpraInstalled && !phd2GuiSession.running"
+                    <div x-show="phd2GuiSession && phd2GuiSession.supportedOs && phd2GuiSession.supportedArch && phd2GuiSession.xpraInstalled && !phd2GuiSession.running && !phd2GuiStarting"
                          class="phd2-gui-empty">
                         <h3>PHD2 GUI session not running</h3>
                         <p>Starting takes ~5–10 seconds (spins up an Xorg-dummy
@@ -4018,7 +4018,7 @@
                            style="margin-top:8px" x-text="phd2GuiSession.lastError"></p>
                     </div>
                     <!-- State 4: Session running, iframe + toolbar -->
-                    <div x-show="phd2GuiSession && phd2GuiSession.supportedOs && phd2GuiSession.running" class="phd2-gui-frame-wrap">
+                    <div x-show="phd2GuiSession && phd2GuiSession.supportedOs && (phd2GuiSession.running || phd2GuiStarting)" class="phd2-gui-frame-wrap">
                         <div class="phd2-gui-toolbar">
                             <span class="text-ok">✓ xpra v<span x-text="phd2GuiSession?.xpraVersion"></span></span>
                             <span class="text-muted" style="font-size:11px">
@@ -4080,8 +4080,18 @@
                              only fires after /api/auth/status has
                              round-tripped and proven the cookie is
                              live in the browser. -->
+                        <!-- Readiness overlay: xpra's HTML5 server can lag
+                             the TCP listen by a few seconds, so we only point
+                             the iframe at the proxy once phd2GuiProbeReady()
+                             succeeds. Until then show a spinner instead of
+                             xpra's 404 / "session not running" page. -->
+                        <div x-show="phd2GuiStarting && !phd2GuiReady"
+                             class="phd2-gui-starting">
+                            <span class="spinner" aria-hidden="true"></span>
+                            <span>Starting PHD2 GUI… (xpra session + PHD2)</span>
+                        </div>
                         <iframe class="phd2-gui-iframe"
-                                :src="auth.authenticated ? '/phd2-gui/' : 'about:blank'"
+                                :src="(auth.authenticated && phd2GuiReady) ? phd2GuiIframeSrc : 'about:blank'"
                                 allow="fullscreen"></iframe>
                     </div>
 
@@ -12619,7 +12629,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260609-skygrid"></script>
+    <script src="/js/app.js?v=20260609-phd2gui"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
