@@ -13911,6 +13911,11 @@ function ninaApp() {
             if (this.previewSolveBusy) return;
             this.previewSolveBusy = true;
             this.previewSolveResult = null;
+            // Shared live solver console (see filesSolveLog): cleared here so
+            // the PREVIEW panel shows this solve's output, refilled by the
+            // /ws/status plateSolve stream.
+            this.filesSolveLog = '';
+            this.filesSolveLiveActive = true;
             try {
                 const body = {};
                 if (this.mount?.connected

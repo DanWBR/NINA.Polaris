@@ -41,17 +41,20 @@ public class SlewCenterService {
     private readonly ProfileService _profiles;
     private readonly CameraStreamService _stream;
     private readonly ILogger<SlewCenterService> _logger;
+    private readonly NINA.Polaris.Services.PlateSolving.PlateSolveProgressService? _progress;
 
     private readonly ConcurrentDictionary<string, SlewCenterJob> _jobs = new();
 
     public SlewCenterService(EquipmentManager equip, PlateSolveService solver,
         ProfileService profiles, CameraStreamService stream,
-        ILogger<SlewCenterService> logger) {
+        ILogger<SlewCenterService> logger,
+        NINA.Polaris.Services.PlateSolving.PlateSolveProgressService? progress = null) {
         _equip = equip;
         _solver = solver;
         _profiles = profiles;
         _stream = stream;
         _logger = logger;
+        _progress = progress;
     }
 
     public SlewCenterJob StartJob(double ra, double dec, double toleranceArcsec = 30,
@@ -108,6 +111,9 @@ public class SlewCenterService {
         double solveExposure = rig.SlewCenterExposureSec > 0 ? rig.SlewCenterExposureSec : 5.0;
         int solveGain = rig.SlewCenterGain > 0 ? rig.SlewCenterGain : 100;
 
+        // Live solver console for the SKY tab, same stream the STUDIO/
+        // PREVIEW solves use (one solve at a time).
+        _progress?.Begin("SKY (slew & center)");
         try {
             if (_equip.Telescope == null) {
                 job.Error = "No telescope connected";
@@ -239,12 +245,13 @@ public class SlewCenterService {
                 // Step 3: Plate solve
                 job.State = SlewCenterState.Solving;
                 _logger.LogInformation("Plate solving...");
+                _progress?.Append($"-- iteration {i + 1}/{maxIterations}: plate solving --");
 
                 var solveResult = await _solver.SolveAsync(tempFits, new PlateSolveOptions {
                     HintRa = job.TargetRa,
                     HintDec = job.TargetDec,
                     SearchRadiusDeg = 10
-                }, ct);
+                }, ct, _progress != null ? _progress.Append : null);
 
                 try { File.Delete(tempFits); } catch { }
 
@@ -340,6 +347,8 @@ public class SlewCenterService {
             job.State = SlewCenterState.Failed;
             job.Error = ex.Message;
             _logger.LogError(ex, "Slew-and-center failed");
+        } finally {
+            _progress?.End();
         }
     }
 

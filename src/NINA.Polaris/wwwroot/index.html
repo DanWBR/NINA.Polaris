@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260609-pslive">
+    <link rel="stylesheet" href="/css/app.css?v=20260609-pslive2">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -2772,6 +2772,15 @@
                         </button>
                     </div>
                     </div><!-- /.shutter-secondary -->
+
+                    <!-- Live solver console while solving (shared
+                         filesSolveLog, streamed via /ws/status plateSolve). -->
+                    <div class="control-row" style="margin-top: 8px;" x-show="previewSolveBusy">
+                        <pre x-show="filesSolveLog"
+                             x-text="filesSolveLog"
+                             x-effect="filesSolveLog; $el.scrollTop = $el.scrollHeight"
+                             class="solver-output-live" style="flex:1;"></pre>
+                    </div>
 
                     <!-- FIELD4-4: plate solve result card. Renders only
                          after a solve completes (success or failure).
@@ -6392,6 +6401,12 @@
                         <button class="btn btn-sm btn-danger" @click="cancelSlewCenter()"
                                 style="margin-left:auto">Cancel</button>
                     </div>
+                    <!-- Live solver console during the solve step (shared
+                         filesSolveLog, streamed via /ws/status plateSolve). -->
+                    <pre x-show="filesSolveLog"
+                         x-text="filesSolveLog"
+                         x-effect="filesSolveLog; $el.scrollTop = $el.scrollHeight"
+                         class="solver-output-live"></pre>
                 </div>
 
                 <!-- The old .sky-info-panel sat below the iframe and
@@ -12555,7 +12570,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260609-pslive"></script>
+    <script src="/js/app.js?v=20260609-pslive2"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
