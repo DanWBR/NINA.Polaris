@@ -4753,6 +4753,23 @@ label select.input-sm {
     color: #c9d2e0;
 }
 
+/* HCG (High Conversion Gain) badge shown next to a gain control when the
+   selected gain is at/above the camera's HCG threshold. */
+.hcg-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #06210f;
+    background: #34d399;
+    border: 1px solid #10b981;
+    cursor: help;
+    user-select: none;
+}
+
 /* Live plate-solve console: streamed solver output while solving. */
 .solver-output-live {
     margin: 6px 0 0;

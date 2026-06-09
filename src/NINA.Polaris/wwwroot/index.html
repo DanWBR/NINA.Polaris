@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260609-skyexp">
+    <link rel="stylesheet" href="/css/app.css?v=20260609-hcg">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -907,6 +907,8 @@
                                     :data-active="gain === zwoPresetsForActiveCamera()?.H"
                                     @click="applyGainPreset('gain', zwoPresetsForActiveCamera().H)">H</button>
                         </span>
+                        <span class="hcg-badge" x-show="isHcgActive(gain)" x-cloak
+                              :title="'High Conversion Gain active (gain >= ' + hcgThreshold() + ')'">HCG</span>
                         <span class="bin-presets" role="group" aria-label="Binning">
                             <template x-for="b in ['1','2','3','4']" :key="b">
                                 <button type="button" class="bin-preset"
@@ -2553,6 +2555,8 @@
                                     :data-active="preview.gain === zwoPresetsForActiveCamera()?.H"
                                     @click="applyGainPreset('preview.gain', zwoPresetsForActiveCamera().H)">H</button>
                         </span>
+                        <span class="hcg-badge" x-show="isHcgActive(preview.gain)" x-cloak
+                              :title="'High Conversion Gain active (gain >= ' + hcgThreshold() + ')'">HCG</span>
                         <span class="bin-presets" role="group" aria-label="Binning">
                             <template x-for="b in ['1','2','3','4']" :key="b">
                                 <button type="button" class="bin-preset"
@@ -6311,6 +6315,23 @@
                                             :data-active="slewCenter.gain === zwoPresetsForActiveCamera()?.H"
                                             @click="applyGainPreset('slewCenter.gain', zwoPresetsForActiveCamera().H); saveSlewCenterRigSettings()">H</button>
                                 </span>
+                                <span class="hcg-badge" x-show="isHcgActive(slewCenter.gain)" x-cloak
+                                      :title="'High Conversion Gain active (gain >= ' + hcgThreshold() + ')'">HCG</span>
+                            </div>
+                            <!-- Camera read-mode / HCG driver control. Shows
+                                 only when the connected (INDI) camera exposes
+                                 a read-mode / gain-mode / HCG switch property.
+                                 Camera-wide setting; lives here for visibility. -->
+                            <div class="control-row" style="margin-top: 6px; gap: 8px"
+                                 x-show="cameraReadMode" x-cloak>
+                                <label x-text="(cameraReadMode?.label || 'Read mode') + ':'"></label>
+                                <select class="input-sm"
+                                        @change="setCameraReadMode($event.target.value)"
+                                        :title="'Camera driver read-mode / HCG selector (' + (cameraReadMode?.device||'') + ')'">
+                                    <template x-for="o in (cameraReadMode?.options || [])" :key="o.name">
+                                        <option :value="o.name" :selected="o.active" x-text="o.label"></option>
+                                    </template>
+                                </select>
                             </div>
                             <p class="hint" style="margin: 6px 0 0 0; font-size: 11px">
                                 Used by Slew &amp; Center, meridian-flip recenter, and live-stack auto-recenter. Saved per-rig.
@@ -12593,7 +12614,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260609-skyexp"></script>
+    <script src="/js/app.js?v=20260609-hcg"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

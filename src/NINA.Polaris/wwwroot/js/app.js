@@ -608,6 +608,13 @@ function ninaApp() {
         // null if the active camera isn't recognised as a ZWO model.
         _zwoPresets: null,
 
+        // Camera read-mode / HCG driver control. Populated by
+        // loadCameraReadModes() from the INDI property tree when the
+        // connected camera exposes a read-mode / gain-mode / HCG switch
+        // vector; null otherwise (no dedicated control to show). Shape:
+        // { device, property, label, options:[{name,label,active}] }.
+        cameraReadMode: null,
+
         // WebSocket state
         statusWs: null,
         imageWs: null,
@@ -4233,6 +4240,93 @@ function ninaApp() {
                 if (obj == null) return;
             }
             obj[parts[parts.length - 1]] = value;
+        },
+
+        // ----- HCG (High Conversion Gain) helpers -----
+        // The HCG threshold for the active (main imaging) camera, from the
+        // ZWO presets table's `hcg` field. null when unknown / not a ZWO
+        // model / the sensor has no distinct HCG step.
+        hcgThreshold() {
+            const p = this.zwoPresetsForActiveCamera();
+            return (p && p.hcg != null) ? Number(p.hcg) : null;
+        },
+        // True when a given gain value puts the sensor in HCG mode, i.e.
+        // gain >= the camera's HCG threshold. Drives the "HCG" badge next
+        // to gain controls.
+        isHcgActive(gain) {
+            const t = this.hcgThreshold();
+            return t != null && Number(gain) >= t;
+        },
+
+        // ----- Camera read-mode / HCG driver control (INDI) -----
+        // Some cameras expose a read-mode / gain-mode / HCG selector as a
+        // driver switch property (mostly INDI: QHY read modes, some SVBony
+        // /touptek drivers). Scan the INDI property tree for the camera's
+        // switch vector that looks like a read-mode selector and surface it
+        // as a dedicated dropdown, instead of making the user dig through
+        // the raw INDI property tree. Best-effort: sets cameraReadMode to
+        // null (control hidden) when nothing matches or INDI is absent.
+        async loadCameraReadModes() {
+            try {
+                if (!this.indiConnected) { this.cameraReadMode = null; return; }
+                const r = await this.apiGet('/api/indi/properties');
+                if (!r || !r.connected || !Array.isArray(r.devices)) {
+                    this.cameraReadMode = null; return;
+                }
+                const rmRe = /read[\s_-]?mode|readout|gain[\s_-]?mode|conversion|hcg/i;
+                for (const dev of r.devices) {
+                    const props = dev.properties || [];
+                    // Only consider camera devices (advertise a CCD/CMOS vector).
+                    const isCam = props.some(p => /^(CCD_|CMOS_|GUIDER_)/i.test(p.name)
+                        || p.name === 'CCD_EXPOSURE');
+                    if (!isCam) continue;
+                    const rm = props.find(p => p.type === 'switch'
+                        && p.permission !== 'ro'
+                        && (p.elements || []).length >= 2
+                        && rmRe.test((p.name || '') + ' ' + (p.label || '')));
+                    if (rm) {
+                        this.cameraReadMode = {
+                            device: dev.name,
+                            property: rm.name,
+                            label: rm.label || rm.name,
+                            options: (rm.elements || []).map(e => ({
+                                name: e.name,
+                                label: e.label || e.name,
+                                active: !!e.value
+                            }))
+                        };
+                        return;
+                    }
+                }
+                this.cameraReadMode = null;
+            } catch (e) {
+                this.cameraReadMode = null;
+            }
+        },
+        // Currently-selected read-mode option name (for the <select> binding).
+        get cameraReadModeCurrent() {
+            const rm = this.cameraReadMode;
+            if (!rm) return '';
+            const on = rm.options.find(o => o.active);
+            return on ? on.name : '';
+        },
+        async setCameraReadMode(memberName) {
+            const rm = this.cameraReadMode;
+            if (!rm || !memberName) return;
+            try {
+                await this.apiPost('/api/indi/properties/set', {
+                    device: rm.device,
+                    property: rm.property,
+                    type: 'switch',
+                    switches: { [memberName]: true }
+                });
+                const opt = rm.options.find(o => o.name === memberName);
+                this.toast('Read mode: ' + (opt ? (opt.label || opt.name) : memberName), 'ok');
+                // Give the driver a beat to apply, then re-read state.
+                setTimeout(() => this.loadCameraReadModes(), 600);
+            } catch (e) {
+                this.toast('Failed to set read mode: ' + (e.message || 'error'), 'error');
+            }
         },
 
         // ----- Remote terminal (xterm.js + SSH via /ws/terminal) -----
@@ -22154,6 +22248,9 @@ function ninaApp() {
                 this.indiConnected = eq.indi.connected;
                 if (wasIndiDisconnected && this.indiConnected) {
                     this.refreshDevices();
+                    // Detect a camera read-mode / HCG switch property to
+                    // surface the dedicated control.
+                    this.loadCameraReadModes();
                 }
             }
             if (eq.camera) {
