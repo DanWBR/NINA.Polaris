@@ -227,18 +227,27 @@ public class GraXpertService {
                 return new GraXpertResult("", null, opts.Operation,
                     sw.Elapsed.TotalSeconds, $"exit {proc.ExitCode}: {err}");
             }
-            if (!File.Exists(outputPath) || new FileInfo(outputPath).Length == 0) {
+            // GraXpert decides the output container itself: a ".fit" input
+            // commonly comes back as ".fits" (astropy's canonical
+            // extension), and on some hosts the file lands a fraction of a
+            // second after the process exits. Both made the strict
+            // File.Exists(outputPath) check fail even though GraXpert
+            // succeeded (a STUDIO refresh then showed the file). Resolve the
+            // real written file by polling briefly and accepting a
+            // sibling-extension match.
+            var written = await ResolveWrittenOutputAsync(outputPath, ct);
+            if (written == null) {
                 return new GraXpertResult("", null, opts.Operation,
                     sw.Elapsed.TotalSeconds, "GraXpert reported success but no output file appeared");
             }
 
             string? bgPath = null;
             if (opts.Operation == GraXpertOperation.BackgroundExtraction && opts.SaveBackground) {
-                var candidate = Path.ChangeExtension(outputPath, null) + "_bg" + Path.GetExtension(outputPath);
-                if (File.Exists(candidate)) bgPath = candidate;
+                var stem = Path.ChangeExtension(written, null) + "_bg";
+                bgPath = FindSiblingExtension(stem);
             }
 
-            return new GraXpertResult(outputPath, bgPath, opts.Operation,
+            return new GraXpertResult(written, bgPath, opts.Operation,
                 sw.Elapsed.TotalSeconds, null);
         } catch (OperationCanceledException) {
             return new GraXpertResult("", null, opts.Operation,
@@ -273,6 +282,54 @@ public class GraXpertService {
     /// it isn't there already. Best-effort: any failure just falls back to
     /// GraXpert's normal model resolution.
     /// </summary>
+    /// <summary>
+    /// Known image extensions GraXpert may emit, in the order we prefer to
+    /// accept them when the exact requested extension isn't what landed.
+    /// </summary>
+    private static readonly string[] OutputExtCandidates =
+        { ".fits", ".fit", ".fts", ".tiff", ".tif", ".xisf", ".png" };
+
+    /// <summary>
+    /// Resolve the file GraXpert actually wrote. GraXpert chooses the
+    /// container itself (a ".fit" input often comes back ".fits"), and on
+    /// some hosts the file is still being flushed when the process exits.
+    /// So we poll briefly and accept either the exact path or a
+    /// same-stem sibling with a different known image extension. Returns
+    /// the real path, or null if nothing non-empty appeared in time.
+    /// </summary>
+    private static async Task<string?> ResolveWrittenOutputAsync(string outputPath,
+                                                                 CancellationToken ct) {
+        // ~3s budget: most hosts write instantly; slow disks / network
+        // shares occasionally lag a beat behind process exit.
+        for (int attempt = 0; attempt < 12; attempt++) {
+            if (NonEmpty(outputPath)) return outputPath;
+            var sibling = FindSiblingExtension(Path.ChangeExtension(outputPath, null));
+            if (sibling != null) return sibling;
+            if (attempt < 11) {
+                try { await Task.Delay(250, ct); }
+                catch (OperationCanceledException) { break; }
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Given a path stem (no extension), return the first existing,
+    /// non-empty file with one of the known image extensions, or null.
+    /// </summary>
+    private static string? FindSiblingExtension(string stem) {
+        foreach (var ext in OutputExtCandidates) {
+            var cand = stem + ext;
+            if (NonEmpty(cand)) return cand;
+        }
+        return null;
+    }
+
+    private static bool NonEmpty(string path) {
+        try { return File.Exists(path) && new FileInfo(path).Length > 0; }
+        catch { return false; }
+    }
+
     /// <summary>
     /// GraXpert's on-disk model dir name for an operation, plus the
     /// canonical family id the <see cref="Onnx.OnnxModelRegistry"/> indexes

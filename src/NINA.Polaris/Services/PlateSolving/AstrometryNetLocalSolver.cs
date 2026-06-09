@@ -89,6 +89,17 @@ public class AstrometryNetLocalSolver : IPlateSolver {
             _logger.LogDebug("solve-field exit: {Code}\n{Out}", proc.ExitCode, stdout);
 
             var result = ParseStdout(stdout);
+            // A solve-field built from source (or a partial install) often
+            // solves and writes the .wcs file but cannot print the
+            // human-readable "Field center" summary, because that step
+            // shells out to helper tools (wcsinfo etc.) that may not be on
+            // PATH. stdout then lacks the line we scrape and parsing fails
+            // even though the solve succeeded. Fall back to reading the
+            // .wcs FITS header solve-field always writes.
+            if (!result.Success) {
+                var fromWcs = TryParseWcsFile(Path.ChangeExtension(fitsPath, ".wcs"));
+                if (fromWcs != null) result = fromWcs;
+            }
             result.Output = PlateSolveProcessOutput.Combine(SolverPath, args, stdout, stderr, proc.ExitCode);
             return result;
         } catch (Exception ex) when (ex is not OperationCanceledException) {
@@ -149,6 +160,81 @@ public class AstrometryNetLocalSolver : IPlateSolver {
             result.RotationDeg = double.Parse(rot.Groups[1].Value, CultureInfo.InvariantCulture);
 
         return result;
+    }
+
+    /// <summary>
+    /// Fallback path: read the WCS solution straight from the .wcs FITS
+    /// header solve-field writes, instead of scraping its stdout summary.
+    /// Returns a successful result, or null if the file is absent /
+    /// unparseable. Public for unit testing.
+    /// </summary>
+    public PlateSolveResult? TryParseWcsFile(string wcsPath) {
+        try {
+            if (!File.Exists(wcsPath)) return null;
+            var cards = ReadFitsHeaderCards(wcsPath);
+            if (cards.Count == 0) return null;
+            if (!cards.TryGetValue("CRVAL1", out var sRa) ||
+                !cards.TryGetValue("CRVAL2", out var sDec)) return null;
+            if (!double.TryParse(sRa, NumberStyles.Float, CultureInfo.InvariantCulture, out var raDeg) ||
+                !double.TryParse(sDec, NumberStyles.Float, CultureInfo.InvariantCulture, out var decDeg))
+                return null;
+
+            // With --crpix-center, CRPIX is the image centre, so CRVAL is
+            // the field centre, exactly what the stdout summary reports.
+            raDeg = ((raDeg % 360) + 360) % 360;
+            var result = new PlateSolveResult {
+                Success = true, SolverUsed = Id,
+                RaDeg = raDeg, RaHours = raDeg / 15.0, DecDeg = decDeg
+            };
+
+            double D(string k) => cards.TryGetValue(k, out var v) &&
+                double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : 0;
+
+            // Pixel scale and rotation from the CD matrix (deg/pixel).
+            if (cards.ContainsKey("CD1_1")) {
+                double cd11 = D("CD1_1"), cd12 = D("CD1_2"), cd21 = D("CD2_1"), cd22 = D("CD2_2");
+                double det = cd11 * cd22 - cd12 * cd21;
+                double scaleDeg = Math.Sqrt(Math.Abs(det));
+                if (scaleDeg > 0) result.ScaleArcsecPerPixel = scaleDeg * 3600.0;
+                // Position angle of the +Y (up) axis, E of N. atan2 on the
+                // CD column matching astrometry.net's reported orientation.
+                double rot = Math.Atan2(cd21, cd11) * 180.0 / Math.PI;
+                result.RotationDeg = ((rot % 360) + 360) % 360;
+            } else if (cards.ContainsKey("CDELT2")) {
+                double cdelt2 = D("CDELT2");
+                if (cdelt2 != 0) result.ScaleArcsecPerPixel = Math.Abs(cdelt2) * 3600.0;
+                result.RotationDeg = D("CROTA2");
+            }
+
+            return result;
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "Failed reading WCS file {Path}", wcsPath);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Minimal FITS-header reader: parse 80-byte ASCII cards (KEYWORD =
+    /// value / comment) up to the END card. Sufficient for a header-only
+    /// .wcs file; not a general FITS data reader.
+    /// </summary>
+    private static Dictionary<string, string> ReadFitsHeaderCards(string path) {
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var bytes = File.ReadAllBytes(path);
+        for (int off = 0; off + 80 <= bytes.Length; off += 80) {
+            var card = System.Text.Encoding.ASCII.GetString(bytes, off, 80);
+            var key = card.Length >= 8 ? card[..8].Trim() : card.Trim();
+            if (key == "END") break;
+            if (key.Length == 0) continue;
+            // Value-indicator "= " in columns 9-10 (0-based 8-9).
+            if (card.Length < 10 || card[8] != '=') continue;
+            var rest = card[10..];
+            var slash = rest.IndexOf('/');
+            if (slash >= 0) rest = rest[..slash];
+            var val = rest.Trim().Trim('\'').Trim();
+            if (!dict.ContainsKey(key)) dict[key] = val;
+        }
+        return dict;
     }
 
     private static string GetDefaultPath() {
