@@ -138,12 +138,23 @@ public class AstrometryNetLocalSolver : IPlateSolver {
             args += $" --radius {Math.Max(1, options.SearchRadiusDeg).ToString(CultureInfo.InvariantCulture)}";
         }
         if (options.ScaleArcsecPerPixel > 0) {
-            // ±20% scale window
+            // ±20% scale window around the known pixel scale.
             var lo = options.ScaleArcsecPerPixel * 0.8;
             var hi = options.ScaleArcsecPerPixel * 1.2;
             args += " --scale-units arcsecperpix";
             args += $" --scale-low {lo.ToString("F3", CultureInfo.InvariantCulture)}";
             args += $" --scale-high {hi.ToString("F3", CultureInfo.InvariantCulture)}";
+        } else if (options.FovDeg > 0) {
+            // No pixel scale, but we know the field width in degrees
+            // (from focal length + sensor). Constrain the solve by field
+            // width so solve-field doesn't have to try every index scale
+            // blind, which is the slowest mode and most likely to fail.
+            // Slightly wider window (±30%) since FovDeg is an estimate.
+            var lo = options.FovDeg * 0.7;
+            var hi = options.FovDeg * 1.3;
+            args += " --scale-units degwidth";
+            args += $" --scale-low {lo.ToString("F4", CultureInfo.InvariantCulture)}";
+            args += $" --scale-high {hi.ToString("F4", CultureInfo.InvariantCulture)}";
         }
         args += $" \"{fitsPath}\"";
         return args;
