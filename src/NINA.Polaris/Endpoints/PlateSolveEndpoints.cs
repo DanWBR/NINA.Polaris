@@ -292,6 +292,32 @@ public static class PlateSolveEndpoints {
                         solverUsed = result.SolverUsed
                     });
                 }
+
+                // Persist the solution into the FITS headers (WCS) so the file
+                // is plate-solved on disk for PCC, re-solve, external tools, etc.
+                // ASTAP already writes WCS in place (-update / proxy re-stamp);
+                // for the other backends we synthesise a TAN WCS from the result
+                // and rewrite the file. Opt out with writeWcsHeaders=false.
+                bool wcsWritten = string.Equals(result.SolverUsed, "astap", StringComparison.OrdinalIgnoreCase);
+                if ((request.WriteWcsHeaders ?? true) && !wcsWritten
+                        && result.ScaleArcsecPerPixel > 0) {
+                    try {
+                        var raDeg = result.RaDeg != 0 ? result.RaDeg : result.RaHours * 15.0;
+                        NINA.Image.ImageData.BaseImageData img;
+                        using (var fs = File.OpenRead(request.Path)) img = FITSReader.Read(fs);
+                        var wcs = WcsHeaders.FromSolveResult(
+                            raDeg, result.DecDeg, result.ScaleArcsecPerPixel, result.RotationDeg,
+                            img.Properties.Width, img.Properties.Height);
+                        // ImageProperties is an init-only record; copy with the WCS set.
+                        var stamped = new NINA.Image.ImageData.BaseImageData(
+                            img.Data, img.Properties with { Wcs = wcs }, img.MetaData);
+                        FITSWriter.Write(stamped, request.Path);
+                        wcsWritten = true;
+                    } catch (Exception wex) {
+                        logger.LogWarning(wex, "WCS header write failed for {Path}", request.Path);
+                    }
+                }
+
                 return Results.Ok(new {
                     success = true,
                     raHours = result.RaHours,
@@ -299,7 +325,8 @@ public static class PlateSolveEndpoints {
                     raDeg = result.RaDeg,
                     rotationDeg = result.RotationDeg,
                     scaleArcsecPerPixel = result.ScaleArcsecPerPixel,
-                    solverUsed = result.SolverUsed
+                    solverUsed = result.SolverUsed,
+                    wcsWritten
                 });
             } catch (OperationCanceledException) {
                 return Results.StatusCode(499);
@@ -328,7 +355,8 @@ public static class PlateSolveEndpoints {
         string Path,
         double? HintRa = null,
         double? HintDec = null,
-        double? SearchRadiusDeg = null);
+        double? SearchRadiusDeg = null,
+        bool? WriteWcsHeaders = null);
 
     /// <summary>PUT body for <c>/api/platesolve/config</c>. Every field is
     /// optional; null leaves the corresponding setting unchanged. Empty string

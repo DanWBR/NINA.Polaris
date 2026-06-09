@@ -14094,7 +14094,8 @@ function ninaApp() {
                 const r = await resp.json();
                 this.filesSolveResult = r || { success: false, error: 'No response' };
                 if (this.filesSolveResult.success) {
-                    this.toast('Plate solve succeeded in ' + this.filesSolveElapsed + 's', 'ok');
+                    this.toast('Plate solve succeeded in ' + this.filesSolveElapsed + 's'
+                        + (this.filesSolveResult.wcsWritten ? ' · WCS saved to FITS' : ''), 'ok');
                 } else {
                     this.toast('Plate solve failed: '
                         + (this.filesSolveResult.error || 'unknown'), 'warn');
