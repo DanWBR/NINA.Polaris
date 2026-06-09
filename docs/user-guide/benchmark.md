@@ -79,8 +79,7 @@ scores and the Mpx/s figures.
 ## Reference results
 
 Scores collected on real hardware, for picking a board. Higher Polaris
-score is better. (More boards added as they arrive: RPi 5 4GB, Orange Pi
-5 Pro, x86 PC stick.)
+score is better. (More boards added as they arrive: x86 PC stick.)
 
 ### Raspberry Pi 4 Model B (4 cores)
 
@@ -114,9 +113,23 @@ limited (2.98×) — keep the Pi 5 actively cooled for the best result.
 
 (16.78 MP frames.)
 
-### Orange Pi 5 Pro
+### Orange Pi 5 Pro (8 cores, RK3588S)
 
-_Pending hardware._
+Run: 2026-06-09 (two runs, 227 best / 222). Ubuntu 26.04 arm64.
+
+| Metric | Value |
+|---|---|
+| **Polaris score** | **227** (best) / 222 |
+| Stacking throughput | 2.66 fps · 44.6 Mpx/s (16.78 MP frames) |
+| Stacking detect / align / resample / stats | 100.41 / 0.56 / 115.76 / 159.71 ms |
+| Capture/video throughput | 1.56 fps · 26.2 Mpx/s |
+| Debayer / JPEG / LZ4 | 70.94 / 555.39 / 13.67 ms (LZ4 2341.4 MB/s) |
+| CPU single / multi-thread | 2778 / 12940 MFLOPS (4.66× scaling) |
+| Memory bandwidth | 23.7 GB/s |
+
+Slightly ahead of the Raspberry Pi 5 — the RK3588S big.LITTLE cores give it
+strong multi-thread scaling (4.66× across its 8 cores) and much higher memory
+bandwidth (23.7 vs ~7 GB/s), which is why its stacking throughput leads.
 
 ### x86 desktop — Core i9-13900KF (32 threads)
 
