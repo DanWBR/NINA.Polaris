@@ -1067,6 +1067,26 @@
                 skySetAlignmentMarkers(msg.target || null, msg.actual || null,
                     msg.drawLine !== false);
                 break;
+            case 'set-grid':
+                // Coordinate-grid toggle from the SKY toolbar. mode is one
+                // of 'none' | 'altaz' | 'eq'. Drives the engine's azimuthal
+                // (alt-az) and equatorial line layers; only one (or none)
+                // is visible at a time. Property paths are the standard
+                // stellarium-web-engine line module ids. Defensive: the
+                // module set can vary by engine build, so guard each.
+                try {
+                    var lines = stel.core && stel.core.lines;
+                    if (lines) {
+                        var az = (msg.mode === 'altaz');
+                        var eq = (msg.mode === 'eq');
+                        if (lines.azimuthal) lines.azimuthal.visible = az;
+                        if (lines.equatorial) lines.equatorial.visible = eq;
+                        // Some builds expose the JNow equatorial grid under a
+                        // separate id; keep it off so we don't double-draw.
+                        if (lines.equatorial_jnow) lines.equatorial_jnow.visible = false;
+                    }
+                } catch (e) { console.warn('[Sky] grid toggle failed:', e); }
+                break;
             case 'set-dss-visible':
                 // Parent toggle for the DSS Color HiPS streamed from
                 // CDS Strasbourg. Turn off when offline (no network) or

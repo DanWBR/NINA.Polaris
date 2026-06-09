@@ -495,6 +495,10 @@ function ninaApp() {
         _skyInfoChart: null,
         skyResults: [],
         skyShowResults: false,
+        // SKY coordinate-grid toggle: 'none' | 'altaz' | 'eq'. Cycled by the
+        // toolbar button; pushed to the engine via the set-grid bridge msg
+        // and re-applied whenever the engine (re)loads.
+        skyGridMode: 'none',
         slewCenterJobId: null,
         slewCenterStatus: null,
         // On a FAILED slew & center we keep the solver console around in a
@@ -7175,6 +7179,21 @@ function ninaApp() {
         // SWE-4: convenience wrappers around _skySendMessage. Each one
         // is one of the documented bridge message types from
         // sky-bridge.js's skyHandleMessage switch.
+        // SKY coordinate-grid cycle: none → alt-az → equatorial → none.
+        // Pushes the chosen mode to the engine and keeps skyGridMode so the
+        // button label and the re-apply on engine reload stay in sync.
+        cycleSkyGrid() {
+            const order = ['none', 'altaz', 'eq'];
+            const next = order[(order.indexOf(this.skyGridMode) + 1) % order.length];
+            this.skyGridMode = next;
+            this._skySendMessage({ type: 'set-grid', mode: next });
+        },
+        skyGridLabel() {
+            return this.skyGridMode === 'altaz' ? 'Grid: Alt-Az'
+                 : this.skyGridMode === 'eq' ? 'Grid: Equatorial'
+                 : 'Grid: off';
+        },
+
         _skyPushObserverAndTime() {
             const lat = this.settings.latitude;
             const lng = this.settings.longitude;
@@ -7196,6 +7215,11 @@ function ninaApp() {
             setTimeout(() => {
                 if (!this._skyBridgeReady) return;
                 this._skyPushObserverAndTime();
+                // Re-apply the coordinate-grid choice (the engine resets it
+                // to its defaults on (re)load).
+                if (this.skyGridMode && this.skyGridMode !== 'none') {
+                    this._skySendMessage({ type: 'set-grid', mode: this.skyGridMode });
+                }
                 if (this.mount?.connected
                     && Number.isFinite(this.mount.ra)
                     && Number.isFinite(this.mount.dec)) {
