@@ -97,8 +97,17 @@ public class AstrometryNetLocalSolver : IPlateSolver {
             // even though the solve succeeded. Fall back to reading the
             // .wcs FITS header solve-field always writes.
             if (!result.Success) {
-                var fromWcs = TryParseWcsFile(Path.ChangeExtension(fitsPath, ".wcs"));
-                if (fromWcs != null) result = fromWcs;
+                var wcsPath = WcsOutputPath(fitsPath);
+                var fromWcs = TryParseWcsFile(wcsPath);
+                if (fromWcs != null) {
+                    result = fromWcs;
+                } else if (!File.Exists(wcsPath)) {
+                    // No summary AND no .wcs => solve-field genuinely did
+                    // not solve. Say so plainly instead of the misleading
+                    // "could not parse" message.
+                    result = PlateSolveResult.Failed(
+                        "solve-field did not produce a solution (no .wcs written)");
+                }
             }
             result.Output = PlateSolveProcessOutput.Combine(SolverPath, args, stdout, stderr, proc.ExitCode);
             return result;
@@ -107,9 +116,22 @@ public class AstrometryNetLocalSolver : IPlateSolver {
         }
     }
 
+    /// <summary>
+    /// Deterministic path solve-field is told to write the WCS solution to
+    /// (via --wcs), so the .wcs fallback reads from a known location
+    /// instead of guessing solve-field's default output naming.
+    /// </summary>
+    public static string WcsOutputPath(string fitsPath) =>
+        Path.ChangeExtension(fitsPath, ".wcs");
+
     /// <summary>Public for unit testing.</summary>
     public string BuildArgs(string fitsPath, PlateSolveOptions options) {
-        var args = $"--overwrite --no-plots --no-verify --crpix-center --downsample {Math.Max(1, options.Downsample)}";
+        // --wcs pins the solution file to a known path (the .wcs fallback
+        // reads it). --new-fits none skips the large rewritten FITS we
+        // don't need. Quote the path for spaces.
+        var args = $"--overwrite --no-plots --no-verify --crpix-center "
+                 + $"--wcs \"{WcsOutputPath(fitsPath)}\" --new-fits none "
+                 + $"--downsample {Math.Max(1, options.Downsample)}";
         if (options.HintRa.HasValue && options.HintDec.HasValue) {
             args += $" --ra {(options.HintRa.Value * 15).ToString(CultureInfo.InvariantCulture)}";
             args += $" --dec {options.HintDec.Value.ToString(CultureInfo.InvariantCulture)}";
