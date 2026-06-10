@@ -108,23 +108,23 @@ internal static class RknnPipelines {
     }
 
     /// <summary>
-    /// Denoise, RGB-aware single pass — ported from GraXpert <c>denoising.py</c>.
-    /// For colour input the real R/G/B channels go through the model together in
-    /// one inference per tile (NOT three mono passes), which matches GraXpert,
-    /// avoids per-channel chroma speckle, and is ~3x fewer inferences. Mono input
-    /// is replicated to 3 channels and the first output channel is taken.
+    /// Denoise on the NPU, processed PER CHANNEL with the 3 model output channels
+    /// AVERAGED. Each colour plane is fed to the model replicated into all 3 input
+    /// channels and the 3 outputs are averaged before denormalize. This is
+    /// deliberate, not the GraXpert single-RGB pass: the RKNN-converted model is
+    /// inconsistent between its output channels (rknn-vs-onnx ~0.2 per element,
+    /// while the 3-channel MEAN is close), so the average cancels that and a real
+    /// single-RGB pass instead surfaces it as colour banding. The browser path
+    /// (fp32 ONNX, no such defect) keeps the faster single-RGB pass.
     ///
-    /// Per channel: robust median/MAD; tile-normalize <c>(v-median)/mad*0.04</c>;
-    /// clip to +/-<paramref name="clip"/> for the model but keep the unclipped
-    /// copy; the model output is used where the input was not clipped, else the
-    /// input is kept (GraXpert's star-core mask); denormalize; then the global
-    /// blend keeps bright pixels original and mixes by <paramref name="strength"/>.
-    /// <paramref name="clip"/> is 1.0 for v3 models, 10.0 for v2.
-    ///
-    /// Finally an NPU-specific star-protection pass keeps the original pixels in a
-    /// feathered halo around bright stars to hide the RKNN fp16 ring artifact
-    /// (the GPU/CPU ONNX paths don't ring, so this is applied here only).
-    /// <paramref name="pixels"/> is plane-sequential; output matches.
+    /// Hard inner-[margin:margin+stride] tile extraction (margins discarded, like
+    /// GraXpert / the browser). Per channel: robust median/MAD; tile-normalize
+    /// <c>(v-median)/mad*0.04</c>, clip to +/-<paramref name="clip"/> for the model
+    /// but keep the unclipped copy for GraXpert's star-core mask; denormalize; the
+    /// global blend keeps bright pixels original and mixes by
+    /// <paramref name="strength"/>. <paramref name="clip"/> is 1.0 for v3, 10.0 for v2.
+    /// A final NPU-only star-protection halo hides the fp16 ring around bright
+    /// stars. <paramref name="pixels"/> is plane-sequential; output matches.
     /// </summary>
     public static ushort[] RunDenoise(IRknnTileRunner runner, ushort[] pixels, int width, int height,
                                       int channels, double strength, double clip) {
@@ -163,51 +163,61 @@ internal static class RknnPipelines {
         // into the neighbours, which produced colour bands that the browser/GPU
         // path -- which discards the margins -- does not have.)
         var dst = new ushort[pixels.Length];
-        var tensor = new float[tile * tile * 3];   // model input (clipped)
-        var copyN = new float[tile * tile * 3];    // unclipped normalized (star-core mask)
+        var tensor = new float[tile * tile * 3];   // model input (replicated to 3ch)
+        var copyN = new float[tile * tile];        // unclipped normalized (1 channel)
 
-        for (int ty = 0; ty < ith; ty++) {
-            for (int tx = 0; tx < itw; tx++) {
-                int sx = tx * stride;
-                int sy = ty * stride;
+        // PER CHANNEL: feed each plane replicated into all 3 input channels and
+        // AVERAGE the 3 output channels. The RKNN-converted model is inconsistent
+        // between its output channels (rknn-vs-onnx ~0.2 per element, but the
+        // 3-channel mean is close), so averaging cancels it. Feeding the real RGB
+        // together (single pass) instead exposes it as colour banding -- so the
+        // NPU keeps this per-channel+average path (the browser uses single RGB).
+        for (int oc = 0; oc < nc; oc++) {
+            int off = oc * planeLen;
+            double m = med[oc], a = mad[oc];
+            double madPerNorm = a / 0.04;
+            double invMadScaled = 0.04 / a;
+            double threshold = clip / 0.04 * a + m;
 
-                for (int y = 0; y < tile; y++) {
-                    int py = sy + y;
-                    int rowBase = y * tile;
-                    for (int x = 0; x < tile; x++) {
-                        int b = (rowBase + x) * 3;
-                        for (int c = 0; c < 3; c++) {
-                            int srcC = nc == 3 ? c : 0;
-                            double v = PaddedRead(srcC, sx + x, py);
-                            double n = (v - med[srcC]) / mad[srcC] * 0.04;
-                            copyN[b + c] = (float)n;
-                            tensor[b + c] = (float)(n > clip ? clip : (n < -clip ? -clip : n));
+            for (int ty = 0; ty < ith; ty++) {
+                for (int tx = 0; tx < itw; tx++) {
+                    int sx = tx * stride;
+                    int sy = ty * stride;
+
+                    for (int y = 0; y < tile; y++) {
+                        int py = sy + y;
+                        int rowBase = y * tile;
+                        for (int x = 0; x < tile; x++) {
+                            double v = PaddedRead(oc, sx + x, py);
+                            double n = (v - m) * invMadScaled;
+                            int p = rowBase + x;
+                            copyN[p] = (float)n;
+                            float cl = (float)(n > clip ? clip : (n < -clip ? -clip : n));
+                            int b = p * 3;
+                            tensor[b] = cl; tensor[b + 1] = cl; tensor[b + 2] = cl;
                         }
                     }
-                }
 
-                var outData = runner.RunTile(tensor);
+                    var outData = runner.RunTile(tensor);
 
-                for (int y = 0; y < stride; y++) {
-                    int rawY = sy + margin + y - offsetY;
-                    if (rawY < 0 || rawY >= height) continue;
-                    int tileRow = (margin + y) * tile + margin;
-                    int rawRow = rawY * width;
-                    for (int x = 0; x < stride; x++) {
-                        int rawX = sx + margin + x - offsetX;
-                        if (rawX < 0 || rawX >= width) continue;
-                        int i3 = (tileRow + x) * 3;
-                        for (int oc = 0; oc < nc; oc++) {
-                            int c = nc == 3 ? oc : 0;
-                            double cn = copyN[i3 + c];     // unclipped normalized input
-                            double on = outData[i3 + c];   // model output (normalized)
-                            double mn = cn < clip ? on : cn;            // GraXpert star-core mask
-                            double denoised = mn / 0.04 * mad[oc] + med[oc];
-                            double orig = pixels[oc * planeLen + rawRow + rawX] * inv;
-                            double threshold = clip / 0.04 * mad[oc] + med[oc];
+                    for (int y = 0; y < stride; y++) {
+                        int rawY = sy + margin + y - offsetY;
+                        if (rawY < 0 || rawY >= height) continue;
+                        int tileRow = (margin + y) * tile + margin;
+                        int rawRow = rawY * width;
+                        for (int x = 0; x < stride; x++) {
+                            int rawX = sx + margin + x - offsetX;
+                            if (rawX < 0 || rawX >= width) continue;
+                            int p = tileRow + x;
+                            int i3 = p * 3;
+                            double cn = copyN[p];                                  // unclipped input
+                            double avg = (outData[i3] + outData[i3 + 1] + outData[i3 + 2]) / 3.0;
+                            double mn = cn < clip ? avg : cn;                      // star-core mask
+                            double denoised = mn * madPerNorm + m;
+                            double orig = pixels[off + rawRow + rawX] * inv;
                             double masked = orig < threshold ? denoised : orig;
                             double blended = masked * strength + orig * (1 - strength);
-                            dst[oc * planeLen + rawRow + rawX] =
+                            dst[off + rawRow + rawX] =
                                 (ushort)Math.Clamp(Math.Round(blended * 65535.0), 0, 65535);
                         }
                     }
