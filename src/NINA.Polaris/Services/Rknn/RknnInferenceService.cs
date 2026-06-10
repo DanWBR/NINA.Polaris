@@ -159,11 +159,31 @@ public sealed class RknnInferenceService : IDisposable {
         return null;
     }
 
+    /// <summary>
+    /// Resolve the <c>model.rknn</c> for a given <c>model.onnx</c>. Two layouts
+    /// are accepted:
+    ///   1. sibling:   {root}/{family}-ai-models/{version}/model.rknn
+    ///   2. parallel:  {root}/rknn/{family}-ai-models/{version}/model.rknn
+    /// The parallel <c>rknn/</c> subtree keeps the converted models separate
+    /// from the (gitignored) ONNX weights, which is how they're bundled here.
+    /// </summary>
     private static string? SiblingRknn(string onnxPath) {
-        var dir = Path.GetDirectoryName(onnxPath);
-        if (dir == null) return null;
-        var rknn = Path.Combine(dir, "model.rknn");
-        return File.Exists(rknn) ? rknn : null;
+        var versionDir = Path.GetDirectoryName(onnxPath);
+        if (versionDir == null) return null;
+
+        // 1. sibling next to model.onnx.
+        var sibling = Path.Combine(versionDir, "model.rknn");
+        if (File.Exists(sibling)) return sibling;
+
+        // 2. parallel rknn/ subtree under the models root.
+        var familyDir = Path.GetDirectoryName(versionDir);
+        var root = familyDir != null ? Path.GetDirectoryName(familyDir) : null;
+        if (root != null) {
+            var parallel = Path.Combine(root, "rknn",
+                Path.GetFileName(familyDir!), Path.GetFileName(versionDir), "model.rknn");
+            if (File.Exists(parallel)) return parallel;
+        }
+        return null;
     }
 
     private RknnSession GetSession(string rknnPath) {
