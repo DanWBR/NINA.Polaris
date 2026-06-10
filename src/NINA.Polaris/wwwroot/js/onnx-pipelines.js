@@ -1004,9 +1004,108 @@
 
     class DenoisePipeline {
         async run(pixels, width, height, opts = {}) {
-            return runPerChannel(
-                (p, w, h, o) => this._runMono(p, w, h, o),
-                pixels, width, height, opts);
+            // RGB-aware single pass (matches GraXpert denoising.py + the host
+            // NPU path): the real R/G/B channels go through the model together,
+            // one inference per tile, instead of three independent mono passes
+            // (runPerChannel). ~3x fewer inferences. Mono keeps the per-plane path.
+            const channels = opts && opts.channels === 3 ? 3 : 1;
+            if (channels === 3) return this._runRgb(pixels, width, height, opts);
+            const o = Object.assign({}, opts); delete o.channels;
+            return this._runMono(pixels, width, height, o);
+        }
+        async _runRgb(pixels, width, height, opts = {}) {
+            const family = 'denoise';
+            const version = opts.version || '2.0.0';
+            const strength = Math.max(0, Math.min(1, opts.strength != null ? opts.strength : 0.5));
+            const TILE = 256, STRIDE = 128, MARGIN = (TILE - STRIDE) / 2;
+            const CLIP = version.startsWith('3.') ? 1.0 : 10.0;
+            const planeLen = width * height;
+            const INV = 1 / 65535;
+            if (opts.onProgress) opts.onProgress('preparing', null);
+            await _yieldToBrowser();
+
+            const session = await loadSession(family, version, opts.onProgress, opts.useGpu);
+            const ort = await loadOrtWeb();
+            const inputName = session.inputNames[0];
+            const outputName = session.outputNames[0];
+
+            // Per-channel robust stats (GraXpert computes median/MAD per channel).
+            const med = [], mad = [];
+            for (let c = 0; c < 3; c++) {
+                const st = medianMadSampledFromUint16(pixels.subarray(c * planeLen, (c + 1) * planeLen));
+                med.push(st.median); mad.push(st.mad);
+            }
+            await _yieldToBrowser();
+
+            const itw = Math.ceil(width / STRIDE), ith = Math.ceil(height / STRIDE);
+            const padW = itw * STRIDE + 2 * MARGIN, padH = ith * STRIDE + 2 * MARGIN;
+            const offsetX = (padW - width) / 2 | 0, offsetY = (padH - height) / 2 | 0;
+
+            function paddedRead(chan, px, py) {
+                let x = px - offsetX, y = py - offsetY;
+                if (x < 0) x = 0; else if (x >= width) x = width - 1;
+                if (y < 0) y = 0; else if (y >= height) y = height - 1;
+                return pixels[chan * planeLen + y * width + x] * INV;
+            }
+
+            const dst = new Uint16Array(pixels.length);
+            const tensorData = new Float32Array(TILE * TILE * 3);
+            const copyN = new Float32Array(TILE * TILE * 3);
+            const totalTiles = itw * ith;
+            let processed = 0;
+            const t0 = performance.now();
+
+            for (let ty = 0; ty < ith; ty++) {
+                for (let tx = 0; tx < itw; tx++) {
+                    const sx = tx * STRIDE, sy = ty * STRIDE;
+                    for (let y = 0; y < TILE; y++) {
+                        const py = sy + y;
+                        for (let x = 0; x < TILE; x++) {
+                            const b = (y * TILE + x) * 3;
+                            for (let c = 0; c < 3; c++) {
+                                const v = paddedRead(c, sx + x, py);
+                                const n = (v - med[c]) / mad[c] * 0.04;
+                                copyN[b + c] = n;
+                                tensorData[b + c] = n > CLIP ? CLIP : (n < -CLIP ? -CLIP : n);
+                            }
+                        }
+                    }
+                    const inputTensor = new ort.Tensor('float32', tensorData, [1, TILE, TILE, 3]);
+                    const result = await session.run({ [inputName]: inputTensor });
+                    const outData = result[outputName].data;
+
+                    for (let y = 0; y < STRIDE; y++) {
+                        const padY = sy + MARGIN + y, rawY = padY - offsetY;
+                        if (rawY < 0 || rawY >= height) continue;
+                        const tileRow = (MARGIN + y) * TILE + MARGIN;
+                        const rawRow = rawY * width;
+                        for (let x = 0; x < STRIDE; x++) {
+                            const padX = sx + MARGIN + x, rawX = padX - offsetX;
+                            if (rawX < 0 || rawX >= width) continue;
+                            const i3 = (tileRow + x) * 3;
+                            for (let c = 0; c < 3; c++) {
+                                const cn = copyN[i3 + c];
+                                const on = outData[i3 + c];
+                                const mn = cn < CLIP ? on : cn;      // GraXpert star-core mask
+                                const denoised = mn / 0.04 * mad[c] + med[c];
+                                const orig = pixels[c * planeLen + rawRow + rawX] * INV;
+                                const threshold = CLIP / 0.04 * mad[c] + med[c];
+                                const masked = orig < threshold ? denoised : orig;
+                                const blended = masked * strength + orig * (1 - strength);
+                                let u = (blended * 65535 + 0.5) | 0;
+                                dst[c * planeLen + rawRow + rawX] = u < 0 ? 0 : (u > 65535 ? 65535 : u);
+                            }
+                        }
+                    }
+                    processed++;
+                    if (opts.onProgress) opts.onProgress('tiles', processed / totalTiles);
+                }
+            }
+            const inferenceMs = performance.now() - t0;
+            return {
+                pixels: dst, width, height, channels: 3,
+                stats: { median: med[1], mad: mad[1], totalTiles, inferenceMs, version },
+            };
         }
         async _runMono(pixels, width, height, opts = {}) {
             const family = 'denoise';
