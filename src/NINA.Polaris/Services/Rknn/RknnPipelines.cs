@@ -156,20 +156,15 @@ internal static class RknnPipelines {
             return (float)(pixels[chan * planeLen + y * width + x] * inv);
         }
 
-        // Overlap-add reconstruction (Bartlett window, 50% overlap -> COLA).
-        // Hard inner-128 tile abutting made per-channel fp16 tile-edge
-        // differences show up as vertical/horizontal COLOUR seams once we stopped
-        // averaging the channels (RGB single pass). A windowed overlap-add blends
-        // each tile's margins into its neighbours so the seams disappear.
-        var accum = new float[pixels.Length];      // denoised * weight, per channel
-        var weight = new float[planeLen];          // window weight (shared across channels)
-        var win = new float[tile];
-        for (int i = 0; i < tile; i++) {
-            double t = 1.0 - Math.Abs((i - (tile - 1) / 2.0) / (tile / 2.0));   // triangular
-            win[i] = (float)(t < 0 ? 0 : t);
-        }
-
+        // Hard inner-tile extraction, IDENTICAL to GraXpert / the browser path:
+        // write only the inner [margin:margin+stride] of each tile and DISCARD
+        // the margins, where the model output is unreliable. (A windowed
+        // overlap-add was tried and reverted: it mixes those unreliable margins
+        // into the neighbours, which produced colour bands that the browser/GPU
+        // path -- which discards the margins -- does not have.)
+        var dst = new ushort[pixels.Length];
         var tensor = new float[tile * tile * 3];   // model input (clipped)
+        var copyN = new float[tile * tile * 3];    // unclipped normalized (star-core mask)
 
         for (int ty = 0; ty < ith; ty++) {
             for (int tx = 0; tx < itw; tx++) {
@@ -185,6 +180,7 @@ internal static class RknnPipelines {
                             int srcC = nc == 3 ? c : 0;
                             double v = PaddedRead(srcC, sx + x, py);
                             double n = (v - med[srcC]) / mad[srcC] * 0.04;
+                            copyN[b + c] = (float)n;
                             tensor[b + c] = (float)(n > clip ? clip : (n < -clip ? -clip : n));
                         }
                     }
@@ -192,42 +188,30 @@ internal static class RknnPipelines {
 
                 var outData = runner.RunTile(tensor);
 
-                for (int y = 0; y < tile; y++) {
-                    int rawY = sy + y - offsetY;
+                for (int y = 0; y < stride; y++) {
+                    int rawY = sy + margin + y - offsetY;
                     if (rawY < 0 || rawY >= height) continue;
-                    double wy = win[y];
-                    int tileRow = y * tile;
+                    int tileRow = (margin + y) * tile + margin;
                     int rawRow = rawY * width;
-                    for (int x = 0; x < tile; x++) {
-                        int rawX = sx + x - offsetX;
+                    for (int x = 0; x < stride; x++) {
+                        int rawX = sx + margin + x - offsetX;
                         if (rawX < 0 || rawX >= width) continue;
-                        float w2d = (float)(wy * win[x]);
-                        if (w2d <= 0f) continue;
                         int i3 = (tileRow + x) * 3;
                         for (int oc = 0; oc < nc; oc++) {
                             int c = nc == 3 ? oc : 0;
-                            double denoised = outData[i3 + c] / 0.04 * mad[oc] + med[oc];
-                            accum[oc * planeLen + rawRow + rawX] += (float)(denoised * w2d);
+                            double cn = copyN[i3 + c];     // unclipped normalized input
+                            double on = outData[i3 + c];   // model output (normalized)
+                            double mn = cn < clip ? on : cn;            // GraXpert star-core mask
+                            double denoised = mn / 0.04 * mad[oc] + med[oc];
+                            double orig = pixels[oc * planeLen + rawRow + rawX] * inv;
+                            double threshold = clip / 0.04 * mad[oc] + med[oc];
+                            double masked = orig < threshold ? denoised : orig;
+                            double blended = masked * strength + orig * (1 - strength);
+                            dst[oc * planeLen + rawRow + rawX] =
+                                (ushort)Math.Clamp(Math.Round(blended * 65535.0), 0, 65535);
                         }
-                        weight[rawRow + rawX] += w2d;
                     }
                 }
-            }
-        }
-
-        // Reconstruct, then GraXpert global blend per channel (bright pixels keep
-        // the original; strength mixes denoised with original).
-        var dst = new ushort[pixels.Length];
-        for (int c = 0; c < nc; c++) {
-            int off = c * planeLen;
-            double threshold = clip / 0.04 * mad[c] + med[c];
-            for (int i = 0; i < planeLen; i++) {
-                double wgt = weight[i];
-                double orig = pixels[off + i] * inv;
-                double denoised = wgt > 1e-6 ? accum[off + i] / wgt : orig;
-                double masked = orig < threshold ? denoised : orig;
-                double blended = masked * strength + orig * (1 - strength);
-                dst[off + i] = (ushort)Math.Clamp(Math.Round(blended * 65535.0), 0, 65535);
             }
         }
 
