@@ -40,23 +40,6 @@ ALL_FAMILIES = DEFAULT_FAMILIES + [
 ]
 
 
-def find_input(onnx_path):
-    """Return (input_name, [shape]) for the first graph input of an ONNX model."""
-    import onnx
-    m = onnx.load(onnx_path)
-    inp = m.graph.input[0]
-    name = inp.name
-    dims = []
-    for d in inp.type.tensor_type.shape.dim:
-        # dim_value is 0 for dynamic dims; the GraXpert image input is fixed
-        # except the batch axis, which we pin to 1.
-        v = d.dim_value if d.dim_value > 0 else 1
-        dims.append(v)
-    if dims and dims[0] != 1:
-        dims[0] = 1
-    return name, dims
-
-
 def convert_one(onnx_path, platform, force):
     rknn_path = os.path.join(os.path.dirname(onnx_path), "model.rknn")
     if os.path.exists(rknn_path) and not force:
@@ -64,12 +47,15 @@ def convert_one(onnx_path, platform, force):
         return True
 
     from rknn.api import RKNN
-    name, shape = find_input(onnx_path)
-    print(f"  input '{name}' shape {shape}")
-
     rknn = RKNN(verbose=False)
     rknn.config(target_platform=platform)   # fp16 by default (no do_quantization)
-    if rknn.load_onnx(model=onnx_path, inputs=[name], input_size_list=[shape]) != 0:
+    # IMPORTANT: do NOT pass inputs/input_size_list. The toolkit warns
+    # "If you don't need to crop the model, don't set 'inputs'/'input_size_list'
+    # /'outputs'!" -- setting them makes RKNN reinterpret/crop the input and the
+    # converted model's output diverges massively from the ONNX (≈60% error,
+    # with per-column structure = the colour banding). Letting RKNN read the
+    # ONNX's own input definition fixes it.
+    if rknn.load_onnx(model=onnx_path) != 0:
         print(f"  ERROR: load_onnx failed for {onnx_path}", file=sys.stderr)
         return False
     if rknn.build(do_quantization=False) != 0:   # fp16; int8 would need a dataset
