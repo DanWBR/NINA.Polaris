@@ -41,10 +41,23 @@ public sealed class RknnSession : IRknnTileRunner {
     public int TileSize { get; }
     public int Channels { get; }
 
-    private RknnSession(ulong ctx, int tileSize, int channels) {
+    // Output tensor geometry, learned from RKNN_QUERY_OUTPUT_ATTR. RKNN's
+    // want_float output is typically NCHW (planar) even when the ONNX output
+    // was NHWC, so RunTile converts to canonical NHWC interleaved using these.
+    private readonly int _outC;
+    private readonly int _outH;
+    private readonly int _outW;
+    private readonly bool _outNchw;
+
+    private RknnSession(ulong ctx, int tileSize, int channels,
+                        int outC, int outH, int outW, bool outNchw) {
         _ctx = ctx;
         TileSize = tileSize;
         Channels = channels;
+        _outC = outC;
+        _outH = outH;
+        _outW = outW;
+        _outNchw = outNchw;
     }
 
     /// <summary>
@@ -76,9 +89,33 @@ public sealed class RknnSession : IRknnTileRunner {
             if (q == 0 && (ion.n_input < 1 || ion.n_output < 1))
                 throw new RknnException($"unexpected model IO (in={ion.n_input}, out={ion.n_output})");
 
+            // Learn the output layout. Default to NCHW (RKNN want_float's usual
+            // layout) with the model's known geometry; refine from the query.
+            int outC = channels, outH = tileSize, outW = tileSize;
+            bool outNchw = true;
+            try {
+                var oattr = new rknn_tensor_attr { dims = new uint[RKNN_MAX_DIMS], name = "", index = 0 };
+                int oq = rknn_query(ctx, rknn_query_cmd.RKNN_QUERY_OUTPUT_ATTR, ref oattr,
+                    (uint)Marshal.SizeOf<rknn_tensor_attr>());
+                if (oq == 0 && oattr.n_dims == 4 && oattr.dims != null) {
+                    if (oattr.fmt == rknn_tensor_format.RKNN_TENSOR_NHWC) {
+                        outH = (int)oattr.dims[1]; outW = (int)oattr.dims[2]; outC = (int)oattr.dims[3];
+                        outNchw = false;
+                    } else { // NCHW (and NC1HWC2 reports logical NCHW dims here)
+                        outC = (int)oattr.dims[1]; outH = (int)oattr.dims[2]; outW = (int)oattr.dims[3];
+                        outNchw = true;
+                    }
+                }
+                logger?.LogInformation("RKNN output attr: fmt={Fmt} dims=[{D0},{D1},{D2},{D3}] -> {C}x{H}x{W} nchw={Nchw}",
+                    oattr.fmt, oattr.dims?[0], oattr.dims?[1], oattr.dims?[2], oattr.dims?[3],
+                    outC, outH, outW, outNchw);
+            } catch (Exception ex) {
+                logger?.LogWarning(ex, "RKNN output attr query failed; assuming NCHW {C}x{H}x{W}", outC, outH, outW);
+            }
+
             logger?.LogInformation("RKNN model loaded (in={In}, out={Out}, tile={Tile}, ch={Ch})",
                 ion.n_input, ion.n_output, tileSize, channels);
-            return new RknnSession(ctx, tileSize, channels);
+            return new RknnSession(ctx, tileSize, channels, outC, outH, outW, outNchw);
         } catch {
             try { rknn_destroy(ctx); } catch { }
             throw;
@@ -128,9 +165,12 @@ public sealed class RknnSession : IRknnTileRunner {
 
                 try {
                     int n = (int)(outputs[0].size / sizeof(float));
-                    var result = new float[n];
-                    Marshal.Copy(outputs[0].buf, result, 0, n);
-                    return result;
+                    var raw = new float[n];
+                    Marshal.Copy(outputs[0].buf, raw, 0, n);
+                    // Normalize to NHWC interleaved (the pipelines read
+                    // out[p*C + c]). RKNN want_float is usually NCHW (planar),
+                    // so transpose [C,H,W] -> [H,W,C] when needed.
+                    return _outNchw && _outC > 1 ? PlanarToInterleaved(raw) : raw;
                 } finally {
                     try { rknn_outputs_release(_ctx, 1, outputs); } catch { }
                 }
@@ -138,6 +178,19 @@ public sealed class RknnSession : IRknnTileRunner {
                 pin.Free();
             }
         }
+    }
+
+    /// <summary>Transpose a planar NCHW output [C,H,W] to NHWC interleaved [H,W,C].</summary>
+    private float[] PlanarToInterleaved(float[] planar) {
+        int hw = _outH * _outW;
+        if (planar.Length < hw * _outC) return planar;   // unexpected size, leave as-is
+        var inter = new float[hw * _outC];
+        for (int c = 0; c < _outC; c++) {
+            int baseC = c * hw;
+            for (int p = 0; p < hw; p++)
+                inter[p * _outC + c] = planar[baseC + p];
+        }
+        return inter;
     }
 
     public void Dispose() {
