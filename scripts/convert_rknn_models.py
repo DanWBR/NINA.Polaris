@@ -40,29 +40,21 @@ ALL_FAMILIES = DEFAULT_FAMILIES + [
 ]
 
 
-def _ensure_onnx_mapping():
-    """Shim for onnx>=1.16, which removed `onnx.mapping`. rknn-toolkit2 2.3.x
-    still uses `onnx.mapping.TENSOR_TYPE_TO_NP_TYPE` when it reads the model's
-    own input types (the load_onnx path without input_size_list). Recreate it so
-    any onnx version works (the user is on onnx 1.18)."""
+def find_input(onnx_path):
+    """Return (input_name, [shape]) for the first graph input. The GraXpert
+    models have a DYNAMIC batch dim (e.g. ['unk__206',256,256,3]), so we must
+    pin it to 1 and pass inputs/input_size_list to load_onnx -- otherwise RKNN
+    errors ('input shape ... is not support')."""
     import onnx
-    if hasattr(onnx, "mapping"):
-        return
-    import types
-    import numpy as np
-    from onnx import TensorProto as tp
-    table = {
-        tp.FLOAT: np.float32, tp.UINT8: np.uint8, tp.INT8: np.int8,
-        tp.UINT16: np.uint16, tp.INT16: np.int16, tp.INT32: np.int32,
-        tp.INT64: np.int64, tp.BOOL: np.bool_, tp.FLOAT16: np.float16,
-        tp.DOUBLE: np.float64, tp.UINT32: np.uint32, tp.UINT64: np.uint64,
-        tp.COMPLEX64: np.complex64, tp.COMPLEX128: np.complex128,
-    }
-    m = types.ModuleType("onnx.mapping")
-    m.TENSOR_TYPE_TO_NP_TYPE = {k: np.dtype(v) for k, v in table.items()}
-    m.NP_TYPE_TO_TENSOR_TYPE = {np.dtype(v): k for k, v in table.items()}
-    onnx.mapping = m
-    sys.modules["onnx.mapping"] = m
+    m = onnx.load(onnx_path)
+    inp = m.graph.input[0]
+    dims = []
+    for d in inp.type.tensor_type.shape.dim:
+        v = d.dim_value if d.dim_value > 0 else 1   # dynamic -> 1
+        dims.append(v)
+    if dims:
+        dims[0] = 1
+    return inp.name, dims
 
 
 def convert_one(onnx_path, platform, force):
@@ -71,17 +63,14 @@ def convert_one(onnx_path, platform, force):
         print(f"  skip (exists): {rknn_path}")
         return True
 
-    _ensure_onnx_mapping()
     from rknn.api import RKNN
+    name, shape = find_input(onnx_path)
+    print(f"  input '{name}' shape {shape}")
     rknn = RKNN(verbose=False)
     rknn.config(target_platform=platform)   # fp16 by default (no do_quantization)
-    # IMPORTANT: do NOT pass inputs/input_size_list. The toolkit warns
-    # "If you don't need to crop the model, don't set 'inputs'/'input_size_list'
-    # /'outputs'!" -- setting them makes RKNN reinterpret/crop the input and the
-    # converted model's output diverges massively from the ONNX (≈60% error,
-    # with per-column structure = the colour banding). Letting RKNN read the
-    # ONNX's own input definition fixes it.
-    if rknn.load_onnx(model=onnx_path) != 0:
+    # The model's batch dim is dynamic, so inputs/input_size_list ARE required
+    # to pin it (without them load_onnx fails with "input shape is not support").
+    if rknn.load_onnx(model=onnx_path, inputs=[name], input_size_list=[shape]) != 0:
         print(f"  ERROR: load_onnx failed for {onnx_path}", file=sys.stderr)
         return False
     if rknn.build(do_quantization=False) != 0:   # fp16; int8 would need a dataset
