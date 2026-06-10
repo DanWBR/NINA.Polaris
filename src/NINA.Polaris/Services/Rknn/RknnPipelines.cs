@@ -15,9 +15,10 @@
 namespace NINA.Polaris.Services.Rknn;
 
 /// <summary>
-/// Pure tile-pipeline math for the RKNN host path, ported tile-for-tile from
-/// the browser <c>onnx-pipelines.js</c> so the NPU output matches the in-browser
-/// ONNX output. Everything here is deterministic and takes an
+/// Pure tile-pipeline math for the RKNN host path. The denoise path is ported
+/// from GraXpert's own <c>denoising.py</c> (real-RGB single pass, per-channel
+/// median/MAD, per-tile star-core mask + global blend); BGE mirrors the browser
+/// <c>onnx-pipelines.js</c>. Everything here is deterministic and takes an
 /// <see cref="IRknnTileRunner"/>, so the normalization / tiling / blending can
 /// be unit-tested with a mock runner (no NPU required).
 ///
@@ -106,18 +107,39 @@ internal static class RknnPipelines {
     }
 
     /// <summary>
-    /// Denoise a single mono plane. Mirrors <c>DenoisePipeline._runMono</c>:
-    /// 256/128/64 tiling over a virtual edge-clamped padded plane, global
-    /// median/MAD normalize (clip +/-<paramref name="clip"/>), per-tile
-    /// inference, then denormalize + blend-mask + strength blend back into the
-    /// trimmed output. <paramref name="clip"/> is 1.0 for v3 models, 10.0 for v2.
+    /// Denoise, RGB-aware single pass — ported from GraXpert <c>denoising.py</c>.
+    /// For colour input the real R/G/B channels go through the model together in
+    /// one inference per tile (NOT three mono passes), which matches GraXpert,
+    /// avoids per-channel chroma speckle, and is ~3x fewer inferences. Mono input
+    /// is replicated to 3 channels and the first output channel is taken.
+    ///
+    /// Per channel: robust median/MAD; tile-normalize <c>(v-median)/mad*0.04</c>;
+    /// clip to +/-<paramref name="clip"/> for the model but keep the unclipped
+    /// copy; the model output is used where the input was not clipped, else the
+    /// input is kept (GraXpert's star-core mask); denormalize; then the global
+    /// blend keeps bright pixels original and mixes by <paramref name="strength"/>.
+    /// <paramref name="clip"/> is 1.0 for v3 models, 10.0 for v2.
+    ///
+    /// Finally an NPU-specific star-protection pass keeps the original pixels in a
+    /// feathered halo around bright stars to hide the RKNN fp16 ring artifact
+    /// (the GPU/CPU ONNX paths don't ring, so this is applied here only).
+    /// <paramref name="pixels"/> is plane-sequential; output matches.
     /// </summary>
-    public static ushort[] RunDenoiseMono(IRknnTileRunner runner, ushort[] plane, int width, int height,
-                                          double strength, double clip) {
+    public static ushort[] RunDenoise(IRknnTileRunner runner, ushort[] pixels, int width, int height,
+                                      int channels, double strength, double clip) {
         int tile = runner.TileSize;          // 256
         int stride = tile / 2;               // 128
         int margin = (tile - stride) / 2;    // 64
         strength = Math.Clamp(strength, 0.0, 1.0);
+        int planeLen = width * height;
+        const double inv = 1.0 / 65535.0;
+        int nc = channels >= 3 ? 3 : 1;
+
+        // Per-channel robust stats (GraXpert computes median/MAD per channel).
+        var med = new double[nc];
+        var mad = new double[nc];
+        for (int c = 0; c < nc; c++)
+            (med[c], mad[c]) = RknnImageMath.MedianMadSampledU16(pixels.AsSpan(c * planeLen, planeLen));
 
         int itw = (int)Math.Ceiling((double)width / stride);
         int ith = (int)Math.Ceiling((double)height / stride);
@@ -125,22 +147,17 @@ internal static class RknnPipelines {
         int padH = ith * stride + 2 * margin;
         int offsetX = (padW - width) / 2;
         int offsetY = (padH - height) / 2;
-        const double inv = 1.0 / 65535.0;
 
-        var (median, mad) = RknnImageMath.MedianMadSampledU16(plane);
-        double invMadScaled = 0.04 / mad;
-        double madPerNorm = mad / 0.04;
-        double thresholdNorm = clip / 0.04 * mad + median;
-
-        float PaddedRead(int px, int py) {
+        float PaddedRead(int chan, int px, int py) {
             int x = px - offsetX; int y = py - offsetY;
             if (x < 0) x = 0; else if (x >= width) x = width - 1;
             if (y < 0) y = 0; else if (y >= height) y = height - 1;
-            return (float)(plane[y * width + x] * inv);
+            return (float)(pixels[chan * planeLen + y * width + x] * inv);
         }
 
-        var dst = new ushort[width * height];
-        var tensor = new float[tile * tile * 3];
+        var dst = new ushort[pixels.Length];
+        var tensor = new float[tile * tile * 3];   // model input (clipped)
+        var copyN = new float[tile * tile * 3];    // unclipped normalized (star-core mask)
 
         for (int ty = 0; ty < ith; ty++) {
             for (int tx = 0; tx < itw; tx++) {
@@ -151,12 +168,14 @@ internal static class RknnPipelines {
                     int py = sy + y;
                     int rowBase = y * tile;
                     for (int x = 0; x < tile; x++) {
-                        double v = PaddedRead(sx + x, py);
-                        double n = (v - median) * invMadScaled;
-                        if (n > clip) n = clip; else if (n < -clip) n = -clip;
                         int b = (rowBase + x) * 3;
-                        float nf = (float)n;
-                        tensor[b] = nf; tensor[b + 1] = nf; tensor[b + 2] = nf;
+                        for (int c = 0; c < 3; c++) {
+                            int srcC = nc == 3 ? c : 0;
+                            double v = PaddedRead(srcC, sx + x, py);
+                            double n = (v - med[srcC]) / mad[srcC] * 0.04;
+                            copyN[b + c] = (float)n;
+                            tensor[b + c] = (float)(n > clip ? clip : (n < -clip ? -clip : n));
+                        }
                     }
                 }
 
@@ -173,46 +192,57 @@ internal static class RknnPipelines {
                         int rawX = padX - offsetX;
                         if (rawX < 0 || rawX >= width) continue;
                         int i3 = (tileRow + x) * 3;
-                        double denoised = ((outData[i3] + outData[i3 + 1] + outData[i3 + 2]) / 3.0)
-                                          * madPerNorm + median;
-                        double orig = plane[rawRow + rawX] * inv;
-                        double masked = orig < thresholdNorm ? denoised : orig;
-                        double blended = masked * strength + orig * (1 - strength);
-                        dst[rawRow + rawX] = (ushort)Math.Clamp(Math.Round(blended * 65535.0), 0, 65535);
+                        for (int oc = 0; oc < nc; oc++) {
+                            int c = nc == 3 ? oc : 0;
+                            double cn = copyN[i3 + c];     // unclipped normalized input
+                            double on = outData[i3 + c];   // model output (normalized)
+                            // GraXpert per-tile star-core mask: where the input
+                            // was clipped (cn >= clip) keep the input, else use
+                            // the model output.
+                            double mn = cn < clip ? on : cn;
+                            double denoised = mn / 0.04 * mad[oc] + med[oc];
+                            double orig = pixels[oc * planeLen + rawRow + rawX] * inv;
+                            // Global blend (GraXpert blend_images): bright pixels
+                            // keep original; strength mixes denoised with original.
+                            double threshold = clip / 0.04 * mad[oc] + med[oc];
+                            double masked = orig < threshold ? denoised : orig;
+                            double blended = masked * strength + orig * (1 - strength);
+                            dst[oc * planeLen + rawRow + rawX] =
+                                (ushort)Math.Clamp(Math.Round(blended * 65535.0), 0, 65535);
+                        }
                     }
                 }
             }
         }
 
-        // Star protection (NPU-specific). The RKNN fp16 NPU execution rings
-        // around bright stars (a dark halo) where the GPU/CPU ONNX paths do
-        // not — it comes from the runtime's Resize/precision, not our tiling
-        // (it changes with the model: v3 rings less than v2). Mitigate it the
-        // way denoise tools do: keep the ORIGINAL pixels in a feathered halo
-        // around bright cores, so the ring is replaced by the (bright, low-
-        // visible-noise) original. Cores are pixels the blend-mask already
-        // protects (orig > thresholdNorm); a few box-blur passes feather the
-        // mask out ~12 px to cover the ring.
-        // Star threshold is INDEPENDENT of the model's denoise clip: with v2
-        // (clip=10) the blend-mask threshold is ~250*mad above the median, so
-        // only the very brightest stars were protected and medium stars got
-        // turned into gray blobs by the RKNN ringing. A fixed ~25-sigma cut
-        // (mad is the robust sigma here) protects medium + bright stars on any
-        // model, while leaving the background to be denoised.
+        // NPU-specific star protection (per channel). The RKNN fp16 NPU rings a
+        // dark halo around bright stars where the GPU/CPU ONNX paths do not (it
+        // changes with the model: v3 rings less than v2). Keep the ORIGINAL in a
+        // feathered halo around bright cores so the ring is replaced by the
+        // original. The threshold is a fixed ~25-sigma (mad is the robust sigma),
+        // INDEPENDENT of the model's clip, so medium + bright stars are protected
+        // on both v2 (clip 10) and v3 (clip 1).
         const double starSigma = 25.0;
-        double starThresh = median + starSigma * mad;
-        int hw = width * height;
-        var prot = new float[hw];
-        for (int i = 0; i < hw; i++)
-            prot[i] = (plane[i] * inv) > starThresh ? 1f : 0f;
-        prot = RknnImageMath.BoxBlurF(prot, width, height, passes: 3, radius: 4);
-        for (int i = 0; i < hw; i++) {
-            float w = prot[i];
-            if (w <= 0.002f) continue;          // far from any star, leave denoised
-            if (w > 1f) w = 1f;
-            double blended = plane[i] * w + dst[i] * (1 - w);
-            dst[i] = (ushort)Math.Clamp(Math.Round(blended), 0, 65535);
+        for (int c = 0; c < nc; c++) {
+            int off = c * planeLen;
+            double starThresh = med[c] + starSigma * mad[c];
+            var prot = new float[planeLen];
+            for (int i = 0; i < planeLen; i++)
+                prot[i] = (pixels[off + i] * inv) > starThresh ? 1f : 0f;
+            prot = RknnImageMath.BoxBlurF(prot, width, height, passes: 3, radius: 4);
+            for (int i = 0; i < planeLen; i++) {
+                float w = prot[i];
+                if (w <= 0.002f) continue;       // far from any star, leave denoised
+                if (w > 1f) w = 1f;
+                double blended = pixels[off + i] * w + dst[off + i] * (1 - w);
+                dst[off + i] = (ushort)Math.Clamp(Math.Round(blended), 0, 65535);
+            }
         }
         return dst;
     }
+
+    /// <summary>Mono convenience wrapper over <see cref="RunDenoise"/> (tests).</summary>
+    public static ushort[] RunDenoiseMono(IRknnTileRunner runner, ushort[] plane, int width, int height,
+                                          double strength, double clip)
+        => RunDenoise(runner, plane, width, height, 1, strength, clip);
 }

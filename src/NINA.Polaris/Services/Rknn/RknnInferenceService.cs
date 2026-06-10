@@ -94,24 +94,15 @@ public sealed class RknnInferenceService : IDisposable {
                 opts.Correction, opts.SaveBackground, out bgPixels);
             tiles = 1;
         } else {
-            // Denoise. v3 models clip at 1.0, v2 at 10.0.
+            // Denoise. v3 models clip at 1.0, v2 at 10.0. Real-RGB single pass
+            // (GraXpert-style): the 3 colour channels go through the model
+            // together, one inference per tile — not three mono passes.
             double clip = version.StartsWith("3.", StringComparison.Ordinal) ? 1.0 : 10.0;
-            int planeLen = w * h;
-            outPixels = new ushort[img.Data.Length];
-            if (channels == 3) {
-                for (int c = 0; c < 3; c++) {
-                    var plane = img.Data.AsSpan(c * planeLen, planeLen).ToArray();
-                    var dp = RknnPipelines.RunDenoiseMono(session, plane, w, h,
-                        opts.DenoiseStrength, clip);
-                    Array.Copy(dp, 0, outPixels, c * planeLen, planeLen);
-                }
-            } else {
-                outPixels = RknnPipelines.RunDenoiseMono(session, img.Data, w, h,
-                    opts.DenoiseStrength, clip);
-            }
+            outPixels = RknnPipelines.RunDenoise(session, img.Data, w, h, channels,
+                opts.DenoiseStrength, clip);
             int itw = (int)Math.Ceiling((double)w / (session.TileSize / 2));
             int ith = (int)Math.Ceiling((double)h / (session.TileSize / 2));
-            tiles = itw * ith * channels;
+            tiles = itw * ith;   // one inference per tile (RGB processed together)
         }
 
         sw.Stop();
