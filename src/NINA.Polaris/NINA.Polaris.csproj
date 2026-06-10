@@ -67,6 +67,26 @@
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
+  <!-- Memory footprint tuning for SBC targets (Raspberry Pi, Orange Pi 5).
+       ASP.NET Core defaults to Server GC, which allocates one managed heap
+       PER CPU core (8 on an RK3588) and holds memory aggressively, pushing
+       idle RSS to ~1 GB. These devices have little RAM and the workload is
+       not throughput-bound, so:
+       - Workstation GC (ServerGarbageCollection=false): a single heap, far
+         smaller idle footprint, returns memory to the OS sooner. The
+         throughput cost is negligible for this single-user server.
+       - Concurrent GC stays on so background collection doesn't pause the
+         capture/stream loops.
+       - RetainVMGarbageCollection=false (default, made explicit): decommit
+         freed segments back to the OS instead of caching them in-process.
+       This is baked into runtimeconfig.json so it applies to every host
+       (systemd, docker, manual run) without extra env vars. -->
+  <PropertyGroup>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <RetainVMGarbageCollection>false</RetainVMGarbageCollection>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\NINA.Core.Portable\NINA.Core.Portable.csproj" />
     <ProjectReference Include="..\NINA.Image.Portable\NINA.Image.Portable.csproj" />

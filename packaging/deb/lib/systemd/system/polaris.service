@@ -30,6 +30,13 @@ Environment=POLARIS_IMAGE_OUTPUT_DIR=/home/polaris/files
 # Environment=DOTNET_ROOT=/opt/dotnet
 # Environment=PATH=/opt/dotnet:/usr/local/bin:/usr/bin:/bin
 
+# Memory footprint on small SBCs. Workstation GC is already baked into
+# runtimeconfig.json (csproj); this trims idle RSS further:
+#  - GCConserveMemory=5: nudge the GC to favour a smaller heap and return
+#    memory to the OS over raw throughput (0..9; 5 is a balanced point for
+#    an idle single-user server).
+Environment=DOTNET_GCConserveMemory=5
+
 Restart=on-failure
 RestartSec=5
 
