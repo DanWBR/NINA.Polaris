@@ -11559,6 +11559,23 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     the certificate the first time, just click through.)
                 </p>
             </div>
+            <!-- RKNN: NPU toggle. Only when the host has an RK3588 NPU and the
+                 run will happen on the host (local AI / browser path off), and
+                 only for the ops the NPU serves (BGE / Denoise; decon is CLI). -->
+            <div class="siril-modal-row"
+                 x-show="graxpert.status?.npuAvailable
+                         && !(graxpert.modalRunInBrowser && onnxAvailableForOp(graxpert.modalOp))
+                         && graxpert.modalOp !== 'deconvolution'">
+                <label class="checkbox-label">
+                    <input type="checkbox" x-model="graxpert.modalUseNpu">
+                    ⚡ Use NPU (Rockchip RK3588)
+                </label>
+                <p class="hint" style="margin-top:4px">
+                    Runs BGE / Denoise on the board's NPU (~5x faster than the CPU
+                    and frees the cores for stacking). Uncheck to use the GraXpert
+                    CLI on the CPU instead.
+                </p>
+            </div>
             <!-- Browser-mode progress (separate from the CLI progress
                  block lower down, that one polls the server job, this
                  one is purely client-side). -->
@@ -12649,7 +12666,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260609-phd2gui2"></script>
+    <script src="/js/app.js?v=20260610-npu-toggle"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

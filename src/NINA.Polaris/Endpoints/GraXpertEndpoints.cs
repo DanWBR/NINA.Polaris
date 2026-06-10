@@ -53,8 +53,10 @@ public static class GraXpertEndpoints {
                 return Results.BadRequest(new { error = $"Unknown operation: {req.Operation}" });
 
             // The NPU path can serve BGE/Denoise even without the GraXpert CLI.
-            // Decon always needs the CLI.
-            bool canNpu = gx.NpuAvailable &&
+            // Decon always needs the CLI. The user can force the CLI by sending
+            // UseNpu=false (e.g. to compare, or when NPU quality isn't wanted).
+            bool useNpu = req.UseNpu ?? true;
+            bool canNpu = gx.NpuAvailable && useNpu &&
                 (op == GraXpertOperation.BackgroundExtraction || op == GraXpertOperation.Denoising);
             if (!gx.IsAvailable && !canNpu)
                 return Results.Json(new { error = "GraXpert is not installed on this host" },
@@ -80,7 +82,8 @@ public static class GraXpertEndpoints {
                 // instead of letting GraXpert pick the latest and download
                 // it. Null is fine: the service falls back to the newest
                 // version it can find locally for this operation.
-                AiVersion: req.AiVersion);
+                AiVersion: req.AiVersion,
+                UseNpu: useNpu);
             var job = gx.StartBatch(new GraXpertBatchRequest(
                 req.Paths, opts, req.Concurrency ?? 1));
             return Results.Accepted(value: new { jobId = job.JobId });
@@ -161,5 +164,9 @@ public static class GraXpertEndpoints {
         // (_decon_stars vs _decon_objects) so the two runs don't collide.
         string? DeconTarget,
         // Denoise
-        double? DenoiseStrength);
+        double? DenoiseStrength,
+        // RKNN: when the host has an NPU (RK3588), use it for BGE/Denoise.
+        // Null/true = use the NPU when available; false = force the GraXpert
+        // CLI (CPU) instead. Only meaningful when npuAvailable.
+        bool? UseNpu);
 }

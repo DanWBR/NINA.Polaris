@@ -2059,6 +2059,9 @@ function ninaApp() {
             // graxpertStartRun branches on this, true → browser
             // pipeline, false → existing CLI subprocess.
             modalRunInBrowser: true,
+            // RKNN: use the host NPU (RK3588) for BGE/Denoise host-side runs.
+            // Only surfaced when graxpert.status.npuAvailable; default on.
+            modalUseNpu: true,
             browserActive: false,
             // Set by graxpertAbortRun() to signal the browser-mode
             // loop to break out at its next safe checkpoint. The
@@ -18589,7 +18592,10 @@ function ninaApp() {
                         // for that family/version into GraXpert's store and
                         // passes -ai_version (stripping any -fp16/-int8
                         // suffix GraXpert doesn't recognise).
-                        aiVersion: this._graxpertSelectedVersion()
+                        aiVersion: this._graxpertSelectedVersion(),
+                        // RKNN: false forces the GraXpert CLI (CPU) even on an
+                        // RK3588 host. Only meaningful when npuAvailable.
+                        useNpu: this.graxpert.modalUseNpu !== false
                 });
                 // apiPost returns the raw Response — parse the body to get
                 // the jobId (reading resp.jobId directly gave "undefined").

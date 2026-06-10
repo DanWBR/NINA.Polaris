@@ -141,7 +141,7 @@ public class GraXpertService {
         // than the CPU and it frees the cores for stacking. Works even when the
         // GraXpert CLI isn't installed. FITS input only; any failure falls
         // through to the GraXpert CLI path below.
-        if (_rknn != null && _rknn.IsAvailable && IsFitsPath(inputPath)) {
+        if (_rknn != null && _rknn.IsAvailable && opts.UseNpu && IsFitsPath(inputPath)) {
             var npu = TryRunRknn(inputPath, opts, ct, onLog);
             if (npu != null) return npu;
         }
@@ -849,7 +849,10 @@ public sealed record GraXpertOptions(
     // GraXpert CLI splits decon into two distinct subcommands; the
     // previous "-cmd deconvolution" was rejected by GraXpert at runtime.
     string DeconTarget = "stars",
-    string? AiVersion = null);
+    string? AiVersion = null,
+    // RKNN: use the Rockchip NPU for BGE/Denoise when available. False forces
+    // the GraXpert CLI (CPU) even on an RK3588 host.
+    bool UseNpu = true);
 
 public sealed record GraXpertResult(string OutputPath, string? BackgroundPath,
                                      GraXpertOperation Operation,
