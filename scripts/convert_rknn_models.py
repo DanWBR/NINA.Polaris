@@ -40,6 +40,29 @@ ALL_FAMILIES = DEFAULT_FAMILIES + [
 ]
 
 
+def _ensure_onnx_mapping():
+    """rknn-toolkit2 2.3.x uses `onnx.mapping`, removed in onnx>=1.16 (user is on
+    1.18) -> AttributeError in load_onnx. Recreate it so any onnx version works."""
+    import onnx
+    if hasattr(onnx, "mapping"):
+        return
+    import types
+    import numpy as np
+    from onnx import TensorProto as tp
+    table = {
+        tp.FLOAT: np.float32, tp.UINT8: np.uint8, tp.INT8: np.int8,
+        tp.UINT16: np.uint16, tp.INT16: np.int16, tp.INT32: np.int32,
+        tp.INT64: np.int64, tp.BOOL: np.bool_, tp.FLOAT16: np.float16,
+        tp.DOUBLE: np.float64, tp.UINT32: np.uint32, tp.UINT64: np.uint64,
+        tp.COMPLEX64: np.complex64, tp.COMPLEX128: np.complex128,
+    }
+    m = types.ModuleType("onnx.mapping")
+    m.TENSOR_TYPE_TO_NP_TYPE = {k: np.dtype(v) for k, v in table.items()}
+    m.NP_TYPE_TO_TENSOR_TYPE = {np.dtype(v): k for k, v in table.items()}
+    onnx.mapping = m
+    sys.modules["onnx.mapping"] = m
+
+
 def find_input(onnx_path):
     """Return (input_name, [shape]) for the first graph input. The GraXpert
     models have a DYNAMIC batch dim (e.g. ['unk__206',256,256,3]), so we must
@@ -63,6 +86,7 @@ def convert_one(onnx_path, platform, force):
         print(f"  skip (exists): {rknn_path}")
         return True
 
+    _ensure_onnx_mapping()
     from rknn.api import RKNN
     name, shape = find_input(onnx_path)
     print(f"  input '{name}' shape {shape}")
