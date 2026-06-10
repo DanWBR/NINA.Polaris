@@ -79,22 +79,42 @@ internal static class RknnPipelines {
             bgFull[c] = RknnImageMath.BilinearResizeF(smoothed, tile, tile, width, height);
         }
 
-        // 8) Apply correction per channel (+ optional background plane).
+        // 8) Apply correction (matches GraXpert background_extraction.py).
+        //   Subtraction: recentre ALL channels on a SINGLE global mean of the
+        //     modelled background -> neutralises the background colour to a
+        //     common grey (using a per-channel median here instead would keep
+        //     each channel's tint and leave a colour cast).
+        //   Division: scale each channel by its own source mean.
         var result = new ushort[pixels.Length];
         background = saveBackground ? new ushort[pixels.Length] : null;
+
+        double globalMean = 0.0;
+        if (!division) {
+            double sum = 0.0;
+            for (int c = 0; c < channels; c++) {
+                var bg = bgFull[c];
+                for (int i = 0; i < planeLen; i++) sum += bg[i];
+            }
+            globalMean = sum / ((double)planeLen * channels);
+        }
+
         for (int c = 0; c < channels; c++) {
             var bg = bgFull[c];
-            double median = med[c];
             int off = c * planeLen;
+            double channelMean = 0.0;
+            if (division) {
+                double s = 0.0;
+                for (int i = 0; i < planeLen; i++) s += pixels[off + i] / 65535.0;
+                channelMean = s / planeLen;
+            }
             for (int i = 0; i < planeLen; i++) {
                 double v = pixels[off + i] / 65535.0;
-                double corrected;
                 double bgv = bg[i];
+                double corrected;
                 if (division) {
-                    double b = Math.Max(1e-6, bgv);
-                    corrected = v / b * median;
+                    corrected = v / Math.Max(1e-6, bgv) * channelMean;
                 } else {
-                    corrected = v - bgv + median;
+                    corrected = v - bgv + globalMean;
                 }
                 result[off + i] = (ushort)Math.Clamp(Math.Round(corrected * 65535.0), 0, 65535);
                 if (background != null) {
