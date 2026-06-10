@@ -134,17 +134,22 @@ bandwidth (23.7 vs ~7 GB/s), which is why its stacking throughput leads.
 ### x86 desktop — Core i9-13900KF (32 threads)
 
 ASUSTeK ProArt B760-CREATOR D4, Core i9-13900KF, 64 GB DDR4-3200, 2 TB NVMe SSD.
-Run: 2026-06-08.
+Run: 2026-06-10 (Release build — see note).
 
 | Metric | Value |
 |---|---|
-| **Polaris score** | **348** |
-| Stacking throughput | 2.2 fps · 37 Mpx/s (16.78 MP frames) |
-| Stacking detect / align / resample / stats | 132.19 / 0.67 / 140.43 / 180.26 ms |
-| Capture/video throughput | 2.6 fps · 43.7 Mpx/s |
-| Debayer / JPEG / LZ4 | 38.19 / 336.37 / 9.69 ms (LZ4 3301.9 MB/s) |
-| CPU single / multi-thread | 2014 / 33972 MFLOPS (16.86× scaling) |
-| Memory bandwidth | 42.5 GB/s |
+| **Polaris score** | **662** |
+| Stacking throughput | 5.43 fps · 91.1 Mpx/s (16.78 MP frames) |
+| Stacking detect / align / resample / stats | 42.46 / 0.93 / 50.36 / 90.46 ms |
+| Capture/video throughput | 3.37 fps · 56.6 Mpx/s |
+| Debayer / JPEG / LZ4 | 37.09 / 249.89 / 9.49 ms (LZ4 3372.6 MB/s) |
+| CPU single / multi-thread | 4697 / 73240 MFLOPS (15.59× scaling) |
+| Memory bandwidth | 46.7 GB/s |
+
+> **Build matters.** This 662 is a **Release** build. An earlier run on the
+> same machine scored 348 in a **Debug** build — roughly half. The SBC numbers
+> above all come from the Release `.deb`, so compare against this 662, not the
+> old Debug figure. Always benchmark a Release build for cross-board comparison.
 
 ### x86 PC stick
 
