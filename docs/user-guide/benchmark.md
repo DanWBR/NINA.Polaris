@@ -131,6 +131,18 @@ Slightly ahead of the Raspberry Pi 5 — the RK3588S big.LITTLE cores give it
 strong multi-thread scaling (4.66× across its 8 cores) and much higher memory
 bandwidth (23.7 vs ~7 GB/s), which is why its stacking throughput leads.
 
+> **This is the board's real ceiling — power/governor don't change it.**
+> Measured at full clocks (4× Cortex-A76 @ 2.35 GHz + 4× Cortex-A55 @ 1.8 GHz,
+> their `scaling_max_freq`) and ~47°C, so no thermal throttle. Forcing the
+> `performance` governor made no difference (cores already hit max under load),
+> and the score is the same (~1.2 A / ~6 W draw) whether powered from a PC
+> USB-C port or a dedicated 5V/5A PSU — a CPU/memory benchmark with no
+> peripherals never approaches the 5A peak rating. The ~4.7× (not 8×)
+> multi-thread scaling is architectural: the 4 little A55 cores are far weaker
+> than the 4 big A76s, so 225–227 is the SoC's genuine limit here, not a
+> power/cooling/config bottleneck. Keep the 5V/5A PSU for field stability
+> (NVMe + USB + camera + dew heater peaks), not for compute.
+
 ### x86 desktop — Core i9-13900KF (32 threads)
 
 ASUSTeK ProArt B760-CREATOR D4, Core i9-13900KF, 64 GB DDR4-3200, 2 TB NVMe SSD.
