@@ -16,6 +16,8 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using NINA.Image.FileFormat.FITS;
+using NINA.Image.ImageData;
 using NINA.Polaris.Services;
 
 namespace NINA.Polaris.Services.External;
@@ -37,6 +39,7 @@ public class GraXpertService {
     private readonly ProfileService _profile;
     private readonly ILogger<GraXpertService> _logger;
     private readonly Onnx.OnnxModelRegistry? _models;
+    private readonly Rknn.RknnInferenceService? _rknn;
 
     private readonly ConcurrentDictionary<string, GraXpertBatchJob> _jobs = new();
     private readonly object _versionLock = new();
@@ -45,12 +48,25 @@ public class GraXpertService {
 
     public GraXpertService(IConfiguration config, ProfileService profile,
                             ILogger<GraXpertService> logger,
-                            Onnx.OnnxModelRegistry? models = null) {
+                            Onnx.OnnxModelRegistry? models = null,
+                            Rknn.RknnInferenceService? rknn = null) {
         _config = config;
         _profile = profile;
         _logger = logger;
         _models = models;
+        _rknn = rknn;
     }
+
+    /// <summary>
+    /// True when a Rockchip NPU is available to accelerate BGE/Denoise on the
+    /// host (RK3588). Surfaced in the GraXpert status so the UI can show an
+    /// "NPU" chip. Note: the NPU path works even when the GraXpert CLI is not
+    /// installed.
+    /// </summary>
+    public bool NpuAvailable => _rknn?.IsAvailable == true;
+
+    /// <summary>One-line NPU probe description (for status/diagnostics).</summary>
+    public string NpuDiagnostics => _rknn?.Diagnostics ?? "NPU support not built";
 
     public string? BinaryPath => Locate();
     public bool IsAvailable => !string.IsNullOrEmpty(BinaryPath);
@@ -117,11 +133,21 @@ public class GraXpertService {
                                                          GraXpertOptions opts,
                                                          CancellationToken ct,
                                                          Action<string>? onLog = null) {
-        if (!IsAvailable)
-            return new GraXpertResult("", null, opts.Operation, 0, "GraXpert not installed");
         if (!File.Exists(inputPath))
             return new GraXpertResult("", null, opts.Operation, 0,
                 $"Input file not found: {inputPath}");
+
+        // NPU fast path (RK3588): BGE/Denoise on the Rockchip NPU, ~5x faster
+        // than the CPU and it frees the cores for stacking. Works even when the
+        // GraXpert CLI isn't installed. FITS input only; any failure falls
+        // through to the GraXpert CLI path below.
+        if (_rknn != null && _rknn.IsAvailable && IsFitsPath(inputPath)) {
+            var npu = TryRunRknn(inputPath, opts, ct, onLog);
+            if (npu != null) return npu;
+        }
+
+        if (!IsAvailable)
+            return new GraXpertResult("", null, opts.Operation, 0, "GraXpert not installed");
 
         // Block decon/denoise on old GraXpert installs, friendlier
         // than letting the subprocess fail with an obscure error.
@@ -256,6 +282,66 @@ public class GraXpertService {
             _logger.LogError(ex, "GraXpert {Op} threw on {Path}", opts.Operation, inputPath);
             return new GraXpertResult("", null, opts.Operation,
                 sw.Elapsed.TotalSeconds, ex.Message);
+        }
+    }
+
+    private static bool IsFitsPath(string path) {
+        var ext = Path.GetExtension(path);
+        return ext.Equals(".fits", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".fit", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".fts", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Run BGE/Denoise on the Rockchip NPU instead of the GraXpert CLI. Reads
+    /// the FITS input, runs the converted .rknn model on the NPU, and writes a
+    /// FITS output with the same naming convention the CLI path uses. Returns
+    /// the result on success, or null (with a logged warning) so the caller
+    /// transparently falls back to the CLI. The NPU only serves operations and
+    /// model versions for which a model.rknn exists (see RknnInferenceService);
+    /// anything else returns null here.
+    /// </summary>
+    private GraXpertResult? TryRunRknn(string inputPath, GraXpertOptions opts,
+                                       CancellationToken ct, Action<string>? onLog) {
+        try {
+            if (!_rknn!.CanHandle(opts.Operation, opts.AiVersion, out _, out var ver))
+                return null;
+
+            onLog?.Invoke($"[NPU] running {opts.Operation} on the Rockchip NPU (rknn {ver})");
+            var sw = Stopwatch.StartNew();
+
+            BaseImageData img;
+            using (var fs = File.OpenRead(inputPath)) img = FITSReader.Read(fs);
+            ct.ThrowIfCancellationRequested();
+
+            var res = _rknn.Run(img, opts);
+
+            var outputPath = DefaultOutputPath(inputPath, opts);
+            Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+            FITSWriter.Write(res.Image, outputPath);
+
+            string? bgPath = null;
+            if (opts.Operation == GraXpertOperation.BackgroundExtraction
+                && opts.SaveBackground && res.Background != null) {
+                bgPath = Path.ChangeExtension(outputPath, null) + "_bg" + Path.GetExtension(outputPath);
+                FITSWriter.Write(res.Background, bgPath);
+            }
+
+            sw.Stop();
+            onLog?.Invoke(FormattableString.Invariant(
+                $"[NPU] done in {sw.Elapsed.TotalSeconds:0.0}s ({res.Tiles} tiles)"));
+            _logger.LogInformation("FileOp RKNN {Op} {In} -> {Out} ({Ms} ms)",
+                opts.Operation, inputPath, outputPath, (long)res.ElapsedMs);
+            return new GraXpertResult(outputPath, bgPath, opts.Operation,
+                sw.Elapsed.TotalSeconds, null);
+        } catch (OperationCanceledException) {
+            // Honour cancellation rather than masking it as a fallback.
+            return new GraXpertResult("", null, opts.Operation, 0, "Cancelled");
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "RKNN NPU path failed for {Op}; falling back to GraXpert CLI",
+                opts.Operation);
+            onLog?.Invoke($"[NPU] failed ({ex.Message}); falling back to GraXpert CLI");
+            return null;
         }
     }
 

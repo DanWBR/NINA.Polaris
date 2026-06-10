@@ -279,6 +279,9 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Editor.ImageEditService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Editor.EditSidecarStore>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Onnx.OnnxModelRegistry>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Onnx.OnnxFileService>();
+// RKNN: host-side NPU acceleration for GraXpert AI on Rockchip RK3588.
+// Injected (optionally) into GraXpertService; no-op when no NPU is present.
+builder.Services.AddSingleton<NINA.Polaris.Services.Rknn.RknnInferenceService>();
 builder.Services.AddSingleton<FileBrowserService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.SirilService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.GraXpertService>();

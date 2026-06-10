@@ -154,4 +154,18 @@
        Include> needed (adding one duplicates every file and fails
        the build with "Duplicate 'Content' items were included"). -->
 
+  <!-- RKNN: Rockchip RKNPU2 runtime for GraXpert AI acceleration on
+       RK3588 (Orange Pi 5 Pro, etc.). Drop the aarch64 librknnrt.so into
+       external/rknpu/aarch64/ via scripts/fetch-librknnrt.sh so the
+       linux-arm64 publish bundles it next to the app; the default native
+       resolver finds it there. The Condition is guarded by Exists() so a
+       dev box without the file (and every non-arm64 build) just skips it —
+       RknnRuntime gates actual use at runtime. -->
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-arm64' And Exists('$(MSBuildThisFileDirectory)..\..\external\rknpu\aarch64\librknnrt.so')">
+    <Content Include="$(MSBuildThisFileDirectory)..\..\external\rknpu\aarch64\librknnrt.so">
+      <Link>librknnrt.so</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

@@ -12928,3 +12928,53 @@ licensing and project-hygiene work.
 ### Project hygiene
 - Added the 9 missing projects to `NINA.Polaris.slnx` (camera SDKs, Guider.Portable,
   Mount.SynScanWifi) — they built via ProjectReference but weren't in the solution.
+
+## RKNN — NPU acceleration for GraXpert AI on Rockchip RK3588 (epic)
+
+### Why
+GraXpert's AI models (BGE / denoise / deconvolution) are the heaviest host-side
+work on an SBC. Feasibility was proven on an Orange Pi 5 Pro (RK3588S, 6-TOPS NPU)
+on 2026-06-10:
+
+- The bundled `model.onnx` converts clean to `.rknn` with **100% NPU mapping,
+  fp16, zero CPU fallback** (only Input/Output operators stay on CPU — normal
+  marshaling). No quantization, so no calibration dataset and no quality risk.
+- On-device timing (rknn-toolkit-lite2, 3 NPU cores, fp16, 256x256x3 tile):
+  **NPU 91.2 ms/tile vs CPU 457.4 ms/tile (onnxruntime, 8 ARM cores) = 5.0x**,
+  and it frees all 8 CPU cores — which is the real live-stacking bottleneck.
+- No OS change needed: the RKNPU driver (v0.9.8) ships in the stock Ubuntu image
+  the board already runs. The NPU is a DRM render node `/dev/dri/renderD129`
+  (NOT `/dev/rknpu`), driven by `librknnrt.so`.
+
+### Design (4 parts)
+1. **Offline convert** (`scripts/convert_rknn_models.py`, build/dev-time on x86 +
+   rknn-toolkit2, Python 3.11): for each `{family}-ai-models/{version}/model.onnx`
+   under `wwwroot/graxpert/models`, emit a sibling `model.rknn` (rk3588, fp16).
+   The `.rknn` is committed next to the `.onnx`.
+2. **Native binding + host inference service** (C#, no Python on the board):
+   - `Services/Rknn/RknnNative.cs` — P/Invoke of `librknnrt` (rknn_init / query /
+     inputs_set / run / outputs_get / outputs_release / destroy / set_core_mask),
+     exact struct layouts from `rknn_api.h`.
+   - `Services/Rknn/RknnSession.cs` — managed `IDisposable` `IRknnTileRunner`:
+     load `.rknn` bytes, set core mask `0_1_2`, run a `[1,256,256,3]` fp32 NHWC
+     tile -> fp32 output.
+   - `Services/Rknn/RknnRuntime.cs` — availability detection: linux-arm64 +
+     `/dev/dri/renderD129` + `librknnrt.so` loadable.
+   - `Services/Rknn/RknnInferenceService.cs` — tiling pipelines that mirror the
+     browser `onnx-pipelines.js` math exactly: BGE single-pass (downsample 256,
+     MAD*0.04 clip +/-1, denorm, box-blur, resize, subtract/divide); Denoise/Decon
+     tiled (256/128/64, median/MAD, CLIP per version, blend-mask + strength).
+     Operates on `BaseImageData` (mono + RGB plane-sequential). Takes
+     `IRknnTileRunner` so the tiling math is unit-testable with a mock.
+3. **Runtime detection + transparent fallback**: `GraXpertService.ProcessFrameAsync`
+   checks NPU availability + a `.rknn` sibling for the requested family/version; if
+   present, runs the RKNN host path (read FITS -> tile on NPU -> write FITS) and
+   returns a `GraXpertResult`; otherwise falls through to the existing GraXpert CLI
+   path. Works on any board; only RK3588 gets the 5x. NPU availability surfaced in
+   status/WS so the UI can show an "NPU" chip.
+4. **Packaging**: per-RID `librknnrt.so` copy in the csproj (linux-arm64), `.deb`
+   inclusion, `NOTICE` + `licenses/RKNPU-LICENSE.txt` entry.
+
+### Future lever (deferred)
+int8 quantization could reach ~45 ms/tile (~10x) but needs a calibration dataset
+and risks denoise quality. fp16 5x is the clean baseline.

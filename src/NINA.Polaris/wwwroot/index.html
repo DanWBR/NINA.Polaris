@@ -10168,6 +10168,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                 ? ', BGE + Decon + Denoise'
                                                 : ', BGE only'))
                                           : '✗ Not detected'"></span>
+                            <span class="external-tool-status ok"
+                                  x-show="graxpert.status?.npuAvailable"
+                                  :title="graxpert.status?.npuDiagnostics || ''"
+                                  x-text="'⚡ NPU (BGE + Denoise accelerated)'"></span>
                             <button class="btn btn-sm" @click="graxpertRedetect()">Re-detect</button>
                         </div>
                         <div class="external-tool-body">

@@ -33,7 +33,11 @@ public static class GraXpertEndpoints {
             binaryPath = gx.BinaryPath,
             version = gx.Version,
             supportsDeconvolution = gx.SupportsDeconvolution,
-            supportsDenoising = gx.SupportsDenoising
+            supportsDenoising = gx.SupportsDenoising,
+            // RKNN: NPU acceleration for BGE/Denoise on RK3588. When true the
+            // host can run those even without the GraXpert CLI installed.
+            npuAvailable = gx.NpuAvailable,
+            npuDiagnostics = gx.NpuDiagnostics
         }));
 
         g.MapGet("/diagnostic", (GraXpertService gx) => Results.Ok(new {
@@ -41,19 +45,24 @@ public static class GraXpertEndpoints {
         }));
 
         g.MapPost("/run", (GraXpertService gx, GraXpertRunRequest req) => {
-            if (!gx.IsAvailable)
-                return Results.Json(new { error = "GraXpert is not installed on this host" },
-                    statusCode: StatusCodes.Status409Conflict);
             if (req.Paths == null || req.Paths.Count == 0)
                 return Results.BadRequest(new { error = "paths is required" });
 
             var op = ParseOperation(req.Operation);
             if (op == null)
                 return Results.BadRequest(new { error = $"Unknown operation: {req.Operation}" });
+
+            // The NPU path can serve BGE/Denoise even without the GraXpert CLI.
+            // Decon always needs the CLI.
+            bool canNpu = gx.NpuAvailable &&
+                (op == GraXpertOperation.BackgroundExtraction || op == GraXpertOperation.Denoising);
+            if (!gx.IsAvailable && !canNpu)
+                return Results.Json(new { error = "GraXpert is not installed on this host" },
+                    statusCode: StatusCodes.Status409Conflict);
             if (op == GraXpertOperation.Deconvolution && !gx.SupportsDeconvolution)
                 return Results.Json(new { error = "Deconvolution requires GraXpert v3.0+" },
                     statusCode: StatusCodes.Status409Conflict);
-            if (op == GraXpertOperation.Denoising && !gx.SupportsDenoising)
+            if (op == GraXpertOperation.Denoising && !canNpu && !gx.SupportsDenoising)
                 return Results.Json(new { error = "Denoising requires GraXpert v3.0+" },
                     statusCode: StatusCodes.Status409Conflict);
 

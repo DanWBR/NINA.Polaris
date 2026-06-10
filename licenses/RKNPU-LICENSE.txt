@@ -1,0 +1,35 @@
+Rockchip RKNPU2 runtime (librknnrt.so)
+======================================
+
+N.I.N.A. Polaris can optionally accelerate the GraXpert AI models
+(background extraction, denoise) on the NPU of Rockchip RK3588/RK3588S
+boards (Orange Pi 5 Pro, etc.) using the Rockchip RKNPU2 user-space
+runtime library `librknnrt.so`.
+
+Source / distribution
+---------------------
+The library is published by Rockchip in the rknn-toolkit2 repository:
+
+    https://github.com/airockchip/rknn-toolkit2
+    rknpu2/runtime/Linux/librknn_api/aarch64/librknnrt.so
+
+It is licensed under the Apache License, Version 2.0, per the
+rknn-toolkit2 repository LICENSE:
+
+    https://github.com/airockchip/rknn-toolkit2/blob/master/LICENSE
+
+This product does NOT commit `librknnrt.so` to the source tree. It is a
+build-time dependency fetched into `external/rknpu/aarch64/` by
+`scripts/fetch-librknnrt.sh` (or `.ps1`) and bundled only into the
+`linux-arm64` publish output. On any other platform, and on an arm64
+board without an NPU, it is absent and unused (the runtime probe in
+`RknnRuntime` falls back to the GraXpert CLI / browser ONNX path).
+
+The model files converted for the NPU (`model.rknn`) are produced from
+the same GraXpert AI ONNX weights and are subject to the GraXpert AI
+model license noted in NOTICE (CC BY-NC-SA 4.0, distributed as an
+optional separate download, not part of this AGPL work).
+
+A copy of the Apache License, Version 2.0 is available at:
+
+    https://www.apache.org/licenses/LICENSE-2.0

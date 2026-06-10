@@ -435,6 +435,10 @@ scripts/.apass-cache/
 /build/deb-arm64
 /scripts/.dso-cache
 
+# RKNN: Rockchip RKNPU2 runtime (librknnrt.so) is a proprietary vendor binary
+# fetched at build time by scripts/fetch-librknnrt.sh, not committed.
+/external/rknpu/
+
 # --- Vendored camera SDK native libraries (force-tracked) ---
 # The generic `x64/` and `[Aa][Rr][Mm]64/` build-output ignores above also
 # match the vendored SDK arch folders under camera_sdk/ (e.g.

@@ -68,3 +68,7 @@ license files. Notable copyleft / restricted components:
   * Camera vendor SDKs (ZWO,
     PlayerOne, ToupTek, SVBony) .... vendor licenses; see camera_sdk/*/
                                       and the linking exception above
+  * Rockchip RKNPU2 runtime ........ Apache-2.0 (librknnrt.so; optional NPU
+                                      acceleration on RK3588, fetched at build
+                                      time, NOT committed; see
+                                      licenses/RKNPU-LICENSE.txt)
