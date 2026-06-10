@@ -40,12 +40,38 @@ ALL_FAMILIES = DEFAULT_FAMILIES + [
 ]
 
 
+def _ensure_onnx_mapping():
+    """Shim for onnx>=1.16, which removed `onnx.mapping`. rknn-toolkit2 2.3.x
+    still uses `onnx.mapping.TENSOR_TYPE_TO_NP_TYPE` when it reads the model's
+    own input types (the load_onnx path without input_size_list). Recreate it so
+    any onnx version works (the user is on onnx 1.18)."""
+    import onnx
+    if hasattr(onnx, "mapping"):
+        return
+    import types
+    import numpy as np
+    from onnx import TensorProto as tp
+    table = {
+        tp.FLOAT: np.float32, tp.UINT8: np.uint8, tp.INT8: np.int8,
+        tp.UINT16: np.uint16, tp.INT16: np.int16, tp.INT32: np.int32,
+        tp.INT64: np.int64, tp.BOOL: np.bool_, tp.FLOAT16: np.float16,
+        tp.DOUBLE: np.float64, tp.UINT32: np.uint32, tp.UINT64: np.uint64,
+        tp.COMPLEX64: np.complex64, tp.COMPLEX128: np.complex128,
+    }
+    m = types.ModuleType("onnx.mapping")
+    m.TENSOR_TYPE_TO_NP_TYPE = {k: np.dtype(v) for k, v in table.items()}
+    m.NP_TYPE_TO_TENSOR_TYPE = {np.dtype(v): k for k, v in table.items()}
+    onnx.mapping = m
+    sys.modules["onnx.mapping"] = m
+
+
 def convert_one(onnx_path, platform, force):
     rknn_path = os.path.join(os.path.dirname(onnx_path), "model.rknn")
     if os.path.exists(rknn_path) and not force:
         print(f"  skip (exists): {rknn_path}")
         return True
 
+    _ensure_onnx_mapping()
     from rknn.api import RKNN
     rknn = RKNN(verbose=False)
     rknn.config(target_platform=platform)   # fp16 by default (no do_quantization)
