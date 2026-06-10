@@ -31,11 +31,22 @@ Environment=POLARIS_IMAGE_OUTPUT_DIR=/home/polaris/files
 # Environment=PATH=/opt/dotnet:/usr/local/bin:/usr/bin:/bin
 
 # Memory footprint on small SBCs. Workstation GC is already baked into
-# runtimeconfig.json (csproj); this trims idle RSS further:
+# runtimeconfig.json (csproj); these trim idle RSS further:
 #  - GCConserveMemory=5: nudge the GC to favour a smaller heap and return
 #    memory to the OS over raw throughput (0..9; 5 is a balanced point for
 #    an idle single-user server).
+#  - MALLOC_ARENA_MAX=2: glibc malloc otherwise creates up to ~8 arenas
+#    PER CPU core (so dozens on an 8-core RK3588) and rarely returns freed
+#    memory to the OS, inflating RSS far beyond the managed heap. Capping
+#    arenas is the classic .NET/Java-on-glibc fix and is the bulk of the
+#    remaining idle footprint after the GC change.
+#  - MALLOC_TRIM_THRESHOLD_=131072: make glibc release free top-of-heap
+#    memory back to the OS sooner (128 KB vs the adaptive default that can
+#    grow into the MBs). These MUST be env vars: glibc reads them at process
+#    start, before any managed code runs, so they can't be set from C#.
 Environment=DOTNET_GCConserveMemory=5
+Environment=MALLOC_ARENA_MAX=2
+Environment=MALLOC_TRIM_THRESHOLD_=131072
 
 Restart=on-failure
 RestartSec=5
