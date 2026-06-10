@@ -225,23 +225,35 @@ internal static class RknnPipelines {
             }
         }
 
-        // NPU-specific star protection (per channel). The RKNN fp16 NPU rings a
-        // dark halo around bright stars where the GPU/CPU ONNX paths do not (it
-        // changes with the model: v3 rings less than v2). Keep the ORIGINAL in a
-        // feathered halo around bright cores so the ring is replaced by the
-        // original. The threshold is a fixed ~25-sigma (mad is the robust sigma),
-        // INDEPENDENT of the model's clip, so medium + bright stars are protected
-        // on both v2 (clip 10) and v3 (clip 1).
-        const double starSigma = 25.0;
+        // NPU-specific star protection (per channel). The RKNN fp16 NPU draws a
+        // dark ring/moat around bright stars where the GPU/CPU ONNX paths do not.
+        // We composite the ORIGINAL back over the star core AND its ring.
+        //
+        // The mask must be SOLID (w==1) across the whole core+ring, feathering
+        // only at the outer rim. A previous version seeded only the bright cores
+        // and then box-blurred them: a few-pixel core averaged over a wide kernel
+        // collapses to w~0.01-0.1, so the blend (orig*w + dst*(1-w)) returned only
+        // a few percent of the original and the ring survived -- and widening the
+        // feather made it WEAKER (more spread = smaller values). The fix is to
+        // DILATE the seed to cover the ring (a solid plateau) and feather only the
+        // edge. starSigma is moderate so medium+bright (ring-producing) stars are
+        // caught on both v2 (clip 10) and v3 (clip 1); faint stars don't ring.
+        const double starSigma = 10.0;
+        const int ringRadius = 14;   // dilation: solid protection out past the ring
+        const int featherRadius = 8; // soft rim so the composite has no hard edge
         for (int c = 0; c < nc; c++) {
             int off = c * planeLen;
             double starThresh = med[c] + starSigma * mad[c];
-            var prot = new float[planeLen];
+            var seed = new float[planeLen];
             for (int i = 0; i < planeLen; i++)
-                prot[i] = (pixels[off + i] * inv) > starThresh ? 1f : 0f;
-            // Feather wide enough (~32px) to cover the NPU "ghost star" side-lobes
-            // that sit at a fixed radius around bright stars, not just the core.
-            prot = RknnImageMath.BoxBlurF(prot, width, height, passes: 4, radius: 8);
+                seed[i] = (pixels[off + i] * inv) > starThresh ? 1f : 0f;
+            // Dilate: one box pass then binarize (any seed inside the window =>
+            // protected), so the solid region grows by ~ringRadius around each
+            // star and fully covers the dark ring.
+            var dil = RknnImageMath.BoxBlurF(seed, width, height, passes: 1, radius: ringRadius);
+            for (int i = 0; i < planeLen; i++) dil[i] = dil[i] > 0f ? 1f : 0f;
+            // Feather only the rim of the dilated plateau.
+            var prot = RknnImageMath.BoxBlurF(dil, width, height, passes: 2, radius: featherRadius);
             for (int i = 0; i < planeLen; i++) {
                 float w = prot[i];
                 if (w <= 0.002f) continue;       // far from any star, leave denoised
