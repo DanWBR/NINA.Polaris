@@ -1,0 +1,120 @@
+---
+import { navLinks } from '../data/site';
+---
+
+<nav class="nav">
+  <a class="brand" href="#top">
+    <span class="brand-mark">NINA</span>
+    <span class="brand-sub">Polaris</span>
+  </a>
+
+  <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+    <span></span><span></span><span></span>
+  </button>
+
+  <div class="nav-links">
+    {navLinks.map((l) => (
+      <a
+        href={l.href}
+        {...(l.external ? { target: '_blank', rel: 'noopener' } : {})}
+      >
+        {l.label}
+      </a>
+    ))}
+  </div>
+</nav>
+
+<script>
+  const toggle = document.querySelector('.nav-toggle');
+  const nav = document.querySelector('.nav');
+  toggle?.addEventListener('click', () => {
+    const open = nav?.classList.toggle('open');
+    toggle.setAttribute('aria-expanded', String(!!open));
+  });
+  // Close the mobile menu after tapping a link
+  document.querySelectorAll('.nav-links a').forEach((a) =>
+    a.addEventListener('click', () => nav?.classList.remove('open'))
+  );
+</script>
+
+<style>
+  .nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 32px;
+    backdrop-filter: blur(8px);
+    background: rgba(26, 26, 46, 0.55);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    text-decoration: none;
+  }
+  .brand:hover { text-decoration: none; }
+  .brand-mark {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: var(--accent);
+  }
+  .brand-sub {
+    font-size: 14px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+  }
+  .nav-links { display: flex; gap: 28px; }
+  .nav-links a {
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 500;
+    transition: color 0.15s;
+  }
+  .nav-links a:hover { color: var(--accent); text-decoration: none; }
+
+  .nav-toggle {
+    display: none;
+    flex-direction: column;
+    gap: 5px;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    padding: 6px;
+  }
+  .nav-toggle span {
+    width: 22px;
+    height: 2px;
+    background: var(--text);
+    border-radius: 2px;
+    transition: 0.2s;
+  }
+
+  @media (max-width: 760px) {
+    .nav { padding: 16px 20px; }
+    .nav-toggle { display: flex; }
+    .nav-links {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      flex-direction: column;
+      gap: 0;
+      background: rgba(26, 26, 46, 0.98);
+      border-bottom: 1px solid var(--border);
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.25s ease;
+    }
+    .nav.open .nav-links { max-height: 320px; }
+    .nav-links a {
+      padding: 14px 20px;
+      border-top: 1px solid var(--border);
+    }
+  }
+</style>

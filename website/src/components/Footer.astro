@@ -1,0 +1,62 @@
+---
+import { site, footerCols } from '../data/site';
+---
+
+<footer class="site-footer">
+  <div class="container footer-grid">
+    <div>
+      <strong>{site.name}</strong>
+      <p>Browser-controlled astrophotography on any device.</p>
+    </div>
+    {footerCols.map((col) => (
+      <div>
+        <strong>{col.title}</strong>
+        <ul>
+          {col.links.map((l) => (
+            <li><a href={l.href} target="_blank" rel="noopener">{l.label}</a></li>
+          ))}
+        </ul>
+      </div>
+    ))}
+  </div>
+  <div class="container footer-fine">
+    Background: IC&nbsp;434 (Horsehead) and NGC&nbsp;2024 (Flame), Orion molecular cloud complex.
+    Not affiliated with the official N.I.N.A. project.
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    background: #11111d;
+    padding: 60px 0 30px;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+  .footer-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 40px;
+    margin-bottom: 40px;
+  }
+  .site-footer strong {
+    color: var(--text);
+    display: block;
+    margin-bottom: 10px;
+    font-size: 14px;
+  }
+  .site-footer ul { list-style: none; }
+  .site-footer li { padding: 4px 0; }
+  .site-footer a { color: var(--text-muted); }
+  .site-footer a:hover { color: var(--accent); }
+  .footer-fine {
+    border-top: 1px solid var(--border);
+    padding-top: 20px;
+    font-size: 12px;
+    color: var(--text-muted);
+    opacity: 0.6;
+  }
+  @media (max-width: 700px) {
+    .footer-grid { grid-template-columns: 1fr; gap: 24px; }
+  }
+</style>

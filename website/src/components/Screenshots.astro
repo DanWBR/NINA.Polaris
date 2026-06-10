@@ -1,0 +1,110 @@
+---
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { screenshots } from '../data/site';
+
+// At build time, check whether the real image has been dropped into public/.
+// If not, we render a styled placeholder instead of a broken <img>.
+const publicDir = new URL('../../public/', import.meta.url);
+const items = screenshots.map((s) => {
+  const filePath = fileURLToPath(new URL('.' + s.src, publicDir));
+  return { ...s, exists: existsSync(filePath) };
+});
+---
+
+<section id="screenshots" class="section section-alt">
+  <div class="container">
+    <h2 class="section-title">See it in the browser</h2>
+    <p class="section-sub">
+      The whole UI runs client-side — these are the screens you drive your rig from.
+    </p>
+
+    <div class="shots-grid">
+      {items.map((s) => (
+        <figure class="shot">
+          {s.exists ? (
+            <img src={s.src} alt={s.title} loading="lazy" decoding="async" />
+          ) : (
+            <div class="shot-placeholder" role="img" aria-label={`${s.title} — screenshot coming soon`}>
+              <span class="shot-placeholder-mark">★</span>
+              <span class="shot-placeholder-title">{s.title}</span>
+              <span class="shot-placeholder-note">screenshot coming soon</span>
+            </div>
+          )}
+          <figcaption>
+            <strong>{s.title}</strong>
+            <span>{s.caption}</span>
+          </figcaption>
+        </figure>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .shots-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+    gap: 22px;
+  }
+  .shot {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.2s;
+  }
+  .shot:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+  }
+  .shot img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    object-fit: cover;
+    background: var(--bg-input);
+  }
+  .shot-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    aspect-ratio: 16 / 10;
+    background:
+      radial-gradient(ellipse at 30% 30%, rgba(var(--accent-rgb), 0.14) 0%, transparent 60%),
+      repeating-linear-gradient(45deg, #16213e 0 14px, #1a2440 14px 28px);
+    border-bottom: 1px solid var(--border);
+  }
+  .shot-placeholder-mark {
+    font-size: 30px;
+    color: var(--accent);
+    opacity: 0.7;
+  }
+  .shot-placeholder-title {
+    font-weight: 700;
+    color: var(--text);
+    font-size: 15px;
+  }
+  .shot-placeholder-note {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+  }
+  figcaption {
+    padding: 16px 18px;
+  }
+  figcaption strong {
+    display: block;
+    font-size: 15px;
+    margin-bottom: 4px;
+  }
+  figcaption span {
+    font-size: 13.5px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+</style>

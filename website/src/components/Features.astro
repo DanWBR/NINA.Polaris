@@ -1,0 +1,56 @@
+---
+import { features } from '../data/site';
+---
+
+<section id="features" class="section">
+  <div class="container">
+    <h2 class="section-title">Built for the field</h2>
+    <p class="section-sub">
+      Everything you'd run on a desktop NINA install, packaged for headless
+      machines and a Web UI that loads in 50&nbsp;ms on a tethered phone.
+    </p>
+
+    <div class="features-grid">
+      {features.map((f) => (
+        <article class="feature">
+          <div class="feature-icon">{f.icon}</div>
+          <h3>{f.title}</h3>
+          <p>{f.body}</p>
+        </article>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+  }
+  .feature {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    transition: all 0.2s;
+  }
+  .feature:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+  }
+  .feature-icon {
+    font-size: 28px;
+    margin-bottom: 14px;
+    display: inline-block;
+    width: 50px;
+    height: 50px;
+    line-height: 50px;
+    text-align: center;
+    background: rgba(var(--accent-rgb), 0.1);
+    border-radius: 10px;
+  }
+  .feature h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+  .feature p { font-size: 14.5px; color: var(--text-muted); line-height: 1.55; }
+</style>

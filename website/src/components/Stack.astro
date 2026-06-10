@@ -1,0 +1,35 @@
+---
+import { stack } from '../data/site';
+---
+
+<section id="stack" class="section">
+  <div class="container">
+    <h2 class="section-title">Built on the same stuff you'd choose yourself</h2>
+    <ul class="stack-list">
+      {stack.map((s) => (
+        <li><strong>{s.name}</strong> · {s.rest}</li>
+      ))}
+    </ul>
+  </div>
+</section>
+
+<style>
+  .stack-list {
+    list-style: none;
+    max-width: 900px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .stack-list li {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    padding: 14px 18px;
+    font-size: 15px;
+    color: var(--text-muted);
+  }
+  .stack-list strong { color: var(--text); }
+</style>

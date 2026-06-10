@@ -1,0 +1,32 @@
+---
+import { site } from '../data/site';
+---
+
+<section class="section section-cta">
+  <div class="container">
+    <h2 class="section-title">Free, open-source, and waiting to image something.</h2>
+    <p class="section-sub">
+      MIT-style license inherited from upstream N.I.N.A. — bring your own scope.
+    </p>
+    <div class="cta-buttons">
+      <a class="btn btn-primary" href={site.repo} target="_blank" rel="noopener">Source &amp; releases</a>
+      <a class="btn btn-ghost" href={site.donate} target="_blank" rel="noopener">❤ Donate</a>
+    </div>
+  </div>
+</section>
+
+<style>
+  .section-cta {
+    background:
+      linear-gradient(180deg, rgba(26, 26, 46, 0.4), rgba(26, 26, 46, 0.95)),
+      url('/assets/horsehead.jpg') center / cover no-repeat;
+    text-align: center;
+  }
+  .cta-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 24px;
+  }
+</style>
