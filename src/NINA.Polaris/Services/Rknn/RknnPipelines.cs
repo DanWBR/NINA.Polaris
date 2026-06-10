@@ -183,6 +183,28 @@ internal static class RknnPipelines {
                 }
             }
         }
+
+        // Star protection (NPU-specific). The RKNN fp16 NPU execution rings
+        // around bright stars (a dark halo) where the GPU/CPU ONNX paths do
+        // not — it comes from the runtime's Resize/precision, not our tiling
+        // (it changes with the model: v3 rings less than v2). Mitigate it the
+        // way denoise tools do: keep the ORIGINAL pixels in a feathered halo
+        // around bright cores, so the ring is replaced by the (bright, low-
+        // visible-noise) original. Cores are pixels the blend-mask already
+        // protects (orig > thresholdNorm); a few box-blur passes feather the
+        // mask out ~12 px to cover the ring.
+        int hw = width * height;
+        var prot = new float[hw];
+        for (int i = 0; i < hw; i++)
+            prot[i] = (plane[i] * inv) > thresholdNorm ? 1f : 0f;
+        prot = RknnImageMath.BoxBlurF(prot, width, height, passes: 3, radius: 4);
+        for (int i = 0; i < hw; i++) {
+            float w = prot[i];
+            if (w <= 0.002f) continue;          // far from any star, leave denoised
+            if (w > 1f) w = 1f;
+            double blended = plane[i] * w + dst[i] * (1 - w);
+            dst[i] = (ushort)Math.Clamp(Math.Round(blended), 0, 65535);
+        }
         return dst;
     }
 }
