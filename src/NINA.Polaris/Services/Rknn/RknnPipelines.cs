@@ -193,10 +193,18 @@ internal static class RknnPipelines {
         // visible-noise) original. Cores are pixels the blend-mask already
         // protects (orig > thresholdNorm); a few box-blur passes feather the
         // mask out ~12 px to cover the ring.
+        // Star threshold is INDEPENDENT of the model's denoise clip: with v2
+        // (clip=10) the blend-mask threshold is ~250*mad above the median, so
+        // only the very brightest stars were protected and medium stars got
+        // turned into gray blobs by the RKNN ringing. A fixed ~25-sigma cut
+        // (mad is the robust sigma here) protects medium + bright stars on any
+        // model, while leaving the background to be denoised.
+        const double starSigma = 25.0;
+        double starThresh = median + starSigma * mad;
         int hw = width * height;
         var prot = new float[hw];
         for (int i = 0; i < hw; i++)
-            prot[i] = (plane[i] * inv) > thresholdNorm ? 1f : 0f;
+            prot[i] = (plane[i] * inv) > starThresh ? 1f : 0f;
         prot = RknnImageMath.BoxBlurF(prot, width, height, passes: 3, radius: 4);
         for (int i = 0; i < hw; i++) {
             float w = prot[i];
