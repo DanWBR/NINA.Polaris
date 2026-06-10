@@ -7773,6 +7773,18 @@ function ninaApp() {
             }
         },
 
+        // Called after any action that may have written a new file to disk
+        // (GraXpert BGE/denoise/decon, plate solve, etc.). STUDIO lists frames
+        // from the indexed DB, so a freshly generated sibling won't show up
+        // until a rescan picks it up. Trigger a background rescan + reload so
+        // the new file appears without the user hitting refresh manually.
+        // Best-effort and silent (no toast) so it doesn't add noise to the
+        // action's own completion feedback.
+        async _studioRefreshAfterFileOp() {
+            try { await this.apiPost('/api/studio/rescan', {}); } catch { /* best effort */ }
+            try { await this.loadStudio(); } catch { /* best effort */ }
+        },
+
         studioToggleSelect(id) {
             const idx = this.studio.selectedIds.indexOf(id);
             if (idx >= 0) this.studio.selectedIds.splice(idx, 1);
@@ -8052,8 +8064,8 @@ function ninaApp() {
                             this.studio.master.running = false;
                             if (s.stage === 'done') {
                                 this.toast?.('Master frame written → ' + s.outputPath, 'ok');
-                                // Refresh browser so the new master shows up.
-                                this.loadStudio();
+                                // Rescan + refresh so the new master shows up.
+                                this._studioRefreshAfterFileOp();
                             } else if (s.stage === 'error') {
                                 this.toast?.('Master integration failed: ' + s.error, 'error');
                             }
@@ -8147,7 +8159,7 @@ function ninaApp() {
                             const fail = s.failed || 0;
                             const msg = `Calibration done, ${ok} OK` + (fail > 0 ? `, ${fail} failed` : '');
                             this.toast?.(msg, fail > 0 ? 'warning' : 'ok');
-                            this.loadStudio();
+                            this._studioRefreshAfterFileOp();
                         }
                     } catch { /* swallow transient failure */ }
                 }, 1000);
@@ -8235,7 +8247,7 @@ function ninaApp() {
                                     ` → ${s.outputPath}`,
                                     s.dropped > 0 ? 'warning' : 'ok'
                                 );
-                                this.loadStudio();
+                                this._studioRefreshAfterFileOp();
                             } else if (s.stage === 'error') {
                                 this.toast?.('Integration failed: ' + s.error, 'error');
                             }
@@ -8396,7 +8408,7 @@ function ninaApp() {
                             if (s.stage === 'done') {
                                 this.toast?.(
                                     `Combine done: ${s.outputPath}`, 'ok');
-                                this.loadStudio();
+                                this._studioRefreshAfterFileOp();
                             } else if (s.stage === 'error') {
                                 this.toast?.(
                                     'Combine failed: ' + s.error, 'error');
@@ -8523,7 +8535,7 @@ function ninaApp() {
                                            `G=${s.gainG.toFixed(2)} B=${s.gainB.toFixed(2)}`;
                                 }
                                 this.toast?.(msg, 'ok');
-                                this.loadStudio();
+                                this._studioRefreshAfterFileOp();
                             } else if (s.stage === 'error') {
                                 this.toast?.(
                                     'Color calibration failed: ' + s.error, 'error');
@@ -8552,7 +8564,7 @@ function ninaApp() {
                 const r = await resp.json();
                 this.studio.viewer.lastOp = r.path;
                 this.toast?.('Debayered → ' + r.path, 'ok');
-                this.loadStudio();
+                this._studioRefreshAfterFileOp();
             } catch (e) {
                 this.toast?.('Debayer failed: ' + e.message, 'error');
             } finally {
@@ -8573,7 +8585,7 @@ function ninaApp() {
                 const r = await resp.json();
                 this.studio.viewer.lastOp = r.path;
                 this.toast?.('Background removed → ' + r.path, 'ok');
-                this.loadStudio();
+                this._studioRefreshAfterFileOp();
             } catch (e) {
                 this.toast?.('Background extraction failed: ' + e.message, 'error');
             } finally {
@@ -8594,7 +8606,7 @@ function ninaApp() {
                 const r = await resp.json();
                 this.studio.viewer.lastOp = r.path;
                 this.toast?.('Noise reduced → ' + r.path, 'ok');
-                this.loadStudio();
+                this._studioRefreshAfterFileOp();
             } catch (e) {
                 this.toast?.('Noise reduction failed: ' + e.message, 'error');
             } finally {
@@ -8615,7 +8627,7 @@ function ninaApp() {
                 const r = await resp.json();
                 this.studio.viewer.lastOp = r.path;
                 this.toast?.('Sharpened → ' + r.path, 'ok');
-                this.loadStudio();
+                this._studioRefreshAfterFileOp();
             } catch (e) {
                 this.toast?.('Sharpen failed: ' + e.message, 'error');
             } finally {
@@ -14248,6 +14260,11 @@ function ninaApp() {
                 if (this.filesSolveResult.success) {
                     this.toast('Plate solve succeeded in ' + this.filesSolveElapsed + 's'
                         + (this.filesSolveResult.wcsWritten ? ' · WCS saved to FITS' : ''), 'ok');
+                    // WCS was re-stamped into the FITS; refresh STUDIO so the
+                    // updated frame (now plate-solved) reflects in the index.
+                    if (this.filesSolveResult.wcsWritten) {
+                        this._studioRefreshAfterFileOp();
+                    }
                 } else {
                     this.toast('Plate solve failed: '
                         + (this.filesSolveResult.error || 'unknown'), 'warn');
@@ -18895,6 +18912,11 @@ function ninaApp() {
             // tears down any CLI poll timer so we don't keep hitting
             // the server after the modal goes away.
             this.graxpertCloseModal();
+            // Index the freshly written FITS into STUDIO so it shows up there
+            // without a manual refresh (runs regardless of the active tab).
+            if (writtenPaths && writtenPaths.length) {
+                this._studioRefreshAfterFileOp();
+            }
             if (this.tab !== 'files') return;
             try { await this.filesReload(); }
             catch { /* non-fatal, selection step below is best-effort */ }
@@ -19130,6 +19152,11 @@ function ninaApp() {
                             written, failed: job.failed || 0, pairs
                         };
                         this.$nextTick(() => this._graxpertScrollLog());
+                        // The CLI/NPU run wrote sibling FITS files; index them
+                        // into STUDIO so they appear without a manual refresh.
+                        if ((job.failed || 0) === 0 && written.length) {
+                            this._studioRefreshAfterFileOp();
+                        }
                     }
                 } catch (e) { /* transient, keep polling */ }
             }, 1500);
