@@ -376,12 +376,12 @@ body {
 .logo {
     font-weight: 700;
     font-size: 16px;
-    letter-spacing: 2px;
+    letter-spacing: 4px;
     color: var(--accent);
 }
 
 .version {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-muted);
 }
 
@@ -393,7 +393,7 @@ body {
        single compact wordmark. With the inner letter-spacing also
        reduced (.brand-name / .brand-tag), 5px is enough to keep the
        two words distinct without the previous airy mark. */
-    gap: 5px;
+    gap: 8px;
     text-decoration: none;
     color: inherit;
     padding: 2px 4px;
@@ -430,7 +430,7 @@ body {
        one compact unit instead of  N . I . N . A .  spread across
        the header. 0.5px keeps the all-caps still visually
        distinct from prose without the airy gap. */
-    letter-spacing: 0.5px;
+    letter-spacing: 1px;
     line-height: 1;
     /* Brand gradient: deep-night blue -> icy cyan -> stellar white.
        Inspired by the colour temperature of O/B-class stars + dark
@@ -450,7 +450,7 @@ body {
     font-size: 17px;
     /* Same tightened tracking as .brand-name — keeps POLARIS as a
        solid block instead of  P O L A R I S  spread out. */
-    letter-spacing: 0.5px;
+    letter-spacing: 1px;
     line-height: 1;
     /* Brand gradient: deep-night blue -> icy cyan -> stellar white.
        Inspired by the colour temperature of O/B-class stars + dark
@@ -466,7 +466,7 @@ body {
     font-size: 10px;
     color: var(--text-muted);
     font-variant-numeric: tabular-nums;
-    margin-left: -2px;
+    margin-left: 0px;
 }
 
 .status-bar-right {
@@ -3653,6 +3653,26 @@ label select.input-sm {
     justify-content: center;
     padding: 12px;
 }
+
+/* Floating exit button shown only in OSD full-page mode. OSD reparents its
+   canvas to <body> with a high z-index and covers our modal header, so this
+   must sit above it (max z-index, fixed) to remain tappable on touch. */
+.image-viewer-fp-exit {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 2147483647;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    background: rgba(200, 40, 40, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: var(--radius);
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+}
+.image-viewer-fp-exit:hover { background: rgba(220, 60, 60, 0.98); }
 
 .image-viewer-frame {
     background: #0a0a14;

@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260609-phd2gui2">
+    <link rel="stylesheet" href="/css/app.css?v=20260610-viewer-fp-exit">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -12096,6 +12096,12 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <div class="image-viewer-modal" x-show="imageViewerOpen" x-cloak
          @click.self="closeImageViewer()"
          @keydown.escape.window="onImageViewerEscape()">
+        <!-- Floating exit button for OSD full-page mode. OSD's full-page
+             overlay covers the modal header (with the ✕ / exit buttons), so
+             on a touch device with no Esc key the user would be trapped. This
+             sits above everything (max z-index, fixed) and exits full page. -->
+        <button class="image-viewer-fp-exit" x-show="imageViewerFullPage" x-cloak
+                @click="osdExitFullPage()" title="Exit full page (Esc)">⤢ Exit</button>
         <div class="image-viewer-frame">
             <div class="image-viewer-header">
                 <span x-text="imageViewerTitle"></span>
@@ -12666,7 +12672,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260610-studio-refresh"></script>
+    <script src="/js/app.js?v=20260610-viewer-fp-exit"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

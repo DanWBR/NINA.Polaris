@@ -2240,6 +2240,11 @@ function ninaApp() {
 
         // OpenSeadragon image viewer
         imageViewerOpen: false,
+        // True while OSD full-page mode is active. OSD's full-page overlay
+        // covers the modal header (where the ✕ / exit buttons live), so we
+        // surface a floating exit button bound to this flag -- otherwise a
+        // touch user with no Esc key is trapped.
+        imageViewerFullPage: false,
         _osdViewer: null,
         // URL the viewer should load. Defaults to the live-camera
         // preview; FILES tab overrides it to point at any file. Reset
@@ -11115,9 +11120,14 @@ function ninaApp() {
         closeImageViewer() {
             this.imageViewerOpen = false;
             if (this._osdViewer) {
+                // Leave OSD full-page before destroying, otherwise the document
+                // stays in full-page state with the OSD element gone -> blank
+                // trap. Then clear our flag.
+                try { if (this._osdViewer.isFullPage()) this._osdViewer.setFullPage(false); } catch (e) { }
                 try { this._osdViewer.destroy(); } catch (e) { }
                 this._osdViewer = null;
             }
+            this.imageViewerFullPage = false;
             // Reset to live-camera defaults so the next "View full image"
             // from any other tab doesn't accidentally re-open a file.
             this.imageViewerUrl = '/api/image/latest/preview';
@@ -11219,10 +11229,12 @@ function ninaApp() {
             try {
                 const cur = this._osdViewer.isFullPage();
                 this._osdViewer.setFullPage(!cur);
-                // Hint the user how to come back. OSD's full-page mode
-                // hides the modal header (where our exit button lives),
-                // so without this they have no visual cue.
-                if (!cur) this.toast('Full page, press Esc to exit', 'info');
+                this.imageViewerFullPage = !cur;
+                // OSD's full-page overlay covers the modal header (where our
+                // exit button lives). A floating exit button (bound to
+                // imageViewerFullPage) handles touch users; Esc still works
+                // on desktop. Toast as an extra hint.
+                if (!cur) this.toast('Full page — tap ⤢ or press Esc to exit', 'info');
             } catch (e) {}
         },
 
@@ -11333,11 +11345,21 @@ function ninaApp() {
                 try {
                     if (this._osdViewer.isFullPage()) {
                         this._osdViewer.setFullPage(false);
+                        this.imageViewerFullPage = false;
                         return;
                     }
                 } catch (e) { /* fall through to close */ }
             }
             this.closeImageViewer();
+        },
+
+        // Exit OSD full-page mode (floating-button target for touch users
+        // who have no Esc key). Safe to call when not in full-page.
+        osdExitFullPage() {
+            if (this._osdViewer) {
+                try { this._osdViewer.setFullPage(false); } catch (e) {}
+            }
+            this.imageViewerFullPage = false;
         },
 
         // When a sky target is selected via search, also re-center the celestial
