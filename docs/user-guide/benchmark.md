@@ -97,19 +97,20 @@ Run: 2026-06-08 (2 consecutive runs, both scored 110).
 
 ### Raspberry Pi 5 Model B (4 cores)
 
-Run: 2026-06-08. Two runs; the score varies with cooling/throttling. The
-higher run had full multi-thread scaling (3.97×), the lower one was thermally
-limited (2.98×) — keep the Pi 5 actively cooled for the best result.
+Run: best 2026-06-10, throttled 2026-06-08. The score varies with
+cooling/throttling. The higher run had near-full multi-thread scaling, the
+lower one was thermally limited (2.98×) — keep the Pi 5 actively cooled for
+the best result.
 
 | Metric | Best run | Throttled run |
 |---|---|---|
-| **Polaris score** | **197** | 172 |
-| Stacking throughput | 2.2 fps · 36.8 Mpx/s | 2.01 fps · 33.7 Mpx/s |
-| Stacking detect / align / resample / stats | 83.33 / 0.44 / 220.48 / 151.26 ms | 91.13 / 0.46 / 248.62 / 157.32 ms |
-| Capture/video throughput | 1.42 fps · 23.8 Mpx/s | 1.35 fps · 22.7 Mpx/s |
-| Debayer / JPEG / LZ4 | 103.15 / 584.09 / 17.19 ms (1861.4 MB/s) | 110.47 / 611.77 / 16.26 ms (1968.2 MB/s) |
-| CPU single / multi-thread | 2868 / 11374 MFLOPS (3.97× scaling) | 2884 / 8581 MFLOPS (2.98× scaling) |
-| Memory bandwidth | 6.9 GB/s | 8.1 GB/s |
+| **Polaris score** | **211** | 172 |
+| Stacking throughput | 2.38 fps · 39.9 Mpx/s | 2.01 fps · 33.7 Mpx/s |
+| Stacking detect / align / resample / stats | 96.5 / 0.6 / 166.27 / 157.59 ms | 91.13 / 0.46 / 248.62 / 157.32 ms |
+| Capture/video throughput | 1.63 fps · 27.3 Mpx/s | 1.35 fps · 22.7 Mpx/s |
+| Debayer / JPEG / LZ4 | 84.63 / 511.52 / 17.69 ms (1808.5 MB/s) | 110.47 / 611.77 / 16.26 ms (1968.2 MB/s) |
+| CPU single / multi-thread | 2888 / 11248 MFLOPS (3.89× scaling) | 2884 / 8581 MFLOPS (2.98× scaling) |
+| Memory bandwidth | 7.7 GB/s | 8.1 GB/s |
 
 (16.78 MP frames.)
 
