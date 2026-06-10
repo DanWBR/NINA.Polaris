@@ -12093,15 +12093,21 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
+    <!-- Floating exit button for OSD full-page mode. OSD's full-page overlay
+         reparents its canvas to <body> with a high z-index, so a button left
+         inside .image-viewer-modal (z-index:1000, its own stacking context)
+         renders BEHIND it no matter how high its own z-index is. Teleport it
+         to <body> so it escapes the modal's stacking context and can sit on
+         top. Without this the only exit was the Esc key -> a touch user with
+         no keyboard was trapped. -->
+    <template x-teleport="body">
+        <button class="image-viewer-fp-exit" x-show="imageViewerFullPage" x-cloak
+                @click="osdExitFullPage()" title="Exit full page (Esc)">⤢ Exit</button>
+    </template>
+
     <div class="image-viewer-modal" x-show="imageViewerOpen" x-cloak
          @click.self="closeImageViewer()"
          @keydown.escape.window="onImageViewerEscape()">
-        <!-- Floating exit button for OSD full-page mode. OSD's full-page
-             overlay covers the modal header (with the ✕ / exit buttons), so
-             on a touch device with no Esc key the user would be trapped. This
-             sits above everything (max z-index, fixed) and exits full page. -->
-        <button class="image-viewer-fp-exit" x-show="imageViewerFullPage" x-cloak
-                @click="osdExitFullPage()" title="Exit full page (Esc)">⤢ Exit</button>
         <div class="image-viewer-frame">
             <div class="image-viewer-header">
                 <span x-text="imageViewerTitle"></span>
