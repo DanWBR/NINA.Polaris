@@ -239,7 +239,9 @@ internal static class RknnPipelines {
             var prot = new float[planeLen];
             for (int i = 0; i < planeLen; i++)
                 prot[i] = (pixels[off + i] * inv) > starThresh ? 1f : 0f;
-            prot = RknnImageMath.BoxBlurF(prot, width, height, passes: 3, radius: 4);
+            // Feather wide enough (~32px) to cover the NPU "ghost star" side-lobes
+            // that sit at a fixed radius around bright stars, not just the core.
+            prot = RknnImageMath.BoxBlurF(prot, width, height, passes: 4, radius: 8);
             for (int i = 0; i < planeLen; i++) {
                 float w = prot[i];
                 if (w <= 0.002f) continue;       // far from any star, leave denoised
