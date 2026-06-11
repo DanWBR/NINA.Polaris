@@ -188,6 +188,16 @@ public static class EditorEndpoints {
             return Results.File(data, "application/octet-stream");
         });
 
+        // Histogram of the LINEAR source + auto black/mid/white. The editor
+        // stretch handles operate on this stable reference (same 0..1 scale as
+        // StretchParams), so they don't jump when the stretch is re-applied.
+        g.MapGet("/linear-histogram/{sessionId}", (ImageEditService svc, string sessionId) => {
+            var r = svc.GetLinearHistogram(sessionId);
+            if (r == null) return Results.NotFound(new { error = "Session not found." });
+            var (hist, autoBlack, autoMid, autoWhite) = r.Value;
+            return Results.Ok(new { hist, autoBlack, autoMid, autoWhite });
+        });
+
         // ─── auto-tune (AUTOED) ───────────────────────────────────────
         // Compute reasonable Light + Color slider values from the
         // working buffer's histogram. Returns the suggestion as JSON;

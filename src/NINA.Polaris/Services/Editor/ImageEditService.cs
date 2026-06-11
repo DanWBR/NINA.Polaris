@@ -121,6 +121,20 @@ public class ImageEditService : IDisposable {
         return (data, s.Width, s.Height, s.Channels);
     }
 
+    /// <summary>
+    /// Histogram of the LINEAR source + the auto-stretch black/mid/white. The
+    /// editor draws this as a stable reference so the stretch handles sit on
+    /// the same scale as StretchParams and don't jump when the stretch is
+    /// re-applied. Null when the session id is unknown.
+    /// </summary>
+    public (int[] hist, double autoBlack, double autoMid, double autoWhite)? GetLinearHistogram(
+            string sessionId) {
+        if (!_sessions.TryGetValue(sessionId, out var s)) return null;
+        s.Touch();
+        var r = s.GetLinearHistogram();
+        return (r.Hist, r.AutoBlack, r.AutoMid, r.AutoWhite);
+    }
+
     // ─── load ────────────────────────────────────────────────────────
 
     private EditSessionInfo? LoadSync(string path) {
@@ -515,6 +529,60 @@ public class ImageEditService : IDisposable {
                 var stretched = EditorStretch.Apply(_linear!, Width, Height, Channels, BitDepth, sp);
                 _cacheKey = key; _cached = stretched;
                 return (byte[])stretched.Clone();
+            }
+        }
+
+        /// <summary>
+        /// Histogram of the LINEAR source (256-bin mono, or 768 RGB), plus the
+        /// auto-stretch black/mid/white. This histogram is invariant to the
+        /// Stretch edits, so the editor can show it as a stable reference and
+        /// place the black/white handles on it (same 0..1 scale as
+        /// StretchParams) without them jumping when the stretch is re-applied.
+        /// </summary>
+        public (int[] Hist, double AutoBlack, double AutoMid, double AutoWhite) GetLinearHistogram() {
+            if (!IsLinear) {
+                // 8-bit import: it's already display-referred, so its own
+                // histogram is the reference and the stretch is identity.
+                var w8 = _working8!;
+                if (Channels == 1) {
+                    var h = new int[256];
+                    for (int i = 0; i < w8.Length; i++) h[w8[i]]++;
+                    return (h, 0.0, 0.5, 1.0);
+                } else {
+                    var h = new int[768];
+                    for (int i = 0; i + 2 < w8.Length; i += 3) {
+                        h[w8[i]]++; h[256 + w8[i + 1]]++; h[512 + w8[i + 2]]++;
+                    }
+                    return (h, 0.0, 0.5, 1.0);
+                }
+            }
+            double maxV = (1 << BitDepth) - 1;
+            if (maxV < 1) maxV = 65535;
+            var lin = _linear!;
+            int planeSize = Width * Height;
+            if (Channels == 3) {
+                var h = new int[768];
+                int step = Math.Max(1, planeSize / 300000);
+                for (int c = 0; c < 3; c++) {
+                    int off = c * planeSize, hoff = c * 256;
+                    for (int i = 0; i < planeSize; i += step) {
+                        int b = (int)(lin[off + i] / maxV * 255);
+                        h[hoff + (b < 0 ? 0 : b > 255 ? 255 : b)]++;
+                    }
+                }
+                var green = new ushort[planeSize];
+                Array.Copy(lin, planeSize, green, 0, planeSize);
+                var p = AutoStretch.ComputeAutoStretchParams(green, Width, Height, BitDepth);
+                return (h, p.Black, p.Mid, p.White);
+            } else {
+                var h = new int[256];
+                int step = Math.Max(1, lin.Length / 300000);
+                for (int i = 0; i < lin.Length; i += step) {
+                    int b = (int)(lin[i] / maxV * 255);
+                    h[b < 0 ? 0 : b > 255 ? 255 : b]++;
+                }
+                var p = AutoStretch.ComputeAutoStretchParams(lin, Width, Height, BitDepth);
+                return (h, p.Black, p.Mid, p.White);
             }
         }
 

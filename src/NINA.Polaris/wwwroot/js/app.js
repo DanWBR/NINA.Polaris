@@ -2364,7 +2364,9 @@ function ninaApp() {
         editorHisto: {
             min: 0, max: 0, avg: 0, std: 0,
             blackFrac: 0, whiteFrac: 1, dispLo: 0, dispHi: 1,
-            _raw: null
+            _raw: null,                          // LINEAR-source histogram (constant per session)
+            _auto: { black: 0, mid: 0.5, white: 1 },
+            _loadedSession: null
         },
         _editorHistoDrag: null,
 
@@ -10075,26 +10077,24 @@ function ninaApp() {
 
         async _editorRenderHistogram() {
             if (!this.editorState.session) return;
+            // The panel shows the LINEAR-source histogram: it's invariant to
+            // the stretch, so the black/white handles (which set the stretch's
+            // linear black/white) sit on it without jumping when the stretch is
+            // re-applied. It's constant per session, so fetch once then redraw.
+            if (this.editorHisto._raw
+                && this.editorHisto._loadedSession === this.editorState.session) {
+                this._editorDrawHistogram();
+                return;
+            }
             try {
-                let hist;
-                if (this.editorState.computeMode === 'wasm' && this.editorState.wasmLoaded
-                    && globalThis.NINA?.Polaris?.Wasm?.Interop) {
-                    // Synchronous; same math as server, no network hop.
-                    hist = globalThis.NINA.Polaris.Wasm.Interop.EditorComputeHistogram(
-                        JSON.stringify(this.editorState.edits || {}));
-                } else {
-                    const r = await this.apiFetch('/api/editor/histogram', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            sessionId: this.editorState.session,
-                            edits: this.editorState.edits
-                        })
-                    });
-                    if (!r.ok) return;
-                    hist = await r.json();
-                }
-                this._editorDrawHistogram(hist);
+                const r = await this.apiGet(
+                    '/api/editor/linear-histogram/' + this.editorState.session);
+                this.editorHisto._raw = r.hist;
+                this.editorHisto._auto = {
+                    black: r.autoBlack ?? 0, mid: r.autoMid ?? 0.5, white: r.autoWhite ?? 1
+                };
+                this.editorHisto._loadedSession = this.editorState.session;
+                this._editorDrawHistogram();
             } catch { /* non-fatal */ }
         },
 
@@ -10203,8 +10203,10 @@ function ninaApp() {
         _editorHistoSyncFracs() {
             const st = this.editorState.edits.stretch;
             if (!st || st.auto !== false) {
-                this.editorHisto.blackFrac = 0;
-                this.editorHisto.whiteFrac = 1;
+                // Auto: sit the handles where the auto-stretch put black/white
+                // on the linear data (so you see the reference, like an STF).
+                this.editorHisto.blackFrac = Math.max(0, Math.min(1, this.editorHisto._auto.black));
+                this.editorHisto.whiteFrac = Math.max(0, Math.min(1, this.editorHisto._auto.white));
             } else {
                 this.editorHisto.blackFrac = Math.max(0, Math.min(1, +(st.black ?? 0)));
                 this.editorHisto.whiteFrac = Math.max(0, Math.min(1, +(st.white ?? 1)));
@@ -10262,7 +10264,7 @@ function ninaApp() {
             const st = (this.editorState.edits.stretch && this.editorState.edits.stretch.auto === false)
                 ? this.editorState.edits.stretch
                 : { auto: false, black: this.editorHisto.blackFrac,
-                    mid: 0.5, white: this.editorHisto.whiteFrac };
+                    mid: this.editorHisto._auto.mid, white: this.editorHisto.whiteFrac };
             if (d.which === 'black') {
                 st.black = Math.max(0, Math.min(frac, this.editorHisto.whiteFrac - gap));
                 this.editorHisto.blackFrac = st.black;
@@ -10314,8 +10316,8 @@ function ninaApp() {
         editorHistoAuto() {
             // Back to the per-channel GraXpert auto-stretch (the load default).
             this.editorState.edits.stretch = { auto: true };
-            this.editorHisto.blackFrac = 0;
-            this.editorHisto.whiteFrac = 1;
+            this.editorHisto.blackFrac = this.editorHisto._auto.black;
+            this.editorHisto.whiteFrac = this.editorHisto._auto.white;
             if (this.editorHistoZoom) this._editorHistoApplyZoom();
             this._editorApplyStretch();
             this._editorDrawHistogram();
