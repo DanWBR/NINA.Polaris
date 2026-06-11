@@ -1539,10 +1539,6 @@
                     <button class="btn btn-sm" @click="showStretchPanel = !showStretchPanel"
                             :class="showStretchPanel ? 'btn-active' : ''" style="margin-left:auto;"
                             :disabled="!selectedCamera">Stretch</button>
-                    <button class="btn btn-sm" @click="showWbPanel = !showWbPanel"
-                            :class="showWbPanel ? 'btn-active' : ''"
-                            :disabled="!selectedCamera"
-                            title="Adjust display white balance (R / B channel multipliers)">WB</button>
                     <button class="btn btn-sm" @click="loadFullStats()"
                             :disabled="!selectedCamera">Detailed stats</button>
                 </div>
@@ -1579,47 +1575,6 @@
                     </div>
                 </div>
 
-                <!-- White-balance panel. Reuses the .stretch-panel /
-                     .stretch-sliders styling so the layout matches the
-                     Stretch panel above it. State is GLOBAL (this.wb.*)
-                     so toggling here also affects what PREVIEW / FOCUS /
-                     VIDEO show — the panels share the same WebGL
-                     renderer and the same wb uniforms. -->
-                <div class="stretch-panel" x-show="showWbPanel">
-                    <div class="stretch-header">
-                        <strong>White balance</strong>
-                        <label class="seq-dither-toggle"
-                               title="Recompute R/B gain ratios from every new frame (~2s throttle, gray-world algorithm).">
-                            <input type="checkbox" x-model="wb.auto" @change="persistWb()">
-                            <span :class="wb.auto ? 'text-ok' : 'text-muted'"
-                                  x-text="wb.auto ? 'AUTO' : 'MANUAL'"></span>
-                        </label>
-                        <span class="text-muted" style="font-size: 11px;" x-show="!_lastRawFrame">
-                            (raw mode + colour sensor only)
-                        </span>
-                    </div>
-                    <div class="stretch-sliders" :class="wb.auto ? 'disabled' : ''">
-                        <label>Red gain: <span x-text="wb.r.toFixed(2) + '×'"></span>
-                            <input type="range" min="0.3" max="3.0" step="0.01"
-                                   x-model.number="wb.r"
-                                   @input="applyWb()" @change="persistWb()"
-                                   :disabled="wb.auto">
-                        </label>
-                        <label>Blue gain: <span x-text="wb.b.toFixed(2) + '×'"></span>
-                            <input type="range" min="0.3" max="3.0" step="0.01"
-                                   x-model.number="wb.b"
-                                   @input="applyWb()" @change="persistWb()"
-                                   :disabled="wb.auto">
-                        </label>
-                    </div>
-                    <div class="control-row actions">
-                        <button class="btn btn-sm btn-primary" @click="autoWbNow()"
-                                title="Run gray-world auto WB against the latest frame, then leave wb at the computed value."
-                                :disabled="!_lastRawFrame">⚖ Auto WB now</button>
-                        <button class="btn btn-sm" @click="resetWb()"
-                                title="Reset to daylight OSC defaults (R 1.7, B 1.5).">Reset</button>
-                    </div>
-                </div>
 
                 <!-- Expanded stats panel -->
                 <div class="full-stats-panel" x-show="fullStats">
@@ -2591,31 +2546,6 @@
                                    placeholder="snap">
                         </label>
                     </div>
-                    <!-- Hardware WB for OSC cameras (WB_R/WB_B). Shares the
-                         VIDEO panel's state + range so a hardware WB change
-                         made in VIDEO can be read/undone here too (the
-                         display-WB panel only multiplies pixels, it can't
-                         revert the camera's native WB). -->
-                    <div class="control-row" x-show="cameraCaps.whiteBalance">
-                        <label style="flex:1">
-                            WB Red
-                            <input type="range" :min="video.wbMin" :max="video.wbMax" step="1"
-                                   x-model.number="video.wbR"
-                                   @change="videoSetWhiteBalance()" class="slider">
-                            <span x-text="video.wbR" class="text-muted" style="margin-left:6px"></span>
-                        </label>
-                        <label style="flex:1">
-                            WB Blue
-                            <input type="range" :min="video.wbMin" :max="video.wbMax" step="1"
-                                   x-model.number="video.wbB"
-                                   @change="videoSetWhiteBalance()" class="slider">
-                            <span x-text="video.wbB" class="text-muted" style="margin-left:6px"></span>
-                        </label>
-                        <button class="btn btn-sm" @click="videoResetWhiteBalance()"
-                                title="Reset to neutral (midpoint of the camera's WB range)">
-                            ↻
-                        </button>
-                    </div>
                     <!-- Inline focuser control: nudge focus or jump to an
                          absolute position while reviewing a snap, without
                          leaving PREVIEW. Shares the FOCUS tab's state +
@@ -2851,54 +2781,6 @@
                           x-text="'last: ' + (preview.lastSnapAt
                                               ? new Date(preview.lastSnapAt).toLocaleTimeString()
                                               : '')"></span>
-                    <!-- Shared WB toggle. State is global (this.wb.*) so
-                         flipping here also affects what the LIVE / FOCUS
-                         / VIDEO previews render with — same WebGL
-                         renderer + uniforms across panels. -->
-                    <button class="btn btn-sm" @click="showWbPanel = !showWbPanel"
-                            :class="showWbPanel ? 'btn-active' : ''"
-                            style="margin-left:auto;"
-                            title="Adjust display white balance (R / B channel multipliers)">WB</button>
-                </div>
-                <!-- Shared WB panel — opens here, but the controls
-                     mutate the global this.wb state. Mounting on
-                     PREVIEW too means a user who tapped Take snap and
-                     sees a wrongly-tinted result can fix it without
-                     hopping to LIVE first. -->
-                <div class="stretch-panel" x-show="showWbPanel">
-                    <div class="stretch-header">
-                        <strong>White balance</strong>
-                        <label class="seq-dither-toggle"
-                               title="Recompute R/B gain ratios from every new frame (~2s throttle, gray-world algorithm).">
-                            <input type="checkbox" x-model="wb.auto" @change="persistWb()">
-                            <span :class="wb.auto ? 'text-ok' : 'text-muted'"
-                                  x-text="wb.auto ? 'AUTO' : 'MANUAL'"></span>
-                        </label>
-                        <span class="text-muted" style="font-size: 11px;" x-show="!_lastRawFrame">
-                            (raw mode + colour sensor only)
-                        </span>
-                    </div>
-                    <div class="stretch-sliders" :class="wb.auto ? 'disabled' : ''">
-                        <label>Red gain: <span x-text="wb.r.toFixed(2) + '×'"></span>
-                            <input type="range" min="0.3" max="3.0" step="0.01"
-                                   x-model.number="wb.r"
-                                   @input="applyWb()" @change="persistWb()"
-                                   :disabled="wb.auto">
-                        </label>
-                        <label>Blue gain: <span x-text="wb.b.toFixed(2) + '×'"></span>
-                            <input type="range" min="0.3" max="3.0" step="0.01"
-                                   x-model.number="wb.b"
-                                   @input="applyWb()" @change="persistWb()"
-                                   :disabled="wb.auto">
-                        </label>
-                    </div>
-                    <div class="control-row actions">
-                        <button class="btn btn-sm btn-primary" @click="autoWbNow()"
-                                title="Run gray-world auto WB against the latest frame, then leave wb at the computed value."
-                                :disabled="!_lastRawFrame">⚖ Auto WB now</button>
-                        <button class="btn btn-sm" @click="resetWb()"
-                                title="Reset to daylight OSC defaults (R 1.7, B 1.5).">Reset</button>
-                    </div>
                 </div>
             </div>
 
@@ -12682,7 +12564,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260610-indiweb-auth"></script>
+    <script src="/js/app.js?v=20260610-wb-video-only"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
