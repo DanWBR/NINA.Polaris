@@ -946,6 +946,17 @@ function ninaApp() {
         // Factory-reset in-flight flag (Settings danger zone button).
         factoryResetting: false,
 
+        // Power / lifecycle (Settings → Power card). Capabilities come from
+        // GET /api/system/power; busy flags gate the buttons during the
+        // brief window before the process/device goes down.
+        power: {
+            platform: '', underSystemd: false,
+            canRestartApp: true, canReboot: false,
+            autoStartSupported: false, autoStartEnabled: false,
+            restarting: false, rebooting: false, autoStartBusy: false,
+            loaded: false
+        },
+
         // Activity bar (bottom). Populated from the status WS message
         // each second. host comes from HostMetricsService; sirilActiveJobs
         // and graXpertActiveJobs are compact summaries of the respective
@@ -18262,6 +18273,116 @@ function ninaApp() {
         // a clean Raspberry Pi SD-card image ships with no personal or
         // test config. Captured images / FITS are deliberately left alone
         // (the server endpoint only touches the config + cache dirs).
+        // ---- Power / lifecycle (Settings → Power) ----
+        async loadPowerInfo() {
+            try {
+                const r = await this.apiFetch('/api/system/power');
+                if (!r.ok) return;
+                const j = await r.json();
+                this.power = { ...this.power, ...j, loaded: true };
+            } catch { /* leave defaults; buttons stay conservative */ }
+        },
+
+        async restartPolaris() {
+            if (this.power.restarting) return;
+            const ok = await this._confirmAsync(
+                'Restart the Polaris server now? Any running capture, ' +
+                'sequence or live stack will stop. The page will reconnect ' +
+                'automatically once it is back (a few seconds).',
+                { title: 'Restart Polaris', okLabel: 'Restart', cancelLabel: 'Cancel', danger: true });
+            if (!ok) return;
+            this.power.restarting = true;
+            try {
+                const r = await this.apiFetch('/api/system/restart-app', { method: 'POST' });
+                let j = {}; try { j = await r.json(); } catch { }
+                if (!r.ok) {
+                    this.toast(j.error || 'Restart failed', 'error');
+                    this.power.restarting = false;
+                    return;
+                }
+                this.toast('Restarting Polaris… reconnecting shortly', 'ok', 4000);
+                // Poll for the server coming back, then reload.
+                this._waitForServerThenReload(60);
+            } catch (e) {
+                // A dropped connection mid-restart is expected; treat as success.
+                this.toast('Restarting Polaris… reconnecting shortly', 'ok', 4000);
+                this._waitForServerThenReload(60);
+            }
+        },
+
+        async rebootDevice() {
+            if (this.power.rebooting) return;
+            if (!this.power.canReboot) {
+                this.toast('Device reboot is not supported on this platform.', 'warn');
+                return;
+            }
+            const ok = await this._confirmAsync(
+                'Reboot the whole device now? Everything stops and the device ' +
+                'restarts. It will be unreachable for up to a minute or two. ' +
+                (this.power.autoStartEnabled
+                    ? 'Polaris will start again automatically on boot.'
+                    : 'NOTE: auto-start does not appear to be enabled, so you may ' +
+                      'need to launch Polaris manually after the device is back.'),
+                { title: 'Reboot device', okLabel: 'Reboot now', cancelLabel: 'Cancel', danger: true });
+            if (!ok) return;
+            this.power.rebooting = true;
+            try {
+                const r = await this.apiFetch('/api/system/reboot', { method: 'POST' });
+                let j = {}; try { j = await r.json(); } catch { }
+                if (!r.ok) {
+                    this.toast(j.error || 'Reboot failed', 'error');
+                    this.power.rebooting = false;
+                    return;
+                }
+                this.toast('Rebooting the device…', 'ok', 6000);
+            } catch (e) {
+                this.toast('Rebooting the device…', 'ok', 6000);
+            }
+        },
+
+        async toggleAutoStart() {
+            if (this.power.autoStartBusy) return;
+            const enable = !this.power.autoStartEnabled;
+            this.power.autoStartBusy = true;
+            try {
+                const r = await this.apiFetch('/api/system/autostart', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enable })
+                });
+                let j = {}; try { j = await r.json(); } catch { }
+                if (!r.ok) {
+                    this.toast(j.error || 'Auto-start change failed', 'error', 6000);
+                    return;
+                }
+                this.power.autoStartEnabled = !!j.enabled;
+                this.toast(j.message || 'Auto-start updated', 'ok', 5000);
+            } catch (e) {
+                this.toast('Auto-start change failed: ' + (e?.message || e), 'error');
+            } finally {
+                this.power.autoStartBusy = false;
+            }
+        },
+
+        // Poll the lightweight /api/system/power until it answers again,
+        // then reload the page so the UI reconnects to the fresh process.
+        async _waitForServerThenReload(maxTries) {
+            for (let i = 0; i < maxTries; i++) {
+                await new Promise(res => setTimeout(res, 1500));
+                try {
+                    // Any resolved response (even 401 from a fresh in-memory
+                    // session store) means the server is back up; reload so
+                    // the UI reconnects (and shows login again if needed).
+                    const r = await this.apiFetch('/api/system/power');
+                    if (r) { window.location.reload(); return; }
+                } catch { /* still down, keep polling */ }
+            }
+            // Give up gracefully; let the user reload by hand.
+            this.power.restarting = false;
+            this.toast('Polaris is taking longer than expected to come back. ' +
+                'Reload the page once it responds.', 'warn', 8000);
+        },
+
         async factoryReset() {
             if (this.factoryResetting) return;
             const ok = await this._confirmAsync(

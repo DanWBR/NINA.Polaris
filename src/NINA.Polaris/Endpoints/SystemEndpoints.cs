@@ -329,6 +329,34 @@ public static class SystemEndpoints {
             });
         });
 
+        // ---- Power / lifecycle (PowerService) ----
+        // Restart the Polaris process, reboot the whole device, and (on
+        // Windows) toggle boot auto-start. All gated by AuthMiddleware like
+        // every /api/* route; the actual restart/reboot happens ~700ms after
+        // the response flushes so the browser sees the ack first.
+        group.MapGet("/power", (PowerService power) => Results.Ok(power.GetInfo()));
+
+        group.MapPost("/restart-app", (PowerService power) => {
+            var r = power.ScheduleRestart();
+            return r.Ok
+                ? Results.Ok(new { ok = true, message = r.Message })
+                : Results.Json(new { ok = false, error = r.Message }, statusCode: r.StatusCode);
+        });
+
+        group.MapPost("/reboot", (PowerService power) => {
+            var r = power.ScheduleReboot();
+            return r.Ok
+                ? Results.Ok(new { ok = true, message = r.Message })
+                : Results.Json(new { ok = false, error = r.Message }, statusCode: r.StatusCode);
+        });
+
+        group.MapPost("/autostart", (AutoStartRequest req, PowerService power) => {
+            var r = power.SetAutoStart(req?.Enable ?? false);
+            return r.Ok
+                ? Results.Ok(new { ok = true, message = r.Message, enabled = power.GetInfo().AutoStartEnabled })
+                : Results.Json(new { ok = false, error = r.Message }, statusCode: r.StatusCode);
+        });
+
         // Legacy settings (redirect to profile)
         group.MapGet("/settings", (ProfileService profiles) => {
             var p = profiles.Active;
@@ -372,4 +400,5 @@ public static class SystemEndpoints {
     record SaveAsRequest(string Name);
     record ClockSyncRequest(string ClientUtc);
     record DeviceNameRequest(string? Name);
+    record AutoStartRequest(bool Enable);
 }

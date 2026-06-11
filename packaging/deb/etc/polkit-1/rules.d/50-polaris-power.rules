@@ -1,0 +1,32 @@
+// PolicyKit rule shipped by the polaris .deb. Grants the 'polaris'
+// system user (created in postinst) two narrowly-scoped power actions
+// used by PowerService when the browser POSTs /api/system/restart-app
+// or /api/system/reboot:
+//
+//   1. Restart its OWN systemd unit (polaris.service) so the "Restart
+//      Polaris" button is instant instead of waiting for the
+//      Restart=on-failure fallback.
+//   2. Reboot the device ("Reboot device" button), via systemctl reboot
+//      which goes through logind.
+//
+// Without these, systemctl returns "Interactive authentication required"
+// and the action fails. Scope is intentionally narrow: only the polaris
+// user, only the polaris.service unit for manage-units, and only the
+// reboot login1 actions. Shutdown/poweroff are deliberately NOT granted.
+polkit.addRule(function(action, subject) {
+    if (subject.user != "polaris") return;
+
+    // Reboot the whole device (systemctl reboot -> logind).
+    if (action.id == "org.freedesktop.login1.reboot"
+        || action.id == "org.freedesktop.login1.reboot-multiple-sessions") {
+        return polkit.Result.YES;
+    }
+
+    // Manage only the polaris unit (restart / enable / disable for the
+    // "Restart Polaris" and auto-start toggle).
+    if ((action.id == "org.freedesktop.systemd1.manage-units"
+            || action.id == "org.freedesktop.systemd1.manage-unit-files")
+        && action.lookup("unit") == "polaris.service") {
+        return polkit.Result.YES;
+    }
+});

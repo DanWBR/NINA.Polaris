@@ -9201,7 +9201,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
 
             <!-- SETTINGS -->
             <div x-show="tab === 'settings'" class="tab-panel"
-                 x-init="$watch('tab', t => { if (t === 'settings') loadSimulatorSettings(); })">
+                 x-init="$watch('tab', t => { if (t === 'settings') { loadSimulatorSettings(); loadPowerInfo(); } })">
                 <div class="panel-header">Settings</div>
 
                 <!-- Card grid, FAQ-style accordion. Each .settings-section
@@ -9762,6 +9762,72 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <p class="text-warn" x-show="clockSync.lastError"
                        style="font-size:11px; margin-top:8px"
                        x-text="'⚠ ' + clockSync.lastError"></p>
+                </div>
+
+                <div class="settings-section" id="power-card">
+                    <h3><span class="settings-card-icon">⏻</span>Power</h3>
+                    <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
+                        Restart the Polaris server or reboot the whole device
+                        without an SSH session. Handy on a headless SBC at the
+                        scope, or a mini-PC you reach only through the browser.
+                    </p>
+
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:14px">
+                        <button class="btn btn-sm"
+                                @click="restartPolaris()"
+                                :disabled="power.restarting">
+                            <span x-show="!power.restarting">🔄 Restart Polaris</span>
+                            <span x-show="power.restarting">Restarting…</span>
+                        </button>
+                        <button class="btn btn-sm btn-danger"
+                                @click="rebootDevice()"
+                                :disabled="!power.canReboot || power.rebooting">
+                            <span x-show="!power.rebooting">⏻ Reboot device</span>
+                            <span x-show="power.rebooting">Rebooting…</span>
+                        </button>
+                    </div>
+                    <p class="text-muted" x-show="!power.canReboot && power.loaded"
+                       style="font-size:11px; margin-top:8px">
+                        ⚠ Device reboot is not available on this platform.
+                    </p>
+
+                    <!-- Windows boot auto-start. On Linux/SBC this is handled
+                         by the systemd unit the installer enables, so we only
+                         show the toggle on Windows. -->
+                    <template x-if="power.loaded && power.platform === 'windows'">
+                        <div style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px">
+                            <label style="display:flex; align-items:center; gap:10px; max-width:560px">
+                                <input type="checkbox"
+                                       :checked="power.autoStartEnabled"
+                                       :disabled="power.autoStartBusy"
+                                       @change="toggleAutoStart()">
+                                <span>Start Polaris automatically at Windows boot (no login)</span>
+                            </label>
+                            <p class="text-muted" style="font-size:11px; margin-top:6px; max-width:560px">
+                                Registers a Scheduled Task that launches Polaris at startup as
+                                <code>SYSTEM</code>, so the server is reachable after a reboot
+                                even before anyone logs in. Enabling this needs Polaris to be
+                                running as Administrator.
+                            </p>
+                        </div>
+                    </template>
+
+                    <!-- Linux auto-start status (read-only; managed by the .deb). -->
+                    <template x-if="power.loaded && power.platform === 'linux'">
+                        <p class="text-muted" style="font-size:11px; margin-top:12px; max-width:560px">
+                            <span x-show="power.autoStartEnabled">
+                                ✓ Auto-start at boot is enabled (systemd
+                                <code>polaris.service</code>).
+                            </span>
+                            <span x-show="!power.autoStartEnabled && power.underSystemd">
+                                ⚠ Auto-start at boot is <strong>disabled</strong>. Enable with
+                                <code>sudo systemctl enable polaris.service</code>.
+                            </span>
+                            <span x-show="!power.underSystemd">
+                                Not running under systemd, so boot auto-start is not managed here.
+                            </span>
+                        </p>
+                    </template>
                 </div>
 
                 <div class="settings-section network-section">
@@ -12789,7 +12855,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260611-vkbd"></script>
+    <script src="/js/app.js?v=20260611-power"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

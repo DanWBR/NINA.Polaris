@@ -185,6 +185,7 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Auth.AuthService>();
 // Linux only; on Windows the service refuses gracefully + the UI
 // banner explains.
 builder.Services.AddSingleton<ClockSyncService>();
+builder.Services.AddSingleton<PowerService>();
 builder.Services.AddSingleton<ImageWriterService>();
 builder.Services.AddSingleton<PHD2Client>();
 // Native in-process autoguider (drop-in alternative to PHD2, per-rig).
