@@ -2710,6 +2710,12 @@ function ninaApp() {
                 try { Object.assign(this.settings, JSON.parse(saved)); } catch (e) { }
             }
 
+            // Restore sticky per-field UI values (panel exposure/gain/binning,
+            // target name, AF params) from the server, then watch them so
+            // later edits persist. Fire-and-forget; defaults stand if the
+            // fetch fails (e.g. not yet authenticated).
+            this._initUiPersistence();
+
             const nightSaved = localStorage.getItem('nina-night-mode');
             if (nightSaved === 'true') {
                 this.nightMode = true;
@@ -14522,6 +14528,84 @@ function ninaApp() {
         // The user typed in the target field → stop auto-identify from
         // clobbering it on the next centre.
         onTargetNameInput() { this.targetNameAuto = false; },
+
+        // ── Sticky UI field persistence (server-side) ───────────────
+        // Field report: panel exposure/gain (and friends) reset to defaults
+        // on every page reload. These are remembered server-side via
+        // /api/ui-state so any browser that opens Polaris restores the last
+        // values typed. Curated list of model paths to persist; dotted paths
+        // navigate the Alpine model. Per-rig settings (slewCenter/polar/video
+        // ROI) stay out of this list — they already persist on the rig.
+        _uiStatePaths() {
+            return [
+                // LIVE capture
+                'exposure', 'gain', 'binning',
+                // PREVIEW
+                'preview.exposure', 'preview.gain', 'preview.binning',
+                'preview.filter', 'preview.saveToDisk',
+                // VIDEO capture
+                'video.exposure', 'video.gain', 'video.binning',
+                'video.maxDurationSec', 'video.wbR', 'video.wbB',
+                // Auto-focus parameters
+                'afParams.steps', 'afParams.stepSize', 'afParams.exposureSeconds',
+                'afParams.minStars', 'afParams.backlashSteps',
+                // Shared target name
+                'targetName'
+            ];
+        },
+        _uiGetPath(path) {
+            return path.split('.').reduce(
+                (o, k) => (o == null ? undefined : o[k]), this);
+        },
+        _uiSetPath(path, val) {
+            const parts = path.split('.');
+            let o = this;
+            for (let i = 0; i < parts.length - 1; i++) {
+                if (o[parts[i]] == null) return;   // parent missing, skip
+                o = o[parts[i]];
+            }
+            o[parts[parts.length - 1]] = val;
+        },
+        async loadUiState() {
+            try {
+                const s = await this.apiGet('/api/ui-state');
+                if (!s || typeof s !== 'object') return;
+                for (const p of this._uiStatePaths()) {
+                    if (Object.prototype.hasOwnProperty.call(s, p)
+                            && s[p] !== null && s[p] !== undefined) {
+                        this._uiSetPath(p, s[p]);
+                    }
+                }
+            } catch (e) { /* non-fatal; defaults stand */ }
+        },
+        _collectUiState() {
+            const out = {};
+            for (const p of this._uiStatePaths()) {
+                const v = this._uiGetPath(p);
+                if (v !== undefined) out[p] = v;
+            }
+            return out;
+        },
+        _saveUiStateDebounced() {
+            clearTimeout(this._uiStateTimer);
+            this._uiStateTimer = setTimeout(() => {
+                this.apiFetch('/api/ui-state', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this._collectUiState())
+                }).catch(() => { /* offline / transient; retried on next change */ });
+            }, 700);
+        },
+        // Load persisted values, then watch each path so later edits save.
+        // Loading first means the initial value-set doesn't bounce back to
+        // the server (the watch fires but writes the same value we just read).
+        async _initUiPersistence() {
+            await this.loadUiState();
+            for (const p of this._uiStatePaths()) {
+                try { this.$watch(p, () => this._saveUiStateDebounced()); }
+                catch (e) { /* unwatchable path; skip */ }
+            }
+        },
 
         // ASIAIR-style "what am I looking at": ask the server which catalog
         // object the mount's current pointing is on (or the most relevant in
