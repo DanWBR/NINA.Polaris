@@ -5698,8 +5698,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     :disabled="indiWeb.busy || !indiWeb.status?.running">
                                 ■ Stop
                             </button>
-                            <button class="btn btn-sm" @click="indiWebStatusRefresh()"
-                                    :disabled="indiWeb.busy">
+                            <button class="btn btn-sm" @click="indiWebStatusRefresh(); indiWebEnsureIframe(true)"
+                                    :disabled="indiWeb.busy"
+                                    title="Refresh status and reload the panel">
                                 ⟳
                             </button>
                         </div>
@@ -5739,12 +5740,15 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                              upstream). Tall (75vh) since the subtab
                              gives us the whole panel to fill instead
                              of being cramped under the equipment grid. -->
-                        <!-- FIELD-4: lazy iframe src. Earlier version
-                             raced the polaris_session cookie write on
-                             first page load. See the matching comments
-                             on the PHD2 iframes in the GUIDE tab. -->
+                        <!-- FIELD-4: lazy iframe src. A static "/indi-web/"
+                             could load before the polaris_session cookie was
+                             written, take a 401, and never reload (src string
+                             unchanged). Now driven by indiWeb.iframeSrc, which
+                             indiWebEnsureIframe() only sets to a cache-busted
+                             "/indi-web/?_=ts" after a credentialed readiness
+                             probe returns OK — same fix as the PHD2 GUI iframe. -->
                         <iframe x-show="indiWeb.status?.running"
-                                :src="auth.authenticated ? '/indi-web/' : 'about:blank'"
+                                :src="indiWeb.iframeSrc"
                                 style="width:100%;height:75vh;min-height:500px;
                                        border:1px solid var(--border);
                                        border-radius:6px;background:#0a0e16;"
@@ -12678,7 +12682,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260610-viewer-fp-exit"></script>
+    <script src="/js/app.js?v=20260610-indiweb-auth"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

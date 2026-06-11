@@ -1041,7 +1041,7 @@ function ninaApp() {
         // after each lifecycle button click). `autoStart` is a UI-
         // local mirror of the IndiWeb:AutoStart config flag persisted
         // via /api/system/settings (same plumbing as PHD2 auto-start).
-        indiWeb: { status: null, autoStart: false, busy: false },
+        indiWeb: { status: null, autoStart: false, busy: false, iframeSrc: 'about:blank' },
         // INDI Control Panel sub-tab in RIGS. The launch button posts
         // /api/indi/cp/launch which uses `xpra control :100 start-child
         // indi_control_panel` to spawn the binary inside the same xpra
@@ -21566,6 +21566,39 @@ function ninaApp() {
                     unsupportedReason: 'Status endpoint unreachable',
                 };
             }
+            // Drive the iframe from a readiness probe (same fix as the PHD2
+            // GUI iframe). A static :src="/indi-web/" can load in the brief
+            // window before the polaris_session cookie is written, take a 401,
+            // and then never reload because the src string never changes. Here
+            // we only point the iframe at the proxy once a credentialed probe
+            // returns OK, and we cache-bust the URL so each (re)load is a real
+            // navigation.
+            this.indiWebEnsureIframe(false);
+        },
+
+        // Credentialed readiness probe + cache-busting iframe (re)load for the
+        // embedded indi-web panel. Mirrors phd2GuiProbeReady / _reloadPhd2GuiIframe.
+        //   force=false: only (re)load when the iframe is currently blank
+        //               (initial open / after a 401-race) — never disrupts a
+        //               working panel the user is interacting with.
+        //   force=true:  always reload (used by Start / the Refresh button).
+        async indiWebEnsureIframe(force) {
+            if (!this.auth.authenticated || !this.indiWeb.status?.running) {
+                this.indiWeb.iframeSrc = 'about:blank';
+                return;
+            }
+            const showing = (this.indiWeb.iframeSrc || '').startsWith('/indi-web/');
+            if (showing && !force) return;
+            try {
+                const r = await fetch('/indi-web/?probe=' + Date.now(),
+                    { cache: 'no-store', credentials: 'same-origin' });
+                // 2xx/3xx = proxy reachable AND auth accepted (a 401 from the
+                // gate would land here as 401 and we leave the iframe blank so
+                // the next refresh retries instead of baking in the error page).
+                if (r.status >= 200 && r.status < 400) {
+                    this.indiWeb.iframeSrc = '/indi-web/?_=' + Date.now();
+                }
+            } catch (e) { /* transient; next refresh retries */ }
         },
 
         async indiWebStart() {
@@ -21583,6 +21616,8 @@ function ninaApp() {
             } finally {
                 this.indiWeb.busy = false;
                 await this.indiWebStatusRefresh();
+                // Force a fresh iframe load now that indi-web is up.
+                this.indiWebEnsureIframe(true);
             }
         },
 
@@ -21592,6 +21627,7 @@ function ninaApp() {
             try {
                 await this.apiPost('/api/indi/web/stop');
                 this.toast('indi-web stopped', 'ok');
+                this.indiWeb.iframeSrc = 'about:blank';
             } catch (e) {
                 this.toast('Stop failed: ' + (e.message || e), 'error');
             } finally {
