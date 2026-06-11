@@ -63,7 +63,16 @@ internal static class SvbonyNative {
         SVB_IMG_RGB24, SVB_IMG_RGB32, SVB_IMG_END = -1
     }
 
-    public enum SVB_CAMERA_MODE { SVB_MODE_NORMAL = 0 }
+    public enum SVB_CAMERA_MODE {
+        SVB_MODE_NORMAL = 0,
+        SVB_MODE_TRIG_SOFT = 1,
+        SVB_MODE_TRIG_RISE_EDGE = 2,
+        SVB_MODE_TRIG_FALL_EDGE = 3,
+        SVB_MODE_TRIG_DOUBLE_EDGE = 4,
+        SVB_MODE_TRIG_HIGH_LEVEL = 5,
+        SVB_MODE_TRIG_LOW_LEVEL = 6,
+        SVB_MODE_END = -1
+    }
 
     // Control indices (subset we use). Values match the header enum order.
     public enum SVB_CONTROL_TYPE {
@@ -134,6 +143,7 @@ internal static class SvbonyNative {
     [DllImport(DLL)] public static extern SVB_ERROR_CODE SVBSetROIFormat(int iCameraID, int iStartX, int iStartY, int iWidth, int iHeight, int iBin);
     [DllImport(DLL)] public static extern SVB_ERROR_CODE SVBGetROIFormat(int iCameraID, out int piStartX, out int piStartY, out int piWidth, out int piHeight, out int piBin);
     [DllImport(DLL)] public static extern SVB_ERROR_CODE SVBSetCameraMode(int iCameraID, SVB_CAMERA_MODE mode);
+    [DllImport(DLL)] public static extern SVB_ERROR_CODE SVBSendSoftTrigger(int iCameraID);
     [DllImport(DLL)] public static extern SVB_ERROR_CODE SVBStartVideoCapture(int iCameraID);
     [DllImport(DLL)] public static extern SVB_ERROR_CODE SVBStopVideoCapture(int iCameraID);
     [DllImport(DLL)] public static extern SVB_ERROR_CODE SVBGetVideoData(int iCameraID, byte[] pBuffer, CLong lBuffSize, int iWaitms);

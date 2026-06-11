@@ -41,6 +41,7 @@ public sealed class SvbonySdkCamera : ICamera {
     private bool _isColor;
     private int _gainMin, _gainMax;
     private bool _supportsCooler;
+    private bool _isTriggerCam;
 
     private int _gain;
     private double _exposureSec = 0.03;
@@ -121,6 +122,7 @@ public sealed class SvbonySdkCamera : ICamera {
         _maxY = (int)prop.MaxHeight.Value;
         _maxBitDepth = prop.MaxBitDepth;
         _isColor = prop.IsColorCam != 0;
+        _isTriggerCam = prop.IsTriggerCam != 0;
         _bayer = _isColor ? MapBayer((SVB_BAYER_PATTERN)prop.BayerPattern) : BayerPatternEnum.None;
 
         // Gain range + cooler support from the control caps table.
@@ -217,16 +219,46 @@ public sealed class SvbonySdkCamera : ICamera {
 
             GetRoi(out var w, out var h);
             var bytes = new byte[(long)w * h * BytesPerPixel()];
-            int waitMs = (int)(exposureSeconds * 1000 * 2 + 500);
+            // Generous upper bound: the requested integration + readout/USB
+            // margin. It's only the max wait, not the actual exposure time.
+            int waitMs = (int)(exposureSeconds * 1000) + 8000;
 
             State = CameraStates.Exposing;
-            Check(SVBStartVideoCapture(_cameraId), "SVBStartVideoCapture");
-            try {
-                var err = SVBGetVideoData(_cameraId, bytes, new CLong(bytes.Length), waitMs);
-                Check(err, "SVBGetVideoData");
-            } finally {
-                try { SVBStopVideoCapture(_cameraId); } catch { }
-                State = CameraStates.Idle;
+            if (_isTriggerCam) {
+                // Soft-trigger mode = exact on-demand exposure. In the NORMAL
+                // (continuous) video mode the SDK hands back whatever frame is
+                // already in flight, so long stills came back early (~the
+                // camera's running video frame time, a few seconds) instead of
+                // integrating for the requested duration. Switching to
+                // SVB_MODE_TRIG_SOFT and firing one SVBSendSoftTrigger makes
+                // SVBGetVideoData block until a single full-length exposure
+                // completes. Mode is restored to NORMAL afterwards so the
+                // video-stream path keeps working.
+                Check(SVBSetCameraMode(_cameraId, SVB_CAMERA_MODE.SVB_MODE_TRIG_SOFT),
+                    "SVBSetCameraMode(TRIG_SOFT)");
+                Check(SVBStartVideoCapture(_cameraId), "SVBStartVideoCapture");
+                try {
+                    // Let the mode + exposure value latch before triggering.
+                    Thread.Sleep(20);
+                    Check(SVBSendSoftTrigger(_cameraId), "SVBSendSoftTrigger");
+                    var err = SVBGetVideoData(_cameraId, bytes, new CLong(bytes.Length), waitMs);
+                    Check(err, "SVBGetVideoData");
+                } finally {
+                    try { SVBStopVideoCapture(_cameraId); } catch { }
+                    try { SVBSetCameraMode(_cameraId, SVB_CAMERA_MODE.SVB_MODE_NORMAL); } catch { }
+                    State = CameraStates.Idle;
+                }
+            } else {
+                // Camera without trigger support: continuous mode. Best effort,
+                // unchanged behaviour.
+                Check(SVBStartVideoCapture(_cameraId), "SVBStartVideoCapture");
+                try {
+                    var err = SVBGetVideoData(_cameraId, bytes, new CLong(bytes.Length), waitMs);
+                    Check(err, "SVBGetVideoData");
+                } finally {
+                    try { SVBStopVideoCapture(_cameraId); } catch { }
+                    State = CameraStates.Idle;
+                }
             }
             return WrapFrame(bytes, w, h);
         }
