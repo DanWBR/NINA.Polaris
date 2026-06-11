@@ -91,20 +91,39 @@ public class ProfileService {
     }
 
     public void Load() {
-        if (!File.Exists(_activeProfilePath)) {
+        // Crash-safe load. active.json is written atomically (tmp + replace)
+        // with a .bak of the previous good version, so a torn/truncated file
+        // from a power cut mid-write (common on field SBCs) can be recovered.
+        // The cardinal rule: NEVER silently reset to an empty profile and then
+        // let the next Save() overwrite a recoverable file — that's how rigs
+        // vanish. So on a parse failure we preserve the bad file, try the
+        // backup, and only fall back to a fresh Default when nothing is usable.
+        var bakPath = _activeProfilePath + ".bak";
+
+        if (TryLoadProfileFrom(_activeProfilePath)) {
+            // loaded fine
+        } else if (File.Exists(_activeProfilePath)) {
+            // Main exists but didn't parse → corrupt/torn. Keep a copy so the
+            // operator (or we) can recover it, then try the backup.
+            PreserveCorruptProfile(_activeProfilePath);
+            if (TryLoadProfileFrom(bakPath)) {
+                _logger.LogWarning("active.json was corrupt; recovered from backup .bak");
+                Save();   // rewrite a clean main from the recovered backup
+            } else {
+                _logger.LogError("active.json corrupt and no usable backup; " +
+                    "starting a fresh Default profile (corrupt file preserved alongside)");
+                _activeProfile = new UserProfile { Name = "Default" };
+                Save();
+            }
+        } else if (TryLoadProfileFrom(bakPath)) {
+            // Main missing but a backup survived (e.g. crash between delete and
+            // rename) → recover it.
+            _logger.LogWarning("active.json missing; recovered from backup .bak");
+            Save();
+        } else {
             _activeProfile = new UserProfile { Name = "Default" };
             Save();
             _logger.LogInformation("Created default profile at {Path}", _activeProfilePath);
-        } else {
-            try {
-                var json = File.ReadAllText(_activeProfilePath);
-                _activeProfile = JsonSerializer.Deserialize<UserProfile>(json, JsonOpts)
-                    ?? new UserProfile { Name = "Default" };
-                _logger.LogInformation("Loaded profile: {Name}", _activeProfile.Name);
-            } catch (Exception ex) {
-                _logger.LogWarning(ex, "Failed to load profile, using defaults");
-                _activeProfile = new UserProfile { Name = "Default" };
-            }
         }
 
         // FIELD4-3: hoist legacy per-rig camera quirks (Bayer
@@ -168,7 +187,7 @@ public class ProfileService {
         _saveLock.Wait();
         try {
             var json = JsonSerializer.Serialize(_activeProfile, JsonOpts);
-            File.WriteAllText(_activeProfilePath, json);
+            WriteFileAtomic(_activeProfilePath, json, backup: true);
         } catch (Exception ex) {
             _logger.LogError(ex, "Failed to save profile");
         } finally {
@@ -183,11 +202,72 @@ public class ProfileService {
 
         try {
             var json = JsonSerializer.Serialize(_activeProfile, JsonOpts);
-            File.WriteAllText(path, json);
-            File.WriteAllText(_activeProfilePath, json);
+            WriteFileAtomic(path, json, backup: false);
+            Save();  // writes active.json atomically (with .bak) under the lock
             _logger.LogInformation("Profile saved as: {Name} ({Path})", name, path);
         } catch (Exception ex) {
             _logger.LogError(ex, "Failed to save profile as {Name}", name);
+        }
+    }
+
+    /// <summary>
+    /// Crash-safe file write: serialise to a sibling <c>.tmp</c>, then move it
+    /// over the target. The move is atomic on the same volume, so a reader (or
+    /// a power cut) never sees a half-written file. When <paramref name="backup"/>
+    /// is set, the previous good file is first copied to <c>.bak</c> so
+    /// <see cref="Load"/> can recover from a torn write. Falls back to a plain
+    /// overwrite on filesystems that reject atomic replace.
+    /// </summary>
+    private void WriteFileAtomic(string path, string contents, bool backup) {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var tmp = path + ".tmp";
+        File.WriteAllText(tmp, contents);
+
+        if (backup && File.Exists(path)) {
+            try { File.Copy(path, path + ".bak", overwrite: true); }
+            catch (Exception ex) { _logger.LogDebug(ex, "Could not refresh backup for {Path}", path); }
+        }
+
+        try {
+            File.Move(tmp, path, overwrite: true);
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "Atomic replace failed for {Path}; falling back to direct write", path);
+            File.WriteAllText(path, contents);
+            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { /* best effort */ }
+        }
+    }
+
+    /// <summary>Try to deserialise a profile from <paramref name="path"/> into
+    /// <see cref="_activeProfile"/>. Returns false (without mutating state) when
+    /// the file is missing, empty, or unparseable, so the caller can fall back
+    /// to a backup instead of clobbering recoverable data.</summary>
+    private bool TryLoadProfileFrom(string path) {
+        try {
+            if (!File.Exists(path)) return false;
+            var json = File.ReadAllText(path);
+            if (string.IsNullOrWhiteSpace(json)) return false;
+            var p = JsonSerializer.Deserialize<UserProfile>(json, JsonOpts);
+            if (p == null) return false;
+            _activeProfile = p;
+            _logger.LogInformation("Loaded profile: {Name} (from {File})",
+                _activeProfile.Name, Path.GetFileName(path));
+            return true;
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "Failed to parse profile {File}", Path.GetFileName(path));
+            return false;
+        }
+    }
+
+    /// <summary>Copy a corrupt profile aside (never delete it) so the operator's
+    /// data is recoverable even in the worst case where the backup is also
+    /// unusable.</summary>
+    private void PreserveCorruptProfile(string path) {
+        try {
+            var dest = path + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+            File.Copy(path, dest, overwrite: true);
+            _logger.LogWarning("Preserved corrupt profile as {Dest}", Path.GetFileName(dest));
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "Could not preserve corrupt profile {Path}", path);
         }
     }
 
