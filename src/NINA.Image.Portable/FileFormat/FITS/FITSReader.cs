@@ -278,6 +278,7 @@ public static class FITSReader {
         meta.Camera.PixelSizeY = GetDoubleHeader(headers, "YPIXSZ", 0);
 
         meta.Telescope.Name = GetStringHeader(headers, "TELESCOP", "");
+        meta.Telescope.OpticalTube = GetStringHeader(headers, "OTA", "");
         meta.Telescope.FocalLength = GetDoubleHeader(headers, "FOCALLEN", 0);
         meta.Telescope.RightAscension = GetDoubleHeader(headers, "RA", 0);
         meta.Telescope.Declination = GetDoubleHeader(headers, "DEC", 0);

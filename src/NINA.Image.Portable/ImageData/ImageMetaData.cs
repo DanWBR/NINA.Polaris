@@ -55,6 +55,11 @@ public class ImageMetaData {
 
     public class TelescopeInfo {
         public string Name { get; set; } = string.Empty;
+        /// <summary>Optical tube assembly (OTA) brand + model, e.g.
+        /// "Celestron EdgeHD 8". Distinct from <see cref="Name"/>, which holds
+        /// the mount device name (FITS TELESCOP keyword). Stamped into the
+        /// FITS/XISF "OTA" keyword.</summary>
+        public string OpticalTube { get; set; } = string.Empty;
         public double FocalLength { get; set; }
         public double FocalRatio { get; set; }
         public double RightAscension { get; set; }

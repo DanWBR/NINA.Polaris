@@ -255,6 +255,8 @@ public static class XISFWriter {
 
             if (!string.IsNullOrEmpty(meta.Telescope.Name))
                 WriteFitsKeyword(xw, "TELESCOP", meta.Telescope.Name, null);
+            if (!string.IsNullOrEmpty(meta.Telescope.OpticalTube))
+                WriteFitsKeyword(xw, "OTA", meta.Telescope.OpticalTube, "Optical tube assembly");
             if (meta.Telescope.FocalLength > 0)
                 WriteFitsKeyword(xw, "FOCALLEN", Fmt(meta.Telescope.FocalLength), "Focal length (mm)");
             if (meta.Telescope.FocalRatio > 0)

@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System.Globalization;
+using System.Linq;
 using NINA.Image.FileFormat.FITS;
 using NINA.Image.FileFormat.XISF;
 using NINA.Image.ImageData;
@@ -218,6 +219,14 @@ public class ImageWriterService {
             var rigFocalLen = _profile.ActiveEquipmentProfile.FocalLengthMm;
             var focalLength = rigFocalLen > 0 ? rigFocalLen : profile.FocalLengthMm;
             m.Telescope.Name = _equip.Telescope.DeviceName;
+            // OTA brand+model is a per-rig optic property kept distinct from the
+            // mount device name (TELESCOP); it drives the "OTA" FITS/XISF keyword.
+            var ota = string.Join(" ", new[] {
+                _profile.ActiveEquipmentProfile.TelescopeBrand,
+                _profile.ActiveEquipmentProfile.TelescopeModel
+            }.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()));
+            if (!string.IsNullOrWhiteSpace(ota))
+                m.Telescope.OpticalTube = ota;
             m.Telescope.FocalLength = focalLength;
             if (focalLength > 0 && profile.SensorWidthMm > 0)
                 m.Telescope.FocalRatio = focalLength /

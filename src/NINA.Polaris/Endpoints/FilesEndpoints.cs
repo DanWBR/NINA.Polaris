@@ -268,7 +268,7 @@ public static class FilesEndpoints {
                     "FILTER","IMAGETYP","NCOMBINE","EXPTOTAL","FRAMENR"
                 };
                 var instrumentKeys = new[] {
-                    "INSTRUME","TELESCOP","FOCALLEN","FOCRATIO","APERTURE",
+                    "INSTRUME","TELESCOP","OTA","FOCALLEN","FOCRATIO","APERTURE",
                     "XPIXSZ","YPIXSZ","XBINNING","YBINNING","GAIN","EGAIN",
                     "OFFSET","READOUTM","CCD-TEMP","SET-TEMP","FWHEEL",
                     "ROTATOR","ROTATANG","FOCNAME","FOCPOS","FOCTEMP","PIERSIDE"

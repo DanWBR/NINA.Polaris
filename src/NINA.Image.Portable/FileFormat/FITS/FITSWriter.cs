@@ -168,7 +168,10 @@ public static class FITSWriter {
             AddStr(cards, "BAYERPAT", meta.Camera.BayerPattern.ToString().ToUpperInvariant());
 
         // ---- Telescope ----
+        // TELESCOP carries the mount device name (existing behaviour); OTA
+        // carries the optical tube brand+model so the two are distinguishable.
         AddStr(cards, "TELESCOP", meta.Telescope.Name);
+        AddStr(cards, "OTA", meta.Telescope.OpticalTube);
         if (meta.Telescope.FocalLength > 0)
             Add(cards, "FOCALLEN", Fmt(meta.Telescope.FocalLength), "Focal length (mm)");
         if (meta.Telescope.FocalRatio > 0)
