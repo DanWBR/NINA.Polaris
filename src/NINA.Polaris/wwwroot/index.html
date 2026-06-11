@@ -10730,6 +10730,16 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 features that talk to the internet.</p>
                                 <span class="help-card-meta">read</span>
                             </button>
+                            <button class="help-tutorial-card"
+                                    @click="help.tutorial = 'credits'">
+                                <span class="help-card-icon">🙏</span>
+                                <h3>Credits &amp; acknowledgements</h3>
+                                <p>The projects, authors and open data
+                                that Polaris is built on, learns from,
+                                and ships in its capture and processing
+                                stack.</p>
+                                <span class="help-card-meta">read</span>
+                            </button>
                         </div>
                     </div>
                 </template>
@@ -10778,7 +10788,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </template>
 
                 <!-- ---- STEPPER (most tutorials) -------------- -->
-                <template x-if="help.tutorial && help.tutorial !== 'workflowsPicker' && help.tutorial !== 'troubleshoot' && help.tutorial !== 'privacy'">
+                <template x-if="help.tutorial && help.tutorial !== 'workflowsPicker' && help.tutorial !== 'troubleshoot' && help.tutorial !== 'privacy' && help.tutorial !== 'credits'">
                     <div>
                         <div class="help-stepper-header">
                             <button class="help-back-btn" @click="helpExit()">
@@ -11042,6 +11052,133 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                             github.com/DanWBR/NINA.Polaris
                                         </a>
                                     </p>
+                                </div>
+                            </details>
+
+                        </div>
+                    </div>
+                </template>
+
+                <!-- ---- CREDITS & ACKNOWLEDGEMENTS ------------ -->
+                <template x-if="help.tutorial === 'credits'">
+                    <div>
+                        <div class="help-stepper-header">
+                            <button class="help-back-btn" @click="helpExit()">
+                                ← Help
+                            </button>
+                            <span class="help-stepper-title">
+                                Credits &amp; acknowledgements
+                            </span>
+                        </div>
+                        <p class="help-intro">
+                            N.I.N.A. Polaris stands on the shoulders of a
+                            large community of astronomy and open-source
+                            projects. Some we derive code from, some we
+                            studied as a reference, and many ship inside the
+                            capture and processing stack. Thank you to every
+                            author below. Full license texts are bundled with
+                            the app and in the
+                            <a href="https://github.com/DanWBR/NINA.Polaris"
+                               target="_blank" rel="noopener">source repository</a>.
+                            Click any group to expand.
+                        </p>
+                        <div class="help-faq-list">
+
+                            <details class="help-faq" open>
+                                <summary>Built on N.I.N.A.</summary>
+                                <div class="help-faq-body">
+                                    <p><a href="https://nighttime-imaging.eu/" target="_blank" rel="noopener"><strong>N.I.N.A. - Nighttime Imaging 'N' Astronomy</strong></a> - Stefan Berg and the N.I.N.A. contributors. Polaris is derived from N.I.N.A.; large parts of the imaging, astrometry, sequencer and equipment model originate here (MPL-2.0).</p>
+                                </div>
+                            </details>
+
+                            <details class="help-faq">
+                                <summary>Guiding &amp; gear simulation</summary>
+                                <div class="help-faq-body">
+                                    <p><a href="https://openphdguiding.org/" target="_blank" rel="noopener"><strong>PHD2 - Open PHD Guiding</strong></a> - Andy Galasso, Bret McKee, Craig Stark and the PHD2 contributors. Used both as the managed external guider and as the reference for the built-in native autoguider and the gear simulator (BSD-3-Clause).</p>
+                                </div>
+                            </details>
+
+                            <details class="help-faq">
+                                <summary>Image processing &amp; AI</summary>
+                                <div class="help-faq-body">
+                                    <p><a href="https://www.graxpert.com/" target="_blank" rel="noopener"><strong>GraXpert</strong></a> - the GraXpert development team. Background extraction, denoising and deconvolution ONNX models, and the auto-stretch algorithm Polaris uses by default.</p>
+                                    <p><a href="https://siril.org/" target="_blank" rel="noopener"><strong>Siril</strong></a> - the Free-Astro / Siril team. Optional external pre-processing and stacking integration.</p>
+                                </div>
+                            </details>
+
+                            <details class="help-faq">
+                                <summary>Plate solving</summary>
+                                <div class="help-faq-body">
+                                    <p><a href="https://www.hnsky.org/astap.htm" target="_blank" rel="noopener"><strong>ASTAP</strong></a> - Han Kleijn. The default fast offline plate solver and star database.</p>
+                                    <p><a href="https://astrometry.net/" target="_blank" rel="noopener"><strong>Astrometry.net</strong></a> - Dustin Lang, David W. Hogg and collaborators. Local and online blind plate solving.</p>
+                                    <p><a href="https://planewave.com/" target="_blank" rel="noopener"><strong>PlateSolve3</strong></a> - PlaneWave Instruments. Alternative plate solver.</p>
+                                </div>
+                            </details>
+
+                            <details class="help-faq">
+                                <summary>Equipment, protocols &amp; camera SDKs</summary>
+                                <div class="help-faq-body">
+                                    <p><a href="https://indilib.org/" target="_blank" rel="noopener"><strong>INDI Library</strong></a> - Jasem Mutlaq and the INDI community. The primary equipment-control protocol (400+ Linux drivers).</p>
+                                    <p><a href="https://ascom-standards.org/" target="_blank" rel="noopener"><strong>ASCOM Initiative &amp; Alpaca</strong></a> - the ASCOM Initiative. Windows COM drivers and the cross-platform Alpaca protocol.</p>
+                                    <p><a href="https://www.zwoastro.com/" target="_blank" rel="noopener"><strong>ZWO ASI SDK</strong></a> - Suzhou ZWO Co., Ltd. Native ZWO camera support.</p>
+                                    <p><a href="https://www.svbony.com/" target="_blank" rel="noopener"><strong>SVBony SDK</strong></a> - SVBONY. Native SVBony camera support.</p>
+                                    <p><a href="https://player-one-astronomy.com/" target="_blank" rel="noopener"><strong>Player One SDK</strong></a> - Player One Astronomy. Native Player One camera support.</p>
+                                    <p><a href="https://www.touptek-astro.com/" target="_blank" rel="noopener"><strong>ToupTek SDK</strong></a> - ToupTek Astro. Native ToupTek (and OEM-alike) camera support.</p>
+                                    <p><a href="https://sdk.nikonimaging.com/" target="_blank" rel="noopener"><strong>Nikon SDK</strong></a> - Nikon Corporation. Nikon DSLR / mirrorless support.</p>
+                                </div>
+                            </details>
+
+                            <details class="help-faq">
+                                <summary>Sky data, catalogs &amp; astrometry</summary>
+                                <div class="help-faq-body">
+                                    <p><a href="https://github.com/mattiaverga/OpenNGC" target="_blank" rel="noopener"><strong>OpenNGC</strong></a> - Mattia Verga. The bundled NGC/IC/Messier/Caldwell deep-sky catalog (CC BY-SA 4.0).</p>
+                                    <p><a href="https://www.aavso.org/apass" target="_blank" rel="noopener"><strong>APASS - AAVSO Photometric All-Sky Survey</strong></a> - the AAVSO. Reference photometry for color calibration.</p>
+                                    <p><a href="https://aladin.cds.unistra.fr/" target="_blank" rel="noopener"><strong>Aladin Lite</strong></a> - CDS, Université de Strasbourg / CNRS. The interactive sky atlas viewer.</p>
+                                    <p><a href="https://github.com/Stellarium/stellarium-web-engine" target="_blank" rel="noopener"><strong>Stellarium Web Engine</strong></a> - Stellarium Labs / Guillaume Chéreau and contributors. The WebGL planetarium sky view (AGPL-3.0).</p>
+                                    <p><a href="https://github.com/cosinekitty/astronomy" target="_blank" rel="noopener"><strong>Astronomy Engine</strong></a> - Don Cross. High-precision ephemeris and coordinate math.</p>
+                                </div>
+                            </details>
+
+                            <details class="help-faq">
+                                <summary>In-browser UI libraries</summary>
+                                <div class="help-faq-body">
+                                    <p><a href="https://alpinejs.dev/" target="_blank" rel="noopener"><strong>Alpine.js</strong></a> - Caleb Porzio and contributors. The reactive framework behind the web UI.</p>
+                                    <p><a href="https://www.chartjs.org/" target="_blank" rel="noopener"><strong>Chart.js</strong></a> - the Chart.js contributors. Focus / guiding / statistics charts.</p>
+                                    <p><a href="https://openseadragon.github.io/" target="_blank" rel="noopener"><strong>OpenSeadragon</strong></a> - the OpenSeadragon contributors. Deep-zoom image viewer.</p>
+                                    <p><a href="https://novnc.com/" target="_blank" rel="noopener"><strong>noVNC</strong></a> - the noVNC authors. The embedded PHD2 GUI on Windows (MPL-2.0).</p>
+                                    <p><a href="https://xtermjs.org/" target="_blank" rel="noopener"><strong>xterm.js</strong></a> - the xterm.js authors. In-browser terminal.</p>
+                                    <p><a href="https://github.com/mourner/suncalc" target="_blank" rel="noopener"><strong>SunCalc</strong></a> - Vladimir Agafonkin. Sun / twilight calculations for the sky view.</p>
+                                    <p><a href="https://sortablejs.github.io/Sortable/" target="_blank" rel="noopener"><strong>SortableJS</strong></a> - the SortableJS contributors. Drag-and-drop in the sequencer.</p>
+                                </div>
+                            </details>
+
+                            <details class="help-faq">
+                                <summary>Server &amp; .NET libraries</summary>
+                                <div class="help-faq-body">
+                                    <p><a href="https://github.com/mono/SkiaSharp" target="_blank" rel="noopener"><strong>SkiaSharp</strong></a> - Microsoft, wrapping Google's Skia. Server-side image encoding and rendering.</p>
+                                    <p><a href="https://onnxruntime.ai/" target="_blank" rel="noopener"><strong>ONNX Runtime (Web)</strong></a> - Microsoft. Runs the GraXpert AI models in the browser.</p>
+                                    <p><a href="https://github.com/microsoft/reverse-proxy" target="_blank" rel="noopener"><strong>YARP</strong></a> - Microsoft. Reverse proxy for the embedded device web UIs.</p>
+                                    <p><a href="https://github.com/CommunityToolkit/dotnet" target="_blank" rel="noopener"><strong>.NET Community Toolkit (MVVM)</strong></a> - the .NET Foundation.</p>
+                                    <p><a href="https://github.com/MiloszKrajewski/K4os.Compression.LZ4" target="_blank" rel="noopener"><strong>K4os.Compression.LZ4</strong></a> - Milosz Krajewski. Fast frame compression for the live preview.</p>
+                                    <p><a href="https://github.com/natemcmaster/LettuceEncrypt" target="_blank" rel="noopener"><strong>LettuceEncrypt</strong></a> - Nate McMaster. Automatic Let's Encrypt certificates.</p>
+                                    <p><a href="https://serilog.net/" target="_blank" rel="noopener"><strong>Serilog</strong></a> - the Serilog contributors. Structured logging.</p>
+                                    <p><a href="https://www.newtonsoft.com/json" target="_blank" rel="noopener"><strong>Json.NET</strong></a> - James Newton-King. JSON serialization.</p>
+                                    <p><a href="https://github.com/sshnet/SSH.NET" target="_blank" rel="noopener"><strong>SSH.NET</strong></a> - the SSH.NET contributors.</p>
+                                    <p><a href="https://github.com/richardschneider/net-mdns" target="_blank" rel="noopener"><strong>net-mdns (Makaretu.Dns)</strong></a> - Richard Schneider. <code>nina.local</code> mDNS discovery.</p>
+                                    <p><a href="https://www.sqlite.org/" target="_blank" rel="noopener"><strong>SQLite</strong></a> - D. Richard Hipp and the SQLite team. On-device databases.</p>
+                                    <p><a href="https://github.com/airockchip/rknn-toolkit2" target="_blank" rel="noopener"><strong>Rockchip RKNN runtime</strong></a> - Rockchip. Optional NPU acceleration for AI models on RK35xx boards.</p>
+                                </div>
+                            </details>
+
+                            <details class="help-faq">
+                                <summary>And everyone else</summary>
+                                <div class="help-faq-body">
+                                    <p>Plus the wider amateur astronomy and free-software
+                                    communities whose tools, drivers, documentation and
+                                    feedback make a project like this possible. If your
+                                    work is used here and not listed, it is an oversight,
+                                    not an intent, please
+                                    <a href="https://github.com/DanWBR/NINA.Polaris" target="_blank" rel="noopener">let us know</a>.</p>
                                 </div>
                             </details>
 
