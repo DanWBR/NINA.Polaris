@@ -1886,6 +1886,7 @@ the [`licenses/`](licenses/) folder, and the bundled `3rd-party-licenses` notice
 
 **Server & .NET**
 
+- [Silk.NET](https://github.com/dotnet/Silk.NET) - the .NET Foundation. OpenCL bindings for the SBC GPU compute backend.
 - [SkiaSharp](https://github.com/mono/SkiaSharp) - Microsoft, wrapping Google's Skia.
 - [ONNX Runtime](https://onnxruntime.ai/) - Microsoft. Runs the GraXpert AI models in the browser.
 - [YARP](https://github.com/microsoft/reverse-proxy) - Microsoft. Reverse proxy for embedded device web UIs.
@@ -1935,3 +1936,6 @@ vendor SDKs and dynamically-loaded plugins - see
   [`licenses/PHD2-LICENSE.txt`](licenses/PHD2-LICENSE.txt). PHD2 is
   Copyright (c) the Open PHD Guiding development team and the Max Planck
   Society. See https://openphdguiding.org.
+- **Silk.NET** -- MIT. Managed OpenCL bindings used by the optional SBC GPU
+  compute backend (`NINA.Polaris.Services.OpenCl`). Copyright (c) .NET
+  Foundation and Contributors. See https://github.com/dotnet/Silk.NET.
