@@ -10691,7 +10691,9 @@ label select.input-sm {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    max-width: 920px;
+    /* No width cap: the accordion spans the same width as the intro
+       paragraph (the full .help-panel content width). */
+    padding: 0 4px;
 }
 .help-faq {
     background: var(--bg-secondary);
