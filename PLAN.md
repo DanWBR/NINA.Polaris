@@ -12978,3 +12978,38 @@ on 2026-06-10:
 ### Future lever (deferred)
 int8 quantization could reach ~45 ms/tile (~10x) but needs a calibration dataset
 and risks denoise quality. fp16 5x is the clean baseline.
+
+## OCL — OpenCL GPU compute backend for classic image math (epic, in progress)
+
+### Why
+Polaris runs all classic image math on the SBC CPU (Parallel.ForEach in
+`NINA.Image.Portable`). On a board whose GPU exposes OpenCL the GPU sits idle.
+A general, reusable GPU backend frees the CPU and holds frame cadence during a
+live-stacking session on a headless SBC, without a browser attached. Target
+board for the main rig: **Radxa Dragon Q6A** (Qualcomm QCS6490, **Adreno 643**
+GPU with OpenCL 2.x, LPDDR5 unified memory). Note the existing RKNN/NPU lane is
+Rockchip-only and does NOT run on the Q6A — on this board the GPU is the primary
+on-device accelerator; the Hexagon NPU (QNN/SNPE/ONNX QNN EP) is a separate
+future track, out of scope here.
+
+### Design
+Mirror the RKNN capability-probe + silent CPU fallback pattern, on
+`Silk.NET.OpenCL`. Unified memory => `CL_MEM_ALLOC_HOST_PTR` + map for near
+zero-copy buffers (the win that makes per-op offload viable on an SBC).
+- `IGpuCompute` (NINA.Image.Portable): the abstraction CPU callers depend on.
+  Each op returns false when the backend declines so the caller runs the CPU
+  helper; `CpuGpuCompute` is the always-true reference impl.
+- `OpenClRuntime` / `OpenClContext` / `OpenClGpuCompute` (NINA.Polaris): probe,
+  context+queue+program cache, and the OpenCL `IGpuCompute` impl.
+- Capability-gated + opt-in; defaults to CPU everywhere (no regression on Pi /
+  x86; Pi VideoCore has no production OpenCL). `POLARIS_DISABLE_GPU=1` forces off.
+
+### Tasks
+- OCL-1: `IGpuCompute` + `CpuGpuCompute` in NINA.Image.Portable (blur, warp,
+  debayer, stretch-LUT apply, accumulate). DONE.
+- OCL-2: `OpenClRuntime` probe + `OpenClContext` + `kernels/*.cl`.
+- OCL-3: `OpenClGpuCompute` (+ Laplacian, Calibrate kernels).
+- OCL-4: DI wiring + call-site migration (LiveStacking, EditPipeline, FQA, Calib).
+- OCL-5: `Silk.NET.OpenCL` ref + kernel packaging + `check-opencl.sh` + licenses.
+- OCL-6: Settings toggle + WS `gpu{}` status chip + Benchmark GPU-vs-CPU.
+- OCL-7: tests + build verify + commit/push + PLAN/benchmark memory.
