@@ -161,7 +161,20 @@ public class AutoFocusService {
                     $"Not enough valid samples to fit parabola ({validPoints.Count} of {positions.Count})");
             }
 
-            var fit = FitParabola(validPoints);
+            // Reject spurious points: a single bad HFR (passing cloud, cosmic
+            // ray, a satellite trail mis-measured as a tight star) sits far off
+            // the V-curve and drags the least-squares parabola sideways, landing
+            // the focuser away from true focus. Iteratively sigma-clip points
+            // whose residual to the fit is an outlier, then refit on the
+            // survivors. The dropped points are flagged (not deleted) so the
+            // chart still shows them.
+            var (fit, inliers, rejected) = FitParabolaRobust(validPoints);
+            foreach (var r in rejected) r.Rejected = true;
+            if (rejected.Count > 0) {
+                _logger.LogInformation(
+                    "AF: ignored {Count} spurious point(s) at {Positions} (off the V-curve)",
+                    rejected.Count, string.Join(", ", rejected.Select(p => p.Position)));
+            }
             int bestPosition = (int)Math.Round(fit.MinX);
 
             // Validate: best position should be inside (or near) the swept range
@@ -359,6 +372,83 @@ public class AutoFocusService {
         return new ParabolaFit { A = a, B = b, C = c, MinX = minX, MinY = minY };
     }
 
+    /// <summary>
+    /// Robust parabola fit with iterative outlier rejection (sigma-clipping).
+    /// Fits the V-curve, measures each sample's residual to the fit, and drops
+    /// samples whose residual exceeds <paramref name="sigmaThreshold"/> times a
+    /// robust scale estimate (median absolute deviation), then refits on the
+    /// survivors. Repeats until nothing else is clipped, the iteration cap is
+    /// hit, or removing more would leave fewer than 3 points.
+    ///
+    /// The MAD-based scale is used instead of the plain standard deviation
+    /// precisely because a single gross outlier inflates the stddev enough to
+    /// hide itself; the median is insensitive to it.
+    /// </summary>
+    /// <returns>
+    /// The final fit, the inlier set it was computed from, and the rejected
+    /// (spurious) samples in detection order.
+    /// </returns>
+    public static (ParabolaFit fit, List<AutoFocusPoint> inliers, List<AutoFocusPoint> rejected)
+        FitParabolaRobust(IReadOnlyList<AutoFocusPoint> points,
+                          double sigmaThreshold = 2.5,
+                          int maxIterations = 5) {
+        if (points.Count < 3)
+            throw new ArgumentException("Need at least 3 points for parabola fit");
+
+        var inliers = points.ToList();
+        var rejected = new List<AutoFocusPoint>();
+        var fit = FitParabola(inliers);
+
+        for (int iter = 0; iter < maxIterations; iter++) {
+            fit = FitParabola(inliers);
+
+            var residuals = inliers
+                .Select(p => p.HFR - (fit.A * p.Position * p.Position + fit.B * p.Position + fit.C))
+                .ToList();
+
+            double sigma = RobustSigma(residuals);
+            if (sigma <= 1e-9) break;  // (near-)perfect fit, nothing to clip
+
+            double threshold = sigmaThreshold * sigma;
+            var keep = new List<AutoFocusPoint>();
+            var drop = new List<AutoFocusPoint>();
+            for (int i = 0; i < inliers.Count; i++) {
+                if (Math.Abs(residuals[i]) > threshold) drop.Add(inliers[i]);
+                else keep.Add(inliers[i]);
+            }
+
+            if (drop.Count == 0) break;   // converged: every survivor fits
+            if (keep.Count < 3) break;    // refuse to clip below a fittable set
+
+            rejected.AddRange(drop);
+            inliers = keep;
+        }
+
+        fit = FitParabola(inliers);
+        return (fit, inliers, rejected);
+    }
+
+    /// <summary>
+    /// Robust 1-sigma estimate from residuals via the median absolute deviation:
+    /// 1.4826 * median(|r - median(r)|), the consistency factor making MAD match
+    /// the standard deviation for normally distributed data.
+    /// </summary>
+    private static double RobustSigma(IReadOnlyList<double> residuals) {
+        if (residuals.Count == 0) return 0;
+        double med = Median(residuals);
+        var absDev = residuals.Select(r => Math.Abs(r - med)).ToList();
+        return 1.4826 * Median(absDev);
+    }
+
+    private static double Median(IReadOnlyList<double> values) {
+        var sorted = values.OrderBy(x => x).ToList();
+        int n = sorted.Count;
+        if (n == 0) return 0;
+        return (n % 2 == 1)
+            ? sorted[n / 2]
+            : 0.5 * (sorted[n / 2 - 1] + sorted[n / 2]);
+    }
+
     /// <summary>Cramer's rule for a 3x3 linear system.</summary>
     private static double[] Solve3x3(double[,] m, double[] v) {
         double det = Determinant3(m);
@@ -428,6 +518,13 @@ public class AutoFocusPoint {
     public int Position { get; set; }
     public double HFR { get; set; }
     public int StarCount { get; set; }
+    /// <summary>
+    /// True when the robust V-curve fit flagged this sample as a spurious
+    /// outlier and excluded it from the parabola. Kept in the points list
+    /// so the chart can still draw it (greyed/struck out) instead of
+    /// silently dropping it.
+    /// </summary>
+    public bool Rejected { get; set; }
 }
 
 public class AutoFocusResult {

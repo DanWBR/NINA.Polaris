@@ -12242,6 +12242,12 @@ function ninaApp() {
                         { label: 'Fit', data: [], showLine: true, borderColor: '#aaa',
                           borderDash: [4, 3], backgroundColor: 'transparent', pointRadius: 0, borderWidth: 1 },
                         { label: 'Best', data: [], pointBackgroundColor: '#4caf50', pointRadius: 8,
+                          pointStyle: 'crossRot', pointBorderWidth: 2 },
+                        // Spurious samples the robust fit ignored: drawn as a
+                        // red X so the operator can see they were measured but
+                        // excluded from the V-curve.
+                        { label: 'Ignored', data: [], pointBackgroundColor: '#ef5350',
+                          pointBorderColor: '#ef5350', pointRadius: 6,
                           pointStyle: 'crossRot', pointBorderWidth: 2 }
                     ]
                 },
@@ -12264,8 +12270,14 @@ function ninaApp() {
             // the ends. The server's parabola fit already excludes
             // these points; this brings the chart visual into
             // agreement with the math.
-            c.data.datasets[0].data = pts
-                .filter(p => Number.isFinite(p.hfr) && p.hfr > 0)
+            const finitePts = pts.filter(p => Number.isFinite(p.hfr) && p.hfr > 0);
+            // Inliers (used by the fit) and spurious points the robust fit
+            // ignored get separate datasets so the X markers stand out.
+            c.data.datasets[0].data = finitePts
+                .filter(p => !p.rejected)
+                .map(p => ({ x: p.position, y: p.hfr }));
+            c.data.datasets[3].data = finitePts
+                .filter(p => p.rejected)
                 .map(p => ({ x: p.position, y: p.hfr }));
             // Generate fitted parabola curve if we have a best position
             if (this.autoFocus.bestPosition && pts.length >= 3) {

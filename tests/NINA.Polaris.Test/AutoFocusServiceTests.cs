@@ -119,6 +119,56 @@ public class AutoFocusServiceTests {
         Assert.That(fit, Is.Not.Null);
     }
 
+    // ---- Robust fit (spurious-point rejection) ----
+
+    [Test]
+    public void FitParabolaRobust_NoOutliers_KeepsAllPoints() {
+        var pts = Pts(
+            (4800, 8.5), (4850, 6.2), (4900, 4.0), (4950, 2.3), (5000, 1.5),
+            (5050, 2.3), (5100, 4.1), (5150, 6.3), (5200, 8.4)
+        );
+
+        var (fit, inliers, rejected) = AutoFocusService.FitParabolaRobust(pts);
+
+        Assert.That(rejected, Is.Empty, "Clean V-curve should not drop any point");
+        Assert.That(inliers.Count, Is.EqualTo(pts.Count));
+        Assert.That(fit.MinX, Is.EqualTo(5000).Within(5));
+    }
+
+    [Test]
+    public void FitParabolaRobust_SingleSpike_RejectsItAndFixesVertex() {
+        // Same V-curve as above but one sample (5050) is a gross outlier:
+        // a passing cloud / mis-measured trail reading HFR 25 instead of ~2.3.
+        var pts = Pts(
+            (4800, 8.5), (4850, 6.2), (4900, 4.0), (4950, 2.3), (5000, 1.5),
+            (5050, 25.0), (5100, 4.1), (5150, 6.3), (5200, 8.4)
+        );
+
+        var clean = AutoFocusService.FitParabola(pts);          // contaminated fit
+        var (robust, inliers, rejected) = AutoFocusService.FitParabolaRobust(pts);
+
+        Assert.That(rejected.Count, Is.EqualTo(1), "Exactly the spike should be dropped");
+        Assert.That(rejected[0].Position, Is.EqualTo(5050));
+        Assert.That(inliers, Has.None.Matches<AutoFocusPoint>(p => p.Position == 5050));
+        // The robust vertex should land near the true minimum, and closer to it
+        // than the contaminated least-squares fit.
+        Assert.That(robust.MinX, Is.EqualTo(5000).Within(15));
+        Assert.That(Math.Abs(robust.MinX - 5000), Is.LessThan(Math.Abs(clean.MinX - 5000)));
+    }
+
+    [Test]
+    public void FitParabolaRobust_NeverClipsBelowThreePoints() {
+        // Three points with one wild value: there is no fittable subset of >=3
+        // after dropping it, so the method must keep all three rather than throw.
+        var pts = Pts((100, 2.0), (200, 50.0), (300, 2.5));
+
+        var (fit, inliers, rejected) = AutoFocusService.FitParabolaRobust(pts);
+
+        Assert.That(inliers.Count, Is.GreaterThanOrEqualTo(3));
+        Assert.That(rejected, Is.Empty);
+        Assert.That(fit, Is.Not.Null);
+    }
+
     // ---- Settings / state defaults ----
 
     [Test]
