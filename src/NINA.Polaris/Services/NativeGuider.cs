@@ -126,6 +126,14 @@ public sealed class NativeGuider : IGuider, IDisposable {
     public bool IsPaused => AppState == "Paused";
     public bool IsLooping => AppState == "Looping";
     public bool IsSettling { get; private set; }
+    public double RaAggression => Rig.NativeRaAggression;
+    public double DecAggression => Rig.NativeDecAggression;
+    // True from the moment a dither offset is applied until the settle that
+    // follows it completes. Distinct from IsSettling (which also covers the
+    // post-start settle) so the UI can show a "Dithering" state and so we can
+    // freeze RMS/error history while the star is deliberately being chased to
+    // the new lock point (otherwise the dither delta inflates RMS).
+    public bool IsDithering { get; private set; }
 
     public double PixelScale { get; private set; }
     public string? LastAlert { get; private set; }
@@ -227,6 +235,11 @@ public sealed class NativeGuider : IGuider, IDisposable {
     public async Task StartGuidingAsync(double settlePixels = 1.5, int settleTime = 10,
             int settleTimeout = 40, bool recalibrate = false, CancellationToken ct = default) {
         EnsureConnected();
+        // Clear any stale alert from a previous session so the GUIDE banner
+        // doesn't keep showing an error that no longer applies once a fresh
+        // run begins. A genuine new failure below re-raises its own alert.
+        LastAlert = null;
+        LastAlertAt = null;
         // Guard the mount up-front: with a restored calibration we skip the
         // calibration step (which had its own check), so without this a
         // disconnected mount would let guiding "run" while every pulse is
@@ -314,6 +327,7 @@ public sealed class NativeGuider : IGuider, IDisposable {
         _raAlgo.Reset();
         _decAlgo.Reset();
         IsSettling = true;
+        IsDithering = true;
         LastSettleStatus = "settling";
         _settleThresholdPx = settlePixels;
         _settler = new GuidingSettler(settlePixels, settleTime, settleTimeout, NowMs());
@@ -839,6 +853,11 @@ public sealed class NativeGuider : IGuider, IDisposable {
                 IsSettling = false;
                 bool ok = state == GuidingSettler.State.Done;
                 LastSettleStatus = ok ? "done" : "failed";
+                // A dither just finished settling: drop the error history that
+                // accumulated against the old lock so the RMS reflects only
+                // post-dither guiding, not the dither excursion itself.
+                if (IsDithering) _rms.Reset();
+                IsDithering = false;
                 Settled?.Invoke(new SettleResult {
                     Status = ok ? 0 : 1,
                     Error = ok ? null : "Settle timed out",
@@ -1021,6 +1040,13 @@ public sealed class NativeGuider : IGuider, IDisposable {
 
     // ----- Internals -----
 
+    /// <summary>Rebuild the per-axis guide algorithms from the current rig
+    /// settings (aggression / min-move / hysteresis) so a settings change made
+    /// while guiding takes effect on the next frame without a stop/start.</summary>
+    public void ApplyAlgorithmSettings() {
+        if (IsConnected) BuildAlgorithms();
+    }
+
     private void BuildAlgorithms() {
         // Per-axis algorithm selection (default hysteresis RA / resist-switch Dec,
         // PHD2's defaults). Lowpass/Lowpass2/Identity also available.
@@ -1032,7 +1058,7 @@ public sealed class NativeGuider : IGuider, IDisposable {
         _decAlgo = GuideAlgorithmFactory.Create(
             string.IsNullOrWhiteSpace(Rig.NativeDecAlgorithm) ? "resistswitch" : Rig.NativeDecAlgorithm,
             minMove: Math.Max(0.0, Rig.NativeMinMoveDecPx),
-            aggression: Math.Clamp(Rig.NativeRaAggression, 0.0, 2.0),
+            aggression: Math.Clamp(Rig.NativeDecAggression, 0.0, 2.0),
             hysteresis: Math.Clamp(Rig.NativeRaHysteresis, 0.0, 0.99));
         _raAlgo.Reset();
         _decAlgo.Reset();
@@ -1066,7 +1092,11 @@ public sealed class NativeGuider : IGuider, IDisposable {
         lock (_stepsLock) {
             _recentSteps.Add(step);
             if (_recentSteps.Count > MaxSteps) _recentSteps.RemoveAt(0);
-            if (p.StarFound) _rms.Add(p.RaArcsec, p.DecArcsec);
+            // Don't feed the deliberate dither excursion into the RMS/history:
+            // while settling (dither chase or post-start), the error is the
+            // distance back to a moved lock, not guiding performance. Counting
+            // it would spike the displayed RMS and the error graph every dither.
+            if (p.StarFound && !IsSettling) _rms.Add(p.RaArcsec, p.DecArcsec);
             var (rRa, rDec, rTot, pRa, pDec) = _rms.Compute();
             RmsRA = rRa; RmsDec = rDec; RmsTotal = rTot; PeakRA = pRa; PeakDec = pDec;
         }

@@ -1108,12 +1108,17 @@ function ninaApp() {
         guider: {
             connected: false, host: 'localhost', port: 4400,
             appState: 'Stopped', guiding: false, calibrating: false,
-            paused: false, looping: false, settling: false,
+            paused: false, looping: false, settling: false, dithering: false,
             pixelScale: 0, rmsRA: 0, rmsDec: 0, rmsTotal: 0,
             peakRA: 0, peakDec: 0, stepCount: 0,
+            raAggression: 0.7, decAggression: 0.7,
             lastAlert: null, lastSettleStatus: null, calProgress: null, calDetails: null,
             recentSteps: []
         },
+        // Text of the guiding alert the user dismissed; the alert row hides
+        // while guider.lastAlert equals this, so a stale WS re-broadcast of
+        // the same message doesn't pop it back. A new alert text shows again.
+        guideAlertDismissed: null,
         showCalReview: false,
         guiderHost: 'localhost',
         guiderPort: 4400,
@@ -20096,6 +20101,24 @@ function ninaApp() {
             try { await this.apiPost('/api/guider/find-star'); this.toast('Auto-selecting star', 'ok'); }
             catch (e) { this.toast('Find star failed', 'error'); }
         },
+        // Set RA/Dec aggressiveness (each a 0..1.5 fraction). Pass null for an
+        // axis to leave it unchanged. Optimistically updates the local state so
+        // the slider label tracks immediately, then PUTs both values; the
+        // server persists them on the rig and applies them to the live guider.
+        async setGuideAggression(ra, dec) {
+            if (ra != null) this.guider.raAggression = ra;
+            if (dec != null) this.guider.decAggression = dec;
+            try {
+                await this.apiFetch('/api/guider/settings/aggression', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ra: this.guider.raAggression,
+                        dec: this.guider.decAggression
+                    })
+                });
+            } catch (e) { this.toast('Aggression update failed: ' + (e.message || e), 'error'); }
+        },
         async guiderClearHistory() {
             try {
                 await this.apiPost('/api/guider/clear-history');
@@ -22840,6 +22863,7 @@ function ninaApp() {
                         paused: g.paused || false,
                         looping: g.looping || false,
                         settling: g.settling || false,
+                        dithering: g.dithering || false,
                         pixelScale: g.pixelScale || 0,
                         rmsRA: g.rmsRA || 0,
                         rmsDec: g.rmsDec || 0,
@@ -22847,6 +22871,11 @@ function ninaApp() {
                         peakRA: g.peakRA || 0,
                         peakDec: g.peakDec || 0,
                         stepCount: g.stepCount || 0,
+                        // Aggression isn't in the WS tick (it's a setting, not
+                        // telemetry); preserve whatever loadGuiderStatus/REST
+                        // populated so the sliders don't snap back to default.
+                        raAggression: g.raAggression ?? this.guider.raAggression ?? 0.7,
+                        decAggression: g.decAggression ?? this.guider.decAggression ?? 0.7,
                         lastAlert: g.lastAlert || null,
                         lastSettleStatus: g.lastSettleStatus || null,
                         calProgress: g.calProgress || null,

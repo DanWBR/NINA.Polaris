@@ -11213,6 +11213,22 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     background:rgba(20,22,30,0.85); color:#ffd54f; border:1px solid #4caf50;
     border-radius:6px; padding:4px 12px; font-size:12px; font-family:monospace;
     white-space:nowrap; pointer-events:none; z-index:5; }
+/* Dither / settle banner over the guide-cam view (ASIAIR-style). Amber for
+   an active dither, blue for a plain post-start settle. Pulses to draw the
+   eye while guiding is intentionally chasing the star. */
+.phd2-dither-banner { position:absolute; left:50%; top:10px; transform:translateX(-50%);
+    background:rgba(180,120,10,0.92); color:#fff; border:1px solid #ffd54f;
+    border-radius:6px; padding:4px 12px; font-size:12px; font-weight:600;
+    white-space:nowrap; pointer-events:none; z-index:6;
+    animation: panic-pulse 1.6s ease-in-out infinite; }
+.phd2-settle-banner { background:rgba(40,90,160,0.92); border-color:#64b5f6; }
+
+/* RA/Dec aggressiveness sliders in the GUIDE sidebar. */
+.guide-aggr { margin-bottom:10px; display:flex; flex-direction:column; gap:8px; }
+.guide-aggr-row { display:flex; flex-direction:column; gap:2px; }
+.guide-aggr-row label { font-size:11px; color:#bbb; display:flex; justify-content:space-between; }
+.guide-aggr-row input[type=range] { width:100%; }
+
 .phd2-rightcol { display:flex; flex-direction:column; gap:8px; }
 .phd2-bullseye, .phd2-profile { background:#0a0a0c; border:1px solid #222; border-radius:6px; padding:6px; }
 .phd2-panel-title { font-size:11px; color:#888; margin-bottom:4px; }

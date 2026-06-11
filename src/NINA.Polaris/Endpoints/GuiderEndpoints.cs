@@ -20,13 +20,16 @@ public static class GuiderEndpoints {
     public static void MapGuiderEndpoints(this WebApplication app) {
         var group = app.MapGroup("/api/guider");
 
-        group.MapGet("/status", (ActiveGuiderProvider guiders, PHD2Client phd2) => {
+        group.MapGet("/status", (ActiveGuiderProvider guiders, PHD2Client phd2, ProfileService profiles) => {
             var g = guiders.Active;
+            var rig = profiles.ActiveEquipmentProfile;
             if (!g.IsConnected)
                 return Results.Ok(new {
                     backend = g.Backend,
                     connected = false,
-                    appState = "Stopped"
+                    appState = "Stopped",
+                    raAggression = rig?.NativeRaAggression ?? 0.70,
+                    decAggression = rig?.NativeDecAggression ?? 0.70
                 });
 
             return Results.Ok(new {
@@ -38,6 +41,7 @@ public static class GuiderEndpoints {
                 paused = g.IsPaused,
                 looping = g.IsLooping,
                 settling = g.IsSettling,
+                dithering = g.IsDithering,
                 pixelScale = g.PixelScale,
                 rmsRA = g.RmsRA,
                 rmsDec = g.RmsDec,
@@ -48,9 +52,30 @@ public static class GuiderEndpoints {
                 lastAlert = g.LastAlert,
                 lastAlertAt = g.LastAlertAt,
                 lastSettleStatus = g.LastSettleStatus,
+                // RA/Dec aggression (0..2) so the UI can show + edit the
+                // ASIAIR-style 10..150% sliders. Profile-backed, applies live.
+                raAggression = rig?.NativeRaAggression ?? 0.70,
+                decAggression = rig?.NativeDecAggression ?? 0.70,
                 // PHD2-only calibration snapshot (null when native).
                 calibration = g.Backend == "phd2" ? phd2.Calibration : null
             });
+        });
+
+        // RA/Dec aggression (0.1..1.5 typical; clamp 0..2). Persisted on the
+        // active rig and applied live to the native guider's algorithms.
+        group.MapPut("/settings/aggression", (AggressionDto dto,
+                ActiveGuiderProvider guiders, ProfileService profiles) => {
+            var rig = profiles.ActiveEquipmentProfile;
+            if (rig == null) return Results.BadRequest(new { error = "No active rig." });
+            double ra = Math.Clamp(dto.Ra, 0.0, 2.0);
+            double dec = Math.Clamp(dto.Dec, 0.0, 2.0);
+            profiles.UpdateEquipmentProfile(rig.Id, r => {
+                r.NativeRaAggression = ra;
+                r.NativeDecAggression = dec;
+            });
+            // Apply to the running native guider without a restart.
+            (guiders.Active as NativeGuider)?.ApplyAlgorithmSettings();
+            return Results.Ok(new { raAggression = ra, decAggression = dec });
         });
 
         group.MapGet("/equipment", async (PHD2Client phd2) => {
@@ -675,4 +700,5 @@ public static class GuiderEndpoints {
     public record SelectStarRequest(double X, double Y);
     public record SyncProfileRequest(string? RigId);
     public record AlgoParamRequest(string Axis, string Name, double Value);
+    public record AggressionDto(double Ra, double Dec);
 }

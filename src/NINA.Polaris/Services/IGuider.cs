@@ -46,6 +46,18 @@ public interface IGuider {
     bool IsLooping { get; }
     bool IsSettling { get; }
 
+    /// <summary>True while a dither offset is being chased back to a new lock
+    /// point (until its settle completes). Lets the UI show a distinct
+    /// "Dithering" state. Backends without a separate dither phase return
+    /// false (PHD2 surfaces dither via its own settle reporting).</summary>
+    bool IsDithering => false;
+
+    /// <summary>RA/Dec correction aggressiveness (0..2 fraction of the error
+    /// corrected per frame). Surfaced so the UI shows the live value; native
+    /// reads it from the rig profile. PHD2 manages its own, so defaults stand.</summary>
+    double RaAggression => 0.70;
+    double DecAggression => 0.70;
+
     /// <summary>Image scale in arcsec/pixel of the guide camera + scope.</summary>
     double PixelScale { get; }
 

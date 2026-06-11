@@ -281,6 +281,7 @@ public class ProfileService {
             NativeMinMoveRaPx = src.NativeMinMoveRaPx,
             NativeMinMoveDecPx = src.NativeMinMoveDecPx,
             NativeRaAggression = src.NativeRaAggression,
+            NativeDecAggression = src.NativeDecAggression,
             NativeRaHysteresis = src.NativeRaHysteresis,
             NativeMaxRaDurationMs = src.NativeMaxRaDurationMs,
             NativeMaxDecDurationMs = src.NativeMaxDecDurationMs,
@@ -958,6 +959,11 @@ public class EquipmentProfile {
     /// <summary>Native guider RA hysteresis-algorithm aggression
     /// (0..2, fraction of the error corrected each frame). Default 0.70.</summary>
     public double NativeRaAggression { get; set; } = 0.70;
+
+    /// <summary>Native guider Dec algorithm aggression (0..2, fraction of the
+    /// error corrected each frame). Default 0.70. Separate from RA so each
+    /// axis can be tuned independently (ASIAIR-style 10..150%).</summary>
+    public double NativeDecAggression { get; set; } = 0.70;
 
     /// <summary>Native guider RA hysteresis weight (0..0.99, fraction of
     /// the previous move blended into this one). Default 0.10.</summary>

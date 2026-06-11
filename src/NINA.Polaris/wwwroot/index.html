@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260610-autorun-scroll">
+    <link rel="stylesheet" href="/css/app.css?v=20260610-guide-fixes">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -3522,6 +3522,17 @@
                             <div class="phd2-cam-empty text-muted" x-show="!guider.view">Loop or guide to see the guide frame</div>
                             <div class="phd2-cal-banner" x-show="guider.calibrating && guider.calProgress"
                                  x-text="'Calibrating — ' + guider.calProgress"></div>
+                            <!-- Dither / settle banner (ASIAIR-style). Dither
+                                 takes precedence; while it's up the RMS/error
+                                 history is frozen server-side so the excursion
+                                 isn't counted as guiding error. -->
+                            <div class="phd2-dither-banner" x-show="guider.dithering" x-cloak>
+                                ⤡ Dithering — settling to &lt; <span x-text="(guiderSettlePixels ?? 1.5)"></span> px…
+                            </div>
+                            <div class="phd2-dither-banner phd2-settle-banner"
+                                 x-show="guider.settling && !guider.dithering" x-cloak>
+                                Settling…
+                            </div>
                         </div>
                         <div class="phd2-rightcol">
                             <div class="phd2-bullseye">
@@ -3654,15 +3665,43 @@
                                     :class="guiderEquipment.mount?.connected ? 'text-ok' : 'text-warn'"></strong>
                         </div>
                         <div class="info-row"><span>Pixel Scale:</span><strong x-text="guider.pixelScale ? guider.pixelScale.toFixed(3) + '&quot;/px' : '--'"></strong></div>
-                        <div class="info-row"><span>RMS RA:</span><strong x-text="guider.rmsRA?.toFixed(2) + '&quot;'" :class="guider.rmsRA < 1 ? 'text-ok' : 'text-warn'"></strong></div>
-                        <div class="info-row"><span>RMS Dec:</span><strong x-text="guider.rmsDec?.toFixed(2) + '&quot;'" :class="guider.rmsDec < 1 ? 'text-ok' : 'text-warn'"></strong></div>
-                        <div class="info-row"><span>Total RMS:</span><strong x-text="guider.rmsTotal?.toFixed(2) + '&quot;'" :class="guider.rmsTotal < 1.5 ? 'text-ok' : 'text-warn'"></strong></div>
+                        <!-- RMS RA/Dec/Total: shown here ONLY for the PHD2
+                             backend. The native backend already renders these
+                             in the graph HUD above, so repeating them here was
+                             the duplicate the operator saw. Peaks stay (the HUD
+                             doesn't show them). -->
+                        <template x-if="guider.backend !== 'native'">
+                            <div>
+                                <div class="info-row"><span>RMS RA:</span><strong x-text="guider.rmsRA?.toFixed(2) + '&quot;'" :class="guider.rmsRA < 1 ? 'text-ok' : 'text-warn'"></strong></div>
+                                <div class="info-row"><span>RMS Dec:</span><strong x-text="guider.rmsDec?.toFixed(2) + '&quot;'" :class="guider.rmsDec < 1 ? 'text-ok' : 'text-warn'"></strong></div>
+                                <div class="info-row"><span>Total RMS:</span><strong x-text="guider.rmsTotal?.toFixed(2) + '&quot;'" :class="guider.rmsTotal < 1.5 ? 'text-ok' : 'text-warn'"></strong></div>
+                            </div>
+                        </template>
                         <div class="info-row"><span>Peak RA:</span><strong x-text="guider.peakRA?.toFixed(2) + '&quot;'"></strong></div>
                         <div class="info-row"><span>Peak Dec:</span><strong x-text="guider.peakDec?.toFixed(2) + '&quot;'"></strong></div>
-                        <div class="info-row" x-show="guider.settling"><span class="text-warn">Settling…</span></div>
-                        <div class="info-row" x-show="guider.lastSettleStatus === 'done'"><span class="text-ok">Settled</span></div>
-                        <div class="info-row" x-show="guider.lastSettleStatus === 'failed'"><span class="text-danger">Settle failed</span></div>
-                        <div class="info-row" x-show="guider.lastAlert"><span class="text-danger">Alert:</span><strong class="text-danger" x-text="guider.lastAlert"></strong></div>
+                        <!-- Dither / settle status. Dithering takes precedence
+                             over plain settling so the operator sees that the
+                             excursion is intentional (and that RMS is frozen). -->
+                        <div class="info-row" x-show="guider.dithering">
+                            <span class="text-warn">⤡ Dithering — settling…</span></div>
+                        <div class="info-row" x-show="guider.settling && !guider.dithering">
+                            <span class="text-warn">Settling…</span></div>
+                        <div class="info-row" x-show="!guider.settling && guider.lastSettleStatus === 'done'">
+                            <span class="text-ok">✓ Settled</span></div>
+                        <div class="info-row" x-show="!guider.settling && guider.lastSettleStatus === 'failed'">
+                            <span class="text-danger">Settle failed</span></div>
+                        <!-- Alert with a dismiss ×. The backend clears the alert
+                             when a fresh guiding run starts; the client guard
+                             (guideAlertDismissed) hides one the user dismissed
+                             so a stale WS re-broadcast doesn't bring it back,
+                             while a genuinely NEW alert text still shows. -->
+                        <div class="info-row" x-show="guider.lastAlert && guider.lastAlert !== guideAlertDismissed"
+                             style="align-items:flex-start;gap:6px">
+                            <span class="text-danger">Alert:</span>
+                            <strong class="text-danger" style="flex:1" x-text="guider.lastAlert"></strong>
+                            <button class="btn btn-sm btn-icon-only" title="Dismiss"
+                                    @click="guideAlertDismissed = guider.lastAlert">&times;</button>
+                        </div>
                     </div>
 
                     <div x-show="guiderDriver === 'native'">
@@ -3678,6 +3717,30 @@
                             title="Review the last calibration (rates, angles, plot)">
                         ⊹ Calibration details
                     </button>
+
+                    <!-- RA/Dec aggressiveness (ASIAIR-style, 10–150%). The
+                         percentage = fraction of the measured error corrected
+                         each frame. Lower = gentler/slower, higher = snappier
+                         but can oscillate. Applies live to the running guider
+                         (no restart). Persisted on the active rig. -->
+                    <div class="guide-aggr">
+                        <div class="guide-aggr-row">
+                            <label>RA aggressiveness
+                                <span class="text-muted" x-text="Math.round((guider.raAggression ?? 0.7) * 100) + '%'"></span>
+                            </label>
+                            <input type="range" min="10" max="150" step="5"
+                                   :value="Math.round((guider.raAggression ?? 0.7) * 100)"
+                                   @change="setGuideAggression(($event.target.value/100), null)">
+                        </div>
+                        <div class="guide-aggr-row">
+                            <label>Dec aggressiveness
+                                <span class="text-muted" x-text="Math.round((guider.decAggression ?? 0.7) * 100) + '%'"></span>
+                            </label>
+                            <input type="range" min="10" max="150" step="5"
+                                   :value="Math.round((guider.decAggression ?? 0.7) * 100)"
+                                   @change="setGuideAggression(null, ($event.target.value/100))">
+                        </div>
+                    </div>
 
                     <!-- Review Calibration modal (ASIAIR / PHD2 style) -->
                     <div class="cal-review-backdrop" x-show="showCalReview" x-cloak
@@ -12570,7 +12633,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260610-autorun-fixes"></script>
+    <script src="/js/app.js?v=20260610-guide-fixes"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
