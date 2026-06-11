@@ -5494,6 +5494,11 @@ function ninaApp() {
                 this.histo.blackFrac = Math.max(0, Math.min(1, this.stretchBlack));
                 this.histo.whiteFrac = Math.max(0, Math.min(1, this.stretchWhite));
             }
+            // While a handle is being dragged, freeze the drawn X range so the
+            // pointer→fraction reference can't shift under the drag (the same
+            // drift the editor histogram had). It re-frames on the next redraw
+            // after release.
+            if (this._histoDrag) return;
             const maxV = this.histo._maxVal || 65535;
             if (this.histoZoom) {
                 let lo = (this.histo.min / maxV) - 0.01;
@@ -5589,7 +5594,12 @@ function ninaApp() {
                 this.stretchWhite = this.histo.whiteFrac;
                 this.stretchAuto = false;
             }
-            this._histoDrag = { which, rect: graph.getBoundingClientRect() };
+            // Capture the rect + display range now and use them for the whole
+            // drag so the pointer→fraction mapping is rock-stable.
+            this._histoDrag = {
+                which, rect: graph.getBoundingClientRect(),
+                lo: this.histo.dispLo, hi: this.histo.dispHi
+            };
             const move = (e) => this._histoDragMove(e);
             const up = () => {
                 window.removeEventListener('pointermove', move);
@@ -5604,7 +5614,7 @@ function ninaApp() {
         _histoDragMove(e) {
             const d = this._histoDrag;
             if (!d) return;
-            const lo = this.histo.dispLo, hi = this.histo.dispHi;
+            const lo = d.lo, hi = d.hi;   // captured at drag start; stable
             const span = Math.max(1e-6, hi - lo);
             let fx = (e.clientX - d.rect.left) / Math.max(1, d.rect.width);
             fx = Math.max(0, Math.min(1, fx));
