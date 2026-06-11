@@ -56,6 +56,7 @@ internal static class AsiNative {
     public enum ASI_CONTROL_TYPE {
         ASI_GAIN = 0,
         ASI_EXPOSURE = 1,
+        ASI_OFFSET = 5,             // sensor bias pedestal (a.k.a. brightness)
         ASI_TEMPERATURE = 8,        // returns 10 * temperature (C)
         ASI_COOLER_POWER_PERC = 15, // 0..100
         ASI_TARGET_TEMP = 16,       // C (not *10)

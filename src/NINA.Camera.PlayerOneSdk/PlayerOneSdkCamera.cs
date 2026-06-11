@@ -38,6 +38,7 @@ public sealed class PlayerOneSdkCamera : ICamera {
     private BayerPatternEnum _bayer = BayerPatternEnum.None;
     private bool _isColor, _supportsCooler;
     private int _gainMin, _gainMax;
+    private int _offset;
 
     private int _gain;
     private double _exposureSec = 0.03;
@@ -123,6 +124,7 @@ public sealed class PlayerOneSdkCamera : ICamera {
         POASetImageSize(_cameraId, _maxX, _maxY);
         POASetImageStartPos(_cameraId, 0, 0);
         _gain = ReadInt(POAConfig.POA_GAIN);
+        _offset = ReadInt(POAConfig.POA_OFFSET);
         _connected = true;
         State = CameraStates.Idle;
     }, ct);
@@ -184,7 +186,7 @@ public sealed class PlayerOneSdkCamera : ICamera {
             // be flipped to RAW8 like an external INDI driver can, but this
             // keeps the native backends consistent + future-proof.
             POASetImageFormat(_cameraId, _imgFormat);
-            ApplyExposureGain(exposureSeconds, opts?.Gain);
+            ApplyExposureGain(exposureSeconds, opts?.Gain, opts?.Offset);
             GetRoi(out var w, out var h);
             var bytes = new byte[(long)w * h * BytesPerPixel()];
             int waitMs = (int)(exposureSeconds * 1000 * 2 + 500);
@@ -254,12 +256,16 @@ public sealed class PlayerOneSdkCamera : ICamera {
         }
     }
 
-    private void ApplyExposureGain(double exposureSeconds, int? gainOverride) {
+    private void ApplyExposureGain(double exposureSeconds, int? gainOverride, int? offsetOverride = null) {
         _exposureSec = exposureSeconds > 0 ? exposureSeconds : _exposureSec;
         POASetConfig(_cameraId, POAConfig.POA_EXPOSURE,
             POAConfigValue.Int((int)Math.Round(_exposureSec * 1_000_000)), POABool.POA_FALSE);
         if (gainOverride is int g) _gain = g;
         POASetConfig(_cameraId, POAConfig.POA_GAIN, POAConfigValue.Int(_gain), POABool.POA_FALSE);
+        if (offsetOverride is int o) {
+            _offset = o;
+            POASetConfig(_cameraId, POAConfig.POA_OFFSET, POAConfigValue.Int(_offset), POABool.POA_FALSE);
+        }
     }
 
     private int BytesPerPixel() => _imgFormat == POAImgFormat.POA_RAW16 ? 2 : 1;
@@ -286,6 +292,7 @@ public sealed class PlayerOneSdkCamera : ICamera {
         var meta = new ImageMetaData();
         meta.Camera.Name = DeviceName;
         meta.Camera.Gain = _gain;
+        meta.Camera.Offset = _offset;
         meta.Camera.PixelSizeX = _pixelSize;
         meta.Camera.PixelSizeY = _pixelSize;
         return new BaseImageData(pixels, props, meta);

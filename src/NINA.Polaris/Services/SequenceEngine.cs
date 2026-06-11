@@ -45,6 +45,7 @@ public class SequenceEngine {
     private readonly ActiveGuiderProvider _guiders;
     private readonly MeridianFlipService _meridianFlip;
     private readonly ImageWriterService _imageWriter;
+    private readonly ProfileService _profile;
     private readonly ILogger<SequenceEngine> _logger;
 
     private CancellationTokenSource? _cts;
@@ -80,6 +81,7 @@ public class SequenceEngine {
         ImageWriterService imageWriter,
         NINA.Polaris.Services.External.GraXpertService graXpert,
         FlatWizardService flatWizard,
+        ProfileService profile,
         ILogger<SequenceEngine> logger) {
         _equip = equip;
         _relay = relay;
@@ -90,6 +92,7 @@ public class SequenceEngine {
         _imageWriter = imageWriter;
         _graXpert = graXpert;
         _flatWizard = flatWizard;
+        _profile = profile;
         _logger = logger;
     }
 
@@ -350,8 +353,14 @@ public class SequenceEngine {
                     // (often a low/8-bit default), so 60 s lights came back
                     // near-black even though item.Gain was only being stamped
                     // into the FITS header at save time.
+                    // Offset is a per-rig setting (DefaultOffset), not per-item:
+                    // a sensible bias pedestal keeps the background off the
+                    // left wall of the histogram. Sent on every frame alongside
+                    // gain so the camera isn't left on a stale/zero offset.
+                    var rigOffset = _profile.ActiveEquipmentProfile?.DefaultOffset ?? 0;
                     var capOpts = new NINA.Image.Interfaces.CaptureOptions(
                         Gain: item.Gain > 0 ? item.Gain : (int?)null,
+                        Offset: rigOffset > 0 ? rigOffset : (int?)null,
                         BinX: item.Binning > 0 ? item.Binning : (int?)null,
                         BinY: item.Binning > 0 ? item.Binning : (int?)null,
                         ImageType: imageType,

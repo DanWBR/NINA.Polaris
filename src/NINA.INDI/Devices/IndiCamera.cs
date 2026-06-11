@@ -217,6 +217,25 @@ public class IndiCamera : ICamera {
         } catch { /* driver rejected the value (out of range?), non-fatal */ }
     }
 
+    /// <summary>Write offset into CCD_CONTROLS only when the driver advertises
+    /// it. Same casing tolerance as gain (Offset / offset / OFFSET). Offset is
+    /// the sensor bias pedestal — leaving it at 0 pins the background near
+    /// black and clips the left of the histogram; most OSC/CMOS rigs want a
+    /// small positive offset (per-rig DefaultOffset).</summary>
+    private async Task TrySetOffsetAsync(int offset, CancellationToken ct) {
+        var ctrl = _client.GetProperty(DeviceName, "CCD_CONTROLS") as IndiNumberProperty;
+        if (ctrl == null) return;
+        string? key = null;
+        foreach (var candidate in new[] { "Offset", "offset", "OFFSET" }) {
+            if (ctrl.Values.ContainsKey(candidate)) { key = candidate; break; }
+        }
+        if (key == null) return;   // driver has no offset element
+        try {
+            await _client.SetNumberAsync(DeviceName, "CCD_CONTROLS",
+                new Dictionary<string, double> { [key] = offset }, ct);
+        } catch { /* out of range / rejected — non-fatal */ }
+    }
+
     // ── Capture bit-depth (RAW16) enforcement ──────────────────────────
     // The SVBONY SV405CC (and ASI) INDI drivers expose a switch to pick the
     // frame format. If it gets left on RAW8 — e.g. after a fast video-stream
@@ -416,6 +435,9 @@ public class IndiCamera : ICamera {
         }
         if (opts?.Gain is int g) {
             await TrySetGainAsync(g, ct);
+        }
+        if (opts?.Offset is int off) {
+            await TrySetOffsetAsync(off, ct);
         }
 
         await _client.SetNumberAsync(DeviceName, "CCD_EXPOSURE",

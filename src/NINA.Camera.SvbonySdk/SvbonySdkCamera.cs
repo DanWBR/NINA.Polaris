@@ -40,6 +40,7 @@ public sealed class SvbonySdkCamera : ICamera {
     private BayerPatternEnum _bayer = BayerPatternEnum.None;
     private bool _isColor;
     private int _gainMin, _gainMax;
+    private int _offset;
     private bool _supportsCooler;
     private bool _isTriggerCam;
 
@@ -152,6 +153,9 @@ public sealed class SvbonySdkCamera : ICamera {
         SVBSetROIFormat(_cameraId, 0, 0, _maxX, _maxY, 1);
 
         _gain = ReadControl(SVB_CONTROL_TYPE.SVB_GAIN);
+        // SVBony exposes the sensor bias pedestal ("offset") as the black-level
+        // control.
+        _offset = ReadControl(SVB_CONTROL_TYPE.SVB_BLACK_LEVEL);
         _connected = true;
         State = CameraStates.Idle;
     }, ct);
@@ -214,7 +218,7 @@ public sealed class SvbonySdkCamera : ICamera {
         lock (_gate) {
             if (_streaming) throw new InvalidOperationException(
                 "Stop the video stream before taking a still exposure.");
-            ApplyExposureGain(exposureSeconds, opts?.Gain);
+            ApplyExposureGain(exposureSeconds, opts?.Gain, opts?.Offset);
             SVBSetOutputImageType(_cameraId, _imgType);
 
             GetRoi(out var w, out var h);
@@ -327,12 +331,16 @@ public sealed class SvbonySdkCamera : ICamera {
 
     // ----- helpers -----
 
-    private void ApplyExposureGain(double exposureSeconds, int? gainOverride) {
+    private void ApplyExposureGain(double exposureSeconds, int? gainOverride, int? offsetOverride = null) {
         _exposureSec = exposureSeconds > 0 ? exposureSeconds : _exposureSec;
         SVBSetControlValue(_cameraId, SVB_CONTROL_TYPE.SVB_EXPOSURE,
             new CLong((nint)Math.Round(_exposureSec * 1_000_000)), 0); // microseconds
         if (gainOverride is int g) _gain = g;
         SVBSetControlValue(_cameraId, SVB_CONTROL_TYPE.SVB_GAIN, new CLong(_gain), 0);
+        if (offsetOverride is int o) {
+            _offset = o;
+            SVBSetControlValue(_cameraId, SVB_CONTROL_TYPE.SVB_BLACK_LEVEL, new CLong(_offset), 0);
+        }
     }
 
     private int BytesPerPixel() => _imgType == SVB_IMG_TYPE.SVB_IMG_RAW16 ? 2 : 1;
@@ -365,6 +373,7 @@ public sealed class SvbonySdkCamera : ICamera {
         var meta = new ImageMetaData();
         meta.Camera.Name = DeviceName;
         meta.Camera.Gain = _gain;
+        meta.Camera.Offset = _offset;
         meta.Camera.PixelSizeX = _pixelSize;
         meta.Camera.PixelSizeY = _pixelSize;
         return new BaseImageData(pixels, props, meta);

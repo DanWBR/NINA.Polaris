@@ -174,6 +174,7 @@ public record VideoStreamOptions(
 /// about before capture.</summary>
 public record CaptureOptions(
     int? Gain = null,
+    int? Offset = null,
     int? Iso = null,
     int? BinX = null,
     int? BinY = null,

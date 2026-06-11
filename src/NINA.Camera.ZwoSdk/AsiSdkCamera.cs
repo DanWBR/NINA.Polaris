@@ -39,6 +39,7 @@ public sealed class AsiSdkCamera : ICamera {
     private BayerPatternEnum _bayer = BayerPatternEnum.None;
     private bool _isColor, _supportsCooler;
     private int _gainMin, _gainMax;
+    private int _offset;
 
     private int _gain;
     private double _exposureSec = 0.03;
@@ -134,6 +135,7 @@ public sealed class AsiSdkCamera : ICamera {
         ASISetROIFormat(_cameraId, _maxX, _maxY, 1, _imgType);
         ASISetStartPos(_cameraId, 0, 0);
         _gain = ReadControl(ASI_CONTROL_TYPE.ASI_GAIN);
+        _offset = ReadControl(ASI_CONTROL_TYPE.ASI_OFFSET);
         _connected = true;
         State = CameraStates.Idle;
     }, ct);
@@ -195,7 +197,7 @@ public sealed class AsiSdkCamera : ICamera {
             // consistent and guards against any future stream/ROI path that
             // might change the format.
             ApplyRoi();
-            ApplyExposureGain(exposureSeconds, opts?.Gain);
+            ApplyExposureGain(exposureSeconds, opts?.Gain, opts?.Offset);
             GetRoi(out var w, out var h);
             var bytes = new byte[(long)w * h * BytesPerPixel()];
             State = CameraStates.Exposing;
@@ -282,12 +284,16 @@ public sealed class AsiSdkCamera : ICamera {
         }
     }
 
-    private void ApplyExposureGain(double exposureSeconds, int? gainOverride) {
+    private void ApplyExposureGain(double exposureSeconds, int? gainOverride, int? offsetOverride = null) {
         _exposureSec = exposureSeconds > 0 ? exposureSeconds : _exposureSec;
         ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_EXPOSURE,
             new CLong((nint)Math.Round(_exposureSec * 1_000_000)), 0);
         if (gainOverride is int g) _gain = g;
         ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_GAIN, new CLong(_gain), 0);
+        if (offsetOverride is int o) {
+            _offset = o;
+            ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_OFFSET, new CLong(_offset), 0);
+        }
     }
 
     private int BytesPerPixel() => _imgType == ASI_IMG_TYPE.ASI_IMG_RAW16 ? 2 : 1;
@@ -311,6 +317,7 @@ public sealed class AsiSdkCamera : ICamera {
         var meta = new ImageMetaData();
         meta.Camera.Name = DeviceName;
         meta.Camera.Gain = _gain;
+        meta.Camera.Offset = _offset;
         meta.Camera.PixelSizeX = _pixelSize;
         meta.Camera.PixelSizeY = _pixelSize;
         return new BaseImageData(pixels, props, meta);
