@@ -9782,8 +9782,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <button class="btn btn-sm btn-danger"
                                 @click="rebootDevice()"
                                 :disabled="!power.canReboot || power.rebooting">
-                            <span x-show="!power.rebooting">⏻ Reboot device</span>
+                            <span x-show="!power.rebooting">⟳ Reboot device</span>
                             <span x-show="power.rebooting">Rebooting…</span>
+                        </button>
+                        <button class="btn btn-sm btn-danger"
+                                @click="shutdownDevice()"
+                                :disabled="!power.canShutdown || power.shuttingDown">
+                            <span x-show="!power.shuttingDown">⏻ Shut down device</span>
+                            <span x-show="power.shuttingDown">Shutting down…</span>
                         </button>
                     </div>
                     <p class="text-muted" x-show="!power.canReboot && power.loaded"
@@ -12855,7 +12861,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260611-advseq"></script>
+    <script src="/js/app.js?v=20260611-shutdown"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

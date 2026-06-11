@@ -66,6 +66,7 @@ public class PowerService {
         IsLinux && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("INVOCATION_ID"));
 
     public bool CanReboot => IsLinux || IsWindows;
+    public bool CanShutdown => IsLinux || IsWindows;
 
     public PowerInfo GetInfo() {
         bool autoSupported = false, autoEnabled = false;
@@ -83,6 +84,7 @@ public class PowerService {
             UnderSystemd: UnderSystemd,
             CanRestartApp: true,
             CanReboot: CanReboot,
+            CanShutdown: CanShutdown,
             AutoStartSupported: autoSupported,
             AutoStartEnabled: autoEnabled);
     }
@@ -144,6 +146,28 @@ public class PowerService {
                 _logger.LogWarning("systemctl reboot returned {Code}: {Err}", r.ExitCode, r.Stderr);
         } else if (IsWindows) {
             await RunAsync("shutdown", "/r /t 0", ignoreExit: true, timeoutMs: 8_000);
+        }
+    }
+
+    // ---- Shutdown ------------------------------------------------------
+    public PowerActionResult ScheduleShutdown() {
+        if (!CanShutdown)
+            return PowerActionResult.Fail("Device shutdown is not supported on this platform.", 501);
+        _ = Task.Run(async () => {
+            await Task.Delay(700);
+            try { await DoShutdownAsync(); }
+            catch (Exception ex) { _logger.LogError(ex, "Shutdown failed"); }
+        });
+        return PowerActionResult.Okay("Shutting the device down…");
+    }
+
+    private async Task DoShutdownAsync() {
+        if (IsLinux) {
+            var r = await RunAsync("systemctl", "poweroff", ignoreExit: true, timeoutMs: 8_000);
+            if (r.ExitCode != 0)
+                _logger.LogWarning("systemctl poweroff returned {Code}: {Err}", r.ExitCode, r.Stderr);
+        } else if (IsWindows) {
+            await RunAsync("shutdown", "/s /t 0", ignoreExit: true, timeoutMs: 8_000);
         }
     }
 
@@ -298,6 +322,7 @@ public record PowerInfo(
     bool UnderSystemd,
     bool CanRestartApp,
     bool CanReboot,
+    bool CanShutdown,
     bool AutoStartSupported,
     bool AutoStartEnabled);
 

@@ -350,6 +350,13 @@ public static class SystemEndpoints {
                 : Results.Json(new { ok = false, error = r.Message }, statusCode: r.StatusCode);
         });
 
+        group.MapPost("/shutdown", (PowerService power) => {
+            var r = power.ScheduleShutdown();
+            return r.Ok
+                ? Results.Ok(new { ok = true, message = r.Message })
+                : Results.Json(new { ok = false, error = r.Message }, statusCode: r.StatusCode);
+        });
+
         group.MapPost("/autostart", (AutoStartRequest req, PowerService power) => {
             var r = power.SetAutoStart(req?.Enable ?? false);
             return r.Ok

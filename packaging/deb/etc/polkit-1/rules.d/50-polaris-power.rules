@@ -6,19 +6,21 @@
 //   1. Restart its OWN systemd unit (polaris.service) so the "Restart
 //      Polaris" button is instant instead of waiting for the
 //      Restart=on-failure fallback.
-//   2. Reboot the device ("Reboot device" button), via systemctl reboot
-//      which goes through logind.
+//   2. Reboot / power off the device ("Reboot device" / "Shut down device"
+//      buttons), via systemctl reboot|poweroff which go through logind.
 //
 // Without these, systemctl returns "Interactive authentication required"
 // and the action fails. Scope is intentionally narrow: only the polaris
 // user, only the polaris.service unit for manage-units, and only the
-// reboot login1 actions. Shutdown/poweroff are deliberately NOT granted.
+// reboot/power-off login1 actions.
 polkit.addRule(function(action, subject) {
     if (subject.user != "polaris") return;
 
-    // Reboot the whole device (systemctl reboot -> logind).
+    // Reboot / power off the whole device (systemctl reboot|poweroff -> logind).
     if (action.id == "org.freedesktop.login1.reboot"
-        || action.id == "org.freedesktop.login1.reboot-multiple-sessions") {
+        || action.id == "org.freedesktop.login1.reboot-multiple-sessions"
+        || action.id == "org.freedesktop.login1.power-off"
+        || action.id == "org.freedesktop.login1.power-off-multiple-sessions") {
         return polkit.Result.YES;
     }
 

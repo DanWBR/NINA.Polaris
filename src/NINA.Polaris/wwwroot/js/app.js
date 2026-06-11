@@ -951,9 +951,9 @@ function ninaApp() {
         // brief window before the process/device goes down.
         power: {
             platform: '', underSystemd: false,
-            canRestartApp: true, canReboot: false,
+            canRestartApp: true, canReboot: false, canShutdown: false,
             autoStartSupported: false, autoStartEnabled: false,
-            restarting: false, rebooting: false, autoStartBusy: false,
+            restarting: false, rebooting: false, shuttingDown: false, autoStartBusy: false,
             loaded: false
         },
 
@@ -18337,6 +18337,33 @@ function ninaApp() {
                 this.toast('Rebooting the device…', 'ok', 6000);
             } catch (e) {
                 this.toast('Rebooting the device…', 'ok', 6000);
+            }
+        },
+
+        async shutdownDevice() {
+            if (this.power.shuttingDown) return;
+            if (!this.power.canShutdown) {
+                this.toast('Device shutdown is not supported on this platform.', 'warn');
+                return;
+            }
+            const ok = await this._confirmAsync(
+                'Shut the whole device down now? Everything stops and the device ' +
+                'powers off. You will need to power it back on physically (there is ' +
+                'no remote way to turn it on again).',
+                { title: 'Shut down device', okLabel: 'Shut down', cancelLabel: 'Cancel', danger: true });
+            if (!ok) return;
+            this.power.shuttingDown = true;
+            try {
+                const r = await this.apiFetch('/api/system/shutdown', { method: 'POST' });
+                let j = {}; try { j = await r.json(); } catch { }
+                if (!r.ok) {
+                    this.toast(j.error || 'Shutdown failed', 'error');
+                    this.power.shuttingDown = false;
+                    return;
+                }
+                this.toast('Shutting the device down…', 'ok', 6000);
+            } catch (e) {
+                this.toast('Shutting the device down…', 'ok', 6000);
             }
         },
 
