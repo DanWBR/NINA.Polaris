@@ -5632,16 +5632,17 @@ function ninaApp() {
             let fx = (e.clientX - d.rect.left) / Math.max(1, d.rect.width);
             fx = Math.max(0, Math.min(1, fx));
             const frac = lo + fx * span;
-            const gap = 0.005;
+            // No hard limits: each handle is bounded only by its neighbours.
+            // black: 0 .. white, mid: black .. white, white: mid .. 1.
             if (d.which === 'black') {
-                this.stretchBlack = Math.max(0, Math.min(frac, this.stretchWhite - gap));
+                this.stretchBlack = Math.max(0, Math.min(frac, this.stretchWhite));
                 this.histo.blackFrac = this.stretchBlack;
             } else if (d.which === 'white') {
-                this.stretchWhite = Math.min(1, Math.max(frac, this.stretchBlack + gap));
+                this.stretchWhite = Math.min(1, Math.max(frac, this.stretchBlack));
                 this.histo.whiteFrac = this.stretchWhite;
             } else { // mid
                 const b = this.histo.blackFrac, w = this.histo.whiteFrac;
-                const cf = Math.max(b + gap, Math.min(frac, w - gap));
+                const cf = Math.max(b, Math.min(frac, w));
                 this.stretchMid = Math.max(0.001, Math.min(0.999, (cf - b) / Math.max(1e-6, w - b)));
                 this.histo.midFrac = cf;
             }
@@ -10284,27 +10285,23 @@ function ninaApp() {
             let fx = (e.clientX - d.rect.left) / Math.max(1, d.rect.width);
             fx = Math.max(0, Math.min(1, fx));
             const frac = d.lo + fx * span;
-            const gap = 0.01;
             // Switch the Stretch stage to manual on first drag, seeding from
             // wherever the handles currently sit so the image doesn't jump.
             const st = (this.editorState.edits.stretch && this.editorState.edits.stretch.auto === false)
                 ? this.editorState.edits.stretch
                 : { auto: false, black: this.editorHisto.blackFrac,
                     mid: this.editorHisto._auto.mid, white: this.editorHisto.whiteFrac };
+            // No hard limits: each handle is bounded only by its neighbours.
+            // black: 0 .. white, mid: black .. white, white: mid .. 1.
             if (d.which === 'black') {
-                // Don't let the black point fall BELOW the data floor: there's
-                // no data there, so the MTF would only lift the background
-                // (wash it out). Stops the handle at the start of the data.
-                const band = this._editorHistoDataBand();
-                const floor = band ? band.lo : 0;
-                st.black = Math.max(floor, Math.min(frac, this.editorHisto.whiteFrac - gap));
+                st.black = Math.max(0, Math.min(frac, this.editorHisto.whiteFrac));
                 this.editorHisto.blackFrac = st.black;
             } else if (d.which === 'white') {
-                st.white = Math.min(1, Math.max(frac, this.editorHisto.blackFrac + gap));
+                st.white = Math.min(1, Math.max(frac, this.editorHisto.blackFrac));
                 this.editorHisto.whiteFrac = st.white;
             } else { // mid
                 const b = this.editorHisto.blackFrac, w = this.editorHisto.whiteFrac;
-                const cf = Math.max(b + gap, Math.min(frac, w - gap));
+                const cf = Math.max(b, Math.min(frac, w));
                 st.mid = Math.max(0.001, Math.min(0.999, (cf - b) / Math.max(1e-6, w - b)));
                 this.editorHisto.midFrac = cf;
             }
