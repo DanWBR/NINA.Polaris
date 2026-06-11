@@ -191,13 +191,30 @@ public sealed class AsiSdkCamera : ICamera {
             ApplyExposureGain(exposureSeconds, opts?.Gain);
             GetRoi(out var w, out var h);
             var bytes = new byte[(long)w * h * BytesPerPixel()];
-            int waitMs = (int)(exposureSeconds * 1000 * 2 + 500);
             State = CameraStates.Exposing;
-            Check(ASIStartVideoCapture(_cameraId), "ASIStartVideoCapture");
+            // Snap (still) mode: ASIStartExposure integrates exactly the
+            // configured exposure. The old path used video capture
+            // (ASIStartVideoCapture + ASIGetVideoData), which hands back the
+            // frame already in flight, so long subs (15s/60s) came back early
+            // instead of integrating the requested time. bIsDark=0 (ASI has no
+            // mechanical shutter; the flag is informational).
+            Check(ASIStartExposure(_cameraId, 0), "ASIStartExposure");
             try {
-                Check(ASIGetVideoData(_cameraId, bytes, new CLong(bytes.Length), waitMs), "ASIGetVideoData");
+                long deadline = Environment.TickCount64 + (long)(exposureSeconds * 1000) + 8000;
+                while (true) {
+                    ct.ThrowIfCancellationRequested();
+                    Check(ASIGetExpStatus(_cameraId, out var st), "ASIGetExpStatus");
+                    if (st == ASI_EXPOSURE_STATUS.ASI_EXP_SUCCESS) break;
+                    if (st == ASI_EXPOSURE_STATUS.ASI_EXP_FAILED)
+                        throw new InvalidOperationException("ASI exposure failed.");
+                    if (Environment.TickCount64 > deadline)
+                        throw new TimeoutException("ASI exposure timed out.");
+                    // Poll coarse while integrating, fine once it should be done.
+                    Thread.Sleep(st == ASI_EXPOSURE_STATUS.ASI_EXP_WORKING ? 50 : 5);
+                }
+                Check(ASIGetDataAfterExp(_cameraId, bytes, new CLong(bytes.Length)), "ASIGetDataAfterExp");
             } finally {
-                try { ASIStopVideoCapture(_cameraId); } catch { }
+                try { ASIStopExposure(_cameraId); } catch { }
                 State = CameraStates.Idle;
             }
             return WrapFrame(bytes, w, h);

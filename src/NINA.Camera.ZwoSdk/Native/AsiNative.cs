@@ -113,4 +113,19 @@ internal static class AsiNative {
     [DllImport(DLL)] public static extern ASI_ERROR_CODE ASIStopVideoCapture(int iCameraID);
     [DllImport(DLL)] public static extern ASI_ERROR_CODE ASIGetVideoData(int iCameraID, byte[] pBuffer, CLong lBuffSize, int iWaitms);
     [DllImport(DLL)] public static extern ASI_ERROR_CODE ASIGetDroppedFrames(int iCameraID, out int piDropFrames);
+
+    // Snap (still) API: the correct path for long exposures. Video capture
+    // returns whatever frame is in flight and so returns short exposures
+    // early; ASIStartExposure integrates exactly the configured exposure.
+    [DllImport(DLL)] public static extern ASI_ERROR_CODE ASIStartExposure(int iCameraID, int bIsDark);
+    [DllImport(DLL)] public static extern ASI_ERROR_CODE ASIStopExposure(int iCameraID);
+    [DllImport(DLL)] public static extern ASI_ERROR_CODE ASIGetExpStatus(int iCameraID, out ASI_EXPOSURE_STATUS pExpStatus);
+    [DllImport(DLL)] public static extern ASI_ERROR_CODE ASIGetDataAfterExp(int iCameraID, byte[] pBuffer, CLong lBuffSize);
+
+    public enum ASI_EXPOSURE_STATUS {
+        ASI_EXP_IDLE = 0,
+        ASI_EXP_WORKING = 1,
+        ASI_EXP_SUCCESS = 2,
+        ASI_EXP_FAILED = 3,
+    }
 }
