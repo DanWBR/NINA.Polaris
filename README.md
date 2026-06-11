@@ -1828,6 +1828,81 @@ images calibrated with PCC, please credit:
 > & Kloppenborg, B. K. (2018). "The APASS Data Release 10." VizieR
 > On-line Data Catalog: II/336. https://www.aavso.org/apass
 
+## Acknowledgements
+
+N.I.N.A. Polaris stands on the shoulders of a large community of astronomy and
+open-source projects. Some we derive code from, some we studied as a reference,
+and many ship inside the capture and processing stack. The same list is shown
+in-app under **HELP -> Credits & acknowledgements**. Thank you to every author
+below. Per-component license details are in [`### Third-party licenses`](#third-party-licenses),
+the [`licenses/`](licenses/) folder, and the bundled `3rd-party-licenses` notice.
+
+**Built on**
+
+- [N.I.N.A. - Nighttime Imaging 'N' Astronomy](https://nighttime-imaging.eu/) - Stefan Berg and the N.I.N.A. contributors. Polaris is derived from N.I.N.A. (MPL-2.0).
+
+**Guiding & gear simulation**
+
+- [PHD2 - Open PHD Guiding](https://openphdguiding.org/) - Andy Galasso, Bret McKee, Craig Stark and the PHD2 contributors. Managed external guider, and the reference for the native autoguider + gear simulator (BSD-3-Clause).
+
+**Image processing & AI**
+
+- [GraXpert](https://www.graxpert.com/) - the GraXpert development team. Background extraction, denoise and deconvolution ONNX models, and the default auto-stretch algorithm.
+- [Siril](https://siril.org/) - the Free-Astro / Siril team. Optional external pre-processing and stacking.
+
+**Plate solving**
+
+- [ASTAP](https://www.hnsky.org/astap.htm) - Han Kleijn. Default fast offline solver and star database.
+- [Astrometry.net](https://astrometry.net/) - Dustin Lang, David W. Hogg and collaborators. Local and online blind solving.
+- [PlateSolve3](https://planewave.com/) - PlaneWave Instruments. Alternative solver.
+
+**Equipment, protocols & camera SDKs**
+
+- [INDI Library](https://indilib.org/) - Jasem Mutlaq and the INDI community. Primary equipment-control protocol.
+- [ASCOM Initiative & Alpaca](https://ascom-standards.org/) - the ASCOM Initiative. Windows COM drivers and the cross-platform Alpaca protocol.
+- [ZWO ASI SDK](https://www.zwoastro.com/) - Suzhou ZWO Co., Ltd.
+- [SVBony SDK](https://www.svbony.com/) - SVBONY.
+- [Player One SDK](https://player-one-astronomy.com/) - Player One Astronomy.
+- [ToupTek SDK](https://www.touptek-astro.com/) - ToupTek Astro.
+- [Nikon SDK](https://sdk.nikonimaging.com/) - Nikon Corporation.
+
+**Sky data, catalogs & astrometry**
+
+- [OpenNGC](https://github.com/mattiaverga/OpenNGC) - Mattia Verga. Bundled NGC/IC/Messier/Caldwell catalog (CC BY-SA 4.0).
+- [APASS - AAVSO Photometric All-Sky Survey](https://www.aavso.org/apass) - the AAVSO. Reference photometry for color calibration.
+- [Aladin Lite](https://aladin.cds.unistra.fr/) - CDS, Universite de Strasbourg / CNRS. Interactive sky atlas.
+- [Stellarium Web Engine](https://github.com/Stellarium/stellarium-web-engine) - Stellarium Labs / Guillaume Chereau and contributors. WebGL planetarium sky view (AGPL-3.0).
+- [Astronomy Engine](https://github.com/cosinekitty/astronomy) - Don Cross. High-precision ephemeris and coordinate math.
+
+**In-browser UI**
+
+- [Alpine.js](https://alpinejs.dev/) - Caleb Porzio and contributors.
+- [Chart.js](https://www.chartjs.org/) - the Chart.js contributors.
+- [OpenSeadragon](https://openseadragon.github.io/) - the OpenSeadragon contributors.
+- [noVNC](https://novnc.com/) - the noVNC authors (MPL-2.0).
+- [xterm.js](https://xtermjs.org/) - the xterm.js authors.
+- [SunCalc](https://github.com/mourner/suncalc) - Vladimir Agafonkin.
+- [SortableJS](https://sortablejs.github.io/Sortable/) - the SortableJS contributors.
+
+**Server & .NET**
+
+- [SkiaSharp](https://github.com/mono/SkiaSharp) - Microsoft, wrapping Google's Skia.
+- [ONNX Runtime](https://onnxruntime.ai/) - Microsoft. Runs the GraXpert AI models in the browser.
+- [YARP](https://github.com/microsoft/reverse-proxy) - Microsoft. Reverse proxy for embedded device web UIs.
+- [.NET Community Toolkit (MVVM)](https://github.com/CommunityToolkit/dotnet) - the .NET Foundation.
+- [K4os.Compression.LZ4](https://github.com/MiloszKrajewski/K4os.Compression.LZ4) - Milosz Krajewski.
+- [LettuceEncrypt](https://github.com/natemcmaster/LettuceEncrypt) - Nate McMaster.
+- [Serilog](https://serilog.net/) - the Serilog contributors.
+- [Json.NET](https://www.newtonsoft.com/json) - James Newton-King.
+- [SSH.NET](https://github.com/sshnet/SSH.NET) - the SSH.NET contributors.
+- [net-mdns (Makaretu.Dns)](https://github.com/richardschneider/net-mdns) - Richard Schneider. `nina.local` discovery.
+- [SQLite](https://www.sqlite.org/) - D. Richard Hipp and the SQLite team.
+- [Rockchip RKNN runtime](https://github.com/airockchip/rknn-toolkit2) - Rockchip. Optional NPU acceleration on RK35xx boards.
+
+Plus the wider amateur astronomy and free-software communities. If your work is
+used here and not listed, it is an oversight, not an intent, please
+[let us know](https://github.com/DanWBR/NINA.Polaris).
+
 ## License
 
 N.I.N.A. Polaris as a whole is licensed under the **GNU Affero General Public
