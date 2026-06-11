@@ -2360,7 +2360,7 @@ function ninaApp() {
         // Editor stretch histogram (same UX as the live mini-panel, but the
         // black/white handles drive the editor's Blacks/Whites light params and
         // the bins come from the post-edit /api/editor/histogram result).
-        editorHistoZoom: false,
+        editorHistoZoom: true,   // open framed to the data, not full 0..65535
         editorHisto: {
             min: 0, max: 0, avg: 0, std: 0,
             blackFrac: 0, whiteFrac: 1, dispLo: 0, dispHi: 1,
@@ -10115,6 +10115,9 @@ function ninaApp() {
             // Handle fractions follow edits.stretch — but NOT while dragging,
             // so a redraw mid-drag can't fight the drag's own positions.
             if (!this._editorHistoDrag) this._editorHistoSyncFracs();
+            // Keep the Zoom view framed to the data on open + after each
+            // re-stretch; frozen during a drag (captured range).
+            if (!this._editorHistoDrag && this.editorHistoZoom) this._editorHistoApplyZoom();
 
             // Backing-store size from the laid-out element (dpr-aware), same as
             // the live drawHistogram so the canvas isn't stretched.
@@ -10334,13 +10337,47 @@ function ninaApp() {
                 this.editorHisto.dispHi = 1;
                 return;
             }
-            const b = this.editorHisto.blackFrac, w = this.editorHisto.whiteFrac;
-            const margin = Math.max(0.05, (w - b) * 0.25);
-            let lo = Math.max(0, b - margin);
-            let hi = Math.min(1, w + margin);
+            // Frame to where the data actually is (the populated band), so the
+            // auto-stretched distribution fills the panel instead of a flat
+            // 0..65535. Falls back to the handle span if bins aren't ready.
+            const band = this._editorHistoDataBand();
+            let lo, hi;
+            if (band) {
+                const m = Math.max(0.02, (band.hi - band.lo) * 0.1);
+                lo = band.lo - m;
+                hi = band.hi + m;
+            } else {
+                lo = this.editorHisto.blackFrac - 0.05;
+                hi = this.editorHisto.whiteFrac + 0.05;
+            }
+            // Keep the handles in view even if dragged outside the data band.
+            lo = Math.min(lo, this.editorHisto.blackFrac - 0.02);
+            hi = Math.max(hi, this.editorHisto.whiteFrac + 0.02);
+            lo = Math.max(0, lo); hi = Math.min(1, hi);
             if (hi - lo < 0.1) { hi = Math.min(1, lo + 0.1); lo = Math.max(0, hi - 0.1); }
             this.editorHisto.dispLo = lo;
             this.editorHisto.dispHi = hi;
+        },
+
+        // The populated band of the current histogram, as 0..1 fractions:
+        // first non-empty bin to the 99.5th percentile. Used by Zoom so the
+        // view frames the actual data.
+        _editorHistoDataBand() {
+            const raw = this.editorHisto._raw;
+            if (!raw) return null;
+            const isRgb = raw.length === 768;
+            let total = 0;
+            const comb = new Float64Array(256);
+            for (let i = 0; i < 256; i++) {
+                comb[i] = isRgb ? (raw[i] + raw[256 + i] + raw[512 + i]) : raw[i];
+                total += comb[i];
+            }
+            if (total <= 0) return null;
+            let lo = 0; while (lo < 255 && comb[lo] <= 0) lo++;
+            let acc = 0, hi = 255; const cut = total * 0.995;
+            for (let i = 0; i < 256; i++) { acc += comb[i]; if (acc >= cut) { hi = i; break; } }
+            if (hi <= lo) hi = Math.min(255, lo + 1);
+            return { lo: lo / 255, hi: hi / 255 };
         },
 
         _editorDefaultEdits() {
