@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260611-exportz">
+    <link rel="stylesheet" href="/css/app.css?v=20260611-about">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -10740,6 +10740,15 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 stack.</p>
                                 <span class="help-card-meta">read</span>
                             </button>
+                            <button class="help-tutorial-card"
+                                    @click="help.tutorial = 'about'">
+                                <span class="help-card-icon">ℹ️</span>
+                                <h3>About Polaris</h3>
+                                <p>What N.I.N.A. Polaris is, the version
+                                you are running, the author, license and
+                                where to get help.</p>
+                                <span class="help-card-meta">read</span>
+                            </button>
                         </div>
                     </div>
                 </template>
@@ -10788,7 +10797,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </template>
 
                 <!-- ---- STEPPER (most tutorials) -------------- -->
-                <template x-if="help.tutorial && help.tutorial !== 'workflowsPicker' && help.tutorial !== 'troubleshoot' && help.tutorial !== 'privacy' && help.tutorial !== 'credits'">
+                <template x-if="help.tutorial && help.tutorial !== 'workflowsPicker' && help.tutorial !== 'troubleshoot' && help.tutorial !== 'privacy' && help.tutorial !== 'credits' && help.tutorial !== 'about'">
                     <div>
                         <div class="help-stepper-header">
                             <button class="help-back-btn" @click="helpExit()">
@@ -11179,6 +11188,88 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     work is used here and not listed, it is an oversight,
                                     not an intent, please
                                     <a href="https://github.com/DanWBR/NINA.Polaris" target="_blank" rel="noopener">let us know</a>.</p>
+                                </div>
+                            </details>
+
+                        </div>
+                    </div>
+                </template>
+
+                <!-- ---- ABOUT POLARIS ------------------------ -->
+                <template x-if="help.tutorial === 'about'">
+                    <div>
+                        <div class="help-stepper-header">
+                            <button class="help-back-btn" @click="helpExit()">
+                                ← Help
+                            </button>
+                            <span class="help-stepper-title">
+                                About Polaris
+                            </span>
+                        </div>
+                        <p class="help-intro">
+                            N.I.N.A. Polaris is a self-hosted, browser-based
+                            astrophotography control, capture and processing
+                            suite. It runs entirely on your own device (a
+                            Raspberry Pi, mini PC or computer) and is reached
+                            from any browser on your network, no app to install
+                            on the viewing device. It controls your equipment
+                            (INDI / ASCOM / Alpaca / native camera SDKs), runs
+                            live stacking, guiding, focusing, plate solving and
+                            sequencing, and includes a full editor with AI
+                            background extraction, denoise and deconvolution.
+                        </p>
+                        <div class="help-faq-list">
+
+                            <details class="help-faq" open>
+                                <summary>Version</summary>
+                                <div class="help-faq-body">
+                                    <p>You are running
+                                    <strong x-text="appVersion || 'unknown'"></strong>.
+                                    The current code and release notes are on the
+                                    <a href="https://github.com/DanWBR/NINA.Polaris" target="_blank" rel="noopener">project page</a>.</p>
+                                </div>
+                            </details>
+
+                            <details class="help-faq">
+                                <summary>Author &amp; contact</summary>
+                                <div class="help-faq-body">
+                                    <p>Created and maintained by
+                                    <strong>Daniel Wagner Oliveira de Medeiros</strong>.</p>
+                                    <p>Contact:
+                                    <a href="mailto:danielwag@gmail.com">danielwag@gmail.com</a></p>
+                                    <p>For bugs and feature requests, opening an issue on
+                                    <a href="https://github.com/DanWBR/NINA.Polaris" target="_blank" rel="noopener">GitHub</a>
+                                    is usually the fastest path.</p>
+                                </div>
+                            </details>
+
+                            <details class="help-faq">
+                                <summary>License</summary>
+                                <div class="help-faq-body">
+                                    <p>N.I.N.A. Polaris is free, open-source software
+                                    licensed under the
+                                    <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener">GNU Affero General Public License v3.0</a>
+                                    (AGPL-3.0). It is derived from
+                                    <a href="https://nighttime-imaging.eu/" target="_blank" rel="noopener">N.I.N.A. - Nighttime Imaging 'N' Astronomy</a>
+                                    by Stefan Berg and contributors (MPL-2.0).</p>
+                                    <p>Full credits for every project, library and dataset
+                                    used are under
+                                    <a href="#" @click.prevent="help.tutorial = 'credits'">Credits &amp; acknowledgements</a>.</p>
+                                </div>
+                            </details>
+
+                            <details class="help-faq">
+                                <summary>Support the project</summary>
+                                <div class="help-faq-body">
+                                    <p>Polaris stays free and open-source. If it has
+                                    saved you an evening of fiddling and you would like
+                                    to chip in, donations are welcome but entirely
+                                    optional:</p>
+                                    <p>
+                                        <a href="https://buy.stripe.com/9B68wPeoLcMSgOz2iJbMQ02" target="_blank" rel="noopener">
+                                            Donate via Stripe
+                                        </a>
+                                    </p>
                                 </div>
                             </details>
 
@@ -13030,7 +13121,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260611-exportz"></script>
+    <script src="/js/app.js?v=20260611-about"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
