@@ -2350,7 +2350,7 @@ function ninaApp() {
         histo: {
             min: 0, max: 0, avg: 0, std: 0,
             bins: null, peak: 1, count: 0,
-            blackFrac: 0, whiteFrac: 1,
+            blackFrac: 0, whiteFrac: 1, midFrac: 0.5,
             dispLo: 0, dispHi: 1,
             _token: -1
         },
@@ -2363,7 +2363,7 @@ function ninaApp() {
         editorHistoZoom: true,   // open framed to the data, not full 0..65535
         editorHisto: {
             min: 0, max: 0, avg: 0, std: 0,
-            blackFrac: 0, whiteFrac: 1, dispLo: 0, dispHi: 1,
+            blackFrac: 0, whiteFrac: 1, midFrac: 0.5, dispLo: 0, dispHi: 1,
             _raw: null,                          // LINEAR-source histogram (constant per session)
             _auto: { black: 0, mid: 0.5, white: 1 },
             _loadedSession: null
@@ -5481,6 +5481,7 @@ function ninaApp() {
             this.histo._maxVal = maxVal;
             this.histo._autoBlack = Math.max(0, Math.min(1, ap.shadow / maxVal));
             this.histo._autoWhite = Math.max(0, Math.min(1, aWhite / maxVal));
+            this.histo._autoMid = ap.midtone;
             this.histo._token = this._histoToken;
             this._histoUpdateEndpoints();
             return true;
@@ -5489,13 +5490,20 @@ function ninaApp() {
         // Refresh the black/white handle fractions (auto vs manual) and the
         // drawn X range (full 0..65535, or zoomed to the populated band).
         _histoUpdateEndpoints() {
+            let midBal;
             if (this.stretchAuto) {
                 this.histo.blackFrac = this.histo._autoBlack ?? 0;
                 this.histo.whiteFrac = this.histo._autoWhite ?? 1;
+                midBal = this.histo._autoMid ?? 0.5;
             } else {
                 this.histo.blackFrac = Math.max(0, Math.min(1, this.stretchBlack));
                 this.histo.whiteFrac = Math.max(0, Math.min(1, this.stretchWhite));
+                midBal = this.stretchMid || 0.25;
             }
+            // Midtone handle: input value (within [black,white]) that maps to
+            // mid-grey = black + midBalance*(white-black).
+            const _b = this.histo.blackFrac, _w = this.histo.whiteFrac;
+            this.histo.midFrac = _b + Math.max(0.001, Math.min(0.999, midBal)) * (_w - _b);
             // While a handle is being dragged, freeze the drawn X range so the
             // pointer→fraction reference can't shift under the drag (the same
             // drift the editor histogram had). It re-frames on the next redraw
@@ -5581,7 +5589,9 @@ function ninaApp() {
         histoMarkerPct(which) {
             const lo = this.histo.dispLo, hi = this.histo.dispHi;
             const span = Math.max(1e-6, hi - lo);
-            const frac = which === 'black' ? this.histo.blackFrac : this.histo.whiteFrac;
+            const frac = which === 'black' ? this.histo.blackFrac
+                       : which === 'mid'  ? this.histo.midFrac
+                       : this.histo.whiteFrac;
             return Math.max(0, Math.min(100, ((frac - lo) / span) * 100));
         },
 
@@ -5594,6 +5604,7 @@ function ninaApp() {
             if (this.stretchAuto) {
                 this.stretchBlack = this.histo.blackFrac;
                 this.stretchWhite = this.histo.whiteFrac;
+                if (this.histo._autoMid != null) this.stretchMid = this.histo._autoMid;
                 this.stretchAuto = false;
             }
             // Capture the rect + display range now and use them for the whole
@@ -5625,9 +5636,14 @@ function ninaApp() {
             if (d.which === 'black') {
                 this.stretchBlack = Math.max(0, Math.min(frac, this.stretchWhite - gap));
                 this.histo.blackFrac = this.stretchBlack;
-            } else {
+            } else if (d.which === 'white') {
                 this.stretchWhite = Math.min(1, Math.max(frac, this.stretchBlack + gap));
                 this.histo.whiteFrac = this.stretchWhite;
+            } else { // mid
+                const b = this.histo.blackFrac, w = this.histo.whiteFrac;
+                const cf = Math.max(b + gap, Math.min(frac, w - gap));
+                this.stretchMid = Math.max(0.001, Math.min(0.999, (cf - b) / Math.max(1e-6, w - b)));
+                this.histo.midFrac = cf;
             }
             // Throttle the (relatively heavy) GPU re-render to one per frame.
             if (!this._histoRaf) {
@@ -10167,13 +10183,14 @@ function ninaApp() {
                 ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1;
                 ctx.beginPath(); ctx.moveTo(xOf(0.5), 0); ctx.lineTo(xOf(0.5), h); ctx.stroke();
             }
-            const marker = (frac) => {
+            const marker = (frac, color) => {
                 if (frac < lo || frac > hi) return;
-                ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 1.5;
+                ctx.strokeStyle = color; ctx.lineWidth = 1.5;
                 ctx.beginPath(); ctx.moveTo(xOf(frac), 0); ctx.lineTo(xOf(frac), h); ctx.stroke();
             };
-            marker(this.editorHisto.blackFrac);
-            marker(this.editorHisto.whiteFrac);
+            marker(this.editorHisto.blackFrac, 'rgba(255,255,255,0.55)');
+            marker(this.editorHisto.midFrac, 'rgba(255,193,7,0.7)');   // amber = midtones
+            marker(this.editorHisto.whiteFrac, 'rgba(255,255,255,0.55)');
         },
 
         // Stats only (Max/Avg/Min/Std on the ~0..65535 scale). Does NOT touch
@@ -10202,21 +10219,30 @@ function ninaApp() {
         // Called only when NOT dragging.
         _editorHistoSyncFracs() {
             const st = this.editorState.edits.stretch;
+            let midBal;
             if (!st || st.auto !== false) {
                 // Auto: sit the handles where the auto-stretch put black/white
                 // on the linear data (so you see the reference, like an STF).
                 this.editorHisto.blackFrac = Math.max(0, Math.min(1, this.editorHisto._auto.black));
                 this.editorHisto.whiteFrac = Math.max(0, Math.min(1, this.editorHisto._auto.white));
+                midBal = this.editorHisto._auto.mid;
             } else {
                 this.editorHisto.blackFrac = Math.max(0, Math.min(1, +(st.black ?? 0)));
                 this.editorHisto.whiteFrac = Math.max(0, Math.min(1, +(st.white ?? 1)));
+                midBal = +(st.mid ?? 0.5);
             }
+            // Midtone handle sits at the input value (within [black,white]) that
+            // maps to mid-grey — i.e. black + midBalance*(white-black).
+            const b = this.editorHisto.blackFrac, w = this.editorHisto.whiteFrac;
+            this.editorHisto.midFrac = b + Math.max(0.001, Math.min(0.999, midBal)) * (w - b);
         },
 
         editorHistoMarkerPct(which) {
             const lo = this.editorHisto.dispLo, hi = this.editorHisto.dispHi;
             const span = Math.max(1e-6, hi - lo);
-            const frac = which === 'black' ? this.editorHisto.blackFrac : this.editorHisto.whiteFrac;
+            const frac = which === 'black' ? this.editorHisto.blackFrac
+                       : which === 'mid'  ? this.editorHisto.midFrac
+                       : this.editorHisto.whiteFrac;
             return Math.max(0, Math.min(100, ((frac - lo) / span) * 100));
         },
 
@@ -10266,11 +10292,21 @@ function ninaApp() {
                 : { auto: false, black: this.editorHisto.blackFrac,
                     mid: this.editorHisto._auto.mid, white: this.editorHisto.whiteFrac };
             if (d.which === 'black') {
-                st.black = Math.max(0, Math.min(frac, this.editorHisto.whiteFrac - gap));
+                // Don't let the black point fall BELOW the data floor: there's
+                // no data there, so the MTF would only lift the background
+                // (wash it out). Stops the handle at the start of the data.
+                const band = this._editorHistoDataBand();
+                const floor = band ? band.lo : 0;
+                st.black = Math.max(floor, Math.min(frac, this.editorHisto.whiteFrac - gap));
                 this.editorHisto.blackFrac = st.black;
-            } else {
+            } else if (d.which === 'white') {
                 st.white = Math.min(1, Math.max(frac, this.editorHisto.blackFrac + gap));
                 this.editorHisto.whiteFrac = st.white;
+            } else { // mid
+                const b = this.editorHisto.blackFrac, w = this.editorHisto.whiteFrac;
+                const cf = Math.max(b + gap, Math.min(frac, w - gap));
+                st.mid = Math.max(0.001, Math.min(0.999, (cf - b) / Math.max(1e-6, w - b)));
+                this.editorHisto.midFrac = cf;
             }
             this.editorState.edits.stretch = st;
             // Move ONLY the marker during the drag — do NOT re-stretch yet.

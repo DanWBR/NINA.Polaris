@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260611-editor-histo">
+    <link rel="stylesheet" href="/css/app.css?v=20260611-midtone">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -1580,6 +1580,9 @@
                         <div class="histo-handle histo-handle-black"
                              :style="'left:' + histoMarkerPct('black') + '%'"
                              @pointerdown="histoHandleDown($event,'black')" title="Black point"></div>
+                        <div class="histo-handle histo-handle-mid"
+                             :style="'left:' + histoMarkerPct('mid') + '%'"
+                             @pointerdown="histoHandleDown($event,'mid')" title="Midtones"></div>
                         <div class="histo-handle histo-handle-white"
                              :style="'left:' + histoMarkerPct('white') + '%'"
                              @pointerdown="histoHandleDown($event,'white')" title="White point"></div>
@@ -2828,6 +2831,9 @@
                         <div class="histo-handle histo-handle-black"
                              :style="'left:' + histoMarkerPct('black') + '%'"
                              @pointerdown="histoHandleDown($event,'black')" title="Black point"></div>
+                        <div class="histo-handle histo-handle-mid"
+                             :style="'left:' + histoMarkerPct('mid') + '%'"
+                             @pointerdown="histoHandleDown($event,'mid')" title="Midtones"></div>
                         <div class="histo-handle histo-handle-white"
                              :style="'left:' + histoMarkerPct('white') + '%'"
                              @pointerdown="histoHandleDown($event,'white')" title="White point"></div>
@@ -7807,6 +7813,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <div class="histo-handle histo-handle-black"
                              :style="'left:' + histoMarkerPct('black') + '%'"
                              @pointerdown="histoHandleDown($event,'black')" title="Black point"></div>
+                        <div class="histo-handle histo-handle-mid"
+                             :style="'left:' + histoMarkerPct('mid') + '%'"
+                             @pointerdown="histoHandleDown($event,'mid')" title="Midtones"></div>
                         <div class="histo-handle histo-handle-white"
                              :style="'left:' + histoMarkerPct('white') + '%'"
                              @pointerdown="histoHandleDown($event,'white')" title="White point"></div>
@@ -8989,10 +8998,13 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <div class="histo-axis"><span>0</span><span>50%</span><span>100%</span></div>
                                     <div class="histo-handle histo-handle-black"
                                          :style="'left:' + editorHistoMarkerPct('black') + '%'"
-                                         @pointerdown="editorHistoHandleDown($event,'black')" title="Black point (Blacks)"></div>
+                                         @pointerdown="editorHistoHandleDown($event,'black')" title="Black point"></div>
+                                    <div class="histo-handle histo-handle-mid"
+                                         :style="'left:' + editorHistoMarkerPct('mid') + '%'"
+                                         @pointerdown="editorHistoHandleDown($event,'mid')" title="Midtones"></div>
                                     <div class="histo-handle histo-handle-white"
                                          :style="'left:' + editorHistoMarkerPct('white') + '%'"
-                                         @pointerdown="editorHistoHandleDown($event,'white')" title="White point (Whites)"></div>
+                                         @pointerdown="editorHistoHandleDown($event,'white')" title="White point"></div>
                                 </div>
                                 <div class="histo-actions">
                                     <button class="btn btn-sm" @click="editorHistoAuto()" title="Auto-stretch">Auto</button>
@@ -12881,7 +12893,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260611-editor-linhist"></script>
+    <script src="/js/app.js?v=20260611-midtone"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

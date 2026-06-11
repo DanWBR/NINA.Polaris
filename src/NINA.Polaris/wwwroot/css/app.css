@@ -1665,6 +1665,10 @@ button,
     background: rgba(56, 189, 248, 0.85);
 }
 .histo-handle-white::after { background: rgba(226, 232, 240, 0.92); }
+/* Midtones handle: amber, sits below black/white so it never blocks them. */
+.histo-handle-mid { z-index: 1; }
+.histo-handle-mid::before { background: rgba(255, 193, 7, 0.7); }
+.histo-handle-mid::after { background: rgba(255, 193, 7, 0.85); height: 18px; }
 .histo-actions {
     display: flex;
     flex-direction: column;
