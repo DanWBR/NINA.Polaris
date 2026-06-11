@@ -7253,20 +7253,25 @@ label select.input-sm {
    pan/zoom cursor region. The width attribute on the <canvas>
    (512) defines the backing pixel buffer for the histogram code
    to draw into; CSS width sizes the rendered box. */
-.editor-histogram {
+/* Editor stretch histogram: the live .histo-panel docked as a translucent
+   overlay strip at the bottom of the preview area. Interactive (handles +
+   buttons), so unlike the old static strip it must capture pointer events. */
+.editor-histo-panel {
     position: absolute;
-    left: 5%;
-    right: 5%;
+    left: 12px;
+    right: 12px;
     bottom: 12px;
-    width: 90%;
-    height: 80px;
-    background: rgba(0, 0, 0, 0.55);
+    z-index: 6;
+    background: rgba(10, 15, 25, 0.78);
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: 8px;
+    padding: 6px 10px;
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
-    pointer-events: none;       /* clicks fall through to pan/zoom */
 }
+/* The graph in the editor overlay is a touch shorter than the live panel
+   so it doesn't cover too much of the image. */
+.editor-histo-panel .histo-graph { height: 72px; }
 
 /* Toolbar toggle states. .btn-toggle-on highlights the histogram
    button (and any future toggle the same way) so the user can

@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260611-histo-panel">
+    <link rel="stylesheet" href="/css/app.css?v=20260611-editor-histo">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -8934,7 +8934,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                  .btn-toggle-on class hook. -->
                             <button class="btn btn-sm"
                                     :class="{ 'btn-toggle-on': editorState.showHistogram }"
-                                    @click="editorState.showHistogram = !editorState.showHistogram"
+                                    @click="editorState.showHistogram = !editorState.showHistogram;
+                                            if (editorState.showHistogram) $nextTick(() => _editorRenderHistogram())"
                                     :title="editorState.showHistogram
                                         ? 'Hide the histogram overlay'
                                         : 'Show the histogram overlay'">📊 Histogram</button>
@@ -8970,16 +8971,35 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                      alt="original" draggable="false">
                             </div>
                             <div class="editor-preview-spinner" x-show="editorState.rendering">⌛</div>
-                            <!-- Histogram overlay. Pinned to the bottom
-                                 of the preview area as a translucent
-                                 strip so it covers the image only when
-                                 enabled instead of stealing a permanent
-                                 80 px row beneath. Width is fluid via
-                                 CSS; height fixed so the canvas backing
-                                 pixel resolution stays predictable. -->
-                            <canvas id="editorHistogram" class="editor-histogram"
-                                    x-show="editorState.showHistogram"
-                                    width="512" height="80"></canvas>
+                            <!-- Histogram + stretch overlay. Same ASIAIR-style
+                                 panel as LIVE/PREVIEW/AUTORUN: Max/Avg/Min/Std
+                                 readout, draggable black/white handles (mapped
+                                 to the Blacks/Whites light params), Auto + Zoom.
+                                 Pinned bottom as a translucent strip. -->
+                            <div class="editor-histo-panel histo-panel"
+                                 x-show="editorState.showHistogram">
+                                <div class="histo-stats">
+                                    <div class="hs-cell"><span class="hs-v" x-text="editorHisto.max"></span><span class="hs-l">Max</span></div>
+                                    <div class="hs-cell"><span class="hs-v" x-text="editorHisto.avg"></span><span class="hs-l">Avg</span></div>
+                                    <div class="hs-cell"><span class="hs-v" x-text="editorHisto.min"></span><span class="hs-l">Min</span></div>
+                                    <div class="hs-cell"><span class="hs-v" x-text="editorHisto.std"></span><span class="hs-l">Std</span></div>
+                                </div>
+                                <div class="histo-graph">
+                                    <canvas id="editorHistogram" class="histo-canvas"></canvas>
+                                    <div class="histo-axis"><span>0</span><span>50%</span><span>100%</span></div>
+                                    <div class="histo-handle histo-handle-black"
+                                         :style="'left:' + editorHistoMarkerPct('black') + '%'"
+                                         @pointerdown="editorHistoHandleDown($event,'black')" title="Black point (Blacks)"></div>
+                                    <div class="histo-handle histo-handle-white"
+                                         :style="'left:' + editorHistoMarkerPct('white') + '%'"
+                                         @pointerdown="editorHistoHandleDown($event,'white')" title="White point (Whites)"></div>
+                                </div>
+                                <div class="histo-actions">
+                                    <button class="btn btn-sm" @click="editorHistoAuto()" title="Auto-stretch">Auto</button>
+                                    <button class="btn btn-sm" :class="editorHistoZoom ? 'btn-active' : ''"
+                                            @click="editorHistoToggleZoom()" title="Zoom the histogram to the data">Zoom</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -12861,7 +12881,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260611-shutdown"></script>
+    <script src="/js/app.js?v=20260611-editor-histo"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

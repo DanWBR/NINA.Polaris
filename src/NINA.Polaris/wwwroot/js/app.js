@@ -2357,6 +2357,17 @@ function ninaApp() {
         _histoToken: 0,       // bumped each time a new raw frame is cached
         _histoDrag: null,     // { which:'black'|'white', tab, rect } while dragging
 
+        // Editor stretch histogram (same UX as the live mini-panel, but the
+        // black/white handles drive the editor's Blacks/Whites light params and
+        // the bins come from the post-edit /api/editor/histogram result).
+        editorHistoZoom: false,
+        editorHisto: {
+            min: 0, max: 0, avg: 0, std: 0,
+            blackFrac: 0, whiteFrac: 1, dispLo: 0, dispHi: 1,
+            _raw: null
+        },
+        _editorHistoDrag: null,
+
         // Preview render quality (client-side, persisted in localStorage).
         //   previewMaxDim: max GPU output canvas dimension. 2048 / 4096 /
         //     0 (native = hardware MAX_TEXTURE_SIZE). Bigger = sharper zoom,
@@ -10078,35 +10089,181 @@ function ninaApp() {
         },
 
         _editorDrawHistogram(hist) {
+            if (hist) this.editorHisto._raw = hist;
+            hist = this.editorHisto._raw;
             const canvas = document.getElementById('editorHistogram');
             if (!canvas || !hist) return;
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Combined bins (sum of channels) drive the stats + zoom band; the
+            // coloured per-channel curves are drawn separately below.
             const isRgb = hist.length === 768;
+            const combined = new Float64Array(256);
+            for (let i = 0; i < 256; i++) {
+                combined[i] = isRgb ? (hist[i] + hist[256 + i] + hist[512 + i]) : hist[i];
+            }
+            this._editorHistoStats(combined);
+
+            // Backing-store size from the laid-out element (dpr-aware), same as
+            // the live drawHistogram so the canvas isn't stretched.
+            const rect = canvas.getBoundingClientRect();
+            if (rect.width < 2 || rect.height < 2) return;
+            const dpr = window.devicePixelRatio || 1;
+            const w = Math.round(rect.width), h = Math.round(rect.height);
+            if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+                canvas.width = Math.round(w * dpr);
+                canvas.height = Math.round(h * dpr);
+            }
+            const ctx = canvas.getContext('2d');
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, w, h);
+
+            const lo = this.editorHisto.dispLo, hi = this.editorHisto.dispHi;
+            const span = Math.max(1e-6, hi - lo);
             const channels = isRgb
                 ? [
                     { off: 0,   color: 'rgba(248, 113, 113, 0.7)' },  // R
                     { off: 256, color: 'rgba(74,  222, 128, 0.7)' },  // G
                     { off: 512, color: 'rgba(96,  165, 250, 0.7)' }   // B
                   ]
-                : [{ off: 0, color: 'rgba(229, 231, 235, 0.85)' }];
-            // Normalise each channel's max so colours don't drown each other.
+                : [{ off: 0, color: 'rgba(150, 180, 220, 0.85)' }];
             for (const ch of channels) {
                 let max = 0;
                 for (let i = 0; i < 256; i++) if (hist[ch.off + i] > max) max = hist[ch.off + i];
                 if (max <= 0) continue;
+                const norm = Math.log1p(max);
                 ctx.fillStyle = ch.color;
                 ctx.beginPath();
-                ctx.moveTo(0, canvas.height);
+                ctx.moveTo(0, h);
                 for (let i = 0; i < 256; i++) {
-                    const x = i / 255 * canvas.width;
-                    const y = canvas.height - (hist[ch.off + i] / max) * (canvas.height - 4);
+                    const frac = i / 255;
+                    const x = ((frac - lo) / span) * w;
+                    const y = h - (Math.log1p(hist[ch.off + i]) / norm) * (h - 4);
                     ctx.lineTo(x, y);
                 }
-                ctx.lineTo(canvas.width, canvas.height);
+                ctx.lineTo(w, h);
                 ctx.closePath();
                 ctx.fill();
             }
+
+            // Midline + black/white markers (mirrors the live panel).
+            const xOf = (frac) => ((frac - lo) / span) * w;
+            if (0.5 >= lo && 0.5 <= hi) {
+                ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.moveTo(xOf(0.5), 0); ctx.lineTo(xOf(0.5), h); ctx.stroke();
+            }
+            const marker = (frac) => {
+                if (frac < lo || frac > hi) return;
+                ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.moveTo(xOf(frac), 0); ctx.lineTo(xOf(frac), h); ctx.stroke();
+            };
+            marker(this.editorHisto.blackFrac);
+            marker(this.editorHisto.whiteFrac);
+        },
+
+        // Derive Max/Avg/Min/Std (0..65535 scale, to match the live readout)
+        // from the 256-bin combined histogram, plus the handle fractions from
+        // the current Blacks/Whites params and the zoom display range.
+        _editorHistoStats(bins) {
+            let total = 0, sum = 0, sumSq = 0, mn = -1, mx = 0;
+            for (let i = 0; i < 256; i++) {
+                const c = bins[i];
+                if (c <= 0) continue;
+                const v = i * 257;               // bin index → ~0..65535
+                if (mn < 0) mn = v;
+                mx = v;
+                total += c; sum += c * v; sumSq += c * v * v;
+            }
+            const avg = total ? sum / total : 0;
+            const std = total ? Math.sqrt(Math.max(0, sumSq / total - avg * avg)) : 0;
+            this.editorHisto.min = mn < 0 ? 0 : Math.round(mn);
+            this.editorHisto.max = Math.round(mx);
+            this.editorHisto.avg = Math.round(avg);
+            this.editorHisto.std = Math.round(std);
+
+            // Handle fractions from the editor's Blacks/Whites light params.
+            const light = this.editorState.edits.light || {};
+            const blacks = +(light.blacks ?? 0);
+            const whites = +(light.whites ?? 0);
+            this.editorHisto.blackFrac = Math.max(0, Math.min(1, blacks));
+            this.editorHisto.whiteFrac = Math.max(0, Math.min(1, 1 + Math.min(0, whites)));
+
+            // Zoom narrows the X range to the populated band (+ a little margin
+            // around the handles), like the live panel's Zoom toggle.
+            if (this.editorHistoZoom && mn >= 0) {
+                let blo = (mn / 65535) - 0.01;
+                let bhi = (mx / 65535) + 0.02;
+                blo = Math.min(blo, this.editorHisto.blackFrac - 0.02);
+                bhi = Math.max(bhi, this.editorHisto.whiteFrac + 0.02);
+                this.editorHisto.dispLo = Math.max(0, blo);
+                this.editorHisto.dispHi = Math.min(1, Math.max(this.editorHisto.dispLo + 0.05, bhi));
+            } else {
+                this.editorHisto.dispLo = 0;
+                this.editorHisto.dispHi = 1;
+            }
+        },
+
+        editorHistoMarkerPct(which) {
+            const lo = this.editorHisto.dispLo, hi = this.editorHisto.dispHi;
+            const span = Math.max(1e-6, hi - lo);
+            const frac = which === 'black' ? this.editorHisto.blackFrac : this.editorHisto.whiteFrac;
+            return Math.max(0, Math.min(100, ((frac - lo) / span) * 100));
+        },
+
+        editorHistoHandleDown(ev, which) {
+            ev.preventDefault();
+            const graph = ev.currentTarget.closest('.histo-graph');
+            if (!graph) return;
+            this._editorHistoDrag = { which, rect: graph.getBoundingClientRect() };
+            const move = (e) => this._editorHistoDragMove(e);
+            const up = () => {
+                window.removeEventListener('pointermove', move);
+                window.removeEventListener('pointerup', up);
+                this._editorHistoDrag = null;
+            };
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', up);
+        },
+
+        _editorHistoDragMove(e) {
+            const d = this._editorHistoDrag;
+            if (!d) return;
+            const lo = this.editorHisto.dispLo, hi = this.editorHisto.dispHi;
+            const span = Math.max(1e-6, hi - lo);
+            let fx = (e.clientX - d.rect.left) / Math.max(1, d.rect.width);
+            fx = Math.max(0, Math.min(1, fx));
+            const frac = lo + fx * span;
+            const gap = 0.01;
+            if (d.which === 'black') {
+                // Black point: 0 = neutral, dragging right crushes shadows
+                // (Blacks 0..1). Kept below the white handle.
+                const v = Math.max(0, Math.min(frac, this.editorHisto.whiteFrac - gap));
+                this.editorHisto.blackFrac = v;
+                this.editorSetLight('blacks', Math.round(v * 100) / 100);
+            } else {
+                // White point: 1 = neutral, dragging left pulls highlights down
+                // (Whites 0..-1). Kept above the black handle.
+                const v = Math.min(1, Math.max(frac, this.editorHisto.blackFrac + gap));
+                this.editorHisto.whiteFrac = v;
+                this.editorSetLight('whites', Math.round((v - 1) * 100) / 100);
+            }
+            // Redraw markers immediately; the pipeline re-render + histogram
+            // refresh is debounced inside editorSetLight.
+            if (!this._editorHistoRaf) {
+                this._editorHistoRaf = requestAnimationFrame(() => {
+                    this._editorHistoRaf = null;
+                    this._editorDrawHistogram();
+                });
+            }
+        },
+
+        editorHistoAuto() {
+            // Reuse the editor's existing one-click Auto tune.
+            if (typeof this.editorAuto === 'function') this.editorAuto();
+        },
+
+        editorHistoToggleZoom() {
+            this.editorHistoZoom = !this.editorHistoZoom;
+            this._editorDrawHistogram();
         },
 
         _editorDefaultEdits() {
