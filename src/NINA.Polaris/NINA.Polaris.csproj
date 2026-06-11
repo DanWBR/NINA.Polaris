@@ -122,6 +122,21 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- OpenCL kernel source, copied next to the binary so OpenClGpuCompute
+         can read + build it at runtime (Services/OpenCl/kernels/*.cl). -->
+    <Content Include="Services\OpenCl\kernels\*.cl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>Services\OpenCl\kernels\%(Filename)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- OpenCL GPU compute backend (NINA.Polaris.Services.OpenCl). Managed
+         bindings to the board's OpenCL ICD loader; classic image kernels
+         (warp / debayer / blur / stretch / accumulate) run on the SBC GPU
+         when available (e.g. Adreno 643 on the Radxa Dragon Q6A), with a
+         silent CPU fallback everywhere else. MIT-licensed. -->
+    <PackageReference Include="Silk.NET.OpenCL" Version="2.22.0" />
     <PackageReference Include="CosineKitty.AstronomyEngine" Version="2.1.19" />
     <PackageReference Include="Makaretu.Dns.Multicast" Version="0.27.*" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.8" />
