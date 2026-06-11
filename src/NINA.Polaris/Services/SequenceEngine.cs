@@ -345,9 +345,22 @@ public class SequenceEngine {
                     _logger.LogDebug("Capturing frame {Frame}/{Total} for {Name}",
                         f + 1, item.Count, item.Name);
 
+                    // Push the item's gain + binning to the camera on every
+                    // frame. Without this the driver kept whatever gain it had
+                    // (often a low/8-bit default), so 60 s lights came back
+                    // near-black even though item.Gain was only being stamped
+                    // into the FITS header at save time.
+                    var capOpts = new NINA.Image.Interfaces.CaptureOptions(
+                        Gain: item.Gain > 0 ? item.Gain : (int?)null,
+                        BinX: item.Binning > 0 ? item.Binning : (int?)null,
+                        BinY: item.Binning > 0 ? item.Binning : (int?)null,
+                        ImageType: imageType,
+                        Filter: string.IsNullOrEmpty(item.Filter) ? null : item.Filter,
+                        TargetName: string.IsNullOrEmpty(item.Name) ? null : item.Name);
+
                     bool frameOk = false;
                     try {
-                        var imageData = await _equip.Camera.CaptureAsync(item.Exposure, ct);
+                        var imageData = await _equip.Camera.CaptureAsync(item.Exposure, capOpts, ct);
 
                         // Populate exposure-level metadata before saving / relaying
                         imageData.MetaData.Exposure.ExposureTime = item.Exposure;
@@ -411,7 +424,7 @@ public class SequenceEngine {
                         // Single retry after brief pause
                         try {
                             await Task.Delay(2000, ct);
-                            var imageData = await _equip.Camera.CaptureAsync(item.Exposure, ct);
+                            var imageData = await _equip.Camera.CaptureAsync(item.Exposure, capOpts, ct);
 
                             // Preview only (see note above): AUTORUN never feeds
                             // the LIVE-tab stacking accumulator.

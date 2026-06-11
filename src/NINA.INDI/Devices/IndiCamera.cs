@@ -217,6 +217,50 @@ public class IndiCamera : ICamera {
         } catch { /* driver rejected the value (out of range?), non-fatal */ }
     }
 
+    // ── Capture bit-depth (RAW16) enforcement ──────────────────────────
+    // The SVBONY SV405CC (and ASI) INDI drivers expose a switch to pick the
+    // frame format. If it gets left on RAW8 — e.g. after a fast video-stream
+    // session, or a stale driver default — a 60 s light comes back as 8-bit
+    // data stuffed into a 16-bit FITS (pixel max stuck at 255), so the frame
+    // looks almost black no matter the stretch. Real capture apps select the
+    // 16-bit RAW format for stills; do the same before every capture so a
+    // light (or guide frame) is never silently 8-bit. Resolved once, then a
+    // cheap "already 16-bit?" check on each capture.
+    private string? _formatProp;     // "CCD_CAPTURE_FORMAT" / "CCD_VIDEO_FORMAT", or null
+    private string? _raw16Element;   // switch element name of the 16-bit RAW format
+
+    private async Task EnsureRaw16FormatAsync(CancellationToken ct) {
+        // Resolve the format property + 16-bit element. Re-probe each capture
+        // until found (the property may not be enumerated yet right after
+        // connect); two dictionary lookups, negligible. INDI standardised
+        // CCD_CAPTURE_FORMAT (1.9+); older drivers use CCD_VIDEO_FORMAT.
+        // Element names are driver-defined (e.g. "SVB_IMG_RAW16",
+        // "ASI_IMG_RAW16", "RAW 16-bit"), so match any element carrying "16"
+        // that isn't an RGB/colour format.
+        if (_raw16Element == null) {
+            foreach (var propName in new[] { "CCD_CAPTURE_FORMAT", "CCD_VIDEO_FORMAT" }) {
+                if (_client.GetProperty(DeviceName, propName) is IndiSwitchProperty sw && sw.Values.Count > 0) {
+                    string? el = null;
+                    foreach (var k in sw.Values.Keys) {
+                        var u = k.ToUpperInvariant();
+                        if (u.Contains("16") && !u.Contains("RGB")) { el = k; break; }
+                    }
+                    if (el != null) { _formatProp = propName; _raw16Element = el; break; }
+                }
+            }
+        }
+        if (_formatProp == null || _raw16Element == null) return;   // 8-bit-only / no such property
+        if (_client.GetProperty(DeviceName, _formatProp) is not IndiSwitchProperty cur) return;
+        // Already on 16-bit? skip — switching re-inits some drivers and can
+        // reset gain/offset, so only write when actually needed.
+        if (cur.Values.TryGetValue(_raw16Element, out var on) && on) return;
+        var payload = new Dictionary<string, bool>();
+        foreach (var k in cur.Values.Keys) payload[k] = (k == _raw16Element);
+        try {
+            await _client.SetSwitchAsync(DeviceName, _formatProp, payload, ct);
+        } catch { /* driver rejected; non-fatal — manual INDI panel still works */ }
+    }
+
     /// <summary>Writes WB_R and WB_B into CCD_CONTROLS. Silent skip if
     /// the driver doesn't have one of the keys.</summary>
     public async Task SetWhiteBalanceAsync(double red, double blue, CancellationToken ct = default) {
@@ -358,6 +402,12 @@ public class IndiCamera : ICamera {
         var localTcs = _exposureTcs;
 
         using var reg = ct.Register(() => localTcs.TrySetCanceled());
+
+        // Force the 16-bit RAW capture format first: a still left on RAW8
+        // (e.g. after a video stream) comes back as 8-bit data in a 16-bit
+        // FITS — near-black. Done before gain because a format switch can
+        // reset the driver's controls on some cameras.
+        await EnsureRaw16FormatAsync(ct);
 
         // opts overrides honoured per-capture so the sequencer can set
         // binning + gain inline without a separate round-trip.
