@@ -2612,6 +2612,15 @@ function ninaApp() {
             // malformed localStorage.
             this.loadWb();
 
+            // AUTORUN rehydration: a sequence can still be running on the
+            // server when the browser is restarted / reconnects. Pull the
+            // item list (drives the cards) AND the live status, then, if it
+            // is mid-run, arm the local UI (shutter tick + status polling)
+            // so the page reflects the active run instead of looking idle
+            // with only the status-bar badge. loadSequenceFromServer was
+            // previously never called, so the cards stayed empty on reload.
+            this._rehydrateSequence();
+
             // ALPACA: fire-and-forget LAN discovery so a user who
             // already has ASCOM Remote Server / Alpaca Omni
             // Simulator running gets devices auto-connected without
@@ -13788,9 +13797,25 @@ function ninaApp() {
         autorunShutterCountdown() {
             if (this.armingLoop) return 'hold...';
             if (this.seqState === 'idle') return '';
-            const done = this.seqStatus?.totalFramesCompleted || 0;
-            const total = this.seqStatus?.totalFrames || 0;
-            if (this.seqState === 'paused') return done + '/' + total + ' · paused';
+            if (this.seqState === 'paused') return 'paused';
+            // PER-FRAME: seconds remaining on the CURRENT exposure (this is
+            // what the inner ring tracks). The session done/total + ETA live
+            // in the sidebar stats block, so the big shutter number is the
+            // current-frame countdown. Reads shutterTick for reactivity.
+            // eslint-disable-next-line no-unused-expressions
+            this.shutterTick;
+            const st = this.seqStatus;
+            const item = (st && st.items && st.currentItemIndex != null)
+                ? st.items[st.currentItemIndex] : null;
+            const exp = item ? item.exposure : 0;
+            if (exp > 0 && this.autorunFrameStart) {
+                const remaining = Math.ceil(exp - (Date.now() - this.autorunFrameStart) / 1000);
+                if (remaining >= 0) return remaining + 's';
+            }
+            // Zero-second frames (BIAS) or between exposures: fall back to the
+            // session frame count so the ring still reads sensibly.
+            const done = st?.totalFramesCompleted || 0;
+            const total = st?.totalFrames || 0;
             return done + '/' + total;
         },
 
@@ -20947,6 +20972,20 @@ function ninaApp() {
             }
         },
 
+        // Called once on boot. Loads the persisted sequence items (cards)
+        // and the live run status; if the server reports a run in progress
+        // it arms the local animation + polling so a reconnecting browser
+        // shows the active run (cards visible, shutter active/abortable)
+        // rather than an idle-looking page with just the status-bar badge.
+        async _rehydrateSequence() {
+            try { await this.loadSequenceFromServer(); } catch { /* non-fatal */ }
+            try { await this.pollSeqStatus(); } catch { /* non-fatal */ }
+            if (this.seqState === 'running' || this.seqState === 'paused') {
+                this._startShutterTick();
+                this.startSeqPolling();
+            }
+        },
+
         async loadSequenceFromServer() {
             try {
                 const data = await this.apiGet('/api/sequence');
@@ -21008,6 +21047,22 @@ function ninaApp() {
                 this.toast('Sequence stopped', 'warn');
             } catch (e) {
                 this.toast('Stop failed', 'error');
+            }
+        },
+
+        // Global panic button (status bar). Hard-aborts whatever sequence is
+        // running, from any tab. Confirms first since it kills the night's
+        // run. Reuses the /stop endpoint; kept separate so the wording and
+        // the confirmation are unambiguous.
+        async panicAbortSequence() {
+            if (!confirm('Abort the running sequence now? '
+                + 'The current frame will be discarded.')) return;
+            try {
+                await this.apiPost('/api/sequence/stop');
+                this.seqState = 'idle';
+                this.toast('Sequence aborted', 'warn');
+            } catch (e) {
+                this.toast('Abort failed: ' + (e.message || e), 'error');
             }
         },
 
@@ -22852,6 +22907,19 @@ function ninaApp() {
                 var newState = msg.sequence.state || 'idle';
                 var oldState = this.seqState;
                 this.seqState = newState;
+
+                // Became active (started elsewhere, or first status after a
+                // reconnect): arm the shutter tick so the per-frame ring
+                // animates, and pull the item list if we don't have it yet
+                // so the cards render. Covers the "reopened the browser, it
+                // kept running but the UI didn't adapt" case.
+                if (oldState !== 'running' && oldState !== 'paused'
+                        && (newState === 'running' || newState === 'paused')) {
+                    this._startShutterTick();
+                    if (!this.sequence || this.sequence.length === 0) {
+                        this.loadSequenceFromServer();
+                    }
+                }
 
                 if (oldState === 'running' && newState === 'idle' &&
                     msg.sequence.totalFramesCompleted > 0 && !msg.sequence.lastError) {
