@@ -10101,7 +10101,10 @@ function ninaApp() {
             for (let i = 0; i < 256; i++) {
                 combined[i] = isRgb ? (hist[i] + hist[256 + i] + hist[512 + i]) : hist[i];
             }
-            this._editorHistoStats(combined);
+            this._editorHistoComputeStats(combined);
+            // Handle fractions follow edits.stretch — but NOT while dragging,
+            // so a redraw mid-drag can't fight the drag's own positions.
+            if (!this._editorHistoDrag) this._editorHistoSyncFracs();
 
             // Backing-store size from the laid-out element (dpr-aware), same as
             // the live drawHistogram so the canvas isn't stretched.
@@ -10160,10 +10163,10 @@ function ninaApp() {
             marker(this.editorHisto.whiteFrac);
         },
 
-        // Derive Max/Avg/Min/Std (0..65535 scale, to match the live readout)
-        // from the 256-bin combined histogram, plus the handle fractions from
-        // the current Blacks/Whites params and the zoom display range.
-        _editorHistoStats(bins) {
+        // Stats only (Max/Avg/Min/Std on the ~0..65535 scale). Does NOT touch
+        // handle fractions or the display range — those are owned separately so
+        // a redraw can't shift the reference under an in-progress drag.
+        _editorHistoComputeStats(bins) {
             let total = 0, sum = 0, sumSq = 0, mn = -1, mx = 0;
             for (let i = 0; i < 256; i++) {
                 const c = bins[i];
@@ -10179,10 +10182,12 @@ function ninaApp() {
             this.editorHisto.max = Math.round(mx);
             this.editorHisto.avg = Math.round(avg);
             this.editorHisto.std = Math.round(std);
+        },
 
-            // Handle fractions from the Stretch stage (the linear→display
-            // transform). Auto puts them at the full 0..1 ends; manual reads
-            // the chosen black/white clip points.
+        // Sync the handle fractions from the Stretch stage. Auto puts them at
+        // the 0..1 ends; manual reads the chosen black/white clip points.
+        // Called only when NOT dragging.
+        _editorHistoSyncFracs() {
             const st = this.editorState.edits.stretch;
             if (!st || st.auto !== false) {
                 this.editorHisto.blackFrac = 0;
@@ -10190,20 +10195,6 @@ function ninaApp() {
             } else {
                 this.editorHisto.blackFrac = Math.max(0, Math.min(1, +(st.black ?? 0)));
                 this.editorHisto.whiteFrac = Math.max(0, Math.min(1, +(st.white ?? 1)));
-            }
-
-            // Zoom narrows the X range to the populated band (+ a little margin
-            // around the handles), like the live panel's Zoom toggle.
-            if (this.editorHistoZoom && mn >= 0) {
-                let blo = (mn / 65535) - 0.01;
-                let bhi = (mx / 65535) + 0.02;
-                blo = Math.min(blo, this.editorHisto.blackFrac - 0.02);
-                bhi = Math.max(bhi, this.editorHisto.whiteFrac + 0.02);
-                this.editorHisto.dispLo = Math.max(0, blo);
-                this.editorHisto.dispHi = Math.min(1, Math.max(this.editorHisto.dispLo + 0.05, bhi));
-            } else {
-                this.editorHisto.dispLo = 0;
-                this.editorHisto.dispHi = 1;
             }
         },
 
@@ -10218,12 +10209,24 @@ function ninaApp() {
             ev.preventDefault();
             const graph = ev.currentTarget.closest('.histo-graph');
             if (!graph) return;
-            this._editorHistoDrag = { which, rect: graph.getBoundingClientRect() };
+            // Capture rect + the display range NOW and use them for the whole
+            // drag, so the clientX→fraction mapping is rock-stable (no drift
+            // even if a redraw fires mid-drag).
+            this._editorHistoDrag = {
+                which,
+                rect: graph.getBoundingClientRect(),
+                lo: this.editorHisto.dispLo,
+                hi: this.editorHisto.dispHi
+            };
             const move = (e) => this._editorHistoDragMove(e);
             const up = () => {
                 window.removeEventListener('pointermove', move);
                 window.removeEventListener('pointerup', up);
                 this._editorHistoDrag = null;
+                // Re-frame the zoom window around the new handle positions now
+                // that the drag is done (never mid-drag, which would shift the
+                // reference under the pointer).
+                if (this.editorHistoZoom) { this._editorHistoApplyZoom(); this._editorDrawHistogram(); }
             };
             window.addEventListener('pointermove', move);
             window.addEventListener('pointerup', up);
@@ -10232,15 +10235,16 @@ function ninaApp() {
         _editorHistoDragMove(e) {
             const d = this._editorHistoDrag;
             if (!d) return;
-            const lo = this.editorHisto.dispLo, hi = this.editorHisto.dispHi;
-            const span = Math.max(1e-6, hi - lo);
+            // Use the captured range, not the live one (which a redraw could
+            // change), so the handle lands exactly where the pointer is.
+            const span = Math.max(1e-6, d.hi - d.lo);
             let fx = (e.clientX - d.rect.left) / Math.max(1, d.rect.width);
             fx = Math.max(0, Math.min(1, fx));
-            const frac = lo + fx * span;
+            const frac = d.lo + fx * span;
             const gap = 0.01;
             // Switch the Stretch stage to manual on first drag, seeding from
             // wherever the handles currently sit so the image doesn't jump.
-            const st = this.editorState.edits.stretch && this.editorState.edits.stretch.auto === false
+            const st = (this.editorState.edits.stretch && this.editorState.edits.stretch.auto === false)
                 ? this.editorState.edits.stretch
                 : { auto: false, black: this.editorHisto.blackFrac,
                     mid: 0.5, white: this.editorHisto.whiteFrac };
@@ -10296,13 +10300,34 @@ function ninaApp() {
             this.editorState.edits.stretch = { auto: true };
             this.editorHisto.blackFrac = 0;
             this.editorHisto.whiteFrac = 1;
+            if (this.editorHistoZoom) this._editorHistoApplyZoom();
             this._editorApplyStretch();
             this._editorDrawHistogram();
         },
 
+        // Zoom toggles between the full 0..65535 range and a window framing the
+        // black/white handles (with margin) so manual stretch tweaks are easy
+        // to aim. The range is set HERE (not recomputed on every redraw), so it
+        // stays put while you drag.
         editorHistoToggleZoom() {
             this.editorHistoZoom = !this.editorHistoZoom;
+            this._editorHistoApplyZoom();
             this._editorDrawHistogram();
+        },
+
+        _editorHistoApplyZoom() {
+            if (!this.editorHistoZoom) {
+                this.editorHisto.dispLo = 0;
+                this.editorHisto.dispHi = 1;
+                return;
+            }
+            const b = this.editorHisto.blackFrac, w = this.editorHisto.whiteFrac;
+            const margin = Math.max(0.05, (w - b) * 0.25);
+            let lo = Math.max(0, b - margin);
+            let hi = Math.min(1, w + margin);
+            if (hi - lo < 0.1) { hi = Math.min(1, lo + 0.1); lo = Math.max(0, hi - 0.1); }
+            this.editorHisto.dispLo = lo;
+            this.editorHisto.dispHi = hi;
         },
 
         _editorDefaultEdits() {
