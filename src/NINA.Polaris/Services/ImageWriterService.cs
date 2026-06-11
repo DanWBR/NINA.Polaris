@@ -187,8 +187,25 @@ public class ImageWriterService {
         if (string.IsNullOrEmpty(m.Exposure.ImageType)) m.Exposure.ImageType = imageType;
         m.Exposure.ExposureNumber = _sessionFrameNumber + 1;
 
-        // Camera (some fields are populated by IndiCamera, fill gaps)
-        if (m.Camera.Gain == 0 && gain > 0) m.Camera.Gain = gain;
+        // Camera gain. Priority: whatever the capture already stamped >
+        // the explicit gain arg from the caller > the live value read off
+        // the connected camera. That last fallback is the fix for GAIN
+        // missing from some saved FITS: several save paths don't pass a
+        // gain (flat wizard, live-stack auto-save, client-saved stacks)
+        // AND not every camera driver stamps Gain into the per-frame
+        // metadata, so without reading the connected camera those frames
+        // ended up with no GAIN header. (FITSWriter only emits GAIN when
+        // it's non-zero, so a genuine 0-gain capture still omits it.)
+        if (m.Camera.Gain == 0) {
+            if (gain > 0) m.Camera.Gain = gain;
+            else if (_equip.Camera is { IsConnected: true } gcam && gcam.Gain > 0)
+                m.Camera.Gain = gcam.Gain;
+        }
+        // Camera identity, same gap: fill from the connected camera when
+        // the capture didn't stamp a name (drives CAMERAID / INSTRUME).
+        if (string.IsNullOrEmpty(m.Camera.Name)
+                && _equip.Camera is { IsConnected: true } ncam)
+            m.Camera.Name = ncam.DeviceName;
 
         // Telescope, focal length comes from the *active rig* (a per-rig
         // optic property), falling back to the legacy profile value only if
