@@ -42,6 +42,7 @@ namespace NINA.Image.Editor;
 /// 1:1, which is the right mental model for the user.
 /// </summary>
 public sealed record EditParams(
+    StretchParams? Stretch = null,
     WhiteBalanceParams? WhiteBalance = null,
     LightParams? Light = null,
     ColorParams? Color = null,
@@ -53,6 +54,24 @@ public sealed record EditParams(
 ) {
     /// <summary>All-defaults instance (no-op pipeline).</summary>
     public static EditParams Defaults => new();
+}
+
+/// <summary>
+/// The first pipeline stage: how the LINEAR image from the camera / stacking
+/// is mapped to 8-bit display space (the "stretch"). <c>Auto</c> (default)
+/// runs the GraXpert per-channel auto-stretch at load. Setting <c>Auto=false</c>
+/// applies a single linked black/mid/white MTF (driven by the editor
+/// histogram's draggable handles): Black/White are the 0..1 clip points,
+/// Mid is the midtone balance (0.5 = neutral, lower lifts the faint nebulosity).
+/// Only meaningful for linear sources (FITS); 8-bit imports ignore it.
+/// </summary>
+public sealed record StretchParams(
+    bool Auto = true,
+    double Black = 0.0,
+    double Mid = 0.5,
+    double White = 1.0
+) {
+    public bool IsDefault => Auto;
 }
 
 /// <summary>

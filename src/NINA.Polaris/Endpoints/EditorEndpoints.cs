@@ -161,8 +161,18 @@ public static class EditorEndpoints {
         // these bytes once per session, then every slider tick runs
         // entirely client-side. Dimensions are sent in response headers
         // so the client doesn't have to round-trip a metadata call.
-        g.MapGet("/raw/{sessionId}", (ImageEditService svc, HttpContext ctx, string sessionId) => {
-            var buf = svc.GetWorkingBuffer(sessionId);
+        g.MapGet("/raw/{sessionId}", (ImageEditService svc, HttpContext ctx, string sessionId,
+                                      bool? stretchAuto, double? black, double? mid, double? white) => {
+            // The Stretch stage runs server-side from the cached linear data;
+            // WASM then takes this 8-bit buffer and runs the rest locally.
+            // The client re-fetches with new black/white (auto=false) when the
+            // operator drags the histogram handles.
+            EditParams? edits = null;
+            if (stretchAuto == false) {
+                edits = new EditParams(Stretch: new StretchParams(
+                    Auto: false, Black: black ?? 0, Mid: mid ?? 0.5, White: white ?? 1));
+            }
+            var buf = svc.GetWorkingBuffer(sessionId, edits);
             if (buf == null) return Results.NotFound(new { error = "Session not found." });
             var (data, w, h, channels) = buf.Value;
             ctx.Response.Headers["X-Width"] = w.ToString();

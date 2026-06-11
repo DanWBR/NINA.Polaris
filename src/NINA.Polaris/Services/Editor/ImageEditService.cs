@@ -109,14 +109,16 @@ public class ImageEditService : IDisposable {
     /// streaming the byte[] back to the browser with appropriate
     /// content-type + dimension headers.
     /// </summary>
-    public (byte[] data, int w, int h, int channels)? GetWorkingBuffer(string sessionId) {
+    public (byte[] data, int w, int h, int channels)? GetWorkingBuffer(
+            string sessionId, EditParams? edits = null) {
         if (!_sessions.TryGetValue(sessionId, out var s)) return null;
         s.Touch();
-        // Return a defensive copy, clients of the API shouldn't see the
-        // session's live buffer (mutating it would silently corrupt
-        // subsequent server-side previews).
-        var copy = (byte[])s.Working.Clone();
-        return (copy, s.Width, s.Height, s.Channels);
+        // The 8-bit working buffer is the linear source run through the
+        // Stretch stage (GetStretched returns a fresh copy, so mutating it
+        // can't corrupt the session). WASM picks up here and runs the rest
+        // of the pipeline locally; re-fetching with a new Stretch re-stretches.
+        var data = s.GetStretched(edits ?? EditParams.Defaults);
+        return (data, s.Width, s.Height, s.Channels);
     }
 
     // ─── load ────────────────────────────────────────────────────────
@@ -129,7 +131,13 @@ public class ImageEditService : IDisposable {
 
         try {
             var ext = Path.GetExtension(path).ToLowerInvariant();
-            byte[] working;
+            // For linear sources (FITS) we keep the raw ushort data and defer
+            // the stretch to the pipeline (EditorStretch), so the operator can
+            // re-stretch the linear image from the histogram. 8-bit imports
+            // have no linear data — they go straight into working8.
+            byte[]? working8 = null;
+            ushort[]? linear = null;
+            int bitDepth = 16;
             int width, height, channels;
 
             switch (ext) {
@@ -149,36 +157,12 @@ public class ImageEditService : IDisposable {
                     // mono path, FITSReader already collapses NAXIS3>3 to a
                     // single plane.
                     channels = img.Properties.Channels == 3 ? 3 : 1;
-                    if (channels == 3) {
-                        // FITSReader returns plane-sequential (R then G then B);
-                        // EditPipeline + Skia wrappers expect RGB-interleaved.
-                        // Stretch each plane independently so each channel
-                        // uses its full dynamic range (matches PixInsight's
-                        // ScreenTransferFunction default and gives a
-                        // viewable preview even when one channel is much
-                        // dimmer than the others). Subsequent Color sliders
-                        // let the user fix any white-balance drift this
-                        // introduces.
-                        int planeSize = width * height;
-                        var rPlane = new ushort[planeSize];
-                        var gPlane = new ushort[planeSize];
-                        var bPlane = new ushort[planeSize];
-                        Array.Copy(img.Data, 0,            rPlane, 0, planeSize);
-                        Array.Copy(img.Data, planeSize,    gPlane, 0, planeSize);
-                        Array.Copy(img.Data, planeSize*2,  bPlane, 0, planeSize);
-                        var rStretched = AutoStretch.Apply(rPlane, width, height, img.Properties.BitDepth);
-                        var gStretched = AutoStretch.Apply(gPlane, width, height, img.Properties.BitDepth);
-                        var bStretched = AutoStretch.Apply(bPlane, width, height, img.Properties.BitDepth);
-                        working = new byte[planeSize * 3];
-                        for (int i = 0, j = 0; i < planeSize; i++, j += 3) {
-                            working[j]     = rStretched[i];
-                            working[j + 1] = gStretched[i];
-                            working[j + 2] = bStretched[i];
-                        }
-                    } else {
-                        // Mono path unchanged.
-                        working = AutoStretch.Apply(img.Data, width, height, img.Properties.BitDepth);
-                    }
+                    // Keep the LINEAR data (plane-sequential R,G,B for RGB, or
+                    // mono). EditorStretch turns it into the 8-bit working
+                    // buffer per the current StretchParams, so the histogram
+                    // handles can re-stretch the linear image at any time.
+                    linear = img.Data;
+                    bitDepth = img.Properties.BitDepth;
                     break;
                 }
                 case ".png":
@@ -205,17 +189,17 @@ public class ImageEditService : IDisposable {
                     bool isMono = LooksMono(rgba);
                     if (isMono) {
                         channels = 1;
-                        working = new byte[width * height];
-                        for (int i = 0, j = 0; j < working.Length; i += 4, j++) {
-                            working[j] = src[i]; // R == G == B
+                        working8 = new byte[width * height];
+                        for (int i = 0, j = 0; j < working8.Length; i += 4, j++) {
+                            working8[j] = src[i]; // R == G == B
                         }
                     } else {
                         channels = 3;
-                        working = new byte[width * height * 3];
+                        working8 = new byte[width * height * 3];
                         for (int i = 0, j = 0; i < src.Length; i += 4, j += 3) {
-                            working[j]     = src[i];     // R
-                            working[j + 1] = src[i + 1]; // G
-                            working[j + 2] = src[i + 2]; // B
+                            working8[j]     = src[i];     // R
+                            working8[j + 1] = src[i + 1]; // G
+                            working8[j + 2] = src[i + 2]; // B
                         }
                     }
                     break;
@@ -226,7 +210,9 @@ public class ImageEditService : IDisposable {
             }
 
             var id = Guid.NewGuid().ToString("N");
-            var session = new EditSession(id, path, working, width, height, channels);
+            var session = linear != null
+                ? new EditSession(id, path, linear, width, height, channels, bitDepth)
+                : new EditSession(id, path, working8!, width, height, channels);
             _sessions[id] = session;
             _logger.LogInformation("Editor session {Id} opened ({W}x{H} ch={Ch}) for {Path}",
                 id, width, height, channels, path);
@@ -269,7 +255,7 @@ public class ImageEditService : IDisposable {
         // preview maxDim is set. Crop is applied at full-res to keep the
         // crop tight to pixel boundaries; resize after the pipeline so
         // sharpening / clarity radii are computed in source pixels.
-        var working = (byte[])s.Working.Clone();
+        var working = s.GetStretched(edits);
         int w = s.Width, h = s.Height;
 
         // Apply the edit pipeline first (on either full-res or already
@@ -313,7 +299,7 @@ public class ImageEditService : IDisposable {
 
         // Histogram on a small downsampled copy is statistically equivalent
         // to the full-res one for chart purposes and ~50× faster.
-        var working = (byte[])s.Working.Clone();
+        var working = s.GetStretched(edits);
         int w = s.Width, h = s.Height;
         if (w > 512 || h > 512) {
             double scale = 512.0 / Math.Max(w, h);
@@ -348,7 +334,7 @@ public class ImageEditService : IDisposable {
         }
         s.Touch();
 
-        var working = (byte[])s.Working.Clone();
+        var working = s.GetStretched(req.Edits);
         int w = s.Width, h = s.Height;
 
         EditPipeline.Apply(working, w, h, s.Channels, req.Edits);
@@ -481,16 +467,55 @@ public class ImageEditService : IDisposable {
     private sealed class EditSession : IDisposable {
         public string Id { get; }
         public string SourcePath { get; }
-        public byte[] Working { get; }
         public int Width { get; }
         public int Height { get; }
         public int Channels { get; }
+        public int BitDepth { get; }
+        public bool IsLinear { get; }
         public DateTime LastTouchedUtc { get; private set; }
 
-        public EditSession(string id, string sourcePath, byte[] working, int w, int h, int channels) {
-            Id = id; SourcePath = sourcePath; Working = working;
-            Width = w; Height = h; Channels = channels;
+        private readonly ushort[]? _linear;   // plane-seq RGB / mono, when IsLinear
+        private readonly byte[]? _working8;    // 8-bit source, when !IsLinear
+        private readonly object _lock = new();
+        private string? _cacheKey;
+        private byte[]? _cached;                // last stretched 8-bit buffer
+
+        // Linear source (FITS): the stretch is part of the pipeline.
+        public EditSession(string id, string sourcePath, ushort[] linear,
+                           int w, int h, int channels, int bitDepth) {
+            Id = id; SourcePath = sourcePath; _linear = linear;
+            Width = w; Height = h; Channels = channels; BitDepth = bitDepth;
+            IsLinear = true;
             LastTouchedUtc = DateTime.UtcNow;
+        }
+
+        // 8-bit import (PNG/JPG/TIFF): already display-referred, no stretch.
+        public EditSession(string id, string sourcePath, byte[] working8,
+                           int w, int h, int channels) {
+            Id = id; SourcePath = sourcePath; _working8 = working8;
+            Width = w; Height = h; Channels = channels; BitDepth = 8;
+            IsLinear = false;
+            LastTouchedUtc = DateTime.UtcNow;
+        }
+
+        /// <summary>
+        /// The 8-bit display buffer for the given edits' Stretch stage. Returns
+        /// a fresh copy each call (the pipeline mutates in place). For linear
+        /// sources the result is cached and only recomputed when the stretch
+        /// params change, so non-stretch slider drags stay cheap.
+        /// </summary>
+        public byte[] GetStretched(EditParams edits) {
+            if (!IsLinear) return (byte[])_working8!.Clone();
+            var sp = edits.Stretch;
+            var key = (sp == null || sp.Auto)
+                ? "auto"
+                : $"{sp.Black:F4}:{sp.Mid:F4}:{sp.White:F4}";
+            lock (_lock) {
+                if (_cacheKey == key && _cached != null) return (byte[])_cached.Clone();
+                var stretched = EditorStretch.Apply(_linear!, Width, Height, Channels, BitDepth, sp);
+                _cacheKey = key; _cached = stretched;
+                return (byte[])stretched.Clone();
+            }
         }
 
         public void Touch() => LastTouchedUtc = DateTime.UtcNow;

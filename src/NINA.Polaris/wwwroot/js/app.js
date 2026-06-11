@@ -9301,7 +9301,7 @@ function ninaApp() {
                 // (full-res 8-bit per channel) and used to feel like
                 // a freeze on first open.
                 const r = await this.apiDownload(
-                    '/api/editor/raw/' + this.editorState.session,
+                    '/api/editor/raw/' + this.editorState.session + this._editorStretchQuery(),
                     { label: 'Load editor session' });
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 const w  = parseInt(r.headers.get('X-Width')  || '0', 10);
@@ -10180,12 +10180,17 @@ function ninaApp() {
             this.editorHisto.avg = Math.round(avg);
             this.editorHisto.std = Math.round(std);
 
-            // Handle fractions from the editor's Blacks/Whites light params.
-            const light = this.editorState.edits.light || {};
-            const blacks = +(light.blacks ?? 0);
-            const whites = +(light.whites ?? 0);
-            this.editorHisto.blackFrac = Math.max(0, Math.min(1, blacks));
-            this.editorHisto.whiteFrac = Math.max(0, Math.min(1, 1 + Math.min(0, whites)));
+            // Handle fractions from the Stretch stage (the linear→display
+            // transform). Auto puts them at the full 0..1 ends; manual reads
+            // the chosen black/white clip points.
+            const st = this.editorState.edits.stretch;
+            if (!st || st.auto !== false) {
+                this.editorHisto.blackFrac = 0;
+                this.editorHisto.whiteFrac = 1;
+            } else {
+                this.editorHisto.blackFrac = Math.max(0, Math.min(1, +(st.black ?? 0)));
+                this.editorHisto.whiteFrac = Math.max(0, Math.min(1, +(st.white ?? 1)));
+            }
 
             // Zoom narrows the X range to the populated band (+ a little margin
             // around the handles), like the live panel's Zoom toggle.
@@ -10233,32 +10238,66 @@ function ninaApp() {
             fx = Math.max(0, Math.min(1, fx));
             const frac = lo + fx * span;
             const gap = 0.01;
+            // Switch the Stretch stage to manual on first drag, seeding from
+            // wherever the handles currently sit so the image doesn't jump.
+            const st = this.editorState.edits.stretch && this.editorState.edits.stretch.auto === false
+                ? this.editorState.edits.stretch
+                : { auto: false, black: this.editorHisto.blackFrac,
+                    mid: 0.5, white: this.editorHisto.whiteFrac };
             if (d.which === 'black') {
-                // Black point: 0 = neutral, dragging right crushes shadows
-                // (Blacks 0..1). Kept below the white handle.
-                const v = Math.max(0, Math.min(frac, this.editorHisto.whiteFrac - gap));
-                this.editorHisto.blackFrac = v;
-                this.editorSetLight('blacks', Math.round(v * 100) / 100);
+                st.black = Math.max(0, Math.min(frac, this.editorHisto.whiteFrac - gap));
+                this.editorHisto.blackFrac = st.black;
             } else {
-                // White point: 1 = neutral, dragging left pulls highlights down
-                // (Whites 0..-1). Kept above the black handle.
-                const v = Math.min(1, Math.max(frac, this.editorHisto.blackFrac + gap));
-                this.editorHisto.whiteFrac = v;
-                this.editorSetLight('whites', Math.round((v - 1) * 100) / 100);
+                st.white = Math.min(1, Math.max(frac, this.editorHisto.blackFrac + gap));
+                this.editorHisto.whiteFrac = st.white;
             }
-            // Redraw markers immediately; the pipeline re-render + histogram
-            // refresh is debounced inside editorSetLight.
+            this.editorState.edits.stretch = st;
+            // Redraw the markers immediately; the re-stretch + render is
+            // debounced in _editorApplyStretch.
             if (!this._editorHistoRaf) {
                 this._editorHistoRaf = requestAnimationFrame(() => {
                     this._editorHistoRaf = null;
                     this._editorDrawHistogram();
                 });
             }
+            this._editorApplyStretch();
+        },
+
+        // Build the ?stretch... query for /api/editor/raw so the WASM buffer
+        // is re-stretched server-side from the cached linear data.
+        _editorStretchQuery() {
+            const st = this.editorState.edits.stretch;
+            if (!st || st.auto !== false) return '';
+            return '?stretchAuto=false&black=' + (st.black ?? 0)
+                 + '&mid=' + (st.mid ?? 0.5) + '&white=' + (st.white ?? 1);
+        },
+
+        // Re-stretch the linear source then re-render. Server mode picks up
+        // edits.stretch directly; WASM mode must re-fetch the freshly stretched
+        // buffer (the stretch is the linear→8-bit stage the WASM pipeline
+        // starts from). Debounced so dragging stays responsive.
+        _editorApplyStretch() {
+            this.editorState.dirty = true;
+            this._editorScheduleHistoryPush();
+            if (this.editorState.computeMode === 'wasm' && this.editorState.wasmLoaded) {
+                clearTimeout(this._editorStretchTimer);
+                this._editorStretchTimer = setTimeout(async () => {
+                    await this._editorLoadWasmBuffer();   // re-fetch stretched buffer
+                    this._editorSchedulePreview();
+                    this._editorRenderHistogram();
+                }, 200);
+            } else {
+                this._editorSchedulePreview();
+            }
         },
 
         editorHistoAuto() {
-            // Reuse the editor's existing one-click Auto tune.
-            if (typeof this.editorAuto === 'function') this.editorAuto();
+            // Back to the per-channel GraXpert auto-stretch (the load default).
+            this.editorState.edits.stretch = { auto: true };
+            this.editorHisto.blackFrac = 0;
+            this.editorHisto.whiteFrac = 1;
+            this._editorApplyStretch();
+            this._editorDrawHistogram();
         },
 
         editorHistoToggleZoom() {
