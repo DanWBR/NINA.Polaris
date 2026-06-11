@@ -2326,6 +2326,22 @@ function ninaApp() {
         _lastRawFrame: null,  // cache: { pixels, width, height, bitDepth, bayerPattern }
         showStretchPanel: false,
 
+        // ASIAIR-style histogram mini-panel (bottom of LIVE / PREVIEW /
+        // AUTORUN). histo holds the computed bins + stats for the cached
+        // frame; histoZoom narrows the drawn X range to the populated
+        // region. blackFrac/whiteFrac are the 0..1 stretch endpoints the
+        // two draggable handles sit on (auto-derived when stretchAuto).
+        histoZoom: false,
+        histo: {
+            min: 0, max: 0, avg: 0, std: 0,
+            bins: null, peak: 1, count: 0,
+            blackFrac: 0, whiteFrac: 1,
+            dispLo: 0, dispHi: 1,
+            _token: -1
+        },
+        _histoToken: 0,       // bumped each time a new raw frame is cached
+        _histoDrag: null,     // { which:'black'|'white', tab, rect } while dragging
+
         // Preview render quality (client-side, persisted in localStorage).
         //   previewMaxDim: max GPU output canvas dimension. 2048 / 4096 /
         //     0 (native = hardware MAX_TEXTURE_SIZE). Bigger = sharper zoom,
@@ -5347,6 +5363,9 @@ function ninaApp() {
             // routing fix.
             this._tryRenderWebGL(f.pixels, f.width, f.height, f.bitDepth,
                 f.bayerPattern, shadow, scaleFactor, midtone, f.frameKind || 0);
+            // Keep the histogram mini-panel (handles + bars) in sync with the
+            // stretch we just applied. Cheap: bins are cached per-frame.
+            this.drawHistogram();
         },
 
         // Re-render the cached frame with whatever wb / stretch state
@@ -5354,6 +5373,226 @@ function ninaApp() {
         // change updates the canvas immediately without waiting for
         // the next capture. Same plumbing as applyManualStretch.
         applyWb() { this.applyManualStretch(); },
+
+        // ───────── ASIAIR-style histogram mini-panel ─────────
+        // Which canvas the histogram draws into, per active tab.
+        _histoCanvasId() {
+            switch (this.tab) {
+                case 'preview':  return 'histoCanvas-preview';
+                case 'sequence': return 'histoCanvas-autorun';  // AUTORUN tab id is 'sequence'
+                default:         return 'histoCanvas-live';
+            }
+        },
+
+        // Build the 256-bin histogram + min/max/avg/std from the cached raw
+        // frame, plus the auto-stretch endpoints (so the handles can show
+        // where Auto placed black/white). Recomputed only when a new frame
+        // arrived (token guard); endpoint + display range refresh is cheap
+        // and runs every draw.
+        _ensureHistogram() {
+            const f = this._lastRawFrame;
+            if (!f || !f.pixels || !f.pixels.length) return false;
+            if (this.histo._token === this._histoToken && this.histo.bins) {
+                this._histoUpdateEndpoints();
+                return true;
+            }
+            const px = f.pixels, n = px.length, maxVal = f.maxVal || 65535;
+            const NB = 256;
+            const bins = new Float64Array(NB);
+            const step = Math.max(1, Math.floor(n / 300000)); // subsample big sensors
+            const scale = (NB - 1) / maxVal;
+            let mn = maxVal, mx = 0, sum = 0, sumSq = 0, cnt = 0;
+            for (let i = 0; i < n; i += step) {
+                const v = px[i];
+                if (v < mn) mn = v;
+                if (v > mx) mx = v;
+                sum += v; sumSq += v * v; cnt++;
+                let b = (v * scale) | 0;
+                if (b < 0) b = 0; else if (b >= NB) b = NB - 1;
+                bins[b]++;
+            }
+            const avg = cnt ? sum / cnt : 0;
+            const std = cnt ? Math.sqrt(Math.max(0, sumSq / cnt - avg * avg)) : 0;
+            let peak = 1;
+            for (let i = 0; i < NB; i++) if (bins[i] > peak) peak = bins[i];
+
+            // Auto endpoints, computed once per frame via the existing
+            // GraXpert-preset path (temporarily force auto mode so we get the
+            // computed shadow/white regardless of the live toggle).
+            const savedAuto = this.stretchAuto;
+            this.stretchAuto = true;
+            let ap;
+            try { ap = this._computeStretchParams(px, maxVal); }
+            finally { this.stretchAuto = savedAuto; }
+            const aWhite = ap.shadow + (ap.scaleFactor > 0 ? 1 / ap.scaleFactor : maxVal);
+
+            this.histo.bins = bins;
+            this.histo.peak = Math.log1p(peak);
+            this.histo.count = cnt;
+            this.histo.min = mn | 0;
+            this.histo.max = mx | 0;
+            this.histo.avg = Math.round(avg);
+            this.histo.std = Math.round(std);
+            this.histo._maxVal = maxVal;
+            this.histo._autoBlack = Math.max(0, Math.min(1, ap.shadow / maxVal));
+            this.histo._autoWhite = Math.max(0, Math.min(1, aWhite / maxVal));
+            this.histo._token = this._histoToken;
+            this._histoUpdateEndpoints();
+            return true;
+        },
+
+        // Refresh the black/white handle fractions (auto vs manual) and the
+        // drawn X range (full 0..65535, or zoomed to the populated band).
+        _histoUpdateEndpoints() {
+            if (this.stretchAuto) {
+                this.histo.blackFrac = this.histo._autoBlack ?? 0;
+                this.histo.whiteFrac = this.histo._autoWhite ?? 1;
+            } else {
+                this.histo.blackFrac = Math.max(0, Math.min(1, this.stretchBlack));
+                this.histo.whiteFrac = Math.max(0, Math.min(1, this.stretchWhite));
+            }
+            const maxV = this.histo._maxVal || 65535;
+            if (this.histoZoom) {
+                let lo = (this.histo.min / maxV) - 0.01;
+                let hi = (this.histo.avg + 8 * this.histo.std) / maxV + 0.02;
+                lo = Math.min(lo, this.histo.blackFrac - 0.02);
+                hi = Math.max(hi, this.histo.whiteFrac + 0.02);
+                this.histo.dispLo = Math.max(0, lo);
+                this.histo.dispHi = Math.min(1, Math.max(this.histo.dispLo + 0.05, hi));
+            } else {
+                this.histo.dispLo = 0;
+                this.histo.dispHi = 1;
+            }
+        },
+
+        // Draw the histogram bars + black/white marker lines onto the active
+        // tab's canvas. No-ops cleanly when the canvas isn't laid out yet
+        // (hidden tab) — the next applyManualStretch / tab switch redraws it.
+        drawHistogram() {
+            try {
+                // Only LIVE / PREVIEW / AUTORUN(sequence) host the panel; skip
+                // the histogram scan entirely on other tabs (e.g. VIDEO).
+                const t = this.tab;
+                if (t !== 'live' && t !== 'preview' && t !== 'sequence') return;
+                if (!this._ensureHistogram()) return;
+                const cv = document.getElementById(this._histoCanvasId());
+                if (!cv) return;
+                const rect = cv.getBoundingClientRect();
+                if (rect.width < 2 || rect.height < 2) return;
+                const dpr = window.devicePixelRatio || 1;
+                const w = Math.round(rect.width), h = Math.round(rect.height);
+                if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+                    cv.width = Math.round(w * dpr);
+                    cv.height = Math.round(h * dpr);
+                }
+                const ctx = cv.getContext('2d');
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                ctx.clearRect(0, 0, w, h);
+
+                const bins = this.histo.bins;
+                if (!bins) return;
+                const NB = bins.length;
+                const lo = this.histo.dispLo, hi = this.histo.dispHi;
+                const span = Math.max(1e-6, hi - lo);
+                const peak = this.histo.peak || 1;
+                const barW = Math.max(1, (w / (NB * span)));
+
+                ctx.fillStyle = 'rgba(150,180,220,0.8)';
+                for (let b = 0; b < NB; b++) {
+                    const frac = (b + 0.5) / NB;
+                    if (frac < lo || frac > hi) continue;
+                    const x = ((frac - lo) / span) * w;
+                    const val = Math.log1p(bins[b]) / peak;
+                    const bh = val * (h - 1);
+                    ctx.fillRect(x, h - bh, barW, bh);
+                }
+                // Midpoint tick (helps read the 0..65535 scale like ASIAIR's
+                // centre gridline at 32768).
+                const midFrac = 0.5;
+                if (midFrac >= lo && midFrac <= hi) {
+                    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+                    ctx.lineWidth = 1;
+                    const xm = ((midFrac - lo) / span) * w;
+                    ctx.beginPath(); ctx.moveTo(xm, 0); ctx.lineTo(xm, h); ctx.stroke();
+                }
+                const marker = (frac, color) => {
+                    if (frac < lo || frac > hi) return;
+                    const x = ((frac - lo) / span) * w;
+                    ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+                    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+                };
+                marker(this.histo.blackFrac, 'rgba(255,255,255,0.55)');
+                marker(this.histo.whiteFrac, 'rgba(255,255,255,0.55)');
+            } catch (e) { /* canvas not ready / context lost — ignore */ }
+        },
+
+        // Handle X position (%) within the drawn range, for the draggable
+        // pill overlays.
+        histoMarkerPct(which) {
+            const lo = this.histo.dispLo, hi = this.histo.dispHi;
+            const span = Math.max(1e-6, hi - lo);
+            const frac = which === 'black' ? this.histo.blackFrac : this.histo.whiteFrac;
+            return Math.max(0, Math.min(100, ((frac - lo) / span) * 100));
+        },
+
+        histoHandleDown(ev, which) {
+            ev.preventDefault();
+            const graph = ev.currentTarget.closest('.histo-graph');
+            if (!graph) return;
+            // First drag flips to manual, seeding the sliders from wherever
+            // Auto currently has the endpoints so the image doesn't jump.
+            if (this.stretchAuto) {
+                this.stretchBlack = this.histo.blackFrac;
+                this.stretchWhite = this.histo.whiteFrac;
+                this.stretchAuto = false;
+            }
+            this._histoDrag = { which, rect: graph.getBoundingClientRect() };
+            const move = (e) => this._histoDragMove(e);
+            const up = () => {
+                window.removeEventListener('pointermove', move);
+                window.removeEventListener('pointerup', up);
+                this._histoDrag = null;
+                this.applyManualStretch();   // final crisp render + histo redraw
+            };
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', up);
+        },
+
+        _histoDragMove(e) {
+            const d = this._histoDrag;
+            if (!d) return;
+            const lo = this.histo.dispLo, hi = this.histo.dispHi;
+            const span = Math.max(1e-6, hi - lo);
+            let fx = (e.clientX - d.rect.left) / Math.max(1, d.rect.width);
+            fx = Math.max(0, Math.min(1, fx));
+            const frac = lo + fx * span;
+            const gap = 0.005;
+            if (d.which === 'black') {
+                this.stretchBlack = Math.max(0, Math.min(frac, this.stretchWhite - gap));
+                this.histo.blackFrac = this.stretchBlack;
+            } else {
+                this.stretchWhite = Math.min(1, Math.max(frac, this.stretchBlack + gap));
+                this.histo.whiteFrac = this.stretchWhite;
+            }
+            // Throttle the (relatively heavy) GPU re-render to one per frame.
+            if (!this._histoRaf) {
+                this._histoRaf = requestAnimationFrame(() => {
+                    this._histoRaf = null;
+                    this.applyManualStretch();
+                });
+            }
+        },
+
+        histoAuto() {
+            this.stretchAuto = !this.stretchAuto;
+            this.applyManualStretch();
+            this.toast(this.stretchAuto ? 'Auto-stretch on' : 'Auto-stretch off (manual)', 'ok');
+        },
+
+        histoToggleZoom() {
+            this.histoZoom = !this.histoZoom;
+            this.drawHistogram();
+        },
 
         // Gray-world auto white-balance from the current raw frame.
         // Walks the Bayer mosaic, sums R / G / B contributions, sets
@@ -6373,6 +6612,9 @@ function ninaApp() {
             // and the preview frame leaks onto the LIVE canvas because
             // the re-render forgot which panel originally owned it.
             this._lastRawFrame = { pixels, width, height, bitDepth, bayerPattern, maxVal, frameKind };
+            // New frame → invalidate the cached histogram bins so the mini
+            // panel recomputes min/max/avg/std + bars on the next draw.
+            this._histoToken++;
 
             // Auto WB: when enabled, recompute gain ratios from the
             // current frame at most every ~2s so we don't burn CPU
@@ -6395,6 +6637,7 @@ function ninaApp() {
             // Try WebGL2 path first (GPU does debayer + stretch in microseconds)
             if (this._tryRenderWebGL(pixels, width, height, bitDepth,
                     bayerPattern, shadow, scaleFactor, midtone, frameKind)) {
+                this.drawHistogram();   // refresh the histogram mini-panel
                 return;
             }
 

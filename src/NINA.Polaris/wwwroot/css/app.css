@@ -1580,6 +1580,99 @@ button,
     min-height: var(--statsbar-height);
 }
 
+/* ASIAIR-style histogram + stretch mini-panel, pinned to the bottom of the
+   LIVE / PREVIEW / AUTORUN tabs: stats on the left, a 0..65535 histogram
+   with two draggable black/white-point handles in the middle, Auto + Zoom
+   on the right. */
+.histo-panel {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    height: 84px;
+    flex: 0 0 auto;
+    padding: 6px 12px;
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border);
+}
+.histo-stats {
+    display: grid;
+    grid-template-columns: auto auto;
+    grid-auto-rows: 1fr;
+    column-gap: 16px;
+    row-gap: 2px;
+    align-content: center;
+    min-width: 116px;
+    font-variant-numeric: tabular-nums;
+}
+.histo-stats .hs-cell { display: flex; flex-direction: column; line-height: 1.15; }
+.histo-stats .hs-v { font-size: 13px; color: var(--text-primary); }
+.histo-stats .hs-l {
+    font-size: 9px; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.05em;
+}
+.histo-graph {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    touch-action: none;
+}
+.histo-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+.histo-axis {
+    position: absolute;
+    left: 0; right: 0; bottom: 1px;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 3px;
+    font-size: 9px;
+    color: var(--text-muted);
+    pointer-events: none;
+    opacity: 0.7;
+}
+.histo-handle {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 16px;
+    margin-left: -8px;
+    cursor: ew-resize;
+    touch-action: none;
+    z-index: 2;
+}
+.histo-handle::before {   /* the thin vertical line at the exact point */
+    content: '';
+    position: absolute;
+    left: 7px; top: 0; bottom: 0;
+    width: 2px;
+    background: rgba(255, 255, 255, 0.7);
+}
+.histo-handle::after {    /* the grabbable pill */
+    content: '';
+    position: absolute;
+    left: 2px; top: 50%;
+    transform: translateY(-50%);
+    width: 12px; height: 26px;
+    border-radius: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    background: rgba(56, 189, 248, 0.85);
+}
+.histo-handle-white::after { background: rgba(226, 232, 240, 0.92); }
+.histo-actions {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+}
+.histo-actions .btn { min-width: 56px; }
+
 .stats-bar strong {
     color: var(--text-primary);
 }

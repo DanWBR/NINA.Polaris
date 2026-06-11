@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260611-sidebar-scroll">
+    <link rel="stylesheet" href="/css/app.css?v=20260611-histo-panel">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -1562,42 +1562,33 @@
                          until the first frame lands. -->
                     <span>Stacking: <strong
                           x-text="liveStackStatus?.elapsedSeconds > 0 ? formatTime(liveStackStatus.elapsedSeconds) : '--'">--</strong></span>
-                    <button class="btn btn-sm" @click="showStretchPanel = !showStretchPanel"
-                            :class="showStretchPanel ? 'btn-active' : ''" style="margin-left:auto;"
-                            :disabled="!selectedCamera">Stretch</button>
-                    <button class="btn btn-sm" @click="loadFullStats()"
+                    <button class="btn btn-sm" @click="loadFullStats()" style="margin-left:auto;"
                             :disabled="!selectedCamera">Detailed stats</button>
                 </div>
 
-                <!-- Manual stretch panel -->
-                <div class="stretch-panel" x-show="showStretchPanel">
-                    <div class="stretch-header">
-                        <strong>Stretch</strong>
-                        <label class="seq-dither-toggle">
-                            <input type="checkbox" x-model="stretchAuto" @change="applyManualStretch()">
-                            <span :class="stretchAuto ? 'text-ok' : 'text-warn'"
-                                  x-text="stretchAuto ? 'AUTO' : 'MANUAL'"></span>
-                        </label>
-                        <span class="text-muted" style="font-size: 11px;" x-show="!_lastRawFrame">
-                            (raw mode only, switch image stream to raw)
-                        </span>
+                <!-- ASIAIR-style histogram + stretch mini-panel -->
+                <div class="histo-panel" x-show="selectedCamera || _lastRawFrame">
+                    <div class="histo-stats">
+                        <div class="hs-cell"><span class="hs-v" x-text="histo.max"></span><span class="hs-l">Max</span></div>
+                        <div class="hs-cell"><span class="hs-v" x-text="histo.avg"></span><span class="hs-l">Avg</span></div>
+                        <div class="hs-cell"><span class="hs-v" x-text="histo.min"></span><span class="hs-l">Min</span></div>
+                        <div class="hs-cell"><span class="hs-v" x-text="histo.std"></span><span class="hs-l">Std</span></div>
                     </div>
-                    <div class="stretch-sliders" :class="stretchAuto ? 'disabled' : ''">
-                        <label>Black point: <span x-text="(stretchBlack * 100).toFixed(1) + '%'"></span>
-                            <input type="range" min="0" max="0.5" step="0.001" x-model.number="stretchBlack"
-                                   @input="applyManualStretch()" :disabled="stretchAuto">
-                        </label>
-                        <label>White point: <span x-text="(stretchWhite * 100).toFixed(1) + '%'"></span>
-                            <input type="range" min="0.5" max="1" step="0.001" x-model.number="stretchWhite"
-                                   @input="applyManualStretch()" :disabled="stretchAuto">
-                        </label>
-                        <label>Midtones (MTF): <span x-text="stretchMid.toFixed(3)"></span>
-                            <input type="range" min="0.01" max="0.9" step="0.005" x-model.number="stretchMid"
-                                   @input="applyManualStretch()">
-                        </label>
+                    <div class="histo-graph">
+                        <canvas id="histoCanvas-live" class="histo-canvas"></canvas>
+                        <div class="histo-axis"><span>0</span><span>32768</span><span>65535</span></div>
+                        <div class="histo-handle histo-handle-black"
+                             :style="'left:' + histoMarkerPct('black') + '%'"
+                             @pointerdown="histoHandleDown($event,'black')" title="Black point"></div>
+                        <div class="histo-handle histo-handle-white"
+                             :style="'left:' + histoMarkerPct('white') + '%'"
+                             @pointerdown="histoHandleDown($event,'white')" title="White point"></div>
                     </div>
-                    <div class="control-row actions">
-                        <button class="btn btn-sm" @click="stretchBlack=0; stretchWhite=1; stretchMid=0.25; stretchAuto=true; applyManualStretch()">Reset</button>
+                    <div class="histo-actions">
+                        <button class="btn btn-sm" :class="stretchAuto ? 'btn-active' : ''"
+                                @click="histoAuto()" title="Auto-stretch">Auto</button>
+                        <button class="btn btn-sm" :class="histoZoom ? 'btn-active' : ''"
+                                @click="histoToggleZoom()" title="Zoom the histogram to the data">Zoom</button>
                     </div>
                 </div>
 
@@ -2821,6 +2812,32 @@
                           x-text="'last: ' + (preview.lastSnapAt
                                               ? new Date(preview.lastSnapAt).toLocaleTimeString()
                                               : '')"></span>
+                </div>
+
+                <!-- ASIAIR-style histogram + stretch mini-panel -->
+                <div class="histo-panel" x-show="selectedCamera || _lastRawFrame">
+                    <div class="histo-stats">
+                        <div class="hs-cell"><span class="hs-v" x-text="histo.max"></span><span class="hs-l">Max</span></div>
+                        <div class="hs-cell"><span class="hs-v" x-text="histo.avg"></span><span class="hs-l">Avg</span></div>
+                        <div class="hs-cell"><span class="hs-v" x-text="histo.min"></span><span class="hs-l">Min</span></div>
+                        <div class="hs-cell"><span class="hs-v" x-text="histo.std"></span><span class="hs-l">Std</span></div>
+                    </div>
+                    <div class="histo-graph">
+                        <canvas id="histoCanvas-preview" class="histo-canvas"></canvas>
+                        <div class="histo-axis"><span>0</span><span>32768</span><span>65535</span></div>
+                        <div class="histo-handle histo-handle-black"
+                             :style="'left:' + histoMarkerPct('black') + '%'"
+                             @pointerdown="histoHandleDown($event,'black')" title="Black point"></div>
+                        <div class="histo-handle histo-handle-white"
+                             :style="'left:' + histoMarkerPct('white') + '%'"
+                             @pointerdown="histoHandleDown($event,'white')" title="White point"></div>
+                    </div>
+                    <div class="histo-actions">
+                        <button class="btn btn-sm" :class="stretchAuto ? 'btn-active' : ''"
+                                @click="histoAuto()" title="Auto-stretch">Auto</button>
+                        <button class="btn btn-sm" :class="histoZoom ? 'btn-active' : ''"
+                                @click="histoToggleZoom()" title="Zoom the histogram to the data">Zoom</button>
+                    </div>
                 </div>
             </div>
 
@@ -7776,6 +7793,32 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div>
                 </div><!-- /.autorun-pane -->
 
+                <!-- ASIAIR-style histogram + stretch mini-panel (sequence view) -->
+                <div class="histo-panel" x-show="autorunTab === 'sequence' && (selectedCamera || _lastRawFrame)">
+                    <div class="histo-stats">
+                        <div class="hs-cell"><span class="hs-v" x-text="histo.max"></span><span class="hs-l">Max</span></div>
+                        <div class="hs-cell"><span class="hs-v" x-text="histo.avg"></span><span class="hs-l">Avg</span></div>
+                        <div class="hs-cell"><span class="hs-v" x-text="histo.min"></span><span class="hs-l">Min</span></div>
+                        <div class="hs-cell"><span class="hs-v" x-text="histo.std"></span><span class="hs-l">Std</span></div>
+                    </div>
+                    <div class="histo-graph">
+                        <canvas id="histoCanvas-autorun" class="histo-canvas"></canvas>
+                        <div class="histo-axis"><span>0</span><span>32768</span><span>65535</span></div>
+                        <div class="histo-handle histo-handle-black"
+                             :style="'left:' + histoMarkerPct('black') + '%'"
+                             @pointerdown="histoHandleDown($event,'black')" title="Black point"></div>
+                        <div class="histo-handle histo-handle-white"
+                             :style="'left:' + histoMarkerPct('white') + '%'"
+                             @pointerdown="histoHandleDown($event,'white')" title="White point"></div>
+                    </div>
+                    <div class="histo-actions">
+                        <button class="btn btn-sm" :class="stretchAuto ? 'btn-active' : ''"
+                                @click="histoAuto()" title="Auto-stretch">Auto</button>
+                        <button class="btn btn-sm" :class="histoZoom ? 'btn-active' : ''"
+                                @click="histoToggleZoom()" title="Zoom the histogram to the data">Zoom</button>
+                    </div>
+                </div>
+
                 <!-- FW-2: Flat Wizard sub-tab pane. 2-column layout
                      mirroring .autorun-pane (config column on the left,
                      shutter sidebar on the right). Shutter reuses the
@@ -12723,7 +12766,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260611-fovrot"></script>
+    <script src="/js/app.js?v=20260611-histo-panel"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
