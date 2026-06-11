@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260611-target-id">
+    <link rel="stylesheet" href="/css/app.css?v=20260611-sidebar-scroll">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -889,6 +889,7 @@
                             @click="toggleQuickControls()"
                             :title="quickControlsCollapsed ? 'Show controls' : 'Hide controls'"
                             x-text="quickControlsCollapsed ? '◀' : '▶'"></button>
+                    <div class="quick-controls-scroll">
                     <!-- SHUT-1: sidebar reorganised into three vertical
                          blocks. .shutter-inputs (Exp/Gain/Bin/Filter)
                          at the top, .shutter-wrap (the round shutter
@@ -1541,6 +1542,7 @@
                         </fieldset>
                     </details>
                     </div><!-- /.shutter-secondary -->
+                    </div><!-- /.quick-controls-scroll -->
                 </div>
                 </div><!-- /.live-pane -->
                 <div class="stats-bar">
@@ -2510,6 +2512,7 @@
                             @click="toggleQuickControls()"
                             :title="quickControlsCollapsed ? 'Show controls' : 'Hide controls'"
                             x-text="quickControlsCollapsed ? '◀' : '▶'"></button>
+                    <div class="quick-controls-scroll">
                     <!-- SHUT-2: same three-block layout LIVE uses
                          (.shutter-inputs / .shutter-wrap / .shutter-secondary). -->
                     <div class="shutter-inputs">
@@ -2803,6 +2806,7 @@
                             </template>
                         </div>
                     </div>
+                    </div><!-- /.quick-controls-scroll -->
                 </div>
                 </div><!-- /.preview-pane -->
 
@@ -2878,6 +2882,7 @@
                                 @click="toggleQuickControls()"
                                 :title="quickControlsCollapsed ? 'Show controls' : 'Hide controls'"
                                 x-text="quickControlsCollapsed ? '◀' : '▶'"></button>
+                        <div class="quick-controls-scroll">
                         <!-- ASIAIR / iOS-date-picker-style vertical drum
          wheels for Exposure / Gain / Focus. Each
          [data-wheel-picker] is mounted by
@@ -3294,6 +3299,7 @@
                             </button>
                         </div>
 
+                        </div><!-- /.quick-controls-scroll -->
                     </div>
                 </div>
 

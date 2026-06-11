@@ -782,7 +782,12 @@ body {
        handle that lives at the inside-left edge of the panel
        (28px wide handle + 8px gap before content starts). */
     padding: 12px 12px 12px 44px;
-    overflow-y: auto;
+    /* The panel itself no longer scrolls — an inner .quick-controls-scroll
+       wrapper does. This keeps the absolutely-positioned toggle handle sized
+       to the panel's full visible height; it used to scroll away with the
+       content, so the grab bar didn't reach the bottom when the panel
+       overflowed (had a scrollbar). */
+    overflow: hidden;
     background: rgba(15, 23, 42, 0.88);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
@@ -868,6 +873,18 @@ body {
 .quick-controls-toggle:hover {
     background: rgba(56, 189, 248, 0.35);
     color: white;
+}
+/* Inner scroll region of the floating PREVIEW / LIVE / VIDEO sidebars. The
+   panel is a fixed-height flex column (top:8 → bottom:8); this wrapper takes
+   the remaining space and scrolls when the controls are taller than the
+   viewport, while the toggle handle stays pinned full-height alongside it. */
+.quick-controls-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 /* AUTORUN sidebar is shutter-only (no exposure / gain / filter
@@ -9504,7 +9521,12 @@ label select.input-sm {
     /* Reserve 44px on the left so the full-height toggle handle
        (28px wide + 8px gap) doesn't overlap content. */
     padding: 12px 12px 12px 44px;
-    overflow-y: auto;
+    /* The panel itself no longer scrolls — an inner .quick-controls-scroll
+       wrapper does. This keeps the absolutely-positioned toggle handle sized
+       to the panel's full visible height; it used to scroll away with the
+       content, so the grab bar didn't reach the bottom when the panel
+       overflowed (had a scrollbar). */
+    overflow: hidden;
     background: rgba(15, 23, 42, 0.88);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
