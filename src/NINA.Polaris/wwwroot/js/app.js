@@ -10233,9 +10233,11 @@ function ninaApp() {
                 window.removeEventListener('pointermove', move);
                 window.removeEventListener('pointerup', up);
                 this._editorHistoDrag = null;
-                // Re-frame the zoom window around the new handle positions now
-                // that the drag is done (never mid-drag, which would shift the
-                // reference under the pointer).
+                // Apply the new stretch only now (on release): re-stretch the
+                // linear source + re-render + refresh the histogram.
+                this._editorApplyStretch();
+                // Re-frame the zoom window around the final handle positions
+                // (never mid-drag, which would shift the reference).
                 if (this.editorHistoZoom) { this._editorHistoApplyZoom(); this._editorDrawHistogram(); }
             };
             window.addEventListener('pointermove', move);
@@ -10266,15 +10268,16 @@ function ninaApp() {
                 this.editorHisto.whiteFrac = st.white;
             }
             this.editorState.edits.stretch = st;
-            // Redraw the markers immediately; the re-stretch + render is
-            // debounced in _editorApplyStretch.
+            // Move ONLY the marker during the drag — do NOT re-stretch yet.
+            // Re-stretching mid-drag changes the histogram (and thus the X
+            // reference) under the pointer, which made the handle overshoot.
+            // The actual re-stretch + render happens once, on release.
             if (!this._editorHistoRaf) {
                 this._editorHistoRaf = requestAnimationFrame(() => {
                     this._editorHistoRaf = null;
                     this._editorDrawHistogram();
                 });
             }
-            this._editorApplyStretch();
         },
 
         // Build the ?stretch... query for /api/editor/raw so the WASM buffer
