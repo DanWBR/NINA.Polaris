@@ -131,6 +131,10 @@ public class ImageWriterService {
             var fileName = SubstitutePattern(pattern, imageData, _sessionFrameNumber) + extension;
             // Sanitise illegal filename characters
             foreach (var c in Path.GetInvalidFileNameChars()) fileName = fileName.Replace(c, '_');
+            // Spaces aren't illegal but make for awkward paths/URLs; collapse
+            // them to underscores so e.g. a "M 31" target writes M_31_... ,
+            // matching the underscore convention SanitizeFolder uses on dirs.
+            fileName = fileName.Replace(' ', '_');
 
             // Standard subdirectory layout, keeps lights / calibration /
             // STUDIO outputs separated so the post-processing pipeline can

@@ -21003,7 +21003,7 @@ function ninaApp() {
 
         addSequenceItem() {
             this.sequence.push({
-                name: 'Target ' + (this.sequence.length + 1),
+                name: 'Target' + (this.sequence.length + 1),
                 exposure: this.exposure,
                 gain: this.gain,
                 binning: parseInt(this.binning),
