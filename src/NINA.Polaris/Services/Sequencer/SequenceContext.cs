@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 
 namespace NINA.Polaris.Services.Sequencer;
@@ -42,18 +43,31 @@ public class SequenceContext {
     /// Per-run scratch space. Triggers use this to remember their last fired
     /// timestamp, the dither trigger uses it to count frames, etc. Keys are
     /// up to the entity (suggest "EntityType:EntityId:field").
+    ///
+    /// Concurrent so a <c>ParallelContainer</c> running children on multiple
+    /// threads can read/write it without corrupting the bucket layout.
     /// </summary>
-    public Dictionary<string, object> Scratch { get; } = new();
+    public ConcurrentDictionary<string, object> Scratch { get; } = new();
 
     /// <summary>Wall-clock start of this sequence run (UTC).</summary>
     public DateTime RunStartedAt { get; }
 
+    private int _framesCompleted;
+
     /// <summary>
     /// Counter incremented by <c>TakeExposureInstruction</c> after every
     /// successful frame. Read by Dither / Auto-focus / Center-after-drift
-    /// triggers that fire every N frames.
+    /// triggers that fire every N frames. Read with a volatile load so a
+    /// trigger evaluated on another thread (parallel container) sees the
+    /// latest value; bump it via <see cref="IncrementFramesCompleted"/>.
     /// </summary>
-    public int FramesCompleted { get; set; }
+    public int FramesCompleted {
+        get => Volatile.Read(ref _framesCompleted);
+        set => Volatile.Write(ref _framesCompleted, value);
+    }
+
+    /// <summary>Atomically increment the completed-frame counter.</summary>
+    public int IncrementFramesCompleted() => Interlocked.Increment(ref _framesCompleted);
 
     /// <summary>
     /// Set by the engine when a <c>SafetyTrigger</c> raises a fatal

@@ -23,6 +23,14 @@ public class SequentialContainer : SequenceContainer {
     public override string Type => "Sequential";
 
     public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
+        // A loop with no conditions runs until the sequence is stopped. That's
+        // a legitimate "shoot until dawn / until I press Stop" pattern, so we
+        // don't treat it as a validation error, but we surface it once in the
+        // log so an accidental IsLoop toggle is diagnosable.
+        if (IsLoop && Conditions.Count == 0)
+            ctx.Logger.LogInformation(
+                "Sequential container '{Name}' loops with no exit condition; "
+                + "it will repeat until the sequence is stopped.", Name);
         do {
             for (int i = 0; i < Items.Count; i++) {
                 if (ctx.AbortRequested) return;

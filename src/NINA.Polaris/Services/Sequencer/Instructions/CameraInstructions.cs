@@ -90,7 +90,7 @@ public class TakeExposureInstruction : SequenceInstruction {
                 ctx.Logger.LogDebug(ex, "Star detection failed on captured frame (continuing)");
             }
 
-            ctx.FramesCompleted++;
+            ctx.IncrementFramesCompleted();
         }
     }
 }

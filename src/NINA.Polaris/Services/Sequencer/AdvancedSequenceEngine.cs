@@ -66,6 +66,14 @@ public class AdvancedSequenceEngine {
 
     public void Start() {
         if (State == AdvancedSequenceState.Running) return;
+        // Guard the restart race: Stop() only requests cancellation, so a
+        // previous run may still be unwinding (an instruction mid-flight that
+        // hasn't observed the token yet). Starting now would let two runs
+        // mutate the same Document.Root concurrently.
+        if (_runTask is { IsCompleted: false }) {
+            LastError = "Previous run is still stopping; try again in a moment.";
+            return;
+        }
         var errors = Validate();
         if (errors.Count > 0) {
             LastError = "Validation failed: " + string.Join("; ", errors);
@@ -85,8 +93,11 @@ public class AdvancedSequenceEngine {
     }
 
     public void Stop() {
+        // Only request cancellation. The run task's finally clause flips State
+        // back to Idle once it has actually wound down, so State stays truthful
+        // ("Running" until the in-flight instruction observes the token) and
+        // Start() can't kick off a second run on top of a live one.
         _cts?.Cancel();
-        State = AdvancedSequenceState.Idle;
     }
 
     private async Task RunAsync(CancellationToken ct) {
