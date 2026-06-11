@@ -179,6 +179,11 @@ public sealed class PlayerOneSdkCamera : ICamera {
                                          CancellationToken ct = default) => Task.Run<IImageData>(() => {
         lock (_gate) {
             if (_streaming) throw new InvalidOperationException("Stop the video stream before a still exposure.");
+            // Re-assert the 16-bit pixel format before the still, mirroring the
+            // SVBony native path. We own the SDK handle exclusively so it can't
+            // be flipped to RAW8 like an external INDI driver can, but this
+            // keeps the native backends consistent + future-proof.
+            POASetImageFormat(_cameraId, _imgFormat);
             ApplyExposureGain(exposureSeconds, opts?.Gain);
             GetRoi(out var w, out var h);
             var bytes = new byte[(long)w * h * BytesPerPixel()];

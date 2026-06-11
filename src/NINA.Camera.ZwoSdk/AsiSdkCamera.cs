@@ -188,6 +188,13 @@ public sealed class AsiSdkCamera : ICamera {
                                          CancellationToken ct = default) => Task.Run<IImageData>(() => {
         lock (_gate) {
             if (_streaming) throw new InvalidOperationException("Stop the video stream before a still exposure.");
+            // Re-assert the 16-bit ROI format (size + bin + image type) right
+            // before the still, mirroring the SVBony native path. We own the
+            // SDK handle exclusively so it can't be flipped to RAW8 the way an
+            // external INDI driver can, but this keeps all native backends
+            // consistent and guards against any future stream/ROI path that
+            // might change the format.
+            ApplyRoi();
             ApplyExposureGain(exposureSeconds, opts?.Gain);
             GetRoi(out var w, out var h);
             var bytes = new byte[(long)w * h * BytesPerPixel()];
