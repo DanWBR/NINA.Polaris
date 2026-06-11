@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using System.Text.Json;
 using NINA.Polaris.Services;
 
 namespace NINA.Polaris.Endpoints;
@@ -39,9 +40,16 @@ public static class SequenceEndpoints {
             }
         });
 
-        group.MapPost("/start", (SequenceEngine engine) => {
+        // resume=true continues a partially-completed run from where it
+        // stopped (the engine retains CurrentItemIndex/CurrentFrameInItem);
+        // anything else resets progress first so it starts from the top.
+        group.MapPost("/start", (SequenceEngine engine, StartRequest? req) => {
+            if (req?.Resume != true) engine.ResetProgress();
             engine.Start();
-            return Results.Ok(new { state = engine.State.ToString().ToLowerInvariant() });
+            return Results.Ok(new {
+                state = engine.State.ToString().ToLowerInvariant(),
+                resumed = req?.Resume == true
+            });
         });
 
         group.MapPost("/pause", (SequenceEngine engine) => {
@@ -107,5 +115,57 @@ public static class SequenceEndpoints {
             engine.Dither = settings;
             return Results.Ok(engine.Dither);
         });
+
+        // --- Named sequence sets (save / reload presets) ---
+        // Stored as one JSON file per set under {DataDir}/sequence-sets/. The
+        // body is the raw items array (stored verbatim so client-only fields
+        // like thumbUrl / fromSky survive a round-trip).
+
+        group.MapGet("/sets", (ProfileService profiles) => {
+            var dir = SetsDir(profiles);
+            if (!Directory.Exists(dir)) return Results.Ok(new { sets = Array.Empty<string>() });
+            var names = Directory.GetFiles(dir, "*.json")
+                .Select(Path.GetFileNameWithoutExtension)
+                .Where(n => !string.IsNullOrEmpty(n))
+                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            return Results.Ok(new { sets = names });
+        });
+
+        group.MapPost("/sets/{name}", async (string name, JsonElement items, ProfileService profiles) => {
+            var safe = SafeSetName(name);
+            if (string.IsNullOrEmpty(safe)) return Results.BadRequest(new { error = "Invalid set name." });
+            var dir = SetsDir(profiles);
+            Directory.CreateDirectory(dir);
+            await File.WriteAllTextAsync(Path.Combine(dir, safe + ".json"), items.GetRawText());
+            return Results.Ok(new { saved = safe });
+        });
+
+        group.MapGet("/sets/{name}", async (string name, ProfileService profiles) => {
+            var safe = SafeSetName(name);
+            var path = Path.Combine(SetsDir(profiles), safe + ".json");
+            if (!File.Exists(path)) return Results.NotFound(new { error = "Set not found." });
+            // Return the stored items array verbatim.
+            return Results.Content(await File.ReadAllTextAsync(path), "application/json");
+        });
+
+        group.MapDelete("/sets/{name}", (string name, ProfileService profiles) => {
+            var safe = SafeSetName(name);
+            var path = Path.Combine(SetsDir(profiles), safe + ".json");
+            if (File.Exists(path)) File.Delete(path);
+            return Results.Ok(new { deleted = safe });
+        });
     }
+
+    private static string SetsDir(ProfileService profiles)
+        => Path.Combine(profiles.DataDir, "sequence-sets");
+
+    private static string SafeSetName(string? name) {
+        if (string.IsNullOrWhiteSpace(name)) return "";
+        var s = name.Trim();
+        foreach (var c in Path.GetInvalidFileNameChars()) s = s.Replace(c, '_');
+        return s.Length > 64 ? s[..64] : s;
+    }
+
+    public record StartRequest(bool? Resume);
 }

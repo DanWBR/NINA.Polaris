@@ -1735,6 +1735,41 @@ label select.input-sm {
     font-size: 12px;
 }
 
+.btn-xs {
+    padding: 2px 7px;
+    font-size: 11px;
+}
+
+/* Named autorun sets (save / reload presets) in the AUTORUN list column. */
+.seq-sets {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+}
+
+.seq-sets-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.7;
+    margin-bottom: 6px;
+}
+
+.seq-set-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+}
+
+.seq-set-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+}
+
 .btn-lg {
     padding: 10px 18px;
     font-size: 16px;

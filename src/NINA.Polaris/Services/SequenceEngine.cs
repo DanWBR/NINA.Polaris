@@ -107,6 +107,29 @@ public class SequenceEngine {
             items.Count, items.Sum(i => i.Count));
     }
 
+    /// <summary>Reset run progress to the start WITHOUT touching the loaded
+    /// items. Used by the "restart" choice when a partially-completed run is
+    /// started again; "continue" simply calls Start() which resumes from the
+    /// retained CurrentItemIndex/CurrentFrameInItem.</summary>
+    public void ResetProgress() {
+        if (State == SequenceState.Running) return;
+        CurrentItemIndex = -1;
+        CurrentFrameInItem = 0;
+        TotalFramesCompleted = 0;
+        LastError = null;
+    }
+
+    /// <summary>True when a previous run left partial progress that can be
+    /// resumed: at least one frame done but not all enabled frames, and not
+    /// currently running.</summary>
+    public bool HasResumableProgress {
+        get {
+            if (State == SequenceState.Running) return false;
+            var total = Items.Where(i => i.Enabled).Sum(i => i.Count);
+            return TotalFramesCompleted > 0 && TotalFramesCompleted < total;
+        }
+    }
+
     public void Start() {
         if (State == SequenceState.Running) return;
 

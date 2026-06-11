@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260610-guide-fixes">
+    <link rel="stylesheet" href="/css/app.css?v=20260611-autorun-sets">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -7607,6 +7607,37 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             :disabled="seqState === 'running' || sequence.length === 0"
                             title="Remove all items from the sequence">Reset</button>
                 </div>
+
+                <!-- Named autorun sets: save the current schedule under a
+                     name and reload it later. Files live server-side under
+                     the active profile so they survive restarts and rigs. -->
+                <div class="seq-sets" x-init="loadSeqSets()">
+                    <div class="seq-sets-title">Saved sets</div>
+                    <div class="control-row" style="gap: 6px; flex-wrap: wrap;">
+                        <input type="text" class="input input-sm" style="flex: 1; min-width: 120px;"
+                               x-model="seqSetName" placeholder="Set name"
+                               @keydown.enter="saveSeqSet()"
+                               :disabled="seqState === 'running'">
+                        <button class="btn btn-sm" @click="saveSeqSet()"
+                                :disabled="seqState === 'running' || sequence.length === 0"
+                                title="Save the current schedule under this name">Save</button>
+                    </div>
+                    <div class="seq-sets-list" x-show="seqSets.length > 0" style="margin-top: 6px;">
+                        <template x-for="s in seqSets" :key="s">
+                            <div class="seq-set-row">
+                                <span class="seq-set-name" x-text="s"></span>
+                                <button class="btn btn-xs" @click="loadSeqSet(s)"
+                                        :disabled="seqState === 'running'"
+                                        title="Load this set into the editor">Load</button>
+                                <button class="btn btn-xs btn-danger" @click="deleteSeqSet(s)"
+                                        title="Delete this set">✕</button>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="hint" x-show="seqSets.length === 0" style="margin-top: 4px;">
+                        No saved sets yet.
+                    </div>
+                </div>
                 </div><!-- /.autorun-list-col -->
 
                 <!-- Centre preview: last captured frame from the running
@@ -12588,6 +12619,29 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
+    <!-- AUTORUN continue-vs-restart prompt. Shown when Start is pressed on
+         a sequence that already has partial progress from a stopped run.
+         Continue resumes from the retained position; Restart re-pushes the
+         current schedule and starts from frame zero. -->
+    <div class="confirm-modal-overlay"
+         x-show="seqResumePrompt" x-cloak
+         @click.self="seqResumePrompt = false">
+        <div class="confirm-modal-card">
+            <h3 class="confirm-modal-title">Resume sequence?</h3>
+            <p class="confirm-modal-message">
+                This sequence has unfinished progress
+                (<strong x-text="(seqStatus && seqStatus.totalFramesCompleted) || 0"></strong>
+                of <strong x-text="(seqStatus && seqStatus.totalFrames) || 0"></strong> frames done).
+                Continue from where it stopped, or restart from the beginning?
+            </p>
+            <div class="confirm-modal-actions">
+                <button class="btn btn-sm" @click="seqResumePrompt = false">Cancel</button>
+                <button class="btn btn-sm btn-danger" @click="_doStartSequence(false)">Restart</button>
+                <button class="btn btn-sm btn-primary" @click="_doStartSequence(true)">Continue</button>
+            </div>
+        </div>
+    </div>
+
     <!-- INDIPROP: INDI property help / note editor. Reuses the confirm
          modal shell for styling. Shows the built-in English description
          (read-only) plus a textarea for the operator's own note. The
@@ -12633,7 +12687,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260610-guide-fixes"></script>
+    <script src="/js/app.js?v=20260611-autorun-sets"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

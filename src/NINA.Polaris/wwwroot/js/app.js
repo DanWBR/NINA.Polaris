@@ -511,6 +511,12 @@ function ninaApp() {
         // Sequence
         sequence: [],
         seqState: 'idle',
+        // Continue-vs-restart prompt shown when Start is pressed on a run
+        // that has partial progress from a previous (stopped) run.
+        seqResumePrompt: false,
+        // Saved autorun sets (named presets) + the name field for saving.
+        seqSets: [],
+        seqSetName: '',
         // FW-2: AUTORUN sub-tab toggle. 'sequence' = the existing
         // editor; 'flat' = Flat Wizard sub-tab. Defaults to sequence
         // so existing muscle memory + first-open lands on the
@@ -21033,18 +21039,82 @@ function ninaApp() {
             } catch (e) { }
         },
 
+        // True when a previous run left partial progress that can be resumed:
+        // some frames done, but not all, and currently idle.
+        seqHasResumableProgress() {
+            const s = this.seqStatus;
+            return this.seqState === 'idle' && !!s
+                && (s.totalFramesCompleted || 0) > 0
+                && (s.totalFramesCompleted || 0) < (s.totalFrames || 0);
+        },
+
         async startSequence() {
+            // If there's partial progress, ask the user: continue from where
+            // it stopped, or restart from the top. Otherwise just start fresh.
+            if (this.seqHasResumableProgress()) { this.seqResumePrompt = true; return; }
+            await this._doStartSequence(false);
+        },
+
+        // resume=true continues the server-side run from its retained position
+        // (does NOT re-push items, so the in-progress schedule is kept).
+        // resume=false pushes the current (possibly edited) sequence and
+        // restarts progress from zero.
+        async _doStartSequence(resume) {
+            this.seqResumePrompt = false;
             try {
-                await this.apiPost('/api/sequence', this.sequence);
-                await this.apiPost('/api/sequence/start');
+                if (!resume) {
+                    await this.apiPost('/api/sequence', this.sequence);
+                }
+                await this.apiPost('/api/sequence/start', { resume: !!resume });
                 this.seqState = 'running';
-                // SHUT-4: kick the shutter tick so the autorun ring
-                // animates smoothly as frames complete.
+                // SHUT-4: kick the shutter tick so the autorun ring animates
+                // smoothly as frames complete; poll as a backup to the WS.
                 this._startShutterTick();
-                this.toast('Sequence started', 'ok');
+                this.startSeqPolling();
+                this.toast(resume ? 'Sequence resumed' : 'Sequence started', 'ok');
             } catch (e) {
-                this.toast('Start failed: ' + e.message, 'error');
+                this.toast('Start failed: ' + (e.message || e), 'error');
             }
+        },
+
+        // ── Named autorun sets (save / reload presets) ──────────────
+        async loadSeqSets() {
+            try {
+                const r = await this.apiGet('/api/sequence/sets');
+                this.seqSets = r.sets || [];
+            } catch (e) { /* non-fatal */ }
+        },
+        async saveSeqSet() {
+            const name = (this.seqSetName || '').trim();
+            if (!name) { this.toast('Enter a name for the set', 'warn'); return; }
+            if (!this.sequence.length) { this.toast('Nothing to save', 'warn'); return; }
+            try {
+                await this.apiPost('/api/sequence/sets/' + encodeURIComponent(name), this.sequence);
+                this.toast('Saved set "' + name + '"', 'ok');
+                this.seqSetName = '';
+                await this.loadSeqSets();
+            } catch (e) { this.toast('Save failed: ' + (e.message || e), 'error'); }
+        },
+        async loadSeqSet(name) {
+            if (!name) return;
+            if (this.seqState === 'running') { this.toast('Stop the run first', 'warn'); return; }
+            try {
+                const items = await this.apiGet('/api/sequence/sets/' + encodeURIComponent(name));
+                this.sequence = Array.isArray(items) ? items : (items.items || []);
+                for (const it of this.sequence) if (it && it.enabled === undefined) it.enabled = true;
+                // Push to the server so a subsequent Start uses it.
+                await this.apiPost('/api/sequence', this.sequence);
+                this.toast('Loaded set "' + name + '"', 'ok');
+            } catch (e) { this.toast('Load failed: ' + (e.message || e), 'error'); }
+        },
+        async deleteSeqSet(name) {
+            if (!name) return;
+            if (!confirm('Delete the set "' + name + '"?')) return;
+            try {
+                await this.apiFetch('/api/sequence/sets/' + encodeURIComponent(name), { method: 'DELETE' });
+                this.toast('Deleted set "' + name + '"', 'ok');
+                await this.loadSeqSets();
+            } catch (e) { this.toast('Delete failed: ' + (e.message || e), 'error'); }
         },
 
         async pauseSequence() {
