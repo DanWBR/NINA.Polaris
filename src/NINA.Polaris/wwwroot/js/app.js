@@ -10767,7 +10767,14 @@ function ninaApp() {
             const mountRot  = Number.isFinite(this.solveRotationDeg)
                 ? this.solveRotationDeg
                 : (this.fov.rotationDeg || 0);
-            const targetRot = (this.fov.rotationDeg || 0);
+            // The camera rectangle on the sky must reflect the actual camera
+            // orientation once we know it from a plate solve, so it lines up
+            // with the mount frame (the operator's report: red appeared
+            // unrotated / mirrored vs the mount). Fall back to the desired
+            // framing angle when there's no solve yet.
+            const targetRot = Number.isFinite(this.solveRotationDeg)
+                ? this.solveRotationDeg
+                : (this.fov.rotationDeg || 0);
 
             let mount = null;
             if (this.mount?.connected

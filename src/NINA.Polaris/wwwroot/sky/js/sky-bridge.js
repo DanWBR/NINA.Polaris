@@ -702,7 +702,17 @@
         //      to the celestial frame the same way an equatorial-mount
         //      camera does.
         var cameraRollDeg = target.rotationDeg || 0;
-        var parallacticDeg = skyParallacticAngleDeg();
+        // Use the SAME parallactic basis as the blue (mount) rectangle:
+        // skyParallacticAt(centre) — the hour-angle formula whose sign was
+        // verified against how the engine projects the celestial-anchored
+        // rectangle. The earlier alt-az skyParallacticAngleDeg() used a
+        // different azimuth convention and came out mirrored relative to the
+        // blue box, so the red camera rectangle looked flipped / not rotated
+        // with the mount. Computing it at the view centre (where this
+        // screen-anchored box sits) makes red and blue agree.
+        var parallacticDeg = 0;
+        var __c = skyGetCenter();
+        if (__c) parallacticDeg = skyParallacticAt(__c.raDeg, __c.decDeg);
         var rotDeg = cameraRollDeg + parallacticDeg;
         el.style.width = wPx + 'px';
         el.style.height = hPx + 'px';
