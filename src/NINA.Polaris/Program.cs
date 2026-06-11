@@ -283,6 +283,19 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Onnx.OnnxFileService>();
 // RKNN: host-side NPU acceleration for GraXpert AI on Rockchip RK3588.
 // Injected (optionally) into GraXpertService; no-op when no NPU is present.
 builder.Services.AddSingleton<NINA.Polaris.Services.Rknn.RknnInferenceService>();
+
+// OCL: SBC GPU acceleration for classic image kernels via OpenCL. Resolve the
+// OpenCL backend when the board exposes an OpenCL ICD loader (Adreno on the
+// Radxa Dragon Q6A, Mali on RK3588, ...), else the always-available CPU backend.
+// Every kernel falls back to the CPU per-call too, so this is a pure no-op on
+// boards without OpenCL (e.g. Raspberry Pi).
+builder.Services.AddSingleton<NINA.Image.Gpu.IGpuCompute>(sp => {
+    if (NINA.Polaris.Services.OpenCl.OpenClRuntime.IsAvailable) {
+        var log = sp.GetRequiredService<ILogger<NINA.Polaris.Services.OpenCl.OpenClGpuCompute>>();
+        return new NINA.Polaris.Services.OpenCl.OpenClGpuCompute(log);
+    }
+    return new NINA.Image.Gpu.CpuGpuCompute();
+});
 builder.Services.AddSingleton<FileBrowserService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.SirilService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.GraXpertService>();

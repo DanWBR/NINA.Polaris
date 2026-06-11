@@ -15,6 +15,7 @@
 using System.Collections.Concurrent;
 using System.Threading.Tasks;
 using NINA.Core.Enum;
+using NINA.Image.Gpu;
 using NINA.Image.ImageAnalysis;
 using NINA.Image.ImageData;
 using NINA.Image.Interfaces;
@@ -67,6 +68,7 @@ public class LiveStackingService {
     // strictly via the registered graph.
     private readonly ImageWriterService? _writer;
     private readonly ILogger<LiveStackingService> _logger;
+    private IGpuCompute _gpu = new CpuGpuCompute();
     private readonly StarDetector _detector = new() { MaxStars = 200 };
     private readonly object _lock = new();
 
@@ -208,7 +210,8 @@ public class LiveStackingService {
                                 ProfileService? profiles = null,
                                 LiveStackPreProcessor? preProcessor = null,
                                 EquipmentManager? equipment = null,
-                                MeridianFlipService? meridian = null) {
+                                MeridianFlipService? meridian = null,
+                                IGpuCompute? gpu = null) {
         _relay = relay;
         _writer = writer;
         _logger = logger;
@@ -216,6 +219,8 @@ public class LiveStackingService {
         _preProcessor = preProcessor;
         _equipment = equipment;
         _meridian = meridian;
+        // GPU compute is optional; null (and the test doubles) get the CPU path.
+        _gpu = gpu ?? new CpuGpuCompute();
         // SNR-3: keep TargetSnr aligned with the active rig until the
         // user explicitly overrides via /api/livestack/target-snr.
         // ProfileService is optional in the ctor so the existing test
@@ -602,7 +607,7 @@ public class LiveStackingService {
                     usedFlipped = false;
                     _logger.LogDebug("Frame aligned (reference orientation): dx={Tx:F1} dy={Ty:F1}",
                         t.Tx, t.Ty);
-                    return ImageResampler.ApplyTransform(data, _width, _height, t);
+                    return Warp(data, t);
                 }
             } else {
                 var rotStars = Rotate180Stars(stars, _width, _height);
@@ -621,11 +626,19 @@ public class LiveStackingService {
                     var composed = AffineTransform.Compose(t, rot180);
                     _logger.LogDebug("Frame aligned (flipped): residual dx={Tx:F1} dy={Ty:F1}",
                         t.Tx, t.Ty);
-                    return ImageResampler.ApplyTransform(data, _width, _height, composed);
+                    return Warp(data, composed);
                 }
             }
         }
         return null;
+    }
+
+    /// <summary>Affine warp + bilinear resample, on the GPU when available
+    /// (<see cref="IGpuCompute"/>) and on the CPU otherwise. The CPU helper is
+    /// the canonical fallback whenever the GPU declines.</summary>
+    private ushort[] Warp(ushort[] data, AffineTransform t) {
+        if (_gpu.TryWarpAffine(data, _width, _height, t, out var warped)) return warped;
+        return ImageResampler.ApplyTransform(data, _width, _height, t);
     }
 
     private static List<DetectedStar> Rotate180Stars(List<DetectedStar> stars, int w, int h) {
