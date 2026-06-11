@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using System.Text.Json;
 using NINA.Polaris.Services.Sequencer;
 
 namespace NINA.Polaris.Endpoints;
@@ -21,18 +22,36 @@ public static class AdvancedSequenceEndpoints {
         var g = app.MapGroup("/api/sequencer");
 
         // ---- Document IO ----
-        g.MapGet("/document", (AdvancedSequenceEngine engine) => Results.Ok(new {
-            engine.Document,
-            engine.State,
-            engine.LastError,
-            engine.StartedAt,
-            engine.FinishedAt,
-            engine.AbortReason
-        }));
+        // NOTE: these go through SequenceJson, NOT the default minimal-API
+        // (de)serializer. SequenceDocument.Root is the ISequenceEntity
+        // interface, which the default System.Text.Json can neither read
+        // (throws on abstract/interface types) nor write fully (drops every
+        // concrete subtype property + the $type discriminator). SequenceJson
+        // carries the polymorphic converter + camelCase web shape the editor
+        // speaks.
+        g.MapGet("/document", (AdvancedSequenceEngine engine) => {
+            var payload = new {
+                document = engine.Document,
+                state = engine.State.ToString(),   // string, the UI compares === 'Running'
+                lastError = engine.LastError,
+                startedAt = engine.StartedAt,
+                finishedAt = engine.FinishedAt,
+                abortReason = engine.AbortReason
+            };
+            return Results.Text(JsonSerializer.Serialize(payload, SequenceJson.Options),
+                "application/json");
+        });
 
-        g.MapPost("/document", (SequenceDocument doc, AdvancedSequenceEngine engine) => {
-            engine.Load(doc);
-            return Results.Ok(new { loaded = true, validation = engine.Validate() });
+        g.MapPost("/document", async (HttpRequest req, AdvancedSequenceEngine engine) => {
+            using var sr = new StreamReader(req.Body);
+            var text = await sr.ReadToEndAsync();
+            try {
+                var doc = SequenceJson.Deserialize(text);
+                engine.Load(doc);
+                return Results.Ok(new { loaded = true, validation = engine.Validate() });
+            } catch (Exception ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
         });
 
         // Convenience: round-trip JSON so the UI can save the current document
@@ -67,8 +86,12 @@ public static class AdvancedSequenceEndpoints {
             Results.Ok(new { errors = engine.Validate() }));
 
         // ---- Palette ----
+        // `defaults` carries the default scalar params of each entity so the
+        // tree editor can render editable fields the instant an entity is
+        // dropped (the editor derives its field list from the node's own keys).
         g.MapGet("/types", () => Results.Ok(SequenceEntityJsonConverter.KnownTypes.Select(t => new {
-            type = t.Type, category = t.Category, kind = t.Class
+            type = t.Type, category = t.Category, kind = t.Class,
+            defaults = SequenceEntityJsonConverter.DefaultParams(t.Type)
         })));
 
         // ---- Templates ----
@@ -79,12 +102,23 @@ public static class AdvancedSequenceEndpoints {
 
         g.MapGet("/templates/{name}", (string name, SequenceTemplateStore store) => {
             var doc = store.Load(name);
-            return doc == null ? Results.NotFound() : Results.Ok(doc);
+            // Serialize through SequenceJson for the same polymorphic reason as
+            // /document (Root is an interface).
+            return doc == null
+                ? Results.NotFound()
+                : Results.Text(SequenceJson.Serialize(doc), "application/json");
         });
 
-        g.MapPost("/templates/{name}", (string name, SequenceDocument doc, SequenceTemplateStore store) => {
-            store.Save(name, doc);
-            return Results.Ok(new { saved = true });
+        g.MapPost("/templates/{name}", async (string name, HttpRequest req, SequenceTemplateStore store) => {
+            using var sr = new StreamReader(req.Body);
+            var text = await sr.ReadToEndAsync();
+            try {
+                var doc = SequenceJson.Deserialize(text);
+                store.Save(name, doc);
+                return Results.Ok(new { saved = true });
+            } catch (Exception ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
         });
 
         g.MapDelete("/templates/{name}", (string name, SequenceTemplateStore store) => {

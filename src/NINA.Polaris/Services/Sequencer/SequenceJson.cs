@@ -36,7 +36,10 @@ namespace NINA.Polaris.Services.Sequencer;
 public static class SequenceJson {
     public const int CurrentVersion = 1;
 
-    private static readonly JsonSerializerOptions _opts = new() {
+    // Web defaults => camelCase property names + case-insensitive reads, which
+    // is what the Alpine frontend (and ASP.NET's own model binding) speak. The
+    // converters below add the $type polymorphism on top.
+    private static readonly JsonSerializerOptions _opts = new(JsonSerializerDefaults.Web) {
         WriteIndented = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Converters = {
@@ -124,7 +127,7 @@ public class SequenceEntityJsonConverter : JsonConverter<ISequenceEntity> {
     // No infinite recursion: the entity converter only kicks in for properties
     // typed as ISequenceEntity (or registered subclasses); for concrete types,
     // STJ uses the default converter, which is what we want here.
-    private static readonly JsonSerializerOptions _innerOptions = new() {
+    private static readonly JsonSerializerOptions _innerOptions = new(JsonSerializerDefaults.Web) {
         WriteIndented = false,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Converters = {
@@ -263,6 +266,40 @@ public class SequenceEntityJsonConverter : JsonConverter<ISequenceEntity> {
     /// <summary>Discoverable list for the UI palette / API. Merges built-in + plugin entries.</summary>
     public static IReadOnlyList<(string Type, string Category, string Class)> KnownTypes =>
         _known.Concat(_pluginKnown).ToList();
+
+    // Keys that are structural / runtime, not user-editable parameters. The
+    // palette's "defaults" object excludes these so the tree editor only seeds
+    // the actual scalar parameters of a freshly-dropped entity.
+    private static readonly HashSet<string> _nonParamKeys = new(StringComparer.OrdinalIgnoreCase) {
+        "id", "$type", "type", "name", "description",
+        "items", "triggers", "conditions",
+        "status", "error", "startedAt", "finishedAt"
+    };
+
+    /// <summary>
+    /// Default scalar parameter values for a freshly-constructed entity of the
+    /// given discriminator, so the tree editor can show editable fields the
+    /// moment an entity is dropped (instead of only after a save+reload). Keys
+    /// are camelCase to match the wire format; nested objects/arrays and the
+    /// structural/runtime keys are excluded. Returns null for unknown types.
+    /// </summary>
+    public static JsonObject? DefaultParams(string type) {
+        var clr = Resolve(type);
+        if (clr == null) return null;
+        object? instance;
+        try { instance = Activator.CreateInstance(clr); }
+        catch { return null; }
+        if (instance == null) return null;
+        if (JsonSerializer.SerializeToNode(instance, clr, _innerOptions) is not JsonObject node)
+            return null;
+        var result = new JsonObject();
+        foreach (var kv in node) {
+            if (_nonParamKeys.Contains(kv.Key)) continue;
+            if (kv.Value is JsonObject or JsonArray) continue; // editor handles scalars only
+            result[kv.Key] = kv.Value?.DeepClone();
+        }
+        return result;
+    }
 
     internal static JsonSerializerOptions InnerOptions => _innerOptions;
 

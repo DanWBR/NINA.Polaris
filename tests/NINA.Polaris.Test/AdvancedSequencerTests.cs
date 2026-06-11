@@ -123,4 +123,63 @@ public class AdvancedSequencerTests {
         var bad = new TemplatedContainer { TemplateName = "" };
         Assert.That(bad.Validate().Any(e => e.Contains("TemplateName")), Is.True);
     }
+
+    // The Alpine frontend consumes camelCase property names and a literal
+    // "$type" discriminator. Lock that wire contract so a future options
+    // change doesn't silently break the tree editor's save/load.
+    [Test]
+    public void Serialize_EmitsCamelCaseAndDollarType() {
+        var doc = new SequenceDocument {
+            Root = new SequentialContainer {
+                Name = "Root",
+                Items = new() { new TakeExposureInstruction { ExposureSeconds = 30, Count = 5 } }
+            }
+        };
+        var json = SequenceJson.Serialize(doc);
+        Assert.That(json, Does.Contain("\"$type\""), "missing $type discriminator");
+        Assert.That(json, Does.Contain("\"exposureSeconds\""), "params must be camelCase");
+        Assert.That(json, Does.Not.Contain("\"ExposureSeconds\""), "must not emit PascalCase");
+        Assert.That(json, Does.Contain("\"items\""), "container children must serialize");
+    }
+
+    // Round-trips through the camelCase + case-insensitive options, which is
+    // what the /document endpoints now use (the default minimal-API serializer
+    // can't even read the interface-typed Root).
+    [Test]
+    public void Deserialize_CamelCasePayload_PopulatesConcreteParams() {
+        const string json = """
+        { "name":"t", "root": { "$type":"Sequential", "name":"Root", "items":[
+            { "$type":"TakeExposure", "exposureSeconds":42, "count":7, "filter":"Ha" }
+        ]}}
+        """;
+        var doc = SequenceJson.Deserialize(json);
+        var root = doc.Root as SequentialContainer;
+        Assert.That(root, Is.Not.Null);
+        var exp = root!.Items[0] as TakeExposureInstruction;
+        Assert.That(exp, Is.Not.Null);
+        Assert.That(exp!.ExposureSeconds, Is.EqualTo(42));
+        Assert.That(exp.Count, Is.EqualTo(7));
+        Assert.That(exp.Filter, Is.EqualTo("Ha"));
+    }
+
+    [Test]
+    public void DefaultParams_TakeExposure_HasCamelCaseScalarsOnly() {
+        var defaults = SequenceEntityJsonConverter.DefaultParams("TakeExposure");
+        Assert.That(defaults, Is.Not.Null);
+        Assert.That(defaults!.ContainsKey("exposureSeconds"), Is.True);
+        Assert.That(defaults.ContainsKey("count"), Is.True);
+        // Structural / runtime keys must be excluded.
+        Assert.That(defaults.ContainsKey("id"), Is.False);
+        Assert.That(defaults.ContainsKey("name"), Is.False);
+        Assert.That(defaults.ContainsKey("status"), Is.False);
+    }
+
+    [Test]
+    public void DefaultParams_Container_ExcludesChildCollections() {
+        var defaults = SequenceEntityJsonConverter.DefaultParams("Sequential");
+        Assert.That(defaults, Is.Not.Null);
+        Assert.That(defaults!.ContainsKey("items"), Is.False);
+        Assert.That(defaults.ContainsKey("triggers"), Is.False);
+        Assert.That(defaults.ContainsKey("conditions"), Is.False);
+    }
 }

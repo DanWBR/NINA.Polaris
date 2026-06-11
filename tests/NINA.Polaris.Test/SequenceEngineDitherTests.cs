@@ -46,7 +46,7 @@ public class SequenceEngineDitherTests {
         var native = new NativeGuider(equip, profile, NullLogger<NativeGuider>.Instance);
         var guiders = new ActiveGuiderProvider(profile, phd2, native);
         return new SequenceEngine(equip, relay, liveStack, phd2, guiders, meridianFlip, imageWriter,
-            graXpert, flatWizard, NullLogger<SequenceEngine>.Instance);
+            graXpert, flatWizard, profile, NullLogger<SequenceEngine>.Instance);
     }
 
     [Test]

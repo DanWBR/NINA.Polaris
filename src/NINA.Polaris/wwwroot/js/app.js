@@ -23922,14 +23922,24 @@ function ninaApp() {
         },
 
         _advSeqNewEntity(t) {
-            return {
+            const isContainer = ['Sequential', 'Parallel', 'DeepSkyObject', 'Templated'].includes(t.type);
+            const e = {
                 id: 'ent-' + Math.random().toString(36).slice(2),
                 type: t.type, $type: t.type,
                 name: t.type,
-                items: ['Sequential', 'Parallel', 'DeepSkyObject', 'Templated'].includes(t.type) ? [] : undefined,
-                triggers: ['Sequential', 'Parallel', 'DeepSkyObject', 'Templated'].includes(t.type) ? [] : undefined,
-                conditions: ['Sequential', 'Parallel', 'DeepSkyObject', 'Templated'].includes(t.type) ? [] : undefined
+                items: isContainer ? [] : undefined,
+                triggers: isContainer ? [] : undefined,
+                conditions: isContainer ? [] : undefined
             };
+            // Seed the entity's default scalar params (from /types) so the
+            // editor shows editable fields immediately, not only after a
+            // save+reload roundtrip.
+            if (t.defaults && typeof t.defaults === 'object') {
+                for (const [k, v] of Object.entries(t.defaults)) {
+                    if (!(k in e) || e[k] === undefined) e[k] = v;
+                }
+            }
+            return e;
         },
 
         advSeqDeleteSelected() {
