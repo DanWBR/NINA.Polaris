@@ -9341,6 +9341,26 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         typeface. Persists per browser; no restart needed.
                     </p>
 
+                    <!-- On-screen keyboard. Replaces the native Android/iOS
+                         keyboard (which covers half the screen and fights
+                         the Sky view) with a compact themed panel docked to
+                         the right edge. "Auto" turns it on only for touch
+                         devices, so desktop users keep their hardware keyboard. -->
+                    <label style="display:flex; align-items:center; gap:12px; max-width:560px; margin-top:18px">
+                        <span style="min-width:90px">On-screen keyboard</span>
+                        <select x-model="vkbdMode" @change="setVkbdMode($event.target.value)" style="flex:1">
+                            <option value="auto">Auto — only on touch devices (default)</option>
+                            <option value="on">Always on</option>
+                            <option value="off">Off — use the device keyboard</option>
+                        </select>
+                    </label>
+                    <p class="text-muted" style="font-size: 12px; margin-top: 6px; max-width:560px">
+                        Shows a compact numeric or full keyboard on the right edge when you
+                        tap a field, so the native tablet keyboard never covers the live view
+                        or Sky map. Dismisses on <strong>OK</strong>, on <strong>✕</strong>,
+                        or when you tap away. Persists per browser.
+                    </p>
+
                     <!-- Preview render quality. The live view is rendered on
                          the GPU; the output canvas is capped at this size.
                          Bigger = sharper zoom, more GPU/canvas memory. The
@@ -12574,6 +12594,9 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          visible tile seams in the output. Also handles object v1.0.0's
          3-input signature (sigma + strenght separate). -->
     <script src="/js/onnx-pipelines.js?v=rgb1pass"></script>
+    <!-- On-screen keyboard (tablet). Self-contained, no framework dep; loads
+         before Alpine so its focus delegation is live from first paint. -->
+    <script src="/js/virtual-keyboard.js?v=20260611-vkbd"></script>
     <script src="/js/lib/alpine.min.js" defer></script>
     <!-- Cache buster on app.js so JS fixes propagate without users
          having to remember Ctrl+Shift+R. Bump the v= when shipping
@@ -12766,7 +12789,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260611-histo-panel"></script>
+    <script src="/js/app.js?v=20260611-vkbd"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

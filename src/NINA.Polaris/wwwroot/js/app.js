@@ -28,6 +28,10 @@ function ninaApp() {
     return {
         tab: 'home',
         nightMode: false,
+        // On-screen keyboard mode (Settings → Appearance). The actual
+        // behaviour lives in /js/virtual-keyboard.js; this just mirrors the
+        // persisted choice for the <select>. 'auto' | 'on' | 'off'.
+        vkbdMode: 'auto',
 
         // Live View
         exposure: 30,
@@ -2791,6 +2795,13 @@ function ninaApp() {
                 : 'atkinson';
             this.applyUiFont();
 
+            // Mirror the on-screen-keyboard mode for the Settings <select>.
+            // The module reads its own localStorage key independently, so
+            // this is display-only sync (no behaviour change here).
+            this.vkbdMode = window.PolarisKeyboard
+                ? window.PolarisKeyboard.getMode()
+                : 'auto';
+
             // Preview render-quality prefs (client-side display only).
             try {
                 const md = parseInt(localStorage.getItem('nina-preview-maxdim'), 10);
@@ -4600,6 +4611,16 @@ function ninaApp() {
                 else document.documentElement.setAttribute('data-font', v);
                 localStorage.setItem('nina-ui-font', v);
             } catch (_) { /* private mode etc. */ }
+        },
+
+        // Persist the on-screen-keyboard mode through the global the
+        // virtual-keyboard module exposes (it owns the localStorage key
+        // 'polaris-vkbd-mode' and the show/hide behaviour).
+        setVkbdMode(mode) {
+            const allowed = ['auto', 'on', 'off'];
+            const v = allowed.includes(mode) ? mode : 'auto';
+            this.vkbdMode = v;
+            if (window.PolarisKeyboard) window.PolarisKeyboard.setMode(v);
         },
 
         // Drop the user's explicit pick and fall back to whatever the
