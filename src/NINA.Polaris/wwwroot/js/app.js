@@ -508,6 +508,16 @@ function ninaApp() {
         _slewCenterTimer: null,
         fov: { width: 2.82, height: 1.88 },
 
+        // Shared target identification, shown on PREVIEW + LIVE and stamped
+        // into saved files (FITS OBJECT header / folder name). Auto-filled
+        // from the catalog after a plate-solved Slew & Center (ASIAIR-style
+        // "what am I looking at"). targetNameAuto tracks whether the current
+        // value came from auto-identify (overwritable) vs. typed by the user
+        // (left alone). identifyBusy gates the Identify button spinner.
+        targetName: '',
+        targetNameAuto: true,
+        identifyBusy: false,
+
         // Sequence
         sequence: [],
         seqState: 'idle',
@@ -6022,7 +6032,8 @@ function ninaApp() {
                 dv.setUint16(i * 2, stackedInt32[i] & 0xFFFF, /* littleEndian */ true);
             }
 
-            const target = (this.seqStatus?.currentTarget
+            const target = ((this.targetName || '').trim()
+                            || this.seqStatus?.currentTarget
                             || this.skyTarget?.name
                             || 'live-stack').replace(/[^A-Za-z0-9_\-]/g, '_');
             const frameCount = this.liveStackFrames || 0;
@@ -14062,7 +14073,10 @@ function ninaApp() {
                     binning: parseInt(this.preview.binning) || 1,
                     filter: this.preview.filter || null,
                     saveToDisk: !!this.preview.saveToDisk,
-                    targetName: this.preview.targetName || 'snap',
+                    // Shared target field wins; fall back to the legacy
+                    // per-preview name, then 'snap'.
+                    targetName: (this.targetName || '').trim()
+                                || this.preview.targetName || 'snap',
                     // PREVIEW is "test shot to check framing/focus" —
                     // never feed the live stack, otherwise the
                     // always-on stacker counts these frames + fires
@@ -14494,6 +14508,62 @@ function ninaApp() {
                     'success');
             } catch (e) {
                 this.toast('Auto-detect failed: ' + (e?.message || ''), 'error');
+            }
+        },
+
+        // Field half-size (degrees) for the catalog cone search: half the
+        // frame diagonal from the rig's computed FOV. Falls back to 1°.
+        _fovRadiusDeg() {
+            const w = this.fov?.width || 0, h = this.fov?.height || 0;
+            if (w > 0 && h > 0) return 0.5 * Math.sqrt(w * w + h * h);
+            return 1.0;
+        },
+
+        // The user typed in the target field → stop auto-identify from
+        // clobbering it on the next centre.
+        onTargetNameInput() { this.targetNameAuto = false; },
+
+        // ASIAIR-style "what am I looking at": ask the server which catalog
+        // object the mount's current pointing is on (or the most relevant in
+        // the FOV), falling back to the nearest planet/Moon. Fills targetName.
+        // silent=true suppresses warnings (used by the post-center auto call).
+        async identifyTarget(silent = false) {
+            const ra = this.mount?.ra, dec = this.mount?.dec;
+            if (!this.mount?.connected || !Number.isFinite(ra) || !Number.isFinite(dec)) {
+                if (!silent) this.toast('Mount RA/Dec unavailable', 'warn');
+                return null;
+            }
+            this.identifyBusy = true;
+            try {
+                const fov = this._fovRadiusDeg();
+                const r = await this.apiGet('/api/sky/identify?ra=' + encodeURIComponent(ra)
+                    + '&dec=' + encodeURIComponent(dec) + '&fov=' + encodeURIComponent(fov));
+                if (r?.found) {
+                    this.targetName = r.displayName || r.name;
+                    this.targetNameAuto = true;
+                    const within = r.withinExtent ? 'in frame'
+                        : (r.separationArcmin != null ? r.separationArcmin.toFixed(1) + "' off centre" : '');
+                    if (!silent) this.toast('Target: ' + this.targetName
+                        + (within ? ' (' + within + ')' : ''), 'success');
+                    return r;
+                }
+                // No DSO in the field — try a Solar System body before giving up.
+                const p = await this.apiGet('/api/sky/nearest-planet?ra='
+                    + encodeURIComponent(ra) + '&dec=' + encodeURIComponent(dec));
+                if (p?.found && p.angularSepDeg <= Math.max(this._fovRadiusDeg() * 1.5, 2)) {
+                    this.targetName = p.name;
+                    this.targetNameAuto = true;
+                    if (!silent) this.toast('Target: ' + p.name
+                        + ' (' + p.angularSepDeg.toFixed(2) + '° from centre)', 'success');
+                    return p;
+                }
+                if (!silent) this.toast('No catalogued object at this pointing', 'warn');
+                return null;
+            } catch (e) {
+                if (!silent) this.toast('Identify failed: ' + (e?.message || ''), 'error');
+                return null;
+            } finally {
+                this.identifyBusy = false;
             }
         },
 
@@ -20770,6 +20840,13 @@ function ninaApp() {
                     // Success: drop the live console.
                     this.filesSolveLog = '';
                     this.slewCenterFailedLog = '';
+                    // ASIAIR-style auto-identify: we now know exactly where the
+                    // mount points (the solved centre), so name the target.
+                    // Only overwrite when the field is empty or was itself
+                    // auto-filled, never a name the user typed by hand.
+                    if (!this.targetName || this.targetNameAuto) {
+                        this.identifyTarget(true).catch(() => {});
+                    }
                 } else if (data.state === 'failed') {
                     this.stopSlewCenterPolling();
                     this.toast('Centering failed: ' + (data.error || 'unknown'), 'error', 6000);

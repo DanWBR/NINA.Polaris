@@ -214,6 +214,35 @@ public static class SkyEndpoints {
             });
         });
 
+        // GET /api/sky/identify?ra={raHours}&dec={decDeg}&fov={radiusDeg}
+        // ASIAIR-style "what am I looking at": given the mount's (ideally
+        // plate-solved) pointing, return the most relevant catalog object in
+        // the field. The frontend calls this after Slew & Center and from the
+        // Identify button next to the PREVIEW / LIVE target field. `fov` is the
+        // field half-size in degrees (optional; defaults to 1°).
+        group.MapGet("/identify", (double ra, double dec, double? fov,
+            SkyCatalogService catalog) => {
+            var hit = catalog.Identify(ra, dec, fov ?? 1.0);
+            if (hit == null) return Results.Ok(new { found = false });
+            var o = hit.Object;
+            return Results.Ok(new {
+                found = true,
+                name = o.Name,
+                commonName = o.CommonName,
+                // Friendly label: prefer the common name, fall back to the
+                // catalog designation.
+                displayName = string.IsNullOrWhiteSpace(o.CommonName) ? o.Name : o.CommonName,
+                type = o.Type,
+                magnitude = o.Magnitude >= 99 ? (double?)null : o.Magnitude,
+                ra = o.Ra,
+                dec = o.Dec,
+                sizeArcmin = o.SizeArcmin,
+                constellation = o.Constellation,
+                separationArcmin = Math.Round(hit.SeparationArcmin, 1),
+                withinExtent = hit.WithinExtent
+            });
+        });
+
         // ---- Altitude chart + night window ----
 
         group.MapGet("/altitude", (double ra, double dec, int? stepMinutes,

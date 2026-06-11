@@ -1770,6 +1770,16 @@ label select.input-sm {
     font-size: 13px;
 }
 
+/* PREVIEW / LIVE target identification row: text field + Identify button
+   aligned along the input baseline. */
+.target-row {
+    align-items: flex-end;
+    gap: 6px;
+}
+.target-row .btn {
+    flex: 0 0 auto;
+}
+
 .btn-lg {
     padding: 10px 18px;
     font-size: 16px;

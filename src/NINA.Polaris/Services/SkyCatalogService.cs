@@ -153,6 +153,115 @@ public class SkyCatalogService {
     }
 
     /// <summary>
+    /// Identify the catalog object a pointing is on, ASIAIR-style. Given the
+    /// mount's (plate-solved) centre RA/Dec, cone-searches the catalog and
+    /// returns the most relevant object: the one whose extent the centre falls
+    /// inside (so a big nebula you're parked in wins over a tiny galaxy that
+    /// happens to be nearer the exact crosshair), with a gentle nudge toward
+    /// prominent objects (Messier, bright, large) to break near-ties.
+    /// </summary>
+    /// <param name="raHours">Pointing RA in decimal hours.</param>
+    /// <param name="decDeg">Pointing Dec in decimal degrees.</param>
+    /// <param name="fovRadiusDeg">Field half-size in degrees. The search
+    /// radius is at least this; objects beyond it are ignored.</param>
+    public IdentifyResult? Identify(double raHours, double decDeg, double fovRadiusDeg = 1.0) {
+        double fovRadius = fovRadiusDeg > 0 ? fovRadiusDeg : 1.0;
+        // Search a bit wider than the frame so a large object whose catalog
+        // centre sits just outside the frame can still be matched by extent.
+        double searchRadius = Math.Max(fovRadius * 1.5, 0.75);
+
+        List<CatalogObject> candidates;
+        if (UseDso) {
+            var hits = _dso!.QueryRegionAsync(raHours, decDeg, searchRadius,
+                magLimit: null, limit: 400).GetAwaiter().GetResult();
+            candidates = hits.Select(FromDso).ToList();
+        } else {
+            candidates = _catalog
+                .Where(o => AngularSeparationDeg(raHours, decDeg, o.Ra, o.Dec) <= searchRadius)
+                .ToList();
+        }
+
+        return PickBest(raHours, decDeg, fovRadius, candidates);
+    }
+
+    /// <summary>
+    /// Pure scoring step of <see cref="Identify"/>, separated so it can be
+    /// unit-tested without a catalog DB. Returns the best match or null when
+    /// nothing falls within (frame + object extent).
+    /// </summary>
+    public static IdentifyResult? PickBest(double raHours, double decDeg,
+            double fovRadiusDeg, IReadOnlyList<CatalogObject> candidates) {
+        if (candidates == null || candidates.Count == 0) return null;
+
+        IdentifyResult? best = null;
+        double bestScore = double.MaxValue;
+
+        foreach (var o in candidates) {
+            double sepDeg = AngularSeparationDeg(raHours, decDeg, o.Ra, o.Dec);
+            // Being inside the object's own extent counts as "centred on it":
+            // subtract the object's angular radius so a 3°-wide nebula scores 0
+            // even when the crosshair is 1° off its catalogue centre.
+            double objRadiusDeg = (o.SizeArcmin ?? 0) / 2.0 / 60.0;
+            double effectiveSep = Math.Max(0, sepDeg - objRadiusDeg);
+
+            // Reject things neither in the frame nor enclosing it.
+            if (effectiveSep > fovRadiusDeg) continue;
+
+            // Gentle prominence bonus (degrees), capped small so proximity to
+            // centre stays the dominant term and only near-ties are swayed.
+            double score = effectiveSep - ProminenceBonusDeg(o);
+            if (score < bestScore) {
+                bestScore = score;
+                best = new IdentifyResult {
+                    Object = o,
+                    SeparationArcmin = sepDeg * 60.0,
+                    WithinExtent = sepDeg <= objRadiusDeg
+                };
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>Small score bonus (in degrees) rewarding notable objects so a
+    /// famous bright/large target wins a near-tie against an obscure neighbour.
+    /// Capped at ~7 arcmin so a genuinely centred object always wins.</summary>
+    private static double ProminenceBonusDeg(CatalogObject o) {
+        double bonus = 0;
+        // Catalog tier: Messier > Caldwell > NGC/IC > everything else.
+        var cat = (o.Catalog ?? "").ToUpperInvariant();
+        if (string.IsNullOrEmpty(cat)) cat = (InferCatalogFromName(o.Name) ?? "").ToUpperInvariant();
+        bonus += cat switch {
+            "M"        => 0.05,
+            "C"        => 0.03,
+            "NGC"      => 0.02,
+            "IC"       => 0.015,
+            _          => 0.0
+        };
+        // Brightness (sentinel 99 = unknown → no bonus).
+        if (o.Magnitude < 6) bonus += 0.03;
+        else if (o.Magnitude < 9) bonus += 0.02;
+        else if (o.Magnitude < 11) bonus += 0.01;
+        // Size.
+        var sz = o.SizeArcmin ?? 0;
+        if (sz > 15) bonus += 0.03;
+        else if (sz > 5) bonus += 0.015;
+        return Math.Min(bonus, 0.12);
+    }
+
+    /// <summary>Great-circle separation in degrees. RA in hours, Dec in
+    /// degrees, matching the catalog units.</summary>
+    private static double AngularSeparationDeg(double ra1H, double dec1D, double ra2H, double dec2D) {
+        double D2R = Math.PI / 180.0;
+        double ra1 = ra1H * 15.0 * D2R, ra2 = ra2H * 15.0 * D2R;
+        double d1 = dec1D * D2R, d2 = dec2D * D2R;
+        double dRa = ra2 - ra1, dDec = d2 - d1;
+        double a = Math.Sin(dDec / 2) * Math.Sin(dDec / 2)
+                 + Math.Cos(d1) * Math.Cos(d2) * Math.Sin(dRa / 2) * Math.Sin(dRa / 2);
+        return 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a)) / D2R;
+    }
+
+    /// <summary>
     /// All catalog objects, used by services that need to walk the full
     /// list (e.g. TonightsBestService ranking visible DSOs). When the
     /// expanded DSO DB is available, this lazy-loads everything brighter
@@ -477,4 +586,13 @@ public class CatalogObject {
             return $"{sign}{d}° {m:D2}' {s:00}\"";
         }
     }
+}
+
+/// <summary>Result of <see cref="SkyCatalogService.Identify"/>: the matched
+/// object plus how far the pointing was from its centre, and whether the
+/// pointing fell inside the object's catalogued extent.</summary>
+public class IdentifyResult {
+    public required CatalogObject Object { get; set; }
+    public double SeparationArcmin { get; set; }
+    public bool WithinExtent { get; set; }
 }

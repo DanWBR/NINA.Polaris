@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260611-af-outliers">
+    <link rel="stylesheet" href="/css/app.css?v=20260611-target-id">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -930,6 +930,24 @@
                                 <option :value="f" x-text="f" :selected="f === filterWheel.currentFilter"></option>
                             </template>
                         </select></label>
+                    </div>
+                    <!-- Target identification. Stamped into saved frames
+                         (FITS OBJECT) and auto-filled after a plate-solved
+                         Slew & Center. 🔍 identifies what the mount is on. -->
+                    <div class="control-row target-row">
+                        <label style="flex:1; min-width:0">Target
+                            <input type="text" class="input-sm" style="width:100%"
+                                   x-model="targetName" @input="onTargetNameInput()"
+                                   placeholder="(unnamed)">
+                        </label>
+                        <button class="btn btn-sm" @click="identifyTarget(false)"
+                                :disabled="identifyBusy || !mount.connected"
+                                :title="mount.connected
+                                    ? 'Identify the object at the current pointing'
+                                    : 'Connect a mount to identify the target'">
+                            <span x-show="!identifyBusy">🔍</span>
+                            <span x-show="identifyBusy">…</span>
+                        </button>
                     </div>
                     </div><!-- /.shutter-inputs -->
 
@@ -2543,14 +2561,26 @@
                                    :disabled="preview.busy">
                             💾 Save to disk
                         </label>
-                        <label x-show="preview.saveToDisk"
-                               title="Folder name under {rig}/snaps/. Defaults to 'snap'.">
-                            Name
-                            <input type="text" x-model="preview.targetName"
-                                   class="input-sm" style="width:140px"
+                    </div>
+                    <!-- Target identification. Names the object being shot;
+                         stamped into saved snaps (FITS OBJECT / snaps folder)
+                         and shared with the LIVE tab. 🔍 identifies what the
+                         mount is currently on (ASIAIR-style). -->
+                    <div class="control-row target-row">
+                        <label style="flex:1; min-width:0">Target
+                            <input type="text" class="input-sm" style="width:100%"
+                                   x-model="targetName" @input="onTargetNameInput()"
                                    :disabled="preview.busy"
-                                   placeholder="snap">
+                                   placeholder="(unnamed)">
                         </label>
+                        <button class="btn btn-sm" @click="identifyTarget(false)"
+                                :disabled="identifyBusy || preview.busy || !mount.connected"
+                                :title="mount.connected
+                                    ? 'Identify the object at the current pointing'
+                                    : 'Connect a mount to identify the target'">
+                            <span x-show="!identifyBusy">🔍</span>
+                            <span x-show="identifyBusy">…</span>
+                        </button>
                     </div>
                     <!-- Inline focuser control: nudge focus or jump to an
                          absolute position while reviewing a snap, without
@@ -12687,7 +12717,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260611-af-outliers"></script>
+    <script src="/js/app.js?v=20260611-target-id"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
