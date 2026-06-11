@@ -7382,13 +7382,16 @@ label select.input-sm {
 .editor-ai-buttons .btn { width: 100%; text-align: left; }
 
 /* Editor export modal, backdrop covers the viewport, frame floats
-   centred. Mirrors the .siril-modal pattern (same z-index + dim) so
-   it stacks correctly with toasts (which sit at z-index ~2000). */
+   centred. z-index 1050 sits ABOVE the fullscreen editor overlay
+   (.files-editor-modal, z-index 1000) so the Export dialog launched
+   from inside the editor isn't painted behind it (same z-index +
+   later DOM order would otherwise hide it), and still below toasts
+   (z-index 1100) so the "Exported to ..." toast stays visible. */
 .editor-export-backdrop {
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.78);
-    z-index: 1000;
+    z-index: 1050;
     display: flex;
     align-items: center;
     justify-content: center;
