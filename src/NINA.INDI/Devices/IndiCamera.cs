@@ -247,6 +247,7 @@ public class IndiCamera : ICamera {
     // cheap "already 16-bit?" check on each capture.
     private string? _formatProp;     // "CCD_CAPTURE_FORMAT" / "CCD_VIDEO_FORMAT", or null
     private string? _raw16Element;   // switch element name of the 16-bit RAW format
+    private string? _fitsElement;    // FORMAT_FITS element of CCD_TRANSFER_FORMAT ("Encode")
 
     private async Task EnsureRaw16FormatAsync(CancellationToken ct) {
         // Resolve the format property + 16-bit element. Re-probe each capture
@@ -278,6 +279,30 @@ public class IndiCamera : ICamera {
         try {
             await _client.SetSwitchAsync(DeviceName, _formatProp, payload, ct);
         } catch { /* driver rejected; non-fatal — manual INDI panel still works */ }
+    }
+
+    // Force the transfer/encode format to FITS (CCD_TRANSFER_FORMAT, labelled
+    // "Encode" in the INDI panel, elements FORMAT_FITS / FORMAT_NATIVE /
+    // FORMAT_XISF). Our BLOB pipeline decodes FITS; if a driver is left on
+    // FORMAT_NATIVE the frame arrives in a raw blob we can't parse. Cheap
+    // re-probe + "already FITS?" guard, same pattern as the RAW16 selector.
+    private async Task EnsureFitsTransferAsync(CancellationToken ct) {
+        if (_fitsElement == null) {
+            if (_client.GetProperty(DeviceName, "CCD_TRANSFER_FORMAT") is IndiSwitchProperty sw
+                    && sw.Values.Count > 0) {
+                foreach (var k in sw.Values.Keys) {
+                    if (k.ToUpperInvariant().Contains("FITS")) { _fitsElement = k; break; }
+                }
+            }
+        }
+        if (_fitsElement == null) return;   // no transfer-format property on this driver
+        if (_client.GetProperty(DeviceName, "CCD_TRANSFER_FORMAT") is not IndiSwitchProperty cur) return;
+        if (cur.Values.TryGetValue(_fitsElement, out var on) && on) return;   // already FITS
+        var payload = new Dictionary<string, bool>();
+        foreach (var k in cur.Values.Keys) payload[k] = (k == _fitsElement);
+        try {
+            await _client.SetSwitchAsync(DeviceName, "CCD_TRANSFER_FORMAT", payload, ct);
+        } catch { /* driver rejected; non-fatal */ }
     }
 
     /// <summary>Writes WB_R and WB_B into CCD_CONTROLS. Silent skip if
@@ -422,10 +447,12 @@ public class IndiCamera : ICamera {
 
         using var reg = ct.Register(() => localTcs.TrySetCanceled());
 
-        // Force the 16-bit RAW capture format first: a still left on RAW8
-        // (e.g. after a video stream) comes back as 8-bit data in a 16-bit
-        // FITS — near-black. Done before gain because a format switch can
-        // reset the driver's controls on some cameras.
+        // Force FITS encode + 16-bit RAW capture format first: a still left
+        // on RAW8 (e.g. after a video stream) comes back as 8-bit data in a
+        // 16-bit FITS — near-black; and a driver left on FORMAT_NATIVE sends a
+        // blob our FITS pipeline can't decode. Done before gain because a
+        // format switch can reset the driver's controls on some cameras.
+        await EnsureFitsTransferAsync(ct);
         await EnsureRaw16FormatAsync(ct);
 
         // opts overrides honoured per-capture so the sequencer can set
