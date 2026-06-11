@@ -907,10 +907,26 @@ body {
    wraps to a lonely box below the preview (the "run button ended up under
    the preview" bug). */
 @media (max-width: 820px) {
-    .autorun-pane { flex-wrap: wrap; }
-    .autorun-pane > .autorun-list-col { flex: 1 1 100%; }
+    .autorun-pane {
+        flex-wrap: wrap;
+        /* Stacked: the three rows together are taller than the pane, so
+           scroll the whole pane (the >820 layout keeps overflow:hidden and
+           lets each column scroll on its own instead). Without this the
+           sidebar/shutter sitting below the preview is clipped and
+           unreachable. */
+        overflow-y: auto;
+    }
+    /* Don't trap the rows in their own nested scrollers when stacked —
+       let them grow to content height and the pane scroll as one column. */
+    .autorun-pane > .autorun-list-col {
+        flex: 1 1 100%;
+        overflow: visible;
+    }
     .autorun-pane > .autorun-preview { flex: 1 1 100%; min-height: 280px; }
-    .autorun-pane > .quick-controls { flex: 1 1 100%; }
+    .autorun-pane > .quick-controls {
+        flex: 1 1 100%;
+        overflow: visible;
+    }
 }
 .live-pane > .quick-controls .control-row,
 .preview-pane > .quick-controls .control-row {
