@@ -32,7 +32,11 @@ const maxScore = Math.max(
             return (
               <tr class={r.highlight ? 'is-highlight' : ''}>
                 <td class="left device">
-                  {r.device}
+                  {r.url ? (
+                    <a href={r.url} target="_blank" rel="noopener">{r.device}</a>
+                  ) : (
+                    r.device
+                  )}
                   {r.highlight && <span class="tag">best value</span>}
                 </td>
                 <td>{r.cores}</td>
@@ -93,6 +97,8 @@ const maxScore = Math.max(
   .bench tbody tr:last-child { border-bottom: 0; }
   .bench tbody td { color: var(--text-muted); }
   .device { color: var(--text); font-weight: 600; }
+  .device a { color: var(--text); text-decoration: none; }
+  .device a:hover { color: var(--accent); text-decoration: underline; }
 
   .is-highlight { background: rgba(var(--accent-rgb), 0.07); }
   .tag {

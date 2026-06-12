@@ -101,6 +101,7 @@ export default defineConfig({
                 ui: { itemProps: (i) => ({ label: `${i?.device ?? ''}: ${i?.score ?? ''}` }) },
                 fields: [
                   { type: 'string', name: 'device', label: 'Device' },
+                  { type: 'string', name: 'url', label: 'Product page URL (optional)' },
                   { type: 'string', name: 'cores', label: 'Cores / threads' },
                   { type: 'string', name: 'score', label: 'Polaris score' },
                   { type: 'string', name: 'stacking', label: 'Stacking (Mpx/s)' },
