@@ -38,6 +38,14 @@ public sealed class CpuGpuCompute : IGpuCompute {
         return true;
     }
 
+    public bool TryBoxBlur8(byte[] src, int width, int height, int radius, int passes, out byte[] result) {
+        // The CPU box blur lives in EditPipeline (private, well-tested). Decline
+        // so the caller runs that canonical version; only the OpenCL backend
+        // accelerates this op.
+        result = System.Array.Empty<byte>();
+        return false;
+    }
+
     public bool TryWarpAffine(ushort[] source, int width, int height,
                               AffineTransform transform, out ushort[] result) {
         result = ImageResampler.ApplyTransform(source, width, height, transform);

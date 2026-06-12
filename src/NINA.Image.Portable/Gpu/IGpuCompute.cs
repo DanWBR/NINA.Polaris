@@ -55,6 +55,15 @@ public interface IGpuCompute {
                           double sigma, out ushort[] result);
 
     /// <summary>
+    /// 8-bit edge-clamped box blur, <paramref name="passes"/> passes of
+    /// (horizontal then vertical), on a single-channel uchar plane. This is the
+    /// editor's local-contrast blur (Clarity/Texture/Sharpen), the heaviest
+    /// per-slider editor cost. <see cref="CpuGpuCompute"/> declines (returns
+    /// false) so the caller keeps using its own canonical CPU box blur.
+    /// </summary>
+    bool TryBoxBlur8(byte[] src, int width, int height, int radius, int passes, out byte[] result);
+
+    /// <summary>
     /// Affine warp + bilinear resample (live-stack frame alignment). Mirrors
     /// <see cref="ImageResampler.ApplyTransform"/>.
     /// </summary>

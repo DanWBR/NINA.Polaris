@@ -14,6 +14,7 @@
 
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
+using NINA.Image.Editor;
 using NINA.Image.Gpu;
 using NINA.Image.ImageAnalysis;
 using NINA.Polaris.Services.OpenCl;
@@ -89,6 +90,67 @@ public class GpuOpenClParityTests {
         Assert.That(_gpu.TryApplyLut8(data, lut, out var gpu), Is.True, "GPU declined lut");
         for (int i = 0; i < data.Length; i++)
             Assert.That(gpu[i], Is.EqualTo(lut[data[i]]), $"lut mismatch at {i}");
+    }
+
+    [Test]
+    public void BoxBlur8_matches_cpu_within_tolerance() {
+        const int w = 96, h = 72;
+        var src = new byte[w * h];
+        for (int i = 0; i < src.Length; i++) src[i] = (byte)((i * 7 + (i % 11) * 20) & 0xFF);
+        Assert.That(_gpu.TryBoxBlur8(src, w, h, 4, 3, out var gpu), Is.True, "GPU declined box blur");
+        // Reference: the editor's exact 3-pass box blur, reached through
+        // EditPipeline (mono Clarity uses the same BoxBlur on the luminance).
+        // Compare the GPU box blur to a CPU 3-pass box blur computed the same way.
+        var cpu = CpuBoxBlur(src, w, h, 4, 3);
+        Assert.That(MaxAbsDiff8(gpu, cpu), Is.LessThanOrEqualTo(2),
+            "GPU box blur differs from CPU by more than 2 LSB");
+    }
+
+    [Test]
+    public void Editor_clarity_matches_cpu_within_tolerance() {
+        const int w = 80, h = 64;
+        var baseBuf = new byte[w * h];
+        for (int i = 0; i < baseBuf.Length; i++) baseBuf[i] = (byte)((i * 13) & 0xFF);
+        var p = new EditParams(Effects: new EffectsParams(Clarity: 0.6));
+
+        var gpuBuf = (byte[])baseBuf.Clone();
+        EditPipeline.Apply(gpuBuf, w, h, 1, p, _gpu);
+        var cpuBuf = (byte[])baseBuf.Clone();
+        EditPipeline.Apply(cpuBuf, w, h, 1, p, null);
+
+        Assert.That(MaxAbsDiff8(gpuBuf, cpuBuf), Is.LessThanOrEqualTo(4),
+            "Editor Clarity (GPU blur) differs from the CPU path by more than 4 LSB");
+    }
+
+    private static long MaxAbsDiff8(byte[] a, byte[] b) {
+        long m = 0;
+        for (int i = 0; i < a.Length; i++) { long d = Math.Abs(a[i] - b[i]); if (d > m) m = d; }
+        return m;
+    }
+
+    // Edge-clamped 3-pass separable box blur, matching EditPipeline.BoxBlur math.
+    private static byte[] CpuBoxBlur(byte[] src, int w, int h, int r, int passes) {
+        var cur = (byte[])src.Clone();
+        for (int p = 0; p < passes; p++) {
+            cur = Pass(cur, w, h, r, horizontal: true);
+            cur = Pass(cur, w, h, r, horizontal: false);
+        }
+        return cur;
+        static byte[] Pass(byte[] s, int w, int h, int r, bool horizontal) {
+            var d = new byte[s.Length];
+            double iarr = 1.0 / (2 * r + 1);
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++) {
+                    int sum = 0;
+                    for (int k = -r; k <= r; k++) {
+                        int xx = horizontal ? Math.Clamp(x + k, 0, w - 1) : x;
+                        int yy = horizontal ? y : Math.Clamp(y + k, 0, h - 1);
+                        sum += s[yy * w + xx];
+                    }
+                    d[y * w + x] = (byte)Math.Clamp(Math.Round(sum * iarr), 0, 255);
+                }
+            return d;
+        }
     }
 
     [Test]

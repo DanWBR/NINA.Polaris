@@ -83,6 +83,42 @@ __kernel void apply_lut8(__global const ushort* src, __global uchar* dst,
     dst[i] = lut[src[i]];
 }
 
+// --- 8-bit box blur (editor clarity/texture/sharpen) ------------------------
+// One H or V pass of an edge-clamped box blur over a uchar plane. The editor
+// runs 3 passes of (H then V) to approximate a Gaussian. iarr = 1/(2r+1).
+// rint() = round-to-nearest-even, matching C# Math.Round; float (no fp64) for
+// Mali/Adreno portability. Edge handling = clamped index (== the CPU fv/lv
+// border extension).
+
+__kernel void box_blur_h(__global const uchar* src, __global uchar* dst,
+                         int width, int height, int r) {
+    int x = get_global_id(0);
+    int y = get_global_id(1);
+    if (x >= width || y >= height) return;
+    int row = y * width;
+    int sum = 0;
+    for (int k = -r; k <= r; ++k) {
+        int xs = clamp(x + k, 0, width - 1);
+        sum += src[row + xs];
+    }
+    float v = rint((float)sum / (float)(2 * r + 1));
+    dst[row + x] = (uchar)clamp(v, 0.0f, 255.0f);
+}
+
+__kernel void box_blur_v(__global const uchar* src, __global uchar* dst,
+                         int width, int height, int r) {
+    int x = get_global_id(0);
+    int y = get_global_id(1);
+    if (x >= width || y >= height) return;
+    int sum = 0;
+    for (int k = -r; k <= r; ++k) {
+        int ys = clamp(y + k, 0, height - 1);
+        sum += src[ys * width + x];
+    }
+    float v = rint((float)sum / (float)(2 * r + 1));
+    dst[y * width + x] = (uchar)clamp(v, 0.0f, 255.0f);
+}
+
 // --- Running-mean accumulate (live stacking) --------------------------------
 // accum[i] += frame[i]; count[i]++
 __kernel void accumulate(__global const ushort* frame, __global float* accum,

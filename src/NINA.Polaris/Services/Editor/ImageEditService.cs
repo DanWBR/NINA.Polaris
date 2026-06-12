@@ -43,13 +43,17 @@ namespace NINA.Polaris.Services.Editor;
 public class ImageEditService : IDisposable {
     private readonly ILogger<ImageEditService> _logger;
     private readonly ProfileService _profile;
+    private readonly NINA.Image.Gpu.IGpuCompute _gpu;
     private readonly ConcurrentDictionary<string, EditSession> _sessions = new();
     private readonly Timer _reaper;
     private static readonly TimeSpan SessionIdleTimeout = TimeSpan.FromMinutes(30);
 
-    public ImageEditService(ProfileService profile, ILogger<ImageEditService> logger) {
+    public ImageEditService(ProfileService profile, ILogger<ImageEditService> logger,
+                            NINA.Image.Gpu.IGpuCompute? gpu = null) {
         _profile = profile;
         _logger = logger;
+        // GPU offload for the editor blur (clarity/texture/sharpen); CPU otherwise.
+        _gpu = gpu ?? new NINA.Image.Gpu.CpuGpuCompute();
         _reaper = new Timer(_ => Reap(), null, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
     }
 
@@ -283,7 +287,7 @@ public class ImageEditService : IDisposable {
             working = downscaled; w = dw; h = dh;
         }
 
-        EditPipeline.Apply(working, w, h, s.Channels, edits);
+        EditPipeline.Apply(working, w, h, s.Channels, edits, _gpu);
 
         // If a crop is set, apply it after the pipeline (keep things in
         // the working frame's coordinate system).
@@ -322,7 +326,7 @@ public class ImageEditService : IDisposable {
             var (down, dw, dh) = EditPipeline.ApplyCropResize(working, w, h, s.Channels, null, tw, th);
             working = down; w = dw; h = dh;
         }
-        EditPipeline.Apply(working, w, h, s.Channels, edits);
+        EditPipeline.Apply(working, w, h, s.Channels, edits, _gpu);
 
         if (s.Channels == 1) {
             var hist = new int[256];
@@ -351,7 +355,7 @@ public class ImageEditService : IDisposable {
         var working = s.GetStretched(req.Edits);
         int w = s.Width, h = s.Height;
 
-        EditPipeline.Apply(working, w, h, s.Channels, req.Edits);
+        EditPipeline.Apply(working, w, h, s.Channels, req.Edits, _gpu);
 
         // Apply crop + final resize in one pass.
         var (final, fw, fh) = EditPipeline.ApplyCropResize(

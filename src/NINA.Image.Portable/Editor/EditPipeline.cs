@@ -26,6 +26,7 @@
 
 using System.Collections.Concurrent;
 using System.Threading.Tasks;
+using NINA.Image.Gpu;
 using NINA.Image.ImageAnalysis;
 
 namespace NINA.Image.Editor;
@@ -59,7 +60,8 @@ public static class EditPipeline {
     /// separately by the caller (so the preview keeps dimensions stable
     /// while sliders move). Use <see cref="ApplyCropResize"/> for those.
     /// </summary>
-    public static byte[] Apply(byte[] buf, int width, int height, int channels, EditParams p) {
+    public static byte[] Apply(byte[] buf, int width, int height, int channels, EditParams p,
+                               IGpuCompute? gpu = null) {
         if (p == null) return buf;
 
         // ── 1. White balance (RGB only, no-op for mono)
@@ -104,7 +106,7 @@ public static class EditPipeline {
         if (p.Effects != null && Math.Abs(p.Effects.Clarity) > 1e-4) {
             ApplyLocalContrast(buf, width, height, channels,
                 radius: (int)Math.Max(8, width / 80),
-                amount: p.Effects.Clarity * 0.5);
+                amount: p.Effects.Clarity * 0.5, gpu: gpu);
         }
 
         // ── 11. Dehaze (global contrast + saturation boost weighted by haze)
@@ -116,7 +118,7 @@ public static class EditPipeline {
         if (p.Effects != null && Math.Abs(p.Effects.Texture) > 1e-4) {
             ApplyLocalContrast(buf, width, height, channels,
                 radius: 3,
-                amount: p.Effects.Texture * 0.6);
+                amount: p.Effects.Texture * 0.6, gpu: gpu);
         }
 
         // ── 13. Sharpen (small-radius USM)
@@ -124,7 +126,7 @@ public static class EditPipeline {
             ApplyLocalContrast(buf, width, height, channels,
                 radius: Math.Max(1, (int)Math.Round(p.Detail.SharpenRadius)),
                 amount: p.Detail.SharpenAmount,
-                thresholdAdu: p.Detail.SharpenThreshold);
+                thresholdAdu: p.Detail.SharpenThreshold, gpu: gpu);
         }
 
         // ── 14. Noise reduction (3x3 median on luminance)
@@ -331,7 +333,8 @@ public static class EditPipeline {
     }
 
     private static void ApplyLocalContrast(byte[] buf, int width, int height, int channels,
-                                            int radius, double amount, int thresholdAdu = 0) {
+                                            int radius, double amount, int thresholdAdu = 0,
+                                            IGpuCompute? gpu = null) {
         // Build a luminance plane, blur it, compute the diff, add back.
         // For RGB we apply the diff per-channel scaled by the same factor
         // so colour isn't shifted.
@@ -347,7 +350,11 @@ public static class EditPipeline {
                 }
             });
         }
-        var blurred = BoxBlur(lum, width, height, radius);
+        // GPU box blur when available (3 passes, matching the CPU BoxBlur);
+        // otherwise the canonical CPU path. The CPU BoxBlur stays the reference.
+        byte[] blurred;
+        if (gpu == null || !gpu.TryBoxBlur8(lum, width, height, radius, 3, out blurred))
+            blurred = BoxBlur(lum, width, height, radius);
 
         // PERF #364: add-back is per-pixel independent → parallel.
         Parallel.ForEach(Partitioner.Create(0, lum.Length), range => {

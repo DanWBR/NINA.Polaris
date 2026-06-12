@@ -139,6 +139,42 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
         } catch (Exception ex) { _log.LogDebug("GPU blur fell back: {Msg}", ex.Message); return false; }
     }
 
+    public bool TryBoxBlur8(byte[] src, int width, int height, int radius, int passes, out byte[] result) {
+        result = Array.Empty<byte>();
+        if (radius < 1 || passes < 1) return false;
+        var ctx = Context();
+        if (ctx == null) return false;
+        try {
+            int n = width * height;
+            var cl = ctx.Cl;
+            lock (ctx.Gate) {
+                // Ping-pong two device buffers; H then V per pass.
+                nint a = CreateFrom(ctx, MemFlags.ReadWrite | MemFlags.CopyHostPtr, src);
+                nint b = CreateEmpty(ctx, MemFlags.ReadWrite, (nuint)n);
+                try {
+                    var kh = ctx.GetKernel("box_blur_h");
+                    var kv = ctx.GetKernel("box_blur_v");
+                    for (int p = 0; p < passes; p++) {
+                        // H: a -> b
+                        SetMem(cl, kh, 0, a); SetMem(cl, kh, 1, b);
+                        SetVal(cl, kh, 2, width); SetVal(cl, kh, 3, height); SetVal(cl, kh, 4, radius);
+                        Run2D(ctx, kh, width, height);
+                        // V: b -> a
+                        SetMem(cl, kv, 0, b); SetMem(cl, kv, 1, a);
+                        SetVal(cl, kv, 2, width); SetVal(cl, kv, 3, height); SetVal(cl, kv, 4, radius);
+                        Run2D(ctx, kv, width, height);
+                    }
+                    var outp = new byte[n];
+                    ReadInto(ctx, a, outp); // result lands back in 'a' after V
+                    result = outp;
+                    return true;
+                } finally {
+                    cl.ReleaseMemObject(a); cl.ReleaseMemObject(b);
+                }
+            }
+        } catch (Exception ex) { _log.LogDebug("GPU box blur fell back: {Msg}", ex.Message); return false; }
+    }
+
     public bool TryWarpAffine(ushort[] source, int width, int height,
                               AffineTransform transform, out ushort[] result) {
         result = Array.Empty<ushort>();
