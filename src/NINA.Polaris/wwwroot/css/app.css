@@ -7791,6 +7791,47 @@ label select.input-sm {
 .editor-export-row input[type="number"] { width: 100%; }
 .editor-export-row .muted { white-space: nowrap; }
 
+/* Theme the Export modal's dropdowns + number input so they match the
+   dark UI instead of falling back to the OS white combobox. Mirrors the
+   Settings-card select styling: dark surface, custom chevron, focus ring,
+   and color-scheme:dark so the option popup renders dark too. */
+.editor-export-row select,
+.editor-export-row input[type="number"] {
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 9px 10px;
+    min-height: 38px;
+    box-sizing: border-box;
+    font-size: 12px;
+    outline: none;
+    color-scheme: dark;
+    transition: border-color var(--transition), box-shadow var(--transition);
+}
+.editor-export-row select {
+    padding-right: 32px;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%23a8b3bf' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+}
+.editor-export-row select:hover {
+    border-color: var(--text-secondary);
+}
+.editor-export-row select:focus,
+.editor-export-row input[type="number"]:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.25);
+}
+.editor-export-row select option {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
 /* ──────────────────────── /EDITOR ──────────────────────── */
 
 .tonight-panel {
