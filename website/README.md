@@ -135,6 +135,6 @@ Vercel / Cloudflare Pages (base dir `website`, build `npm run build`, publish
 
 - This replaced the old zero-build `landing/` page (removed).
 - The hero background (`public/assets/horsehead.jpg`) is IC 434 / Horsehead +
-  NGC 2024 Flame, used by permission of M. Pugh.
+  NGC 2024 Flame, photographed by Daniel Wagner Oliveira de Medeiros (site owner).
 - Fonts under `public/fonts/` are OFL-1.1; attribution in
   `public/fonts/README.md`.
