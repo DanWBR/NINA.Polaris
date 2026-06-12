@@ -71,9 +71,11 @@ public sealed class CpuGpuCompute : IGpuCompute {
     }
 
     public bool TryAccumulate(ushort[] frame, float[] accum, int[] count, int length) {
+        // Zero == warp-edge no-data; skip so it doesn't bias the running mean
+        // (matches LiveStackingService's `if (alignedData[i] > 0)`).
         for (int i = 0; i < length; i++) {
-            accum[i] += frame[i];
-            count[i]++;
+            ushort v = frame[i];
+            if (v > 0) { accum[i] += v; count[i]++; }
         }
         return true;
     }

@@ -80,8 +80,12 @@ public class GpuComputeTests {
     }
 
     [Test]
-    public void Cpu_accumulate_running_mean() {
-        var frame = Ramp(64);
+    public void Cpu_accumulate_running_mean_skips_zero_nodata() {
+        // All-positive pixels accumulate twice; a zero pixel is no-data and is
+        // skipped (matches the live-stack warp-edge convention).
+        var frame = new ushort[64];
+        for (int i = 0; i < 64; i++) frame[i] = (ushort)(i * 37 + 1); // never 0
+        frame[10] = 0; // a no-data pixel
         var accum = new float[64];
         var count = new int[64];
         var cpu = new CpuGpuCompute();
@@ -89,8 +93,8 @@ public class GpuComputeTests {
         Assert.That(cpu.TryAccumulate(frame, accum, count, 64), Is.True);
         Assert.That(cpu.TryAccumulate(frame, accum, count, 64), Is.True);
         for (int i = 0; i < 64; i++) {
-            Assert.That(count[i], Is.EqualTo(2));
-            Assert.That(accum[i], Is.EqualTo(frame[i] * 2f));
+            if (i == 10) { Assert.That(count[i], Is.EqualTo(0)); Assert.That(accum[i], Is.EqualTo(0f)); }
+            else { Assert.That(count[i], Is.EqualTo(2)); Assert.That(accum[i], Is.EqualTo(frame[i] * 2f)); }
         }
     }
 

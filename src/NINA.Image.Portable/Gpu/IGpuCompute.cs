@@ -87,9 +87,10 @@ public interface IGpuCompute {
 
     /// <summary>
     /// Running-mean accumulate for live stacking, in place:
-    /// <c>accum[i] += frame[i]; count[i]++</c>. Returns false if it declined
-    /// (caller then accumulates on the CPU). All three arrays share length
-    /// <paramref name="length"/>.
+    /// <c>if (frame[i] > 0) { accum[i] += frame[i]; count[i]++; }</c>. Zero
+    /// pixels are warp-edge no-data and are skipped so they don't bias the mean.
+    /// Returns false if it declined (caller then accumulates on the CPU). All
+    /// three arrays share length <paramref name="length"/>.
     /// </summary>
     bool TryAccumulate(ushort[] frame, float[] accum, int[] count, int length);
 }

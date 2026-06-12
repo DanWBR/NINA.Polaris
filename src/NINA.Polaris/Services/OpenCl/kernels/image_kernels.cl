@@ -120,11 +120,16 @@ __kernel void box_blur_v(__global const uchar* src, __global uchar* dst,
 }
 
 // --- Running-mean accumulate (live stacking) --------------------------------
-// accum[i] += frame[i]; count[i]++
+// accum[i] += frame[i]; count[i]++  -- but ONLY for frame[i] > 0. Zero pixels
+// are warp-edge "no data" and must not bias the running mean (matches the CPU
+// LiveStackingService loop: `if (alignedData[i] > 0)`).
 __kernel void accumulate(__global const ushort* frame, __global float* accum,
                          __global int* count, int n) {
     int i = get_global_id(0);
     if (i >= n) return;
-    accum[i] += (float)frame[i];
-    count[i] += 1;
+    ushort v = frame[i];
+    if (v > 0) {
+        accum[i] += (float)v;
+        count[i] += 1;
+    }
 }

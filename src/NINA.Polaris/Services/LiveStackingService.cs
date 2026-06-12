@@ -490,11 +490,15 @@ public class LiveStackingService {
                     }
                 }
 
-                // Accumulate into stack buffer (running average)
-                for (int i = 0; i < alignedData.Length && i < _stackBuffer!.Length; i++) {
-                    if (alignedData[i] > 0) {
-                        _stackBuffer[i] += alignedData[i];
-                        _countBuffer![i]++;
+                // Accumulate into stack buffer (running average), on the GPU
+                // when available (skips zero/no-data pixels), CPU otherwise.
+                int accN = Math.Min(alignedData.Length, _stackBuffer!.Length);
+                if (!_gpu.TryAccumulate(alignedData, _stackBuffer!, _countBuffer!, accN)) {
+                    for (int i = 0; i < accN; i++) {
+                        if (alignedData[i] > 0) {
+                            _stackBuffer[i] += alignedData[i];
+                            _countBuffer![i]++;
+                        }
                     }
                 }
 
