@@ -70,10 +70,16 @@ comparison table, and the download cards) lives in
 1. `npm run dev`
 2. open http://localhost:4321/admin/index.html
 3. edit in the form panel with live preview, then **Save**
+4. `npm run publish` to push it live
 
-Saving writes back to `content/pages/home.json`. **Commit & push that file to
-publish.** The workflow is fully git-based, no external service, no database.
-You can of course also hand-edit the JSON directly.
+Saving writes back to the JSON files under `content/`. **`npm run publish`** is a
+shortcut that stages `content/` + `public/assets/`, commits (`"content update"`),
+and pushes, which triggers the GitHub Pages deploy (live in 1-2 min). The flow is
+fully git-based, no external service, no database.
+
+> `npm run publish` only stages **content and media**. If you also changed code
+> (components, styles, `tina/config.ts`), commit and push manually so those files
+> are included. You can also hand-edit the JSON directly instead of using `/admin`.
 
 The field layout (what shows up in the editor) is defined in
 [`tina/config.ts`](tina/config.ts). Structural config that isn't editorial copy
