@@ -64,15 +64,23 @@ const statusClass = (s: string) => {
       <div class="container">
         <h2 class="block-title">{g.download.title}</h2>
         <p class="block-sub">{g.download.sub}</p>
-        <div class="dl-row">
-          {g.download.items.map((d) => (
-            <a class="dl-link" href={d.url} target="_blank" rel="noopener">
-              <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true">
-                <path d="M8 1a.75.75 0 0 1 .75.75v6.69l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 0 1 1.06-1.06l2.22 2.22V1.75A.75.75 0 0 1 8 1ZM2.75 13.5a.75.75 0 0 0 0 1.5h10.5a.75.75 0 0 0 0-1.5H2.75Z"/>
-              </svg>
-              <span class="dl-label">{d.label}</span>
-              {d.badge && <span class="badge alt">{d.badge}</span>}
-            </a>
+        <div class="dl-groups">
+          {g.download.groups.map((grp) => (
+            <div class="dl-group">
+              <h3 class="dl-group-name">{grp.name}</h3>
+              {grp.note && <p class="dl-group-note">{grp.note}</p>}
+              <div class="dl-row">
+                {grp.items.map((d) => (
+                  <a class="dl-link" href={d.url} target="_blank" rel="noopener">
+                    <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true">
+                      <path d="M8 1a.75.75 0 0 1 .75.75v6.69l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 0 1 1.06-1.06l2.22 2.22V1.75A.75.75 0 0 1 8 1ZM2.75 13.5a.75.75 0 0 0 0 1.5h10.5a.75.75 0 0 0 0-1.5H2.75Z"/>
+                    </svg>
+                    <span class="dl-label">{d.label}</span>
+                    {d.badge && <span class="badge alt">{d.badge}</span>}
+                  </a>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </div>
@@ -454,6 +462,15 @@ const statusClass = (s: string) => {
   }
 
   /* Download links */
+  .dl-groups { display: flex; flex-direction: column; gap: 28px; }
+  .dl-group-name {
+    font-size: 16px;
+    font-weight: 700;
+    border-left: 3px solid var(--accent);
+    padding-left: 12px;
+    margin-bottom: 6px;
+  }
+  .dl-group-note { font-size: 13.5px; color: var(--text-muted); line-height: 1.5; margin-bottom: 14px; max-width: 70ch; }
   .dl-row { display: flex; flex-wrap: wrap; gap: 12px; }
   .dl-link {
     display: inline-flex;

@@ -31,15 +31,27 @@
   },
   "download": {
     "title": "Download",
-    "sub": "Grab the latest release for your platform, then follow the install steps below. Prefer zero setup? Use a ready-to-flash image above.",
-    "items": [
-      { "label": "Raspberry Pi (.deb)", "badge": "arm64", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb" },
-      { "label": "Linux arm64 (.tar.gz)", "badge": "arm64", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-linux-arm64.tar.gz" },
-      { "label": "Linux x64 (.tar.gz)", "badge": "x64", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-linux-x64.tar.gz" },
-      { "label": "Windows x64 (.zip)", "badge": "x64", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-x64.zip" },
-      { "label": "Windows arm64 (.zip)", "badge": "arm64", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-arm64.zip" },
-      { "label": "Android app (.apk)", "badge": "android", "url": "https://drive.google.com/uc?export=download&id=1iAmrDeHPWZ4DY-xSK0NP2HAU7rrwk3xM" },
-      { "label": "All releases", "badge": "github", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest" }
+    "sub": "Grab the server build for the machine that runs your rig, then follow the install steps below. Prefer zero setup? Use a ready-to-flash image above.",
+    "groups": [
+      {
+        "name": "Server (runs on the rig)",
+        "note": "Install on the Raspberry Pi, SBC, or mini PC that controls your gear.",
+        "items": [
+          { "label": "Raspberry Pi (.deb)", "badge": "arm64", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb" },
+          { "label": "Linux arm64 (.tar.gz)", "badge": "arm64", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-linux-arm64.tar.gz" },
+          { "label": "Linux x64 (.tar.gz)", "badge": "x64", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-linux-x64.tar.gz" },
+          { "label": "Windows x64 (.zip)", "badge": "x64", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-x64.zip" },
+          { "label": "Windows arm64 (.zip)", "badge": "arm64", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-arm64.zip" },
+          { "label": "All releases", "badge": "github", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest" }
+        ]
+      },
+      {
+        "name": "Client apps (connect from a device)",
+        "note": "Optional native app to reach the server. Any browser also works, so no app is required.",
+        "items": [
+          { "label": "Android app (.apk)", "badge": "android", "url": "https://drive.google.com/uc?export=download&id=1iAmrDeHPWZ4DY-xSK0NP2HAU7rrwk3xM" }
+        ]
+      }
     ]
   },
   "tldr": {
