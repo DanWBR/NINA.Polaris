@@ -2361,6 +2361,14 @@ function ninaApp() {
         // black/white handles drive the editor's Blacks/Whites light params and
         // the bins come from the post-edit /api/editor/histogram result).
         editorHistoZoom: true,   // open framed to the data, not full 0..65535
+        // Width (px) of the editor's right-hand sliders panel. Drag the
+        // resizer to change it; persisted so it survives reloads.
+        editorPanelW: (function () {
+            try {
+                const v = parseInt(localStorage.getItem('polaris.editorPanelW') || '', 10);
+                return (v >= 260 && v <= 900) ? v : 320;
+            } catch (e) { return 320; }
+        })(),
         editorHisto: {
             min: 0, max: 0, avg: 0, std: 0,
             blackFrac: 0, whiteFrac: 1, midFrac: 0.5, dispLo: 0, dispHi: 1,
@@ -10374,6 +10382,42 @@ function ninaApp() {
             this.editorHistoZoom = !this.editorHistoZoom;
             this._editorHistoApplyZoom();
             this._editorDrawHistogram();
+        },
+
+        // ---- Editor sliders-panel resize (drag the .editor-resizer) ----
+        // The panel is the right grid column; widening it drags leftward, so a
+        // negative deltaX (cursor moving left) grows the width. Clamped to a
+        // sane range and capped at ~70% of the window so the preview never
+        // disappears. Persisted to localStorage.
+        editorPanelResizeStart(ev) {
+            ev.preventDefault();
+            const startX = ev.clientX;
+            const startW = this.editorPanelW;
+            const handle = ev.currentTarget;
+            try { handle.setPointerCapture(ev.pointerId); } catch (e) {}
+            handle.classList.add('dragging');
+            const maxW = Math.min(900, Math.round((window.innerWidth || 1200) * 0.7));
+            const move = (e) => {
+                const w = startW - (e.clientX - startX);
+                this.editorPanelW = Math.max(260, Math.min(maxW, Math.round(w)));
+            };
+            const up = (e) => {
+                handle.classList.remove('dragging');
+                try { handle.releasePointerCapture(ev.pointerId); } catch (er) {}
+                window.removeEventListener('pointermove', move);
+                window.removeEventListener('pointerup', up);
+                window.removeEventListener('pointercancel', up);
+                try { localStorage.setItem('polaris.editorPanelW', String(this.editorPanelW)); } catch (er) {}
+            };
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', up);
+            window.addEventListener('pointercancel', up);
+        },
+
+        // Double-click the handle to snap back to the default width.
+        editorPanelResizeReset() {
+            this.editorPanelW = 320;
+            try { localStorage.setItem('polaris.editorPanelW', '320'); } catch (e) {}
         },
 
         _editorHistoApplyZoom() {

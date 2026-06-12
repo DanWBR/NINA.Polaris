@@ -7175,7 +7175,10 @@ label select.input-sm {
 .editor-workspace {
     flex: 1;
     display: grid;
-    grid-template-columns: 1fr 320px;
+    /* Middle "auto" column is the drag handle; the right column width is
+       user-resizable via --editor-panel-w (set inline from Alpine, so the
+       mobile media query below still wins by not using the var). */
+    grid-template-columns: 1fr auto var(--editor-panel-w, 320px);
     gap: 0;
     overflow: hidden;
     min-height: 0;
@@ -7185,6 +7188,46 @@ label select.input-sm {
         grid-template-columns: 1fr;
         grid-template-rows: 1fr auto;
     }
+    /* No side-by-side resize on a stacked mobile layout. */
+    .editor-resizer { display: none; }
+}
+
+/* Drag handle between the preview and the controls panel. A thin column
+   the user grabs to widen/narrow the sliders panel. */
+.editor-resizer {
+    width: 6px;
+    cursor: col-resize;
+    background: var(--border);
+    position: relative;
+    flex: none;
+    touch-action: none;        /* we handle the drag via pointer events */
+    transition: background 0.12s ease;
+}
+.editor-resizer:hover,
+.editor-resizer.dragging {
+    background: var(--accent);
+}
+/* Fatter invisible hit area so it's easy to grab on touch without making
+   the visible strip wide. */
+.editor-resizer::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -5px;
+    right: -5px;
+}
+/* Grip dots so the handle reads as draggable. */
+.editor-resizer::after {
+    content: "⋮";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 14px;
+    line-height: 1;
+    color: var(--text-secondary);
+    pointer-events: none;
 }
 .editor-preview-col {
     display: flex;

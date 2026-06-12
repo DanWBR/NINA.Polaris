@@ -8887,7 +8887,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <div class="editor-load-error" x-show="editorState.error" x-text="editorState.error"></div>
 
                 <!-- Active editing surface -->
-                <div class="editor-workspace" x-show="editorState.session">
+                <div class="editor-workspace" x-show="editorState.session"
+                     :style="'--editor-panel-w: ' + editorPanelW + 'px'">
                     <!-- Left rail: preview + histogram -->
                     <div class="editor-preview-col">
                         <div class="editor-preview-toolbar">
@@ -9014,6 +9015,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             </div>
                         </div>
                     </div>
+
+                    <!-- Drag handle to widen/narrow the sliders panel. -->
+                    <div class="editor-resizer" title="Drag to resize the panel"
+                         @pointerdown="editorPanelResizeStart($event)"
+                         @dblclick="editorPanelResizeReset()"></div>
 
                     <!-- Right rail: collapsible sliders panels (Lightroom-mobile layout) -->
                     <div class="editor-controls-col">
@@ -13202,7 +13208,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260612-nativedefault"></script>
+    <script src="/js/app.js?v=20260612-editorresize"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
