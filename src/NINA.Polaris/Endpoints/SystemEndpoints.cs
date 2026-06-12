@@ -363,6 +363,20 @@ public static class SystemEndpoints {
             });
         });
 
+        // OCL: in-process GPU-vs-CPU kernel validation. Runs every kernel on
+        // this machine's GPU and diffs against the CPU reference, so a board
+        // with only the installed .deb (no test project) can still confirm its
+        // GPU produces correct output. Returns per-kernel maxDiff + pass/fail.
+        group.MapGet("/gpu/selftest", (NINA.Image.Gpu.IGpuCompute gpu) => {
+            var results = NINA.Polaris.Services.OpenCl.GpuSelfTest.Run(gpu);
+            return Results.Ok(new {
+                backend = gpu.BackendName,
+                hardware = gpu.IsHardware,
+                allOk = results.All(r => r.Ok),
+                kernels = results
+            });
+        });
+
         group.MapPost("/restart-app", (PowerService power) => {
             var r = power.ScheduleRestart();
             return r.Ok
