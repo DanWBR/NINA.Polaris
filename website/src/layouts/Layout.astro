@@ -1,6 +1,7 @@
 ---
 import '../styles/global.css';
 import { site } from '../data/site';
+import Nav from '../components/Nav.astro';
 
 interface Props {
   title?: string;
@@ -50,6 +51,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? Astro.url).href;
     <meta name="generator" content={Astro.generator} />
   </head>
   <body>
+    <Nav />
     <slot />
   </body>
 </html>

@@ -2,7 +2,6 @@
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import Layout from '../layouts/Layout.astro';
-import Nav from '../components/Nav.astro';
 import Footer from '../components/Footer.astro';
 import { guide as g } from '../data/site';
 
@@ -18,8 +17,6 @@ const steps = g.steps.map((s) => ({
   title={`${g.title}, N.I.N.A. Polaris`}
   description="A basic first-night guide for N.I.N.A. Polaris: rig setup, connecting equipment, guiding, focus, live stacking or autorun, then stacking and editing in STUDIO."
 >
-  <Nav />
-
   <main>
     <header class="page-head">
       <div class="container">

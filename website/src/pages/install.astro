@@ -1,6 +1,5 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import Nav from '../components/Nav.astro';
 import Footer from '../components/Footer.astro';
 import { installGuide as g } from '../data/site';
 
@@ -18,8 +17,6 @@ const statusClass = (s: string) => {
   title={`${g.title}, N.I.N.A. Polaris`}
   description="Install N.I.N.A. Polaris on Raspberry Pi, Linux, Windows, or Docker, plus the optional components for plate solving, guiding, post-processing, and more."
 >
-  <Nav />
-
   <main>
     <header class="page-head">
       <div class="container">

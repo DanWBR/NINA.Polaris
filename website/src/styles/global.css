@@ -67,7 +67,7 @@
   --maxw: 1200px;
 }
 
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; scroll-padding-top: 76px; }
 
 body {
   font-family: var(--font-body);
