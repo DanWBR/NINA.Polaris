@@ -29,6 +29,36 @@ const statusClass = (s: string) => {
       </div>
     </header>
 
+    <!-- Ready-to-flash images -->
+    <section id="sd-images" class="section section-alt">
+      <div class="container">
+        <h2 class="block-title">{g.images.title}</h2>
+        <p class="block-sub">{g.images.sub}</p>
+        <div class="img-grid">
+          {g.images.items.map((it) => (
+            <article class="img-card">
+              <header>
+                <h3>{it.device}</h3>
+                {it.badge && <span class="badge">{it.badge}</span>}
+              </header>
+              {it.size && <p class="img-size">{it.size}</p>}
+              {it.note && <p class="img-note">{it.note}</p>}
+              {it.url ? (
+                <a class="btn btn-primary img-btn" href={it.url} target="_blank" rel="noopener">
+                  <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+                    <path d="M8 1a.75.75 0 0 1 .75.75v6.69l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 0 1 1.06-1.06l2.22 2.22V1.75A.75.75 0 0 1 8 1ZM2.75 13.5a.75.75 0 0 0 0 1.5h10.5a.75.75 0 0 0 0-1.5H2.75Z"/>
+                  </svg>
+                  Download image
+                </a>
+              ) : (
+                <span class="soon">Coming soon</span>
+              )}
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+
     <!-- System requirements -->
     <section id="requirements" class="section">
       <div class="container">
@@ -365,6 +395,44 @@ const statusClass = (s: string) => {
     white-space: nowrap;
   }
   .badge.alt { color: var(--text-muted); border-color: var(--border); background: rgba(255, 255, 255, 0.03); }
+
+  /* Ready-to-flash image cards */
+  .img-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+  }
+  .img-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+  }
+  .img-card header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .img-card h3 { font-size: 16px; font-weight: 700; }
+  .img-size { font-size: 13px; color: var(--text-muted); font-family: var(--font-mono); margin-bottom: 8px; }
+  .img-note { font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 14px; }
+  .img-btn { margin-top: auto; align-self: flex-start; padding: 9px 16px; font-size: 14px; }
+  .soon {
+    margin-top: auto;
+    align-self: flex-start;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    border: 1px dashed var(--border);
+    border-radius: 999px;
+    padding: 6px 12px;
+  }
 
   /* Firewall */
   .fw-grid {

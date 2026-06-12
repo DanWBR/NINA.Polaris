@@ -175,6 +175,29 @@ export default defineConfig({
           },
           {
             type: 'object',
+            name: 'images',
+            label: 'Ready-to-flash images',
+            fields: [
+              { type: 'string', name: 'title', label: 'Title' },
+              { type: 'string', name: 'sub', label: 'Subtitle', ui: { component: 'textarea' } },
+              {
+                type: 'object',
+                name: 'items',
+                label: 'Image cards',
+                list: true,
+                ui: { itemProps: (i) => ({ label: i?.device }) },
+                fields: [
+                  { type: 'string', name: 'device', label: 'Device' },
+                  { type: 'string', name: 'badge', label: 'Badge (arch)' },
+                  { type: 'string', name: 'url', label: 'Download URL (empty = Coming soon)' },
+                  { type: 'string', name: 'size', label: 'File size (optional)' },
+                  { type: 'string', name: 'note', label: 'Note (optional)' },
+                ],
+              },
+            ],
+          },
+          {
+            type: 'object',
             name: 'tldr',
             label: 'Bare-minimum table',
             fields: [
