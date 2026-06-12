@@ -5,13 +5,17 @@
   "private": true,
   "description": "Marketing website for N.I.N.A. Polaris",
   "scripts": {
-    "dev": "astro dev",
-    "start": "astro dev",
+    "dev": "tinacms dev -c \"astro dev\"",
+    "dev:astro": "astro dev",
+    "start": "tinacms dev -c \"astro dev\"",
     "build": "astro build",
+    "build:admin": "tinacms build",
     "preview": "astro preview",
     "astro": "astro"
   },
   "dependencies": {
-    "astro": "^5.7.0"
+    "@tinacms/cli": "^2.4.4",
+    "astro": "^5.7.0",
+    "tinacms": "^3.9.1"
   }
 }

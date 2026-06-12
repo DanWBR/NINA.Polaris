@@ -1,5 +1,5 @@
 ---
-import { site, stats } from '../data/site';
+import { site, hero, stats } from '../data/site';
 import Nav from './Nav.astro';
 ---
 
@@ -7,17 +7,13 @@ import Nav from './Nav.astro';
   <Nav />
 
   <div class="hero-content">
-    <span class="hero-eyebrow">Browser-controlled astrophotography · open-source</span>
+    <span class="hero-eyebrow">{hero.eyebrow}</span>
     <h1 class="hero-title">
-      Your rig.<br />
-      Any device.<br />
-      <span class="accent">No display required.</span>
+      {hero.titleLine1}<br />
+      {hero.titleLine2}<br />
+      <span class="accent">{hero.titleAccent}</span>
     </h1>
-    <p class="hero-lede">
-      A complete imaging session — equipment, guiding, plate-solving, sequencer —
-      running on a Raspberry Pi, a Windows mini PC, or anywhere else, controlled
-      from the browser of your phone, laptop, or warm-room tablet.
-    </p>
+    <p class="hero-lede">{hero.lede}</p>
     <div class="hero-cta">
       <a class="btn btn-primary" href={site.repo} target="_blank" rel="noopener">
         <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor" aria-hidden="true">
@@ -25,7 +21,7 @@ import Nav from './Nav.astro';
         </svg>
         Source on GitHub
       </a>
-      <a class="btn btn-ghost" href="#getting-started">Quick start →</a>
+      <a class="btn btn-ghost" href="/getting-started">Get started →</a>
       <a class="btn btn-ghost" href={site.donate} target="_blank" rel="noopener">❤ Donate</a>
     </div>
 

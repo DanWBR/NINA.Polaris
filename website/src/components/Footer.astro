@@ -13,7 +13,14 @@ import { site, footerCols } from '../data/site';
         <strong>{col.title}</strong>
         <ul>
           {col.links.map((l) => (
-            <li><a href={l.href} target="_blank" rel="noopener">{l.label}</a></li>
+            <li>
+              <a
+                href={l.href}
+                {...('external' in l && l.external === false
+                  ? {}
+                  : { target: '_blank', rel: 'noopener' })}
+              >{l.label}</a>
+            </li>
           ))}
         </ul>
       </div>

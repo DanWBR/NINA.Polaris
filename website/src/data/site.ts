@@ -1,6 +1,13 @@
-// Single source of truth for the site's content + links.
-// Edit here and every component updates.
+// Editorial content (hero text, features, screenshots, quick-start, stack, CTA,
+// section headings) is managed by TinaCMS and lives in
+// content/pages/home.json. Edit it visually at /admin (run `npm run dev`),
+// or by hand in the JSON. The exports below just re-surface that content to the
+// components, so nothing else needs to change.
+import home from '../../content/pages/home.json';
+import install from '../../content/install/install.json';
+import gettingStarted from '../../content/guide/getting-started.json';
 
+// ---- Static site config (links/meta, not editorial copy) ----
 export const site = {
   name: 'N.I.N.A. Polaris',
   tagline: 'Browser-controlled astrophotography for any device',
@@ -14,149 +21,20 @@ export const site = {
 };
 
 export const navLinks = [
-  { label: 'Features', href: '#features' },
-  { label: 'Screenshots', href: '#screenshots' },
-  { label: 'Get started', href: '#getting-started' },
-  { label: 'Stack', href: '#stack' },
+  { label: 'Features', href: '/#features' },
+  { label: 'Benchmarks', href: '/#benchmarks' },
+  { label: 'Get started', href: '/getting-started' },
+  { label: 'Install', href: '/install' },
+  { label: 'Download', href: '/#download' },
   { label: 'GitHub ↗', href: site.repo, external: true },
-];
-
-export const stats = [
-  { value: '181', label: 'unit tests' },
-  { value: '30+', label: 'sequencer instructions' },
-  { value: '9', label: 'device types' },
-  { value: '0', label: 'cloud dependencies' },
-];
-
-export const features = [
-  {
-    icon: '⚙️',
-    title: '9 device types',
-    body: 'Camera, mount, focuser, filter wheel, rotator, dome, flat panel, weather, guider — over INDI or ASCOM/Alpaca, with auto-discovery on the LAN.',
-  },
-  {
-    icon: '🎯',
-    title: 'Plate-solve & Slew-and-Center',
-    body: 'ASTAP, PlateSolve3, Astrometry.net (online + local), primary + blind fallback. Auto-pushes the solved focal length back into the rig.',
-  },
-  {
-    icon: '📡',
-    title: 'PHD2 guiding, fully managed',
-    body: 'JSON-RPC client with live RA/Dec chart, dither, settle params, profile switcher. Auto-launches PHD2 at startup if you opt in.',
-  },
-  {
-    icon: '🌲',
-    title: 'Advanced Sequencer (tree)',
-    body: 'Containers, loop conditions, event triggers (auto-focus on temp/HFR, meridian flip, dither, safety abort). Drag-drop tree editor in the browser.',
-  },
-  {
-    icon: '🧩',
-    title: 'Mosaic planner',
-    body: 'N×M grid with cos(δ) correction + serpentine slew order. One click lowers the plan into a runnable sequence.',
-  },
-  {
-    icon: '📸',
-    title: 'Live stack & adaptive stream',
-    body: 'EAA-style live stacking over WebSocket with LZ4 compression. Auto-downgrades raw → JPEG when WiFi gets flaky.',
-  },
-  {
-    icon: '🌐',
-    title: 'Remote relay (no port-forward)',
-    body: "Outbound WebSocket to a tiny relay server gives you internet access without DDNS. Per-tenant quotas, mTLS, web admin, built-in Let's Encrypt.",
-  },
-  {
-    icon: '🔌',
-    title: 'Plugin system',
-    body: 'Drop a .NET .dll into plugins/, ship custom sequencer instructions. Isolated load context — bad plugins can’t take the host down.',
-  },
-  {
-    icon: '🛰️',
-    title: 'Offline sky viewer',
-    body: 'Canvas-based starfield with the brightest stars + constellations + DSO catalog. Works without internet — perfect for dark-site observatories.',
-  },
-];
-
-// Screenshot gallery. Drop the real PNG/JPG into public/assets/screenshots/
-// using the filename in `src`. Until the file exists, a styled placeholder
-// with the title is shown — the section never looks broken.
-export const screenshots = [
-  {
-    src: '/assets/screenshots/sequencer.png',
-    title: 'Advanced Sequencer',
-    caption: 'Drag-and-drop tree editor with containers, triggers, and loop conditions.',
-  },
-  {
-    src: '/assets/screenshots/live-view.png',
-    title: 'Live view & stacking',
-    caption: 'EAA-style live stack with client-side stretch over a bandwidth-adaptive stream.',
-  },
-  {
-    src: '/assets/screenshots/sky-map.png',
-    title: 'Sky map & atlas',
-    caption: 'Offline starfield with constellations and a searchable DSO catalog.',
-  },
-  {
-    src: '/assets/screenshots/guiding.png',
-    title: 'PHD2 guiding',
-    caption: 'Live RA/Dec chart, dither and settle controls, profile switching.',
-  },
-  {
-    src: '/assets/screenshots/rigs.png',
-    title: 'Equipment rigs',
-    caption: 'Auto-discovered INDI / ASCOM Alpaca devices, organised per rig.',
-  },
-  {
-    src: '/assets/screenshots/focus.png',
-    title: 'Auto-focus (V-curve)',
-    caption: 'HFR vs. position curve fitting with hyperbolic / parabolic models.',
-  },
-];
-
-export const quickStart = [
-  {
-    tag: 'RPi',
-    title: 'Raspberry Pi 4 / 5',
-    code: `git clone https://github.com/DanWBR/NINA.Polaris.git
-cd NINA.Polaris
-./deploy/publish-linux-arm64.sh
-./publish/linux-arm64/NINA.Polaris`,
-    note: 'Then point any browser at http://nina-<hostname>.local:5000 — the mDNS announcer ships built-in.',
-  },
-  {
-    tag: 'Windows',
-    title: 'Windows mini PC',
-    code: `git clone https://github.com/DanWBR/NINA.Polaris.git
-cd NINA.Polaris
-.\\deploy\\publish-win-x64.ps1
-.\\publish\\win-x64\\NINA.Polaris.exe`,
-    note: 'Or -InstallService for a Windows Service that survives reboots. Discovers ASCOM Remote (Alpaca) drivers on the LAN automatically.',
-  },
-  {
-    tag: 'Docker',
-    title: 'Container',
-    code: `docker run -d --network host \\
-  -v $(pwd)/config:/config \\
-  -v $(pwd)/images:/images \\
-  ghcr.io/danwbr/nina-polaris:latest`,
-    note: 'Multi-arch image (arm64 + amd64). The compose file in the repo includes indiserver in the same stack.',
-  },
-];
-
-export const stack = [
-  { name: 'ASP.NET Core 10', rest: 'Minimal API, single-binary publish, runs on Linux ARM64 / x64 / Windows' },
-  { name: 'Alpine.js + plain JS', rest: 'the UI is ~3700 lines, no build step, hot-editable' },
-  { name: 'WebSockets', rest: 'binary image relay (LZ4 frames) + status broadcast at 1 Hz' },
-  { name: 'INDI + ASCOM Alpaca', rest: 'INDI over TCP/XML and Alpaca over HTTP, auto-discovery for both' },
-  { name: 'Chart.js', rest: 'guiding / focus / HFR / temperature plots' },
-  { name: 'WebGL2', rest: 'shader pipeline for client-side debayer + MTF stretch (with CPU fallback)' },
-  { name: 'LettuceEncrypt', rest: "the relay server's built-in Let's Encrypt" },
-  { name: 'Zero cloud dependencies', rest: 'catalog, FITS writing, plate-solve dispatch, sequencer engine — all in the binary' },
 ];
 
 export const footerCols = [
   {
     title: 'Project',
     links: [
+      { label: 'Getting started', href: '/getting-started', external: false },
+      { label: 'Install guide', href: '/install', external: false },
       { label: 'GitHub repo', href: site.repo },
       { label: 'README', href: site.readme },
       { label: 'Issues / requests', href: site.issues },
@@ -172,3 +50,18 @@ export const footerCols = [
     ],
   },
 ];
+
+// ---- Tina-managed editorial content (content/pages/home.json) ----
+export const hero = home.hero;
+export const stats = home.stats;
+export const featuresSection = home.featuresSection;
+export const features = home.features;
+export const benchmarks = home.benchmarks;
+export const downloadsSection = home.downloadsSection;
+export const downloads = home.downloads;
+
+// ---- Install guide (content/install/install.json) ----
+export const installGuide = install;
+
+// ---- Getting started (content/guide/getting-started.json) ----
+export const guide = gettingStarted;

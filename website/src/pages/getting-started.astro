@@ -1,0 +1,242 @@
+---
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import Layout from '../layouts/Layout.astro';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+import { guide as g } from '../data/site';
+
+// Resolve which step screenshots actually exist (placeholder otherwise).
+const publicDir = new URL('../../public/', import.meta.url);
+const steps = g.steps.map((s) => ({
+  ...s,
+  exists: !!s.image && existsSync(fileURLToPath(new URL('.' + s.image, publicDir))),
+}));
+---
+
+<Layout
+  title={`${g.title}, N.I.N.A. Polaris`}
+  description="A basic first-night guide for N.I.N.A. Polaris: rig setup, connecting equipment, guiding, focus, live stacking or autorun, then stacking and editing in STUDIO."
+>
+  <Nav />
+
+  <main>
+    <header class="page-head">
+      <div class="container">
+        <a class="back" href="/">← Back to home</a>
+        <h1>{g.title}</h1>
+        <p class="lede">{g.lede}</p>
+      </div>
+    </header>
+
+    <section class="section">
+      <div class="container narrow">
+        <ol class="steps">
+          {steps.map((s, i) => (
+            <li class="step">
+              <div class="step-rail">
+                <span class="step-num">{i + 1}</span>
+              </div>
+              <div class="step-main">
+                <div class="step-head">
+                  <span class="step-icon" aria-hidden="true">{s.icon}</span>
+                  <h2>{s.title}</h2>
+                </div>
+                <p class="step-body">{s.body}</p>
+                {s.tip && (
+                  <p class="step-tip"><span class="tip-tag">Tip</span>{s.tip}</p>
+                )}
+                <div class="step-shot">
+                  {s.exists ? (
+                    <img src={s.image} alt={s.title} loading="lazy" decoding="async" />
+                  ) : (
+                    <div class="shot-ph" role="img" aria-label={`${s.title}: screenshot coming soon`}>
+                      <span class="ph-ico">{s.icon}</span>
+                      <span class="ph-note">screenshot coming soon</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ol>
+
+        <div class="closing">
+          <h2>{g.closing.title}</h2>
+          <p>{g.closing.sub}</p>
+          <div class="closing-btns">
+            <a class="btn btn-primary" href="/install">Installation guide</a>
+            {g.closing.docUrl && (
+              <a class="btn btn-ghost" href={g.closing.docUrl} target="_blank" rel="noopener">Full end-to-end docs ↗</a>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <Footer />
+
+  <!-- Click-to-zoom lightbox -->
+  <div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Screenshot">
+    <button class="lightbox-close" type="button" aria-label="Close">×</button>
+    <img class="lightbox-img" src="" alt="" />
+  </div>
+</Layout>
+
+<script>
+  const lb = document.getElementById('lightbox');
+  const lbImg = lb?.querySelector('.lightbox-img') as HTMLImageElement | null;
+  const closeBtn = lb?.querySelector('.lightbox-close');
+  function open(src: string, alt: string) {
+    if (!lb || !lbImg) return;
+    lbImg.src = src; lbImg.alt = alt; lb.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+  function close() {
+    if (!lb || !lbImg) return;
+    lb.hidden = true; lbImg.src = ''; document.body.style.overflow = '';
+  }
+  document.querySelectorAll<HTMLImageElement>('.step-shot img').forEach((img) => {
+    img.addEventListener('click', () => open(img.currentSrc || img.src, img.alt));
+  });
+  closeBtn?.addEventListener('click', close);
+  lb?.addEventListener('click', (e) => { if (e.target === lb) close(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && lb && !lb.hidden) close(); });
+</script>
+
+<style>
+  .page-head {
+    padding: 56px 0 40px;
+    border-bottom: 1px solid var(--border);
+    background: radial-gradient(ellipse at 30% 0%, #21305a 0%, var(--bg) 60%);
+  }
+  .back { display: inline-block; font-size: 14px; margin-bottom: 18px; color: var(--text-muted); }
+  .back:hover { color: var(--accent); text-decoration: none; }
+  .page-head h1 { font-size: clamp(30px, 5vw, 48px); font-weight: 800; letter-spacing: -1px; margin-bottom: 14px; }
+  .lede { font-size: 17px; color: var(--text-muted); max-width: 72ch; line-height: 1.6; }
+
+  .container.narrow { max-width: 860px; }
+  .section { padding: 56px 0; }
+
+  .steps { list-style: none; counter-reset: none; }
+  .step {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    gap: 22px;
+    padding-bottom: 44px;
+  }
+  /* Connector line down the rail between numbers */
+  .step-rail { position: relative; display: flex; justify-content: center; }
+  .step-num {
+    width: 40px; height: 40px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 999px;
+    background: rgba(var(--accent-rgb), 0.12);
+    border: 1px solid rgba(var(--accent-rgb), 0.4);
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 16px;
+    z-index: 1;
+  }
+  .step:not(:last-child) .step-rail::after {
+    content: "";
+    position: absolute;
+    top: 44px; bottom: -44px;
+    width: 2px;
+    background: var(--border);
+  }
+
+  .step-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .step-icon { font-size: 22px; }
+  .step-head h2 { font-size: clamp(19px, 2.4vw, 24px); font-weight: 700; letter-spacing: -0.4px; }
+  .step-body { font-size: 16px; color: var(--text-muted); line-height: 1.65; }
+
+  .step-tip {
+    margin-top: 14px;
+    font-size: 14px;
+    color: var(--text);
+    background: rgba(var(--accent-rgb), 0.06);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 12px 14px;
+    line-height: 1.55;
+  }
+  .tip-tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent);
+    margin-right: 8px;
+  }
+
+  .step-shot { margin-top: 18px; max-width: 620px; }
+  .step-shot img,
+  .shot-ph {
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.32);
+  }
+  .step-shot img {
+    display: block;
+    object-fit: cover;
+    background: var(--bg-input);
+    cursor: zoom-in;
+    transition: border-color 0.15s;
+  }
+  .step-shot img:hover { border-color: var(--accent); }
+  .shot-ph {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    background:
+      radial-gradient(ellipse at 30% 30%, rgba(var(--accent-rgb), 0.12) 0%, transparent 60%),
+      repeating-linear-gradient(45deg, #16213e 0 14px, #1a2440 14px 28px);
+  }
+  .ph-ico { font-size: 32px; opacity: 0.85; }
+  .ph-note { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); }
+
+  .closing {
+    text-align: center;
+    border-top: 1px solid var(--border);
+    padding-top: 40px;
+    margin-top: 10px;
+  }
+  .closing h2 { font-size: clamp(22px, 3vw, 30px); font-weight: 700; margin-bottom: 10px; }
+  .closing p { font-size: 16px; color: var(--text-muted); max-width: 60ch; margin: 0 auto 22px; line-height: 1.6; }
+  .closing-btns { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+
+  /* Lightbox */
+  .lightbox {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+    padding: 4vmin;
+    background: rgba(10, 9, 20, 0.93);
+    backdrop-filter: blur(6px);
+    cursor: zoom-out;
+  }
+  .lightbox[hidden] { display: none; }
+  .lightbox-img {
+    max-width: 94vw; max-height: 92vh;
+    border-radius: 10px; border: 1px solid var(--border);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+    cursor: default;
+  }
+  .lightbox-close {
+    position: absolute; top: 18px; right: 24px;
+    width: 44px; height: 44px; font-size: 28px; line-height: 1;
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--border);
+    border-radius: 999px; cursor: pointer; transition: all 0.15s;
+  }
+  .lightbox-close:hover { background: rgba(255, 255, 255, 0.16); color: var(--accent); }
+
+  @media (max-width: 640px) {
+    .step { grid-template-columns: 36px 1fr; gap: 16px; }
+    .step-num { width: 34px; height: 34px; font-size: 14px; }
+    .step:not(:last-child) .step-rail::after { top: 38px; bottom: -40px; }
+  }
+</style>

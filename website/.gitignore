@@ -1,5 +1,8 @@
 # build output
 dist/
+# TinaCMS generated client/types + built admin
+tina/__generated__/
+public/admin/
 # generated types
 .astro/
 # dependencies

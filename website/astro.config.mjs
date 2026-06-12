@@ -1,16 +1,16 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 
-// Static output works on any host (GitHub Pages, Netlify, Vercel,
-// Cloudflare Pages, or bundled into the app's wwwroot/).
+// Deployed to GitHub Pages on the custom domain polaris-astro.app.br,
+// served at the domain root, so no `base` prefix is needed. `site` is
+// used for absolute URLs in <meta>/OG tags and the canonical link.
 //
-// `site` is used for absolute URLs in <meta> tags and the sitemap.
-// Update it once you pick a domain. If you deploy to a GitHub Pages
-// *project* page (https://user.github.io/NINA.Polaris/), also set
-// `base: '/NINA.Polaris/'` below.
+// The custom domain is pinned by public/CNAME (copied to dist/CNAME).
+// If you ever move off the custom domain to a project page
+// (https://danwbr.github.io/NINA.Polaris/), set base: '/NINA.Polaris/'
+// and make internal links base-aware.
 export default defineConfig({
-  site: 'https://ninapolaris.app',
-  // base: '/NINA.Polaris/',
+  site: 'https://polaris-astro.app.br',
   build: {
     inlineStylesheets: 'auto',
   },

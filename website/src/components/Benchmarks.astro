@@ -1,0 +1,149 @@
+---
+import { benchmarks } from '../data/site';
+
+// Highest score drives the relative score bars.
+const maxScore = Math.max(
+  ...benchmarks.rows.map((r) => Number(String(r.score).replace(/[^\d.]/g, '')) || 0),
+  1,
+);
+---
+
+<section id="benchmarks" class="section section-alt">
+  <div class="container">
+    <h2 class="section-title">{benchmarks.title}</h2>
+    <p class="section-sub">{benchmarks.sub}</p>
+
+    <div class="bench-wrap">
+      <table class="bench">
+        <thead>
+          <tr>
+            <th class="left">Device</th>
+            <th>Cores</th>
+            <th>Polaris score</th>
+            <th>Stacking</th>
+            <th>Capture</th>
+            <th>Memory BW</th>
+          </tr>
+        </thead>
+        <tbody>
+          {benchmarks.rows.map((r) => {
+            const n = Number(String(r.score).replace(/[^\d.]/g, '')) || 0;
+            const pct = Math.round((n / maxScore) * 100);
+            return (
+              <tr class={r.highlight ? 'is-highlight' : ''}>
+                <td class="left device">
+                  {r.device}
+                  {r.highlight && <span class="tag">best value</span>}
+                </td>
+                <td>{r.cores}</td>
+                <td class="score">
+                  <span class="score-bar" style={`--pct:${pct}%`}>
+                    <strong>{r.score}</strong>
+                  </span>
+                </td>
+                <td>{r.stacking}</td>
+                <td>{r.capture}</td>
+                <td>{r.memory}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+
+    {benchmarks.note && <p class="bench-note">{benchmarks.note}</p>}
+    {benchmarks.docUrl && (
+      <p class="bench-link">
+        <a href={benchmarks.docUrl} target="_blank" rel="noopener">Full per-device tables & methodology →</a>
+      </p>
+    )}
+  </div>
+</section>
+
+<style>
+  .bench-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel);
+  }
+  .bench {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 720px;
+    font-size: 14.5px;
+  }
+  .bench th,
+  .bench td {
+    padding: 14px 18px;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .bench th.left,
+  .bench td.left { text-align: left; }
+  .bench thead th {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    font-weight: 700;
+  }
+  .bench tbody tr { border-bottom: 1px solid var(--border); }
+  .bench tbody tr:last-child { border-bottom: 0; }
+  .bench tbody td { color: var(--text-muted); }
+  .device { color: var(--text); font-weight: 600; }
+
+  .is-highlight { background: rgba(var(--accent-rgb), 0.07); }
+  .tag {
+    display: inline-block;
+    margin-left: 10px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+    border: 1px solid rgba(var(--accent-rgb), 0.4);
+    border-radius: 999px;
+    padding: 2px 8px;
+    vertical-align: middle;
+  }
+
+  /* Polaris score cell: a subtle fill bar behind the number. */
+  .score { min-width: 140px; }
+  .score-bar {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 130px;
+    height: 30px;
+    border-radius: 6px;
+    background: linear-gradient(
+      90deg,
+      rgba(var(--accent-rgb), 0.35) var(--pct),
+      rgba(var(--accent-rgb), 0.08) var(--pct)
+    );
+    border: 1px solid rgba(var(--accent-rgb), 0.25);
+  }
+  .score-bar strong {
+    color: var(--text);
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .bench-note {
+    font-size: 13px;
+    color: var(--text-muted);
+    max-width: 760px;
+    margin: 20px auto 0;
+    text-align: center;
+    line-height: 1.55;
+  }
+  .bench-link { text-align: center; margin-top: 10px; font-size: 14px; }
+
+  @media (max-width: 700px) {
+    .bench th, .bench td { padding: 12px 14px; }
+  }
+</style>

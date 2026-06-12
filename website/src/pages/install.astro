@@ -1,0 +1,406 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+import { installGuide as g } from '../data/site';
+
+// Map a free-text status to a colour class for the requirements table.
+const statusClass = (s: string) => {
+  const t = (s || '').toLowerCase();
+  if (t.includes('recommend') || t.includes('full') || t === 'good') return 'ok';
+  if (t.includes('testing') || t.includes('tbd')) return 'pending';
+  if (t.includes('below') || t.includes('limit')) return 'warn';
+  return '';
+};
+---
+
+<Layout
+  title={`${g.title}, N.I.N.A. Polaris`}
+  description="Install N.I.N.A. Polaris on Raspberry Pi, Linux, Windows, or Docker, plus the optional components for plate solving, guiding, post-processing, and more."
+>
+  <Nav />
+
+  <main>
+    <header class="page-head">
+      <div class="container">
+        <a class="back" href="/">← Back to home</a>
+        <h1>{g.title}</h1>
+        <p class="lede">{g.lede}</p>
+      </div>
+    </header>
+
+    <!-- System requirements -->
+    <section id="requirements" class="section">
+      <div class="container">
+        <h2 class="block-title">{g.requirements.title}</h2>
+        <p class="block-sub">{g.requirements.sub}</p>
+
+        <div class="callouts">
+          <div class="callout ram">
+            <span class="callout-ico" aria-hidden="true">🧠</span>
+            <p>{g.requirements.ramNote}</p>
+          </div>
+          {g.requirements.recommendedNote && (
+            <div class="callout rec">
+              <span class="callout-ico" aria-hidden="true">⭐</span>
+              <p>{g.requirements.recommendedNote}</p>
+            </div>
+          )}
+        </div>
+
+        <div class="table-wrap">
+          <table class="grid-table">
+            <thead>
+              <tr>
+                <th class="left">Host</th>
+                <th>RAM</th>
+                <th>Status</th>
+                <th class="left">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {g.requirements.rows.map((r) => (
+                <tr>
+                  <td class="left rowlabel">{r.host}</td>
+                  <td class="nowrap">{r.ram}</td>
+                  <td><span class={`status ${statusClass(r.status)}`}>{r.status}</span></td>
+                  <td class="left">{r.notes}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TL;DR -->
+    <section class="section section-alt">
+      <div class="container narrow">
+        <h2 class="block-title">{g.tldr.title}</h2>
+        <div class="table-wrap">
+          <table class="grid-table">
+            <thead>
+              <tr><th class="left"></th><th>Windows</th><th>Linux (RPi / x64)</th></tr>
+            </thead>
+            <tbody>
+              {g.tldr.rows.map((r) => (
+                <tr>
+                  <td class="left rowlabel">{r.label}</td>
+                  <td>{r.windows}</td>
+                  <td>{r.linux}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p class="muted-note">{g.tldr.note}</p>
+      </div>
+    </section>
+
+    <!-- Platforms -->
+    <section id="platforms" class="section">
+      <div class="container">
+        <h2 class="block-title">{g.platformsSection.title}</h2>
+        <p class="block-sub">{g.platformsSection.sub}</p>
+        <div class="plat-grid">
+          {g.platforms.map((p) => (
+            <article class="plat-card">
+              <header>
+                <h3>{p.name}</h3>
+                <span class="badge">{p.badge}</span>
+              </header>
+              <p class="plat-summary">{p.summary}</p>
+              <pre><code>{p.steps}</code></pre>
+              <p class="plat-note">{p.notes}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <!-- Firewall -->
+    <section class="section section-alt">
+      <div class="container narrow">
+        <h2 class="block-title">{g.firewall.title}</h2>
+        <p class="block-sub">{g.firewall.sub}</p>
+        <div class="fw-grid">
+          <div>
+            <span class="os-label">Windows (Admin PowerShell)</span>
+            <pre><code>{g.firewall.windows}</code></pre>
+          </div>
+          <div>
+            <span class="os-label">Linux</span>
+            <pre><code>{g.firewall.linux}</code></pre>
+          </div>
+        </div>
+        <p class="muted-note">{g.firewall.note}</p>
+      </div>
+    </section>
+
+    <!-- Optional components -->
+    <section id="optional" class="section">
+      <div class="container">
+        <h2 class="block-title">{g.optionalSection.title}</h2>
+        <p class="block-sub">{g.optionalSection.sub}</p>
+
+        <div class="groups">
+          {g.optionalGroups.map((grp) => (
+            <div class="group">
+              <h3 class="group-name">{grp.name}</h3>
+              <p class="group-intro">{grp.intro}</p>
+              <div class="items">
+                {grp.items.map((it) => (
+                  <article class="opt-item">
+                    <div class="opt-head">
+                      <h4>{it.name}</h4>
+                      {it.badge && <span class="badge alt">{it.badge}</span>}
+                    </div>
+                    <p class="opt-purpose">{it.purpose}</p>
+                    <dl class="opt-os">
+                      <div><dt>Windows</dt><dd>{it.windows}</dd></div>
+                      <div><dt>Linux</dt><dd>{it.linux}</dd></div>
+                    </dl>
+                    {it.url && (
+                      <a class="opt-link" href={it.url} target="_blank" rel="noopener">Get it ↗</a>
+                    )}
+                  </article>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <Footer />
+</Layout>
+
+<style>
+  .page-head {
+    padding: 56px 0 40px;
+    border-bottom: 1px solid var(--border);
+    background: radial-gradient(ellipse at 30% 0%, #21305a 0%, var(--bg) 60%);
+  }
+  .back {
+    display: inline-block;
+    font-size: 14px;
+    margin-bottom: 18px;
+    color: var(--text-muted);
+  }
+  .back:hover { color: var(--accent); text-decoration: none; }
+  .page-head h1 {
+    font-size: clamp(30px, 5vw, 48px);
+    font-weight: 800;
+    letter-spacing: -1px;
+    margin-bottom: 14px;
+  }
+  .lede {
+    font-size: 17px;
+    color: var(--text-muted);
+    max-width: 70ch;
+    line-height: 1.6;
+  }
+
+  .container.narrow { max-width: 880px; }
+  .section { padding: 56px 0; }
+
+  .block-title {
+    font-size: clamp(22px, 3vw, 30px);
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    margin-bottom: 10px;
+  }
+  .block-sub {
+    font-size: 16px;
+    color: var(--text-muted);
+    margin-bottom: 28px;
+    max-width: 70ch;
+  }
+  .muted-note {
+    font-size: 13.5px;
+    color: var(--text-muted);
+    margin-top: 16px;
+    line-height: 1.55;
+  }
+
+  /* TL;DR table */
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel);
+  }
+  .grid-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 640px;
+    font-size: 14px;
+  }
+  .grid-table th,
+  .grid-table td {
+    padding: 13px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .grid-table tbody tr:last-child td { border-bottom: 0; }
+  .grid-table thead th {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    font-weight: 700;
+  }
+  .grid-table td { color: var(--text-muted); }
+  .rowlabel { color: var(--text); font-weight: 600; white-space: nowrap; }
+  .nowrap { white-space: nowrap; }
+
+  /* Callouts */
+  .callouts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 26px;
+  }
+  .callout {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    border-radius: 12px;
+    padding: 18px 20px;
+    border: 1px solid var(--border);
+  }
+  .callout.ram {
+    background: rgba(var(--accent-rgb), 0.06);
+    border-color: rgba(var(--accent-rgb), 0.25);
+    border-left: 3px solid var(--accent);
+  }
+  .callout.rec {
+    background: rgba(255, 152, 0, 0.07);
+    border-color: rgba(255, 152, 0, 0.35);
+    border-left: 3px solid var(--warning);
+  }
+  .callout-ico { font-size: 24px; line-height: 1.2; }
+  .callout p { font-size: 14.5px; color: var(--text); line-height: 1.6; }
+
+  @media (max-width: 760px) {
+    .callouts { grid-template-columns: 1fr; }
+  }
+
+  /* Status pill in the requirements table */
+  .status {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+  .status.ok { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.4); background: rgba(var(--accent-rgb), 0.1); }
+  .status.warn { color: var(--warning); border-color: rgba(255, 152, 0, 0.4); background: rgba(255, 152, 0, 0.1); }
+  .status.pending { color: var(--text-muted); border-style: dashed; }
+
+  /* Platform cards */
+  .plat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 20px;
+  }
+  .plat-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+  }
+  .plat-card header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .plat-card h3 { font-size: 18px; font-weight: 700; }
+  .plat-summary { font-size: 14px; color: var(--text-muted); line-height: 1.55; margin-bottom: 12px; }
+  .plat-card pre { margin: 0 0 12px; }
+  .plat-note { font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-top: auto; }
+
+  .badge {
+    font-size: 11px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+    background: rgba(var(--accent-rgb), 0.1);
+    border: 1px solid rgba(var(--accent-rgb), 0.3);
+    border-radius: 999px;
+    padding: 3px 10px;
+    white-space: nowrap;
+  }
+  .badge.alt { color: var(--text-muted); border-color: var(--border); background: rgba(255, 255, 255, 0.03); }
+
+  /* Firewall */
+  .fw-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .fw-grid pre { margin: 8px 0 0; }
+  .os-label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent);
+  }
+
+  /* Optional groups */
+  .groups { display: flex; flex-direction: column; gap: 44px; }
+  .group-name {
+    font-size: 20px;
+    font-weight: 700;
+    border-left: 3px solid var(--accent);
+    padding-left: 12px;
+    margin-bottom: 8px;
+  }
+  .group-intro { font-size: 14.5px; color: var(--text-muted); line-height: 1.55; margin-bottom: 20px; max-width: 80ch; }
+  .items {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 16px;
+  }
+  .opt-item {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+  }
+  .opt-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .opt-head h4 { font-size: 16px; font-weight: 700; }
+  .opt-purpose { font-size: 13.5px; color: var(--text-muted); line-height: 1.55; margin-bottom: 14px; }
+  .opt-os { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .opt-os > div { display: grid; grid-template-columns: 70px 1fr; gap: 10px; align-items: baseline; }
+  .opt-os dt {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+  }
+  .opt-os dd { font-size: 13px; color: var(--text); line-height: 1.5; font-family: var(--font-mono); }
+  .opt-link { font-size: 13px; font-weight: 600; margin-top: auto; align-self: flex-start; }
+
+  @media (max-width: 760px) {
+    .fw-grid { grid-template-columns: 1fr; }
+    .opt-os > div { grid-template-columns: 60px 1fr; }
+  }
+</style>

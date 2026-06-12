@@ -1,27 +1,44 @@
 # Screenshots
 
-Drop real UI captures here to populate the "See it in the browser" gallery on
-the landing page. Until a file exists, that card shows a styled placeholder
-("screenshot coming soon") — the page never looks broken.
+Each feature row on the landing page pairs its text with a screenshot. Drop the
+real UI captures here using the filenames below. Until a file exists, that
+feature shows a styled placeholder ("screenshot coming soon"), so the page
+never looks broken.
 
 ## Expected filenames
 
-The gallery is defined in [`src/data/site.ts`](../../../src/data/site.ts)
-(`screenshots` array). The current slots are:
+The mapping lives in [`content/pages/home.json`](../../../content/pages/home.json)
+(`features[].image`). Current slots:
 
-| File             | Card                  |
-|------------------|-----------------------|
-| `sequencer.png`  | Advanced Sequencer    |
-| `live-view.png`  | Live view & stacking  |
-| `sky-map.png`    | Sky map & atlas       |
-| `guiding.png`    | PHD2 guiding          |
-| `rigs.png`       | Equipment rigs        |
-| `focus.png`      | Auto-focus (V-curve)  |
+| File                | Feature                                   |
+|---------------------|-------------------------------------------|
+| `devices.png`       | Connect any rig (INDI / ASCOM / Alpaca)   |
+| `guiding.png`       | Native PHD2 guiding                       |
+| `sky-explorer.png`  | Sky explorer with slew & center           |
+| `live-view.png`     | Complete live stacking panel              |
+| `video.png`         | Video recording + processing              |
+| `sequencer.png`     | Advanced sequencer                        |
+| `autofocus.png`     | Auto focus                                |
+| `studio.png`        | STUDIO: stacking + AI post-processing     |
+| `opencl.png`        | GPU acceleration via OpenCL               |
+
+### Getting Started page (`content/guide/getting-started.json`, `steps[].image`)
+
+| File               | Step                          |
+|--------------------|-------------------------------|
+| `gs-rigs.png`      | Set up your rig               |
+| `gs-connect.png`   | Connect your equipment        |
+| `gs-guiding.png`   | Set up guiding                |
+| `gs-focus.png`     | Get sharp focus               |
+| `gs-sky.png`       | Frame your target             |
+| `gs-live.png`      | Capture (live / autorun)      |
+| `gs-studio.png`    | Stack and edit in STUDIO      |
 
 ## Tips
 
-- **Aspect ratio:** cards crop to **16:10** (`object-fit: cover`). Capture at
-  ~1600×1000 (or any 16:10-ish size) for the cleanest result.
-- **Format:** PNG for crisp UI text; JPG/WebP are fine for photo-heavy shots.
-- To add/rename/reorder cards, edit the `screenshots` array in `site.ts` —
-  no component changes needed.
+- **Aspect ratio:** the feature media is **16:10** (`object-fit: cover`).
+  Capture at ~1600×1000 for the cleanest result.
+- **Format:** PNG for crisp UI text; JPG/WebP fine for photo-heavy shots.
+- You can also set the image visually in the Tina editor (`/admin`): the
+  "Screenshot" field on each feature opens the media picker.
+- To add/rename/reorder features, edit `content/pages/home.json` (or use Tina).

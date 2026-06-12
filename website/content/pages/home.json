@@ -1,0 +1,76 @@
+{
+  "hero": {
+    "eyebrow": "Browser-controlled astrophotography · open-source",
+    "titleLine1": "Your rig.",
+    "titleLine2": "Any device.",
+    "titleAccent": "No display required.",
+    "lede": "A complete imaging session, covering equipment, guiding, plate-solving and the sequencer, running on a Raspberry Pi, a Windows mini PC, or anywhere else, controlled from the browser of your phone, laptop, or warm-room tablet."
+  },
+  "stats": [
+    { "value": "181", "label": "unit tests" },
+    { "value": "30+", "label": "sequencer instructions" },
+    { "value": "9", "label": "device types" },
+    { "value": "0", "label": "cloud dependencies" }
+  ],
+  "featuresSection": {
+    "title": "Everything your session needs",
+    "sub": "From connecting the hardware to a finished image: capture, guiding, framing, live stacking, sequencing, and AI post-processing, all driven from the browser."
+  },
+  "features": [
+    { "icon": "🔭", "title": "Connect any rig: INDI, ASCOM, Alpaca + native drivers", "body": "Talk to your gear over INDI (400+ Linux drivers), over ASCOM and Alpaca across the LAN, or through native camera SDKs for ZWO, Player One, and Canon, Nikon and Sony DSLR/mirrorless. Auto-discovery finds devices on the network.", "image": "/assets/screenshots/devices.png" },
+    { "icon": "📡", "title": "Native PHD2 guiding, with fallback to the real app", "body": "A native PHD2 implementation drives guiding directly, with a live RA/Dec chart, dither, settle, and profiles. When you want the original PHD2 interface, fall back to the real application embedded right in the browser over xpra or VNC.", "image": "/assets/screenshots/guiding.png" },
+    { "icon": "🌌", "title": "Sky explorer with slew & center", "body": "A full sky explorer powered by the Stellarium Web Engine, with total mount integration. Pick any target, slew to it, then plate-solve and center automatically, all from the browser.", "image": "/assets/screenshots/sky-explorer.png" },
+    { "icon": "📸", "title": "Complete live stacking panel", "body": "EAA-style live stacking with registration, integration, and real-time stretch over a bandwidth-adaptive WebSocket stream, so the image builds up live as each frame lands.", "image": "/assets/screenshots/live-view.png" },
+    { "icon": "🎥", "title": "Video recording + processing", "body": "Record high-frame-rate video for planetary, lunar, and solar work, then process it on the spot for lucky-imaging results.", "image": "/assets/screenshots/video.png" },
+    { "icon": "🌲", "title": "Advanced sequencer", "body": "A tree-based sequencer with containers, loop conditions, and event triggers: auto-focus on temperature or HFR drift, meridian flip, dither, safety abort. Drag and drop the whole plan in the browser.", "image": "/assets/screenshots/sequencer.png" },
+    { "icon": "🔬", "title": "Auto focus", "body": "Automated focusing with V-curve and HFR fitting, kicked off by temperature change or HFR drift during a sequence, so stars stay tight all night.", "image": "/assets/screenshots/autofocus.png" },
+    { "icon": "🎨", "title": "STUDIO: stacking + AI post-processing", "body": "A complete STUDIO for stacking and full post-processing, including AI background extraction, denoise, and deconvolution via GraXpert, accelerated on the client GPU through the browser or on the SBC's NPU.", "image": "/assets/screenshots/studio.png" },
+    { "icon": "⚡", "title": "GPU acceleration via OpenCL", "body": "OpenCL-backed GPU acceleration for the heavy image-processing paths like debayer, stretch, and stacking, with a transparent CPU fallback when no GPU is present.", "image": "/assets/screenshots/opencl.png" }
+  ],
+  "benchmarks": {
+    "title": "Benchmarked on real hardware",
+    "sub": "The built-in benchmark reports a single Polaris score so you can pick a board. Higher is better. Figures below are Release builds.",
+    "rows": [
+      { "device": "Raspberry Pi 4 Model B", "cores": "4 cores", "score": "110", "stacking": "22.2 Mpx/s", "capture": "11.5 Mpx/s", "memory": "4.7 GB/s", "highlight": false },
+      { "device": "Raspberry Pi 5 Model B", "cores": "4 cores", "score": "211", "stacking": "39.9 Mpx/s", "capture": "27.3 Mpx/s", "memory": "7.7 GB/s", "highlight": false },
+      { "device": "Orange Pi 5 Pro (RK3588S)", "cores": "8 cores", "score": "227", "stacking": "44.6 Mpx/s", "capture": "26.2 Mpx/s", "memory": "23.7 GB/s", "highlight": true },
+      { "device": "Core i9-13900KF (x86 desktop)", "cores": "32 threads", "score": "662", "stacking": "91.1 Mpx/s", "capture": "56.6 Mpx/s", "memory": "46.7 GB/s", "highlight": false }
+    ],
+    "note": "Polaris score is the headline figure; Mpx/s columns are live-stack and capture throughput. Pi 5 shown at its best (actively cooled) run. Full per-device tables and methodology in the benchmark docs.",
+    "docUrl": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/user-guide/benchmark.md"
+  },
+  "downloadsSection": {
+    "title": "Download & run",
+    "sub": "Single self-contained binary, no runtime install. Grab the latest release for your platform."
+  },
+  "downloads": [
+    {
+      "platform": "Raspberry Pi 4 / 5",
+      "badge": ".deb",
+      "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb",
+      "command": "wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb\nsudo apt install ./polaris_arm64.deb",
+      "note": "Creates the user, systemd unit, indi-web venv, apt deps, and a self-signed HTTPS cert. Running at https://<hostname>.local:5000 in ~30s."
+    },
+    {
+      "platform": "Other Linux (portable)",
+      "badge": "tar.gz",
+      "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-linux-arm64.tar.gz",
+      "command": "wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-linux-arm64.tar.gz\ntar -xzf polaris-linux-arm64.tar.gz\ncd polaris-linux-arm64 && ./NINA.Polaris",
+      "note": "Fedora, Arch, or no-systemd setups. Replace linux-arm64 with linux-x64 for Intel/AMD."
+    },
+    {
+      "platform": "Windows mini PC",
+      "badge": ".zip",
+      "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-x64.zip",
+      "command": "Invoke-WebRequest -Uri \"https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-x64.zip\" -OutFile polaris.zip\nExpand-Archive polaris.zip\ncd polaris-win-x64 && .\\NINA.Polaris.exe",
+      "note": "Portable, no install. ARM64 build also available (polaris-win-arm64.zip). Open https://localhost:5000."
+    },
+    {
+      "platform": "Docker",
+      "badge": "multi-arch",
+      "url": "",
+      "command": "docker run -d --network host \\\n  -v $(pwd)/config:/config \\\n  -v $(pwd)/images:/images \\\n  ghcr.io/danwbr/nina-polaris:latest",
+      "note": "Multi-arch image (arm64 + amd64). The compose file in the repo includes indiserver in the same stack."
+    }
+  ]
+}
