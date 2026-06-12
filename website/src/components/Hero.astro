@@ -7,6 +7,7 @@ import Nav from './Nav.astro';
   <Nav />
 
   <div class="hero-content">
+    <div class="hero-text">
     <span class="hero-eyebrow">{hero.eyebrow}</span>
     <h1 class="hero-title">
       {hero.titleLine1}<br />
@@ -26,6 +27,13 @@ import Nav from './Nav.astro';
     </div>
 
     {hero.disclaimer && <p class="hero-note">{hero.disclaimer}</p>}
+    </div>
+
+    {hero.image && (
+      <div class="hero-media">
+        <img src={hero.image} alt="N.I.N.A. Polaris sky map" loading="eager" decoding="async" />
+      </div>
+    )}
   </div>
 
   <div class="hero-credit">
@@ -45,14 +53,26 @@ import Nav from './Nav.astro';
 
   .hero-content {
     flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 48px;
+    align-items: center;
     max-width: var(--maxw);
     width: 100%;
     margin: 0 auto;
     padding: 60px 32px;
+  }
+  .hero-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .hero-media img {
+    display: block;
+    width: 100%;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
   }
   .hero-eyebrow {
     font-size: 13px;
@@ -105,9 +125,14 @@ import Nav from './Nav.astro';
     letter-spacing: 0.5px;
   }
 
+  @media (max-width: 920px) {
+    .hero-content { grid-template-columns: 1fr; gap: 30px; }
+    .hero-media { max-width: 600px; }
+  }
   @media (max-width: 700px) {
     .hero-content { padding: 40px 24px; }
     .hero-title { letter-spacing: -1px; }
     .hero-credit { right: 8px; font-size: 10px; }
+    .hero-media { display: none; }
   }
 </style>

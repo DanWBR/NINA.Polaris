@@ -52,6 +52,7 @@ export default defineConfig({
               { type: 'string', name: 'titleAccent', label: 'Title line 3 (accent colour)' },
               { type: 'string', name: 'lede', label: 'Lede paragraph', ui: { component: 'textarea' } },
               { type: 'string', name: 'disclaimer', label: 'Fork disclaimer', ui: { component: 'textarea' } },
+              { type: 'image', name: 'image', label: 'Hero image' },
             ],
           },
           {
