@@ -13024,3 +13024,12 @@ zero-copy buffers (the win that makes per-op offload viable on an SBC).
   variant (disable already works via `POLARIS_DISABLE_GPU=1`).
 - OCL-7: CPU-parity + safe-probe unit tests (6, green). DONE. Hardware E2E
   (speedup, identical output GPU vs CPU) pending on the Radxa Dragon Q6A.
+- OCL-8: Settings toggle "GPU acceleration (OpenCL)" -> persists
+  `UserProfile.UseGpuOpenCl`, flips `OpenClGpuCompute.Enabled` live; device
+  line + "Run GPU self-test" button (`GET/POST /api/system/gpu`,
+  `/api/system/gpu/selftest`). Validated Mali-G610 (selftest allOk). DONE.
+- OCL-9: `BenchmarkService` GPU-vs-CPU workload (warp/debayer/blur Mpx/s +
+  per-op and overall speedup -> `BenchmarkResult.Gpu`); surfaced in the
+  Settings benchmark card ("GPU vs CPU (OpenCL)"). Skipped when no GPU /
+  toggle off. Tests green (13). DONE. Pending: record real SBC speedup
+  numbers in benchmark memory once run on the Q6A / OPi5.
