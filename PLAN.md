@@ -13009,10 +13009,14 @@ zero-copy buffers (the win that makes per-op offload viable on an SBC).
   debayer-passthrough, stretch-LUT apply, accumulate). DONE.
 - OCL-2: `OpenClRuntime` probe + `OpenClContext` + `kernels/image_kernels.cl`. DONE.
 - OCL-3: `OpenClGpuCompute` (blur, warp, lut, accumulate; debayer -> CPU). DONE.
-- OCL-4: DI wiring + live-stack warp migration. DONE. Deferred follow-ups
-  (each CPU-safe, low priority): editor `GaussianBlur` (needs threading
-  `IGpuCompute` through static `EditPipeline.Apply`), planetary `LaplacianVariance`
-  + `CalibrationMath` (need new kernels + interface methods).
+- OCL-4: DI wiring + live-stack warp migration. DONE.
+- OCL-4b: editor box blur (clarity/texture/sharpen) GPU path via
+  `IGpuCompute.TryBoxBlur8` + `box_blur_h/v` kernels, threaded through
+  `EditPipeline.Apply` -> `ImageEditService`; WASM stays CPU. DONE, RTX-validated.
+  Deferred follow-ups (each CPU-safe, low priority): planetary
+  `LaplacianVariance` + `CalibrationMath` + bilinear debayer (need new
+  kernels/interface methods), and wiring the existing `accumulate` kernel into
+  the live-stack integration loop.
 - OCL-5: `Silk.NET.OpenCL` ref + kernel packaging + `check-opencl.sh` + Silk MIT
   license entries. DONE.
 - OCL-6: `GET /api/system/gpu` capability endpoint (available/backend/device/
