@@ -77,7 +77,22 @@ equipment's calibration; other saved ones stay.
 ## Guiding parameters
 
 - **RA algo / Dec algo** — Hysteresis / Lowpass / Lowpass2 / Resist-Switch /
-  Identity (defaults: Hysteresis RA, Resist-Switch Dec, PHD2's defaults).
+  Predictive (PE + drift) / Identity (defaults: Hysteresis RA, Resist-Switch Dec,
+  PHD2's defaults).
+- **Predictive (PE + drift)** — a feed-forward algorithm that *learns* the mount's
+  periodic error (worm-gear sinusoid) plus slow drift from the recent guiding
+  history and corrects *ahead* of the error instead of only chasing it, similar in
+  spirit to PHD2's Predictive PEC. Most useful on the **RA** axis, where worm PE
+  dominates. When you pick it on either axis a small panel appears:
+  - **Worm period (s, 0 = auto)** — your mount's worm period if you know it;
+    leave at 0 to auto-estimate it from the guiding history.
+  - **History (samples)** — how many recent frames feed the fit (≈ two worm
+    periods; default 256).
+  - **Feed-forward blend (0–1)** — how strongly the prediction is applied on top of
+    the reactive baseline (default 0.7; lower is gentler).
+  It always falls back to reactive guiding until the model locks on, so it never
+  guides worse than the default. The guide graph overlays a **dashed predicted
+  curve** (amber = RA, pale-cyan = Dec) so you can see the model tracking the error.
 - **Dec backlash comp (auto-measured)** — applies the slack take-up measured
   during calibration on a Dec direction reversal. Disabled if calibration didn't
   measure a backlash.

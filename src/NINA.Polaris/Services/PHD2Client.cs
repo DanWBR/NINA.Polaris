@@ -668,6 +668,10 @@ public record GuideStep {
     public int DecDuration { get; init; }
     public string? RaDirection { get; init; }
     public string? DecDirection { get; init; }
+    /// <summary>Predicted next-frame error (arcsec) from the native predictive
+    /// algorithm; 0 for PHD2 and reactive native algorithms.</summary>
+    public double PredRaArcsec { get; init; }
+    public double PredDecArcsec { get; init; }
 }
 
 public record SettleResult {

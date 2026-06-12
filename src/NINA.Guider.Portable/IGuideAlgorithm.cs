@@ -32,6 +32,11 @@ public interface IGuideAlgorithm {
     string Name { get; }
     /// <summary>Compute the correction for this frame's measured error.</summary>
     double Result(double input);
+    /// <summary>Compute the correction with the frame interval available. Reactive
+    /// algorithms ignore <paramref name="dtSeconds"/> (default impl forwards to
+    /// <see cref="Result(double)"/>); only the time-aware predictor needs it to
+    /// model periodic error + drift in real time.</summary>
+    double Result(double input, double dtSeconds) => Result(input);
     /// <summary>Clear internal history (on guiding start / dither).</summary>
     void Reset();
 }

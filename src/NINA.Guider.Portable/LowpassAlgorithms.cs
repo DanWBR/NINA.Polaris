@@ -162,12 +162,17 @@ public sealed class Lowpass2Algorithm : IGuideAlgorithm {
 /// names fall back to identity (pass-through).</summary>
 public static class GuideAlgorithmFactory {
     public static IGuideAlgorithm Create(string? name, double minMove,
-                                         double aggression, double hysteresis) {
+                                         double aggression, double hysteresis,
+                                         double wormPeriodSec = 0.0,
+                                         int predictiveWindow = 256,
+                                         double predictiveBlend = 0.7) {
         return (name ?? "").Trim().ToLowerInvariant() switch {
             "hysteresis"  => new HysteresisAlgorithm(hysteresis, aggression, minMove),
             "resistswitch" => new ResistSwitchAlgorithm(minMove, aggression),
             "lowpass"     => new LowpassAlgorithm(minMove),
             "lowpass2"    => new Lowpass2Algorithm(minMove, Math.Clamp(aggression * 100.0, 1.0, 100.0)),
+            "predictive"  => new PredictiveAlgorithm(minMove, aggression, hysteresis,
+                                                     wormPeriodSec, predictiveWindow, predictiveBlend),
             "identity"    => new IdentityAlgorithm(),
             _             => new IdentityAlgorithm(),
         };

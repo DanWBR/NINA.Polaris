@@ -3876,6 +3876,34 @@
                             </template>
                         </select>
                     </div>
+                    <!-- Predictive (PE + drift) tuning, shown only when an axis
+                         uses the predictive algorithm. -->
+                    <div x-show="nativeRaAlgorithm === 'predictive' || nativeDecAlgorithm === 'predictive'"
+                         style="margin-top:8px; padding:8px; border:1px solid var(--border); border-radius:8px">
+                        <div class="text-muted" style="font-size:11px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px">Predictive (PE + drift)</div>
+                        <div class="cal-corr-grid">
+                            <label class="gb-field">Worm period (s, 0=auto)
+                                <input type="number" min="0" max="2000" step="1"
+                                       :value="nativePredictiveWormPeriodSec"
+                                       @change="setNativePredictive('nativePredictiveWormPeriodSec', $event.target.value)">
+                            </label>
+                            <label class="gb-field">History (samples)
+                                <input type="number" min="32" max="4096" step="16"
+                                       :value="nativePredictiveWindowSamples"
+                                       @change="setNativePredictive('nativePredictiveWindowSamples', $event.target.value)">
+                            </label>
+                            <label class="gb-field">Feed-forward blend (0-1)
+                                <input type="number" min="0" max="1" step="0.05"
+                                       :value="nativePredictiveBlend"
+                                       @change="setNativePredictive('nativePredictiveBlend', $event.target.value)">
+                            </label>
+                        </div>
+                        <div class="hint" style="margin-top:6px">
+                            Learns the worm-gear periodic error + drift and corrects ahead of
+                            it. Leave the period on auto; raise the blend for stronger
+                            feed-forward. Falls back to reactive guiding until it locks on.
+                        </div>
+                    </div>
                     <label class="equip-driver-row" style="margin-top:8px; gap:6px; cursor:pointer">
                         <input type="checkbox" :checked="nativeBacklashComp"
                                @change="setNativeBacklashComp($event.target.checked)">
@@ -13208,7 +13236,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260612-editorresize"></script>
+    <script src="/js/app.js?v=20260612-predictive"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

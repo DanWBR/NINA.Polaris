@@ -78,6 +78,25 @@ public static class GuiderEndpoints {
             return Results.Ok(new { raAggression = ra, decAggression = dec });
         });
 
+        // Predictive (PE + drift) tuning for the native guider: worm period
+        // (s; 0 = auto-estimate), history window (samples), feed-forward blend
+        // (0..1). Persisted on the active rig + applied live.
+        group.MapPut("/settings/predictive", (PredictiveDto dto,
+                ActiveGuiderProvider guiders, ProfileService profiles) => {
+            var rig = profiles.ActiveEquipmentProfile;
+            if (rig == null) return Results.BadRequest(new { error = "No active rig." });
+            double worm = Math.Max(0.0, dto.WormPeriodSec);
+            int window = Math.Clamp(dto.WindowSamples, 32, 4096);
+            double blend = Math.Clamp(dto.Blend, 0.0, 1.0);
+            profiles.UpdateEquipmentProfile(rig.Id, r => {
+                r.NativePredictiveWormPeriodSec = worm;
+                r.NativePredictiveWindowSamples = window;
+                r.NativePredictiveBlend = blend;
+            });
+            (guiders.Active as NativeGuider)?.ApplyAlgorithmSettings();
+            return Results.Ok(new { wormPeriodSec = worm, windowSamples = window, blend });
+        });
+
         group.MapGet("/equipment", async (PHD2Client phd2) => {
             if (!phd2.IsConnected)
                 return Results.Ok(new { connected = false });
@@ -701,4 +720,5 @@ public static class GuiderEndpoints {
     public record SyncProfileRequest(string? RigId);
     public record AlgoParamRequest(string Axis, string Name, double Value);
     public record AggressionDto(double Ra, double Dec);
+    public record PredictiveDto(double WormPeriodSec, int WindowSamples, double Blend);
 }

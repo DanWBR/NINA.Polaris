@@ -760,11 +760,16 @@ function ninaApp() {
         nativeCalibrationStepMs: 1000,
         nativeMaxRaDurationMs: 2500,
         nativeMaxDecDurationMs: 2500,
+        // Predictive (PE + drift) tuning, per-rig.
+        nativePredictiveWormPeriodSec: 0,   // 0 = auto-estimate
+        nativePredictiveWindowSamples: 256,
+        nativePredictiveBlend: 0.7,
         nativeGuideAlgorithms: [
             { id: 'hysteresis', name: 'Hysteresis' },
             { id: 'resistswitch', name: 'Resist Switch' },
             { id: 'lowpass', name: 'Lowpass' },
             { id: 'lowpass2', name: 'Lowpass2' },
+            { id: 'predictive', name: 'Predictive (PE + drift)' },
             { id: 'identity', name: 'Identity' },
         ],
 
@@ -12478,7 +12483,10 @@ function ninaApp() {
             const stepsRef = this.guider.recentSteps || [];
             const raVals = [];
             const decVals = [];
+            const predRaVals = [];
+            const predDecVals = [];
             const labels = [];
+            const hasPred = stepsRef.some(s => s && (Math.abs(s.predRa || 0) > 1e-6 || Math.abs(s.predDec || 0) > 1e-6));
             for (let i = 0; i < stepsRef.length; i++) {
                 const s = stepsRef[i];
                 if (!s) continue;
@@ -12488,6 +12496,10 @@ function ninaApp() {
                     raVals.push(ra);
                     decVals.push(dec);
                     labels.push(i);
+                    if (hasPred) {
+                        predRaVals.push(Number(s.predRa) || 0);
+                        predDecVals.push(Number(s.predDec) || 0);
+                    }
                 }
             }
 
@@ -12503,7 +12515,13 @@ function ninaApp() {
                               pointRadius: 0, borderWidth: 1.5 },
                             { label: 'Dec', data: decVals, borderColor: '#64b5f6',
                               backgroundColor: 'transparent', tension: 0.2,
-                              pointRadius: 0, borderWidth: 1.5 }
+                              pointRadius: 0, borderWidth: 1.5 },
+                            { label: 'RA pred', data: predRaVals, borderColor: 'rgba(255,167,38,0.85)',
+                              backgroundColor: 'transparent', tension: 0.2,
+                              pointRadius: 0, borderWidth: 1.1, borderDash: [4, 3] },
+                            { label: 'Dec pred', data: predDecVals, borderColor: 'rgba(178,235,242,0.8)',
+                              backgroundColor: 'transparent', tension: 0.2,
+                              pointRadius: 0, borderWidth: 1.1, borderDash: [4, 3] }
                         ]
                     },
                     options: {
@@ -12536,6 +12554,8 @@ function ninaApp() {
                 c.data.labels = labels;
                 c.data.datasets[0].data = raVals;
                 c.data.datasets[1].data = decVals;
+                if (c.data.datasets[2]) c.data.datasets[2].data = predRaVals;
+                if (c.data.datasets[3]) c.data.datasets[3].data = predDecVals;
             }
             // Default update mode re-runs the layout pass and the
             // axis-scale calculation. 'none' (which we tried before)
@@ -12688,6 +12708,27 @@ function ninaApp() {
             };
             line('ra', '#e57373');
             line('dec', '#64b5f6');
+
+            // Predicted next-frame error (predictive algorithm only): dashed,
+            // dimmer lines over the matching axis colour. Skipped entirely for
+            // reactive algorithms (predRa/predDec are 0).
+            const hasPred = steps.some(s => Math.abs(s.predRa || 0) > 1e-6 || Math.abs(s.predDec || 0) > 1e-6);
+            if (hasPred) {
+                const dashed = (key, color) => {
+                    ctx.save();
+                    ctx.strokeStyle = color; ctx.lineWidth = 1.2; ctx.setLineDash([4, 3]);
+                    ctx.beginPath();
+                    for (let i = 0; i < n; i++) {
+                        const x = i * dx;
+                        const y = yOf(Number(steps[i][key]) || 0);
+                        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                    }
+                    ctx.stroke();
+                    ctx.restore();
+                };
+                dashed('predRa', 'rgba(255,167,38,0.85)');   // amber dashed = RA prediction
+                dashed('predDec', 'rgba(178,235,242,0.8)');  // pale-cyan dashed = Dec prediction
+            }
         },
 
         // Target bullseye: scatter of recent RA/Dec error in arcsec with
@@ -13201,6 +13242,9 @@ function ninaApp() {
             this.nativeCalibrationStepMs = rig.nativeCalibrationStepMs || 1000;
             this.nativeMaxRaDurationMs = rig.nativeMaxRaDurationMs || 2500;
             this.nativeMaxDecDurationMs = rig.nativeMaxDecDurationMs || 2500;
+            this.nativePredictiveWormPeriodSec = rig.nativePredictiveWormPeriodSec || 0;
+            this.nativePredictiveWindowSamples = rig.nativePredictiveWindowSamples || 256;
+            this.nativePredictiveBlend = (rig.nativePredictiveBlend ?? 0.7);
             this.nativePierSideHandling = rig.nativePierSideHandling || 'mirror';
             this.nativeReverseDecAfterFlip = !!rig.nativeReverseDecAfterFlip;
             this.equipMountChoice = rig.telescope || '';
@@ -13804,6 +13848,9 @@ function ninaApp() {
                 guideCameraDriver: this.guideCameraDriver || rig.guideCameraDriver || 'indi',
                 nativeRaAlgorithm: this.nativeRaAlgorithm || rig.nativeRaAlgorithm || 'hysteresis',
                 nativeDecAlgorithm: this.nativeDecAlgorithm || rig.nativeDecAlgorithm || 'resistswitch',
+                nativePredictiveWormPeriodSec: this.nativePredictiveWormPeriodSec ?? rig.nativePredictiveWormPeriodSec ?? 0,
+                nativePredictiveWindowSamples: this.nativePredictiveWindowSamples || rig.nativePredictiveWindowSamples || 256,
+                nativePredictiveBlend: this.nativePredictiveBlend ?? rig.nativePredictiveBlend ?? 0.7,
                 telescope: this.equipMountChoice || rig.telescope,
                 telescopeDriver: this.mountDriver || rig.telescopeDriver || 'indi',
                 focuser: this.equipFocuserChoice || rig.focuser,
@@ -17934,6 +17981,30 @@ function ninaApp() {
             this._persistRigSelection({ [field]: v });
         },
 
+        // Predictive (PE + drift) tuning. Persists to the rig AND applies live
+        // to the running native guider via the dedicated endpoint (mirrors the
+        // aggression path).
+        async setNativePredictive(field, value) {
+            let v = Number(value);
+            if (!isFinite(v)) v = 0;
+            if (field === 'nativePredictiveWormPeriodSec') v = Math.max(0, Math.min(2000, v));
+            else if (field === 'nativePredictiveWindowSamples') v = Math.max(32, Math.min(4096, Math.round(v)));
+            else if (field === 'nativePredictiveBlend') v = Math.max(0, Math.min(1, v));
+            this[field] = v;
+            this._persistRigSelection({ [field]: v });
+            try {
+                await this.apiPost('/api/guider/settings/predictive', null, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        wormPeriodSec: this.nativePredictiveWormPeriodSec,
+                        windowSamples: this.nativePredictiveWindowSamples,
+                        blend: this.nativePredictiveBlend
+                    })
+                });
+            } catch (e) { /* guider may be disconnected; the rig save still persists */ }
+        },
+
         // Set the guide-camera exposure (ms) on the active guider. Works for both
         // backends via /api/guider/exposure/{ms}; for native it persists to the
         // rig (NativeGuideExposureMs) and applies on the next frame.
@@ -21125,6 +21196,34 @@ function ninaApp() {
                 pts.push(x.toFixed(1) + ',' + y.toFixed(1));
             }
             return pts.join(' ');
+        },
+
+        // Predicted-error polyline (predictive algorithm only). Empty unless the
+        // steps carry non-zero predRa/predDec, so reactive algorithms draw nothing.
+        buildPredictedPath(axis) {
+            const steps = this.guider.recentSteps || [];
+            if (steps.length === 0) return '';
+            const key = axis === 'ra' ? 'predRa' : 'predDec';
+            if (!steps.some(s => Math.abs(s[key] || 0) > 1e-6)) return '';
+            const w = this.guideChartW, h = this.guideChartH;
+            const scale = Math.max(this.guideChartScale, 0.5);
+            const n = Math.max(steps.length, 1);
+            const pts = [];
+            for (let i = 0; i < steps.length; i++) {
+                const x = (i / Math.max(n - 1, 1)) * w;
+                const v = steps[i][key] || 0;
+                const clamped = Math.max(-scale, Math.min(scale, v));
+                const y = (h / 2) - (clamped / scale) * (h / 2);
+                pts.push(x.toFixed(1) + ',' + y.toFixed(1));
+            }
+            return pts.join(' ');
+        },
+
+        // True when the current guide history carries predictions (predictive
+        // algorithm active) — gates the dashed overlay + legend entry.
+        get guideHasPrediction() {
+            const steps = this.guider.recentSteps || [];
+            return steps.some(s => Math.abs(s.predRa || 0) > 1e-6 || Math.abs(s.predDec || 0) > 1e-6);
         },
 
         async pollCameraInfo() {

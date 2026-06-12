@@ -208,7 +208,11 @@ public static class StatusStreamHandler {
                                 raDur = s.RaDuration,
                                 decDur = s.DecDuration,
                                 raDir = s.RaDirection,
-                                decDir = s.DecDirection
+                                decDir = s.DecDirection,
+                                // Predicted next-frame error (arcsec) from the native
+                                // predictive algorithm; 0 for PHD2 / reactive algos.
+                                predRa = s.PredRaArcsec,
+                                predDec = s.PredDecArcsec
                             }),
                             // Live guide-frame view (native backend only; null for PHD2).
                             view = activeGuider.ViewState,

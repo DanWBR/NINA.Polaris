@@ -37,7 +37,11 @@ public readonly record struct GuideStep(
     int DecDurationMs,
     double Snr,
     double Hfd,
-    bool StarFound);
+    bool StarFound,
+    // Predicted next-frame error (arcsec) from a predictive algorithm; 0 for
+    // reactive algorithms. Drives the dashed predicted-curve chart overlay.
+    double PredRaArcsec = 0.0,
+    double PredDecArcsec = 0.0);
 
 /// <summary>Rolling RMS / peak over a window of guide errors (arcsec).</summary>
 public sealed class RmsCalculator {

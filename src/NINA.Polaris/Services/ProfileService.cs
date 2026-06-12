@@ -367,6 +367,9 @@ public class ProfileService {
             NativeMaxDecDurationMs = src.NativeMaxDecDurationMs,
             NativeRaAlgorithm = src.NativeRaAlgorithm,
             NativeDecAlgorithm = src.NativeDecAlgorithm,
+            NativePredictiveWormPeriodSec = src.NativePredictiveWormPeriodSec,
+            NativePredictiveWindowSamples = src.NativePredictiveWindowSamples,
+            NativePredictiveBlend = src.NativePredictiveBlend,
             NativeBacklashComp = src.NativeBacklashComp,
             NativeBacklashMaxMs = src.NativeBacklashMaxMs,
             NativeMultiStar = src.NativeMultiStar,
@@ -1065,12 +1068,24 @@ public class EquipmentProfile {
     public int NativeMaxDecDurationMs { get; set; } = 2500;
 
     /// <summary>Native guider RA-axis algorithm: hysteresis (default),
-    /// lowpass, lowpass2, or identity.</summary>
+    /// lowpass, lowpass2, predictive, or identity.</summary>
     public string NativeRaAlgorithm { get; set; } = "hysteresis";
 
     /// <summary>Native guider Dec-axis algorithm: resistswitch (default),
-    /// lowpass, lowpass2, hysteresis, or identity.</summary>
+    /// lowpass, lowpass2, hysteresis, predictive, or identity.</summary>
     public string NativeDecAlgorithm { get; set; } = "resistswitch";
+
+    /// <summary>Predictive algorithm: worm period in seconds for the periodic-error
+    /// feed-forward. 0 = auto-estimate from the guiding history.</summary>
+    public double NativePredictiveWormPeriodSec { get; set; } = 0.0;
+
+    /// <summary>Predictive algorithm: number of recent samples kept for the
+    /// PE + drift fit (≈ two worm periods). Clamped to [32, 4096].</summary>
+    public int NativePredictiveWindowSamples { get; set; } = 256;
+
+    /// <summary>Predictive algorithm: feed-forward weight (0..1) applied to the
+    /// predicted per-frame change on top of the reactive baseline. Default 0.7.</summary>
+    public double NativePredictiveBlend { get; set; } = 0.7;
 
     /// <summary>Apply Dec backlash compensation (the amount is auto-measured
     /// during calibration). Off by default — an over-large value oscillates

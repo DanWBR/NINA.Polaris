@@ -106,6 +106,8 @@ public sealed class NativeGuider : IGuider, IDisposable {
     private IGuideAlgorithm _raAlgo = new HysteresisAlgorithm();
     private IGuideAlgorithm _decAlgo = new ResistSwitchAlgorithm();
     private BacklashComp _backlashComp = new(0);
+    // Timestamp of the previous guide frame, for the predictor's frame interval.
+    private long _lastGuideMs;
 
     // Dither bookkeeping.
     private volatile bool _paused;
@@ -788,9 +790,21 @@ public sealed class NativeGuider : IGuider, IDisposable {
         double dy = curY - _lockY;
         var (raPx, decPx) = MountCoordTransform.CameraToMount(_calibration, dx, dy);
 
+        // Frame interval for the (time-aware) predictive algorithm; reactive
+        // algorithms ignore it. First frame falls back to the exposure period.
+        long nowMs = NowMs();
+        double dtSec = _lastGuideMs > 0 ? (nowMs - _lastGuideMs) / 1000.0 : expMs / 1000.0;
+        _lastGuideMs = nowMs;
+
         // Per-axis algorithm: correction (pixels) to apply this frame.
-        double raCorr = _raAlgo.Result(raPx);
-        double decCorr = _decAlgo.Result(decPx);
+        double raCorr = _raAlgo.Result(raPx, dtSec);
+        double decCorr = _decAlgo.Result(decPx, dtSec);
+
+        // Predicted next-frame error (pixels) when a predictive algorithm is
+        // active, for the guide-chart overlay; 0 for reactive algorithms.
+        double scaleP = PixelScale > 0 ? PixelScale : 1.0;
+        double predRaAs = (_raAlgo as PredictiveAlgorithm)?.LastPredictedError * scaleP ?? 0.0;
+        double predDecAs = (_decAlgo as PredictiveAlgorithm)?.LastPredictedError * scaleP ?? 0.0;
 
         // Rates: RA scaled for declination, Dec from calibration.
         double decRad = (mount != null && !double.IsNaN(mount.Declination))
@@ -841,7 +855,8 @@ public sealed class NativeGuider : IGuider, IDisposable {
             raPx * scale, decPx * scale,
             raPx, decPx,
             raMs, decMs,
-            snr, hfd, true);
+            snr, hfd, true,
+            predRaAs, predDecAs);
         PushStep(step);
         BuildView(curX, curY, snr, true);
 
@@ -1050,18 +1065,25 @@ public sealed class NativeGuider : IGuider, IDisposable {
     private void BuildAlgorithms() {
         // Per-axis algorithm selection (default hysteresis RA / resist-switch Dec,
         // PHD2's defaults). Lowpass/Lowpass2/Identity also available.
+        // Predictive (PE + drift) tuning, shared by either axis if selected.
+        double wormSec = Math.Max(0.0, Rig.NativePredictiveWormPeriodSec);
+        int predWin = Rig.NativePredictiveWindowSamples;
+        double predBlend = Math.Clamp(Rig.NativePredictiveBlend, 0.0, 1.0);
         _raAlgo = GuideAlgorithmFactory.Create(
             string.IsNullOrWhiteSpace(Rig.NativeRaAlgorithm) ? "hysteresis" : Rig.NativeRaAlgorithm,
             minMove: Math.Max(0.0, Rig.NativeMinMoveRaPx),
             aggression: Math.Clamp(Rig.NativeRaAggression, 0.0, 2.0),
-            hysteresis: Math.Clamp(Rig.NativeRaHysteresis, 0.0, 0.99));
+            hysteresis: Math.Clamp(Rig.NativeRaHysteresis, 0.0, 0.99),
+            wormPeriodSec: wormSec, predictiveWindow: predWin, predictiveBlend: predBlend);
         _decAlgo = GuideAlgorithmFactory.Create(
             string.IsNullOrWhiteSpace(Rig.NativeDecAlgorithm) ? "resistswitch" : Rig.NativeDecAlgorithm,
             minMove: Math.Max(0.0, Rig.NativeMinMoveDecPx),
             aggression: Math.Clamp(Rig.NativeDecAggression, 0.0, 2.0),
-            hysteresis: Math.Clamp(Rig.NativeRaHysteresis, 0.0, 0.99));
+            hysteresis: Math.Clamp(Rig.NativeRaHysteresis, 0.0, 0.99),
+            wormPeriodSec: wormSec, predictiveWindow: predWin, predictiveBlend: predBlend);
         _raAlgo.Reset();
         _decAlgo.Reset();
+        _lastGuideMs = 0;
         // Dec backlash compensation: only when enabled on the rig AND the
         // calibration actually measured a backlash. Disabled by default
         // because an over-large value oscillates worse than no comp.
@@ -1087,7 +1109,9 @@ public sealed class NativeGuider : IGuider, IDisposable {
             RaDuration = p.RaDurationMs,
             DecDuration = p.DecDurationMs,
             RaDirection = null,
-            DecDirection = null
+            DecDirection = null,
+            PredRaArcsec = p.PredRaArcsec,
+            PredDecArcsec = p.PredDecArcsec
         };
         lock (_stepsLock) {
             _recentSteps.Add(step);
