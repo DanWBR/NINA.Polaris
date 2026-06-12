@@ -153,23 +153,34 @@ from ~227 to ~242 and freeing CPU headroom during a live-stack session.
 
 ### x86 desktop — Core i9-13900KF (32 threads)
 
-ASUSTeK ProArt B760-CREATOR D4, Core i9-13900KF, 64 GB DDR4-3200, 2 TB NVMe SSD.
-Run: 2026-06-10 (Release build — see note).
+ASUSTeK ProArt B760-CREATOR D4, Core i9-13900KF, 64 GB DDR4-3200, 2 TB NVMe SSD,
+NVIDIA GeForce RTX 5070. Run: 2026-06-12 (Release build — see note).
 
 | Metric | Value |
 |---|---|
-| **Polaris score** | **662** |
-| Stacking throughput | 5.43 fps · 91.1 Mpx/s (16.78 MP frames) |
-| Stacking detect / align / resample / stats | 42.46 / 0.93 / 50.36 / 90.46 ms |
-| Capture/video throughput | 3.37 fps · 56.6 Mpx/s |
-| Debayer / JPEG / LZ4 | 37.09 / 249.89 / 9.49 ms (LZ4 3372.6 MB/s) |
-| CPU single / multi-thread | 4697 / 73240 MFLOPS (15.59× scaling) |
-| Memory bandwidth | 46.7 GB/s |
+| **Polaris score** | **936** |
+| Stacking throughput | 5.93 fps · 99.4 Mpx/s (16.78 MP frames) |
+| Stacking detect / align / resample / stats | 24.2 / 0.61 / 75.23 / 68.67 ms |
+| Capture/video throughput | 5.31 fps · 89 Mpx/s |
+| Debayer / JPEG / LZ4 | 20.51 / 160.91 / 7.06 ms (LZ4 4535.4 MB/s) |
+| CPU single / multi-thread | 6054 / 120336 MFLOPS (19.88× scaling) |
+| Memory bandwidth | 41 GB/s |
+| GPU vs CPU (RTX 5070, OpenCL) | warp 0.47× · debayer 0.40× · blur 16.17× · overall 5.68× |
 
-> **Build matters.** This 662 is a **Release** build. An earlier run on the
-> same machine scored 348 in a **Debug** build — roughly half. The SBC numbers
-> above all come from the Release `.deb`, so compare against this 662, not the
-> old Debug figure. Always benchmark a Release build for cross-board comparison.
+> **Discrete GPU caveat.** Unlike the unified-memory SBCs (Mali/Adreno), a
+> discrete GPU sits behind PCIe, so the per-op host↔device copy dominates the
+> small kernels: warp (0.47×) and debayer (0.40×) are actually *slower* on the
+> RTX 5070 than on this fast CPU; only the heavier blur wins (16.17×). The
+> "overall" figure is a plain average of the three, so it looks high but is
+> carried by blur. The OpenCL backend is designed for unified-memory SBCs where
+> zero-copy makes every op a win; on a discrete-GPU desktop the CPU is already
+> fast enough that offloading the light ops is a net loss — leave the GPU toggle
+> off there, or expect it to help only the editor's blur-heavy work.
+
+> **Build matters.** Use a **Release** build. Earlier runs on this machine in
+> **Debug** scored ~348 — roughly half. The SBC numbers above all come from the
+> Release `.deb`, so compare against the Release figure. Always benchmark a
+> Release build for cross-board comparison.
 
 ### x86 PC stick
 
