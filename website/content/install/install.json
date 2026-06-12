@@ -1,5 +1,5 @@
 {
-  "title": "Download & install",
+  "title": "Download & Install",
   "lede": "Flash a ready-made image, or download the release for your platform and run the install steps. Then add only the optional components for the features you want; Polaris detects what is installed at runtime and hides the UI for anything missing.",
   "requirements": {
     "title": "System requirements",

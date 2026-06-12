@@ -117,7 +117,7 @@ export default defineConfig({
       },
       {
         name: 'install',
-        label: 'Download & install',
+        label: 'Download & Install',
         path: 'content/install',
         format: 'json',
         ui: { allowedActions: { create: false, delete: false } },

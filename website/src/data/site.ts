@@ -23,8 +23,8 @@ export const site = {
 export const navLinks = [
   { label: 'Features', href: '/#features' },
   { label: 'Benchmarks', href: '/#benchmarks' },
-  { label: 'Get started', href: '/getting-started' },
-  { label: 'Download & install', href: '/install' },
+  { label: 'Get Started', href: '/getting-started' },
+  { label: 'Download & Install', href: '/install' },
   { label: 'GitHub ↗', href: site.repo, external: true },
 ];
 
@@ -33,7 +33,7 @@ export const footerCols = [
     title: 'Project',
     links: [
       { label: 'Getting started', href: '/getting-started', external: false },
-      { label: 'Download & install', href: '/install', external: false },
+      { label: 'Download & Install', href: '/install', external: false },
       { label: 'GitHub repo', href: site.repo },
       { label: 'README', href: site.readme },
       { label: 'Issues / requests', href: site.issues },
