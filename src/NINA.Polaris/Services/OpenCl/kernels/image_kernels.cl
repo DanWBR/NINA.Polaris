@@ -75,6 +75,73 @@ __kernel void warp_affine(__global const ushort* src, __global ushort* dst,
     dst[y * width + x] = (ushort)v;
 }
 
+// --- Bilinear debayer (live-stack OSC preprocessing) ------------------------
+// Mirrors BayerDebayer.Bilinear exactly: integer-truncating neighbour averages
+// (sum / count, not rounded), edge handling = average only the in-bounds
+// neighbours. The 2x2 colour block (0=R,1=G,2=B) is passed as b0..b3 =
+// block[(y&1)*2 + (x&1)].
+
+static int dbg_avgN4(__global const ushort* c, int x, int y, int w, int h) {
+    int sum = 0, n = 0;
+    if (y > 0)       { sum += c[(y - 1) * w + x]; n++; }
+    if (y + 1 < h)   { sum += c[(y + 1) * w + x]; n++; }
+    if (x > 0)       { sum += c[y * w + (x - 1)]; n++; }
+    if (x + 1 < w)   { sum += c[y * w + (x + 1)]; n++; }
+    return n == 0 ? 0 : sum / n;
+}
+static int dbg_avgDiag4(__global const ushort* c, int x, int y, int w, int h) {
+    int sum = 0, n = 0;
+    if (x > 0     && y > 0)     { sum += c[(y - 1) * w + (x - 1)]; n++; }
+    if (x + 1 < w && y > 0)     { sum += c[(y - 1) * w + (x + 1)]; n++; }
+    if (x > 0     && y + 1 < h) { sum += c[(y + 1) * w + (x - 1)]; n++; }
+    if (x + 1 < w && y + 1 < h) { sum += c[(y + 1) * w + (x + 1)]; n++; }
+    return n == 0 ? 0 : sum / n;
+}
+static int dbg_avgH(__global const ushort* c, int x, int y, int w) {
+    int sum = 0, n = 0;
+    if (x > 0)     { sum += c[y * w + (x - 1)]; n++; }
+    if (x + 1 < w) { sum += c[y * w + (x + 1)]; n++; }
+    return n == 0 ? 0 : sum / n;
+}
+static int dbg_avgV(__global const ushort* c, int x, int y, int w, int h) {
+    int sum = 0, n = 0;
+    if (y > 0)     { sum += c[(y - 1) * w + x]; n++; }
+    if (y + 1 < h) { sum += c[(y + 1) * w + x]; n++; }
+    return n == 0 ? 0 : sum / n;
+}
+
+__kernel void debayer_bilinear(__global const ushort* cfa,
+                               __global ushort* r, __global ushort* g, __global ushort* b,
+                               int width, int height, int b0, int b1, int b2, int b3) {
+    int x = get_global_id(0);
+    int y = get_global_id(1);
+    if (x >= width || y >= height) return;
+    int idx = y * width + x;
+    int rowBase = (y & 1) << 1;
+    int xp = x & 1;
+    int block[4] = { b0, b1, b2, b3 };
+    int colour = block[rowBase + xp];
+    int raw = cfa[idx];
+    if (colour == 0) {            // R site
+        r[idx] = (ushort)raw;
+        g[idx] = (ushort)dbg_avgN4(cfa, x, y, width, height);
+        b[idx] = (ushort)dbg_avgDiag4(cfa, x, y, width, height);
+    } else if (colour == 2) {     // B site
+        b[idx] = (ushort)raw;
+        g[idx] = (ushort)dbg_avgN4(cfa, x, y, width, height);
+        r[idx] = (ushort)dbg_avgDiag4(cfa, x, y, width, height);
+    } else {                      // G site
+        g[idx] = (ushort)raw;
+        if (block[rowBase + (xp ^ 1)] == 0) { // reds on this row
+            r[idx] = (ushort)dbg_avgH(cfa, x, y, width);
+            b[idx] = (ushort)dbg_avgV(cfa, x, y, width, height);
+        } else {
+            r[idx] = (ushort)dbg_avgV(cfa, x, y, width, height);
+            b[idx] = (ushort)dbg_avgH(cfa, x, y, width);
+        }
+    }
+}
+
 // --- Per-pixel 16-bit -> 8-bit LUT apply (stretch hot path) -----------------
 __kernel void apply_lut8(__global const ushort* src, __global uchar* dst,
                          __global const uchar* lut, int n) {

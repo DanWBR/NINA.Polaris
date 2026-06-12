@@ -83,6 +83,24 @@ public class GpuOpenClParityTests {
     }
 
     [Test]
+    public void Debayer_matches_cpu_exactly() {
+        const int w = 64, h = 48; // even dims so the Bayer grid is clean
+        var cfa = Ramp(w * h, 29);
+        foreach (var pat in new[] { NINA.Core.Enum.BayerPatternEnum.RGGB,
+                                    NINA.Core.Enum.BayerPatternEnum.GRBG,
+                                    NINA.Core.Enum.BayerPatternEnum.GBRG,
+                                    NINA.Core.Enum.BayerPatternEnum.BGGR }) {
+            Assert.That(_gpu.TryDebayerBilinear(cfa, w, h, pat, out var gpu), Is.True,
+                $"GPU declined debayer {pat}");
+            var cpu = BayerDebayer.Bilinear(cfa, w, h, pat);
+            // Pure integer math -> must be bit-exact.
+            Assert.That(gpu.R, Is.EqualTo(cpu.R), $"R mismatch {pat}");
+            Assert.That(gpu.G, Is.EqualTo(cpu.G), $"G mismatch {pat}");
+            Assert.That(gpu.B, Is.EqualTo(cpu.B), $"B mismatch {pat}");
+        }
+    }
+
+    [Test]
     public void Lut8_matches_cpu_exactly() {
         var data = Ramp(4096);
         var lut = new byte[65536];

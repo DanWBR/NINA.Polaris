@@ -216,10 +216,47 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
 
     public bool TryDebayerBilinear(ushort[] cfa, int width, int height,
                                    BayerPatternEnum pattern, out BayerDebayer.Channels result) {
-        // Not yet ported to OpenCL; CPU handles debayer.
         result = null!;
-        return false;
+        var block = ColorBlock(pattern);
+        if (block == null) return false; // None/Auto/unsupported -> CPU
+        var ctx = Context();
+        if (ctx == null) return false;
+        try {
+            int n = width * height;
+            if (cfa.Length < n) return false;
+            var cl = ctx.Cl;
+            lock (ctx.Gate) {
+                nint bCfa = CreateFrom(ctx, MemFlags.ReadOnly | MemFlags.CopyHostPtr, cfa);
+                nint bR = CreateEmpty(ctx, MemFlags.WriteOnly, (nuint)(n * sizeof(ushort)));
+                nint bG = CreateEmpty(ctx, MemFlags.WriteOnly, (nuint)(n * sizeof(ushort)));
+                nint bB = CreateEmpty(ctx, MemFlags.WriteOnly, (nuint)(n * sizeof(ushort)));
+                try {
+                    var k = ctx.GetKernel("debayer_bilinear");
+                    SetMem(cl, k, 0, bCfa); SetMem(cl, k, 1, bR); SetMem(cl, k, 2, bG); SetMem(cl, k, 3, bB);
+                    SetVal(cl, k, 4, width); SetVal(cl, k, 5, height);
+                    SetVal(cl, k, 6, block[0]); SetVal(cl, k, 7, block[1]);
+                    SetVal(cl, k, 8, block[2]); SetVal(cl, k, 9, block[3]);
+                    Run2D(ctx, k, width, height);
+                    var r = new ushort[n]; var g = new ushort[n]; var b = new ushort[n];
+                    ReadInto(ctx, bR, r); ReadInto(ctx, bG, g); ReadInto(ctx, bB, b);
+                    result = new BayerDebayer.Channels(r, g, b);
+                    return true;
+                } finally {
+                    cl.ReleaseMemObject(bCfa); cl.ReleaseMemObject(bR);
+                    cl.ReleaseMemObject(bG); cl.ReleaseMemObject(bB);
+                }
+            }
+        } catch (Exception ex) { _log.LogDebug("GPU debayer fell back: {Msg}", ex.Message); return false; }
     }
+
+    // 2x2 colour block (0=R,1=G,2=B) row-major, matching BayerDebayer.ColorBlockFor.
+    private static int[]? ColorBlock(BayerPatternEnum pattern) => pattern switch {
+        BayerPatternEnum.RGGB => new[] { 0, 1, 1, 2 },
+        BayerPatternEnum.GRBG => new[] { 1, 0, 2, 1 },
+        BayerPatternEnum.GBRG => new[] { 1, 2, 0, 1 },
+        BayerPatternEnum.BGGR => new[] { 2, 1, 1, 0 },
+        _ => null,
+    };
 
     public bool TryApplyLut8(ushort[] data, byte[] lut, out byte[] result) {
         result = Array.Empty<byte>();
