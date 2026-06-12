@@ -41,6 +41,20 @@ const statusClass = (s: string) => {
                 <h3>{it.device}</h3>
                 {it.badge && <span class="badge">{it.badge}</span>}
               </header>
+              {(it.gpu || it.npu) && (
+                <div class="caps">
+                  {it.gpu && (
+                    <span class={`cap ${it.gpu === 'yes' ? 'ok' : 'no'}`}>
+                      {it.gpu === 'yes' ? '✓' : '✕'} GPU · OpenCL
+                    </span>
+                  )}
+                  {it.npu && (
+                    <span class={`cap ${it.npu === 'yes' ? 'ok' : 'no'}`}>
+                      {it.npu === 'yes' ? '✓' : '✕'} NPU · AI
+                    </span>
+                  )}
+                </div>
+              )}
               {it.size && <p class="img-size">{it.size}</p>}
               {it.note && <p class="img-note">{it.note}</p>}
               {it.url ? (
@@ -447,6 +461,20 @@ const statusClass = (s: string) => {
   .img-card h3 { font-size: 16px; font-weight: 700; }
   .img-size { font-size: 13px; color: var(--text-muted); font-family: var(--font-mono); margin-bottom: 8px; }
   .img-note { font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 14px; }
+
+  /* Capability badges (GPU / NPU) */
+  .caps { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .cap {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    border-radius: 999px;
+    padding: 3px 9px;
+    white-space: nowrap;
+  }
+  .cap.ok { color: var(--success); border: 1px solid rgba(76, 175, 80, 0.45); background: rgba(76, 175, 80, 0.1); }
+  .cap.no { color: var(--text-muted); border: 1px dashed var(--border); }
   .img-btn { margin-top: auto; align-self: flex-start; padding: 9px 16px; font-size: 14px; }
   .soon {
     margin-top: auto;

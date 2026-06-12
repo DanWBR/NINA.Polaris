@@ -168,6 +168,26 @@ export default defineConfig({
                   { type: 'string', name: 'url', label: 'Download URL (empty = Coming soon)' },
                   { type: 'string', name: 'size', label: 'File size (optional)' },
                   { type: 'string', name: 'note', label: 'Note (optional)' },
+                  {
+                    type: 'string',
+                    name: 'gpu',
+                    label: 'GPU (OpenCL)',
+                    options: [
+                      { value: '', label: '(no badge)' },
+                      { value: 'yes', label: 'Supported' },
+                      { value: 'no', label: 'Not supported' },
+                    ],
+                  },
+                  {
+                    type: 'string',
+                    name: 'npu',
+                    label: 'NPU (AI)',
+                    options: [
+                      { value: '', label: '(no badge)' },
+                      { value: 'yes', label: 'Supported' },
+                      { value: 'no', label: 'Not supported' },
+                    ],
+                  },
                 ],
               },
             ],
