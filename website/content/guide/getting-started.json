@@ -25,35 +25,35 @@
       "title": "Set up your rig",
       "body": "Open RIGS in the sidebar. Pick a saved rig from the dropdown, or build a new one by adding your Main Telescope (brand, model, reducer or flattener, so focal length and aperture auto-fill), Main Camera, Mount, Focuser, and Filter Wheel cards. Click Save selections so the rig remembers everything next time.",
       "tip": "A rig stores focal length, gain defaults, and the PHD2 profile binding, which is the basis for framing and plate-solving.",
-      "image": "/assets/screenshots/gs-rigs.png"
+      "image": "/assets/screenshots/gs-rigs.jpg"
     },
     {
       "icon": "🔌",
       "title": "Connect your equipment",
       "body": "On each card, pick the device under the connection strip: INDI on Linux, ASCOM or Alpaca on Windows, or a native camera SDK. Set the camera cooler target, then hit Connect on each device. Confirm the mount is tracking and that the filter list matches your wheel.",
       "tip": "Auto-discovery lists devices it finds on the LAN, so most gear shows up without typing an address.",
-      "image": "/assets/screenshots/gs-connect.png"
+      "image": "/assets/screenshots/gs-connect.jpg"
     },
     {
       "icon": "📡",
       "title": "Set up guiding",
       "body": "Switch to GUIDE. Click Launch PHD2 (or Connect if it is already running) and pick the profile that matches your guide camera and mount. Click Connect equipment, then Loop, Find Star, and Smart Calibrate. Watch the RA/Dec graph settle, and guiding then runs in the background all night.",
       "tip": "Prefer the original PHD2 interface? Open the PHD2 GUI tab to drive the real app embedded over xpra or VNC.",
-      "image": "/assets/screenshots/gs-guiding.png"
+      "image": "/assets/screenshots/gs-guiding.jpg"
     },
     {
       "icon": "🔬",
       "title": "Get sharp focus",
       "body": "Open FOCUS and run V-curve auto-focus: set the step size and sample count for your focuser and hit Start AF. Polaris samples several positions, fits the HFR curve, and parks the focuser at the sharpest point. You can also focus manually with the stepper buttons while watching HFR drop.",
       "tip": "Lower HFR means tighter stars. The sequencer can re-focus automatically when temperature or HFR drifts during the night.",
-      "image": "/assets/screenshots/gs-focus.png"
+      "image": "/assets/screenshots/gs-focus.jpg"
     },
     {
       "icon": "🌌",
       "title": "Frame your target",
       "body": "Open SKY and search for your target (M31, NGC 7000, and so on), or pick a suggestion from the TONIGHT tab ranked by altitude. Click the target, then Slew & Center: Polaris slews, plate-solves, and re-slews until the target sits centered inside the field-of-view overlay.",
       "tip": "Slew & Center uses the Stellarium Web Engine sky explorer with full mount integration, no hand controller needed.",
-      "image": "/assets/screenshots/gs-sky.png"
+      "image": "/assets/screenshots/gs-sky.jpg"
     },
     {
       "icon": "📸",
@@ -67,7 +67,7 @@
       "title": "Stack and edit in STUDIO, then export",
       "body": "Open STUDIO to turn your subs into a finished image: build master calibration frames, calibrate the lights, and Integrate them into a master. Clean it up with GraXpert AI in the browser (background extraction, then denoise, then deconvolution, accelerated on the client GPU or the SBC's NPU). Polish tone and color in the EDITOR, then Export as JPEG, PNG, or 16-bit TIFF.",
       "tip": "Turn on Auto-GraXpert BGE in the autorun end-actions and the background-extracted frames are ready before you even open STUDIO.",
-      "image": "/assets/screenshots/gs-studio.png"
+      "image": "/assets/screenshots/gs-studio.jpg"
     }
   ],
   "closing": {
