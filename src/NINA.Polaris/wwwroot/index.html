@@ -10188,6 +10188,33 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <tr><td class="hint" style="padding-left:10px">Memory bandwidth</td>
                                     <td><span x-text="bench.lastResult.cpu.memBandwidthGBps"></span> GB/s</td></tr>
 
+                                <template x-if="bench.lastResult.gpu && bench.lastResult.gpu.ran">
+                                    <tr><td colspan="2" style="padding-top:6px"><strong>GPU vs CPU (OpenCL)</strong>
+                                        <span class="hint" x-text="'(' + bench.lastResult.gpu.device + ')'"></span></td></tr>
+                                </template>
+                                <template x-if="bench.lastResult.gpu && bench.lastResult.gpu.ran">
+                                    <tr><td class="hint" style="padding-left:10px">Warp (CPU / GPU / speedup)</td>
+                                        <td><span x-text="bench.lastResult.gpu.warpCpuMpxPerSec"></span> /
+                                            <span x-text="bench.lastResult.gpu.warpGpuMpxPerSec"></span> Mpx/s ·
+                                            <strong x-text="bench.lastResult.gpu.warpSpeedup + '×'"></strong></td></tr>
+                                </template>
+                                <template x-if="bench.lastResult.gpu && bench.lastResult.gpu.ran">
+                                    <tr><td class="hint" style="padding-left:10px">Debayer (CPU / GPU / speedup)</td>
+                                        <td><span x-text="bench.lastResult.gpu.debayerCpuMpxPerSec"></span> /
+                                            <span x-text="bench.lastResult.gpu.debayerGpuMpxPerSec"></span> Mpx/s ·
+                                            <strong x-text="bench.lastResult.gpu.debayerSpeedup + '×'"></strong></td></tr>
+                                </template>
+                                <template x-if="bench.lastResult.gpu && bench.lastResult.gpu.ran">
+                                    <tr><td class="hint" style="padding-left:10px">Blur (CPU / GPU / speedup)</td>
+                                        <td><span x-text="bench.lastResult.gpu.blurCpuMpxPerSec"></span> /
+                                            <span x-text="bench.lastResult.gpu.blurGpuMpxPerSec"></span> Mpx/s ·
+                                            <strong x-text="bench.lastResult.gpu.blurSpeedup + '×'"></strong></td></tr>
+                                </template>
+                                <template x-if="bench.lastResult.gpu && bench.lastResult.gpu.ran">
+                                    <tr><td class="hint" style="padding-left:10px">Overall GPU speedup</td>
+                                        <td><strong x-text="bench.lastResult.gpu.overallSpeedup + '×'"></strong></td></tr>
+                                </template>
+
                                 <template x-if="bench.lastResult.camera">
                                     <tr><td colspan="2" style="padding-top:6px"><strong>Camera</strong>
                                         <span class="hint">(camera-dependent)</span></td></tr>

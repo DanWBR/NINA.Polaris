@@ -86,14 +86,17 @@ public class BenchmarkService {
         EquipmentManager equipment,
         CameraStreamService cameraStream,
         LiveStackingService liveStack,
-        ProfileService profiles) {
+        ProfileService profiles,
+        NINA.Image.Gpu.IGpuCompute? gpu = null) {
         _logger = logger;
         _store = store;
         _equipment = equipment;
         _cameraStream = cameraStream;
         _liveStack = liveStack;
         _profiles = profiles;
+        _gpu = gpu ?? new NINA.Image.Gpu.CpuGpuCompute();
     }
+    private readonly NINA.Image.Gpu.IGpuCompute _gpu;
 
     public object GetStatus() => new {
         state = State,
@@ -145,6 +148,15 @@ public class BenchmarkService {
                 return (s, e, c);
             }, ct);
 
+            // OCL: GPU-vs-CPU on the image kernels (skipped when no OpenCL GPU
+            // or the GPU toggle is off -> Ran=false).
+            GpuResult? gpuRes = null;
+            try {
+                Phase = "GPU (OpenCL)";
+                gpuRes = await Task.Run(() => RunGpuWorkload(ct), ct);
+            } catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { _logger.LogWarning(ex, "GPU benchmark workload failed"); }
+
             CameraResult? camera = null;
             CameraVideoResult? cameraVideo = null;
             if (cam) {
@@ -172,7 +184,8 @@ public class BenchmarkService {
                 Cpu: cpu,
                 CompositeScore: Math.Round(composite, 1),
                 Camera: camera,
-                CameraVideo: cameraVideo);
+                CameraVideo: cameraVideo,
+                Gpu: gpuRes);
 
             try { await _store.SaveResultAsync(result, ct); }
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to persist benchmark result"); }
@@ -670,6 +683,56 @@ public class BenchmarkService {
         return 100.0 * Math.Pow(sn * en * cn, 1.0 / 3.0);
     }
 
+    // ----- Workload: GPU (OpenCL) vs CPU on the image kernels -----
+
+    private GpuResult RunGpuWorkload(CancellationToken ct) {
+        var none = new GpuResult(false, _gpu.BackendName, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        if (!_gpu.IsHardware) return none; // CPU backend -> nothing to compare
+        var cpu = new NINA.Image.Gpu.CpuGpuCompute();
+        int w = FrameW, h = FrameH;
+        double mpx = (double)w * h / 1_000_000.0;
+        var frame = GenerateStarField(w, h, Seed, 0, 0);
+        var t = new AffineTransform { M00 = 1, M11 = 1, Tx = 7.3, Ty = -5.1 };
+        var budget = TimeSpan.FromMilliseconds(700);
+
+        double warpCpu = MeasureMpx(() => cpu.TryWarpAffine(frame, w, h, t, out _), mpx, budget, ct);
+        double warpGpu = MeasureMpx(() => _gpu.TryWarpAffine(frame, w, h, t, out _), mpx, budget, ct);
+        double debCpu = MeasureMpx(() => cpu.TryDebayerBilinear(frame, w, h, NINA.Core.Enum.BayerPatternEnum.RGGB, out _), mpx, budget, ct);
+        double debGpu = MeasureMpx(() => _gpu.TryDebayerBilinear(frame, w, h, NINA.Core.Enum.BayerPatternEnum.RGGB, out _), mpx, budget, ct);
+        double blurCpu = MeasureMpx(() => cpu.TrySeparableBlur(frame, w, h, 3, 1.5, out _), mpx, budget, ct);
+        double blurGpu = MeasureMpx(() => _gpu.TrySeparableBlur(frame, w, h, 3, 1.5, out _), mpx, budget, ct);
+
+        // GPU declined everything -> disabled at runtime; report not-ran.
+        if (warpGpu <= 0 && debGpu <= 0 && blurGpu <= 0) return none;
+
+        static double Spd(double g, double c) => c > 0 ? Math.Round(g / c, 2) : 0;
+        var speedups = new[] { Spd(warpGpu, warpCpu), Spd(debGpu, debCpu), Spd(blurGpu, blurCpu) }
+            .Where(s => s > 0).ToArray();
+        double overall = speedups.Length > 0 ? Math.Round(speedups.Average(), 2) : 0;
+        static double R(double v) => Math.Round(v, 1);
+        return new GpuResult(true, _gpu.BackendName,
+            R(warpCpu), R(warpGpu), Spd(warpGpu, warpCpu),
+            R(debCpu), R(debGpu), Spd(debGpu, debCpu),
+            R(blurCpu), R(blurGpu), Spd(blurGpu, blurCpu),
+            overall);
+    }
+
+    /// <summary>Run <paramref name="op"/> repeatedly within the budget and
+    /// return megapixels/sec. Returns 0 if the op declines (e.g. GPU disabled).
+    /// One warm-up call primes buffers/JIT/kernel build before timing.</summary>
+    private static double MeasureMpx(Func<bool> op, double mpx, TimeSpan budget, CancellationToken ct) {
+        if (!op()) return 0; // warm-up + capability probe
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        int iters = 0;
+        while (sw.Elapsed < budget && !ct.IsCancellationRequested) {
+            if (!op()) break;
+            iters++;
+        }
+        sw.Stop();
+        if (iters == 0 || sw.Elapsed.TotalSeconds <= 0) return 0;
+        return iters * mpx / sw.Elapsed.TotalSeconds;
+    }
+
     /// <summary>Deterministic synthetic star field: uniform background +
     /// a jittered grid of round Gaussian stars. Same (seed, dx, dy) always
     /// yields identical pixels so the workload is repeatable across
@@ -747,6 +810,15 @@ public record CpuResult(
     double SingleThreadMflops, double MultiThreadMflops,
     double CoreScaling, double MemBandwidthGBps, int Cores);
 
+// OCL: GPU (OpenCL) vs CPU on the same image kernels. MpxPerSec is megapixels
+// processed per second; Speedup = gpu / cpu. Ran=false when no usable GPU.
+public record GpuResult(
+    bool Ran, string Device,
+    double WarpCpuMpxPerSec, double WarpGpuMpxPerSec, double WarpSpeedup,
+    double DebayerCpuMpxPerSec, double DebayerGpuMpxPerSec, double DebayerSpeedup,
+    double BlurCpuMpxPerSec, double BlurGpuMpxPerSec, double BlurSpeedup,
+    double OverallSpeedup);
+
 public record CameraResult(
     int Frames, double MeanCaptureMs, double Fps,
     int Width, int Height, double MBPerSec, string? Error);
@@ -769,4 +841,5 @@ public record BenchmarkResult(
     CpuResult Cpu,
     double CompositeScore,
     CameraResult? Camera,
-    CameraVideoResult? CameraVideo = null);
+    CameraVideoResult? CameraVideo = null,
+    GpuResult? Gpu = null);
