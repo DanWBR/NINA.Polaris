@@ -2666,8 +2666,14 @@ function ninaApp() {
             // 'cache: no-store' so a long-lived browser tab against an
             // updated server picks up the new version after a Polaris
             // restart without forcing the user to ctrl+F5.
-            fetch('/api/system/status', { cache: 'no-store' })
-                .then(r => r.ok ? r.json() : null)
+            //
+            // Must go through apiGet (NOT a bare fetch): /api/system/status
+            // is gated, and a bare fetch relies solely on the cookie. In
+            // the mobile wrapper the UI runs in a cross-origin iframe where
+            // the session cookie may not be sent, so the bare fetch 401s and
+            // the version badge stays '…'. apiGet attaches the bearer token,
+            // which works in every context (incl. plain HTTP).
+            this.apiGet('/api/system/status', { cache: 'no-store' })
                 .then(s => { if (s && s.version) this.appVersion = s.version; })
                 .catch(() => { /* badge stays as '…', non-fatal */ });
 

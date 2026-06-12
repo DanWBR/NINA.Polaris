@@ -147,16 +147,35 @@ public static class AuthEndpoints {
     }
 
     private static void SetSessionCookie(HttpContext ctx, string token) {
-        // SameSite=Strict so cross-site requests never carry the
-        // cookie; Polaris is single-origin only. HttpOnly so JS can't
-        // read it (the bearer token in localStorage handles the JS
-        // path; the cookie is only for iframe + img/a navigation).
-        // Secure flag is auto-set when the request came in via HTTPS.
+        // Cookie carries auth for the embedded sub-apps (phd2-gui,
+        // indi-web, sky) and any <iframe>/<img>/<a> navigation that
+        // can't send the Authorization header. The bearer token in
+        // localStorage remains the primary path for JS fetch/XHR.
+        //
+        // SameSite: the official mobile wrapper (Capacitor) loads the
+        // whole Polaris UI inside a CROSS-ORIGIN iframe (app shell
+        // origin https://localhost, Polaris on https://<host>:5000).
+        // A SameSite=Strict/Lax cookie is treated as third-party there
+        // and the WebView never sends it, so every cookie-dependent
+        // request 401s (version badge, embedded iframes, etc.). Over
+        // HTTPS we therefore issue SameSite=None (which REQUIRES
+        // Secure) so the cookie survives the cross-origin iframe. Over
+        // plain HTTP we can't use None (browsers reject None without
+        // Secure), so fall back to Lax; the bearer token still covers
+        // the wrapper there.
+        //
+        // Trade-off: SameSite=None relaxes CSRF protection. It is
+        // acceptable here because the cookie is HttpOnly + Secure, the
+        // server is a single-user LAN host, and bearer-token auth is
+        // the primary mechanism for state-changing JS requests.
+        var sameSite = ctx.Request.IsHttps
+            ? SameSiteMode.None
+            : SameSiteMode.Lax;
         ctx.Response.Cookies.Append(AuthService.CookieName, token,
             new CookieOptions {
                 HttpOnly = true,
                 Secure = ctx.Request.IsHttps,
-                SameSite = SameSiteMode.Strict,
+                SameSite = sameSite,
                 Path = "/",
                 // No Max-Age/Expires: cookie dies when the browser
                 // closes, mirroring sessionStorage behaviour on the
