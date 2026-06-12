@@ -75,9 +75,9 @@
       {
         "device": "Raspberry Pi 5",
         "badge": "arm64",
-        "url": "https://drive.google.com/uc?export=download&id=1NaA_rILy2zaun93RGbTMKRL6peFjtkLh",
-        "size": "7.11 GB (.7z)",
-        "note": "Raspberry Pi OS 64-bit (Debian Trixie, released 2026-04-21). 7-Zip archive; extract before flashing. (Shared with the Pi 4 image for now.)"
+        "url": "https://drive.google.com/uc?export=download&id=14R3aKr09KTAqWX0Roq1vzdjJQfUPD-0N",
+        "size": "7.6 GB (.7z)",
+        "note": "Raspberry Pi OS 64-bit (Debian Trixie, released 2026-04-21). 7-Zip archive; extract before flashing."
       },
       {
         "device": "Orange Pi 4 Pro",
@@ -308,22 +308,22 @@
     },
     {
       "name": "Autoguiding",
-      "intro": "PHD2 connection (TCP 4400) is auto-attempted on startup alongside INDI / Alpaca discovery.",
+      "intro": "Polaris guides out of the box with a built-in, native PHD2, so there is nothing to install for basic guiding.",
       "items": [
         {
-          "name": "PHD2",
-          "badge": "free",
-          "purpose": "Full integration: Polaris auto-detects PHD2, can launch and shut it down, swap profiles, run Smart Calibrate, and broadcast guide stats in real time.",
+          "name": "PHD2 (optional, the original app)",
+          "badge": "optional",
+          "purpose": "Prefer the real PHD2 over the native implementation? Install it on Windows or Linux, and Polaris drives it from inside the browser through an embedded remote view, no second screen needed. It still auto-detects PHD2, swaps profiles, runs Smart Calibrate, and broadcasts guide stats in real time.",
           "url": "https://openphdguiding.org/",
           "windows": "PHD2 installer (free, GPLv3).",
           "linux": "sudo apt install phd2"
         },
         {
-          "name": "PHD2 embedded GUI",
-          "badge": "Linux",
-          "purpose": "Shows the PHD2 window inside the GUIDE tab. Not supported on 32-bit Raspberry Pi (auto-gated).",
+          "name": "Embedded remote view",
+          "badge": "remote",
+          "purpose": "Shows the installed PHD2 inside the Polaris GUIDE tab over a remote connection, no extra screen. Not supported on 32-bit Raspberry Pi (auto-gated).",
           "url": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/phd2-gui-embedding.md",
-          "windows": "Not needed (PHD2 runs natively).",
+          "windows": "TightVNC, which Polaris bridges into the browser via noVNC.",
           "linux": "sudo apt install xpra xserver-xorg-video-dummy (xpra 6.0+)."
         }
       ]
