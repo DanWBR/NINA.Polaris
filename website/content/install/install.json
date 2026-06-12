@@ -38,6 +38,7 @@
       { "label": "Linux x64 (.tar.gz)", "badge": "x64", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-linux-x64.tar.gz" },
       { "label": "Windows x64 (.zip)", "badge": "x64", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-x64.zip" },
       { "label": "Windows arm64 (.zip)", "badge": "arm64", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-arm64.zip" },
+      { "label": "Android app (.apk)", "badge": "android", "url": "https://drive.google.com/uc?export=download&id=1iAmrDeHPWZ4DY-xSK0NP2HAU7rrwk3xM" },
       { "label": "All releases", "badge": "github", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest" }
     ]
   },
