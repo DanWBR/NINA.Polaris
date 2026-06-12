@@ -31,6 +31,12 @@ const statusClass = (s: string) => {
       <div class="container">
         <h2 class="block-title">{g.images.title}</h2>
         <p class="block-sub">{g.images.sub}</p>
+        {g.images.bootNote && (
+          <div class="img-boot">
+            <span class="img-boot-ico" aria-hidden="true">📡</span>
+            <p>{g.images.bootNote}</p>
+          </div>
+        )}
         <div class="img-grid">
           {g.images.items.map((it) => (
             <article class="img-card">
@@ -435,6 +441,20 @@ const statusClass = (s: string) => {
   .badge.alt { color: var(--text-muted); border-color: var(--border); background: rgba(255, 255, 255, 0.03); }
 
   /* Ready-to-flash image cards */
+  .img-boot {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    background: rgba(var(--accent-rgb), 0.08);
+    border: 1px solid rgba(var(--accent-rgb), 0.3);
+    border-left: 3px solid var(--accent);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 24px;
+  }
+  .img-boot-ico { font-size: 22px; line-height: 1.2; }
+  .img-boot p { font-size: 14.5px; color: var(--text); line-height: 1.6; }
+
   .img-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));

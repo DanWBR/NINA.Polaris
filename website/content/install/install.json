@@ -63,6 +63,7 @@
   "images": {
     "title": "Ready-to-flash images",
     "sub": "The fastest way to get going: each image is a Linux OS with Polaris preinstalled and configured for that board. Flash it to an SD card (or USB / eMMC), boot, and open the browser. Use Raspberry Pi Imager, balenaEtcher, or Rufus. Images live on Google Drive and are added as each board is validated.",
+    "bootNote": "On boot, the image starts Polaris automatically and it is ready to use, no setup needed. If the device cannot join a known WiFi network and it has WiFi, it raises its own hotspot named Polaris-Hotspot (password polaris1234). Connect to that, then open the Polaris UI in your browser.",
     "items": [
       {
         "device": "Raspberry Pi 4",

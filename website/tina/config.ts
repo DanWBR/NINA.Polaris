@@ -157,6 +157,7 @@ export default defineConfig({
             fields: [
               { type: 'string', name: 'title', label: 'Title' },
               { type: 'string', name: 'sub', label: 'Subtitle', ui: { component: 'textarea' } },
+              { type: 'string', name: 'bootNote', label: 'Boot / hotspot callout', ui: { component: 'textarea' } },
               {
                 type: 'object',
                 name: 'items',
