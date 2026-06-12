@@ -59,6 +59,42 @@ html, body {
 body.connected #polarisFrame { display: block; }
 body.connected .connect { display: none; }
 
+/* "Switch device" floating button: overlays the iframe while connected,
+   tap returns to the picker, drag repositions it. Translucent + dimmed
+   so it stays out of the way of the live Polaris UI until touched. */
+.switch-device {
+    position: fixed;
+    left: max(12px, env(safe-area-inset-left));
+    bottom: max(12px, env(safe-area-inset-bottom));
+    z-index: 2147483000;            /* above the embedded Polaris iframe */
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 13px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(16, 29, 63, 0.72);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    opacity: 0.5;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    touch-action: none;            /* we handle drag via pointer events */
+    user-select: none;
+    -webkit-user-select: none;
+    transition: opacity 0.15s ease;
+}
+body.connected .switch-device { display: inline-flex; }
+.switch-device:hover,
+.switch-device:active,
+.switch-device.dragging { opacity: 1; }
+.switch-device.dragging { cursor: grabbing; }
+.switch-device .sd-ico { font-size: 15px; line-height: 1; }
+
 .brand { text-align: center; margin: 28px 0 32px; }
 .brand-mark {
     width: 96px; height: 96px; margin: 0 auto 14px;

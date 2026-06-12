@@ -60,6 +60,16 @@
         </div><!-- /.panels -->
     </main>
 
+    <!-- Floating control to leave the connected Polaris instance and go
+         back to the device picker (switch between rigs / devices). Shown
+         only while an instance is loaded (body.connected) and draggable
+         so it never permanently blocks the embedded Polaris UI. Lives
+         outside <main> so it overlays the full-screen iframe. -->
+    <button class="switch-device" id="switchDeviceBtn" type="button" hidden
+            aria-label="Switch device">
+        <span class="sd-ico" aria-hidden="true">⇄</span><span class="sd-label">Devices</span>
+    </button>
+
     <!-- Capacitor + the connect logic. onnx-native-shim.js is NOT loaded
          here; it is injected into the remote Polaris UI at document-start
          by the native layer (see plugins/polaris-onnx + README). -->

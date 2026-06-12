@@ -20,8 +20,8 @@ build. Deleting `mobile/` changes nothing in the server/web app.
 ```
 mobile/
   www/                       launcher + injected shims (the only local web assets)
-    index.html               connect / discovery screen
-    connect.js               mDNS browse, host entry, navigate to the Pi
+    index.html               connect / discovery screen + "Devices" button
+    connect.js               mDNS browse, host entry, load the Pi, switch device
     onnx-native-shim.js       injected into the Polaris UI; routes ORT -> native
   plugins/polaris-onnx/      local Capacitor plugin: native ONNX Runtime
   capacitor.config.ts        appId, allowNavigation (so the remote Pi UI keeps the bridge)

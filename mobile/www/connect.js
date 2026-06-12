@@ -27,6 +27,7 @@ const els = {
   connectBtn: document.getElementById('connectBtn'),
   lastRow: document.getElementById('lastHostRow'),
   lastLink: document.getElementById('lastHostLink'),
+  switchBtn: document.getElementById('switchDeviceBtn'),
 };
 
 // Capacitor bridge + plugin handles. Resolved from the global the native
@@ -36,6 +37,7 @@ const Plugins = (Cap && Cap.Plugins) ? Cap.Plugins : {};
 const ZeroConf = Plugins.ZeroConf;
 const Preferences = Plugins.Preferences;
 const KeepAwake = Plugins.KeepAwake;
+const AppPlugin = Plugins.App;
 
 const isNative = () => !!(Cap && typeof Cap.isNativePlatform === 'function' && Cap.isNativePlatform());
 
@@ -140,6 +142,82 @@ async function connect(origin) {
   }
   frame.src = origin;
   document.body.classList.add('connected');
+  if (els.switchBtn) els.switchBtn.hidden = false;
+}
+
+// Leave the current instance and return to the picker so the operator can
+// jump to another rig/device. Tears down the iframe (drops the Polaris
+// session/WebSocket), re-runs discovery, and re-shows the last-used row.
+function disconnect() {
+  const frame = document.getElementById('polarisFrame');
+  if (frame) frame.src = 'about:blank';
+  document.body.classList.remove('connected');
+  if (els.switchBtn) els.switchBtn.hidden = true;
+  els.connectBtn.disabled = false;
+  // Battery: the session is over, let the screen sleep again until the
+  // operator picks the next device (connect() re-acquires the lock).
+  try { if (KeepAwake) KeepAwake.allowSleep(); } catch {}
+  getLastHost().then((last) => {
+    if (last) {
+      els.lastLink.textContent = last;
+      els.lastLink.onclick = (e) => { e.preventDefault(); connect(last); };
+      els.lastRow.hidden = false;
+    }
+  });
+  scan();
+}
+
+// The "Devices" floating button: a tap returns to the picker; a drag
+// repositions it so it never permanently blocks part of the Polaris UI.
+function wireSwitchButton() {
+  const btn = els.switchBtn;
+  if (!btn) return;
+  let active = false, moved = false, sx = 0, sy = 0, ox = 0, oy = 0;
+  btn.addEventListener('pointerdown', (e) => {
+    active = true; moved = false;
+    sx = e.clientX; sy = e.clientY;
+    const r = btn.getBoundingClientRect();
+    ox = r.left; oy = r.top;
+    try { btn.setPointerCapture(e.pointerId); } catch {}
+  });
+  btn.addEventListener('pointermove', (e) => {
+    if (!active) return;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (!moved && Math.hypot(dx, dy) > 6) { moved = true; btn.classList.add('dragging'); }
+    if (!moved) return;
+    const w = btn.offsetWidth, h = btn.offsetHeight;
+    const nx = Math.max(4, Math.min(window.innerWidth - w - 4, ox + dx));
+    const ny = Math.max(4, Math.min(window.innerHeight - h - 4, oy + dy));
+    btn.style.left = nx + 'px';
+    btn.style.top = ny + 'px';
+    btn.style.right = 'auto';
+    btn.style.bottom = 'auto';
+  });
+  const end = (e) => {
+    if (!active) return;
+    active = false;
+    btn.classList.remove('dragging');
+    try { btn.releasePointerCapture(e.pointerId); } catch {}
+    if (!moved) disconnect();          // a clean tap = leave the instance
+  };
+  btn.addEventListener('pointerup', end);
+  btn.addEventListener('pointercancel', end);
+}
+
+// Android hardware back button: while an instance is loaded, back returns
+// to the picker (matches the floating button) instead of killing the app;
+// on the picker itself it exits. Without a listener Capacitor would just
+// navigate the WebView history / close the app, jumping straight out of a
+// live session.
+function wireHardwareBack() {
+  if (!AppPlugin || typeof AppPlugin.addListener !== 'function') return;
+  AppPlugin.addListener('backButton', () => {
+    if (document.body.classList.contains('connected')) {
+      disconnect();
+    } else {
+      try { AppPlugin.exitApp(); } catch {}
+    }
+  });
 }
 
 function wire() {
@@ -154,6 +232,8 @@ function wire() {
   // Wire the controls FIRST so Connect always works, even if anything
   // below (plugin calls, discovery) throws.
   wire();
+  wireSwitchButton();
+  wireHardwareBack();
 
   getLastHost().then((last) => {
     if (last) {
