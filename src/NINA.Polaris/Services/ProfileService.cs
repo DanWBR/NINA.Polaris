@@ -724,6 +724,12 @@ public class UserProfile {
     public string OnnxDefaultDenoiseVersion { get; set; } = "2.0.0";
     public bool OnnxPreferCli { get; set; } = false;
 
+    // OCL: use the SBC GPU (OpenCL) for classic image kernels when the board
+    // exposes a usable OpenCL device. Default on; honoured only when an OpenCL
+    // driver is present (no effect on Pi/x86 without OpenCL). Set false to force
+    // the CPU path (A/B testing, or if a board's GPU misbehaves).
+    public bool UseGpuOpenCl { get; set; } = true;
+
     // AUTH-1: basic auth for the local HTTP API + WebSockets. Default
     // enabled, but with no hash configured. The frontend's first-run
     // wizard forces the user to set a password before any other tab

@@ -350,10 +350,12 @@ public static class SystemEndpoints {
                 device = ocl.Device;
                 initError = ocl.InitError;
             }
+            bool userEnabled = gpu is NINA.Polaris.Services.OpenCl.OpenClGpuCompute o2 ? o2.Enabled : false;
             return Results.Ok(new {
                 available = NINA.Polaris.Services.OpenCl.OpenClRuntime.IsAvailable,
                 enabled = NINA.Polaris.Services.OpenCl.OpenClRuntime.Enabled,
                 loaderPresent = NINA.Polaris.Services.OpenCl.OpenClRuntime.LoaderPresent,
+                userEnabled,
                 backend = gpu.BackendName,
                 hardware = gpu.IsHardware,
                 initialized,
@@ -361,6 +363,16 @@ public static class SystemEndpoints {
                 initError,
                 diagnostics = NINA.Polaris.Services.OpenCl.OpenClRuntime.Diagnostics
             });
+        });
+
+        // OCL: enable/disable GPU (OpenCL) use at runtime + persist the choice.
+        // Takes effect immediately (the backend gates each call on it); on boot
+        // it's restored from UserProfile.UseGpuOpenCl.
+        group.MapPost("/gpu", (NINA.Image.Gpu.IGpuCompute gpu, ProfileService profiles, GpuToggleRequest req) => {
+            profiles.Active.UseGpuOpenCl = req.Enabled;
+            profiles.Save();
+            if (gpu is NINA.Polaris.Services.OpenCl.OpenClGpuCompute ocl) ocl.Enabled = req.Enabled;
+            return Results.Ok(new { ok = true, enabled = req.Enabled, hardware = gpu.IsHardware });
         });
 
         // OCL: in-process GPU-vs-CPU kernel validation. Runs every kernel on
@@ -449,4 +461,5 @@ public static class SystemEndpoints {
     record ClockSyncRequest(string ClientUtc);
     record DeviceNameRequest(string? Name);
     record AutoStartRequest(bool Enable);
+    record GpuToggleRequest(bool Enabled);
 }

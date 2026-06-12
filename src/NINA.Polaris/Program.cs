@@ -292,7 +292,10 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Rknn.RknnInferenceService>()
 builder.Services.AddSingleton<NINA.Image.Gpu.IGpuCompute>(sp => {
     if (NINA.Polaris.Services.OpenCl.OpenClRuntime.IsAvailable) {
         var log = sp.GetRequiredService<ILogger<NINA.Polaris.Services.OpenCl.OpenClGpuCompute>>();
-        return new NINA.Polaris.Services.OpenCl.OpenClGpuCompute(log);
+        var impl = new NINA.Polaris.Services.OpenCl.OpenClGpuCompute(log);
+        // Honour the persisted Settings toggle at startup.
+        impl.Enabled = sp.GetService<ProfileService>()?.Active?.UseGpuOpenCl ?? true;
+        return impl;
     }
     return new NINA.Image.Gpu.CpuGpuCompute();
 });

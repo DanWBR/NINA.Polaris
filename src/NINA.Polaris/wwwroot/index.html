@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260611-faqwidth">
+    <link rel="stylesheet" href="/css/app.css?v=20260612-gpu">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -10513,6 +10513,50 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </div>
                 </template>
 
+                <div class="settings-section" x-init="loadGpuInfo()">
+                    <h3><span class="settings-card-icon">🎛️</span>GPU acceleration (OpenCL)</h3>
+                    <p class="hint" style="margin-top:0">
+                        Offloads classic image math (debayer, alignment warp,
+                        stretch, editor blur, live-stack integration) to the SBC
+                        GPU when the board exposes OpenCL (e.g. Mali on RK3588,
+                        Adreno on QCS6490). Falls back to the CPU automatically
+                        per operation; AI inference is separate (below).
+                    </p>
+                    <template x-if="gpuInfo && gpuInfo.loaderPresent && gpuInfo.hardware">
+                        <div>
+                            <label class="checkbox-label">
+                                <input type="checkbox" :checked="gpuInfo.userEnabled"
+                                       @change="toggleGpu($event.target.checked)">
+                                Use GPU when available
+                            </label>
+                            <p class="hint" style="margin-top:6px">
+                                Device: <strong x-text="gpuInfo.device || gpuInfo.backend"></strong>
+                                <span x-show="gpuInfo.userEnabled && gpuInfo.initialized" style="color:var(--accent-ok,#16a34a)"> · active</span>
+                                <span x-show="!gpuInfo.userEnabled" style="color:var(--text-secondary)"> · disabled (CPU)</span>
+                            </p>
+                            <button class="btn btn-sm" @click="runGpuSelftest()" :disabled="gpuSelftest==='running'">
+                                <span x-show="gpuSelftest!=='running'">Run GPU self-test</span>
+                                <span x-show="gpuSelftest==='running'">Testing…</span>
+                            </button>
+                            <template x-if="gpuSelftestResult">
+                                <div class="hint" style="margin-top:8px">
+                                    <span :style="gpuSelftestResult.allOk ? 'color:var(--accent-ok,#16a34a)' : 'color:var(--accent-warn,#f59e0b)'"
+                                          x-text="gpuSelftestResult.allOk ? '✓ all kernels match the CPU reference' : '⚠ a kernel diverged'"></span>
+                                    <template x-for="k in gpuSelftestResult.kernels" :key="k.kernel">
+                                        <div x-show="!k.ok || k.maxDiff > 0">
+                                            <code x-text="k.kernel + ': maxDiff ' + k.maxDiff + ' (tol ' + k.tolerance + ') ' + (k.ok ? 'OK' : 'FAIL')"></code>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                    <p class="hint" x-show="gpuInfo && !gpuInfo.loaderPresent" style="color:var(--text-secondary)">
+                        No OpenCL device on this machine — running on CPU.
+                        <span x-text="gpuInfo.diagnostics"></span>
+                    </p>
+                </div>
+
                 <div class="settings-section settings-section--wide">
                     <h3><span class="settings-card-icon">🧠</span>AI inference (ONNX)</h3>
                     <p class="hint" style="margin-top:0">
@@ -13131,7 +13175,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260611-faqwidth"></script>
+    <script src="/js/app.js?v=20260612-gpu"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

@@ -47,6 +47,11 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
     public string BackendName => _ctx != null ? $"OpenCL: {_ctx.DeviceName}" : "OpenCL (uninitialised)";
     public bool IsHardware => true;
 
+    /// <summary>User toggle (Settings -> persisted UseGpuOpenCl). When false,
+    /// every op declines so the CPU path runs, without tearing down the context.
+    /// Checked per call so it can flip at runtime.</summary>
+    public bool Enabled { get; set; } = true;
+
     // --- bring-up diagnostics (surfaced by GET /api/system/gpu) ---
 
     /// <summary>True once a context built successfully.</summary>
@@ -64,6 +69,7 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
     public bool EnsureInitialized() => Context() != null;
 
     private OpenClContext? Context() {
+        if (!Enabled) return null;       // user disabled -> decline -> CPU path
         if (_initFailed) return null;
         if (_ctx != null) return _ctx;
         lock (_initGate) {

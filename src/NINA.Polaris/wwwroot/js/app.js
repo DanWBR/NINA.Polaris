@@ -2526,6 +2526,10 @@ function ninaApp() {
         // are fed from the WS status; lastResult + history are pulled
         // over REST after a run finishes (or on first open).
         bench: { state: 'idle', progress: 0, phase: '', lastResult: null, history: [] },
+        // OCL: GPU (OpenCL) capability + Settings toggle + self-test.
+        gpuInfo: null,
+        gpuSelftest: 'idle',      // idle | running
+        gpuSelftestResult: null,
         benchIncludeCamera: false,
         benchExposure: 1.0,
         benchGain: null,
@@ -12074,6 +12078,33 @@ function ninaApp() {
             } finally {
                 this.cacheClearing = false;
             }
+        },
+
+        // ─── OCL: GPU (OpenCL) settings ────────────────────────────────
+        async loadGpuInfo() {
+            try { this.gpuInfo = await this.apiGet('/api/system/gpu'); }
+            catch (e) { /* leave card hidden */ }
+        },
+        async toggleGpu(enabled) {
+            try {
+                await this.apiPost('/api/system/gpu', { enabled: !!enabled });
+                this.toast(enabled ? 'GPU acceleration on' : 'GPU acceleration off (CPU)', 'ok');
+                await this.loadGpuInfo();
+            } catch (e) {
+                this.toast('Failed to change GPU setting: ' + (e.message || ''), 'error');
+                await this.loadGpuInfo();
+            }
+        },
+        async runGpuSelftest() {
+            this.gpuSelftest = 'running';
+            this.gpuSelftestResult = null;
+            try {
+                this.gpuSelftestResult = await this.apiGet('/api/system/gpu/selftest');
+                this.toast(this.gpuSelftestResult?.allOk ? 'GPU self-test passed' : 'GPU self-test: a kernel diverged',
+                    this.gpuSelftestResult?.allOk ? 'ok' : 'warn');
+            } catch (e) {
+                this.toast('GPU self-test failed: ' + (e.message || ''), 'error');
+            } finally { this.gpuSelftest = 'idle'; }
         },
 
         // ─── BENCH: hardware benchmark ─────────────────────────────────
