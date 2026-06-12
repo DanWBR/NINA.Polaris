@@ -37,7 +37,7 @@
         "name": "Server (runs on the rig)",
         "note": "Install on the Raspberry Pi, SBC, or mini PC that controls your gear.",
         "items": [
-          { "label": "Raspberry Pi (.deb)", "badge": "arm64", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb" },
+          { "label": "Raspberry / Orange / Banana Pi (arm64 SBC)", "badge": ".deb", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb" },
           { "label": "Linux arm64 (.tar.gz)", "badge": "arm64", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-linux-arm64.tar.gz" },
           { "label": "Linux x64 (.tar.gz)", "badge": "x64", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-linux-x64.tar.gz" },
           { "label": "Windows x64 (.zip)", "badge": "x64", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-x64.zip" },
