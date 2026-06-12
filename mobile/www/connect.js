@@ -1,22 +1,24 @@
-// M0 - connect / discovery screen.
+// M0 - connect / discovery screen + tabbed multi-instance.
 //
 // Discovers Polaris hosts advertised over mDNS as `_nina._tcp` (the
 // server's MdnsService announces `polaris-app.local:5000`), lets the
-// operator pick one or type a host / Relay URL, remembers the last
-// choice, then navigates the WebView to that origin. `allowNavigation`
-// in capacitor.config keeps the native bridge (and the polaris-onnx
-// plugin) alive on the remote Polaris UI.
+// operator check one or more, then loads each in its own full-screen
+// <iframe> and switches between them with a top tab bar. Each instance is
+// an independent, live session (kept loaded while hidden). `allowNavigation`
+// in capacitor.config keeps the native bridge (and the polaris-onnx plugin)
+// alive on every remote Polaris origin.
 //
 // IMPORTANT: this file is loaded as a plain <script type="module"> with
 // NO bundler. So it must NOT `import` the Capacitor packages by bare
 // specifier (`@capacitor/core`, ...) -- those don't resolve in the
 // WebView and would throw. Native plugins are reached through the global
 // bridge `window.Capacitor.Plugins.<Name>` (ZeroConf / Preferences /
-// KeepAwake), which Capacitor injects regardless of bundling. In a plain
-// desktop browser there is no `window.Capacitor`, so everything falls
-// back gracefully and the manual address box still works.
+// KeepAwake / App), which Capacitor injects regardless of bundling. In a
+// plain desktop browser there is no `window.Capacitor`, so everything
+// falls back gracefully and the manual address box still works.
 
 const LAST_HOST_KEY = 'polaris.lastHost';
+const LAST_SET_KEY = 'polaris.lastSet';
 const MDNS_TYPE = '_nina._tcp.';
 
 const els = {
@@ -25,9 +27,14 @@ const els = {
   rescanBtn: document.getElementById('rescanBtn'),
   hostInput: document.getElementById('hostInput'),
   connectBtn: document.getElementById('connectBtn'),
+  openSelectedBtn: document.getElementById('openSelectedBtn'),
+  reopenRow: document.getElementById('reopenRow'),
+  reopenLink: document.getElementById('reopenLink'),
   lastRow: document.getElementById('lastHostRow'),
   lastLink: document.getElementById('lastHostLink'),
-  switchBtn: document.getElementById('switchDeviceBtn'),
+  tabBar: document.getElementById('tabBar'),
+  frames: document.getElementById('frames'),
+  pickerDoneBtn: document.getElementById('pickerDoneBtn'),
 };
 
 // Capacitor bridge + plugin handles. Resolved from the global the native
@@ -39,20 +46,27 @@ const Preferences = Plugins.Preferences;
 const KeepAwake = Plugins.KeepAwake;
 const AppPlugin = Plugins.App;
 
-const isNative = () => !!(Cap && typeof Cap.isNativePlatform === 'function' && Cap.isNativePlatform());
-
-async function getLastHost() {
+async function prefGet(key) {
   try {
-    if (Preferences) return (await Preferences.get({ key: LAST_HOST_KEY })).value;
-    return localStorage.getItem(LAST_HOST_KEY);
+    if (Preferences) return (await Preferences.get({ key })).value;
+    return localStorage.getItem(key);
   } catch { return null; }
 }
-async function setLastHost(url) {
+async function prefSet(key, value) {
   try {
-    if (Preferences) await Preferences.set({ key: LAST_HOST_KEY, value: url });
-    else localStorage.setItem(LAST_HOST_KEY, url);
+    if (Preferences) await Preferences.set({ key, value });
+    else localStorage.setItem(key, value);
   } catch { /* ignore */ }
 }
+
+const getLastHost = () => prefGet(LAST_HOST_KEY);
+const setLastHost = (url) => prefSet(LAST_HOST_KEY, url);
+async function getLastSet() {
+  const raw = await prefGet(LAST_SET_KEY);
+  if (!raw) return [];
+  try { const a = JSON.parse(raw); return Array.isArray(a) ? a : []; } catch { return []; }
+}
+const setLastSet = (origins) => prefSet(LAST_SET_KEY, JSON.stringify(origins));
 
 // Normalise a user/discovered host into a full origin URL. Default to
 // https (the Pi serves HTTPS on 5000); accept a full URL as-is.
@@ -64,19 +78,44 @@ function toOrigin(host, port) {
   return `https://${h}`.replace(/\/+$/, '');
 }
 
-const discovered = new Map(); // origin -> { name, addr }
+// Short human label for a manually-typed origin (falls back to the host).
+function hostLabel(origin) {
+  try { return new URL(origin).host; } catch { return origin; }
+}
+
+const discovered = new Map();        // origin -> { name, addr }
+const selected = new Set();          // origins ticked on the picker
+const instances = new Map();         // origin -> { origin, name, frame }
+let activeOrigin = null;
+
+// ---------- discovery ----------
 
 function renderList() {
   els.hostList.innerHTML = '';
-  if (discovered.size === 0) return;
   for (const [origin, info] of discovered) {
     const li = document.createElement('li');
+    li.className = selected.has(origin) ? 'selected' : '';
+    const open = instances.has(origin);
     li.innerHTML =
-      `<span><span class="h-name">${info.name}</span><br>` +
-      `<span class="h-addr">${info.addr}</span></span><span class="go">→</span>`;
-    li.addEventListener('click', () => connect(origin));
+      `<input type="checkbox" class="host-check"${selected.has(origin) ? ' checked' : ''}>` +
+      `<span class="h-main"><span class="h-name">${info.name}</span>` +
+      (open ? '<span class="h-open">● open</span>' : '') +
+      `<br><span class="h-addr">${info.addr}</span></span>`;
+    li.addEventListener('click', () => toggleSelected(origin));
     els.hostList.appendChild(li);
   }
+  updateOpenButton();
+}
+
+function toggleSelected(origin) {
+  if (selected.has(origin)) selected.delete(origin); else selected.add(origin);
+  renderList();
+}
+
+function updateOpenButton() {
+  const n = selected.size;
+  els.openSelectedBtn.hidden = n === 0;
+  els.openSelectedBtn.textContent = n > 1 ? `Open ${n} instances` : 'Open';
 }
 
 async function scan() {
@@ -95,14 +134,11 @@ async function scan() {
       const addr = (s.ipv4Addresses && s.ipv4Addresses[0]) || s.hostname;
       if (!addr) return;
       const origin = toOrigin(addr, s.port || 5000);
-      // Prefer the human-set label the server advertises in its TXT
-      // record ("Telescope on the balcony"); fall back to the mDNS name.
       const friendly = (s.txtRecord && s.txtRecord.friendly) || s.name || 'Polaris';
       discovered.set(origin, { name: friendly, addr: `${addr}:${s.port || 5000}` });
       els.scanHint.textContent = `${discovered.size} found.`;
       renderList();
     });
-    // Stop watching after 8s to save battery; results stay listed.
     setTimeout(() => { try { ZeroConf.close(); } catch {} }, 8000);
     setTimeout(() => {
       if (discovered.size === 0)
@@ -113,107 +149,159 @@ async function scan() {
   }
 }
 
-async function connect(origin) {
-  if (!origin) {
-    els.scanHint.textContent = 'Enter an address first (e.g. 192.168.0.50:5000).';
-    return;
-  }
-  els.connectBtn.disabled = true;
-  await setLastHost(origin);
-  // Keep the screen on for the imaging session once we're in the app.
-  try { if (KeepAwake) await KeepAwake.keepAwake(); } catch {}
-  try { if (ZeroConf) await ZeroConf.close(); } catch {}
+// ---------- instances / tabs ----------
 
-  // Load the Polaris UI in a FULL-SCREEN IFRAME instead of navigating.
-  // Navigating away would drop the Capacitor plugin bridge (plugins only
-  // work on the app origin), which is exactly what broke native GraXpert.
-  // By keeping this page (app origin) as the parent and loading the Pi UI
-  // as a child, the parent keeps the native plugins; the injected
-  // onnx-native-shim in the iframe RPCs inference back here via
-  // postMessage. The Pi UI itself is unchanged.
-  let frame = document.getElementById('polarisFrame');
-  if (!frame) {
-    frame = document.createElement('iframe');
-    frame.id = 'polarisFrame';
+function addInstance(origin, name, { activate = false } = {}) {
+  if (!origin) return;
+  if (!instances.has(origin)) {
+    const frame = document.createElement('iframe');
+    frame.className = 'instance-frame';
     frame.setAttribute('allow',
       'fullscreen; accelerometer; gyroscope; magnetometer; ' +
       'camera; microphone; clipboard-read; clipboard-write');
-    document.body.appendChild(frame);
+    frame.src = origin;
+    els.frames.appendChild(frame);
+    instances.set(origin, { origin, name: name || hostLabel(origin), frame });
+    // Keep the screen on for the imaging session once the first instance opens.
+    if (instances.size === 1) { try { if (KeepAwake) KeepAwake.keepAwake(); } catch {} }
+    persistSet();
   }
-  frame.src = origin;
+  renderTabs();
+  if (activate || !activeOrigin) activateTab(origin);
+}
+
+function activateTab(origin) {
+  const inst = instances.get(origin);
+  if (!inst) return;
+  activeOrigin = origin;
+  for (const [, i] of instances) i.frame.classList.toggle('active', i === inst);
   document.body.classList.add('connected');
-  if (els.switchBtn) els.switchBtn.hidden = false;
+  hidePicker();
+  renderTabs();
 }
 
-// Leave the current instance and return to the picker so the operator can
-// jump to another rig/device. Tears down the iframe (drops the Polaris
-// session/WebSocket), re-runs discovery, and re-shows the last-used row.
-function disconnect() {
-  const frame = document.getElementById('polarisFrame');
-  if (frame) frame.src = 'about:blank';
-  document.body.classList.remove('connected');
-  if (els.switchBtn) els.switchBtn.hidden = true;
-  els.connectBtn.disabled = false;
-  // Battery: the session is over, let the screen sleep again until the
-  // operator picks the next device (connect() re-acquires the lock).
-  try { if (KeepAwake) KeepAwake.allowSleep(); } catch {}
-  getLastHost().then((last) => {
-    if (last) {
-      els.lastLink.textContent = last;
-      els.lastLink.onclick = (e) => { e.preventDefault(); connect(last); };
-      els.lastRow.hidden = false;
-    }
-  });
-  scan();
+function closeTab(origin) {
+  const inst = instances.get(origin);
+  if (!inst) return;
+  try { inst.frame.src = 'about:blank'; } catch {}
+  inst.frame.remove();
+  instances.delete(origin);
+  persistSet();
+  if (instances.size === 0) {
+    // Nothing left: tear down to the picker as the base screen.
+    activeOrigin = null;
+    document.body.classList.remove('connected');
+    document.body.classList.remove('picker-open');
+    try { if (KeepAwake) KeepAwake.allowSleep(); } catch {}
+    renderTabs();
+    refreshPickerExtras();
+    scan();
+    return;
+  }
+  if (activeOrigin === origin) {
+    activateTab(instances.keys().next().value);   // neighbour
+  } else {
+    renderTabs();
+  }
 }
 
-// The "Devices" floating button: a tap returns to the picker; a drag
-// repositions it so it never permanently blocks part of the Polaris UI.
-function wireSwitchButton() {
-  const btn = els.switchBtn;
-  if (!btn) return;
-  let active = false, moved = false, sx = 0, sy = 0, ox = 0, oy = 0;
-  btn.addEventListener('pointerdown', (e) => {
-    active = true; moved = false;
-    sx = e.clientX; sy = e.clientY;
-    const r = btn.getBoundingClientRect();
-    ox = r.left; oy = r.top;
-    try { btn.setPointerCapture(e.pointerId); } catch {}
-  });
-  btn.addEventListener('pointermove', (e) => {
-    if (!active) return;
-    const dx = e.clientX - sx, dy = e.clientY - sy;
-    if (!moved && Math.hypot(dx, dy) > 6) { moved = true; btn.classList.add('dragging'); }
-    if (!moved) return;
-    const w = btn.offsetWidth, h = btn.offsetHeight;
-    const nx = Math.max(4, Math.min(window.innerWidth - w - 4, ox + dx));
-    const ny = Math.max(4, Math.min(window.innerHeight - h - 4, oy + dy));
-    btn.style.left = nx + 'px';
-    btn.style.top = ny + 'px';
-    btn.style.right = 'auto';
-    btn.style.bottom = 'auto';
-  });
-  const end = (e) => {
-    if (!active) return;
-    active = false;
-    btn.classList.remove('dragging');
-    try { btn.releasePointerCapture(e.pointerId); } catch {}
-    if (!moved) disconnect();          // a clean tap = leave the instance
-  };
-  btn.addEventListener('pointerup', end);
-  btn.addEventListener('pointercancel', end);
+function renderTabs() {
+  const bar = els.tabBar;
+  bar.innerHTML = '';
+  if (instances.size === 0) { bar.hidden = true; return; }
+  bar.hidden = false;
+  for (const [origin, inst] of instances) {
+    const tab = document.createElement('div');
+    tab.className = 'tab' + (origin === activeOrigin ? ' active' : '');
+    const label = document.createElement('span');
+    label.className = 'tab-label';
+    label.textContent = inst.name;
+    label.addEventListener('click', () => activateTab(origin));
+    const close = document.createElement('button');
+    close.className = 'tab-close';
+    close.type = 'button';
+    close.textContent = '×';
+    close.setAttribute('aria-label', 'Close ' + inst.name);
+    close.addEventListener('click', (e) => { e.stopPropagation(); closeTab(origin); });
+    tab.appendChild(label);
+    tab.appendChild(close);
+    bar.appendChild(tab);
+  }
+  const add = document.createElement('button');
+  add.className = 'tab-add';
+  add.type = 'button';
+  add.textContent = '＋';
+  add.setAttribute('aria-label', 'Add instance');
+  add.addEventListener('click', showPicker);
+  bar.appendChild(add);
 }
 
-// Android hardware back button: while an instance is loaded, back returns
-// to the picker (matches the floating button) instead of killing the app;
-// on the picker itself it exits. Without a listener Capacitor would just
-// navigate the WebView history / close the app, jumping straight out of a
-// live session.
+// Open all checked instances at once.
+function openSelected() {
+  const origins = Array.from(selected);
+  if (origins.length === 0) return;
+  origins.forEach((o, i) => addInstance(o, discovered.get(o)?.name, { activate: i === 0 }));
+  setLastHost(origins[origins.length - 1]);
+  selected.clear();
+  hidePicker();
+  maybeWarnMemory();
+}
+
+function maybeWarnMemory() {
+  if (instances.size >= 4) {
+    els.scanHint.textContent =
+      `${instances.size} live instances — this can use a lot of memory; weak phones may reload background tabs.`;
+  }
+}
+
+function persistSet() { setLastSet(Array.from(instances.keys())); }
+
+// ---------- picker overlay (non-destructive) ----------
+
+function showPicker() {
+  document.body.classList.add('picker-open');
+  els.pickerDoneBtn.hidden = instances.size === 0;   // only offer "back" when tabs exist
+  refreshPickerExtras();
+  try { if (ZeroConf) scan(); } catch {}
+}
+
+function hidePicker() {
+  document.body.classList.remove('picker-open');
+}
+
+// Refresh the "Last used" + "Reopen last (N)" rows on the picker.
+async function refreshPickerExtras() {
+  const last = await getLastHost();
+  if (last && !instances.has(last)) {
+    els.lastLink.textContent = last;
+    els.lastLink.onclick = (e) => { e.preventDefault(); addInstance(last, null, { activate: true }); };
+    els.lastRow.hidden = false;
+  } else {
+    els.lastRow.hidden = true;
+  }
+  const set = (await getLastSet()).filter(o => !instances.has(o));
+  if (set.length > 0) {
+    els.reopenLink.textContent = `Reopen last ${set.length > 1 ? set.length + ' instances' : 'instance'}`;
+    els.reopenLink.onclick = (e) => {
+      e.preventDefault();
+      set.forEach((o, i) => addInstance(o, null, { activate: i === 0 }));
+      maybeWarnMemory();
+    };
+    els.reopenRow.hidden = false;
+  } else {
+    els.reopenRow.hidden = true;
+  }
+}
+
+// ---------- hardware back ----------
+
 function wireHardwareBack() {
   if (!AppPlugin || typeof AppPlugin.addListener !== 'function') return;
   AppPlugin.addListener('backButton', () => {
-    if (document.body.classList.contains('connected')) {
-      disconnect();
+    if (document.body.classList.contains('picker-open') && instances.size > 0) {
+      hidePicker();                      // back to the active tab
+    } else if (instances.size > 0) {
+      showPicker();                      // summon the picker over running tabs
     } else {
       try { AppPlugin.exitApp(); } catch {}
     }
@@ -222,26 +310,23 @@ function wireHardwareBack() {
 
 function wire() {
   els.rescanBtn.addEventListener('click', scan);
-  els.connectBtn.addEventListener('click', () => connect(toOrigin(els.hostInput.value)));
-  els.hostInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') connect(toOrigin(els.hostInput.value));
-  });
+  els.openSelectedBtn.addEventListener('click', openSelected);
+  els.pickerDoneBtn.addEventListener('click', () => { if (activeOrigin) activateTab(activeOrigin); });
+  const manual = () => {
+    const origin = toOrigin(els.hostInput.value);
+    if (!origin) { els.scanHint.textContent = 'Enter an address first (e.g. 192.168.0.50:5000).'; return; }
+    setLastHost(origin);
+    addInstance(origin, hostLabel(origin), { activate: true });
+  };
+  els.connectBtn.addEventListener('click', manual);
+  els.hostInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') manual(); });
 }
 
 (function init() {
   // Wire the controls FIRST so Connect always works, even if anything
   // below (plugin calls, discovery) throws.
   wire();
-  wireSwitchButton();
   wireHardwareBack();
-
-  getLastHost().then((last) => {
-    if (last) {
-      els.lastLink.textContent = last;
-      els.lastLink.onclick = (e) => { e.preventDefault(); connect(last); };
-      els.lastRow.hidden = false;
-    }
-  });
-
+  refreshPickerExtras();
   scan();
 })();

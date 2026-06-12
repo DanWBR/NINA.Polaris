@@ -20,19 +20,36 @@ build. Deleting `mobile/` changes nothing in the server/web app.
 ```
 mobile/
   www/                       launcher + injected shims (the only local web assets)
-    index.html               connect / discovery screen + "Devices" button
-    connect.js               mDNS browse, host entry, load the Pi, switch device
+    index.html               connect / discovery screen + tab bar + frames
+    connect.js               mDNS browse, host entry, tabbed multi-instance
     onnx-native-shim.js       injected into the Polaris UI; routes ORT -> native
   plugins/polaris-onnx/      local Capacitor plugin: native ONNX Runtime
   capacitor.config.ts        appId, allowNavigation (so the remote Pi UI keeps the bridge)
 ```
 
-The shell loads `www/index.html`. After the user picks a host it
-navigates the same WebView to e.g. `https://polaris-app.local:5000`.
-`server.allowNavigation` keeps the Capacitor bridge (and our plugins)
-available on that remote page. `onnx-native-shim.js` is injected so the
-unchanged `onnx-pipelines.js` served by the Pi transparently calls the
-native runtime instead of ONNX Runtime Web.
+The shell loads `www/index.html`. The Polaris UI is loaded in a **child
+iframe** on the app origin (not by navigating away), so the Capacitor
+bridge + our plugins stay alive; `server.allowNavigation` permits the
+remote LAN/Relay origins. `onnx-native-shim.js` is injected into every
+frame so the unchanged `onnx-pipelines.js` served by the Pi transparently
+calls the native runtime instead of ONNX Runtime Web.
+
+### Tabbed multi-instance
+
+On the connect screen each discovered host has a **checkbox**; tick one or
+more and tap **Open (N)** to load each in its own iframe, then switch
+between them with the **tab bar** at the top (each tab is an independent,
+live session kept loaded while hidden). A tab's **×** closes that instance;
+the tab bar's **＋** reopens the picker as a non-destructive overlay (the
+running tabs stay alive behind it) to add more. The Android **back** button
+toggles the picker ↔ the active tab and only exits the app when no
+instances are open. The last opened set is remembered and offered as
+**Reopen last (N)** on launch.
+
+> **Memory:** every open instance is a full Polaris UI (Alpine + WASM
+> live-stack + WebGL) live in parallel. There is no hard cap, but a warning
+> appears from ~4; on a weak phone the system may discard a background
+> iframe, which simply reloads when you switch back to it.
 
 ## How the GraXpert "unlock" works (M1)
 

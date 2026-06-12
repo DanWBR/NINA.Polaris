@@ -28,6 +28,7 @@
             </div>
             <ul class="host-list" id="hostList"></ul>
             <p class="hint" id="scanHint">Searching the local network…</p>
+            <button class="btn open-selected" id="openSelectedBtn" type="button" hidden>Open</button>
         </section>
 
         <section class="manual">
@@ -44,6 +45,9 @@
             </p>
         </section>
 
+        <p class="last" id="reopenRow" hidden>
+            <a href="#" id="reopenLink"></a>
+        </p>
         <p class="last" id="lastHostRow" hidden>
             Last used: <a href="#" id="lastHostLink"></a>
         </p>
@@ -60,15 +64,17 @@
         </div><!-- /.panels -->
     </main>
 
-    <!-- Floating control to leave the connected Polaris instance and go
-         back to the device picker (switch between rigs / devices). Shown
-         only while an instance is loaded (body.connected) and draggable
-         so it never permanently blocks the embedded Polaris UI. Lives
-         outside <main> so it overlays the full-screen iframe. -->
-    <button class="switch-device" id="switchDeviceBtn" type="button" hidden
-            aria-label="Switch device">
-        <span class="sd-ico" aria-hidden="true">⇄</span><span class="sd-label">Devices</span>
-    </button>
+    <!-- Tab bar (top): one tab per open instance + an "Add" button. Shown
+         while ≥1 instance is loaded. Tabs are rendered by connect.js. -->
+    <div class="tab-bar" id="tabBar" hidden></div>
+
+    <!-- Holds one full-screen iframe per open Polaris instance; only the
+         active one is shown. Sits below the tab bar so the UI isn't covered. -->
+    <div class="frames" id="frames"></div>
+
+    <!-- Return to the active tab from the picker overlay (non-destructive).
+         Only visible when the picker is summoned over running instances. -->
+    <button class="picker-done" id="pickerDoneBtn" type="button" hidden>✕ Back to tabs</button>
 
     <!-- Capacitor + the connect logic. onnx-native-shim.js is NOT loaded
          here; it is injected into the remote Polaris UI at document-start

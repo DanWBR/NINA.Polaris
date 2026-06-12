@@ -44,56 +44,102 @@ html, body {
     padding: max(24px, env(safe-area-inset-top)) 20px 40px;
 }
 
-/* Full-screen iframe that hosts the live Polaris UI once connected. The
-   parent page (this app origin) stays mounted underneath so the native
-   plugin bridge keeps working; the iframe just covers it. */
-#polarisFrame {
+/* Tabbed multi-instance: one full-screen iframe per open instance, only
+   the active one shown, with a tab bar pinned to the top. The parent page
+   (this app origin) stays mounted so the native plugin bridge keeps
+   working; the iframes just cover it. */
+:root { --tabbar-h: 46px; }
+
+.tab-bar {
     position: fixed;
-    inset: 0;
-    width: 100%;
-    height: 100%;
+    top: 0; left: 0; right: 0;
+    height: calc(var(--tabbar-h) + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
+    z-index: 2147483000;
+    display: none;
+    align-items: stretch;
+    gap: 4px;
+    padding-left: 6px; padding-right: 6px;
+    overflow-x: auto;
+    background: rgba(10, 16, 33, 0.96);
+    border-bottom: 1px solid var(--border);
+    -webkit-overflow-scrolling: touch;
+}
+body.connected .tab-bar { display: flex; }
+.tab {
+    display: flex; align-items: center; gap: 6px;
+    flex: 0 0 auto; max-width: 60vw;
+    margin: 6px 0;
+    padding: 0 6px 0 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--muted);
+    font-size: 13px; font-weight: 600;
+    white-space: nowrap;
+}
+.tab.active { background: var(--bg2); color: var(--text); border-color: var(--accent); }
+.tab-label { overflow: hidden; text-overflow: ellipsis; max-width: 46vw; cursor: pointer; padding: 6px 0; }
+.tab-close {
+    border: none; background: none; color: var(--muted);
+    font-size: 16px; line-height: 1; cursor: pointer; padding: 4px 4px;
+}
+.tab-close:hover { color: var(--text); }
+.tab-add {
+    flex: 0 0 auto; margin: 6px 2px;
+    border: 1px dashed var(--border); background: none; color: var(--accent);
+    border-radius: 8px; font-size: 16px; font-weight: 700; cursor: pointer;
+    padding: 0 12px;
+}
+
+.frames {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    top: calc(var(--tabbar-h) + env(safe-area-inset-top));
+    display: none;
+    background: var(--bg);
+}
+body.connected .frames { display: block; }
+.frames .instance-frame {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
     border: 0;
     display: none;
     background: var(--bg);
 }
-body.connected #polarisFrame { display: block; }
-body.connected .connect { display: none; }
+.frames .instance-frame.active { display: block; }
 
-/* "Switch device" floating button: overlays the iframe while connected,
-   tap returns to the picker, drag repositions it. Translucent + dimmed
-   so it stays out of the way of the live Polaris UI until touched. */
-.switch-device {
+/* Connect screen: hidden once connected, unless summoned as a
+   non-destructive picker overlay (body.picker-open) over the live tabs. */
+body.connected .connect { display: none; }
+body.connected.picker-open .connect {
+    display: block;
     position: fixed;
-    left: max(12px, env(safe-area-inset-left));
-    bottom: max(12px, env(safe-area-inset-bottom));
-    z-index: 2147483000;            /* above the embedded Polaris iframe */
-    display: none;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 13px;
-    border-radius: 999px;
-    border: 1px solid var(--border);
-    background: rgba(16, 29, 63, 0.72);
-    color: var(--text);
-    font-family: inherit;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    opacity: 0.5;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    touch-action: none;            /* we handle drag via pointer events */
-    user-select: none;
-    -webkit-user-select: none;
-    transition: opacity 0.15s ease;
+    inset: 0;
+    top: calc(var(--tabbar-h) + env(safe-area-inset-top));
+    z-index: 2147482000;             /* above frames, below the tab bar */
+    overflow-y: auto;
+    background: radial-gradient(120% 80% at 50% -10%, #16235a 0%, var(--bg) 60%);
 }
-body.connected .switch-device { display: inline-flex; }
-.switch-device:hover,
-.switch-device:active,
-.switch-device.dragging { opacity: 1; }
-.switch-device.dragging { cursor: grabbing; }
-.switch-device .sd-ico { font-size: 15px; line-height: 1; }
+
+/* "Back to tabs" button shown over the picker overlay. */
+.picker-done {
+    position: fixed;
+    top: calc(env(safe-area-inset-top) + 6px);
+    right: 10px;
+    z-index: 2147483001;             /* above the tab bar */
+    border: 1px solid var(--border);
+    background: rgba(16, 29, 63, 0.92);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 12px; font-weight: 600;
+    cursor: pointer;
+}
+body:not(.picker-open) .picker-done { display: none; }
+
+/* "Open (N)" primary action under the discovered list. */
+.open-selected { width: 100%; margin-top: 10px; }
 
 .brand { text-align: center; margin: 28px 0 32px; }
 .brand-mark {
@@ -152,15 +198,18 @@ h2 { margin: 0 0 12px; font-size: 14px; font-weight: 600; color: var(--muted);
 
 .host-list { list-style: none; margin: 0; padding: 0; }
 .host-list li {
-    display: flex; align-items: center; justify-content: space-between;
+    display: flex; align-items: center;
     gap: 12px; padding: 12px 14px; border: 1px solid var(--border);
     border-radius: 10px; margin-bottom: 8px; background: var(--bg2);
     cursor: pointer; transition: border-color 0.15s, background 0.15s;
 }
 .host-list li:hover, .host-list li:active { border-color: var(--accent); }
+.host-list li.selected { border-color: var(--accent); background: var(--card); }
+.host-list .host-check { width: 20px; height: 20px; flex: 0 0 auto; accent-color: var(--accent); pointer-events: none; }
+.host-list .h-main { flex: 1; min-width: 0; }
 .host-list .h-name { font-weight: 600; }
+.host-list .h-open { color: var(--accent); font-size: 11px; margin-left: 8px; }
 .host-list .h-addr { color: var(--muted); font-size: 12px; }
-.host-list .go { color: var(--accent); font-size: 18px; }
 
 .hint { color: var(--muted); font-size: 12px; margin: 8px 0 0; line-height: 1.4; }
 .hint code { background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 4px; }
