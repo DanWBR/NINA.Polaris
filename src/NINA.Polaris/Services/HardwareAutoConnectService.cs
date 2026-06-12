@@ -238,8 +238,9 @@ public class HardwareAutoConnectService : IHostedService {
         var devices = new (string Label, string? Name, Func<string, Task> Bind)[] {
             ("Camera",       rig.Camera,      async name => { var c = _equip.SelectCamera(rig.CameraDriver ?? "indi", name);    await c.ConnectAsync(ct); }),
             // Guide camera only auto-connects for native-guider rigs; PHD2
-            // owns its own guide cam. Name is null (skipped) otherwise.
-            ("Guide camera", string.Equals(rig.GuiderDriver, "native", StringComparison.OrdinalIgnoreCase) ? rig.GuideCamera : null,
+            // owns its own guide cam. Native is the default, so only an
+            // explicit "phd2" skips it (name null = skipped).
+            ("Guide camera", !string.Equals(rig.GuiderDriver, "phd2", StringComparison.OrdinalIgnoreCase) ? rig.GuideCamera : null,
                              async name => { var c = _equip.SelectGuideCamera(rig.GuideCameraDriver ?? "indi", name); await c.ConnectAsync(ct); }),
             ("Mount",        rig.Telescope,   async name => {
                 var t = _equip.SelectTelescope(rig.TelescopeDriver ?? "indi", name);

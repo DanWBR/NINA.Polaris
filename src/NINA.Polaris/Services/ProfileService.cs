@@ -1010,12 +1010,13 @@ public class EquipmentProfile {
 
     // ----- Guider backend selection (native vs PHD2) -----
 
-    /// <summary>Which autoguider drives this rig. <c>phd2</c> (default)
-    /// uses the external PHD2 process via <see cref="PHD2Client"/>;
-    /// <c>native</c> uses the in-process <c>NativeGuider</c> (ported PHD2
-    /// math) with the rig's own guide camera + mount pulse guiding.
-    /// Selectable per-rig; PHD2 stays the default everywhere.</summary>
-    public string GuiderDriver { get; set; } = "phd2";
+    /// <summary>Which autoguider drives this rig. <c>native</c> (default)
+    /// uses the in-process <c>NativeGuider</c> (ported PHD2 math) with the
+    /// rig's own guide camera + mount pulse guiding; <c>phd2</c> uses the
+    /// external PHD2 process via <see cref="PHD2Client"/>. Selectable
+    /// per-rig. New rigs default to the native guider; rigs already saved
+    /// with <c>phd2</c> keep using external PHD2 until changed.</summary>
+    public string GuiderDriver { get; set; } = "native";
 
     /// <summary>Guide-camera device id used by the native guider. Same
     /// addressing scheme as <see cref="Camera"/> (INDI device name, vendor

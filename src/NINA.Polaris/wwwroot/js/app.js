@@ -713,7 +713,7 @@ function ninaApp() {
         // guideCameraDriver address the native guide camera (same scheme
         // as the imaging camera). guideCameraVendorDevices is the per-
         // driver discovery payload refreshed by the "Detect" button.
-        guiderDriver: 'phd2',
+        guiderDriver: 'native',
         guideCamera: '',
         guideCameraDriver: 'indi',
         guideCameraVendorDevices: [],
@@ -13136,8 +13136,9 @@ function ninaApp() {
                 this.cameraVendorDevices = [];
                 try { this.detectVendorCameras(); } catch (e) {}
             }
-            // Guider backend + native guide-camera selection.
-            this.guiderDriver = rig.guiderDriver || 'phd2';
+            // Guider backend + native guide-camera selection. Native is the
+            // default; only a rig explicitly saved as 'phd2' uses external PHD2.
+            this.guiderDriver = rig.guiderDriver || 'native';
             this.guideCamera = rig.guideCamera || '';
             this.guideCameraDriver = rig.guideCameraDriver || 'indi';
             // Vendor/Simulator guide cams are listed by discovery, which only
@@ -13754,7 +13755,7 @@ function ninaApp() {
                 camera: this.equipCameraChoice || rig.camera,
                 cameraDriver: this.cameraDriver || rig.cameraDriver || 'indi',
                 // Guider backend + native guide-camera selection.
-                guiderDriver: this.guiderDriver || rig.guiderDriver || 'phd2',
+                guiderDriver: this.guiderDriver || rig.guiderDriver || 'native',
                 guideCamera: this.guideCamera || rig.guideCamera,
                 guideCameraDriver: this.guideCameraDriver || rig.guideCameraDriver || 'indi',
                 nativeRaAlgorithm: this.nativeRaAlgorithm || rig.nativeRaAlgorithm || 'hysteresis',
@@ -17864,9 +17865,9 @@ function ninaApp() {
         // _persistRigSelection (the same rig-save path the imaging
         // picker uses) so the choice survives reload + rig switch.
 
-        // Guider backend: 'phd2' (default, external) or 'native'.
+        // Guider backend: 'native' (default, built-in) or 'phd2' (external).
         setGuiderDriver(driver) {
-            this.guiderDriver = driver || 'phd2';
+            this.guiderDriver = driver || 'native';
             this._persistRigSelection({ guiderDriver: this.guiderDriver });
         },
 

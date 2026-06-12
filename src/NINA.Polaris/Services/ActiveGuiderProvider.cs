@@ -16,8 +16,9 @@ namespace NINA.Polaris.Services;
 
 /// <summary>
 /// Routes generic guider operations to whichever backend the active rig
-/// selected. PHD2 is the default; a rig opts into the native autoguider
-/// by setting <c>EquipmentProfile.GuiderDriver == "native"</c>.
+/// selected. The native autoguider is the default; a rig opts into the
+/// external PHD2 process by setting <c>EquipmentProfile.GuiderDriver ==
+/// "phd2"</c> (anything else, including a fresh rig, uses native).
 ///
 /// <para>GuiderEndpoints and the status WebSocket resolve <see cref="Active"/>
 /// for every generic call so the switch is transparent to the frontend.
@@ -36,10 +37,13 @@ public sealed class ActiveGuiderProvider {
         _native = native;
     }
 
-    /// <summary>The guider backend the active rig is configured to use.</summary>
+    /// <summary>The guider backend the active rig is configured to use.
+    /// Native is the default: only an explicit <c>phd2</c> selects the
+    /// external PHD2 process, so a fresh rig (or one missing the field)
+    /// uses the in-process native guider.</summary>
     public IGuider Active =>
-        string.Equals(_profiles.ActiveEquipmentProfile.GuiderDriver, "native",
+        string.Equals(_profiles.ActiveEquipmentProfile.GuiderDriver, "phd2",
             StringComparison.OrdinalIgnoreCase)
-            ? _native
-            : _phd2;
+            ? _phd2
+            : _native;
 }
