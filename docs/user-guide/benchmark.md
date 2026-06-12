@@ -116,21 +116,27 @@ the best result.
 
 ### Orange Pi 5 Pro (8 cores, RK3588S)
 
-Run: 2026-06-09 (two runs, 227 best / 222). Ubuntu 26.04 arm64.
+Run: 2026-06-12 (best 242, with the OpenCL GPU backend enabled). Armbian
+(Ubuntu) arm64, Mali-G610 via libmali + OpenCL ICD. Earlier CPU-only runs
+(2026-06-09) topped out at 227.
 
 | Metric | Value |
 |---|---|
-| **Polaris score** | **227** (best) / 222 |
-| Stacking throughput | 2.66 fps · 44.6 Mpx/s (16.78 MP frames) |
-| Stacking detect / align / resample / stats | 100.41 / 0.56 / 115.76 / 159.71 ms |
-| Capture/video throughput | 1.56 fps · 26.2 Mpx/s |
-| Debayer / JPEG / LZ4 | 70.94 / 555.39 / 13.67 ms (LZ4 2341.4 MB/s) |
-| CPU single / multi-thread | 2778 / 12940 MFLOPS (4.66× scaling) |
-| Memory bandwidth | 23.7 GB/s |
+| **Polaris score** | **242** (GPU on) / 227 (CPU only) |
+| Stacking throughput | 2.75 fps · 46.2 Mpx/s (16.78 MP frames) |
+| Stacking detect / align / resample / stats | 92.43 / 0.48 / 118 / 152.09 ms |
+| Capture/video throughput | 1.84 fps · 30.9 Mpx/s |
+| Debayer / JPEG / LZ4 | 58.82 / 471.14 / 13.55 ms (LZ4 2361.7 MB/s) |
+| CPU single / multi-thread | 2783 / 12879 MFLOPS (4.63× scaling) |
+| Memory bandwidth | 23.1 GB/s |
+| GPU vs CPU (Mali-G610 r0p0) | warp 3.41× · debayer 1.19× · blur 12.95× · **overall 5.85×** |
 
 Slightly ahead of the Raspberry Pi 5 — the RK3588S big.LITTLE cores give it
-strong multi-thread scaling (4.66× across its 8 cores) and much higher memory
-bandwidth (23.7 vs ~7 GB/s), which is why its stacking throughput leads.
+strong multi-thread scaling (4.6× across its 8 cores) and much higher memory
+bandwidth (23 vs ~7 GB/s), which is why its stacking throughput leads. With the
+Mali-G610 OpenCL backend on, the offloaded kernels (alignment warp, separable
+blur, debayer) run ~5.9× faster than the CPU path, lifting the overall score
+from ~227 to ~242 and freeing CPU headroom during a live-stack session.
 
 > **This is the board's real ceiling — power/governor don't change it.**
 > Measured at full clocks (4× Cortex-A76 @ 2.35 GHz + 4× Cortex-A55 @ 1.8 GHz,
@@ -140,8 +146,9 @@ bandwidth (23.7 vs ~7 GB/s), which is why its stacking throughput leads.
 > USB-C port or a dedicated 5V/5A PSU — a CPU/memory benchmark with no
 > peripherals never approaches the 5A peak rating. The ~4.7× (not 8×)
 > multi-thread scaling is architectural: the 4 little A55 cores are far weaker
-> than the 4 big A76s, so 225–227 is the SoC's genuine limit here, not a
-> power/cooling/config bottleneck. Keep the 5V/5A PSU for field stability
+> than the 4 big A76s, so ~227 is the SoC's genuine CPU-only limit here, not a
+> power/cooling/config bottleneck — the Mali-G610 OpenCL backend is what lifts
+> the overall score past it (242). Keep the 5V/5A PSU for field stability
 > (NVMe + USB + camera + dew heater peaks), not for compute.
 
 ### x86 desktop — Core i9-13900KF (32 threads)
