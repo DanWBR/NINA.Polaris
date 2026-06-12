@@ -34,38 +34,8 @@
     "note": "Polaris score is the headline figure; Mpx/s columns are live-stack and capture throughput. The Orange Pi 5 Pro is shown with the OpenCL GPU backend on (242; 227 CPU only) and the Pi 5 at its best, actively cooled run. Full per-device tables and methodology in the benchmark docs.",
     "docUrl": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/user-guide/benchmark.md"
   },
-  "downloadsSection": {
-    "title": "Download & run",
-    "sub": "Single self-contained binary, no runtime install. Grab the latest release for your platform."
-  },
-  "downloads": [
-    {
-      "platform": "Raspberry Pi 4 / 5",
-      "badge": ".deb",
-      "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb",
-      "command": "wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb\nsudo apt install ./polaris_arm64.deb",
-      "note": "Creates the user, systemd unit, indi-web venv, apt deps, and a self-signed HTTPS cert. Running at https://<hostname>.local:5000 in ~30s."
-    },
-    {
-      "platform": "Other Linux (portable)",
-      "badge": "tar.gz",
-      "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-linux-arm64.tar.gz",
-      "command": "wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-linux-arm64.tar.gz\ntar -xzf polaris-linux-arm64.tar.gz\ncd polaris-linux-arm64 && ./NINA.Polaris",
-      "note": "Fedora, Arch, or no-systemd setups. Replace linux-arm64 with linux-x64 for Intel/AMD."
-    },
-    {
-      "platform": "Windows mini PC",
-      "badge": ".zip",
-      "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-x64.zip",
-      "command": "Invoke-WebRequest -Uri \"https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-x64.zip\" -OutFile polaris.zip\nExpand-Archive polaris.zip\ncd polaris-win-x64 && .\\NINA.Polaris.exe",
-      "note": "Portable, no install. ARM64 build also available (polaris-win-arm64.zip). Open https://localhost:5000."
-    },
-    {
-      "platform": "Docker",
-      "badge": "multi-arch",
-      "url": "",
-      "command": "docker run -d --network host \\\n  -v $(pwd)/config:/config \\\n  -v $(pwd)/images:/images \\\n  ghcr.io/danwbr/nina-polaris:latest",
-      "note": "Multi-arch image (arm64 + amd64). The compose file in the repo includes indiserver in the same stack."
-    }
-  ]
+  "closing": {
+    "title": "Free, open-source, and ready to image.",
+    "sub": "MIT-style license inherited from upstream N.I.N.A. Bring your own scope."
+  }
 }

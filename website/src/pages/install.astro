@@ -59,6 +59,46 @@ const statusClass = (s: string) => {
       </div>
     </section>
 
+    <!-- Download -->
+    <section id="download" class="section">
+      <div class="container">
+        <h2 class="block-title">{g.download.title}</h2>
+        <p class="block-sub">{g.download.sub}</p>
+        <div class="dl-row">
+          {g.download.items.map((d) => (
+            <a class="dl-link" href={d.url} target="_blank" rel="noopener">
+              <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true">
+                <path d="M8 1a.75.75 0 0 1 .75.75v6.69l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 0 1 1.06-1.06l2.22 2.22V1.75A.75.75 0 0 1 8 1ZM2.75 13.5a.75.75 0 0 0 0 1.5h10.5a.75.75 0 0 0 0-1.5H2.75Z"/>
+              </svg>
+              <span class="dl-label">{d.label}</span>
+              {d.badge && <span class="badge alt">{d.badge}</span>}
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <!-- Install -->
+    <section id="install" class="section section-alt">
+      <div class="container">
+        <h2 class="block-title">{g.platformsSection.title}</h2>
+        <p class="block-sub">{g.platformsSection.sub}</p>
+        <div class="plat-grid">
+          {g.platforms.map((p) => (
+            <article class="plat-card">
+              <header>
+                <h3>{p.name}</h3>
+                <span class="badge">{p.badge}</span>
+              </header>
+              <p class="plat-summary">{p.summary}</p>
+              <pre><code>{p.steps}</code></pre>
+              <p class="plat-note">{p.notes}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+
     <!-- System requirements -->
     <section id="requirements" class="section">
       <div class="container">
@@ -130,29 +170,8 @@ const statusClass = (s: string) => {
       </div>
     </section>
 
-    <!-- Platforms -->
-    <section id="platforms" class="section">
-      <div class="container">
-        <h2 class="block-title">{g.platformsSection.title}</h2>
-        <p class="block-sub">{g.platformsSection.sub}</p>
-        <div class="plat-grid">
-          {g.platforms.map((p) => (
-            <article class="plat-card">
-              <header>
-                <h3>{p.name}</h3>
-                <span class="badge">{p.badge}</span>
-              </header>
-              <p class="plat-summary">{p.summary}</p>
-              <pre><code>{p.steps}</code></pre>
-              <p class="plat-note">{p.notes}</p>
-            </article>
-          ))}
-        </div>
-      </div>
-    </section>
-
     <!-- Firewall -->
-    <section class="section section-alt">
+    <section class="section">
       <div class="container narrow">
         <h2 class="block-title">{g.firewall.title}</h2>
         <p class="block-sub">{g.firewall.sub}</p>
@@ -171,7 +190,7 @@ const statusClass = (s: string) => {
     </section>
 
     <!-- Optional components -->
-    <section id="optional" class="section">
+    <section id="optional" class="section section-alt">
       <div class="container">
         <h2 class="block-title">{g.optionalSection.title}</h2>
         <p class="block-sub">{g.optionalSection.sub}</p>
@@ -432,6 +451,28 @@ const statusClass = (s: string) => {
     border: 1px dashed var(--border);
     border-radius: 999px;
     padding: 6px 12px;
+  }
+
+  /* Download links */
+  .dl-row { display: flex; flex-wrap: wrap; gap: 12px; }
+  .dl-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.15s;
+  }
+  .dl-link:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    text-decoration: none;
+    transform: translateY(-1px);
   }
 
   /* Firewall */

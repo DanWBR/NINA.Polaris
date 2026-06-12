@@ -24,8 +24,7 @@ export const navLinks = [
   { label: 'Features', href: '/#features' },
   { label: 'Benchmarks', href: '/#benchmarks' },
   { label: 'Get started', href: '/getting-started' },
-  { label: 'Install', href: '/install' },
-  { label: 'Download', href: '/#download' },
+  { label: 'Download & install', href: '/install' },
   { label: 'GitHub ↗', href: site.repo, external: true },
 ];
 
@@ -34,7 +33,7 @@ export const footerCols = [
     title: 'Project',
     links: [
       { label: 'Getting started', href: '/getting-started', external: false },
-      { label: 'Install guide', href: '/install', external: false },
+      { label: 'Download & install', href: '/install', external: false },
       { label: 'GitHub repo', href: site.repo },
       { label: 'README', href: site.readme },
       { label: 'Issues / requests', href: site.issues },
@@ -56,8 +55,7 @@ export const hero = home.hero;
 export const featuresSection = home.featuresSection;
 export const features = home.features;
 export const benchmarks = home.benchmarks;
-export const downloadsSection = home.downloadsSection;
-export const downloads = home.downloads;
+export const closing = home.closing;
 
 // ---- Install guide (content/install/install.json) ----
 export const installGuide = install;
