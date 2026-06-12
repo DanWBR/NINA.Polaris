@@ -2,8 +2,8 @@
   "hero": {
     "eyebrow": "Browser-controlled astrophotography · open-source",
     "titleLine1": "Your rig.",
-    "titleLine2": "Any device.",
-    "titleAccent": "No display required.",
+    "titleLine2": "",
+    "titleAccent": "Any device.",
     "lede": "A complete imaging session, covering equipment, guiding, plate-solving and the sequencer, running on a Raspberry Pi, a Windows mini PC, or anywhere else, controlled from the browser of your phone, laptop, or warm-room tablet.",
     "disclaimer": "N.I.N.A. Polaris is a community-driven fork of N.I.N.A. It is not affiliated with or supported by the official N.I.N.A. team. For anything Polaris, open an issue on this repository; please do not contact the N.I.N.A. developers about it."
   },

@@ -10,7 +10,7 @@ import Nav from './Nav.astro';
     <span class="hero-eyebrow">{hero.eyebrow}</span>
     <h1 class="hero-title">
       {hero.titleLine1}<br />
-      {hero.titleLine2}<br />
+      {hero.titleLine2 && <Fragment>{hero.titleLine2}<br /></Fragment>}
       <span class="accent">{hero.titleAccent}</span>
     </h1>
     <p class="hero-lede">{hero.lede}</p>
