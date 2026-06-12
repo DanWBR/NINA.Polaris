@@ -1,10 +1,10 @@
 {
   "hero": {
-    "eyebrow": "Browser-controlled astrophotography · open-source",
-    "titleLine1": "Your rig.",
+    "eyebrow": "Open-source Integrated Astrophotography Suite",
+    "titleLine1": "Your rig,",
     "titleLine2": "",
     "titleAccent": "Any device.",
-    "lede": "A complete imaging session, covering equipment, guiding, plate-solving and the sequencer, running on a Raspberry Pi, a Windows mini PC, or anywhere else, controlled from the browser of your phone, laptop, or warm-room tablet.",
+    "lede": "A complete imaging session, covering equipment, guiding, plate-solving and the sequencer, running on a Raspberry Pi, Orange Pi, a Windows mini PC, or anywhere else, controlled from the browser of your phone, laptop, or warm-room tablet.",
     "disclaimer": "N.I.N.A. Polaris is a community-driven fork of N.I.N.A. It is not affiliated with or supported by the official N.I.N.A. team. For anything Polaris, open an issue on this repository; please do not contact the N.I.N.A. developers about it.",
     "image": "/assets/screenshots/hero.jpg"
   },
@@ -13,24 +13,105 @@
     "sub": "From connecting the hardware to a finished image: capture, guiding, framing, live stacking, sequencing, and AI post-processing, all driven from the browser."
   },
   "features": [
-    { "icon": "🔭", "title": "Connect any rig: INDI, ASCOM, Alpaca + native drivers", "body": "Talk to your gear over INDI (400+ Linux drivers), over ASCOM and Alpaca across the LAN, or through native camera SDKs for ZWO, Player One, SVBONY, and Canon, Nikon and Sony DSLR/mirrorless. Auto-discovery finds devices on the network.", "image": "/assets/screenshots/devices.jpg" },
-    { "icon": "📡", "title": "Native PHD2 guiding, with fallback to the real app", "body": "A native PHD2 implementation drives guiding directly, with a live RA/Dec chart, dither, settle, and profiles. When you want the original PHD2 interface, fall back to the real application embedded right in the browser over xpra or VNC.", "image": "/assets/screenshots/guiding.jpg" },
-    { "icon": "🌌", "title": "Sky explorer with slew & center", "body": "A full sky explorer powered by the Stellarium Web Engine, with total mount integration. Pick any target, slew to it, then plate-solve and center automatically, all from the browser.", "image": "/assets/screenshots/sky-explorer.jpg" },
-    { "icon": "📸", "title": "Complete live stacking panel", "body": "EAA-style live stacking with registration, integration, and real-time stretch over a bandwidth-adaptive WebSocket stream, so the image builds up live as each frame lands.", "image": "/assets/screenshots/live-view.png" },
-    { "icon": "🎥", "title": "Video recording + processing", "body": "Record high-frame-rate video for planetary, lunar, and solar work, then process it on the spot for lucky-imaging results.", "image": "/assets/screenshots/video.png" },
-    { "icon": "🌲", "title": "Advanced sequencer", "body": "A tree-based sequencer with containers, loop conditions, and event triggers: auto-focus on temperature or HFR drift, meridian flip, dither, safety abort. Drag and drop the whole plan in the browser.", "image": "/assets/screenshots/sequencer.png" },
-    { "icon": "🔬", "title": "Auto focus", "body": "Automated focusing with V-curve and HFR fitting, kicked off by temperature change or HFR drift during a sequence, so stars stay tight all night.", "image": "/assets/screenshots/autofocus.jpg" },
-    { "icon": "🎨", "title": "STUDIO: stacking + AI post-processing", "body": "A complete STUDIO for stacking and full post-processing, including AI background extraction, denoise, and deconvolution via GraXpert, accelerated on the client GPU through the browser or on the SBC's NPU.", "image": "/assets/screenshots/studio.jpg" },
-    { "icon": "⚡", "title": "GPU & NPU acceleration", "body": "OpenCL-backed GPU acceleration for the heavy image-processing paths like debayer, stretch, and stacking, with a transparent CPU fallback when no GPU is present. On top of that, AI background extraction, deconvolution, and denoise run via GraXpert right in the browser, using the client device's GPU, or the server's NPU (for example the Orange Pi 5 Pro).", "image": "/assets/screenshots/opencl.jpg" }
+    {
+      "icon": "🔭",
+      "title": "Connect any rig: INDI, ASCOM, Alpaca + native drivers",
+      "body": "Talk to your gear over INDI (400+ Linux drivers), over ASCOM and Alpaca across the LAN, or through native camera SDKs for ZWO, Player One, SVBONY, and Canon, Nikon and Sony DSLR/mirrorless. Auto-discovery finds devices on the network.",
+      "image": "/assets/screenshots/devices.jpg"
+    },
+    {
+      "icon": "📡",
+      "title": "Native PHD2 guiding, with fallback to the real app",
+      "body": "A native PHD2 implementation drives guiding directly, with a live RA/Dec chart, dither, settle, and profiles. When you want the original PHD2 interface, fall back to the real application embedded right in the browser over xpra or VNC.",
+      "image": "/assets/screenshots/guiding.jpg"
+    },
+    {
+      "icon": "🌌",
+      "title": "Sky explorer with slew & center",
+      "body": "A full sky explorer powered by the Stellarium Web Engine, with total mount integration. Pick any target, slew to it, then plate-solve and center automatically, all from the browser.",
+      "image": "/assets/screenshots/sky-explorer.jpg"
+    },
+    {
+      "icon": "📸",
+      "title": "Complete live stacking panel",
+      "body": "EAA-style live stacking with registration, integration, and real-time stretch over a bandwidth-adaptive WebSocket stream, so the image builds up live as each frame lands.",
+      "image": "/assets/screenshots/live-view.png"
+    },
+    {
+      "icon": "🎥",
+      "title": "Video recording + processing",
+      "body": "Record high-frame-rate video for planetary, lunar, and solar work, then process it on the spot for lucky-imaging results.",
+      "image": "/assets/screenshots/video.png"
+    },
+    {
+      "icon": "🌲",
+      "title": "Advanced sequencer",
+      "body": "A tree-based sequencer with containers, loop conditions, and event triggers: auto-focus on temperature or HFR drift, meridian flip, dither, safety abort. Drag and drop the whole plan in the browser.",
+      "image": "/assets/screenshots/sequencer.png"
+    },
+    {
+      "icon": "🔬",
+      "title": "Auto focus",
+      "body": "Automated focusing with V-curve and HFR fitting, kicked off by temperature change or HFR drift during a sequence, so stars stay tight all night.",
+      "image": "/assets/screenshots/autofocus.jpg"
+    },
+    {
+      "icon": "🎨",
+      "title": "STUDIO: stacking + AI post-processing",
+      "body": "A complete STUDIO for stacking and full post-processing, including AI background extraction, denoise, and deconvolution via GraXpert, accelerated on the client GPU through the browser or on the SBC's NPU.",
+      "image": "/assets/screenshots/studio.jpg"
+    },
+    {
+      "icon": "⚡",
+      "title": "GPU & NPU acceleration",
+      "body": "OpenCL-backed GPU acceleration for the heavy image-processing paths like debayer, stretch, and stacking, with a transparent CPU fallback when no GPU is present. On top of that, AI background extraction, deconvolution, and denoise run via GraXpert right in the browser, using the client device's GPU, or the server's NPU (for example the Orange Pi 5 Pro).",
+      "image": "/assets/screenshots/opencl.jpg"
+    }
   ],
   "benchmarks": {
     "title": "Benchmarked on real hardware",
     "sub": "The built-in benchmark reports a single Polaris score so you can pick a board. Higher is better. Figures below are Release builds.",
     "rows": [
-      { "device": "Raspberry Pi 4 Model B", "url": "https://www.raspberrypi.com/products/raspberry-pi-4-model-b/", "cores": "4 cores", "score": "110", "stacking": "22.2 Mpx/s", "capture": "11.5 Mpx/s", "memory": "4.7 GB/s", "highlight": false },
-      { "device": "Raspberry Pi 5 Model B", "url": "https://www.raspberrypi.com/products/raspberry-pi-5/", "cores": "4 cores", "score": "211", "stacking": "39.9 Mpx/s", "capture": "27.3 Mpx/s", "memory": "7.7 GB/s", "highlight": false },
-      { "device": "Orange Pi 5 Pro (RK3588S)", "url": "http://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-5-Pro.html", "cores": "8 cores", "score": "242", "stacking": "46.2 Mpx/s", "capture": "30.9 Mpx/s", "memory": "23.1 GB/s", "highlight": true },
-      { "device": "Core i9-13900KF + RTX 5070", "url": "", "cores": "32 threads", "score": "936", "stacking": "99.4 Mpx/s", "capture": "89 Mpx/s", "memory": "41 GB/s", "highlight": false }
+      {
+        "device": "Raspberry Pi 4 Model B",
+        "url": "https://www.raspberrypi.com/products/raspberry-pi-4-model-b/",
+        "cores": "4 cores",
+        "score": "110",
+        "stacking": "22.2 Mpx/s",
+        "capture": "11.5 Mpx/s",
+        "memory": "4.7 GB/s",
+        "highlight": false
+      },
+      {
+        "device": "Raspberry Pi 5 Model B",
+        "url": "https://www.raspberrypi.com/products/raspberry-pi-5/",
+        "cores": "4 cores",
+        "score": "211",
+        "stacking": "39.9 Mpx/s",
+        "capture": "27.3 Mpx/s",
+        "memory": "7.7 GB/s",
+        "highlight": false
+      },
+      {
+        "device": "Orange Pi 5 Pro (RK3588S)",
+        "url": "http://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-5-Pro.html",
+        "cores": "8 cores",
+        "score": "242",
+        "stacking": "46.2 Mpx/s",
+        "capture": "30.9 Mpx/s",
+        "memory": "23.1 GB/s",
+        "highlight": true
+      },
+      {
+        "device": "Core i9-13900KF + RTX 5070",
+        "url": "",
+        "cores": "32 threads",
+        "score": "936",
+        "stacking": "99.4 Mpx/s",
+        "capture": "89 Mpx/s",
+        "memory": "41 GB/s",
+        "highlight": false
+      }
     ],
     "note": "Polaris score is the headline figure; Mpx/s columns are live-stack and capture throughput. The Orange Pi 5 Pro is shown with the OpenCL GPU backend on (242; 227 CPU only) and the Pi 5 at its best, actively cooled run. Full per-device tables and methodology in the benchmark docs.",
     "docUrl": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/user-guide/benchmark.md"

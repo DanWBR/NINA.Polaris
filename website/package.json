@@ -11,7 +11,8 @@
     "build": "astro build",
     "build:admin": "tinacms build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "publish": "git add content public/assets && git commit -m \"content update\" && git push"
   },
   "dependencies": {
     "@tinacms/cli": "^2.4.4",

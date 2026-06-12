@@ -7,26 +7,107 @@
     "ramNote": "Polaris uses 0.7 to 1.7 GB of RAM on average, so 2 GB is the practical floor. A Raspberry Pi 4 with 2 GB still runs the app, with client-side WASM offloading the heavy live-stack math.",
     "recommendedNote": "Recommended board: the Orange Pi 5 Pro with 4 GB or more. It runs the whole app end to end, with OpenCL acceleration on the GPU and GraXpert AI on the NPU. More boards are on the test bench: two Orange Pi 4 Pro (4 GB), a Celeron PC stick, and a Radxa Dragon Q6A (expected to be the most powerful of the lot).",
     "rows": [
-      { "host": "Orange Pi 5 Pro (4 GB)", "ram": "4 GB+", "status": "Recommended", "highlight": true, "notes": "Proven daily driver. RK3588S (4x Cortex-A76 + 4x Cortex-A55), Mali-G610 GPU, 6 TOPS NPU. Full experience: OpenCL on the GPU and GraXpert AI on the NPU." },
-      { "host": "Raspberry Pi 5 (8 GB)", "ram": "8 GB", "status": "Great", "notes": "Broadcom BCM2712 (4x Cortex-A76, up to 2.4 GHz), VideoCore VII GPU, LPDDR4X. Lossless: live stacking plus simultaneous Studio jobs are fine." },
-      { "host": "Raspberry Pi 4 (2 GB)", "ram": "2 / 4 / 8 GB", "status": "Minimum", "notes": "Broadcom BCM2711 (4x Cortex-A72, up to 1.8 GHz), VideoCore VI GPU, LPDDR4. The RAM floor: 2 GB is the minimum to run; client-side WASM offloads the heavy math." },
-      { "host": "Raspberry Pi 3 (1 GB)", "ram": "1 GB", "status": "Below RAM target", "notes": "Broadcom BCM2837 (4x Cortex-A53, up to 1.2 GHz), VideoCore IV GPU. Runs, but tight; PHD2 GUI embed is auto-disabled (32-bit ARM gate)." },
-      { "host": "Radxa Dragon Q6A", "ram": "6 / 8 GB", "status": "Testing", "highlight": true, "notes": "Qualcomm QCS6490 (octa-core Kryo: 1x 2.7 GHz + 3x 2.4 GHz + 4x 1.9 GHz), Adreno 643 GPU (OpenCL), Hexagon NPU up to 12 TOPS, LPDDR5. Incoming, expected to be the most powerful board tested so far, pending validation." },
-      { "host": "Orange Pi 4 Pro (4 GB)", "ram": "4 GB", "status": "Testing", "highlight": true, "notes": "Two units incoming. Allwinner A733 (2x Cortex-A76 + 6x Cortex-A55, up to 2.0 GHz), Imagination BXM-4-64 GPU, 3 TOPS NPU, LPDDR5. Same GPU-plus-NPU story as the 5 Pro: OpenCL on the GPU and GraXpert on the NPU, pending validation." },
-      { "host": "Celeron PC stick", "ram": "8 GB", "status": "Testing", "notes": "Intel Celeron J4105 (4 cores, up to 2.5 GHz), Intel UHD 600 GPU (OpenCL), 8 GB LPDDR4, 128 GB eMMC, Gigabit LAN. Ships with Windows 11 Pro. Incoming, results to follow." },
-      { "host": "Windows mini PC / desktop / laptop", "ram": "4 GB+", "status": "Full features", "notes": "Same feature set as Linux, plus vendor DSLR drivers." }
+      {
+        "host": "Raspberry Pi 3",
+        "ram": "1 GB",
+        "status": "Below RAM target",
+        "notes": "Broadcom BCM2837 (4x Cortex-A53, up to 1.2 GHz), VideoCore IV GPU. Runs, but tight; PHD2 GUI embed is auto-disabled (32-bit ARM gate)."
+      },
+      {
+        "host": "Raspberry Pi 4",
+        "ram": "2+ GB",
+        "status": "Minimum",
+        "notes": "Broadcom BCM2711 (4x Cortex-A72, up to 1.8 GHz), VideoCore VI GPU, LPDDR4. The RAM floor: 2 GB is the minimum to run; client-side WASM offloads the heavy math."
+      },
+      {
+        "host": "Raspberry Pi 5",
+        "ram": "2+ GB",
+        "status": "Great",
+        "notes": "Broadcom BCM2712 (4x Cortex-A76, up to 2.4 GHz), VideoCore VII GPU, LPDDR4X. Lossless: live stacking plus simultaneous Studio jobs are fine."
+      },
+      {
+        "host": "Orange Pi 4 Pro",
+        "ram": "2+ GB",
+        "status": "Testing",
+        "highlight": true,
+        "notes": "Two units incoming. Allwinner A733 (2x Cortex-A76 + 6x Cortex-A55, up to 2.0 GHz), Imagination BXM-4-64 GPU, 3 TOPS NPU, LPDDR5. Same GPU-plus-NPU story as the 5 Pro: OpenCL on the GPU and GraXpert on the NPU, pending validation."
+      },
+      {
+        "host": "Orange Pi 5 Pro",
+        "ram": "2 GB+",
+        "status": "Recommended",
+        "highlight": true,
+        "notes": "Proven daily driver. RK3588S (4x Cortex-A76 + 4x Cortex-A55), Mali-G610 GPU, 6 TOPS NPU. Full experience: OpenCL on the GPU and GraXpert AI on the NPU."
+      },
+      {
+        "host": "Radxa Dragon Q6A",
+        "ram": "4+ GB",
+        "status": "Testing",
+        "highlight": true,
+        "notes": "Qualcomm QCS6490 (octa-core Kryo: 1x 2.7 GHz + 3x 2.4 GHz + 4x 1.9 GHz), Adreno 643 GPU (OpenCL), Hexagon NPU up to 12 TOPS, LPDDR5. Incoming, expected to be the most powerful board tested so far, pending validation."
+      },
+      {
+        "host": "Celeron PC stick",
+        "ram": "4+ GB",
+        "status": "Testing",
+        "notes": "Intel Celeron J4105 (4 cores, up to 2.5 GHz), Intel UHD 600 GPU (OpenCL), 8 GB LPDDR4, 128 GB eMMC, Gigabit LAN. Ships with Windows 11 Pro. Incoming, results to follow."
+      },
+      {
+        "host": "Windows mini PC / desktop / laptop",
+        "ram": "4 GB+",
+        "status": "Full features",
+        "notes": "Same feature set as Linux, plus vendor DSLR drivers."
+      }
     ]
   },
   "images": {
     "title": "Ready-to-flash images",
     "sub": "The fastest way to get going: each image is a Linux OS with Polaris preinstalled and configured for that board. Flash it to an SD card (or USB / eMMC), boot, and open the browser. Use Raspberry Pi Imager, balenaEtcher, or Rufus. Images live on Google Drive and are added as each board is validated.",
     "items": [
-      { "device": "Raspberry Pi 4", "badge": "arm64", "url": "https://drive.google.com/uc?export=download&id=1NaA_rILy2zaun93RGbTMKRL6peFjtkLh", "size": "7.11 GB (.7z)", "note": "Raspberry Pi OS 64-bit (Debian Trixie, released 2026-04-21). 7-Zip archive; extract before flashing." },
-      { "device": "Raspberry Pi 5", "badge": "arm64", "url": "https://drive.google.com/uc?export=download&id=1NaA_rILy2zaun93RGbTMKRL6peFjtkLh", "size": "7.11 GB (.7z)", "note": "Raspberry Pi OS 64-bit (Debian Trixie, released 2026-04-21). 7-Zip archive; extract before flashing. (Shared with the Pi 4 image for now.)" },
-      { "device": "Orange Pi 4 Pro", "badge": "arm64", "url": "", "size": "", "note": "" },
-      { "device": "Orange Pi 5 Pro", "badge": "arm64", "url": "https://drive.google.com/uc?export=download&id=1HnaqiXaOzcrnHBJ3kpuAicJvkI_eaZrP", "size": "7.51 GB (.7z)", "note": "Armbian 26.8.0 KDE (Ubuntu 26.04, kernel 6.1.115). 7-Zip archive; extract before flashing.", "gpu": "yes", "npu": "yes" },
-      { "device": "Radxa Dragon Q6A", "badge": "arm64", "url": "", "size": "", "note": "" },
-      { "device": "PC Stick", "badge": "x86-64", "url": "", "size": "", "note": "x86 board: flash to USB or write to the internal eMMC, not an SD card." }
+      {
+        "device": "Raspberry Pi 4",
+        "badge": "arm64",
+        "url": "https://drive.google.com/uc?export=download&id=1NaA_rILy2zaun93RGbTMKRL6peFjtkLh",
+        "size": "7.11 GB (.7z)",
+        "note": "Raspberry Pi OS 64-bit (Debian Trixie, released 2026-04-21). 7-Zip archive; extract before flashing."
+      },
+      {
+        "device": "Raspberry Pi 5",
+        "badge": "arm64",
+        "url": "https://drive.google.com/uc?export=download&id=1NaA_rILy2zaun93RGbTMKRL6peFjtkLh",
+        "size": "7.11 GB (.7z)",
+        "note": "Raspberry Pi OS 64-bit (Debian Trixie, released 2026-04-21). 7-Zip archive; extract before flashing. (Shared with the Pi 4 image for now.)"
+      },
+      {
+        "device": "Orange Pi 4 Pro",
+        "badge": "arm64",
+        "url": "",
+        "size": "",
+        "note": ""
+      },
+      {
+        "device": "Orange Pi 5 Pro",
+        "badge": "arm64",
+        "url": "https://drive.google.com/uc?export=download&id=1HnaqiXaOzcrnHBJ3kpuAicJvkI_eaZrP",
+        "size": "7.51 GB (.7z)",
+        "note": "Armbian 26.8.0 KDE (Ubuntu 26.04, kernel 6.1.115). 7-Zip archive; extract before flashing.",
+        "gpu": "yes",
+        "npu": "yes"
+      },
+      {
+        "device": "Radxa Dragon Q6A",
+        "badge": "arm64",
+        "url": "",
+        "size": "",
+        "note": ""
+      },
+      {
+        "device": "PC Stick",
+        "badge": "x86-64",
+        "url": "",
+        "size": "",
+        "note": "x86 board: flash to USB or write to the internal eMMC, not an SD card."
+      }
     ]
   },
   "download": {
@@ -37,19 +118,47 @@
         "name": "Server (runs on the rig)",
         "note": "Install on the Raspberry Pi, SBC, or mini PC that controls your gear.",
         "items": [
-          { "label": "Raspberry / Orange / Banana Pi (arm64 SBC)", "badge": ".deb", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb" },
-          { "label": "Linux arm64 (.tar.gz)", "badge": "arm64", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-linux-arm64.tar.gz" },
-          { "label": "Linux x64 (.tar.gz)", "badge": "x64", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-linux-x64.tar.gz" },
-          { "label": "Windows x64 (.zip)", "badge": "x64", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-x64.zip" },
-          { "label": "Windows arm64 (.zip)", "badge": "arm64", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-arm64.zip" },
-          { "label": "All releases", "badge": "github", "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest" }
+          {
+            "label": "Raspberry / Orange / Banana Pi (arm64 SBC)",
+            "badge": ".deb",
+            "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb"
+          },
+          {
+            "label": "Linux arm64 (.tar.gz)",
+            "badge": "arm64",
+            "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-linux-arm64.tar.gz"
+          },
+          {
+            "label": "Linux x64 (.tar.gz)",
+            "badge": "x64",
+            "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-linux-x64.tar.gz"
+          },
+          {
+            "label": "Windows x64 (.zip)",
+            "badge": "x64",
+            "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-x64.zip"
+          },
+          {
+            "label": "Windows arm64 (.zip)",
+            "badge": "arm64",
+            "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-arm64.zip"
+          },
+          {
+            "label": "All releases",
+            "badge": "github",
+            "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest"
+          }
         ]
       },
       {
         "name": "Client apps (connect from a device)",
         "note": "Optional native app to reach the server. Any browser also works, so no app is required.",
         "items": [
-          { "label": "Android app (.apk)", "badge": "android", "url": "https://drive.google.com/uc?export=download&id=1iAmrDeHPWZ4DY-xSK0NP2HAU7rrwk3xM" }
+          {
+            "label": "Android app (.apk)",
+            "badge": "android",
+            "url": "https://drive.google.com/uc?export=download&id=1iAmrDeHPWZ4DY-xSK0NP2HAU7rrwk3xM"
+          }
         ]
       }
     ]
@@ -58,9 +167,21 @@
     "title": "Bare minimum to boot",
     "note": "That is all the home page needs. Every other feature has its own dependency, listed under optional components below.",
     "rows": [
-      { "label": "Runtime", "windows": ".NET 10 Desktop Runtime (bundled in the self-contained build)", "linux": ".NET 10 Runtime, or use the self-contained build" },
-      { "label": "Polaris binary", "windows": "NINA.Polaris.exe", "linux": "NINA.Polaris" },
-      { "label": "Network", "windows": "TCP 5000 open on the LAN", "linux": "TCP 5000 open on the LAN" }
+      {
+        "label": "Runtime",
+        "windows": ".NET 10 Desktop Runtime (bundled in the self-contained build)",
+        "linux": ".NET 10 Runtime, or use the self-contained build"
+      },
+      {
+        "label": "Polaris binary",
+        "windows": "NINA.Polaris.exe",
+        "linux": "NINA.Polaris"
+      },
+      {
+        "label": "Network",
+        "windows": "TCP 5000 open on the LAN",
+        "linux": "TCP 5000 open on the LAN"
+      }
     ]
   },
   "platformsSection": {
@@ -120,52 +241,164 @@
       "name": "Equipment drivers",
       "intro": "At least one bus is required to control hardware. Both can coexist; the active rig stores a per-device driver choice.",
       "items": [
-        { "name": "INDI", "badge": "Linux", "purpose": "Preferred on Linux. The indi-full meta-package ships the daemon plus 100+ drivers (ZWO, Canon, EQMod, Celestron, weather, ...).", "url": "https://indilib.org/", "windows": "Runs via WSL2 or a windi build; most Windows users pick Alpaca instead.", "linux": "sudo apt install indi-full" },
-        { "name": "ASCOM / Alpaca", "badge": "Windows", "purpose": "Preferred on Windows. Polaris discovers Alpaca devices over the LAN via UDP.", "url": "https://ascom-standards.org/Downloads/Index.htm", "windows": "ASCOM Platform 7+ (free) + the driver pack per device. Alpaca on by default.", "linux": "Run an Alpaca-compatible device server; most modern drivers expose Alpaca natively." },
-        { "name": "Vendor SDKs (DSLR / mirrorless)", "badge": "Windows", "purpose": "Canon, Nikon, and Sony DSLR/mirrorless on Windows. Drop the DLLs into plugins/ after registering with the vendor (EULA blocks redistribution).", "url": "https://developer.canon-asia.com/", "windows": "Canon EDSDK 13.x+ in plugins/canon-edsdk/, Nikon SDK in plugins/nikon-sdk/, Sony SDK in plugins/sony-sdk/.", "linux": "Not needed: DSLRs use indi_gphoto_ccd from indi-full." }
+        {
+          "name": "INDI",
+          "badge": "Linux",
+          "purpose": "Preferred on Linux. The indi-full meta-package ships the daemon plus 100+ drivers (ZWO, Canon, EQMod, Celestron, weather, ...).",
+          "url": "https://indilib.org/",
+          "windows": "Runs via WSL2 or a windi build; most Windows users pick Alpaca instead.",
+          "linux": "sudo apt install indi-full"
+        },
+        {
+          "name": "ASCOM / Alpaca",
+          "badge": "Windows",
+          "purpose": "Preferred on Windows. Polaris discovers Alpaca devices over the LAN via UDP.",
+          "url": "https://ascom-standards.org/Downloads/Index.htm",
+          "windows": "ASCOM Platform 7+ (free) + the driver pack per device. Alpaca on by default.",
+          "linux": "Run an Alpaca-compatible device server; most modern drivers expose Alpaca natively."
+        },
+        {
+          "name": "Vendor SDKs (DSLR / mirrorless)",
+          "badge": "Windows",
+          "purpose": "Canon, Nikon, and Sony DSLR/mirrorless on Windows. Drop the DLLs into plugins/ after registering with the vendor (EULA blocks redistribution).",
+          "url": "https://developer.canon-asia.com/",
+          "windows": "Canon EDSDK 13.x+ in plugins/canon-edsdk/, Nikon SDK in plugins/nikon-sdk/, Sony SDK in plugins/sony-sdk/.",
+          "linux": "Not needed: DSLRs use indi_gphoto_ccd from indi-full."
+        }
       ]
     },
     {
       "name": "Plate solving",
       "intro": "Required for Slew & Center (the centering loop). Without any solver, Slew Only still slews the mount. Polaris dispatches primary then blind fallback across whatever is installed.",
       "items": [
-        { "name": "ASTAP", "badge": "recommended", "purpose": "Default solver. Fast (about 1 to 3 s), works offline, MIT. Recommended for everyone.", "url": "https://www.hnsky.org/astap.htm", "windows": "astap.exe installer + the H17/H18 star database (~2 GB).", "linux": "sudo apt install astap astap-data" },
-        { "name": "PlateSolve3", "badge": "Windows", "purpose": "Faster than ASTAP at long focal lengths. Free for non-commercial use.", "url": "https://planewave.com/software-and-downloads/", "windows": "PlateSolve3 installer.", "linux": "Not available." },
-        { "name": "Astrometry.net (local)", "badge": "Linux", "purpose": "The gold standard, but slow on a Pi (about 30 to 60 s).", "url": "https://astrometry.net/", "windows": "Not practical.", "linux": "sudo apt install astrometry.net + index files." },
-        { "name": "Astrometry.net (online)", "badge": "needs internet", "purpose": "Last resort. About 30 to 60 s per solve, free with an API key.", "url": "https://nova.astrometry.net", "windows": "API key only.", "linux": "API key only." }
+        {
+          "name": "ASTAP",
+          "badge": "recommended",
+          "purpose": "Default solver. Fast (about 1 to 3 s), works offline, MIT. Recommended for everyone.",
+          "url": "https://www.hnsky.org/astap.htm",
+          "windows": "astap.exe installer + the H17/H18 star database (~2 GB).",
+          "linux": "sudo apt install astap astap-data"
+        },
+        {
+          "name": "PlateSolve3",
+          "badge": "Windows",
+          "purpose": "Faster than ASTAP at long focal lengths. Free for non-commercial use.",
+          "url": "https://planewave.com/software-and-downloads/",
+          "windows": "PlateSolve3 installer.",
+          "linux": "Not available."
+        },
+        {
+          "name": "Astrometry.net (local)",
+          "badge": "Linux",
+          "purpose": "The gold standard, but slow on a Pi (about 30 to 60 s).",
+          "url": "https://astrometry.net/",
+          "windows": "Not practical.",
+          "linux": "sudo apt install astrometry.net + index files."
+        },
+        {
+          "name": "Astrometry.net (online)",
+          "badge": "needs internet",
+          "purpose": "Last resort. About 30 to 60 s per solve, free with an API key.",
+          "url": "https://nova.astrometry.net",
+          "windows": "API key only.",
+          "linux": "API key only."
+        }
       ]
     },
     {
       "name": "Autoguiding",
       "intro": "PHD2 connection (TCP 4400) is auto-attempted on startup alongside INDI / Alpaca discovery.",
       "items": [
-        { "name": "PHD2", "badge": "free", "purpose": "Full integration: Polaris auto-detects PHD2, can launch and shut it down, swap profiles, run Smart Calibrate, and broadcast guide stats in real time.", "url": "https://openphdguiding.org/", "windows": "PHD2 installer (free, GPLv3).", "linux": "sudo apt install phd2" },
-        { "name": "PHD2 embedded GUI", "badge": "Linux", "purpose": "Shows the PHD2 window inside the GUIDE tab. Not supported on 32-bit Raspberry Pi (auto-gated).", "url": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/phd2-gui-embedding.md", "windows": "Not needed (PHD2 runs natively).", "linux": "sudo apt install xpra xserver-xorg-video-dummy (xpra 6.0+)." }
+        {
+          "name": "PHD2",
+          "badge": "free",
+          "purpose": "Full integration: Polaris auto-detects PHD2, can launch and shut it down, swap profiles, run Smart Calibrate, and broadcast guide stats in real time.",
+          "url": "https://openphdguiding.org/",
+          "windows": "PHD2 installer (free, GPLv3).",
+          "linux": "sudo apt install phd2"
+        },
+        {
+          "name": "PHD2 embedded GUI",
+          "badge": "Linux",
+          "purpose": "Shows the PHD2 window inside the GUIDE tab. Not supported on 32-bit Raspberry Pi (auto-gated).",
+          "url": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/phd2-gui-embedding.md",
+          "windows": "Not needed (PHD2 runs natively).",
+          "linux": "sudo apt install xpra xserver-xorg-video-dummy (xpra 6.0+)."
+        }
       ]
     },
     {
       "name": "Post-processing",
       "intro": "Detected at startup via the binary locator. Polaris grays out the matching STUDIO buttons when missing.",
       "items": [
-        { "name": "Siril", "badge": "optional", "purpose": "Replaces the built-in stacking pipeline in STUDIO with Siril scripts (5 bundled, plus your own ~/.siril/scripts).", "url": "https://siril.org/", "windows": "Siril installer.", "linux": "sudo apt install siril" },
-        { "name": "GraXpert", "badge": "optional", "purpose": "Background extraction (auto per-frame during sequences if toggled), plus deconvolution and denoise on v3.0+.", "url": "https://www.graxpert.com/", "windows": "GraXpert v3.0+ installer.", "linux": "AppImage from the GraXpert releases page." }
+        {
+          "name": "Siril",
+          "badge": "optional",
+          "purpose": "Replaces the built-in stacking pipeline in STUDIO with Siril scripts (5 bundled, plus your own ~/.siril/scripts).",
+          "url": "https://siril.org/",
+          "windows": "Siril installer.",
+          "linux": "sudo apt install siril"
+        },
+        {
+          "name": "GraXpert",
+          "badge": "optional",
+          "purpose": "Background extraction (auto per-frame during sequences if toggled), plus deconvolution and denoise on v3.0+.",
+          "url": "https://www.graxpert.com/",
+          "windows": "GraXpert v3.0+ installer.",
+          "linux": "AppImage from the GraXpert releases page."
+        }
       ]
     },
     {
       "name": "Simulators (no hardware)",
       "intro": "Test the whole pipeline without a scope. Settings then Equipment simulator detects the install and spawns the stack with one click.",
       "items": [
-        { "name": "INDI simulators", "badge": "Linux", "purpose": "Renders real stars from the GSC catalog at the simulated mount position.", "url": "https://indilib.org/", "windows": "Use the Alpaca Omni Simulator instead.", "linux": "sudo apt install indi-bin" },
-        { "name": "Alpaca Omni Simulator", "badge": "Windows", "purpose": "A single .exe exposing the ASCOM Camera/Telescope/Focuser/FilterWheel simulators over Alpaca.", "url": "https://github.com/ASCOMInitiative/ASCOMRemote/releases", "windows": "Download and run the Omni Simulator.", "linux": "Use the INDI simulators instead." }
+        {
+          "name": "INDI simulators",
+          "badge": "Linux",
+          "purpose": "Renders real stars from the GSC catalog at the simulated mount position.",
+          "url": "https://indilib.org/",
+          "windows": "Use the Alpaca Omni Simulator instead.",
+          "linux": "sudo apt install indi-bin"
+        },
+        {
+          "name": "Alpaca Omni Simulator",
+          "badge": "Windows",
+          "purpose": "A single .exe exposing the ASCOM Camera/Telescope/Focuser/FilterWheel simulators over Alpaca.",
+          "url": "https://github.com/ASCOMInitiative/ASCOMRemote/releases",
+          "windows": "Download and run the Omni Simulator.",
+          "linux": "Use the INDI simulators instead."
+        }
       ]
     },
     {
       "name": "More integrations",
       "intro": "Extra conveniences, all optional.",
       "items": [
-        { "name": "Relay server (remote internet access)", "badge": "self-hosted", "purpose": "Reach your rig from anywhere without exposing it directly. Reverse-tunnels over HTTPS with per-tenant tokens, mTLS, quotas, and built-in Let's Encrypt.", "url": "https://github.com/DanWBR/NINA.Polaris/blob/master/src/NINA.Relay.Server/README.md", "windows": "Host NINA.Relay.Server on a public VPS (Linux). The rig side needs nothing extra.", "linux": "Run the Linux x64/arm64 build on a VPS with a domain and ports 80/443 open." },
-        { "name": "Remote terminal", "badge": "optional", "purpose": "Browser-based SSH from the Polaris tab to restart services on a headless host. Set Terminal:Enabled = true in appsettings.json.", "url": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/user-guide/remote-terminal.md", "windows": "Add-WindowsCapability -Online -Name OpenSSH.Server, then start sshd.", "linux": "sudo apt install openssh-server (already present on Raspberry Pi OS)." },
-        { "name": "Stellarium sync", "badge": "optional", "purpose": "Pull the currently selected object from Stellarium into the SKY tab as a target.", "url": "https://stellarium.org/", "windows": "Enable Plugins then Remote Control, bind to 127.0.0.1:8090.", "linux": "Same: enable the Remote Control plugin on 127.0.0.1:8090." }
+        {
+          "name": "Relay server (remote internet access)",
+          "badge": "self-hosted",
+          "purpose": "Reach your rig from anywhere without exposing it directly. Reverse-tunnels over HTTPS with per-tenant tokens, mTLS, quotas, and built-in Let's Encrypt.",
+          "url": "https://github.com/DanWBR/NINA.Polaris/blob/master/src/NINA.Relay.Server/README.md",
+          "windows": "Host NINA.Relay.Server on a public VPS (Linux). The rig side needs nothing extra.",
+          "linux": "Run the Linux x64/arm64 build on a VPS with a domain and ports 80/443 open."
+        },
+        {
+          "name": "Remote terminal",
+          "badge": "optional",
+          "purpose": "Browser-based SSH from the Polaris tab to restart services on a headless host. Set Terminal:Enabled = true in appsettings.json.",
+          "url": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/user-guide/remote-terminal.md",
+          "windows": "Add-WindowsCapability -Online -Name OpenSSH.Server, then start sshd.",
+          "linux": "sudo apt install openssh-server (already present on Raspberry Pi OS)."
+        },
+        {
+          "name": "Stellarium sync",
+          "badge": "optional",
+          "purpose": "Pull the currently selected object from Stellarium into the SKY tab as a target.",
+          "url": "https://stellarium.org/",
+          "windows": "Enable Plugins then Remote Control, bind to 127.0.0.1:8090.",
+          "linux": "Same: enable the Remote Control plugin on 127.0.0.1:8090."
+        }
       ]
     }
   ]
