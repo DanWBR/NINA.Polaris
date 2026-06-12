@@ -29,6 +29,24 @@ const steps = g.steps.map((s) => ({
       </div>
     </header>
 
+    <!-- How to access Polaris -->
+    <section id="access" class="section section-alt">
+      <div class="container narrow">
+        <h2 class="access-title">{g.access.title}</h2>
+        <p class="access-sub">{g.access.sub}</p>
+        <div class="access-grid">
+          {g.access.options.map((o) => (
+            <article class="access-card">
+              <span class="access-ico" aria-hidden="true">{o.icon}</span>
+              <h3>{o.title}</h3>
+              <p>{o.body}</p>
+              {o.code && <pre><code>{o.code}</code></pre>}
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+
     <section class="section">
       <div class="container narrow">
         <ol class="steps">
@@ -115,6 +133,22 @@ const steps = g.steps.map((s) => ({
   .back:hover { color: var(--accent); text-decoration: none; }
   .page-head h1 { font-size: clamp(30px, 5vw, 48px); font-weight: 800; letter-spacing: -1px; margin-bottom: 14px; }
   .lede { font-size: 17px; color: var(--text-muted); max-width: 72ch; line-height: 1.6; }
+
+  /* Access section */
+  .access-title { font-size: clamp(22px, 3vw, 30px); font-weight: 700; letter-spacing: -0.5px; margin-bottom: 10px; }
+  .access-sub { font-size: 16px; color: var(--text-muted); margin-bottom: 26px; max-width: 70ch; }
+  .access-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .access-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px;
+  }
+  .access-ico { font-size: 26px; }
+  .access-card h3 { font-size: 17px; font-weight: 700; margin: 8px 0; }
+  .access-card p { font-size: 14px; color: var(--text-muted); line-height: 1.6; }
+  .access-card pre { margin: 14px 0 0; }
+  @media (max-width: 640px) { .access-grid { grid-template-columns: 1fr; } }
 
   .container.narrow { max-width: 860px; }
   .section { padding: 56px 0; }

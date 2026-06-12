@@ -21,10 +21,10 @@
     "title": "Ready-to-flash images",
     "sub": "The fastest way to get going: each image is a Linux OS with Polaris preinstalled and configured for that board. Flash it to an SD card (or USB / eMMC), boot, and open the browser. Use Raspberry Pi Imager, balenaEtcher, or Rufus. Images live on Google Drive and are added as each board is validated.",
     "items": [
-      { "device": "Raspberry Pi 4", "badge": "arm64", "url": "", "size": "", "note": "" },
-      { "device": "Raspberry Pi 5", "badge": "arm64", "url": "", "size": "", "note": "" },
+      { "device": "Raspberry Pi 4", "badge": "arm64", "url": "", "size": "", "note": "Raspberry Pi OS 64-bit (Debian Trixie, released 2026-04-21)." },
+      { "device": "Raspberry Pi 5", "badge": "arm64", "url": "", "size": "", "note": "Raspberry Pi OS 64-bit (Debian Trixie, released 2026-04-21)." },
       { "device": "Orange Pi 4 Pro", "badge": "arm64", "url": "", "size": "", "note": "" },
-      { "device": "Orange Pi 5 Pro", "badge": "arm64", "url": "", "size": "", "note": "" },
+      { "device": "Orange Pi 5 Pro", "badge": "arm64", "url": "", "size": "1.3 GB", "note": "Armbian 26.8.0 KDE (Ubuntu 26.04, kernel 6.1.115)." },
       { "device": "Radxa Dragon Q6A", "badge": "arm64", "url": "", "size": "", "note": "" },
       { "device": "PC Stick", "badge": "x86-64", "url": "", "size": "", "note": "x86 board: flash to USB or write to the internal eMMC, not an SD card." }
     ]

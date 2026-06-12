@@ -1,6 +1,24 @@
 {
   "title": "Getting started",
   "lede": "Your first night, from scope on the tripod to a finished image you can share. This is the speed run: connect the gear, guide and focus, capture with live stacking or an unattended autorun, then stack and edit in STUDIO.",
+  "access": {
+    "title": "First, open the Polaris UI",
+    "sub": "Polaris runs on the rig and is driven from any device on the same network. There are two ways in.",
+    "options": [
+      {
+        "icon": "🌐",
+        "title": "Any browser",
+        "body": "Point any phone, tablet, or laptop at the rig's address on port 5000. Use its hostname or its IP, and accept the self-signed certificate once.",
+        "code": "https://<ip-or-hostname>:5000"
+      },
+      {
+        "icon": "📱",
+        "title": "Android app",
+        "body": "Install the Android app from the Download page and open it. It scans the network and lists every Polaris instance it finds, ready to connect with one tap, no IP typing needed.",
+        "code": ""
+      }
+    ]
+  },
   "steps": [
     {
       "icon": "🛠️",

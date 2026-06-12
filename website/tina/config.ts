@@ -308,6 +308,28 @@ export default defineConfig({
           { type: 'string', name: 'lede', label: 'Intro paragraph', ui: { component: 'textarea' } },
           {
             type: 'object',
+            name: 'access',
+            label: 'Access (how to open Polaris)',
+            fields: [
+              { type: 'string', name: 'title', label: 'Title' },
+              { type: 'string', name: 'sub', label: 'Subtitle', ui: { component: 'textarea' } },
+              {
+                type: 'object',
+                name: 'options',
+                label: 'Access options',
+                list: true,
+                ui: { itemProps: (i) => ({ label: i?.title }) },
+                fields: [
+                  { type: 'string', name: 'icon', label: 'Icon (emoji)' },
+                  { type: 'string', name: 'title', label: 'Title' },
+                  { type: 'string', name: 'body', label: 'Body', ui: { component: 'textarea' } },
+                  { type: 'string', name: 'code', label: 'Example URL (optional)' },
+                ],
+              },
+            ],
+          },
+          {
+            type: 'object',
             name: 'steps',
             label: 'Steps',
             list: true,
