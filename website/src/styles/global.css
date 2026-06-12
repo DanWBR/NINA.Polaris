@@ -78,6 +78,29 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Shared static backdrop on every page: the hero's Horsehead image with its
+   opacity gradient, pinned to the viewport (position: fixed) so it stays put
+   while content scrolls. Sits above the solid --bg fallback and below all
+   content (z-index: -1), so transparent sections reveal it and opaque cards
+   stay readable. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(26, 26, 46, 0.55) 0%,
+      rgba(26, 26, 46, 0.45) 30%,
+      rgba(26, 26, 46, 0.75) 65%,
+      rgba(26, 26, 46, 0.98) 100%
+    ),
+    url('/assets/horsehead.jpg') center / cover no-repeat,
+    radial-gradient(ellipse at 30% 30%, #21305a 0%, #1a1a2e 70%);
+}
+
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
@@ -145,7 +168,7 @@ pre code { background: transparent; padding: 0; color: #c9d6e8; }
 /* ---------- Sections ---------- */
 .section { padding: 100px 0; }
 .section-alt {
-  background: var(--bg-alt);
+  background: rgba(9, 8, 18, 0.5);
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
 }

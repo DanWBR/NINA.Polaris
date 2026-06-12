@@ -46,18 +46,7 @@ import Nav from './Nav.astro';
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    /* Local background image, fall back to a deep-space gradient when the
-       JPG isn't present, so the page is never embarrassing. */
-    background:
-      linear-gradient(
-        180deg,
-        rgba(26, 26, 46, 0.55) 0%,
-        rgba(26, 26, 46, 0.35) 35%,
-        rgba(26, 26, 46, 0.7) 70%,
-        rgba(26, 26, 46, 1) 100%
-      ),
-      url('/assets/horsehead.jpg') center / cover no-repeat,
-      radial-gradient(ellipse at 30% 40%, #21305a 0%, #1a1a2e 70%);
+    /* Background comes from the shared body::before backdrop. */
     overflow: hidden;
   }
 
