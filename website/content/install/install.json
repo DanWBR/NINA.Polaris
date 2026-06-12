@@ -24,7 +24,7 @@
       { "device": "Raspberry Pi 4", "badge": "arm64", "url": "https://drive.google.com/uc?export=download&id=1NaA_rILy2zaun93RGbTMKRL6peFjtkLh", "size": "7.11 GB (.7z)", "note": "Raspberry Pi OS 64-bit (Debian Trixie, released 2026-04-21). 7-Zip archive; extract before flashing." },
       { "device": "Raspberry Pi 5", "badge": "arm64", "url": "https://drive.google.com/uc?export=download&id=1NaA_rILy2zaun93RGbTMKRL6peFjtkLh", "size": "7.11 GB (.7z)", "note": "Raspberry Pi OS 64-bit (Debian Trixie, released 2026-04-21). 7-Zip archive; extract before flashing. (Shared with the Pi 4 image for now.)" },
       { "device": "Orange Pi 4 Pro", "badge": "arm64", "url": "", "size": "", "note": "" },
-      { "device": "Orange Pi 5 Pro", "badge": "arm64", "url": "https://drive.google.com/uc?export=download&id=1HnaqiXaOzcrnHBJ3kpuAicJvkI_eaZrP", "size": "7.51 GB", "note": "Armbian 26.8.0 KDE (Ubuntu 26.04, kernel 6.1.115).", "gpu": "yes", "npu": "yes" },
+      { "device": "Orange Pi 5 Pro", "badge": "arm64", "url": "https://drive.google.com/uc?export=download&id=1HnaqiXaOzcrnHBJ3kpuAicJvkI_eaZrP", "size": "7.51 GB (.7z)", "note": "Armbian 26.8.0 KDE (Ubuntu 26.04, kernel 6.1.115). 7-Zip archive; extract before flashing.", "gpu": "yes", "npu": "yes" },
       { "device": "Radxa Dragon Q6A", "badge": "arm64", "url": "", "size": "", "note": "" },
       { "device": "PC Stick", "badge": "x86-64", "url": "", "size": "", "note": "x86 board: flash to USB or write to the internal eMMC, not an SD card." }
     ]
