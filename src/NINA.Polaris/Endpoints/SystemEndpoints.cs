@@ -336,6 +336,18 @@ public static class SystemEndpoints {
         // the response flushes so the browser sees the ack first.
         group.MapGet("/power", (PowerService power) => Results.Ok(power.GetInfo()));
 
+        // OCL: SBC GPU (OpenCL) capability + which compute backend is active.
+        // available/enabled/loaderPresent come from the cheap runtime probe;
+        // backend/hardware reflect the resolved IGpuCompute (CPU vs OpenCL).
+        group.MapGet("/gpu", (NINA.Image.Gpu.IGpuCompute gpu) => Results.Ok(new {
+            available = NINA.Polaris.Services.OpenCl.OpenClRuntime.IsAvailable,
+            enabled = NINA.Polaris.Services.OpenCl.OpenClRuntime.Enabled,
+            loaderPresent = NINA.Polaris.Services.OpenCl.OpenClRuntime.LoaderPresent,
+            backend = gpu.BackendName,
+            hardware = gpu.IsHardware,
+            diagnostics = NINA.Polaris.Services.OpenCl.OpenClRuntime.Diagnostics
+        }));
+
         group.MapPost("/restart-app", (PowerService power) => {
             var r = power.ScheduleRestart();
             return r.Ok

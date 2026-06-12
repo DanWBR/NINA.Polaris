@@ -13006,10 +13006,17 @@ zero-copy buffers (the win that makes per-op offload viable on an SBC).
 
 ### Tasks
 - OCL-1: `IGpuCompute` + `CpuGpuCompute` in NINA.Image.Portable (blur, warp,
-  debayer, stretch-LUT apply, accumulate). DONE.
-- OCL-2: `OpenClRuntime` probe + `OpenClContext` + `kernels/*.cl`.
-- OCL-3: `OpenClGpuCompute` (+ Laplacian, Calibrate kernels).
-- OCL-4: DI wiring + call-site migration (LiveStacking, EditPipeline, FQA, Calib).
-- OCL-5: `Silk.NET.OpenCL` ref + kernel packaging + `check-opencl.sh` + licenses.
-- OCL-6: Settings toggle + WS `gpu{}` status chip + Benchmark GPU-vs-CPU.
-- OCL-7: tests + build verify + commit/push + PLAN/benchmark memory.
+  debayer-passthrough, stretch-LUT apply, accumulate). DONE.
+- OCL-2: `OpenClRuntime` probe + `OpenClContext` + `kernels/image_kernels.cl`. DONE.
+- OCL-3: `OpenClGpuCompute` (blur, warp, lut, accumulate; debayer -> CPU). DONE.
+- OCL-4: DI wiring + live-stack warp migration. DONE. Deferred follow-ups
+  (each CPU-safe, low priority): editor `GaussianBlur` (needs threading
+  `IGpuCompute` through static `EditPipeline.Apply`), planetary `LaplacianVariance`
+  + `CalibrationMath` (need new kernels + interface methods).
+- OCL-5: `Silk.NET.OpenCL` ref + kernel packaging + `check-opencl.sh` + Silk MIT
+  license entries. DONE.
+- OCL-6: `GET /api/system/gpu` capability endpoint (available/backend/device/
+  diagnostics). DONE. Deferred: Settings GPU chip UI + Benchmark GPU-vs-CPU
+  variant (disable already works via `POLARIS_DISABLE_GPU=1`).
+- OCL-7: CPU-parity + safe-probe unit tests (6, green). DONE. Hardware E2E
+  (speedup, identical output GPU vs CPU) pending on the Radxa Dragon Q6A.
