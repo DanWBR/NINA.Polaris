@@ -38,6 +38,7 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
     private OpenClContext? _ctx;
     private bool _initTried;
     private bool _initFailed;
+    private string? _initError;
 
     public OpenClGpuCompute(ILogger<OpenClGpuCompute> log) {
         _log = log;
@@ -45,6 +46,22 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
 
     public string BackendName => _ctx != null ? $"OpenCL: {_ctx.DeviceName}" : "OpenCL (uninitialised)";
     public bool IsHardware => true;
+
+    // --- bring-up diagnostics (surfaced by GET /api/system/gpu) ---
+
+    /// <summary>True once a context built successfully.</summary>
+    public bool Initialized => _ctx != null;
+
+    /// <summary>Device name when initialised, else null.</summary>
+    public string? Device => _ctx?.DeviceName;
+
+    /// <summary>The reason init failed (incl. the OpenCL build log) when it did,
+    /// else null. Invaluable for the first hardware bring-up.</summary>
+    public string? InitError => _initError;
+
+    /// <summary>Force the lazy init (idempotent) and report whether the GPU path
+    /// is usable. Lets a status endpoint trigger + observe the real result.</summary>
+    public bool EnsureInitialized() => Context() != null;
 
     private OpenClContext? Context() {
         if (_initFailed) return null;
@@ -54,13 +71,18 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
             if (_initTried) return _ctx;
             _initTried = true;
             try {
-                if (!OpenClRuntime.IsAvailable) { _initFailed = true; return null; }
+                if (!OpenClRuntime.IsAvailable) {
+                    _initFailed = true;
+                    _initError = OpenClRuntime.Diagnostics;
+                    return null;
+                }
                 var src = LoadKernelSource();
                 _ctx = new OpenClContext(src);
                 _log.LogInformation("OpenCL GPU backend ready: {Device}", _ctx.DeviceName);
                 return _ctx;
             } catch (Exception ex) {
                 _initFailed = true;
+                _initError = ex.Message; // includes the OpenCL build log on a build failure
                 _log.LogInformation("OpenCL GPU backend unavailable, using CPU: {Msg}", ex.Message);
                 return null;
             }

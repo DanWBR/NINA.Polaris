@@ -339,14 +339,29 @@ public static class SystemEndpoints {
         // OCL: SBC GPU (OpenCL) capability + which compute backend is active.
         // available/enabled/loaderPresent come from the cheap runtime probe;
         // backend/hardware reflect the resolved IGpuCompute (CPU vs OpenCL).
-        group.MapGet("/gpu", (NINA.Image.Gpu.IGpuCompute gpu) => Results.Ok(new {
-            available = NINA.Polaris.Services.OpenCl.OpenClRuntime.IsAvailable,
-            enabled = NINA.Polaris.Services.OpenCl.OpenClRuntime.Enabled,
-            loaderPresent = NINA.Polaris.Services.OpenCl.OpenClRuntime.LoaderPresent,
-            backend = gpu.BackendName,
-            hardware = gpu.IsHardware,
-            diagnostics = NINA.Polaris.Services.OpenCl.OpenClRuntime.Diagnostics
-        }));
+        group.MapGet("/gpu", (NINA.Image.Gpu.IGpuCompute gpu) => {
+            // Force the lazy OpenCL init so first bring-up sees a real result:
+            // device name on success, or the failure reason (incl. the OpenCL
+            // build log) on failure.
+            bool initialized = false;
+            string? device = null, initError = null;
+            if (gpu is NINA.Polaris.Services.OpenCl.OpenClGpuCompute ocl) {
+                initialized = ocl.EnsureInitialized();
+                device = ocl.Device;
+                initError = ocl.InitError;
+            }
+            return Results.Ok(new {
+                available = NINA.Polaris.Services.OpenCl.OpenClRuntime.IsAvailable,
+                enabled = NINA.Polaris.Services.OpenCl.OpenClRuntime.Enabled,
+                loaderPresent = NINA.Polaris.Services.OpenCl.OpenClRuntime.LoaderPresent,
+                backend = gpu.BackendName,
+                hardware = gpu.IsHardware,
+                initialized,
+                device,
+                initError,
+                diagnostics = NINA.Polaris.Services.OpenCl.OpenClRuntime.Diagnostics
+            });
+        });
 
         group.MapPost("/restart-app", (PowerService power) => {
             var r = power.ScheduleRestart();
