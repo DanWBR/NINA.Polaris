@@ -98,6 +98,39 @@ public class BenchmarkServiceTests {
         Assert.That(r.CoreScaling, Is.GreaterThan(0));
     }
 
+    // ----- GPU overall speedup (geometric mean) -----
+
+    [Test]
+    public void GpuOverallSpeedup_uses_geometric_mean_not_arithmetic() {
+        // The measured RTX 5070 numbers: two ops slower (<1x), one big win.
+        var perOp = new[] { 0.47, 0.40, 16.17 };
+        var geo = BenchmarkService.GpuOverallSpeedup(perOp);
+        // Geometric mean = (0.47*0.40*16.17)^(1/3) ≈ 1.45 — honest, vs the old
+        // arithmetic mean ≈ 5.68 which the single blur win inflated.
+        Assert.That(geo, Is.EqualTo(1.45).Within(0.01));
+        Assert.That(geo, Is.LessThan(perOp.Average()),
+            "geometric mean must not be dominated by the one large win");
+    }
+
+    [Test]
+    public void GpuOverallSpeedup_ignores_ops_that_did_not_run() {
+        // Zeros mean "declined / not measured" and must not drag the figure to 0.
+        var geo = BenchmarkService.GpuOverallSpeedup(new[] { 0.0, 4.0, 9.0 });
+        Assert.That(geo, Is.EqualTo(6.0).Within(0.01)); // sqrt(4*9)
+    }
+
+    [Test]
+    public void GpuOverallSpeedup_is_zero_when_nothing_ran() {
+        Assert.That(BenchmarkService.GpuOverallSpeedup(new[] { 0.0, 0.0 }), Is.EqualTo(0));
+        Assert.That(BenchmarkService.GpuOverallSpeedup(System.Array.Empty<double>()), Is.EqualTo(0));
+    }
+
+    [Test]
+    public void GpuOverallSpeedup_of_equal_ratios_returns_that_ratio() {
+        Assert.That(BenchmarkService.GpuOverallSpeedup(new[] { 2.0, 2.0, 2.0 }),
+            Is.EqualTo(2.0).Within(0.001));
+    }
+
     // ----- results store round-trip -----
 
     private BenchmarkResultsStore NewStore() {

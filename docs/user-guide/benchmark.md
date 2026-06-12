@@ -129,14 +129,16 @@ Run: 2026-06-12 (best 242, with the OpenCL GPU backend enabled). Armbian
 | Debayer / JPEG / LZ4 | 58.82 / 471.14 / 13.55 ms (LZ4 2361.7 MB/s) |
 | CPU single / multi-thread | 2783 / 12879 MFLOPS (4.63× scaling) |
 | Memory bandwidth | 23.1 GB/s |
-| GPU vs CPU (Mali-G610 r0p0) | warp 3.41× · debayer 1.19× · blur 12.95× · **overall 5.85×** |
+| GPU vs CPU (Mali-G610 r0p0) | warp 3.41× · debayer 1.19× · blur 12.95× · **overall 3.74×** (geo-mean) |
 
 Slightly ahead of the Raspberry Pi 5 — the RK3588S big.LITTLE cores give it
 strong multi-thread scaling (4.6× across its 8 cores) and much higher memory
 bandwidth (23 vs ~7 GB/s), which is why its stacking throughput leads. With the
 Mali-G610 OpenCL backend on, the offloaded kernels (alignment warp, separable
-blur, debayer) run ~5.9× faster than the CPU path, lifting the overall score
-from ~227 to ~242 and freeing CPU headroom during a live-stack session.
+blur, debayer) run ~3.7× faster than the CPU path on average (geometric mean;
+every op wins here because the shared memory makes offload free), lifting the
+overall score from ~227 to ~242 and freeing CPU headroom during a live-stack
+session.
 
 > **This is the board's real ceiling — power/governor don't change it.**
 > Measured at full clocks (4× Cortex-A76 @ 2.35 GHz + 4× Cortex-A55 @ 1.8 GHz,
@@ -165,17 +167,23 @@ NVIDIA GeForce RTX 5070. Run: 2026-06-12 (Release build — see note).
 | Debayer / JPEG / LZ4 | 20.51 / 160.91 / 7.06 ms (LZ4 4535.4 MB/s) |
 | CPU single / multi-thread | 6054 / 120336 MFLOPS (19.88× scaling) |
 | Memory bandwidth | 41 GB/s |
-| GPU vs CPU (RTX 5070, OpenCL) | warp 0.47× · debayer 0.40× · blur 16.17× · overall 5.68× |
+| GPU vs CPU (RTX 5070, OpenCL) | warp 0.47× · debayer 0.40× · blur 16.17× · overall 1.45× (geo-mean) |
 
 > **Discrete GPU caveat.** Unlike the unified-memory SBCs (Mali/Adreno), a
 > discrete GPU sits behind PCIe, so the per-op host↔device copy dominates the
 > small kernels: warp (0.47×) and debayer (0.40×) are actually *slower* on the
 > RTX 5070 than on this fast CPU; only the heavier blur wins (16.17×). The
-> "overall" figure is a plain average of the three, so it looks high but is
-> carried by blur. The OpenCL backend is designed for unified-memory SBCs where
-> zero-copy makes every op a win; on a discrete-GPU desktop the CPU is already
-> fast enough that offloading the light ops is a net loss — leave the GPU toggle
-> off there, or expect it to help only the editor's blur-heavy work.
+> "overall" figure is the **geometric mean** of the three (1.45×), so it is no
+> longer inflated by the single blur win the way a plain average was (5.68×).
+>
+> **You don't need to do anything about this.** The OpenCL backend now detects
+> the device's memory model at startup: on a unified-memory SBC it offloads
+> every op (full zero-copy win); on a discrete GPU it runs a one-time micro-probe
+> and offloads **only the ops that actually beat the CPU** — here, just the blur,
+> while warp and debayer stay on the CPU. So leaving the GPU toggle on costs
+> nothing on a discrete-GPU desktop: the light ops never regress and the editor's
+> blur-heavy work still gets the 16× speedup. (`GET /api/system/gpu` reports
+> `unifiedMemory` and the chosen `offloadedOps`.)
 
 > **Build matters.** Use a **Release** build. Earlier runs on this machine in
 > **Debug** scored ~348 — roughly half. The SBC numbers above all come from the

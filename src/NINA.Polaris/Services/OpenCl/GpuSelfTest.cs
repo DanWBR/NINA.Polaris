@@ -31,6 +31,20 @@ public static class GpuSelfTest {
     public record KernelResult(string Kernel, bool Ran, long MaxDiff, long Tolerance, bool Ok, string? Note = null);
 
     public static IReadOnlyList<KernelResult> Run(IGpuCompute gpu) {
+        // The self-test validates kernel *correctness* on this GPU, so it must
+        // exercise every kernel even when the production offload policy (on a
+        // discrete GPU) would decline some of them for performance. Force the
+        // policy to allow-all for the duration, restoring it afterwards.
+        if (gpu is OpenClGpuCompute ocl) {
+            ocl.EnsureInitialized();
+            var saved = ocl.OffloadPolicy;
+            ocl.OffloadPolicy = GpuOffloadPolicy.AllowAll(ocl.HostUnifiedMemory ?? true);
+            try { return RunCore(gpu); } finally { ocl.OffloadPolicy = saved; }
+        }
+        return RunCore(gpu);
+    }
+
+    private static IReadOnlyList<KernelResult> RunCore(IGpuCompute gpu) {
         var results = new List<KernelResult>();
         var cpu = new CpuGpuCompute();
 

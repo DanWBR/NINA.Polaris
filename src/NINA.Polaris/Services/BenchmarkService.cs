@@ -686,8 +686,18 @@ public class BenchmarkService {
     // ----- Workload: GPU (OpenCL) vs CPU on the image kernels -----
 
     private GpuResult RunGpuWorkload(CancellationToken ct) {
+        if (!_gpu.IsHardware)
+            return new GpuResult(false, _gpu.BackendName, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        // The GPU section reports the *raw* per-op GPU-vs-CPU speed — that's what
+        // justifies the offload policy — so measure with every kernel forced on
+        // even if the production policy declines some on this discrete device.
+        return _gpu is NINA.Polaris.Services.OpenCl.OpenClGpuCompute ocl
+            ? ocl.WithAllKernels(() => MeasureGpu(ct))
+            : MeasureGpu(ct);
+    }
+
+    private GpuResult MeasureGpu(CancellationToken ct) {
         var none = new GpuResult(false, _gpu.BackendName, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-        if (!_gpu.IsHardware) return none; // CPU backend -> nothing to compare
         var cpu = new NINA.Image.Gpu.CpuGpuCompute();
         int w = FrameW, h = FrameH;
         double mpx = (double)w * h / 1_000_000.0;
@@ -706,15 +716,28 @@ public class BenchmarkService {
         if (warpGpu <= 0 && debGpu <= 0 && blurGpu <= 0) return none;
 
         static double Spd(double g, double c) => c > 0 ? Math.Round(g / c, 2) : 0;
-        var speedups = new[] { Spd(warpGpu, warpCpu), Spd(debGpu, debCpu), Spd(blurGpu, blurCpu) }
-            .Where(s => s > 0).ToArray();
-        double overall = speedups.Length > 0 ? Math.Round(speedups.Average(), 2) : 0;
         static double R(double v) => Math.Round(v, 1);
+        double overall = GpuOverallSpeedup(
+            new[] { Spd(warpGpu, warpCpu), Spd(debGpu, debCpu), Spd(blurGpu, blurCpu) });
         return new GpuResult(true, _gpu.BackendName,
             R(warpCpu), R(warpGpu), Spd(warpGpu, warpCpu),
             R(debCpu), R(debGpu), Spd(debGpu, debCpu),
             R(blurCpu), R(blurGpu), Spd(blurGpu, blurCpu),
             overall);
+    }
+
+    /// <summary>Aggregate the per-op GPU/CPU speedups into one headline figure
+    /// using the <i>geometric</i> mean of the ops that ran (speedup &gt; 0). The
+    /// geometric mean is the correct way to average ratios: unlike a plain
+    /// arithmetic mean it is not dominated by a single large win (e.g. blur 16×
+    /// while warp/debayer are &lt;1×), so it doesn't overstate the benefit when
+    /// some ops are actually slower on the GPU. Returns 0 when nothing ran.</summary>
+    internal static double GpuOverallSpeedup(IEnumerable<double> perOpSpeedups) {
+        var s = perOpSpeedups.Where(x => x > 0).ToArray();
+        if (s.Length == 0) return 0;
+        double product = 1.0;
+        foreach (var v in s) product *= v;
+        return Math.Round(Math.Pow(product, 1.0 / s.Length), 2);
     }
 
     /// <summary>Run <paramref name="op"/> repeatedly within the budget and
@@ -811,7 +834,10 @@ public record CpuResult(
     double CoreScaling, double MemBandwidthGBps, int Cores);
 
 // OCL: GPU (OpenCL) vs CPU on the same image kernels. MpxPerSec is megapixels
-// processed per second; Speedup = gpu / cpu. Ran=false when no usable GPU.
+// processed per second; Speedup = gpu / cpu. OverallSpeedup is the geometric
+// mean of the per-op speedups (not arithmetic — see GpuOverallSpeedup), so a
+// single large win doesn't mask ops that are slower on the GPU. Ran=false when
+// no usable GPU.
 public record GpuResult(
     bool Ran, string Device,
     double WarpCpuMpxPerSec, double WarpGpuMpxPerSec, double WarpSpeedup,

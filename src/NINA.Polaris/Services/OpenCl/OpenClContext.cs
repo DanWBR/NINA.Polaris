@@ -43,6 +43,17 @@ public sealed unsafe class OpenClContext : IDisposable {
     /// <summary>Human-readable device name (CL_DEVICE_NAME), for status/logs.</summary>
     public string DeviceName { get; }
 
+    /// <summary>
+    /// CL_DEVICE_HOST_UNIFIED_MEMORY: true when host and device share physical
+    /// memory (the SBC GPUs we target — Mali/Adreno — where buffer copies are
+    /// effectively zero-cost), false for a discrete GPU behind PCIe where every
+    /// host&lt;-&gt;device transfer has real cost. Used to decide whether to
+    /// offload the light per-op kernels (worth it on unified memory, often a net
+    /// loss on a discrete card). On query failure we assume unified (true) so the
+    /// SBC path — the primary target — is never penalised by a probe.
+    /// </summary>
+    public bool HostUnifiedMemory { get; }
+
     public CL Cl => _cl;
     public nint Context => _context;
     public nint Queue => _queue;
@@ -75,6 +86,7 @@ public sealed unsafe class OpenClContext : IDisposable {
         if (device == 0) throw new InvalidOperationException("No OpenCL GPU device.");
         _device = device;
         DeviceName = QueryDeviceName(device);
+        HostUnifiedMemory = QueryHostUnifiedMemory(device);
 
         // --- context + command queue ---
         int err;
@@ -120,6 +132,23 @@ public sealed unsafe class OpenClContext : IDisposable {
             fixed (byte* p = buf) _cl.GetDeviceInfo(device, DeviceInfo.Name, size, p, null);
             return Encoding.ASCII.GetString(buf).TrimEnd('\0', ' ');
         } catch { return "OpenCL GPU"; }
+    }
+
+    private bool QueryHostUnifiedMemory(nint device) {
+        try {
+            // cl_bool is a 4-byte uint (CL_TRUE == 1).
+            uint val = 0;
+            // CL_DEVICE_HOST_UNIFIED_MEMORY is marked deprecated since OpenCL 2.0,
+            // but it remains the portable way to tell shared- from discrete-memory
+            // and is still reported by the SBC drivers (Mali/Adreno) and desktop
+            // ICDs we target; there is no non-deprecated equivalent for this query.
+#pragma warning disable CS0618 // Type or member is obsolete
+            int err = _cl.GetDeviceInfo(device, DeviceInfo.HostUnifiedMemory,
+                (nuint)sizeof(uint), &val, null);
+#pragma warning restore CS0618
+            if (err != 0) return true; // unknown -> assume unified (don't penalise SBCs)
+            return val != 0;
+        } catch { return true; }
     }
 
     private string BuildLog(nint device) {

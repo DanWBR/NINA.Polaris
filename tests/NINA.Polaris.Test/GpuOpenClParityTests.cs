@@ -41,7 +41,12 @@ public class GpuOpenClParityTests {
             Assert.Ignore($"No OpenCL GPU on this machine. {OpenClRuntime.Diagnostics}. " +
                           $"InitError: {_gpu.InitError}");
         }
-        TestContext.Out.WriteLine($"OpenCL device: {_gpu.Device}");
+        // These tests validate kernel correctness, so every kernel must run even
+        // on a discrete GPU whose production policy would decline the light ops
+        // (warp/debayer) for performance. Force the allow-all policy.
+        _gpu.OffloadPolicy = GpuOffloadPolicy.AllowAll(_gpu.HostUnifiedMemory ?? true);
+        TestContext.Out.WriteLine(
+            $"OpenCL device: {_gpu.Device} (unifiedMemory={_gpu.HostUnifiedMemory})");
     }
 
     [OneTimeTearDown]

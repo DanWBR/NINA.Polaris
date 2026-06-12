@@ -345,10 +345,16 @@ public static class SystemEndpoints {
             // build log) on failure.
             bool initialized = false;
             string? device = null, initError = null;
+            bool? unifiedMemory = null;
+            string[]? offloadedOps = null;
             if (gpu is NINA.Polaris.Services.OpenCl.OpenClGpuCompute ocl) {
                 initialized = ocl.EnsureInitialized();
                 device = ocl.Device;
                 initError = ocl.InitError;
+                unifiedMemory = ocl.HostUnifiedMemory;
+                // On a discrete GPU some light kernels run on the CPU instead
+                // (auto-decided at init); expose which ops actually offload.
+                offloadedOps = ocl.OffloadedOps.Select(o => o.ToString()).ToArray();
             }
             bool userEnabled = gpu is NINA.Polaris.Services.OpenCl.OpenClGpuCompute o2 ? o2.Enabled : false;
             return Results.Ok(new {
@@ -361,6 +367,8 @@ public static class SystemEndpoints {
                 initialized,
                 device,
                 initError,
+                unifiedMemory,
+                offloadedOps,
                 diagnostics = NINA.Polaris.Services.OpenCl.OpenClRuntime.Diagnostics
             });
         });

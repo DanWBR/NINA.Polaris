@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using NINA.Core.Enum;
@@ -40,6 +41,12 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
     private bool _initFailed;
     private string? _initError;
 
+    /// <summary>Per-op offload allow-list, decided once at init from the device's
+    /// memory model (see <see cref="GpuOffloadPolicy"/>). <c>null</c> means "allow
+    /// every op" — the state while the discrete-device probe is running (so each
+    /// kernel can execute to be measured) and before init.</summary>
+    private volatile GpuOffloadPolicy? _policy;
+
     public OpenClGpuCompute(ILogger<OpenClGpuCompute> log) {
         _log = log;
     }
@@ -64,6 +71,42 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
     /// else null. Invaluable for the first hardware bring-up.</summary>
     public string? InitError => _initError;
 
+    /// <summary>CL_DEVICE_HOST_UNIFIED_MEMORY for the active device (null until
+    /// initialised). True for the SBC GPUs we target, false for a discrete card.</summary>
+    public bool? HostUnifiedMemory => _ctx?.HostUnifiedMemory;
+
+    /// <summary>The per-op offload policy chosen at init (null until initialised).
+    /// Settable so the self-test / benchmark can force every kernel on to
+    /// measure/validate the raw kernels regardless of the production decision;
+    /// callers should restore the previous value (see <see cref="WithAllKernels"/>).</summary>
+    public GpuOffloadPolicy? OffloadPolicy {
+        get => _policy;
+        set => _policy = value;
+    }
+
+    /// <summary>The ops actually offloaded to the GPU under the current policy
+    /// (empty when uninitialised), for status/diagnostics.</summary>
+    public IReadOnlyList<GpuOp> OffloadedOps =>
+        _policy?.AllowedOps ?? Array.Empty<GpuOp>();
+
+    /// <summary>True when <paramref name="op"/> may run on the GPU. A null policy
+    /// (probe in flight / pre-init) allows everything so the gate never blocks a
+    /// kernel that init itself needs to measure.</summary>
+    private bool Offload(GpuOp op) => _policy?.Allows(op) ?? true;
+
+    /// <summary>Run <paramref name="body"/> with the offload policy forced to
+    /// allow every op, restoring the previous policy afterwards. Used by the
+    /// self-test (validate every kernel on this GPU) and the benchmark (measure
+    /// the raw per-op GPU-vs-CPU speed), which must exercise kernels the
+    /// production policy would otherwise decline. Forces init first so a real
+    /// context exists.</summary>
+    public T WithAllKernels<T>(Func<T> body) {
+        EnsureInitialized();
+        var saved = _policy;
+        _policy = GpuOffloadPolicy.AllowAll(_ctx?.HostUnifiedMemory ?? true);
+        try { return body(); } finally { _policy = saved; }
+    }
+
     /// <summary>Force the lazy init (idempotent) and report whether the GPU path
     /// is usable. Lets a status endpoint trigger + observe the real result.</summary>
     public bool EnsureInitialized() => Context() != null;
@@ -84,7 +127,25 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
                 }
                 var src = LoadKernelSource();
                 _ctx = new OpenClContext(src);
-                _log.LogInformation("OpenCL GPU backend ready: {Device}", _ctx.DeviceName);
+                // Decide the per-op offload policy. Unified-memory SBCs (the
+                // primary target) keep full offload unchanged; a discrete GPU is
+                // probed so only ops that actually beat the CPU get offloaded
+                // (the light kernels lose to a fast desktop CPU once the PCIe
+                // transfer is counted). _policy stays null across the probe so
+                // each kernel can run to be measured.
+                if (_ctx.HostUnifiedMemory) {
+                    _policy = GpuOffloadPolicy.AllowAll(unifiedMemory: true);
+                    _log.LogInformation(
+                        "OpenCL GPU backend ready: {Device} (unified memory, full offload)",
+                        _ctx.DeviceName);
+                } else {
+                    var policy = ProbeDiscretePolicy();
+                    _policy = policy;
+                    _log.LogInformation(
+                        "OpenCL GPU backend ready: {Device} (discrete GPU; offloading {Ops})",
+                        _ctx.DeviceName,
+                        policy.AllowedOps.Count > 0 ? string.Join(", ", policy.AllowedOps) : "nothing");
+                }
                 return _ctx;
             } catch (Exception ex) {
                 _initFailed = true;
@@ -105,6 +166,74 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
         return File.ReadAllText(path);
     }
 
+    // ─── discrete-GPU offload probe ───────────────────────────────────────
+
+    // One representative tile (1 MP). Big enough that the per-op transfer-vs-
+    // compute balance resembles a real frame, small enough that the whole probe
+    // is well under a second. A tiny buffer would over-penalise the GPU (fixed
+    // launch/transfer latency dominates), so this is a fair, slightly
+    // conservative gate.
+    private const int ProbeDim = 1024;
+    private const int ProbeIters = 5;
+
+    /// <summary>
+    /// Times each offloadable kernel GPU-vs-CPU once (best-of-N) and returns the
+    /// allow-list. Runs only on a discrete device, inside init, with
+    /// <see cref="_policy"/> still null so the gate lets every kernel execute.
+    /// BoxBlur8 isn't measured (the CPU backend declines it); the policy derives
+    /// it from the separable-blur result.
+    /// </summary>
+    private GpuOffloadPolicy ProbeDiscretePolicy() {
+        const int w = ProbeDim, h = ProbeDim, n = w * h;
+        var cpu = new CpuGpuCompute();
+        var data = new ushort[n];
+        for (int i = 0; i < n; i++) data[i] = (ushort)((i * 41 + (i % 7) * 1000) & 0xFFFF);
+        var lut = new byte[65536];
+        for (int i = 0; i < lut.Length; i++) lut[i] = (byte)((i * 255) / 65535);
+        var t = new AffineTransform { M00 = 1, M11 = 1, Tx = 7.3, Ty = -5.1 };
+
+        var speedups = new Dictionary<GpuOp, double> {
+            [GpuOp.Warp] = Speedup(
+                () => TryWarpAffine(data, w, h, t, out _),
+                () => cpu.TryWarpAffine(data, w, h, t, out _)),
+            [GpuOp.Debayer] = Speedup(
+                () => TryDebayerBilinear(data, w, h, BayerPatternEnum.RGGB, out _),
+                () => cpu.TryDebayerBilinear(data, w, h, BayerPatternEnum.RGGB, out _)),
+            [GpuOp.SeparableBlur] = Speedup(
+                () => TrySeparableBlur(data, w, h, 3, 1.5, out _),
+                () => cpu.TrySeparableBlur(data, w, h, 3, 1.5, out _)),
+            [GpuOp.ApplyLut8] = Speedup(
+                () => TryApplyLut8(data, lut, out _),
+                () => cpu.TryApplyLut8(data, lut, out _)),
+            [GpuOp.Accumulate] = Speedup(
+                () => { var a = new float[n]; var c = new int[n]; return TryAccumulate(data, a, c, n); },
+                () => { var a = new float[n]; var c = new int[n]; return cpu.TryAccumulate(data, a, c, n); }),
+        };
+        return GpuOffloadPolicy.FromProbe(speedups);
+    }
+
+    /// <summary>GPU/CPU speedup (>1 means the GPU is faster) from the best (min)
+    /// time of each side over a few iterations; min reduces GC/scheduler noise.
+    /// Returns 0 — i.e. "GPU not faster", so the op is not offloaded — if either
+    /// side declines or is unmeasurable.</summary>
+    private static double Speedup(Func<bool> gpu, Func<bool> cpu) {
+        double g = BestMs(gpu), c = BestMs(cpu);
+        return g > 0 && c > 0 ? c / g : 0;
+    }
+
+    private static double BestMs(Func<bool> op) {
+        if (!op()) return -1; // warm-up + capability probe (JIT, kernel build, buffers)
+        double best = double.MaxValue;
+        var sw = new Stopwatch();
+        for (int i = 0; i < ProbeIters; i++) {
+            sw.Restart();
+            if (!op()) return -1;
+            sw.Stop();
+            best = Math.Min(best, sw.Elapsed.TotalMilliseconds);
+        }
+        return best > 0 ? best : double.Epsilon;
+    }
+
     // ─── kernels ──────────────────────────────────────────────────────────
 
     public bool TrySeparableBlur(ushort[] data, int width, int height, int radius,
@@ -112,7 +241,7 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
         result = Array.Empty<ushort>();
         if (radius < 1) return false;
         var ctx = Context();
-        if (ctx == null) return false;
+        if (ctx == null || !Offload(GpuOp.SeparableBlur)) return false;
         try {
             int n = width * height;
             var kernel = BuildGaussianKernel(radius, sigma <= 0 ? radius / 2.0 : sigma);
@@ -149,7 +278,7 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
         result = Array.Empty<byte>();
         if (radius < 1 || passes < 1) return false;
         var ctx = Context();
-        if (ctx == null) return false;
+        if (ctx == null || !Offload(GpuOp.BoxBlur8)) return false;
         try {
             int n = width * height;
             var cl = ctx.Cl;
@@ -185,7 +314,7 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
                               AffineTransform transform, out ushort[] result) {
         result = Array.Empty<ushort>();
         var ctx = Context();
-        if (ctx == null) return false;
+        if (ctx == null || !Offload(GpuOp.Warp)) return false;
         try {
             // Invert the forward transform so the kernel can map output->source.
             double det = transform.M00 * transform.M11 - transform.M01 * transform.M10;
@@ -226,7 +355,7 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
         var block = ColorBlock(pattern);
         if (block == null) return false; // None/Auto/unsupported -> CPU
         var ctx = Context();
-        if (ctx == null) return false;
+        if (ctx == null || !Offload(GpuOp.Debayer)) return false;
         try {
             int n = width * height;
             if (cfa.Length < n) return false;
@@ -267,7 +396,7 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
     public bool TryApplyLut8(ushort[] data, byte[] lut, out byte[] result) {
         result = Array.Empty<byte>();
         var ctx = Context();
-        if (ctx == null) return false;
+        if (ctx == null || !Offload(GpuOp.ApplyLut8)) return false;
         try {
             int n = data.Length;
             var cl = ctx.Cl;
@@ -293,7 +422,7 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
 
     public bool TryAccumulate(ushort[] frame, float[] accum, int[] count, int length) {
         var ctx = Context();
-        if (ctx == null) return false;
+        if (ctx == null || !Offload(GpuOp.Accumulate)) return false;
         try {
             var cl = ctx.Cl;
             lock (ctx.Gate) {
