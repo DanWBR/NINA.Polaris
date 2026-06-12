@@ -166,6 +166,7 @@ export default defineConfig({
                   { type: 'string', name: 'host', label: 'Host' },
                   { type: 'string', name: 'ram', label: 'RAM' },
                   { type: 'string', name: 'status', label: 'Status' },
+                  { type: 'boolean', name: 'highlight', label: 'Highlight row (GPU + NPU board)' },
                   { type: 'string', name: 'notes', label: 'Notes', ui: { component: 'textarea' } },
                 ],
               },

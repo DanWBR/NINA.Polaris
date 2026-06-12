@@ -7,12 +7,12 @@
     "ramNote": "Polaris uses 0.7 to 1.7 GB of RAM on average, so 2 GB is the practical floor. A Raspberry Pi 4 with 2 GB still runs the app, with client-side WASM offloading the heavy live-stack math.",
     "recommendedNote": "Recommended board: the Orange Pi 5 Pro with 4 GB or more. It runs the whole app end to end, with OpenCL acceleration on the GPU and GraXpert AI on the NPU. More boards are on the test bench: two Orange Pi 4 Pro (4 GB), a Celeron PC stick, and a Radxa Dragon Q6A (expected to be the most powerful of the lot).",
     "rows": [
-      { "host": "Orange Pi 5 Pro (4 GB)", "ram": "4 GB+", "status": "Recommended", "notes": "Proven daily driver. Full experience: OpenCL on the GPU and GraXpert AI on the NPU." },
+      { "host": "Orange Pi 5 Pro (4 GB)", "ram": "4 GB+", "status": "Recommended", "highlight": true, "notes": "Proven daily driver. RK3588S (4x Cortex-A76 + 4x Cortex-A55), Mali-G610 GPU, 6 TOPS NPU. Full experience: OpenCL on the GPU and GraXpert AI on the NPU." },
       { "host": "Raspberry Pi 5 (8 GB)", "ram": "8 GB", "status": "Great", "notes": "Lossless. Live stacking plus simultaneous Studio jobs are fine." },
       { "host": "Raspberry Pi 4 (2 GB)", "ram": "2 / 4 / 8 GB", "status": "Minimum", "notes": "The RAM floor. 2 GB is the minimum to run; client-side WASM offloads the heavy math." },
       { "host": "Raspberry Pi 3 (1 GB)", "ram": "1 GB", "status": "Below RAM target", "notes": "Runs, but tight. PHD2 GUI embed is auto-disabled (32-bit ARM gate)." },
       { "host": "Radxa Dragon Q6A", "ram": "TBD", "status": "Testing", "notes": "Incoming. Expected to be the most powerful board tested so far." },
-      { "host": "Orange Pi 4 Pro (4 GB)", "ram": "4 GB", "status": "Testing", "notes": "Two units incoming." },
+      { "host": "Orange Pi 4 Pro (4 GB)", "ram": "4 GB", "status": "Testing", "highlight": true, "notes": "Two units incoming. Allwinner A733 (2x Cortex-A76 + 6x Cortex-A55, up to 2.0 GHz), Imagination BXM-4-64 GPU, 3 TOPS NPU, LPDDR5. Same GPU-plus-NPU story as the 5 Pro: OpenCL on the GPU and GraXpert on the NPU, pending validation." },
       { "host": "Celeron PC stick", "ram": "TBD", "status": "Testing", "notes": "Incoming, results to follow." },
       { "host": "Windows mini PC / desktop / laptop", "ram": "4 GB+", "status": "Full features", "notes": "Same feature set as Linux, plus vendor DSLR drivers." }
     ]

@@ -60,8 +60,11 @@ const statusClass = (s: string) => {
             </thead>
             <tbody>
               {g.requirements.rows.map((r) => (
-                <tr>
-                  <td class="left rowlabel">{r.host}</td>
+                <tr class={r.highlight ? 'is-highlight' : ''}>
+                  <td class="left rowlabel">
+                    {r.host}
+                    {r.highlight && <span class="gpu-tag">GPU + NPU</span>}
+                  </td>
                   <td class="nowrap">{r.ram}</td>
                   <td><span class={`status ${statusClass(r.status)}`}>{r.status}</span></td>
                   <td class="left">{r.notes}</td>
@@ -304,6 +307,23 @@ const statusClass = (s: string) => {
   .status.ok { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.4); background: rgba(var(--accent-rgb), 0.1); }
   .status.warn { color: var(--warning); border-color: rgba(255, 152, 0, 0.4); background: rgba(255, 152, 0, 0.1); }
   .status.pending { color: var(--text-muted); border-style: dashed; }
+
+  /* Highlighted rows: the GPU + NPU capable boards */
+  .grid-table tr.is-highlight { background: rgba(var(--accent-rgb), 0.07); }
+  .gpu-tag {
+    display: inline-block;
+    margin-left: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+    border: 1px solid rgba(var(--accent-rgb), 0.4);
+    border-radius: 999px;
+    padding: 2px 7px;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
 
   /* Platform cards */
   .plat-grid {
