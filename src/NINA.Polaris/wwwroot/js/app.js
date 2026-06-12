@@ -23915,6 +23915,19 @@ function ninaApp() {
                 } else if (this.guideTab === 'native') {
                     this.guideTab = 'gui';
                 }
+                // Safety net: the "PHD2 backend" radio binds to guiderDriver,
+                // which is hydrated from the active rig by _applyRigToChoices.
+                // If the rigs list never loaded (e.g. loadRigs failed in the
+                // mobile wrapper), guiderDriver stays at its hardcoded 'phd2'
+                // default and the radio shows External even though the server
+                // is actually running the native guider. Adopt the authoritative
+                // running backend so the radio reflects reality. No-ops once
+                // loadRigs succeeds (rigs.length > 0 -> _applyRigToChoices wins),
+                // so it never fights an explicit user pick on a loaded rig.
+                if (this.guider.backend && !this.rigs.length
+                        && this.guiderDriver !== this.guider.backend) {
+                    this.guiderDriver = this.guider.backend;
+                }
                 // Even on disconnect, surface the sync/calibrate/gui-session
                 // sub-objects so the chips + GUI tab still update.
                 if (g.profileSync)  this.guider.profileSync = g.profileSync;
