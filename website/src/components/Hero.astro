@@ -1,5 +1,5 @@
 ---
-import { site, hero, stats } from '../data/site';
+import { site, hero } from '../data/site';
 import Nav from './Nav.astro';
 ---
 
@@ -25,14 +25,7 @@ import Nav from './Nav.astro';
       <a class="btn btn-ghost" href={site.donate} target="_blank" rel="noopener">❤ Donate</a>
     </div>
 
-    <div class="hero-stats">
-      {stats.map((s) => (
-        <div>
-          <strong>{s.value}</strong>
-          <span>{s.label}</span>
-        </div>
-      ))}
-    </div>
+    {hero.disclaimer && <p class="hero-note">{hero.disclaimer}</p>}
   </div>
 
   <div class="hero-credit">
@@ -92,25 +85,15 @@ import Nav from './Nav.astro';
   }
   .hero-cta { display: flex; flex-wrap: wrap; gap: 12px; }
 
-  .hero-stats {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 36px;
-    margin-top: 56px;
-  }
-  .hero-stats > div { display: flex; flex-direction: column; }
-  .hero-stats strong {
-    font-size: 32px;
-    font-weight: 700;
-    color: var(--accent);
-    line-height: 1;
-  }
-  .hero-stats span {
-    font-size: 12px;
+  .hero-note {
+    margin-top: 44px;
+    max-width: 560px;
+    font-size: 13px;
+    line-height: 1.55;
     color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    margin-top: 4px;
+    border-left: 2px solid var(--border);
+    padding-left: 14px;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
   }
 
   .hero-credit {
@@ -125,8 +108,6 @@ import Nav from './Nav.astro';
   @media (max-width: 700px) {
     .hero-content { padding: 40px 24px; }
     .hero-title { letter-spacing: -1px; }
-    .hero-stats { gap: 20px; }
-    .hero-stats strong { font-size: 24px; }
     .hero-credit { right: 8px; font-size: 10px; }
   }
 </style>

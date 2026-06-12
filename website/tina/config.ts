@@ -51,17 +51,7 @@ export default defineConfig({
               { type: 'string', name: 'titleLine2', label: 'Title line 2' },
               { type: 'string', name: 'titleAccent', label: 'Title line 3 (accent colour)' },
               { type: 'string', name: 'lede', label: 'Lede paragraph', ui: { component: 'textarea' } },
-            ],
-          },
-          {
-            type: 'object',
-            name: 'stats',
-            label: 'Hero stats',
-            list: true,
-            ui: { itemProps: (i) => ({ label: `${i?.value ?? ''} ${i?.label ?? ''}` }) },
-            fields: [
-              { type: 'string', name: 'value', label: 'Value' },
-              { type: 'string', name: 'label', label: 'Label' },
+              { type: 'string', name: 'disclaimer', label: 'Fork disclaimer', ui: { component: 'textarea' } },
             ],
           },
           {

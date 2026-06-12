@@ -4,14 +4,9 @@
     "titleLine1": "Your rig.",
     "titleLine2": "Any device.",
     "titleAccent": "No display required.",
-    "lede": "A complete imaging session, covering equipment, guiding, plate-solving and the sequencer, running on a Raspberry Pi, a Windows mini PC, or anywhere else, controlled from the browser of your phone, laptop, or warm-room tablet."
+    "lede": "A complete imaging session, covering equipment, guiding, plate-solving and the sequencer, running on a Raspberry Pi, a Windows mini PC, or anywhere else, controlled from the browser of your phone, laptop, or warm-room tablet.",
+    "disclaimer": "N.I.N.A. Polaris is a community-driven fork of N.I.N.A. It is not affiliated with or supported by the official N.I.N.A. team. For anything Polaris, open an issue on this repository; please do not contact the N.I.N.A. developers about it."
   },
-  "stats": [
-    { "value": "181", "label": "unit tests" },
-    { "value": "30+", "label": "sequencer instructions" },
-    { "value": "9", "label": "device types" },
-    { "value": "0", "label": "cloud dependencies" }
-  ],
   "featuresSection": {
     "title": "Everything your session needs",
     "sub": "From connecting the hardware to a finished image: capture, guiding, framing, live stacking, sequencing, and AI post-processing, all driven from the browser."

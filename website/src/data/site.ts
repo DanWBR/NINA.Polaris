@@ -53,7 +53,6 @@ export const footerCols = [
 
 // ---- Tina-managed editorial content (content/pages/home.json) ----
 export const hero = home.hero;
-export const stats = home.stats;
 export const featuresSection = home.featuresSection;
 export const features = home.features;
 export const benchmarks = home.benchmarks;
