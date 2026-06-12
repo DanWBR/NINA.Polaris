@@ -4,8 +4,9 @@ import { navLinks } from '../data/site';
 
 <nav class="nav">
   <a class="brand" href="/">
-    <span class="brand-mark">NINA</span>
-    <span class="brand-sub">Polaris</span>
+    <img class="brand-badge" src="/img/polaris-badge.png" alt="N.I.N.A. Polaris" width="28" height="28" />
+    <span class="brand-name">N.I.N.A.</span>
+    <span class="brand-tag">POLARIS</span>
   </a>
 
   <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
@@ -50,24 +51,36 @@ import { navLinks } from '../data/site';
     top: 0;
     z-index: 20;
   }
+  /* Wordmark mirrors the app header (css/app.css .brand*). */
   .brand {
-    display: flex;
-    align-items: baseline;
+    display: inline-flex;
+    align-items: center;
     gap: 8px;
     text-decoration: none;
+    color: inherit;
+    padding: 2px 4px;
+    border-radius: 6px;
   }
   .brand:hover { text-decoration: none; }
-  .brand-mark {
-    font-size: 22px;
-    font-weight: 800;
-    letter-spacing: 1px;
-    color: var(--accent);
+  .brand-badge {
+    height: 28px;
+    width: auto;
+    border-radius: 4px;
+    flex-shrink: 0;
+    filter: drop-shadow(0 0 4px rgba(8, 145, 178, 0.4));
   }
-  .brand-sub {
-    font-size: 14px;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 2px;
+  .brand-name,
+  .brand-tag {
+    font-weight: 800;
+    font-size: 17px;
+    letter-spacing: 1px;
+    line-height: 1;
+    /* Brand gradient: deep-night blue, icy cyan, stellar white. */
+    background: linear-gradient(90deg, #1e3a8a 0%, #0891b2 40%, #67e8f9 75%, #f0f9ff 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
   }
   .nav-links { display: flex; gap: 28px; }
   .nav-links a {
