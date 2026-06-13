@@ -1247,7 +1247,8 @@ public sealed class NativeGuider : IGuider, IDisposable {
         if (vf == null || vf.Pixels.Length < (long)vf.Width * vf.Height) return null;
         try {
             return NINA.Polaris.Services.Studio.FitsThumbnailer.RenderJpegFromBuffer(
-                vf.Pixels, vf.Width, vf.Height, vf.BitDepth, maxDim, quality);
+                vf.Pixels, vf.Width, vf.Height, vf.BitDepth, maxDim, quality,
+                guideStretch: true);
         } catch {
             return null;
         }

@@ -163,17 +163,22 @@ public static class FitsThumbnailer {
     /// </summary>
     public static byte[] RenderJpegFromBuffer(ushort[] pixels, int width, int height,
                                               int bitDepth, int maxDim = 256, int quality = 85,
-                                              NINA.Image.ImageAnalysis.AutoStretch.StretchParams? overrideParams = null) {
+                                              NINA.Image.ImageAnalysis.AutoStretch.StretchParams? overrideParams = null,
+                                              bool guideStretch = false) {
         // Auto-stretch lives in NINA.Image (vendored portable copy).
         // GX-12c: when overrideParams is set, skip the auto-stretch
         // computation and apply the caller-supplied black/mid/white.
         // Used by the comparator to pin both BEFORE and AFTER to the
         // same histogram.
+        // guideStretch picks the dark-background guide-camera preset
+        // instead of the DSO 15%-grey default (see AutoStretch.ApplyGuide).
         byte[] stretched = overrideParams != null
             ? NINA.Image.ImageAnalysis.AutoStretch.ApplyManual(
                 pixels, width, height,
                 overrideParams.Black, overrideParams.Mid, overrideParams.White, bitDepth)
-            : NINA.Image.ImageAnalysis.AutoStretch.Apply(pixels, width, height, bitDepth);
+            : guideStretch
+                ? NINA.Image.ImageAnalysis.AutoStretch.ApplyGuide(pixels, width, height, bitDepth)
+                : NINA.Image.ImageAnalysis.AutoStretch.Apply(pixels, width, height, bitDepth);
 
         // Wrap the byte[] as a Gray8 SKBitmap, copy so we own the
         // backing storage, then resize. JPEG encoders are flaky with

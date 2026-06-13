@@ -51,6 +51,81 @@ public static class AutoStretch {
     }
 
     /// <summary>
+    /// Stretch tuned for the native guider's guide-camera preview.
+    ///
+    /// The DSO auto-stretch above lifts the background to a 15% grey so faint
+    /// nebulosity shows; on a guide frame that just amplifies the sensor noise
+    /// floor to a grainy grey wash (the symptom: native guide preview looks far
+    /// noisier than PHD2's of the same camera). PHD2 instead keeps the
+    /// background DARK and only lets stars stand out. We mirror that by placing
+    /// the black point ABOVE the background median (median + k*MAD), so the
+    /// noise floor clips to black, and mapping the brightest pixel to white.
+    /// </summary>
+    public static byte[] ApplyGuide(ushort[] data, int width, int height, int bitDepth = 16) {
+        var p = ComputeGuideStretchParams(data, width, height, bitDepth);
+        return ApplyManual(data, width, height, p.Black, p.Mid, p.White, bitDepth);
+    }
+
+    /// <summary>
+    /// Compute the guide-preview stretch (see <see cref="ApplyGuide"/>).
+    /// <paramref name="blackSigma"/> is how far above the background median (in
+    /// MADs) the black point sits — higher crushes more noise to black.
+    /// <paramref name="midtone"/> &lt; 0.5 lifts the surviving star signal a
+    /// little so dim guide stars stay visible. A single serial pass is fine
+    /// here: guide frames are small and this runs roughly once per exposure.
+    /// </summary>
+    public static StretchParams ComputeGuideStretchParams(
+            ushort[] data, int width, int height, int bitDepth = 16,
+            double blackSigma = 2.0, double midtone = 0.35) {
+        int pixelCount = width * height;
+        if (data.Length == 0) return new StretchParams(0, 0.5, 1);
+        int n = Math.Min(data.Length, pixelCount);
+        double maxVal = (1 << bitDepth) - 1;
+
+        // Histogram over non-zero samples (ignore dead/border pixels) +
+        // the observed maximum (the brightest star → white point).
+        var hist = new int[65536];
+        long count = 0;
+        ushort observedMax = 0;
+        for (int i = 0; i < n; i++) {
+            ushort v = data[i];
+            if (v > observedMax) observedMax = v;
+            if (v == 0) continue;
+            hist[v]++;
+            count++;
+        }
+        if (count == 0) return new StretchParams(0, 0.5, 1);
+
+        long half = count / 2;
+        long cum = 0;
+        double median = 0;
+        for (int i = 0; i < hist.Length; i++) {
+            cum += hist[i];
+            if (cum > half) { median = i; break; }
+        }
+
+        // MAD: median of |v - median| over the same sample.
+        var dev = new int[65536];
+        double median0 = median;
+        for (int i = 0; i < n; i++) {
+            ushort v = data[i];
+            if (v == 0) continue;
+            int d = (int)Math.Abs(v - median0);
+            if (d < 65536) dev[d]++;
+        }
+        cum = 0;
+        double mad = 0;
+        for (int i = 0; i < dev.Length; i++) {
+            cum += dev[i];
+            if (cum > half) { mad = i; break; }
+        }
+
+        double black = Math.Clamp((median + blackSigma * mad) / maxVal, 0.0, 1.0);
+        double white = Math.Clamp(observedMax / maxVal, black + 1e-3, 1.0);
+        return new StretchParams(black, Math.Clamp(midtone, 0.001, 0.999), white);
+    }
+
+    /// <summary>
     /// Apply an explicit MTF stretch with caller-chosen black / mid / white
     /// points (each normalised 0..1). Used by the STUDIO viewer so slider
     /// drags don't require re-computing stats every frame.
