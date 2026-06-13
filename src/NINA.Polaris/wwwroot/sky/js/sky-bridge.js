@@ -1107,6 +1107,24 @@
                         stel.core.dss.visible = !!msg.visible;
                 } catch (e) { console.warn('[Sky] DSS toggle failed:', e); }
                 break;
+            case 'set-constellations':
+                // Parent toggle for constellation rendering. lines+labels
+                // are the stick-figure overlay; art is the bundled western
+                // illustration set (88 .webp). show_only_pointed is forced
+                // off so the WHOLE sky shows constellations, not just the
+                // one under the centre (the engine default is pointed-only).
+                try {
+                    var c = stel.core && stel.core.constellations;
+                    if (c) {
+                        c.show_only_pointed = false;
+                        if (typeof msg.lines === 'boolean') {
+                            c.lines_visible = msg.lines;
+                            c.labels_visible = msg.lines;
+                        }
+                        if (typeof msg.art === 'boolean') c.images_visible = msg.art;
+                    }
+                } catch (e) { console.warn('[Sky] constellations toggle failed:', e); }
+                break;
             default:
                 console.log('[Sky] unknown message type:', msg.type);
         }
@@ -1445,6 +1463,27 @@
                     console.log('[Sky] data sources registered (base: ' + SKYDATA_BASE + ')');
                 } catch (dsErr) {
                     console.error('[Sky] addDataSource failed:', dsErr);
+                }
+
+                // Constellations ON by default. The engine ships them
+                // disabled (lines/labels off, show_only_pointed=true) so
+                // out of the box you only ever see ONE constellation, the
+                // one under the centre, which is why the sky looked empty.
+                // Lines + labels give the ASIAIR/Stellarium look using data
+                // already bundled (HIP line indices + IAU names); the
+                // artwork overlay (images_visible) stays off by default
+                // since the figures can occlude faint DSOs during EAA, the
+                // parent app can turn it on via 'set-constellations'.
+                try {
+                    var consInit = stel.core.constellations;
+                    if (consInit) {
+                        consInit.show_only_pointed = false;
+                        consInit.lines_visible = true;
+                        consInit.labels_visible = true;
+                        consInit.images_visible = false;
+                    }
+                } catch (consErr) {
+                    console.warn('[Sky] constellation defaults failed:', consErr);
                 }
 
                 postToParent({
