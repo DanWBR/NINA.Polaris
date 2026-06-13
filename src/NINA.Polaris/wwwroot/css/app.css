@@ -6420,6 +6420,26 @@ label select.input-sm {
     background: rgba(33, 150, 243, 0.1);
 }
 
+/* Frente B: per-object DSO preview thumbnail (DSS2 cutout). Sits left of
+   the text; the text block keeps the old single-row layout so the mag
+   still right-aligns via its margin-left:auto. */
+.sky-result-thumb {
+    width: 46px;
+    height: 46px;
+    flex: 0 0 46px;
+    object-fit: cover;
+    border-radius: 4px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+}
+.sky-result-text {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
 .sky-result-type {
     color: var(--text-muted);
     font-size: 11px;

@@ -7868,6 +7868,29 @@ function ninaApp() {
             this._skySendMessage({ type: 'set-dss-visible', visible: !!this.skyDssVisible });
         },
 
+        // Frente B: per-object DSO preview thumbnail. Derives the bundled
+        // filename slug from a catalog result's catalog + catalogId (e.g.
+        // M42, NGC7000, Sh2279), or as a fallback parses the object name.
+        // Returns '' when no slug can be derived (the <img> stays hidden);
+        // a 404 for an object we didn't bundle is handled by the @error
+        // handler that hides the element. Files come from
+        // scripts/build-dso-thumbs.py (DSS2 cutouts) under
+        // /sky/data/skydata/dso-thumbs/.
+        dsoThumbUrl(obj) {
+            if (!obj) return '';
+            let slug = '';
+            if (obj.catalog && (obj.catalogId || obj.catalogId === 0)) {
+                slug = ('' + obj.catalog + obj.catalogId).replace(/\s+/g, '').toUpperCase();
+            } else if (obj.name) {
+                // "NGC 7000" / "M 42" / "IC 1396" -> NGC7000 (drop spaces +
+                // leading zeros on the number, matching the catalog id form).
+                const m = ('' + obj.name).trim().match(/^([A-Za-z]+)\s*0*(\d+[A-Za-z]?)/);
+                if (m) slug = (m[1] + m[2]).toUpperCase();
+            }
+            if (!slug) return '';
+            return '/sky/data/skydata/dso-thumbs/' + slug + '.jpg';
+        },
+
         // Settings -> Sky imagery (offline DSS). Poll status once; if a
         // download is running, keep polling every 1.5s for the progress bar
         // until it finishes.

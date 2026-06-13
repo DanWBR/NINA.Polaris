@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260613-histohandles">
+    <link rel="stylesheet" href="/css/app.css?v=20260613-dsothumbs">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -6226,10 +6226,15 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                          x-text="atlasResults.length + ' objects'"></div>
                     <template x-for="obj in atlasResults" :key="obj.name">
                         <div class="sky-result-item" @click="selectSkyTarget(obj)">
-                            <strong x-text="obj.name"></strong>
-                            <span class="sky-result-type" x-text="obj.type"></span>
-                            <span class="sky-result-common" x-show="obj.commonName" x-text="obj.commonName"></span>
-                            <span class="sky-result-mag">mag <span x-text="obj.magnitude"></span></span>
+                            <img class="sky-result-thumb" loading="lazy"
+                                 x-show="dsoThumbUrl(obj)" :src="dsoThumbUrl(obj)"
+                                 @error="$el.style.display='none'" alt="">
+                            <div class="sky-result-text">
+                                <strong x-text="obj.name"></strong>
+                                <span class="sky-result-type" x-text="obj.type"></span>
+                                <span class="sky-result-common" x-show="obj.commonName" x-text="obj.commonName"></span>
+                                <span class="sky-result-mag">mag <span x-text="obj.magnitude"></span></span>
+                            </div>
                         </div>
                     </template>
                 </div>
@@ -6238,10 +6243,15 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <div class="sky-results" x-show="skyShowResults && skyResults.length > 1">
                     <template x-for="obj in skyResults" :key="obj.name">
                         <div class="sky-result-item" @click="selectSkyTarget(obj)">
-                            <strong x-text="obj.name"></strong>
-                            <span class="sky-result-type" x-text="obj.type"></span>
-                            <span class="sky-result-common" x-show="obj.commonName" x-text="obj.commonName"></span>
-                            <span class="sky-result-mag">mag <span x-text="obj.magnitude"></span></span>
+                            <img class="sky-result-thumb" loading="lazy"
+                                 x-show="dsoThumbUrl(obj)" :src="dsoThumbUrl(obj)"
+                                 @error="$el.style.display='none'" alt="">
+                            <div class="sky-result-text">
+                                <strong x-text="obj.name"></strong>
+                                <span class="sky-result-type" x-text="obj.type"></span>
+                                <span class="sky-result-common" x-show="obj.commonName" x-text="obj.commonName"></span>
+                                <span class="sky-result-mag">mag <span x-text="obj.magnitude"></span></span>
+                            </div>
                         </div>
                     </template>
                 </div>
@@ -13372,7 +13382,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260613-dssdownload"></script>
+    <script src="/js/app.js?v=20260613-dsothumbs"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

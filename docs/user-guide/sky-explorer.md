@@ -68,7 +68,27 @@ Attribution: DSS Color, STScI/NASA, HEALPixed by CDS Strasbourg.
 
 > The repo ships order ≤3 as a baseline so the offline background works
 > out of the box. Run the script to a higher order for ASIAIR-grade
-> detail.
+> detail, or use **Settings → Sky imagery (offline DSS)** to download
+> order 4 / 5 from the app without touching a script.
+
+## DSO preview thumbnails
+
+Search + Atlas result cards show a small **DSS2 cutout per object** (an
+ASIAIR-style "photo per target") so you can tell a galaxy from a nebula
+at a glance, fully offline. The repo bundles Messier + Caldwell (~206
+images, ~3 MB) under `skydata/dso-thumbs/<SLUG>.jpg` (e.g. `M42.jpg`,
+`C14.jpg`), tracked with Git LFS. The frontend derives the slug from each
+result's catalog + id and hides the image when none is bundled.
+
+Regenerate or widen coverage (e.g. add bright NGC/IC) with:
+
+```bash
+python scripts/build-dso-thumbs.py --catalogs M,C,NGC,IC --max-mag 11 --min-size 3
+```
+
+Resumable (skips existing). Source: DSS2 Color via the CDS hips2fits
+service (STScI/NASA imagery). Distinct from the online `/api/sky/image`
+NASA/Wikipedia lookup, which still works as a fallback when connected.
 
 > **Browser requirement.** WebGL2 is mandatory. On a host with no
 > WebGL2 (e.g. running Polaris's local browser on a Raspberry Pi 2
