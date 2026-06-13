@@ -13197,6 +13197,30 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
+    <!-- Single-select modal (replaces window.prompt for the STUDIO
+         integration / calibration method pickers). Driven by
+         _pickOptionAsync(). -->
+    <div class="confirm-modal-overlay"
+         x-show="optionModal.open" x-cloak
+         @click.self="_optionCancel()">
+        <div class="confirm-modal-card">
+            <h3 class="confirm-modal-title" x-text="optionModal.title"></h3>
+            <p class="confirm-modal-message" x-show="optionModal.message"
+               x-text="optionModal.message"></p>
+            <select class="input" style="width:100%; margin-bottom:4px"
+                    x-model="optionModal.value">
+                <template x-for="opt in optionModal.options" :key="opt.value">
+                    <option :value="opt.value" x-text="opt.label"></option>
+                </template>
+            </select>
+            <div class="confirm-modal-actions">
+                <button class="btn btn-sm" @click="_optionCancel()">Cancel</button>
+                <button class="btn btn-sm btn-primary" @click="_optionAccept()"
+                        x-text="optionModal.okLabel || 'OK'"></button>
+            </div>
+        </div>
+    </div>
+
     <!-- AUTORUN continue-vs-restart prompt. Shown when Start is pressed on
          a sequence that already has partial progress from a stopped run.
          Continue resumes from the retained position; Restart re-pushes the
@@ -13265,7 +13289,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260613-lssave"></script>
+    <script src="/js/app.js?v=20260613-methodmodal"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

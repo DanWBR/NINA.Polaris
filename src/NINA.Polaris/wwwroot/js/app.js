@@ -956,6 +956,15 @@ function ninaApp() {
                         okLabel: 'OK', cancelLabel: 'Cancel', danger: false },
         _confirmResolver: null,
 
+        // Custom single-select modal -- replaces window.prompt() for the
+        // STUDIO integration / calibration method pickers (a native prompt
+        // is ugly and especially awkward on the Android tablet). Driven via
+        // _pickOptionAsync() which resolves to the chosen value, or null on
+        // cancel/ESC/backdrop. options = [{ value, label }].
+        optionModal: { open: false, title: '', message: '',
+                       value: '', options: [], okLabel: 'OK' },
+        _optionResolver: null,
+
         // Factory-reset in-flight flag (Settings danger zone button).
         factoryResetting: false,
 
@@ -1806,9 +1815,17 @@ function ninaApp() {
                 this.toast('Need at least 2 ' + slot + ' to make a master', 'warn');
                 return;
             }
-            const methodIn = prompt(
-                'Integration method (Mean / Median / SigmaClippedMean):',
-                'SigmaClippedMean');
+            const methodIn = await this._pickOptionAsync({
+                title: 'Make master ' + kind,
+                message: 'Integration method:',
+                value: 'SigmaClippedMean',
+                okLabel: 'Continue',
+                options: [
+                    { value: 'Mean', label: 'Mean (average)' },
+                    { value: 'Median', label: 'Median' },
+                    { value: 'SigmaClippedMean', label: 'Sigma-clipped mean (recommended)' }
+                ]
+            });
             if (!methodIn) return;
             const type = kind.charAt(0).toUpperCase() + kind.slice(1);
             let resp;
@@ -1874,13 +1891,18 @@ function ninaApp() {
                 this.toast('Need at least 2 lights to integrate', 'warn');
                 return;
             }
-            const methodIn = prompt(
-                'Integration method (Mean / Median / SigmaClippedMean):',
-                'SigmaClippedMean');
+            const methodIn = await this._pickOptionAsync({
+                title: 'Integrate ' + this.stack.lights.length + ' lights',
+                message: 'Integration method:',
+                value: 'SigmaClippedMean',
+                okLabel: 'Integrate',
+                options: [
+                    { value: 'Mean', label: 'Mean (average)' },
+                    { value: 'Median', label: 'Median' },
+                    { value: 'SigmaClippedMean', label: 'Sigma-clipped mean (recommended)' }
+                ]
+            });
             if (!methodIn) return;
-            if (!await this._confirmAsync('Integrate ' + this.stack.lights.length
-                    + ' lights with method ' + methodIn.trim() + '?',
-                    { title: 'Integrate', okLabel: 'Integrate' })) return;
             let resp;
             try {
                 resp = await this.apiPost('/api/studio/integrate', {
@@ -2951,6 +2973,7 @@ function ninaApp() {
             // closes whichever is open.
             window.addEventListener('keydown', (ev) => this._floatPanelEscapeClose(ev));
             window.addEventListener('keydown', (ev) => this._confirmModalKeydown(ev));
+            window.addEventListener('keydown', (ev) => this._optionModalKeydown(ev));
             // Android/iOS WebView: a long-press on a control pops the native
             // context menu (text-selection / link callout), which steals the
             // gesture and breaks our long-press behaviours (shutter loop,
@@ -16251,6 +16274,11 @@ function ninaApp() {
                 ev.preventDefault();
                 return;
             }
+            if (this.optionModal.open) {
+                this._optionCancel();
+                ev.preventDefault();
+                return;
+            }
             let closed = false;
             if (this.mountPanel?.visible) {
                 this.mountPanel.visible = false;
@@ -16306,6 +16334,47 @@ function ninaApp() {
             if (!this.confirmModal.open) return;
             if (ev.key === 'Enter') {
                 this._confirmAccept();
+                ev.preventDefault();
+            }
+        },
+
+        // Custom replacement for window.prompt() restricted to a fixed set
+        // of choices. Returns a Promise resolving to the chosen value (or
+        // null on Cancel/ESC/backdrop).
+        // Usage: `const m = await this._pickOptionAsync({ title, options, value });`
+        _pickOptionAsync(opts = {}) {
+            if (this.optionModal.open && this._optionResolver) {
+                this._optionResolver(null);
+                this._optionResolver = null;
+            }
+            const options = opts.options || [];
+            this.optionModal = {
+                open: true,
+                title: opts.title || 'Choose',
+                message: opts.message || '',
+                value: opts.value || (options[0] && options[0].value) || '',
+                options,
+                okLabel: opts.okLabel || 'OK'
+            };
+            return new Promise(resolve => { this._optionResolver = resolve; });
+        },
+        _optionAccept() {
+            const r = this._optionResolver;
+            this._optionResolver = null;
+            const val = this.optionModal.value;
+            this.optionModal.open = false;
+            if (r) r(val);
+        },
+        _optionCancel() {
+            const r = this._optionResolver;
+            this._optionResolver = null;
+            this.optionModal.open = false;
+            if (r) r(null);
+        },
+        _optionModalKeydown(ev) {
+            if (!this.optionModal.open) return;
+            if (ev.key === 'Enter') {
+                this._optionAccept();
                 ev.preventDefault();
             }
         },
