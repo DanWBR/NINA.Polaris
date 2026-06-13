@@ -2034,6 +2034,10 @@ function ninaApp() {
             modalBiases: [],
             modalInjectBge: false,   // pre-process each light with GraXpert BGE
             modalBgePhase: null,     // null | { jobId, total, done, failed }
+            // Server-suggested script for the current dataset selection
+            // { scriptName, reason, osc, available }. The dropdown is
+            // auto-set to this on open / when sets change; user can override.
+            modalRecommended: null,
             currentJobId: null,
             currentJob: null,
             _pollTimer: null,
@@ -18187,7 +18191,7 @@ function ninaApp() {
             // stripped, lowercased). Category order is the display order.
             const CATS = [
                 ['Equipment & capture', ['hardware', 'indi server', 'indi status', 'plate solving', 'sequencer']],
-                ['Image processing',    ['ai inference (onnx)', 'external tools', 'image cache', 'image output']],
+                ['Image processing', ['ai inference (onnx)', 'gpu acceleration (opencl)', 'external tools', 'image cache', 'image output']],
                 ['Location & time',     ['clock', 'observatory']],
                 ['Appearance & interface', ['appearance', 'device name']],
                 ['Network & security',  ['authentication', 'https certificate',
@@ -18548,9 +18552,37 @@ function ninaApp() {
             // the ~10 s × N frames cost.
             this.siril.modalInjectBge = false;
             this.siril.modalBgePhase = null;
+            this.siril.modalRecommended = null;
             this.siril.currentJobId = null;
             this.siril.currentJob = null;
             this.siril.modalOpen = true;
+            // Ask the server which script fits the current dataset and
+            // pre-select it (OSC/Mono + which calibration sets are present).
+            this.sirilRecommend();
+        },
+
+        // Ask /api/siril/recommend for the best script given the selected
+        // datasets, preselect it, and stash the reason for the UI hint.
+        // Called on modal open and whenever the calibration sets change.
+        async sirilRecommend() {
+            try {
+                const r = await this.apiPost('/api/siril/recommend', null, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        lightPaths: this.siril.modalLights,
+                        hasDarks: this.siril.modalDarks.length > 0,
+                        hasFlats: this.siril.modalFlats.length > 0,
+                        hasBias: this.siril.modalBiases.length > 0
+                    })
+                });
+                this.siril.modalRecommended = r;
+                // Only auto-apply when the recommended script actually
+                // exists in the catalogue; otherwise leave the user's pick.
+                if (r && r.available && r.scriptName) {
+                    this.siril.modalScriptName = r.scriptName;
+                }
+            } catch { /* recommendation is best-effort */ }
         },
 
         sirilCloseModal() {

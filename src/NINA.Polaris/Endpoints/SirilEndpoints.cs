@@ -50,6 +50,17 @@ public static class SirilEndpoints {
         g.MapGet("/scripts", (SirilService siril)
             => Results.Ok(siril.EnumerateScripts()));
 
+        // Recommend the best bundled script for the selected datasets.
+        // OSC vs Mono is sniffed from the first light's BAYERPAT; the
+        // calibration variant follows which masters are present. The UI
+        // seeds its script dropdown with this; the user can still override.
+        g.MapPost("/recommend", (SirilService siril, SirilRecommendRequest req)
+            => Results.Ok(siril.RecommendScript(
+                req.LightPaths,
+                req.HasDarks ?? (req.DarkPaths?.Count > 0),
+                req.HasFlats ?? (req.FlatPaths?.Count > 0),
+                req.HasBias ?? (req.BiasPaths?.Count > 0))));
+
         g.MapPost("/run", (SirilService siril, SirilRunRequest req) => {
             if (!siril.IsAvailable)
                 return Results.Json(new { error = "Siril is not installed on this host" },
@@ -128,4 +139,16 @@ public static class SirilEndpoints {
         List<string>? FlatPaths,
         List<string>? BiasPaths,
         string? WorkDirOverride);
+
+    // Either pass explicit has* flags (cheap, when the client knows the
+    // counts) or the path lists (server derives presence). LightPaths is
+    // used to sniff OSC vs Mono from the first light's header.
+    public record SirilRecommendRequest(
+        List<string>? LightPaths,
+        bool? HasDarks,
+        bool? HasFlats,
+        bool? HasBias,
+        List<string>? DarkPaths = null,
+        List<string>? FlatPaths = null,
+        List<string>? BiasPaths = null);
 }

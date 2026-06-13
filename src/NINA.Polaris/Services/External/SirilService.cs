@@ -209,6 +209,67 @@ public class SirilService {
         BinaryLocator.Enumerate(_profile.Active.SirilPath,
             WindowsCandidates(), LinuxCandidates(), MacCandidates(), "siril-cli");
 
+    // --- Script recommendation --------------------------------------
+
+    /// <summary>
+    /// Pick the most appropriate bundled preprocessing script for the
+    /// selected datasets. OSC vs Mono is sniffed from the first light's
+    /// BAYERPAT header; the calibration variant follows which masters the
+    /// user selected:
+    ///   darks + flats        -> {P}_Preprocessing          (bias used if present)
+    ///   darks, no flats      -> {P}_Preprocessing_WithoutFlat
+    ///   flats, no darks      -> {P}_Preprocessing_WithoutDark
+    ///   neither              -> {P}_Preprocessing_WithoutDBF (lights only)
+    /// The user can still override the dropdown; this only seeds it.
+    /// </summary>
+    public SirilRecommendation RecommendScript(IReadOnlyList<string>? lightPaths,
+            bool hasDarks, bool hasFlats, bool hasBias) {
+        bool osc = DetectOscFromFirstLight(lightPaths);
+        string prefix = osc ? "OSC" : "Mono";
+        string variant, reason;
+        if (hasDarks && hasFlats) {
+            variant = "";
+            reason = "lights + darks + flats" + (hasBias ? " + bias" : "");
+        } else if (hasDarks) {
+            variant = "_WithoutFlat";
+            reason = "lights + darks" + (hasBias ? " + bias" : "") + " (no flats)";
+        } else if (hasFlats) {
+            variant = "_WithoutDark";
+            reason = "lights + flats" + (hasBias ? " + bias" : "") + " (no darks)";
+        } else {
+            variant = "_WithoutDBF";
+            reason = hasBias ? "lights + bias only (no darks/flats)" : "lights only";
+        }
+        var name = $"{prefix}_Preprocessing{variant}.ssf";
+        bool available = EnumerateScripts()
+            .Any(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
+        return new SirilRecommendation(name, reason, osc, available);
+    }
+
+    /// <summary>True when the first readable light carries a colour-filter
+    /// array (BAYERPAT = RGGB/GRBG/GBRG/BGGR) → OSC; false for mono or when
+    /// no light is readable we default to OSC (the common SBC rig).</summary>
+    private static bool DetectOscFromFirstLight(IReadOnlyList<string>? lights) {
+        var path = lights?.FirstOrDefault(p => !string.IsNullOrWhiteSpace(p) && File.Exists(p));
+        if (path == null) return true;
+        try {
+            using var fs = File.OpenRead(path);
+            // FITS headers are ASCII 80-char cards; the BAYERPAT card lives
+            // in the primary header, so a few 2880-byte blocks always cover
+            // it. Read a small prefix and scan for the card.
+            var buf = new byte[2880 * 6];
+            int read = fs.Read(buf, 0, buf.Length);
+            var text = System.Text.Encoding.ASCII.GetString(buf, 0, read);
+            var idx = text.IndexOf("BAYERPAT", StringComparison.Ordinal);
+            if (idx < 0) return false;
+            var card = text.Substring(idx, Math.Min(80, text.Length - idx)).ToUpperInvariant();
+            return card.Contains("RGGB") || card.Contains("GRBG")
+                || card.Contains("GBRG") || card.Contains("BGGR");
+        } catch {
+            return true;
+        }
+    }
+
     // --- Job execution ----------------------------------------------
 
     /// <summary>
@@ -614,6 +675,11 @@ public class SirilService {
 
 public sealed record SirilScriptInfo(string Name, string Path, string Source);
                                                               // Source = "bundled" | "user"
+
+/// <summary>Recommended script for a dataset. <see cref="Available"/> is
+/// false when the matched bundled script isn't present (then the UI keeps
+/// the user's current pick).</summary>
+public sealed record SirilRecommendation(string ScriptName, string Reason, bool Osc, bool Available);
 
 public sealed record SirilJobRequest(
     string ScriptName,
