@@ -35,7 +35,7 @@
       "icon": "📸",
       "title": "Complete live stacking panel",
       "body": "EAA-style live stacking with registration, integration, and real-time stretch over a bandwidth-adaptive WebSocket stream, so the image builds up live as each frame lands.",
-      "image": "/assets/screenshots/live-view.png"
+      "image": "/assets/screenshots/live-view.jpg"
     },
     {
       "icon": "🎥",
@@ -47,7 +47,7 @@
       "icon": "🌲",
       "title": "Advanced sequencer",
       "body": "A tree-based sequencer with containers, loop conditions, and event triggers: auto-focus on temperature or HFR drift, meridian flip, dither, safety abort. Drag and drop the whole plan in the browser.",
-      "image": "/assets/screenshots/sequencer.png"
+      "image": "/assets/screenshots/sequencer.jpg"
     },
     {
       "icon": "🔬",
