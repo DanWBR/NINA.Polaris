@@ -34,62 +34,81 @@
     // ort.min.js sets `window.ort` when loaded via <script>. We resolve
     // the script-tag injection once; subsequent calls reuse the same
     // promise so concurrent first-uses don't fight for the DOM.
+    // Configure the freshly-loaded ORT runtime (wasm dir + thread count).
+    // Idempotent; called once a bundle has set window.ort.
+    function configureOrt() {
+        // Point at the WASM bundle dir so the runtime knows where to fetch
+        // ort-wasm-simd-threaded.wasm + .jsep variant. Without this it
+        // assumes the same dir as the entry script, which is true for us but
+        // explicit beats implicit (especially behind a sub-path / reverse
+        // proxy / Relay tunnel).
+        window.ort.env.wasm.wasmPaths = ORT_VENDOR_PATH;
+        // GX-9 (perf): bump the WASM thread count when the browser actually
+        // has SharedArrayBuffer (requires cross-origin isolation, which
+        // Polaris does NOT set by default). Falls back to 1 when SAB is
+        // absent. Only matters when WebGPU isn't chosen.
+        const hasSAB = typeof SharedArrayBuffer !== 'undefined';
+        if (hasSAB) {
+            const n = Math.min(navigator.hardwareConcurrency || 4, 8);
+            window.ort.env.wasm.numThreads = n;
+            console.log('[OnnxRegistry] WASM threads:', n, '(SharedArrayBuffer available)');
+        } else {
+            window.ort.env.wasm.numThreads = 1;
+            console.warn('[OnnxRegistry] WASM single-threaded, '
+                + 'SharedArrayBuffer unavailable (no COOP/COEP). '
+                + 'Expect slow CPU inference; WebGPU still works.');
+        }
+    }
+
+    // Inject one ORT bundle and resolve true if it set window.ort, false
+    // otherwise (load error OR ran-but-didn't-attach, which is what an old
+    // Android WebView does with a modern ORT bundle). Never rejects so the
+    // caller can fall through to the next candidate.
+    function tryLoadBundle(file) {
+        return new Promise((resolve) => {
+            const s = document.createElement('script');
+            s.src = ORT_VENDOR_PATH + file;
+            s.onload = () => resolve(!!window.ort);
+            s.onerror = () => resolve(false);
+            document.head.appendChild(s);
+        });
+    }
+
     let _ortLoadPromise = null;
     function loadOrtWeb() {
         if (_ortLoadPromise) return _ortLoadPromise;
-        _ortLoadPromise = new Promise((resolve, reject) => {
-            if (window.ort) { resolve(window.ort); return; }
-            const s = document.createElement('script');
-            // GX-10/11: ort.min.js is the WASM-only build, when we
-            // pass 'webgpu' in executionProviders, ORT logs
-            // "removing requested execution provider 'webgpu' from
-            // session options because it is not available: backend
-            // not found" and silently falls through to WASM. The
-            // ort.webgpu.min.js bundle has both WASM + WebGPU EPs
-            // registered up-front, so the same executionProviders
-            // request actually engages the GPU on capable hosts.
-            // Side note: this build is ~333 KB (vs ~230 KB for
-            // wasm-only) and only loads on first AI-op invocation, so
-            // the extra cost is negligible.
-            s.src = ORT_VENDOR_PATH + 'ort.webgpu.min.js';
-            s.onload = () => {
-                if (!window.ort) {
-                    reject(new Error('ort.min.js loaded but window.ort is undefined'));
-                    return;
+        _ortLoadPromise = (async () => {
+            if (window.ort) return window.ort;
+            // GX-10/11: ort.webgpu.min.js carries both WASM + WebGPU EPs so
+            // the GPU engages on capable hosts; ort.min.js is wasm-only.
+            // Try the webgpu build first, then fall back to the lighter
+            // wasm-only build. A bundle can "load" (onload fires) yet leave
+            // window.ort undefined on an outdated WebView that can't run the
+            // modern ORT code, hence the per-candidate window.ort check.
+            const candidates = ['ort.webgpu.min.js', 'ort.min.js'];
+            for (const file of candidates) {
+                let ok = false;
+                try { ok = await tryLoadBundle(file); } catch { ok = false; }
+                if (ok && window.ort) {
+                    configureOrt();
+                    return window.ort;
                 }
-                // Point at the WASM bundle dir so the runtime knows
-                // where to fetch ort-wasm-simd-threaded.wasm + .jsep
-                // variant. Without this it assumes the same dir as
-                // the entry script, which is true for us but explicit
-                // beats implicit (especially when served behind a
-                // sub-path / reverse proxy / Relay tunnel).
-                window.ort.env.wasm.wasmPaths = ORT_VENDOR_PATH;
-                // GX-9 (perf): bump the WASM thread count when the
-                // browser actually has SharedArrayBuffer (requires
-                // cross-origin-isolation, which Polaris does NOT set
-                // by default, but if a future deploy enables COOP/COEP
-                // or runs inside an isolated context, threading is a
-                // free 4-8× speedup). Falls back to 1 when SAB is
-                // absent. This only matters when WebGPU isn't chosen
-                // (e.g. browser without GPU adapter); with WebGPU the
-                // GPU does the work and CPU thread count is irrelevant.
-                const hasSAB = typeof SharedArrayBuffer !== 'undefined';
-                if (hasSAB) {
-                    const n = Math.min(navigator.hardwareConcurrency || 4, 8);
-                    window.ort.env.wasm.numThreads = n;
-                    console.log('[OnnxRegistry] WASM threads:', n,
-                        '(SharedArrayBuffer available)');
-                } else {
-                    window.ort.env.wasm.numThreads = 1;
-                    console.warn('[OnnxRegistry] WASM single-threaded, '
-                        + 'SharedArrayBuffer unavailable (no COOP/COEP). '
-                        + 'Expect slow CPU inference; WebGPU still works.');
-                }
-                resolve(window.ort);
-            };
-            s.onerror = () => reject(new Error('Failed to load ' + s.src));
-            document.head.appendChild(s);
-        });
+                console.warn('[OnnxRegistry] ' + file
+                    + (ok ? ' loaded but window.ort missing' : ' failed to load')
+                    + '; trying fallback.');
+            }
+            // Both failed: almost always an outdated Android System WebView
+            // (or iOS WebView) that can't run ONNX Runtime Web in-browser.
+            throw new Error(
+                'In-browser AI runtime unavailable (ONNX Runtime Web did not '
+                + 'initialize). This usually means the browser / Android System '
+                + 'WebView is outdated. Update "Android System WebView" and '
+                + 'Chrome from the Play Store, or turn off "Run in browser" so '
+                + 'the operation runs on the server instead.');
+        })();
+        // Let a failed attempt be retried on the next invocation rather than
+        // caching the rejection forever.
+        _ortLoadPromise.catch(() => { _ortLoadPromise = null; });
         return _ortLoadPromise;
     }
 
