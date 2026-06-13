@@ -83,6 +83,11 @@ public class LiveStackingService {
     private BayerPatternEnum _bayerPattern = BayerPatternEnum.None;
     private int _width;
     private int _height;
+    // Last frame's bit depth + metadata, retained so SaveCurrentStack can
+    // stamp the written master with the same camera/target/telescope
+    // headers the live frames carried (and pick the right BITPIX).
+    private int _lastBitDepth = 16;
+    private ImageMetaData? _lastMetaData;
     private int _frameCount;
     private int _framesSavedToDisk;
     private List<DetectedStar>? _referenceStars;
@@ -308,6 +313,8 @@ public class LiveStackingService {
             _framesSavedToDisk = 0;
             _width = 0;
             _height = 0;
+            _lastMetaData = null;
+            _lastBitDepth = 16;
             _startedAt = null;
             LastFrameMedianHfr = 0;
             LastFrameStarCount = 0;
@@ -571,6 +578,10 @@ public class LiveStackingService {
                 }
 
                 _frameCount++;
+                // Retain for SaveCurrentStack: the master inherits the
+                // last frame's BITPIX + camera/target headers.
+                _lastBitDepth = props.BitDepth;
+                _lastMetaData = imageData.MetaData;
             }
 
             // Generate stacked result and relay to clients.
@@ -896,6 +907,35 @@ public class LiveStackingService {
                 }
             }
             return result;
+        }
+    }
+
+    /// <summary>Materialise the current accumulated stack as an image:
+    /// a 3-channel plane-sequential RGB image when colour mode is active,
+    /// otherwise the mono running-mean. Stamped with the last frame's
+    /// metadata + bit depth so the written master keeps the camera /
+    /// target / telescope headers. Returns null when nothing has been
+    /// integrated yet. The caller persists it via ImageWriterService.</summary>
+    public IImageData? GetCurrentStackImage() {
+        lock (_lock) {
+            if (_frameCount == 0 || _width == 0 || _height == 0) return null;
+            var meta = _lastMetaData ?? new ImageMetaData();
+            if (_colorActive && _stackR != null) {
+                var rgb = GetStackedResultRgb();
+                if (rgb.Length == 0) return null;
+                var props = new ImageProperties {
+                    Width = _width, Height = _height, BitDepth = _lastBitDepth,
+                    Channels = 3, IsBayered = false, BayerPattern = BayerPatternEnum.None
+                };
+                return new BaseImageData(rgb, props, meta);
+            } else {
+                var mono = GetStackedResult();
+                if (mono.Length == 0) return null;
+                var props = new ImageProperties {
+                    Width = _width, Height = _height, BitDepth = _lastBitDepth
+                };
+                return new BaseImageData(mono, props, meta);
+            }
         }
     }
 

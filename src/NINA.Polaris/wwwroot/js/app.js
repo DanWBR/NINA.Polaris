@@ -6442,6 +6442,38 @@ function ninaApp() {
             }
         },
 
+        // Save the SERVER-side accumulated stack as a FITS. Used when the
+        // stack lives on the server (colour OSC mode, or any full-mode
+        // session) — the browser has no raw accumulator to upload, only
+        // the JPEG preview, so the server materialises + writes the master
+        // (3-channel RGB in colour mode, mono otherwise).
+        async saveServerStack() {
+            const target = ((this.targetName || '').trim()
+                            || this.seqStatus?.currentTarget
+                            || this.skyTarget?.name
+                            || '').replace(/[^A-Za-z0-9_\-]/g, '_');
+            const url = '/api/livestack/save-current'
+                      + (target ? ('?target=' + encodeURIComponent(target)) : '');
+            this.toast('Saving stack...', 'info');
+            try {
+                // apiFetch returns the Response on 2xx and throws ApiError
+                // (with .body holding the JSON error) on non-2xx.
+                const resp = await this.apiPost(url);
+                const data = await resp.json().catch(() => ({}));
+                this.toast((data.color ? 'Colour stack saved: ' : 'Stack saved: ')
+                    + data.savedPath, 'success');
+            } catch (e) {
+                let msg = e.message;
+                try {
+                    const body = JSON.parse(e.body || '{}');
+                    if (body.error) msg = body.error;
+                    else if (body.detail) msg = body.detail;
+                } catch { /* not JSON; keep raw message */ }
+                console.error('saveServerStack failed', e);
+                this.toast('Save failed: ' + msg, 'error');
+            }
+        },
+
         // CLST-4: feed a raw uint16 frame to the WASM stacker and
         // return the running-mean accumulator for display. Side
         // effect: posts a 'client-stack-progress' message back to the

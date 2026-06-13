@@ -342,6 +342,53 @@ public static class LiveStackEndpoints {
                     statusCode: 500);
             }
         }).DisableAntiforgery();
+
+        // Save the SERVER-side accumulated stack as a FITS master. Used
+        // when the stack lives on the server (colour OSC mode, or any
+        // full-mode session) rather than in the browser WASM accumulator
+        // — the colour stack in particular never reaches the client as
+        // raw pixels, only as a JPEG preview, so the client can't upload
+        // it. Colour mode writes a 3-channel RGB FITS; mono writes a
+        // single-plane FITS. Lands in integrated/{target}/ as a MASTER,
+        // same place /upload-result + STUDIO batch stacks go, so
+        // FrameLibraryService surfaces it in STUDIO on the next rescan.
+        group.MapPost("/save-current", (LiveStackingService stack,
+                                         ImageWriterService writer,
+                                         [Microsoft.AspNetCore.Mvc.FromQuery] string? target,
+                                         ILoggerFactory loggerFactory) => {
+            var log = loggerFactory.CreateLogger("LiveStack.SaveCurrent");
+            var image = stack.GetCurrentStackImage();
+            if (image == null) {
+                return Results.BadRequest(new {
+                    error = "No live stack to save — start stacking and integrate at least one frame first."
+                });
+            }
+            var name = string.IsNullOrWhiteSpace(target)
+                ? (image.MetaData?.Target?.Name)
+                : target;
+            if (string.IsNullOrWhiteSpace(name)) name = "live-stack";
+            try {
+                var saved = writer.SaveImage(image, targetName: name,
+                                              imageType: "MASTER", gain: 0);
+                if (saved == null) {
+                    return Results.Problem(
+                        detail: "ImageOutputDir not configured on the active profile. " +
+                                "Set the output directory in Settings → Files → Image Output before saving stacks.",
+                        statusCode: 500);
+                }
+                var st = stack.GetStatus();
+                return Results.Ok(new {
+                    savedPath = saved,
+                    frameCount = st.FrameCount,
+                    color = stack.ColorActive
+                });
+            } catch (Exception ex) {
+                log.LogError(ex, "Failed to save server-side live stack");
+                return Results.Problem(
+                    detail: $"{ex.GetType().Name}: {ex.Message}",
+                    statusCode: 500);
+            }
+        });
     }
 
     /// <summary>Body of POST /api/livestack/refocus-suggestion/dismiss.

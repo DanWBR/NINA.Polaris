@@ -1051,6 +1051,20 @@
                                 title="Upload the WASM-accumulated stack as a FITS into integrated/{target}/">
                             💾 Save current stack
                         </button>
+                        <!-- Server-side save: the stack lives on the server
+                             (colour OSC mode, or any full-mode session), so
+                             the browser has no raw accumulator to upload.
+                             Writes a 3-channel RGB FITS in colour mode, mono
+                             otherwise, into integrated/{target}/. Shown when
+                             the server is NOT in metricsonly mode and at least
+                             one frame has been integrated. -->
+                        <button class="btn"
+                                @click="saveServerStack()"
+                                x-show="liveStackStatus && liveStackStatus.mode !== 'metricsonly'"
+                                :disabled="!(liveStackStatus?.frameCount > 0)"
+                                title="Save the server-side accumulated stack as a FITS into integrated/{target}/ (RGB in colour mode)">
+                            💾 Save current stack<span x-show="liveStackColorActive"> (colour)</span>
+                        </button>
                         <button class="btn" @click="openImageViewer()" :disabled="!selectedCamera" title="Full-resolution zoom/pan viewer">⛶ View</button>
                         <!-- CLST-7: per-rig override for the compute
                              target. Auto follows the WASM handshake;
@@ -13251,7 +13265,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260613-lscolor"></script>
+    <script src="/js/app.js?v=20260613-lssave"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
