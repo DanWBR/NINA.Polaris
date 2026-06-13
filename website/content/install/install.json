@@ -109,7 +109,13 @@
         "size": "",
         "note": "x86 board: flash to USB or write to the internal eMMC, not an SD card."
       }
-    ]
+    ],
+    "update": {
+      "title": "Updating Polaris on a flashed image",
+      "intro": "Already running a flashed image? SSH in (user polaris, password polaris), download the latest .deb, and install it over the running version. Your profiles and data are kept.",
+      "code": "ssh polaris@<ip-or-hostname>\nwget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb\nsudo dpkg -i polaris_arm64.deb",
+      "note": "Use polaris_arm64.deb for ARM SBCs (Raspberry Pi, Orange Pi); pick the package that matches your board otherwise. Change the default polaris password after first login."
+    }
   },
   "download": {
     "title": "Download",

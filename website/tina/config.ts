@@ -192,6 +192,17 @@ export default defineConfig({
                   },
                 ],
               },
+              {
+                type: 'object',
+                name: 'update',
+                label: 'Update instructions',
+                fields: [
+                  { type: 'string', name: 'title', label: 'Title' },
+                  { type: 'string', name: 'intro', label: 'Intro', ui: { component: 'textarea' } },
+                  { type: 'string', name: 'code', label: 'Commands', ui: { component: 'textarea' } },
+                  { type: 'string', name: 'note', label: 'Note', ui: { component: 'textarea' } },
+                ],
+              },
             ],
           },
           {

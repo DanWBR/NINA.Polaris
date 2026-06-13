@@ -73,6 +73,14 @@ const statusClass = (s: string) => {
             </article>
           ))}
         </div>
+        {g.images.update && (
+          <div class="img-update">
+            <h3 class="img-update-title">{g.images.update.title}</h3>
+            <p class="img-update-intro">{g.images.update.intro}</p>
+            <pre><code>{g.images.update.code}</code></pre>
+            {g.images.update.note && <p class="muted-note">{g.images.update.note}</p>}
+          </div>
+        )}
       </div>
     </section>
 
@@ -454,6 +462,18 @@ const statusClass = (s: string) => {
   }
   .img-boot-ico { font-size: 22px; line-height: 1.2; }
   .img-boot p { font-size: 14.5px; color: var(--text); line-height: 1.6; }
+
+  /* Update-an-image block */
+  .img-update {
+    margin-top: 30px;
+    border-top: 1px solid var(--border);
+    padding-top: 24px;
+    max-width: 780px;
+  }
+  .img-update-title { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+  .img-update-intro { font-size: 14.5px; color: var(--text-muted); line-height: 1.6; }
+  .img-update pre { margin: 14px 0 0; }
+  .img-update .muted-note { margin-top: 12px; }
 
   .img-grid {
     display: grid;
