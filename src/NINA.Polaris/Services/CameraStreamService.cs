@@ -55,6 +55,10 @@ public class CameraStreamService : IDisposable {
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, Action<IImageData>> _externalSubs = new();
     private int _nextSubId;
 
+    // Which FrameKind streamed JPEGs are tagged with (set per Start). Video
+    // by default; SlewPreviewService starts the stream with SlewPreview.
+    private FrameKind _broadcastKind = FrameKind.Video;
+
     public bool IsRunning { get; private set; }
     public string Mode { get; private set; } = "idle";      // "native" | "loop" | "idle"
     public double ExposureSeconds { get; private set; }
@@ -130,6 +134,7 @@ public class CameraStreamService : IDisposable {
             Gain = cfg.Gain ?? cam.Gain;
             BinX = cfg.BinX ?? 1;
             BinY = cfg.BinY ?? 1;
+            _broadcastKind = cfg.Kind;
             LastError = null;
             Interlocked.Exchange(ref _frameCount, 0);
             Interlocked.Exchange(ref _transmittedFrames, 0);
@@ -270,7 +275,7 @@ public class CameraStreamService : IDisposable {
             // render is still in flight (bounded CPU/latency). Count the
             // ones actually transmitted so TransmitFps reflects the real
             // delivery rate (vs the capture rate above).
-            _ = _relay.RelayVideoJpegAsync(frame).ContinueWith(t => {
+            _ = _relay.RelayVideoJpegAsync(frame, kind: _broadcastKind).ContinueWith(t => {
                 if (t.IsCompletedSuccessfully && t.Result)
                     Interlocked.Increment(ref _transmittedFrames);
             }, TaskScheduler.Default);
@@ -315,4 +320,8 @@ public record StreamConfig(
     int? Gain = null,
     int? BinX = null,
     int? BinY = null,
-    bool ForceLoop = false);
+    bool ForceLoop = false,
+    // Which canvas the broadcast JPEG frames are tagged for. VIDEO/PREVIEW
+    // leave it Video (routes to videoCaptureCanvas); SlewPreviewService sets
+    // SlewPreview so frames land on the SKY-tab inset canvas instead.
+    FrameKind Kind = FrameKind.Video);

@@ -115,14 +115,24 @@ public class SlewPreviewService : BackgroundService {
         LastDecision_CaptureIdle = captureIdle;
 
         if (slewing && captureIdle && !IsPreviewActive) {
-            // Start preview, short exposure, default gain. Use loop
-            // fallback by default (consistent fps even on cameras
-            // without native streaming).
+            // Start preview tuned to actually SHOW stars while the mount
+            // sweeps: a short-ish 0.5 s exposure (enough photons without
+            // long trails) and a high gain (~75% of range) so faint stars
+            // clear the noise floor. The relayed JPEG is auto-stretched, so
+            // contrast is handled downstream. Tagged FrameKind.SlewPreview so
+            // it lands on the SKY-tab inset canvas, not the VIDEO canvas.
+            int? gain = null;
+            var cam = _equip.Camera;
+            if (cam != null && cam.GainMax > cam.GainMin) {
+                gain = cam.GainMin + (int)((cam.GainMax - cam.GainMin) * 0.75);
+            }
             try {
-                _stream.Start(new StreamConfig(ExposureSeconds: 0.1));
+                _stream.Start(new StreamConfig(
+                    ExposureSeconds: 0.5, Gain: gain, Kind: FrameKind.SlewPreview));
                 IsPreviewActive = true;
                 _streamWasStartedByUs = true;
-                _logger.LogInformation("Slew preview: stream ON ({Mode})", _stream.Mode);
+                _logger.LogInformation("Slew preview: stream ON ({Mode}, gain={Gain})",
+                    _stream.Mode, gain?.ToString() ?? "current");
             } catch (Exception ex) {
                 LastError = ex.Message;
                 _logger.LogDebug(ex, "Slew preview start failed");

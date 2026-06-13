@@ -301,6 +301,7 @@ public class ImageRelayService : IDisposable {
     /// real transmission rate vs the capture rate.</returns>
     public async Task<bool> RelayVideoJpegAsync(IImageData imageData,
                                           int maxDim = 1280, int quality = 70,
+                                          FrameKind kind = FrameKind.Video,
                                           CancellationToken ct = default) {
         if (_clients.IsEmpty) return false;
         // Drop-if-busy: keep CPU + latency bounded under fast frame rates.
@@ -324,7 +325,7 @@ public class ImageRelayService : IDisposable {
             // canvas). The W/H/bayer fields describe the source frame but
             // the client ignores them for JPEG payloads.
             var buffer = ImageBuffer.FromImageData(src, resolved);
-            var header = buffer.GetStreamHeader((int)FrameKind.Video);
+            var header = buffer.GetStreamHeader((int)kind);
             var frame = new byte[4 + header.Length + jpeg.Length];
             BitConverter.GetBytes(header.Length).CopyTo(frame, 0);
             header.CopyTo(frame, 4);

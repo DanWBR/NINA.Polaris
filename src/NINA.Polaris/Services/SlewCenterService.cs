@@ -40,6 +40,7 @@ public class SlewCenterService {
     private readonly PlateSolveService _solver;
     private readonly ProfileService _profiles;
     private readonly CameraStreamService _stream;
+    private readonly ActiveGuiderProvider _guiders;
     private readonly ILogger<SlewCenterService> _logger;
     private readonly NINA.Polaris.Services.PlateSolving.PlateSolveProgressService? _progress;
 
@@ -48,11 +49,13 @@ public class SlewCenterService {
     public SlewCenterService(EquipmentManager equip, PlateSolveService solver,
         ProfileService profiles, CameraStreamService stream,
         ILogger<SlewCenterService> logger,
-        NINA.Polaris.Services.PlateSolving.PlateSolveProgressService? progress = null) {
+        NINA.Polaris.Services.PlateSolving.PlateSolveProgressService? progress = null,
+        ActiveGuiderProvider? guiders = null) {
         _equip = equip;
         _solver = solver;
         _profiles = profiles;
         _stream = stream;
+        _guiders = guiders;
         _logger = logger;
         _progress = progress;
     }
@@ -196,6 +199,23 @@ public class SlewCenterService {
                     _logger.LogWarning(ex, "Failed to stop video stream before solve (continuing)");
                 }
             }
+
+            // Pause guiding across the slew: the mount is about to move, so
+            // the locked guide star will leave the frame. Stop now; we
+            // re-acquire a NEW star and restart guiding only after a
+            // successful centre (see the finally block).
+            var guider = _guiders.Active;
+            bool guiderWasGuiding = false;
+            try {
+                if (guider != null && guider.IsConnected && guider.IsGuiding) {
+                    guiderWasGuiding = true;
+                    _logger.LogInformation("Pausing guiding for slew & center");
+                    await guider.StopAsync(ct);
+                }
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "Failed to stop guiding before slew (continuing)");
+            }
+
             try {
 
             for (int i = 0; i < maxIterations; i++) {
@@ -372,6 +392,21 @@ public class SlewCenterService {
                     } catch (Exception ex) {
                         _logger.LogWarning(ex,
                             "Failed to resume video stream after solve (operator can restart manually)");
+                    }
+                }
+
+                // Resume guiding only on a successful centre. The old guide
+                // star is out of frame after the slew, so re-acquire a new
+                // one (AutoSelectStar) before restarting. On failure/cancel
+                // we leave guiding off rather than guide on the wrong field.
+                if (guiderWasGuiding && job.State == SlewCenterState.Centered) {
+                    try {
+                        _logger.LogInformation("Resuming guiding: re-selecting guide star");
+                        await guider.AutoSelectStarAsync(ct);
+                        await guider.StartGuidingAsync(ct: ct);
+                    } catch (Exception ex) {
+                        _logger.LogWarning(ex,
+                            "Failed to resume guiding after slew & center (re-select + start guiding manually)");
                     }
                 }
             }
