@@ -248,6 +248,7 @@ public class IndiCamera : ICamera {
     private string? _formatProp;     // "CCD_CAPTURE_FORMAT" / "CCD_VIDEO_FORMAT", or null
     private string? _raw16Element;   // switch element name of the 16-bit RAW format
     private string? _fitsElement;    // FORMAT_FITS element of CCD_TRANSFER_FORMAT ("Encode")
+    private bool _raw16Forced;       // have we written RAW16 at least once this session?
 
     private async Task EnsureRaw16FormatAsync(CancellationToken ct) {
         // Resolve the format property + 16-bit element. Re-probe each capture
@@ -271,13 +272,21 @@ public class IndiCamera : ICamera {
         }
         if (_formatProp == null || _raw16Element == null) return;   // 8-bit-only / no such property
         if (_client.GetProperty(DeviceName, _formatProp) is not IndiSwitchProperty cur) return;
-        // Already on 16-bit? skip — switching re-inits some drivers and can
-        // reset gain/offset, so only write when actually needed.
-        if (cur.Values.TryGetValue(_raw16Element, out var on) && on) return;
+        // Already on 16-bit? Normally skip — switching re-inits some drivers
+        // and can reset gain/offset, so only write when needed. BUT the SVBONY
+        // SV405CC driver REPORTS SVB_IMG_RAW16 as the selected element while
+        // still delivering RAW8 frames until the switch is actually written —
+        // a state/output desync. So on the first call of each session
+        // (_raw16Forced == false) we write it even when it reads as already
+        // on, which forces the driver to truly apply 16-bit. Subsequent
+        // captures keep the cheap skip-if-on behaviour.
+        bool alreadyOn = cur.Values.TryGetValue(_raw16Element, out var on) && on;
+        if (alreadyOn && _raw16Forced) return;
         var payload = new Dictionary<string, bool>();
         foreach (var k in cur.Values.Keys) payload[k] = (k == _raw16Element);
         try {
             await _client.SetSwitchAsync(DeviceName, _formatProp, payload, ct);
+            _raw16Forced = true;
         } catch { /* driver rejected; non-fatal — manual INDI panel still works */ }
     }
 
@@ -377,6 +386,9 @@ public class IndiCamera : ICamera {
     }
 
     public async Task ConnectAsync(CancellationToken ct = default) {
+        // New session: force the RAW16 write once even if the driver's
+        // format switch already *reports* 16-bit (see _raw16Forced).
+        _raw16Forced = false;
         await _client.ConnectDeviceAsync(DeviceName, ct);
         // EnableBLOB is idempotent — INDI just notes the preference for
         // future BLOB delivery. Always re-send after connect so a

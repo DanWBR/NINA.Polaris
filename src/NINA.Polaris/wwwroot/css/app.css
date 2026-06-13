@@ -1712,8 +1712,10 @@ button,
 .histo-handle {
     position: absolute;
     top: 0; bottom: 0;
-    width: 16px;
-    margin-left: -8px;
+    /* Wider hit area + fatter grab pill so the points are easy to drag
+       with a finger on the tablet (the 16px target was hard to grab). */
+    width: 30px;
+    margin-left: -15px;
     cursor: ew-resize;
     touch-action: none;
     z-index: 2;
@@ -1721,17 +1723,17 @@ button,
 .histo-handle::before {   /* the thin vertical line at the exact point */
     content: '';
     position: absolute;
-    left: 7px; top: 0; bottom: 0;
+    left: 14px; top: 0; bottom: 0;
     width: 2px;
     background: rgba(255, 255, 255, 0.7);
 }
 .histo-handle::after {    /* the grabbable pill */
     content: '';
     position: absolute;
-    left: 2px; top: 50%;
+    left: 7px; top: 50%;
     transform: translateY(-50%);
-    width: 12px; height: 26px;
-    border-radius: 3px;
+    width: 16px; height: 38px;
+    border-radius: 4px;
     border: 1px solid rgba(255, 255, 255, 0.55);
     background: rgba(56, 189, 248, 0.85);
 }
@@ -1739,7 +1741,7 @@ button,
 /* Midtones handle: amber, sits below black/white so it never blocks them. */
 .histo-handle-mid { z-index: 1; }
 .histo-handle-mid::before { background: rgba(255, 193, 7, 0.7); }
-.histo-handle-mid::after { background: rgba(255, 193, 7, 0.85); height: 18px; }
+.histo-handle-mid::after { background: rgba(255, 193, 7, 0.85); height: 28px; }
 .histo-actions {
     display: flex;
     flex-direction: column;
