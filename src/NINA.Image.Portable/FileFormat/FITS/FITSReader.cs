@@ -68,7 +68,11 @@ public static class FITSReader {
         var props = new ImageProperties {
             Width = width,
             Height = height,
-            BitDepth = Math.Abs(bitpix) > 16 ? 16 : Math.Abs(bitpix),
+            // 8-bit sources are promoted into the 16-bit range in
+            // ReadPixelData (see case 8), so report 16 here too — otherwise
+            // a RAW8 frame saved as a 16-bit FITS reloads as BitDepth=8 and
+            // the 16-bit stretch renders it near-black.
+            BitDepth = Math.Abs(bitpix) <= 8 ? 16 : (Math.Abs(bitpix) > 16 ? 16 : Math.Abs(bitpix)),
             IsBayered = bayerPattern != BayerPatternEnum.None,
             BayerPattern = bayerPattern,
             Channels = planes,
@@ -141,9 +145,17 @@ public static class FITSReader {
         // stacking. Output is byte-identical to the old serial loops.
         switch (bitpix) {
             case 8:
+                // 8-bit source (e.g. an INDI driver left in RAW8 — the
+                // SVBONY SV405CC defaults to it). Promote into the TOP 8
+                // bits of the 16-bit range (value << 8) so the rest of the
+                // 16-bit pipeline (auto-stretch, stacking, FITS save) sees a
+                // normal full-range frame instead of a near-black 0..255
+                // image. Mirrors the native SVBONY SDK's own RAW8 handling.
                 Parallel.ForEach(Partitioner.Create(0L, pixelCount), range => {
-                    for (long i = range.Item1; i < range.Item2; i++)
-                        pixels[i] = (ushort)(rawData[i] * bscale + bzero);
+                    for (long i = range.Item1; i < range.Item2; i++) {
+                        int v = (int)(rawData[i] * bscale + bzero);
+                        pixels[i] = (ushort)(Math.Clamp(v, 0, 255) << 8);
+                    }
                 });
                 break;
             case 16:
