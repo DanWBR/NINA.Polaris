@@ -111,6 +111,14 @@ function ninaApp() {
         // most users want both the integrated preview AND an
         // archive they can re-stack offline.
         liveStackSaveFrames: true,
+        // Colour (OSC debayer → RGB) live-stacking toggle. Mirrors the
+        // LIVE tab checkbox. PUT /api/livestack/color updates both the
+        // running service flag and the active rig's LiveStackColor
+        // profile field. Default OFF (mono/CFA accumulation). Takes
+        // full effect on the next Reset (reference frame). liveStackColorActive
+        // reflects whether colour is actually engaged this session.
+        liveStackColor: false,
+        liveStackColorActive: false,
 
         // LSTR-5: live-stack auto-refocus + auto-recenter triggers.
         // Mirror of EquipmentProfile.LiveStackTriggers, hydrated from
@@ -6305,6 +6313,29 @@ function ninaApp() {
                 // Revert the checkbox if the server rejected it so the
                 // UI doesn't lie about the actual state.
                 this.liveStackSaveFrames = !this.liveStackSaveFrames;
+                this.toast('Save failed: ' + (e.message || e), 'error');
+            }
+        },
+
+        // LIVE tab "Colour stacking (OSC)" toggle. Same dual-write as
+        // saveLiveStackSaveFrames: runtime flag + persisted per-rig
+        // LiveStackColor. Colour takes full effect on the next Reset
+        // (the reference frame is what arms colour mode), so we nudge
+        // the user toward Reset when turning it on mid-session.
+        async saveLiveStackColor() {
+            try {
+                await this.apiPost('/api/livestack/color', null, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: this.liveStackColor })
+                });
+                const rig = this.rigs.find(r => r.id === this.activeRigId);
+                if (rig) rig.liveStackColor = this.liveStackColor;
+                this.toast(this.liveStackColor
+                    ? 'Colour stacking on — Reset the stack to apply'
+                    : 'Colour stacking off — Reset the stack to apply', 'ok');
+            } catch (e) {
+                this.liveStackColor = !this.liveStackColor;
                 this.toast('Save failed: ' + (e.message || e), 'error');
             }
         },
@@ -13291,6 +13322,9 @@ function ninaApp() {
             // post-redesign) so legacy rigs adopt the same friendly
             // behaviour without a manual flip.
             this.liveStackSaveFrames = rig.liveStackSaveFramesToDisk !== false;
+            // Per-rig colour-stacking toggle. Defaults OFF (mono/CFA)
+            // when the field is missing, matching the server default.
+            this.liveStackColor = rig.liveStackColor === true;
             // Auto-pause cap in MINUTES (UI unit). Backend stores
             // seconds. 0 = unlimited (default).
             this.liveStackMaxMinutes = Math.round(
@@ -24244,6 +24278,10 @@ function ninaApp() {
                 // read .triggers + per-frame HFR / star count without
                 // a second source of truth.
                 this.liveStackStatus = msg.liveStack;
+                // Colour stacking: whether it's actually engaged this
+                // session (toggle ON + reference frame was Bayered).
+                if (typeof msg.liveStack.colorActive === 'boolean')
+                    this.liveStackColorActive = msg.liveStack.colorActive;
             }
             if (msg.sequence) {
                 this.seqStatus = msg.sequence;

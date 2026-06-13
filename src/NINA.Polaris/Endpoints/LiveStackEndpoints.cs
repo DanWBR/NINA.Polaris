@@ -199,6 +199,22 @@ public static class LiveStackEndpoints {
             return Results.Ok(new { saved = true, enabled = req.Enabled });
         });
 
+        // Toggle colour (OSC debayer → RGB) live stacking. Same dual
+        // write as /save-frames: runtime flag (applies on the next
+        // reference frame, i.e. after a Reset) + persisted per-rig
+        // LiveStackColor field.
+        group.MapPut("/color", (ColorStackRequest req,
+                                 LiveStackingService stack,
+                                 ProfileService profiles) => {
+            stack.ColorStacking = req.Enabled;
+            var rig = profiles.ActiveEquipmentProfile;
+            if (rig != null) {
+                profiles.UpdateEquipmentProfile(rig.Id,
+                    r => r.LiveStackColor = req.Enabled);
+            }
+            return Results.Ok(new { saved = true, enabled = req.Enabled });
+        });
+
         // SNR-3: session-only target SNR override. The active rig's
         // TargetSnr is the persisted default; the LIVE tab can push
         // a different number here for one session without touching
@@ -336,6 +352,10 @@ public static class LiveStackEndpoints {
     /// <summary>Body of PUT /api/livestack/save-frames. Mirrors the
     /// LIVE tab checkbox.</summary>
     public record SaveFramesRequest(bool Enabled);
+
+    /// <summary>Body of PUT /api/livestack/color. Mirrors the LIVE tab
+    /// colour-stacking checkbox.</summary>
+    public record ColorStackRequest(bool Enabled);
 
     /// <summary>Body of PUT /api/livestack/max-duration. 0 =
     /// unlimited. The LIVE tab posts the user's "stack for N

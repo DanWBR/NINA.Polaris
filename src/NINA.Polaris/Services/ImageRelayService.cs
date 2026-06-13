@@ -338,6 +338,46 @@ public class ImageRelayService : IDisposable {
         }
     }
 
+    /// <summary>
+    /// Broadcast a 3-plane (planar R,G,B) RGB image as a downscaled,
+    /// per-channel auto-stretched JPEG tagged <paramref name="kind"/>.
+    /// Used by the colour live-stacker so the LIVE canvas shows the
+    /// debayered RGB stack without a client-side RGB-raw render path —
+    /// the browser decodes the colour JPEG and the existing headered-JPEG
+    /// route draws it on the frame's canvas. Same drop-if-busy guard as
+    /// <see cref="RelayVideoJpegAsync"/>.
+    /// </summary>
+    public async Task<bool> RelayRgbJpegAsync(IImageData rgb,
+                                        int maxDim = 1280, int quality = 80,
+                                        FrameKind kind = FrameKind.Live,
+                                        CancellationToken ct = default) {
+        if (_clients.IsEmpty) return false;
+        if (Interlocked.CompareExchange(ref _videoRenderInFlight, 1, 0) != 0) return false;
+        try {
+            byte[] jpeg;
+            try {
+                jpeg = await Task.Run(() => FitsThumbnailer.RenderJpegFromRgbPlanes(
+                    rgb.Data, rgb.Properties.Width, rgb.Properties.Height,
+                    rgb.Properties.BitDepth, maxDim, quality), ct);
+            } catch (Exception ex) {
+                _logger.LogDebug(ex, "RGB JPEG render failed (skipping frame)");
+                return false;
+            }
+            if (jpeg == null || jpeg.Length == 0) return false;
+
+            var buffer = ImageBuffer.FromImageData(rgb);
+            var header = buffer.GetStreamHeader((int)kind);
+            var frame = new byte[4 + header.Length + jpeg.Length];
+            BitConverter.GetBytes(header.Length).CopyTo(frame, 0);
+            header.CopyTo(frame, 4);
+            jpeg.CopyTo(frame, 4 + header.Length);
+            await BroadcastFrameAsync(frame, ct);
+            return true;
+        } finally {
+            Interlocked.Exchange(ref _videoRenderInFlight, 0);
+        }
+    }
+
     private int _videoRenderInFlight;
 
     /// <summary>Fan a pre-built binary frame out to every connected

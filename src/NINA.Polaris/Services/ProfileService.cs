@@ -424,6 +424,7 @@ public class ProfileService {
             },
             LiveStackComputeMode = src.LiveStackComputeMode,
             LiveStackSaveFramesToDisk = src.LiveStackSaveFramesToDisk,
+            LiveStackColor = src.LiveStackColor,
             LiveStackMaxDurationSeconds = src.LiveStackMaxDurationSeconds,
             TargetSnr = src.TargetSnr,
             // LSPP-3: per-frame pre-processing (calibration + BGE).
@@ -1240,6 +1241,13 @@ public class EquipmentProfile {
     /// PixInsight later. Per-rig so visual-only EAA rigs can opt
     /// out (just untick the checkbox in the LIVE tab).</summary>
     public bool LiveStackSaveFramesToDisk { get; set; } = true;
+
+    /// <summary>Debayer each OSC frame to RGB and integrate in colour
+    /// during live stacking, broadcasting a colour preview on the LIVE
+    /// canvas. Default OFF (mono/CFA accumulation), since it costs a
+    /// debayer + 3x the warp/accumulate work per frame. Per-rig so a
+    /// colour EAA rig can opt in while a mono rig stays mono.</summary>
+    public bool LiveStackColor { get; set; } = false;
 
     /// <summary>Auto-pause the live stack after this many seconds
     /// of integration. 0 (default) = no cap, runs until the user

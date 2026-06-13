@@ -447,6 +447,22 @@ app.Services.GetRequiredService<RefocusSuggestionService>();
     ApplySaveFramesPolicy("startup");
     profiles.EquipmentProfileActivated += _ => ApplySaveFramesPolicy("rig-switch");
 
+    // Per-rig colour (OSC debayer → RGB) live-stacking toggle. Same
+    // dual-source pattern as save-frames: the runtime flag wins at
+    // frame time, the profile field persists. Default OFF for legacy
+    // profiles. Takes full effect on the next Reset (reference frame).
+    void ApplyColorStackingPolicy(string trigger) {
+        var enabled = profiles.ActiveEquipmentProfile?.LiveStackColor ?? false;
+        if (liveStack.ColorStacking != enabled) {
+            liveStack.ColorStacking = enabled;
+            liveStackLogger.LogInformation(
+                "Live stack ColorStacking -> {Enabled} (trigger={Trigger})",
+                enabled, trigger);
+        }
+    }
+    ApplyColorStackingPolicy("startup");
+    profiles.EquipmentProfileActivated += _ => ApplyColorStackingPolicy("rig-switch");
+
     // Per-rig live-stack duration cap. 0 (default) = unlimited.
     // Same persistence pattern as the save-frames toggle.
     void ApplyDurationCap(string trigger) {

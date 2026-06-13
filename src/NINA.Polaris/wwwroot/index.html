@@ -1086,6 +1086,22 @@
                                   x-show="liveStackStatus?.framesSavedToDisk"
                                   x-text="'(' + liveStackStatus.framesSavedToDisk + ' saved)'"></span>
                         </label>
+                        <!-- Colour (OSC) live stacking. When on AND the
+                             camera is one-shot-colour, the server debayers
+                             each frame to RGB, warps + integrates per
+                             channel, and the LIVE preview shows colour.
+                             Off = mono/CFA accumulation. Changes apply on
+                             the next Reset (the reference frame arms it). -->
+                        <label class="livestack-save-frames-label"
+                               title="Debayer each OSC frame to RGB and integrate in colour, showing a colour live preview. Off by default (mono/CFA). Costs a debayer plus 3x the warp/accumulate work per frame. Reset the stack after changing this for it to take effect.">
+                            <input type="checkbox"
+                                   x-model="liveStackColor"
+                                   @change="saveLiveStackColor()">
+                            🌈 Colour stacking (OSC)
+                            <span class="text-muted"
+                                  x-show="liveStackColorActive"
+                                  x-text="'(active)'"></span>
+                        </label>
                     </div>
 
                     <!-- Part B4: meridian flip from the LIVE panel. The
@@ -13235,7 +13251,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260613-sirilcal"></script>
+    <script src="/js/app.js?v=20260613-lscolor"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

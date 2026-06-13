@@ -74,6 +74,13 @@ public class LiveStackingService {
 
     private float[]? _stackBuffer;
     private int[]? _countBuffer;
+    // Colour (OSC) accumulators, used only when ColorStacking is on AND
+    // the session is Bayered. Each is a full-resolution plane; the running
+    // mean divides by _countBuffer (shared, coverage is per-pixel). When
+    // these are non-null the live preview is broadcast as an RGB JPEG.
+    private float[]? _stackR, _stackG, _stackB;
+    private bool _colorActive;
+    private BayerPatternEnum _bayerPattern = BayerPatternEnum.None;
     private int _width;
     private int _height;
     private int _frameCount;
@@ -118,6 +125,20 @@ public class LiveStackingService {
     /// later. UI checkbox in LIVE tab persists the choice per-rig
     /// via PUT /api/livestack/save-frames.</summary>
     public bool SaveFramesToDisk { get; set; } = true;
+
+    /// <summary>Per-rig opt-in: stack OSC frames in colour. When on AND the
+    /// incoming frames are Bayered, each frame is debayered to RGB, aligned
+    /// per-channel and integrated into 3 accumulators; the live preview is a
+    /// colour JPEG. OFF (default) keeps the historical mono-CFA stack (client
+    /// debayers for display). Set via PUT /api/livestack/color, persisted in
+    /// the active rig's LiveStackColor field; loaded on rig change in
+    /// Program.cs. Mono cameras ignore it.</summary>
+    public bool ColorStacking { get; set; } = false;
+
+    /// <summary>True once the current session is integrating in colour
+    /// (ColorStacking + a Bayered reference frame). Drives the colour
+    /// broadcast + colour save path.</summary>
+    public bool ColorActive { get { lock (_lock) { return _colorActive; } } }
 
     /// <summary>When > 0, stacking auto-pauses after this many
     /// seconds elapsed since the first frame of the current stack
@@ -274,6 +295,11 @@ public class LiveStackingService {
         lock (_lock) {
             _stackBuffer = null;
             _countBuffer = null;
+            _stackR = null;
+            _stackG = null;
+            _stackB = null;
+            _colorActive = false;
+            _bayerPattern = BayerPatternEnum.None;
             _referenceStars = null;
             _flipped = false;
             _referencePier = PierSide.pierUnknown;
@@ -432,6 +458,10 @@ public class LiveStackingService {
 
         if (mode == StackMode.Full) {
             ushort[] alignedData;
+            // Transform that aligned THIS frame onto the reference grid
+            // (null for the reference frame / identity). In colour mode we
+            // apply it per-debayered-plane instead of warping the raw CFA.
+            AffineTransform? usedTransform = null;
 
             lock (_lock) {
                 if (_frameCount == 0) {
@@ -446,6 +476,19 @@ public class LiveStackingService {
                     _stackBuffer = new float[pixelCount];
                     _countBuffer = new int[pixelCount];
                     _referenceStars = stars;
+                    // Colour session? OSC frame + the per-rig toggle. Allocate
+                    // the 3 plane accumulators once; the rest of the session
+                    // debayers + integrates in colour.
+                    _bayerPattern = props.BayerPattern;
+                    _colorActive = ColorStacking && props.IsBayered
+                        && _bayerPattern != BayerPatternEnum.None
+                        && _bayerPattern != BayerPatternEnum.Auto;
+                    if (_colorActive) {
+                        _stackR = new float[pixelCount];
+                        _stackG = new float[pixelCount];
+                        _stackB = new float[pixelCount];
+                        _logger.LogInformation("Live stack: colour mode ON (pattern {P})", _bayerPattern);
+                    }
                     // Part B2: remember the pier side at the reference so a
                     // later change can hint a flip before alignment proves it.
                     _referencePier = _equipment?.Telescope?.SideOfPier ?? PierSide.pierUnknown;
@@ -471,7 +514,7 @@ public class LiveStackingService {
                     // pier hint says so or we're already tracking a flip.
                     bool flippedFirst = _flipped || pierFlipHint;
 
-                    alignedData = TryAlignOriented(stars, data, flippedFirst, out bool usedFlipped);
+                    alignedData = TryAlignOriented(stars, data, flippedFirst, out bool usedFlipped, out usedTransform);
                     if (alignedData == null) {
                         _logger.LogWarning("Alignment failed for frame {N}, skipping", _frameCount + 1);
                         return;
@@ -490,14 +533,39 @@ public class LiveStackingService {
                     }
                 }
 
-                // Accumulate into stack buffer (running average), on the GPU
-                // when available (skips zero/no-data pixels), CPU otherwise.
-                int accN = Math.Min(alignedData.Length, _stackBuffer!.Length);
-                if (!_gpu.TryAccumulate(alignedData, _stackBuffer!, _countBuffer!, accN)) {
+                if (_colorActive) {
+                    // Colour: debayer the ORIGINAL frame to RGB, then warp
+                    // each plane with the transform that aligned it (null =
+                    // reference, no warp). Interpolation stays within a
+                    // colour channel, so no CFA smear. Accumulate per channel
+                    // into the 3 buffers, sharing one coverage count.
+                    var ch = BayerDebayer.Bilinear(data, _width, _height, _bayerPattern);
+                    ushort[] r = ch.R, g = ch.G, b = ch.B;
+                    if (usedTransform != null) {
+                        r = ImageResampler.ApplyTransform(r, _width, _height, usedTransform);
+                        g = ImageResampler.ApplyTransform(g, _width, _height, usedTransform);
+                        b = ImageResampler.ApplyTransform(b, _width, _height, usedTransform);
+                    }
+                    int accN = Math.Min(r.Length, _stackR!.Length);
                     for (int i = 0; i < accN; i++) {
-                        if (alignedData[i] > 0) {
-                            _stackBuffer[i] += alignedData[i];
+                        // Off-canvas after warp is 0 in all three planes.
+                        if (r[i] > 0 || g[i] > 0 || b[i] > 0) {
+                            _stackR![i] += r[i];
+                            _stackG![i] += g[i];
+                            _stackB![i] += b[i];
                             _countBuffer![i]++;
+                        }
+                    }
+                } else {
+                    // Mono: accumulate the aligned CFA/mono frame (running
+                    // average), on the GPU when available, CPU otherwise.
+                    int accN = Math.Min(alignedData.Length, _stackBuffer!.Length);
+                    if (!_gpu.TryAccumulate(alignedData, _stackBuffer!, _countBuffer!, accN)) {
+                        for (int i = 0; i < accN; i++) {
+                            if (alignedData[i] > 0) {
+                                _stackBuffer[i] += alignedData[i];
+                                _countBuffer![i]++;
+                            }
                         }
                     }
                 }
@@ -505,18 +573,32 @@ public class LiveStackingService {
                 _frameCount++;
             }
 
-            // Generate stacked result and relay to clients
-            var stackedPixels = GetStackedResult();
-            var stackedProps = new ImageProperties {
-                Width = _width,
-                Height = _height,
-                BitDepth = props.BitDepth,
-                IsBayered = props.IsBayered,
-                BayerPattern = props.BayerPattern
-            };
-
-            var stackedImage = new BaseImageData(stackedPixels, stackedProps, imageData.MetaData);
-            await _relay.RelayImageAsync(stackedImage, ct);
+            // Generate stacked result and relay to clients.
+            if (_colorActive) {
+                // Colour: broadcast the debayered RGB stack as a colour JPEG
+                // on the LIVE canvas (the client renders headered JPEGs by
+                // FrameKind, no RGB-raw WebGL path needed).
+                var rgbPixels = GetStackedResultRgb();
+                var rgbProps = new ImageProperties {
+                    Width = _width, Height = _height, BitDepth = props.BitDepth,
+                    Channels = 3,
+                    IsBayered = false,
+                    BayerPattern = BayerPatternEnum.None
+                };
+                var rgbImage = new BaseImageData(rgbPixels, rgbProps, imageData.MetaData);
+                await _relay.RelayRgbJpegAsync(rgbImage, kind: FrameKind.Live, ct: ct);
+            } else {
+                var stackedPixels = GetStackedResult();
+                var stackedProps = new ImageProperties {
+                    Width = _width,
+                    Height = _height,
+                    BitDepth = props.BitDepth,
+                    IsBayered = props.IsBayered,
+                    BayerPattern = props.BayerPattern
+                };
+                var stackedImage = new BaseImageData(stackedPixels, stackedProps, imageData.MetaData);
+                await _relay.RelayImageAsync(stackedImage, ct);
+            }
         } else {
             // MetricsOnly: bookkeep frame count + dimensions so triggers
             // and status broadcasts have something to render, but skip
@@ -601,14 +683,17 @@ public class LiveStackingService {
     /// orientation won so the caller can track flip state.
     /// </summary>
     private ushort[]? TryAlignOriented(List<DetectedStar> stars, ushort[] data,
-                                       bool flippedFirst, out bool usedFlipped) {
+                                       bool flippedFirst, out bool usedFlipped,
+                                       out AffineTransform? used) {
         usedFlipped = false;
+        used = null;
         var order = flippedFirst ? new[] { true, false } : new[] { false, true };
         foreach (var flip in order) {
             if (!flip) {
                 var t = StarMatcher.Match(_referenceStars!, stars);
                 if (t != null) {
                     usedFlipped = false;
+                    used = t;
                     _logger.LogDebug("Frame aligned (reference orientation): dx={Tx:F1} dy={Ty:F1}",
                         t.Tx, t.Ty);
                     return Warp(data, t);
@@ -628,6 +713,7 @@ public class LiveStackingService {
                         M00 = -1, M11 = -1, Tx = _width - 1, Ty = _height - 1
                     };
                     var composed = AffineTransform.Compose(t, rot180);
+                    used = composed;
                     _logger.LogDebug("Frame aligned (flipped): residual dx={Tx:F1} dy={Ty:F1}",
                         t.Tx, t.Ty);
                     return Warp(data, composed);
@@ -787,6 +873,26 @@ public class LiveStackingService {
             for (int i = 0; i < _stackBuffer.Length; i++) {
                 if (_countBuffer![i] > 0) {
                     result[i] = (ushort)Math.Clamp(_stackBuffer[i] / _countBuffer[i], 0, 65535);
+                }
+            }
+            return result;
+        }
+    }
+
+    /// <summary>The running-mean colour stack as a plane-sequential RGB
+    /// buffer (R then G then B, each W*H). Empty when not in colour mode.
+    /// Used by the colour live preview broadcast and the colour save path.</summary>
+    public ushort[] GetStackedResultRgb() {
+        lock (_lock) {
+            if (_stackR == null || _stackG == null || _stackB == null) return [];
+            int n = _stackR.Length;
+            var result = new ushort[n * 3];
+            for (int i = 0; i < n; i++) {
+                int c = _countBuffer![i];
+                if (c > 0) {
+                    result[i]         = (ushort)Math.Clamp(_stackR[i] / c, 0, 65535);
+                    result[n + i]     = (ushort)Math.Clamp(_stackG[i] / c, 0, 65535);
+                    result[2 * n + i] = (ushort)Math.Clamp(_stackB[i] / c, 0, 65535);
                 }
             }
             return result;

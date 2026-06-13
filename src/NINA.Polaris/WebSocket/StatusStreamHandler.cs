@@ -327,6 +327,12 @@ public static class StatusStreamHandler {
                             // counter rendered next to it.
                             saveFramesToDisk = liveStack.SaveFramesToDisk,
                             framesSavedToDisk = liveStack.FramesSavedToDisk,
+                            // Colour (OSC debayer → RGB) stacking toggle +
+                            // whether it's actually engaged this session (ON
+                            // + the reference frame was Bayered). Drives the
+                            // LIVE tab colour checkbox + a "(colour)" hint.
+                            colorStacking = liveStack.ColorStacking,
+                            colorActive = liveStack.ColorActive,
                             // Part B: how many meridian flips the stacker
                             // re-oriented and kept stacking through.
                             meridianFlipsHandled = liveStack.MeridianFlipsHandled,
