@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260612-exportselect">
+    <link rel="stylesheet" href="/css/app.css?v=20260613-autorunlayout">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -7357,138 +7357,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </button>
                 </div>
 
-                <!-- Empty state -->
-                <div class="sequence-empty" x-show="sequence.length === 0">
-                    <p>No sequence loaded — click <strong>+ Add</strong> below or pick a target in Sky Explorer.</p>
-                </div>
-
-                <!-- Sequence item card grid. CSS Grid auto-fit with
-                     a 280px min so items reflow as horizontal cards
-                     on desktop and collapse to one-column on narrow
-                     viewports. Replaces the previous vertical stack
-                     that wasted ~70% of horizontal real estate on
-                     wide screens. -->
-                <div class="sequence-list" x-show="sequence.length > 0">
-                    <template x-for="(item, i) in sequence" :key="i">
-                        <div class="sequence-item" :class="{
-                            'seq-active': seqStatus && seqStatus.currentItemIndex === i && seqState === 'running',
-                            'seq-done': seqStatus && i < seqStatus.currentItemIndex,
-                            'seq-disabled': item.enabled === false
-                        }">
-                            <div class="seq-card-head">
-                                <input type="checkbox" class="seq-enable-check" x-model="item.enabled"
-                                       :disabled="seqState === 'running'"
-                                       @change="syncSequenceToServer()"
-                                       title="Enable or disable this item (disabled items are skipped)">
-                                <span class="seq-num" x-text="i + 1"></span>
-                                <input type="text" class="seq-input seq-input-name" x-model="item.name"
-                                       :disabled="seqState === 'running'"
-                                       :placeholder="item.imageType === 'LIGHT' ? 'Target name' : (item.imageType || 'LIGHT').toLowerCase() + ' set'">
-                                <button class="btn btn-sm btn-icon-only" @click="removeSequenceItem(i)"
-                                        :disabled="seqState === 'running'" title="Remove">&times;</button>
-                            </div>
-                            <!-- Celestial thumbnail for Sky-added targets.
-                                 Resolved server-side via the NASA Image
-                                 Library / Wikipedia REST adapter that
-                                 already powers the Tonight tab. Hidden
-                                 for manual "+ Add" items and for any
-                                 catalog name the service couldn't
-                                 resolve, so the card still looks tight
-                                 in those cases. -->
-                            <img class="seq-card-thumb"
-                                 x-show="item.thumbUrl"
-                                 :src="item.thumbUrl"
-                                 :alt="item.name + ' thumbnail'"
-                                 loading="lazy"
-                                 @error="item.thumbUrl = null">
-                            <div class="seq-item-body">
-                                <!-- Frame-type pill selector (Light / Bias / Flat / Dark) -->
-                                <div class="seq-type-pills">
-                                    <template x-for="t in ['LIGHT','BIAS','FLAT','DARK']" :key="t">
-                                        <button type="button" class="seq-type-pill"
-                                                :class="{
-                                                    'seq-type-light': t === 'LIGHT' && (item.imageType || 'LIGHT') === t,
-                                                    'seq-type-bias':  t === 'BIAS'  && item.imageType === t,
-                                                    'seq-type-flat':  t === 'FLAT'  && item.imageType === t,
-                                                    'seq-type-dark':  t === 'DARK'  && item.imageType === t
-                                                }"
-                                                @click="item.imageType = t; if (t === 'BIAS') item.exposure = 0"
-                                                :disabled="seqState === 'running'"
-                                                x-text="t.charAt(0) + t.slice(1).toLowerCase()"></button>
-                                    </template>
-                                </div>
-                                <div class="seq-item-params">
-                                    <!-- FLAT-only "Auto" pill. When ON, the sequence engine
-                                         asks FlatWizardService.AutoFindExposureAsync() to
-                                         binary-search the right exposure for this
-                                         (filter, binning) at runtime, using the trained-
-                                         exposure cache as the fast path. Lets users
-                                         without a filter wheel (Flat Wizard sub-tab is
-                                         filter-wheel-gated) still get auto-exposure
-                                         flats from AUTORUN. -->
-                                    <button type="button" class="seq-type-pill"
-                                            x-show="item.imageType === 'FLAT'"
-                                            :class="{ 'seq-type-flat': item.autoExposure }"
-                                            :disabled="seqState === 'running'"
-                                            @click="item.autoExposure = !item.autoExposure"
-                                            :title="item.autoExposure
-                                                ? 'Auto-exposure ON: engine searches the right exposure at runtime'
-                                                : 'Auto-exposure OFF: engine uses the value below'">
-                                        Auto
-                                    </button>
-                                    <label>Exp<input type="number" class="seq-input seq-input-num"
-                                        x-model.number="item.exposure" list="exposure-presets" step="any" min="0"
-                                        :disabled="seqState === 'running'
-                                                   || item.imageType === 'BIAS'
-                                                   || (item.imageType === 'FLAT' && item.autoExposure)"
-                                        :placeholder="(item.imageType === 'FLAT' && item.autoExposure) ? 'auto' : ''">s</label>
-                                    <label>x<input type="number" class="seq-input seq-input-num"
-                                        x-model.number="item.count" step="1" min="1"
-                                        :disabled="seqState === 'running'"></label>
-                                    <label>G<input type="number" class="seq-input seq-input-num"
-                                        x-model.number="item.gain" step="10" min="0"
-                                        :disabled="seqState === 'running'"></label>
-                                    <!-- Inline ZWO presets, direct assignment on `item` since
-                                         applyGainPreset() can't reach into the x-for scope. -->
-                                    <span class="zwo-gain-presets"
-                                          x-show="zwoPresetsForActiveCamera() && seqState !== 'running'">
-                                        <button type="button" class="zwo-gain-preset"
-                                                :data-active="item.gain === zwoPresetsForActiveCamera()?.L"
-                                                @click="item.gain = zwoPresetsForActiveCamera().L">L</button>
-                                        <button type="button" class="zwo-gain-preset"
-                                                :data-active="item.gain === zwoPresetsForActiveCamera()?.M"
-                                                @click="item.gain = zwoPresetsForActiveCamera().M">M</button>
-                                        <button type="button" class="zwo-gain-preset"
-                                                :data-active="item.gain === zwoPresetsForActiveCamera()?.H"
-                                                @click="item.gain = zwoPresetsForActiveCamera().H">H</button>
-                                    </span>
-                                    <span class="bin-presets" role="group" aria-label="Binning">
-                                        <template x-for="b in [1,2,3,4]" :key="b">
-                                            <button type="button" class="bin-preset"
-                                                    :data-active="item.binning === b"
-                                                    :disabled="seqState === 'running'"
-                                                    @click="item.binning = b"
-                                                    x-text="'BIN' + b"></button>
-                                        </template>
-                                    </span>
-                                    <label x-show="filterWheel.connected && filterWheel.filters.length > 0">
-                                        Filter<select class="seq-input" x-model="item.filter"
-                                            :disabled="seqState === 'running'">
-                                            <option value="">(current)</option>
-                                            <template x-for="f in filterWheel.filters" :key="f">
-                                                <option :value="f" x-text="f"></option>
-                                            </template>
-                                        </select>
-                                    </label>
-                                </div>
-                                <!-- Per-item progress when running -->
-                                <div class="seq-item-progress" x-show="seqStatus && seqStatus.items && seqStatus.items[i]">
-                                    <span x-text="(seqStatus?.items?.[i]?.completed || 0) + '/' + item.count"></span>
-                                </div>
-                            </div>
-                        </div>
-                    </template>
-                </div>
+                <!-- (Sequence cards relocated to .autorun-cards-col,
+                     the dedicated vertical rail to the right of these
+                     controls — see after the list-col close below.) -->
 
                 <!-- Meridian flip settings panel.
                      Header lives in the .autorun-options-bar chip
@@ -7725,12 +7596,184 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         No saved sets yet.
                     </div>
                 </div>
+                <!-- Compact run control pinned to the bottom of the
+                     controls column (replaces the old right-hand shutter
+                     sidebar). Press-and-hold the ring to start; press
+                     again to stop. -->
+                <div class="autorun-run-bar">
+                    <div class="polaris-shutter shutter-compact"
+                         :class="{
+                             'shutter-active': seqState === 'running' || seqState === 'paused',
+                             'shutter-arming': armingLoop
+                         }"
+                         :aria-disabled="sequence.length === 0"
+                         role="button"
+                         :aria-label="seqState === 'idle' ? 'Start sequence' : 'Stop sequence'"
+                         @pointerdown="shutterPointerDown($event, autorunShutterCtx())"
+                         @pointerup="shutterPointerUp($event, autorunShutterCtx())"
+                         @pointercancel="shutterPointerCancel()"
+                         @pointerleave="shutterPointerCancel()">
+                        <svg class="shutter-svg" viewBox="0 0 100 100">
+                            <circle class="shutter-track" cx="50" cy="50" r="46"></circle>
+                            <circle class="shutter-progress" cx="50" cy="50" r="46"
+                                    :style="'stroke-dashoffset: '
+                                        + (armingLoop
+                                            ? (289 * (1 - _shutterArmProgress()))
+                                            : autorunShutterDashoffset())"></circle>
+                            <template x-if="seqState === 'running' || seqState === 'paused'">
+                                <g>
+                                    <circle class="shutter-track-inner" cx="50" cy="50" r="38"></circle>
+                                    <circle class="shutter-progress-inner" cx="50" cy="50" r="38"
+                                            :style="'stroke-dashoffset:' + autorunExposureDashoffset()"></circle>
+                                </g>
+                            </template>
+                        </svg>
+                        <span class="shutter-icon">
+                            <svg viewBox="0 0 24 24" x-show="seqState === 'idle'">
+                                <polygon points="8,5 19,12 8,19"></polygon>
+                            </svg>
+                            <svg viewBox="0 0 24 24" x-show="seqState !== 'idle'">
+                                <rect x="7" y="7" width="10" height="10" rx="1.5"></rect>
+                            </svg>
+                        </span>
+                        <span class="shutter-countdown" x-text="autorunShutterCountdown()"></span>
+                    </div>
+                    <div class="autorun-run-meta">
+                        <button class="btn btn-sm"
+                                @click="pauseSequence()"
+                                :disabled="seqState === 'idle'"
+                                x-text="seqState === 'paused' ? '▶ Resume' : '⏸ Pause'"></button>
+                        <div class="text-muted" style="font-size:11px"
+                             x-show="seqState === 'idle' && sequence.length > 0">
+                            Hold to start ·
+                            <span x-text="sequence.length + ' item' + (sequence.length === 1 ? '' : 's')"></span>
+                        </div>
+                        <div class="text-muted" style="font-size:11px; line-height:1.4"
+                             x-show="seqState !== 'idle' && seqStatus">
+                            <div x-text="seqProgress() + '% · ' + (seqStatus?.totalFramesCompleted || 0) + '/' + (seqStatus?.totalFrames || 0)"></div>
+                            <div x-show="seqStatus?.estimatedRemainingSeconds > 0">
+                                ETA <strong x-text="formatTime(seqStatus?.estimatedRemainingSeconds)"></strong>
+                            </div>
+                        </div>
+                        <div class="seq-error" x-show="seqStatus?.lastError">
+                            <span x-text="seqStatus?.lastError"></span>
+                        </div>
+                    </div>
+                </div>
                 </div><!-- /.autorun-list-col -->
 
-                <!-- Centre preview: last captured frame from the running
-                     sequence (relayed as a Live frame, mirrored here by
-                     the multi-canvas renderer). Same pan/zoom/stretch
-                     toolbar as the PREVIEW tab. -->
+                <!-- Col 2: sequence item cards in their own vertical rail.
+                     Single-column stack so each target card reads top to
+                     bottom beside the controls. -->
+                <div class="autorun-cards-col">
+                    <div class="sequence-empty" x-show="sequence.length === 0">
+                        <p>No sequence loaded — click <strong>+ Add</strong> in the controls panel or pick a target in Sky Explorer.</p>
+                    </div>
+                    <div class="sequence-list" x-show="sequence.length > 0">
+                        <template x-for="(item, i) in sequence" :key="i">
+                            <div class="sequence-item" :class="{
+                                'seq-active': seqStatus && seqStatus.currentItemIndex === i && seqState === 'running',
+                                'seq-done': seqStatus && i < seqStatus.currentItemIndex,
+                                'seq-disabled': item.enabled === false
+                            }">
+                                <div class="seq-card-head">
+                                    <input type="checkbox" class="seq-enable-check" x-model="item.enabled"
+                                           :disabled="seqState === 'running'"
+                                           @change="syncSequenceToServer()"
+                                           title="Enable or disable this item (disabled items are skipped)">
+                                    <span class="seq-num" x-text="i + 1"></span>
+                                    <input type="text" class="seq-input seq-input-name" x-model="item.name"
+                                           :disabled="seqState === 'running'"
+                                           :placeholder="item.imageType === 'LIGHT' ? 'Target name' : (item.imageType || 'LIGHT').toLowerCase() + ' set'">
+                                    <button class="btn btn-sm btn-icon-only" @click="removeSequenceItem(i)"
+                                            :disabled="seqState === 'running'" title="Remove">&times;</button>
+                                </div>
+                                <img class="seq-card-thumb"
+                                     x-show="item.thumbUrl"
+                                     :src="item.thumbUrl"
+                                     :alt="item.name + ' thumbnail'"
+                                     loading="lazy"
+                                     @error="item.thumbUrl = null">
+                                <div class="seq-item-body">
+                                    <div class="seq-type-pills">
+                                        <template x-for="t in ['LIGHT','BIAS','FLAT','DARK']" :key="t">
+                                            <button type="button" class="seq-type-pill"
+                                                    :class="{
+                                                        'seq-type-light': t === 'LIGHT' && (item.imageType || 'LIGHT') === t,
+                                                        'seq-type-bias':  t === 'BIAS'  && item.imageType === t,
+                                                        'seq-type-flat':  t === 'FLAT'  && item.imageType === t,
+                                                        'seq-type-dark':  t === 'DARK'  && item.imageType === t
+                                                    }"
+                                                    @click="item.imageType = t; if (t === 'BIAS') item.exposure = 0"
+                                                    :disabled="seqState === 'running'"
+                                                    x-text="t.charAt(0) + t.slice(1).toLowerCase()"></button>
+                                        </template>
+                                    </div>
+                                    <div class="seq-item-params">
+                                        <button type="button" class="seq-type-pill"
+                                                x-show="item.imageType === 'FLAT'"
+                                                :class="{ 'seq-type-flat': item.autoExposure }"
+                                                :disabled="seqState === 'running'"
+                                                @click="item.autoExposure = !item.autoExposure"
+                                                :title="item.autoExposure
+                                                    ? 'Auto-exposure ON: engine searches the right exposure at runtime'
+                                                    : 'Auto-exposure OFF: engine uses the value below'">
+                                            Auto
+                                        </button>
+                                        <label>Exp<input type="number" class="seq-input seq-input-num"
+                                            x-model.number="item.exposure" list="exposure-presets" step="any" min="0"
+                                            :disabled="seqState === 'running'
+                                                       || item.imageType === 'BIAS'
+                                                       || (item.imageType === 'FLAT' && item.autoExposure)"
+                                            :placeholder="(item.imageType === 'FLAT' && item.autoExposure) ? 'auto' : ''">s</label>
+                                        <label>x<input type="number" class="seq-input seq-input-num"
+                                            x-model.number="item.count" step="1" min="1"
+                                            :disabled="seqState === 'running'"></label>
+                                        <label>G<input type="number" class="seq-input seq-input-num"
+                                            x-model.number="item.gain" step="10" min="0"
+                                            :disabled="seqState === 'running'"></label>
+                                        <span class="zwo-gain-presets"
+                                              x-show="zwoPresetsForActiveCamera() && seqState !== 'running'">
+                                            <button type="button" class="zwo-gain-preset"
+                                                    :data-active="item.gain === zwoPresetsForActiveCamera()?.L"
+                                                    @click="item.gain = zwoPresetsForActiveCamera().L">L</button>
+                                            <button type="button" class="zwo-gain-preset"
+                                                    :data-active="item.gain === zwoPresetsForActiveCamera()?.M"
+                                                    @click="item.gain = zwoPresetsForActiveCamera().M">M</button>
+                                            <button type="button" class="zwo-gain-preset"
+                                                    :data-active="item.gain === zwoPresetsForActiveCamera()?.H"
+                                                    @click="item.gain = zwoPresetsForActiveCamera().H">H</button>
+                                        </span>
+                                        <span class="bin-presets" role="group" aria-label="Binning">
+                                            <template x-for="b in [1,2,3,4]" :key="b">
+                                                <button type="button" class="bin-preset"
+                                                        :data-active="item.binning === b"
+                                                        :disabled="seqState === 'running'"
+                                                        @click="item.binning = b"
+                                                        x-text="'BIN' + b"></button>
+                                            </template>
+                                        </span>
+                                        <label x-show="filterWheel.connected && filterWheel.filters.length > 0">
+                                            Filter<select class="seq-input" x-model="item.filter"
+                                                :disabled="seqState === 'running'">
+                                                <option value="">(current)</option>
+                                                <template x-for="f in filterWheel.filters" :key="f">
+                                                    <option :value="f" x-text="f"></option>
+                                                </template>
+                                            </select>
+                                        </label>
+                                    </div>
+                                    <div class="seq-item-progress" x-show="seqStatus && seqStatus.items && seqStatus.items[i]">
+                                        <span x-text="(seqStatus?.items?.[i]?.completed || 0) + '/' + item.count"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div><!-- /.autorun-cards-col -->
+
+                <!-- Col 3: centre preview with the histogram docked at
+                     the bottom of the frame panel (not full window width). -->
                 <div class="preview-area autorun-preview">
                     <canvas id="autorunCanvas" class="preview-canvas"></canvas>
                     <div class="pz-toolbar" @pointerdown.stop @dblclick.stop @wheel.stop>
@@ -7744,117 +7787,38 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <div class="preview-overlay" x-show="!_lastRawFrame">
                         <p>The last captured frame of the running sequence appears here.</p>
                     </div>
-                </div>
 
-                <!-- SHUT-4: right sidebar with the Polaris Shutter
-                     (start / abort), Pause/Resume toggle, and the
-                     progress text that used to live in the horizontal
-                     seq-progress-section. -->
-                <div class="quick-controls autorun-sidebar">
-                    <div class="shutter-inputs">
-                        <div class="control-row text-muted" style="font-size:11px"
-                             x-show="sequence.length > 0">
-                            <span x-text="sequence.length + ' item' + (sequence.length === 1 ? '' : 's')"></span>
-                            <span x-show="seqState !== 'idle'"
-                                  x-text="' · ' + (seqStatus?.totalFrames || 0) + ' frames total'"></span>
+                    <!-- ASIAIR-style histogram + stretch mini-panel, docked
+                         inside the frame area at the bottom. -->
+                    <div class="histo-panel autorun-histo" x-show="selectedCamera || _lastRawFrame">
+                        <div class="histo-stats">
+                            <div class="hs-cell"><span class="hs-v" x-text="histo.max"></span><span class="hs-l">Max</span></div>
+                            <div class="hs-cell"><span class="hs-v" x-text="histo.avg"></span><span class="hs-l">Avg</span></div>
+                            <div class="hs-cell"><span class="hs-v" x-text="histo.min"></span><span class="hs-l">Min</span></div>
+                            <div class="hs-cell"><span class="hs-v" x-text="histo.std"></span><span class="hs-l">Std</span></div>
                         </div>
-                    </div>
-
-                    <div class="shutter-wrap">
-                        <div class="polaris-shutter"
-                             :class="{
-                                 'shutter-active': seqState === 'running' || seqState === 'paused',
-                                 'shutter-arming': armingLoop
-                             }"
-                             :aria-disabled="sequence.length === 0"
-                             role="button"
-                             :aria-label="seqState === 'idle' ? 'Start sequence' : 'Stop sequence'"
-                             @pointerdown="shutterPointerDown($event, autorunShutterCtx())"
-                             @pointerup="shutterPointerUp($event, autorunShutterCtx())"
-                             @pointercancel="shutterPointerCancel()"
-                             @pointerleave="shutterPointerCancel()">
-                            <svg class="shutter-svg" viewBox="0 0 100 100">
-                                <circle class="shutter-track" cx="50" cy="50" r="46"></circle>
-                                <circle class="shutter-progress" cx="50" cy="50" r="46"
-                                        :style="'stroke-dashoffset: '
-                                            + (armingLoop
-                                                ? (289 * (1 - _shutterArmProgress()))
-                                                : autorunShutterDashoffset())"></circle>
-                                <!-- Inner ring: progress of the CURRENT exposure
-                                     (elapsed / exposure seconds). Only while the
-                                     sequence is active. r=38 -> circumference 238.76. -->
-                                <template x-if="seqState === 'running' || seqState === 'paused'">
-                                    <g>
-                                        <circle class="shutter-track-inner" cx="50" cy="50" r="38"></circle>
-                                        <circle class="shutter-progress-inner" cx="50" cy="50" r="38"
-                                                :style="'stroke-dashoffset:' + autorunExposureDashoffset()"></circle>
-                                    </g>
-                                </template>
-                            </svg>
-                            <span class="shutter-icon">
-                                <svg viewBox="0 0 24 24" x-show="seqState === 'idle'">
-                                    <polygon points="8,5 19,12 8,19"></polygon>
-                                </svg>
-                                <svg viewBox="0 0 24 24" x-show="seqState !== 'idle'">
-                                    <rect x="7" y="7" width="10" height="10" rx="1.5"></rect>
-                                </svg>
-                            </span>
-                            <span class="shutter-countdown" x-text="autorunShutterCountdown()"></span>
+                        <div class="histo-graph">
+                            <canvas id="histoCanvas-autorun" class="histo-canvas"></canvas>
+                            <div class="histo-axis"><span>0</span><span>32768</span><span>65535</span></div>
+                            <div class="histo-handle histo-handle-black"
+                                 :style="'left:' + histoMarkerPct('black') + '%'"
+                                 @pointerdown="histoHandleDown($event,'black')" title="Black point"></div>
+                            <div class="histo-handle histo-handle-mid"
+                                 :style="'left:' + histoMarkerPct('mid') + '%'"
+                                 @pointerdown="histoHandleDown($event,'mid')" title="Midtones"></div>
+                            <div class="histo-handle histo-handle-white"
+                                 :style="'left:' + histoMarkerPct('white') + '%'"
+                                 @pointerdown="histoHandleDown($event,'white')" title="White point"></div>
                         </div>
-                    </div>
-
-                    <div class="shutter-secondary">
-                        <div class="control-row" style="justify-content:center">
-                            <button class="btn btn-sm"
-                                    @click="pauseSequence()"
-                                    :disabled="seqState === 'idle'"
-                                    x-text="seqState === 'paused' ? '▶ Resume' : '⏸ Pause'"></button>
-                        </div>
-                        <div class="control-row text-muted" style="font-size:11px; flex-direction:column; align-items:flex-start; gap:2px"
-                             x-show="seqState !== 'idle' && seqStatus">
-                            <span x-text="seqProgress() + '% · ' + (seqStatus?.totalFramesCompleted || 0) + '/' + (seqStatus?.totalFrames || 0)"></span>
-                            <span x-show="seqStatus?.estimatedRemainingSeconds > 0">
-                                ETA <strong x-text="formatTime(seqStatus?.estimatedRemainingSeconds)"></strong>
-                            </span>
-                            <span x-show="seqStatus?.elapsedSeconds > 0">
-                                Elapsed <strong x-text="formatTime(seqStatus?.elapsedSeconds)"></strong>
-                            </span>
-                        </div>
-                        <div class="seq-error" x-show="seqStatus?.lastError">
-                            <span x-text="seqStatus?.lastError"></span>
+                        <div class="histo-actions">
+                            <button class="btn btn-sm" :class="stretchAuto ? 'btn-active' : ''"
+                                    @click="histoAuto()" title="Auto-stretch">Auto</button>
+                            <button class="btn btn-sm" :class="histoZoom ? 'btn-active' : ''"
+                                    @click="histoToggleZoom()" title="Zoom the histogram to the data">Zoom</button>
                         </div>
                     </div>
                 </div>
                 </div><!-- /.autorun-pane -->
-
-                <!-- ASIAIR-style histogram + stretch mini-panel (sequence view) -->
-                <div class="histo-panel" x-show="autorunTab === 'sequence' && (selectedCamera || _lastRawFrame)">
-                    <div class="histo-stats">
-                        <div class="hs-cell"><span class="hs-v" x-text="histo.max"></span><span class="hs-l">Max</span></div>
-                        <div class="hs-cell"><span class="hs-v" x-text="histo.avg"></span><span class="hs-l">Avg</span></div>
-                        <div class="hs-cell"><span class="hs-v" x-text="histo.min"></span><span class="hs-l">Min</span></div>
-                        <div class="hs-cell"><span class="hs-v" x-text="histo.std"></span><span class="hs-l">Std</span></div>
-                    </div>
-                    <div class="histo-graph">
-                        <canvas id="histoCanvas-autorun" class="histo-canvas"></canvas>
-                        <div class="histo-axis"><span>0</span><span>32768</span><span>65535</span></div>
-                        <div class="histo-handle histo-handle-black"
-                             :style="'left:' + histoMarkerPct('black') + '%'"
-                             @pointerdown="histoHandleDown($event,'black')" title="Black point"></div>
-                        <div class="histo-handle histo-handle-mid"
-                             :style="'left:' + histoMarkerPct('mid') + '%'"
-                             @pointerdown="histoHandleDown($event,'mid')" title="Midtones"></div>
-                        <div class="histo-handle histo-handle-white"
-                             :style="'left:' + histoMarkerPct('white') + '%'"
-                             @pointerdown="histoHandleDown($event,'white')" title="White point"></div>
-                    </div>
-                    <div class="histo-actions">
-                        <button class="btn btn-sm" :class="stretchAuto ? 'btn-active' : ''"
-                                @click="histoAuto()" title="Auto-stretch">Auto</button>
-                        <button class="btn btn-sm" :class="histoZoom ? 'btn-active' : ''"
-                                @click="histoToggleZoom()" title="Zoom the histogram to the data">Zoom</button>
-                    </div>
-                </div>
 
                 <!-- FW-2: Flat Wizard sub-tab pane. 2-column layout
                      mirroring .autorun-pane (config column on the left,

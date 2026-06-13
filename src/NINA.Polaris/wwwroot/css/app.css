@@ -910,13 +910,81 @@ body {
    col flex:1; pin it to a fixed width here so the centre preview gets
    the remaining space. Flat Wizard keeps the flex:1 single layout. */
 .autorun-pane > .autorun-list-col {
-    flex: 0 1 340px;
+    flex: 0 0 300px;
     min-width: 0;
+}
+/* Col 2: the sequence cards rail. Own scroll, fixed width so the
+   centre preview keeps the rest. Cards stack vertically (one per row)
+   regardless of the wider auto-fit grid the list uses elsewhere. */
+.autorun-pane > .autorun-cards-col {
+    flex: 0 0 320px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 0 4px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+.autorun-pane > .autorun-cards-col .sequence-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 4px;
 }
 .autorun-pane > .autorun-preview {
     flex: 1 1 auto;
     min-width: 0;
     border-radius: var(--radius);
+    /* Anchor the docked histogram at the bottom of the frame panel. */
+    position: relative;
+}
+
+/* Compact run control at the bottom of the controls column. Sticky so
+   the Start ring stays reachable while the controls above scroll. */
+.autorun-run-bar {
+    position: sticky;
+    bottom: 0;
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 6px 4px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+}
+.autorun-run-bar .autorun-run-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    min-width: 0;
+}
+/* Small shutter for the run bar (the big ring lived in the old right
+   sidebar; here it's ~64px so it tucks into the controls footer). */
+.polaris-shutter.shutter-compact {
+    width: 64px;
+    height: 64px;
+    flex: 0 0 64px;
+}
+.polaris-shutter.shutter-compact .shutter-countdown { font-size: 10px; }
+.polaris-shutter.shutter-compact .shutter-icon svg { width: 20px; height: 20px; }
+
+/* Histogram docked inside the AUTORUN frame panel, bottom edge, instead
+   of a full-window-width strip. Translucent so the frame shows through. */
+.autorun-preview .histo-panel.autorun-histo {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    height: 78px;
+    z-index: 3;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: rgba(15, 23, 42, 0.82);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
 }
 /* Keep all three columns down to tablet-landscape widths; only stack on
    genuinely narrow screens. When it DOES stack, the run-control sidebar
@@ -935,7 +1003,8 @@ body {
     }
     /* Don't trap the rows in their own nested scrollers when stacked —
        let them grow to content height and the pane scroll as one column. */
-    .autorun-pane > .autorun-list-col {
+    .autorun-pane > .autorun-list-col,
+    .autorun-pane > .autorun-cards-col {
         flex: 1 1 100%;
         overflow: visible;
     }
@@ -944,6 +1013,8 @@ body {
         flex: 1 1 100%;
         overflow: visible;
     }
+    /* Stacked: don't pin the run bar, let it flow after the controls. */
+    .autorun-run-bar { position: static; }
 }
 .live-pane > .quick-controls .control-row,
 .preview-pane > .quick-controls .control-row {
