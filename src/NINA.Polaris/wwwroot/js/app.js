@@ -432,6 +432,15 @@ function ninaApp() {
         // otherwise) or when the user prefers a cleaner vector view.
         skyDssVisible: true,
 
+        // Settings -> Sky imagery (offline DSS). Mirrors the
+        // DssDownloadService status; polled while the card is open and
+        // while a download runs. installedOrder = -1 means nothing on disk.
+        dssDownload: {
+            running: false, targetOrder: 0, totalTiles: 0, completedTiles: 0,
+            failedTiles: 0, installedOrder: -1, error: null
+        },
+        _dssPollTimer: null,
+
         // Remote terminal (xterm.js + /ws/terminal SSH bridge).
         // Credentials are never persisted, every Connect prompts
         // again. Terminal:Enabled=false on the server returns 403
@@ -7857,6 +7866,52 @@ function ninaApp() {
         // that across).
         _skyToggleDss() {
             this._skySendMessage({ type: 'set-dss-visible', visible: !!this.skyDssVisible });
+        },
+
+        // Settings -> Sky imagery (offline DSS). Poll status once; if a
+        // download is running, keep polling every 1.5s for the progress bar
+        // until it finishes.
+        async loadDssStatus() {
+            try {
+                const s = await this.apiGet('/api/sky/dss/status');
+                this.dssDownload = Object.assign(this.dssDownload, s);
+            } catch (e) { /* card may not be visible yet */ }
+            if (this.dssDownload.running && !this._dssPollTimer) {
+                this._dssPollTimer = setInterval(() => this._pollDss(), 1500);
+            }
+        },
+        async _pollDss() {
+            try {
+                const s = await this.apiGet('/api/sky/dss/status');
+                this.dssDownload = Object.assign(this.dssDownload, s);
+            } catch (e) { /* keep last */ }
+            if (!this.dssDownload.running && this._dssPollTimer) {
+                clearInterval(this._dssPollTimer); this._dssPollTimer = null;
+                if (!this.dssDownload.error) {
+                    this.toast('Sky imagery downloaded (order '
+                        + this.dssDownload.installedOrder + '). Reload the SKY tab.', 'ok');
+                } else if (this.dssDownload.error !== 'cancelled') {
+                    this.toast('Sky imagery download failed: ' + this.dssDownload.error, 'error');
+                }
+            }
+        },
+        async startDssDownload(order) {
+            try {
+                const resp = await this.apiPost('/api/sky/dss/download', { maxOrder: order });
+                const s = await resp.json().catch(() => ({}));
+                this.dssDownload = Object.assign(this.dssDownload, s, { running: true });
+                this.toast('Downloading sky imagery (order ' + order
+                    + '). This runs in the background.', 'info');
+                if (!this._dssPollTimer) this._dssPollTimer = setInterval(() => this._pollDss(), 1500);
+            } catch (e) {
+                let msg = e.message;
+                try { const b = JSON.parse(e.body || '{}'); if (b.error) msg = b.error; } catch {}
+                this.toast('Could not start download: ' + msg, 'error');
+            }
+        },
+        async cancelDssDownload() {
+            try { await this.apiPost('/api/sky/dss/cancel'); } catch (e) {}
+            this.toast('Cancelling download…', 'warn');
         },
 
         // Async search via the engine. Returns Promise<result|null>.

@@ -9831,6 +9831,66 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                        x-text="'⚠ ' + clockSync.lastError"></p>
                 </div>
 
+                <div class="settings-section" id="dss-card" x-init="loadDssStatus()">
+                    <h3><span class="settings-card-icon">🌌</span>Sky imagery (offline DSS)</h3>
+                    <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
+                        The SKY map ships with real deep-sky imagery (DSS Color)
+                        at a low resolution that works fully offline. Download a
+                        higher detail level here for ASIAIR-grade zoom — it's
+                        stored on this host and used automatically, no internet
+                        needed afterwards. Each level includes the lower ones
+                        and resumes where it left off.
+                    </p>
+                    <div style="display:flex; flex-direction:column; gap:6px; margin-top:8px; font-size:12px">
+                        <div>
+                            Installed detail:
+                            <strong x-text="dssDownload.installedOrder >= 0
+                                ? ('order ' + dssDownload.installedOrder
+                                   + (dssDownload.installedOrder >= 5 ? ' (full)'
+                                      : dssDownload.installedOrder >= 4 ? ' (high)'
+                                      : ' (baseline)'))
+                                : 'none'"></strong>
+                        </div>
+                        <div x-show="dssDownload.running">
+                            Downloading order <span x-text="dssDownload.targetOrder"></span>:
+                            <strong x-text="dssDownload.completedTiles + ' / ' + dssDownload.totalTiles + ' tiles'"></strong>
+                            <span class="text-muted"
+                                  x-show="dssDownload.totalTiles > 0"
+                                  x-text="'(' + Math.floor(100 * dssDownload.completedTiles / dssDownload.totalTiles) + '%)'"></span>
+                        </div>
+                        <div x-show="dssDownload.running" class="progress-track"
+                             style="height:6px; background:var(--bg-elevated); border-radius:3px; overflow:hidden">
+                            <div style="height:100%; background:var(--accent); transition:width .3s"
+                                 :style="'width:' + (dssDownload.totalTiles > 0
+                                     ? (100 * dssDownload.completedTiles / dssDownload.totalTiles) : 0) + '%'"></div>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:14px">
+                        <button class="btn btn-sm btn-primary"
+                                @click="startDssDownload(4)"
+                                :disabled="dssDownload.running || dssDownload.installedOrder >= 4">
+                            ⬇ Order 4 (~110 MB)
+                        </button>
+                        <button class="btn btn-sm btn-primary"
+                                @click="startDssDownload(5)"
+                                :disabled="dssDownload.running || dssDownload.installedOrder >= 5">
+                            ⬇ Order 5 (~400 MB)
+                        </button>
+                        <button class="btn btn-sm btn-danger"
+                                x-show="dssDownload.running"
+                                @click="cancelDssDownload()">
+                            Cancel
+                        </button>
+                    </div>
+                    <p class="text-warn" x-show="dssDownload.error && dssDownload.error !== 'cancelled'"
+                       style="font-size:11px; margin-top:8px"
+                       x-text="'⚠ ' + dssDownload.error"></p>
+                    <p class="text-muted" style="font-size:11px; margin-top:8px">
+                        Source: DSS Color, STScI/NASA, HEALPixed by CDS Strasbourg.
+                        Reload the SKY tab after a download to see the new detail.
+                    </p>
+                </div>
+
                 <div class="settings-section" id="power-card">
                     <h3><span class="settings-card-icon">⏻</span>Power</h3>
                     <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
@@ -13312,7 +13372,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260613-textmodal"></script>
+    <script src="/js/app.js?v=20260613-dssdownload"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

@@ -322,6 +322,10 @@ builder.Services.AddSingleton<HostMetricsService>();
 // store persists run history under {ProfileService.DataDir}/benchmarks/.
 builder.Services.AddSingleton<BenchmarkResultsStore>();
 builder.Services.AddSingleton<BenchmarkService>();
+// On-demand DSS Color HiPS downloader (Settings -> Sky imagery). Pulls the
+// higher HEALPix orders (4 ~110 MB, 5 ~400 MB) into the bundled skydata dir
+// so the SKY map reaches ASIAIR-grade detail without shipping them in git.
+builder.Services.AddSingleton<NINA.Polaris.Services.External.DssDownloadService>();
 // Camera sensor analysis (e/ADU, read noise, full well, dynamic range
 // vs gain via the photon-transfer-curve method). On-demand, like the
 // benchmark; launched from the Equipment camera card.
@@ -947,6 +951,7 @@ app.MapCacheEndpoints();
 app.MapBenchmarkEndpoints();
 app.MapSensorAnalysisEndpoints();
 app.MapSirilEndpoints();
+app.MapDssEndpoints();
 app.MapGraXpertEndpoints();
 app.MapCropEndpoints();
 app.MapAnalysisEndpoints();
