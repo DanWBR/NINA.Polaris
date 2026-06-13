@@ -1422,25 +1422,47 @@
                         url: SKYDATA_BASE + 'surveys/milkyway'
                     });
                     // High-resolution deep-sky background via the DSS
-                    // Color HiPS streamed from CDS Strasbourg. Streams
-                    // HEALPix tiles on demand (no bundle cost), and
-                    // unlocks the "you can see actual nebulae/galaxies"
-                    // experience when zooming in past a few degrees.
-                    // The bundled milkyway survey is hips_order=0 only
-                    // (a single low-res panorama) — without DSS, zoom
-                    // just makes the same blurred background bigger.
+                    // Color HiPS — the "you can see actual nebulae/
+                    // galaxies" layer. The bundled milkyway survey is
+                    // hips_order=0 only (a single low-res panorama), so
+                    // without DSS, zoom just enlarges the same blur.
+                    //
+                    // OFFLINE-FIRST: if the operator provisioned the
+                    // local DSS bundle (scripts/fetch-stellarium-dss.sh
+                    // writes surveys/dss/), prefer it so the rich sky
+                    // works with no network at the telescope. Otherwise
+                    // fall back to streaming from CDS Strasbourg (needs
+                    // a connection). We pick by probing the local
+                    // properties file first, then register the chosen
+                    // source — registration can happen a tick after the
+                    // rest of init without issue.
                     //
                     // Visibility is toggled by the parent app via the
-                    // 'set-dss-visible' message; default ON since this
-                    // is the whole point of having the engine vs the
-                    // old d3-celestial vector renderer. Falls back
-                    // silently if the user is offline (engine logs a
-                    // tile 404, stars/DSO/milkyway still render).
+                    // 'set-dss-visible' message; default ON.
                     //
-                    // Attribution: STScI/NASA, healpixed by CDS — see
-                    // upstream stellarium-web data-credits-dialog.vue
-                    // for the full text we mirror in our footer.
+                    // Attribution: DSS Color, STScI/NASA, healpixed by
+                    // CDS — mirrored in our footer per upstream
+                    // stellarium-web data-credits-dialog.vue.
                     try {
+                        var LOCAL_DSS = SKYDATA_BASE + 'surveys/dss';
+                        var REMOTE_DSS = 'https://alasky.cds.unistra.fr/DSS/DSSColor';
+                        fetch(LOCAL_DSS + '/properties', { method: 'GET' })
+                            .then(function (r) { return r && r.ok ? LOCAL_DSS : REMOTE_DSS; })
+                            .catch(function () { return REMOTE_DSS; })
+                            .then(function (url) {
+                                try {
+                                    core.dss.addDataSource({ url: url });
+                                    core.dss.visible = true;
+                                    console.log('[Sky] DSS source: '
+                                        + (url === LOCAL_DSS ? 'LOCAL bundle' : 'remote CDS'));
+                                } catch (e) { console.warn('[Sky] DSS register failed:', e); }
+                            });
+                    } catch (dssOuter) {
+                        console.warn('[Sky] DSS probe failed:', dssOuter);
+                    }
+                    // Legacy synchronous path kept disabled — replaced by
+                    // the offline-first probe above.
+                    if (false) try {
                         core.dss.addDataSource({
                             url: 'https://alasky.cds.unistra.fr/DSS/DSSColor'
                         });

@@ -6,16 +6,69 @@ orchestration.
 ## Sky map
 
 [stellarium-web-engine](https://github.com/Stellarium/stellarium-web-engine)
-running as a sandboxed WebGL2 sub-app (`/sky/`) inside an iframe. Renders
-Gaia stars (down to mag 16), DSO surveys with image overlays, IAU
-constellation art + names in multiple cultures, atmosphere/horizon, sun
-+ moon + planets + asteroids, and HiPS Milky Way tiles. Fully offline
-when the skydata bundle is present (bundled with publish by default;
-~300 MB on disk).
+running as a sandboxed WebGL2 sub-app (`/sky/`) inside an iframe.
+
+The bundled `skydata/` (~4.6 MB, shipped in the repo + publish output)
+covers, fully offline: Hipparcos/Tycho stars (the brighter naked-eye to
+binocular range), the NGC/IC/Messier DSO catalog as labelled markers, IAU
+**constellation lines + names** (on by default — the stick-figure overlay
+you'd expect), the 88 western constellation **figure illustrations**
+(toggleable artwork), a low-res Milky Way panorama, plus sun / moon /
+planets / asteroids / comets.
+
+**Real deep-sky imagery** (the "I can actually see the nebula/galaxy"
+background, like ASIAIR) comes from the **DSS Color HiPS**. Two modes:
+
+- **Online** (default if no local bundle): streamed on demand from CDS
+  Strasbourg. Needs a connection.
+- **Offline**: provision the DSS bundle once (see *Offline deep-sky
+  imagery* below); the bridge auto-detects it and prefers it, so the rich
+  sky works at the telescope with no network.
 
 Drag to pan, mouse wheel / pinch to zoom. The view aims at whatever
 the host UI tells it via postMessage (mount RA/Dec, search hit,
 "Centre on selected target" buttons).
+
+## Offline deep-sky imagery (DSS)
+
+To make the sky show real imagery with **no internet at use time**,
+download the DSS Color HiPS into the bundle once with the provisioning
+script. Size scales ~4x per HEALPix order — pick the ceiling that fits
+your SBC card:
+
+| max order | tiles  | approx size | look                                  |
+|---        |---:    |---:         |---                                    |
+| 3         | ~1 020 | ~30 MB      | big objects recognisable, soft on zoom|
+| 4         | ~4 100 | ~110 MB     | most DSOs recognisable (good value)   |
+| 5         | ~16 400| ~400 MB     | detailed, ASIAIR-like                  |
+| 6         | ~65 500| ~1.5 GB     | overkill for framing                  |
+
+```bash
+# Linux / macOS / Git-Bash  (args: MAX_ORDER [PARALLEL])
+scripts/fetch-stellarium-dss.sh 4
+```
+```powershell
+# Windows
+pwsh scripts/fetch-stellarium-dss.ps1 -MaxOrder 4
+```
+
+The script is **resumable** (skips tiles already present, so re-run to
+top up to a higher order) and writes to
+`src/NINA.Polaris/wwwroot/sky/data/skydata/surveys/dss/`. That path is
+tracked with **Git LFS** (see `.gitattributes`) so the binary tiles don't
+bloat the working clone but still ship in `dotnet publish` / the
+installer. Commit after fetching:
+
+```bash
+git add src/NINA.Polaris/wwwroot/sky/data/skydata/surveys/dss
+git commit -m "skydata: bundle DSS Color HiPS (order 4)"
+```
+
+Attribution: DSS Color, STScI/NASA, HEALPixed by CDS Strasbourg.
+
+> The repo ships order ≤3 as a baseline so the offline background works
+> out of the box. Run the script to a higher order for ASIAIR-grade
+> detail.
 
 > **Browser requirement.** WebGL2 is mandatory. On a host with no
 > WebGL2 (e.g. running Polaris's local browser on a Raspberry Pi 2

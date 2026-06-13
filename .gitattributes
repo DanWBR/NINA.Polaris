@@ -34,6 +34,20 @@ external/stellarium-web-engine/** -text
 src/NINA.Polaris/wwwroot/sky/data/skydata/** -text
 
 ###############################################################################
+# Offline sky imagery (DSS Color HiPS background + curated DSO preview
+# thumbnails) is large binary (tens to hundreds of MB depending on the
+# HEALPix order fetched). Track it with Git LFS so the working clone isn't
+# permanently bloated — the bytes still ship in `dotnet publish` / the
+# installer (LFS smudges real content on checkout), they just live in the
+# LFS store instead of git history. These rules are MORE specific than the
+# skydata `-text` line above and win by being last-matching. Populate via
+# scripts/fetch-stellarium-dss.sh and the DSO-thumbnail fetcher; both
+# write under these paths.
+###############################################################################
+src/NINA.Polaris/wwwroot/sky/data/skydata/surveys/dss/** filter=lfs diff=lfs merge=lfs -text
+src/NINA.Polaris/wwwroot/sky/data/skydata/dso-thumbs/** filter=lfs diff=lfs merge=lfs -text
+
+###############################################################################
 # Set default behavior for command prompt diff.
 #
 # This is need for earlier builds of msysgit that does not have it on by
