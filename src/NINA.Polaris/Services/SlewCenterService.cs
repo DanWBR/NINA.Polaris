@@ -247,9 +247,45 @@ public class SlewCenterService {
                 _logger.LogInformation("Plate solving...");
                 _progress?.Append($"-- iteration {i + 1}/{maxIterations}: plate solving --");
 
+                // Position hint: prefer the mount's ACTUAL current pointing over
+                // the slew target. They coincide right after a normal first slew,
+                // but in center-only / post-flip / KeepCentered cases the mount can
+                // be pointing well off the desired target coordinates, so hinting
+                // ASTAP with the target would steer it to the wrong field. Fall back
+                // to the target when the mount doesn't report a usable RA/Dec.
+                double hintRa = job.TargetRa, hintDec = job.TargetDec;
+                var scope = _equip.Telescope;
+                if (scope != null && scope.IsConnected) {
+                    var mra = scope.RightAscension;
+                    var mdec = scope.Declination;
+                    if (!double.IsNaN(mra) && !double.IsNaN(mdec) &&
+                            mra >= 0 && mra <= 24 && mdec >= -90 && mdec <= 90) {
+                        hintRa = mra;
+                        hintDec = mdec;
+                    }
+                }
+
+                // FOV hint: ASTAP without a scale hint has to search its whole
+                // range, which is the main cause of slow/failed solves. Derive the
+                // horizontal FOV from the active rig focal length + camera pixel
+                // size + captured image width (same relation the FILES tab uses).
+                double fovDeg = 0;
+                double fl = _profiles.ActiveEquipmentProfile?.FocalLengthMm ?? 0;
+                double pixSize = _equip.Camera?.PixelSizeX ?? 0;
+                int imgWidth = imageData.Properties.Width;
+                if (fl > 0 && pixSize > 0 && imgWidth > 0) {
+                    double sensorMm = pixSize * imgWidth / 1000.0;
+                    fovDeg = 2.0 * Math.Atan(sensorMm / (2.0 * fl)) * (180.0 / Math.PI);
+                }
+
+                _logger.LogInformation(
+                    "Solve hints: RA={Ra:F4}h Dec={Dec:F4}° fov={Fov:F2}° radius=10°",
+                    hintRa, hintDec, fovDeg);
+
                 var solveResult = await _solver.SolveAsync(tempFits, new PlateSolveOptions {
-                    HintRa = job.TargetRa,
-                    HintDec = job.TargetDec,
+                    HintRa = hintRa,
+                    HintDec = hintDec,
+                    FovDeg = fovDeg,
                     SearchRadiusDeg = 10
                 }, ct, _progress != null ? _progress.Append : null);
 
