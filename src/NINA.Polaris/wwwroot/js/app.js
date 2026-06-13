@@ -2397,13 +2397,16 @@ function ninaApp() {
         // Client-side white-balance (display tint applied in the WebGL
         // shader AFTER stretch). Shared across LIVE, PREVIEW, FOCUS,
         // VIDEO so changing it anywhere updates the preview everywhere.
-        // Defaults 1.7 / 1.5 approximate daylight WB on raw OSC data;
-        // wb.auto = true makes the next-frame handler recompute via
-        // gray-world from the actual pixels. NOT the same as the
-        // hardware-side video.wbR / video.wbB which write WB_R/WB_B
-        // to the camera driver (different OSCs expose those very
-        // differently — display tint always works).
-        wb: { r: 1.7, b: 1.5, auto: false },
+        // auto = true (default) makes the next-frame handler recompute
+        // the gains via gray-world from the actual pixels, so the
+        // background stays neutral on any OSC sensor instead of a fixed
+        // 1.7 / 1.5 daylight guess (which pushed some sensors blue).
+        // The r / b values are the seed used until the first frame
+        // arrives and whenever a mono sensor leaves auto a no-op.
+        // NOT the same as the hardware-side video.wbR / video.wbB which
+        // write WB_R/WB_B to the camera driver (different OSCs expose
+        // those very differently — display tint always works).
+        wb: { r: 1.7, b: 1.5, auto: true },
         _wbLastAutoAt: 0,
         showWbPanel: false,
 
