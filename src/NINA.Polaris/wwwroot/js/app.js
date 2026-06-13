@@ -18527,7 +18527,32 @@ function ninaApp() {
 
         // --- Siril run modal (STUDIO "Stack with Siril" entry point) ---
 
-        sirilOpenRunModal(prefilledLights) {
+        // Open from the STUDIO stack workspace, prefilling lights +
+        // whichever calibration slots are populated. The recommendation
+        // then reflects the full dataset (lights+flats+darks+bias).
+        sirilOpenFromStack() {
+            this.sirilOpenRunModal({
+                lights: (this.stack.lights || []).slice(),
+                darks:  (this.stack.darks  || []).slice(),
+                flats:  (this.stack.flats  || []).slice(),
+                biases: (this.stack.biases || []).slice(),
+                target: this.stack.target || this.studio?.filter?.target || 'Untitled'
+            });
+        },
+
+        // Empty one calibration set and re-run the recommendation so the
+        // suggested script follows the change (e.g. drop flats -> the
+        // WithoutFlat / WithoutDBF variant).
+        sirilClearSet(kind) {
+            if (kind === 'darks') this.siril.modalDarks = [];
+            else if (kind === 'flats') this.siril.modalFlats = [];
+            else if (kind === 'biases') this.siril.modalBiases = [];
+            this.sirilRecommend();
+        },
+
+        // arg: either a string[] of light paths (legacy) or an object
+        // { lights, darks, flats, biases, target }.
+        sirilOpenRunModal(arg) {
             if (!this.siril.status?.available) {
                 this.toast('Siril is not installed on this host', 'warn');
                 return;
@@ -18536,17 +18561,19 @@ function ninaApp() {
                 this.toast('No Siril scripts found', 'warn');
                 return;
             }
+            const o = Array.isArray(arg) ? { lights: arg } : (arg || {});
             // Default to the first OSC preprocessing script if it
             // exists; otherwise just take whatever the catalogue
             // returns first (bundled comes before user, sorted).
+            // sirilRecommend() below overrides this with a dataset match.
             const defaultScript = this.siril.scripts.find(s =>
                 /OSC_Preprocessing\.ssf/i.test(s.name)) || this.siril.scripts[0];
             this.siril.modalScriptName = defaultScript?.name || '';
-            this.siril.modalTargetName = 'Untitled';
-            this.siril.modalLights = (prefilledLights || []).slice();
-            this.siril.modalDarks = [];
-            this.siril.modalFlats = [];
-            this.siril.modalBiases = [];
+            this.siril.modalTargetName = o.target || 'Untitled';
+            this.siril.modalLights = (o.lights || []).slice();
+            this.siril.modalDarks = (o.darks || []).slice();
+            this.siril.modalFlats = (o.flats || []).slice();
+            this.siril.modalBiases = (o.biases || []).slice();
             // BGE inject is opt-in per run, not sticky, every modal
             // open starts unchecked so the user must consciously add
             // the ~10 s × N frames cost.

@@ -8737,6 +8737,13 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         title="Align + stack lights into a master_light.fits">
                                     Integrate
                                 </button>
+                                <button class="btn btn-sm"
+                                        x-show="siril.status?.available"
+                                        @click="sirilOpenFromStack()"
+                                        :disabled="stack.lights.length < 2 || !!stack.activeJob"
+                                        title="Pre-process + stack with Siril using the lights + any darks/flats/biases in the slots. Polaris suggests the matching .ssf script.">
+                                    Stack with Siril
+                                </button>
                             </div>
                             <!-- UNIF-3c: Combine + ColorCal. The lights
                                  slot doubles as the input source for
@@ -11890,9 +11897,15 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
 
             <div class="siril-modal-counts">
                 <span>Lights: <strong x-text="siril.modalLights.length"></strong></span>
-                <span>Darks: <strong x-text="siril.modalDarks.length"></strong></span>
-                <span>Flats: <strong x-text="siril.modalFlats.length"></strong></span>
-                <span>Biases: <strong x-text="siril.modalBiases.length"></strong></span>
+                <span>Darks: <strong x-text="siril.modalDarks.length"></strong>
+                    <a href="#" x-show="siril.modalDarks.length"
+                       @click.prevent="sirilClearSet('darks')" title="Remove darks">✕</a></span>
+                <span>Flats: <strong x-text="siril.modalFlats.length"></strong>
+                    <a href="#" x-show="siril.modalFlats.length"
+                       @click.prevent="sirilClearSet('flats')" title="Remove flats">✕</a></span>
+                <span>Biases: <strong x-text="siril.modalBiases.length"></strong>
+                    <a href="#" x-show="siril.modalBiases.length"
+                       @click.prevent="sirilClearSet('biases')" title="Remove biases">✕</a></span>
             </div>
 
             <!-- Dataset-driven script recommendation. Auto-applied to the
@@ -11917,9 +11930,10 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             </p>
 
             <p class="hint" x-show="!siril.currentJob">
-                Calibration frames pre-fill happens in the next iteration,
-                for now run the WithoutDark / WithoutFlat / WithoutDBF
-                variants when you don't have masters yet.
+                Lights + any darks / flats / biases come from the STUDIO
+                stack slots. The script above is auto-matched to what's
+                present; drop a set with ✕ to switch variants, or override
+                the dropdown.
             </p>
 
             <!-- Chain GraXpert BGE before the Siril stack. Useful under
@@ -13221,7 +13235,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260613-sirilrec"></script>
+    <script src="/js/app.js?v=20260613-sirilcal"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
