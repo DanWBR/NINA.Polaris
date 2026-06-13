@@ -965,6 +965,17 @@ function ninaApp() {
                        value: '', options: [], okLabel: 'OK' },
         _optionResolver: null,
 
+        // Custom text-input modal -- replaces window.prompt() for free-text
+        // entry (folder name, rename, rig name, password, channel-combine
+        // variable). Driven via _promptTextAsync() which resolves to the
+        // entered string, or null on cancel/ESC/backdrop. password:true
+        // renders a masked field. allowEmpty:true lets the OK button accept
+        // a blank value (default requires non-empty).
+        textModal: { open: false, title: '', message: '', value: '',
+                     placeholder: '', password: false, okLabel: 'OK',
+                     allowEmpty: false },
+        _textResolver: null,
+
         // Factory-reset in-flight flag (Settings danger zone button).
         factoryResetting: false,
 
@@ -1933,12 +1944,17 @@ function ninaApp() {
                 this.toast('Need at least 2 per-filter masters in Lights', 'warn');
                 return;
             }
-            const mode = (prompt(
-                'Combine mode: rgb | lrgb', 'rgb') || '').trim().toLowerCase();
-            if (mode !== 'rgb' && mode !== 'lrgb') {
-                this.toast('Cancelled (mode must be rgb or lrgb)', 'info');
-                return;
-            }
+            const mode = await this._pickOptionAsync({
+                title: 'Channel combine',
+                message: 'Combine mode:',
+                value: 'rgb',
+                okLabel: 'Continue',
+                options: [
+                    { value: 'rgb', label: 'RGB (3 channels)' },
+                    { value: 'lrgb', label: 'LRGB (4 channels + luminance)' }
+                ]
+            });
+            if (mode !== 'rgb' && mode !== 'lrgb') return; // cancelled
             const need = mode === 'lrgb' ? 4 : 3;
             if (this.stack.lights.length < need) {
                 this.toast(mode.toUpperCase() + ' needs at least ' + need
@@ -1947,11 +1963,14 @@ function ninaApp() {
             }
             const channelMap = [];
             for (const p of this.stack.lights) {
-                const v = (prompt(
-                    'Variable for ' + this.stackBasename(p)
-                        + '\n(R, G, B' + (mode === 'lrgb' ? ', L' : '')
-                        + ' -- empty to skip)',
-                    '') || '').trim();
+                const v = ((await this._promptTextAsync({
+                    title: 'Channel for ' + this.stackBasename(p),
+                    message: 'Variable (R, G, B' + (mode === 'lrgb' ? ', L' : '')
+                        + ') -- leave empty to skip this file',
+                    placeholder: 'R / G / B' + (mode === 'lrgb' ? ' / L' : ''),
+                    allowEmpty: true,
+                    okLabel: 'Next'
+                })) || '').trim();
                 if (!v) continue;
                 channelMap.push({ variable: v, framePath: p });
             }
@@ -1964,8 +1983,16 @@ function ninaApp() {
             }
             let lrgbAlgo = null;
             if (mode === 'lrgb') {
-                lrgbAlgo = (prompt('LRGB algorithm: lab | ratio', 'lab')
-                    || 'lab').trim().toLowerCase();
+                lrgbAlgo = await this._pickOptionAsync({
+                    title: 'LRGB algorithm',
+                    message: 'Luminance combine algorithm:',
+                    value: 'lab',
+                    okLabel: 'Combine',
+                    options: [
+                        { value: 'lab', label: 'Lab (CIE L*a*b* luminance swap)' },
+                        { value: 'ratio', label: 'Ratio (per-pixel scaling)' }
+                    ]
+                });
                 if (lrgbAlgo !== 'lab' && lrgbAlgo !== 'ratio') lrgbAlgo = 'lab';
             }
             let resp;
@@ -2974,6 +3001,7 @@ function ninaApp() {
             window.addEventListener('keydown', (ev) => this._floatPanelEscapeClose(ev));
             window.addEventListener('keydown', (ev) => this._confirmModalKeydown(ev));
             window.addEventListener('keydown', (ev) => this._optionModalKeydown(ev));
+            window.addEventListener('keydown', (ev) => this._textModalKeydown(ev));
             // Android/iOS WebView: a long-press on a control pops the native
             // context menu (text-selection / link callout), which steals the
             // gesture and breaks our long-press behaviours (shutter loop,
@@ -3621,7 +3649,12 @@ function ninaApp() {
         async authEnable() {
             // Re-enable doesn't need a confirm modal: prompt() inline
             // so the user types the password once, we POST, done.
-            const pwd = prompt('Re-enable authentication, enter the password:');
+            const pwd = await this._promptTextAsync({
+                title: 'Re-enable authentication',
+                message: 'Enter the password:',
+                password: true,
+                okLabel: 'Enable'
+            });
             if (!pwd) return;
             try {
                 const r = await this.apiPost('/api/auth/enable',
@@ -10990,7 +11023,12 @@ function ninaApp() {
         },
 
         async filesMkdir() {
-            const name = (window.prompt('New folder name:') || '').trim();
+            const name = ((await this._promptTextAsync({
+                title: 'New folder',
+                message: 'Folder name:',
+                placeholder: 'my-folder',
+                okLabel: 'Create'
+            })) || '').trim();
             if (!name) return;
             try {
                 await this.apiPost('/api/files/mkdir', null, {
@@ -11009,7 +11047,12 @@ function ninaApp() {
             if (this.files.selectedPaths.length !== 1) return;
             const path = this.files.selectedPaths[0];
             const oldName = path.split(/[\\/]+/).filter(Boolean).pop() || '';
-            const newName = (window.prompt('Rename to:', oldName) || '').trim();
+            const newName = ((await this._promptTextAsync({
+                title: 'Rename',
+                message: 'New name:',
+                value: oldName,
+                okLabel: 'Rename'
+            })) || '').trim();
             if (!newName || newName === oldName) return;
             try {
                 await this.apiPost('/api/files/rename', null, {
@@ -13526,7 +13569,12 @@ function ninaApp() {
         },
 
         async cloneActiveRig() {
-            const name = prompt('Name for the new rig (copy of active):');
+            const name = await this._promptTextAsync({
+                title: 'Clone rig',
+                message: 'Name for the new rig (copy of active):',
+                placeholder: 'My rig (copy)',
+                okLabel: 'Clone'
+            });
             if (!name) return;
             try {
                 const rig = await this.apiPost('/api/equipment/rigs/clone', { newName: name });
@@ -16279,6 +16327,11 @@ function ninaApp() {
                 ev.preventDefault();
                 return;
             }
+            if (this.textModal.open) {
+                this._textCancel();
+                ev.preventDefault();
+                return;
+            }
             let closed = false;
             if (this.mountPanel?.visible) {
                 this.mountPanel.visible = false;
@@ -16375,6 +16428,54 @@ function ninaApp() {
             if (!this.optionModal.open) return;
             if (ev.key === 'Enter') {
                 this._optionAccept();
+                ev.preventDefault();
+            }
+        },
+
+        // Custom replacement for window.prompt() free-text entry. Returns a
+        // Promise resolving to the entered string (or null on Cancel/ESC/
+        // backdrop). opts: { title, message, value, placeholder, password,
+        // okLabel, allowEmpty }.
+        _promptTextAsync(opts = {}) {
+            if (this.textModal.open && this._textResolver) {
+                this._textResolver(null);
+                this._textResolver = null;
+            }
+            this.textModal = {
+                open: true,
+                title: opts.title || 'Enter value',
+                message: opts.message || '',
+                value: opts.value || '',
+                placeholder: opts.placeholder || '',
+                password: !!opts.password,
+                okLabel: opts.okLabel || 'OK',
+                allowEmpty: !!opts.allowEmpty
+            };
+            // Focus the field once Alpine has rendered it.
+            this.$nextTick(() => {
+                const el = document.getElementById('textModalInput');
+                if (el) { el.focus(); el.select(); }
+            });
+            return new Promise(resolve => { this._textResolver = resolve; });
+        },
+        _textAccept() {
+            const val = (this.textModal.value || '');
+            if (!this.textModal.allowEmpty && !val.trim()) return; // require non-empty
+            const r = this._textResolver;
+            this._textResolver = null;
+            this.textModal.open = false;
+            if (r) r(val);
+        },
+        _textCancel() {
+            const r = this._textResolver;
+            this._textResolver = null;
+            this.textModal.open = false;
+            if (r) r(null);
+        },
+        _textModalKeydown(ev) {
+            if (!this.textModal.open) return;
+            if (ev.key === 'Enter') {
+                this._textAccept();
                 ev.preventDefault();
             }
         },

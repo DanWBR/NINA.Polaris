@@ -13221,6 +13221,29 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
+    <!-- Free-text input modal (replaces window.prompt for folder name,
+         rename, rig name, password, channel-combine variable). Driven by
+         _promptTextAsync(). -->
+    <div class="confirm-modal-overlay"
+         x-show="textModal.open" x-cloak
+         @click.self="_textCancel()">
+        <div class="confirm-modal-card">
+            <h3 class="confirm-modal-title" x-text="textModal.title"></h3>
+            <p class="confirm-modal-message" x-show="textModal.message"
+               style="white-space:pre-line" x-text="textModal.message"></p>
+            <input id="textModalInput" class="input" style="width:100%; margin-bottom:4px"
+                   :type="textModal.password ? 'password' : 'text'"
+                   :placeholder="textModal.placeholder"
+                   x-model="textModal.value">
+            <div class="confirm-modal-actions">
+                <button class="btn btn-sm" @click="_textCancel()">Cancel</button>
+                <button class="btn btn-sm btn-primary" @click="_textAccept()"
+                        :disabled="!textModal.allowEmpty && !(textModal.value || '').trim()"
+                        x-text="textModal.okLabel || 'OK'"></button>
+            </div>
+        </div>
+    </div>
+
     <!-- AUTORUN continue-vs-restart prompt. Shown when Start is pressed on
          a sequence that already has partial progress from a stopped run.
          Continue resumes from the retained position; Restart re-pushes the
@@ -13289,7 +13312,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260613-methodmodal"></script>
+    <script src="/js/app.js?v=20260613-textmodal"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
