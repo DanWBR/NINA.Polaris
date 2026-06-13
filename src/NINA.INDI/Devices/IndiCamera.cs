@@ -349,6 +349,12 @@ public class IndiCamera : ICamera {
             throw new NotSupportedException(
                 $"INDI device {DeviceName} does not expose CCD_VIDEO_STREAM. Use loop mode instead.");
 
+        // Same as a still capture: force FITS encode + RAW16 before the
+        // stream starts so video frames aren't silently 8-bit (the SVBONY
+        // SV405CC otherwise streams RAW8 unless RAW16 is actively written).
+        await EnsureFitsTransferAsync(ct);
+        await EnsureRaw16FormatAsync(ct);
+
         // Honour optional per-stream overrides where the driver exposes
         // the matching properties. Silently skip when absent, different
         // drivers expose different subset of streaming knobs.
