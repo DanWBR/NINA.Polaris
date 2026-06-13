@@ -190,19 +190,28 @@ public static class GuiderEndpoints {
             return Results.Ok(new { status = "disconnected" });
         });
 
-        group.MapPost("/guide", async (ActiveGuiderProvider guiders, GuideRequest? request) => {
+        group.MapPost("/guide", (ActiveGuiderProvider guiders,
+                Microsoft.Extensions.Logging.ILoggerFactory lf, GuideRequest? request) => {
             var g = guiders.Active;
             if (!g.IsConnected) return Results.BadRequest(new { error = "Guider not connected" });
-            try {
-                await g.StartGuidingAsync(
-                    settlePixels: request?.SettlePixels ?? 1.5,
-                    settleTime: request?.SettleTime ?? 10,
-                    settleTimeout: request?.SettleTimeout ?? 40,
-                    recalibrate: request?.Recalibrate ?? false);
-                return Results.Ok(new { status = "guide_started" });
-            } catch (Exception ex) {
-                return Results.Problem(ex.Message);
-            }
+            // Calibration + settle routinely takes well over a minute, far longer
+            // than the client's request timeout. Awaiting it here makes the POST
+            // abort client-side ("Request timed out" / AbortError) even though the
+            // server is fine. Kick it off in the background and return immediately;
+            // progress and the final result surface over the status WebSocket
+            // (appState / calProgress / calDetails / lastAlert). /stop cancels it.
+            _ = Task.Run(async () => {
+                try {
+                    await g.StartGuidingAsync(
+                        settlePixels: request?.SettlePixels ?? 1.5,
+                        settleTime: request?.SettleTime ?? 10,
+                        settleTimeout: request?.SettleTimeout ?? 40,
+                        recalibrate: request?.Recalibrate ?? false);
+                } catch (Exception ex) {
+                    lf.CreateLogger("Guider").LogWarning(ex, "Background StartGuiding failed");
+                }
+            });
+            return Results.Ok(new { status = "guide_starting" });
         });
 
         group.MapPost("/stop", async (ActiveGuiderProvider guiders) => {

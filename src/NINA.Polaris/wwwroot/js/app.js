@@ -21116,7 +21116,7 @@ function ninaApp() {
                     settleTimeout: this.guiderSettleTimeout,
                     recalibrate: false
                 });
-                this.toast('Guiding started', 'ok');
+                this.toast('Starting guider…', 'ok');
             } catch (e) { this.toast('Start guide failed: ' + e.message, 'error'); }
         },
         async guiderStop() {
