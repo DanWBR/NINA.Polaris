@@ -95,6 +95,12 @@ public class BatchStackingService {
             int? width = null, height = null;
             int bitDepth = 16;
             string target = "", filter = "";
+            // OSC handling: when the frames are Bayered we debayer each one
+            // to RGB and stack in colour. Registering/resampling the raw CFA
+            // mosaic as mono blends adjacent R/G/B sites (bilinear) and the
+            // master collapses to grey with a checkerboard. `pattern` is read
+            // from the first frame's BAYERPAT; None => plain mono stacking.
+            var pattern = NINA.Core.Enum.BayerPatternEnum.None;
 
             for (int i = 0; i < framePaths.Count; i++) {
                 var path = framePaths[i];
@@ -109,6 +115,7 @@ public class BatchStackingService {
                     width = img.Properties.Width;
                     height = img.Properties.Height;
                     bitDepth = img.Properties.BitDepth;
+                    pattern = img.Properties.BayerPattern;
                     var t = img.MetaData.Target.Name;
                     target = string.IsNullOrEmpty(t) ? "Unknown" : t;
                     var f = img.MetaData.Exposure.Filter;
@@ -117,7 +124,14 @@ public class BatchStackingService {
                     _logger.LogWarning("Frame {Name} size mismatch, skipping", frameName);
                     continue;
                 }
-                var stars = detector.Detect(img.Data, img.Properties.Width, img.Properties.Height);
+                // Detect stars on luminance for OSC (so the matcher sees real
+                // stars, not the CFA), on the raw buffer for mono.
+                ushort[] starSrc = img.Data;
+                if (pattern != NINA.Core.Enum.BayerPatternEnum.None) {
+                    var ch = BayerDebayer.Bilinear(img.Data, img.Properties.Width, img.Properties.Height, pattern);
+                    starSrc = BayerDebayer.ToLuminance(ch);
+                }
+                var stars = detector.Detect(starSrc, img.Properties.Width, img.Properties.Height);
                 loaded.Add((img, stars, frameName));
                 _jobs[jobId] = _jobs[jobId] with { Done = i + 1 };
             }
@@ -149,15 +163,24 @@ public class BatchStackingService {
 
             int W = width!.Value;
             int H = height!.Value;
-            var aligned = new List<ushort[]>(loaded.Count);
+            // Debayer a raw buffer into colour planes (R,G,B) for OSC, or
+            // wrap the mono buffer as a single plane. Stacking then runs
+            // per-plane so colour is preserved and the resample interpolates
+            // within a channel instead of across the CFA mosaic.
+            ushort[][] PlanesOf(ushort[] data) {
+                if (pattern == NINA.Core.Enum.BayerPatternEnum.None) return new[] { data };
+                var ch = BayerDebayer.Bilinear(data, W, H, pattern);
+                return new[] { ch.R, ch.G, ch.B };
+            }
+            var aligned = new List<ushort[][]>(loaded.Count);
             var keptNames = new List<string>(loaded.Count);
             double totalExposure = 0;
             int dropped = 0;
 
             for (int i = 0; i < loaded.Count; i++) {
                 if (i == refIdx) {
-                    // Reference goes in untouched.
-                    aligned.Add(loaded[i].Img.Data);
+                    // Reference goes in untouched (debayered, not resampled).
+                    aligned.Add(PlanesOf(loaded[i].Img.Data));
                     keptNames.Add(loaded[i].Name);
                     totalExposure += loaded[i].Img.MetaData.Exposure.ExposureTime;
                 } else {
@@ -190,8 +213,12 @@ public class BatchStackingService {
                                 loaded[i].Name, residual, transform.Tx, transform.Ty);
                         }
 
-                        var resampled = ImageResampler.ApplyTransform(
-                            loaded[i].Img.Data, W, H, transform);
+                        // Resample EACH colour plane with the same transform
+                        // (the transform came from luminance star matching).
+                        var srcPlanes = PlanesOf(loaded[i].Img.Data);
+                        var resampled = new ushort[srcPlanes.Length][];
+                        for (int p = 0; p < srcPlanes.Length; p++)
+                            resampled[p] = ImageResampler.ApplyTransform(srcPlanes[p], W, H, transform);
                         aligned.Add(resampled);
                         keptNames.Add(loaded[i].Name);
                         totalExposure += loaded[i].Img.MetaData.Exposure.ExposureTime;
@@ -236,49 +263,57 @@ public class BatchStackingService {
                 IntegrationPercent = 0,
             };
             int N = aligned.Count;
-            var output = new ushort[W * H];
+            // 1 plane for mono, 3 (R,G,B) for OSC. Integrate each plane
+            // independently across all frames; the output is plane-sequential
+            // (R then G then B), the FITS RGB-cube convention.
+            int nPlanes = aligned.Count > 0 ? aligned[0].Length : 1;
+            int planeSize = W * H;
+            var output = new ushort[planeSize * nPlanes];
             var stacks = aligned.ToArray();
 
             int rowsDone = 0;
             int lastReportedPct = 0;
-            Parallel.For(0, H, () => new ushort[N], (y, _, scratch) => {
-                int rowOff = y * W;
-                for (int x = 0; x < W; x++) {
-                    int idx = rowOff + x;
-                    int valid = 0;
-                    // Skip pixels whose value is 0, ImageResampler
-                    // marks off-canvas regions as 0 after the affine
-                    // shift, and rolling them into the average drags
-                    // the master down at the edges.
-                    for (int k = 0; k < N; k++) {
-                        var v = stacks[k][idx];
-                        if (v > 0) { scratch[valid++] = v; }
+            int totalRows = nPlanes * H;
+            for (int pl = 0; pl < nPlanes; pl++) {
+                int plane = pl;
+                int planeOff = plane * planeSize;
+                Parallel.For(0, H, () => new ushort[N], (y, _, scratch) => {
+                    int rowOff = y * W;
+                    for (int x = 0; x < W; x++) {
+                        int idx = rowOff + x;
+                        int valid = 0;
+                        // Skip pixels whose value is 0, ImageResampler
+                        // marks off-canvas regions as 0 after the affine
+                        // shift, and rolling them into the average drags
+                        // the master down at the edges.
+                        for (int k = 0; k < N; k++) {
+                            var v = stacks[k][plane][idx];
+                            if (v > 0) { scratch[valid++] = v; }
+                        }
+                        int outIdx = planeOff + idx;
+                        if (valid == 0) {
+                            output[outIdx] = 0;
+                        } else {
+                            var slice = ((ReadOnlySpan<ushort>)scratch)[..valid];
+                            output[outIdx] = method switch {
+                                IntegrationMethod.Mean   => IntegrationMath.Mean(slice),
+                                IntegrationMethod.Median => IntegrationMath.Median(slice),
+                                IntegrationMethod.SigmaClippedMean
+                                                         => IntegrationMath.SigmaClippedMean(slice),
+                                _                        => IntegrationMath.Mean(slice)
+                            };
+                        }
                     }
-                    if (valid == 0) {
-                        output[idx] = 0;
-                    } else {
-                        var slice = ((ReadOnlySpan<ushort>)scratch)[..valid];
-                        output[idx] = method switch {
-                            IntegrationMethod.Mean   => IntegrationMath.Mean(slice),
-                            IntegrationMethod.Median => IntegrationMath.Median(slice),
-                            IntegrationMethod.SigmaClippedMean
-                                                     => IntegrationMath.SigmaClippedMean(slice),
-                            _                        => IntegrationMath.Mean(slice)
-                        };
+                    var done = System.Threading.Interlocked.Increment(ref rowsDone);
+                    // Throttle the status writeback to whole percent ticks.
+                    int pct = (int)(done * 100L / totalRows);
+                    if (pct != lastReportedPct) {
+                        lastReportedPct = pct;
+                        _jobs[jobId] = _jobs[jobId] with { IntegrationPercent = pct };
                     }
-                }
-                var done = System.Threading.Interlocked.Increment(ref rowsDone);
-                // Throttle the status writeback to whole percent
-                // ticks, the inner loop fires once per row (thousands
-                // of times per master) and the record-with churn
-                // dominates the work on small images otherwise.
-                int pct = (int)(done * 100L / H);
-                if (pct != lastReportedPct) {
-                    lastReportedPct = pct;
-                    _jobs[jobId] = _jobs[jobId] with { IntegrationPercent = pct };
-                }
-                return scratch;
-            }, _ => { });
+                    return scratch;
+                }, _ => { });
+            }
             _jobs[jobId] = _jobs[jobId] with { IntegrationPercent = 100 };
 
             // ---- Phase 4: write integrated master FITS -------------
@@ -301,6 +336,9 @@ public class BatchStackingService {
 
             var props = new ImageProperties {
                 Width = W, Height = H, BitDepth = bitDepth,
+                // Debayered RGB output (3 channels) for OSC, or mono (1).
+                // Either way it is no longer a CFA mosaic.
+                Channels = nPlanes,
                 BayerPattern = NINA.Core.Enum.BayerPatternEnum.None,
                 IsBayered = false,
                 // CCALB-0a: carry WCS forward so the master is plate-
