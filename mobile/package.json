@@ -17,6 +17,7 @@
     "@capacitor/android": "^6.1.2",
     "@capacitor/app": "^6.0.1",
     "@capacitor/core": "^6.1.2",
+    "@capacitor/geolocation": "^6.1.0",
     "@capacitor/ios": "^6.1.2",
     "@capacitor-community/keep-awake": "^5.0.1",
     "@capacitor/preferences": "^6.0.2",

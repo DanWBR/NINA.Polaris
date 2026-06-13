@@ -7435,9 +7435,80 @@ function ninaApp() {
             this.locSetup.searchQuery = r.displayName;
         },
 
+        // Ask the native app shell (parent frame) for the device location.
+        // Polaris runs in a cross-origin iframe inside the Android/iOS app,
+        // where navigator.geolocation is unreliable; the shell has the
+        // Capacitor Geolocation plugin and the OS permission prompt. Resolves
+        // {latitude, longitude, altitude} or rejects (incl. 'no-native-host'
+        // when not running in the app, so callers fall back to the browser
+        // API). See mobile/www/connect.js for the parent-side handler.
+        _nativeGeo() {
+            return new Promise((resolve, reject) => {
+                let inIframe = false;
+                try { inIframe = window.top !== window.self; } catch { inIframe = true; }
+                if (!inIframe || !window.parent) { reject(new Error('no-native-host')); return; }
+                const id = 'geo' + Date.now() + '_' + Math.random().toString(36).slice(2);
+                let acked = false, settled = false;
+                const onMsg = (ev) => {
+                    const d = ev.data;
+                    if (!d || d.id !== id) return;
+                    if (d.__polarisGeoAck === true) { acked = true; return; }
+                    if (d.__polarisGeoRes !== true) return;
+                    if (settled) return;
+                    settled = true;
+                    window.removeEventListener('message', onMsg);
+                    if (d.ok) resolve({ latitude: d.lat, longitude: d.lon, altitude: d.alt });
+                    else reject(new Error(d.error || 'native geolocation failed'));
+                };
+                window.addEventListener('message', onMsg);
+                try {
+                    window.parent.postMessage({ __polarisGeoReq: true, id }, '*');
+                } catch (e) {
+                    window.removeEventListener('message', onMsg);
+                    reject(e); return;
+                }
+                // No ack quickly → no native host listening; fail fast so the
+                // caller falls back to navigator.geolocation.
+                setTimeout(() => {
+                    if (settled || acked) return;
+                    settled = true;
+                    window.removeEventListener('message', onMsg);
+                    reject(new Error('no-native-host'));
+                }, 1200);
+                // Acked but the fix is taking too long (GPS cold start).
+                setTimeout(() => {
+                    if (settled) return;
+                    settled = true;
+                    window.removeEventListener('message', onMsg);
+                    reject(new Error('native geolocation timed out'));
+                }, 25000);
+            });
+        },
+
         useBrowserGeolocation() {
+            // In the native app, get the fix from the shell (handles the OS
+            // permission prompt). Falls through to the browser API otherwise.
+            this.locSetup.error = null;
+            this._nativeGeo().then((c) => {
+                this.locSetup.lat = +c.latitude.toFixed(4);
+                this.locSetup.lon = +c.longitude.toFixed(4);
+                if (c.altitude != null) this.locSetup.alt = Math.round(c.altitude);
+                this.locSetup.locating = false;
+            }).catch((e) => {
+                if (e && e.message === 'no-native-host') { this._browserGeolocation(); return; }
+                this.locSetup.locating = false;
+                this.locSetup.error =
+                    'Location failed: ' + ((e && e.message) || 'unknown') +
+                    '. Use the address search above, or type the coordinates manually below.';
+            });
+            // Show the spinner while either path runs.
+            this.locSetup.locating = true;
+        },
+
+        _browserGeolocation() {
             if (!navigator.geolocation) {
                 this.locSetup.error = 'Browser geolocation API not available.';
+                this.locSetup.locating = false;
                 return;
             }
             // iOS Safari + most modern browsers refuse Geolocation on
@@ -7450,6 +7521,7 @@ function ninaApp() {
                 || location.protocol === 'https:'
                 || ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
             if (!isSecure) {
+                this.locSetup.locating = false;
                 this.locSetup.error =
                     'Browser location needs HTTPS (or localhost). Type the coordinates ' +
                     'manually below, or search by address. Tip: opening Polaris on ' +
@@ -8077,7 +8149,26 @@ function ninaApp() {
         // and a secure context (localhost is fine, plain-HTTP LAN
         // hosts are NOT, modern browsers gate this on https://).
         useBrowserLocation() {
+            this.obsGpsLoading = true;
+            this.obsAddressError = '';
+            // Native app: ask the shell (Capacitor Geolocation + OS prompt).
+            this._nativeGeo().then((c) => {
+                this.settings.latitude  = Number(c.latitude.toFixed(4));
+                this.settings.longitude = Number(c.longitude.toFixed(4));
+                if (c.altitude != null) this.settings.altitude = Math.round(c.altitude);
+                this.obsGpsLoading = false;
+                this.saveSettings();
+                this._refreshLocationLabel();
+            }).catch((e) => {
+                if (e && e.message === 'no-native-host') { this._browserLocation(); return; }
+                this.obsGpsLoading = false;
+                this.obsAddressError = 'Location failed: ' + ((e && e.message) || 'unknown');
+            });
+        },
+
+        _browserLocation() {
             if (!('geolocation' in navigator)) {
+                this.obsGpsLoading = false;
                 this.obsAddressError = 'Geolocation is not supported by this browser.';
                 return;
             }

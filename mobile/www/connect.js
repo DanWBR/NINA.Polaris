@@ -46,6 +46,47 @@ const Preferences = Plugins.Preferences;
 const KeepAwake = Plugins.KeepAwake;
 const AppPlugin = Plugins.App;
 
+// @capacitor/geolocation. Resolve from the bridge (Plugins) or via
+// registerPlugin so it works whether or not Capacitor pre-populated
+// Plugins. Undefined in a plain browser → the iframe falls back to the
+// WebView's own navigator.geolocation.
+const Geolocation = Plugins.Geolocation
+  || ((Cap && typeof Cap.registerPlugin === 'function')
+        ? Cap.registerPlugin('Geolocation') : undefined);
+
+// ---------- geolocation bridge (parent side) ----------
+// The Polaris UI runs in a cross-origin <iframe>, where navigator.geolocation
+// is unreliable inside the Android WebView. So the iframe asks US (the app
+// origin, where Capacitor plugins live) for the device location. We ack
+// immediately (so the child knows a native host is present and doesn't wait
+// the full timeout when it isn't), then resolve with the native fix. This
+// triggers the Android runtime location-permission prompt on first use.
+window.addEventListener('message', async (ev) => {
+  const d = ev.data;
+  if (!d || d.__polarisGeoReq !== true) return;
+  const id = d.id;
+  const post = (msg) => { try { ev.source.postMessage(msg, '*'); } catch { /* ignore */ } };
+  // Let the child know native geolocation is available here.
+  post({ __polarisGeoAck: true, id });
+  const reply = (m) => post(Object.assign({ __polarisGeoRes: true, id }, m));
+  try {
+    if (!Geolocation) { reply({ ok: false, error: 'Geolocation plugin unavailable' }); return; }
+    // Ask for permission (shows the OS prompt the first time). Ignore the
+    // result and let getCurrentPosition surface the real error if denied.
+    try { await Geolocation.requestPermissions({ permissions: ['location'] }); } catch { /* ignore */ }
+    const pos = await Geolocation.getCurrentPosition(
+      { enableHighAccuracy: false, timeout: 20000, maximumAge: 60000 });
+    reply({
+      ok: true,
+      lat: pos.coords.latitude,
+      lon: pos.coords.longitude,
+      alt: (pos.coords.altitude != null) ? pos.coords.altitude : 0,
+    });
+  } catch (e) {
+    reply({ ok: false, error: (e && e.message) || String(e) });
+  }
+});
+
 async function prefGet(key) {
   try {
     if (Preferences) return (await Preferences.get({ key })).value;
@@ -158,7 +199,7 @@ function addInstance(origin, name, { activate = false } = {}) {
     frame.className = 'instance-frame';
     frame.setAttribute('allow',
       'fullscreen; accelerometer; gyroscope; magnetometer; ' +
-      'camera; microphone; clipboard-read; clipboard-write');
+      'geolocation; camera; microphone; clipboard-read; clipboard-write');
     frame.src = origin;
     els.frames.appendChild(frame);
     instances.set(origin, { origin, name: name || hostLabel(origin), frame });
