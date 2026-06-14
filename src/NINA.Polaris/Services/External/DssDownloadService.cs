@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System.Collections.Concurrent;
+using System.Net;
 
 namespace NINA.Polaris.Services.External;
 
@@ -112,10 +113,42 @@ public sealed class DssDownloadService {
         lock (_lock) { _cts?.Cancel(); }
     }
 
+    private enum FetchResult { Ok, Missing, Error }
+
     private async Task RunAsync(int maxOrder, CancellationToken ct) {
-        long completed = 0, failed = 0;
+        long ok = 0, missing = 0, errors = 0;
         try {
-            Directory.CreateDirectory(_dssDir);
+            // Preflight 1: the destination must be writable. On a packaged
+            // install wwwroot can be read-only / root-owned; fail loudly
+            // instead of "downloading" thousands of doomed writes.
+            try {
+                Directory.CreateDirectory(_dssDir);
+                var probe = Path.Combine(_dssDir, ".write-probe");
+                await File.WriteAllTextAsync(probe, "ok", ct);
+                File.Delete(probe);
+            } catch (Exception ex) {
+                Finish(0, 0, $"Sky data folder is not writable ({ex.GetType().Name}: {ex.Message}). "
+                    + "Run Polaris with write access to its wwwroot, or use scripts/fetch-stellarium-dss.sh.");
+                return;
+            }
+
+            // Preflight 2: we need internet to fetch tiles. Probe a known
+            // order-4 tile fresh (bypassing the already-present check). This
+            // is the common field failure: downloading at the telescope with
+            // no connection — previously every tile failed silently and the
+            // job reported a misleading "success".
+            try {
+                using var probe = await Http.GetAsync($"{Remote}/Norder4/Dir0/Npix0.jpg", ct);
+                if (!probe.IsSuccessStatusCode)
+                    throw new Exception($"server returned HTTP {(int)probe.StatusCode}");
+            } catch (OperationCanceledException) {
+                throw;
+            } catch (Exception ex) {
+                Finish(0, 0, "Could not reach the sky imagery server — an internet connection is "
+                    + $"required to download (you can be offline afterwards). [{ex.Message}]");
+                return;
+            }
+
             // Root metadata first (cheap, makes the survey self-describing).
             foreach (var meta in new[] { "properties", "Moc.fits" }) {
                 await FetchAsync($"{Remote}/{meta}", Path.Combine(_dssDir, meta), ct);
@@ -137,45 +170,57 @@ public sealed class DssDownloadService {
                     await gate.WaitAsync(ct);
                     tasks.Add(Task.Run(async () => {
                         try {
-                            bool ok = await FetchAsync(url, outPath, ct);
-                            Interlocked.Increment(ref completed);
-                            if (!ok) Interlocked.Increment(ref failed);
-                            UpdateProgress(Interlocked.Read(ref completed), Interlocked.Read(ref failed));
+                            var r = await FetchAsync(url, outPath, ct);
+                            if (r == FetchResult.Ok) Interlocked.Increment(ref ok);
+                            else if (r == FetchResult.Missing) Interlocked.Increment(ref missing);
+                            else Interlocked.Increment(ref errors);
+                            UpdateProgress(Interlocked.Read(ref ok)
+                                + Interlocked.Read(ref missing)
+                                + Interlocked.Read(ref errors),
+                                Interlocked.Read(ref errors));
                         } finally { gate.Release(); }
                     }, ct));
                 }
                 await Task.WhenAll(tasks);
             }
-            Finish(completed, failed, null);
-            _logger.LogInformation("DSS download complete: order {Order}, {Done} tiles ({Failed} missing)",
-                maxOrder, completed, failed);
+            // If the connection dropped mid-run, nothing useful landed even
+            // though we got past the preflight — report that honestly rather
+            // than claiming success.
+            string? err = (ok == 0 && errors > 0)
+                ? "Download failed — the connection appears to have dropped (no tiles were saved)."
+                : null;
+            Finish(ok + missing + errors, errors, err);
+            _logger.LogInformation("DSS download done: order {Order}, {Ok} saved, {Missing} sparse, {Err} errors",
+                maxOrder, ok, missing, errors);
         } catch (OperationCanceledException) {
-            Finish(completed, failed, "cancelled");
-            _logger.LogInformation("DSS download cancelled at {Done} tiles", completed);
+            Finish(ok + missing + errors, errors, "cancelled");
+            _logger.LogInformation("DSS download cancelled at {Done} tiles", ok + missing + errors);
         } catch (Exception ex) {
-            Finish(completed, failed, $"{ex.GetType().Name}: {ex.Message}");
+            Finish(ok + missing + errors, errors, $"{ex.GetType().Name}: {ex.Message}");
             _logger.LogError(ex, "DSS download failed");
         }
     }
 
-    // Returns true on a real download (or already-present), false when the
-    // tile is genuinely missing upstream (sparse survey — normal, not fatal).
-    private static async Task<bool> FetchAsync(string url, string outPath, CancellationToken ct) {
+    // Ok    = downloaded now, or already present.
+    // Missing = upstream 404 / empty (sparse survey — normal, not fatal).
+    // Error = network/IO failure (the caller treats a run of these as fatal).
+    private static async Task<FetchResult> FetchAsync(string url, string outPath, CancellationToken ct) {
         try {
-            if (File.Exists(outPath) && new FileInfo(outPath).Length > 0) return true;
+            if (File.Exists(outPath) && new FileInfo(outPath).Length > 0) return FetchResult.Ok;
             Directory.CreateDirectory(Path.GetDirectoryName(outPath)!);
             using var resp = await Http.GetAsync(url, ct);
-            if (!resp.IsSuccessStatusCode) return false;
+            if (resp.StatusCode == HttpStatusCode.NotFound) return FetchResult.Missing;
+            if (!resp.IsSuccessStatusCode) return FetchResult.Error;
             var bytes = await resp.Content.ReadAsByteArrayAsync(ct);
-            if (bytes.Length == 0) return false;
+            if (bytes.Length == 0) return FetchResult.Missing;
             var tmp = outPath + ".part";
             await File.WriteAllBytesAsync(tmp, bytes, ct);
             File.Move(tmp, outPath, overwrite: true);
-            return true;
+            return FetchResult.Ok;
         } catch (OperationCanceledException) {
             throw;
         } catch {
-            return false;
+            return FetchResult.Error;
         }
     }
 
