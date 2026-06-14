@@ -95,6 +95,13 @@ function ninaApp() {
             try { return localStorage.getItem('polaris.guideSideCollapsed') === '1'; }
             catch { return false; }
         })(),
+        // UI lock: a full-window overlay eats pointer events so the running
+        // session can't be disturbed by an accidental tap. Persisted so an
+        // accidental reload doesn't silently unlock.
+        uiLocked: (function() {
+            try { return localStorage.getItem('polaris.uiLocked') === '1'; }
+            catch { return false; }
+        })(),
         liveStackFrames: 0,
         // SNR-7: session-level target SNR override + ETA debounce
         // timer (PUT is fired ~400 ms after the user stops typing).
@@ -16380,6 +16387,16 @@ function ninaApp() {
             try {
                 localStorage.setItem('polaris.quickControlsCollapsed',
                     this.quickControlsCollapsed ? '1' : '0');
+            } catch { /* private-browsing / quota — silent */ }
+        },
+
+        // Lock / unlock the whole UI. When locked, the .ui-lock-overlay
+        // blocks all pointer/scroll input to the app (the live frame stays
+        // visible underneath); only the unlock pill responds. Persisted.
+        toggleUiLock() {
+            this.uiLocked = !this.uiLocked;
+            try {
+                localStorage.setItem('polaris.uiLocked', this.uiLocked ? '1' : '0');
             } catch { /* private-browsing / quota — silent */ }
         },
 

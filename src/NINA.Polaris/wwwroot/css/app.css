@@ -2365,6 +2365,51 @@ label select.input-sm {
     background: rgba(99, 102, 241, 0.12);
 }
 
+/* UI lock badge in the status bar. Goes amber when engaged so it reads as
+   an active/holding state rather than a neutral toggle. */
+.ui-lock-badge-active {
+    color: #febc2e;
+    border-color: #febc2e;
+    background: rgba(254, 188, 46, 0.14);
+}
+
+/* Full-window lock overlay: transparent (frame stays visible) but captures
+   every pointer/scroll/touch event so nothing under it fires by accident.
+   Below modals (z 10000) so anything already open stays usable. */
+.ui-lock-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9500;
+    background: transparent;
+    cursor: not-allowed;
+    /* Belt + suspenders with the @click.self handlers: block scroll/zoom. */
+    touch-action: none;
+    overscroll-behavior: contain;
+}
+/* The one interactive thing while locked. Centred near the top so it's
+   findable without covering the live view. */
+.ui-lock-pill {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 999px;
+    border: 1px solid #febc2e;
+    background: rgba(20, 16, 4, 0.86);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    color: #febc2e;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+.ui-lock-pill:hover { background: rgba(40, 32, 8, 0.92); }
+
 .btn-active {
     background: var(--accent);
     border-color: var(--accent);

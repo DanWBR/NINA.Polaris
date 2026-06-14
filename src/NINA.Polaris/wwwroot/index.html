@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260614-termmodal">
+    <link rel="stylesheet" href="/css/app.css?v=20260614-uilock">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -485,6 +485,31 @@
                     <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"
                           fill="none" stroke="currentColor" stroke-width="2"
                           stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+            <!-- UI lock: blocks accidental taps (eats pointer events via a
+                 full-window overlay) while still letting you watch the
+                 frame underneath. The only thing clickable when locked is
+                 the floating unlock pill (see #ui-lock-overlay). -->
+            <button class="btn-icon ui-lock-badge"
+                    :class="{ 'ui-lock-badge-active': uiLocked }"
+                    @click="toggleUiLock()"
+                    :title="uiLocked ? 'Unlock UI' : 'Lock UI (prevent accidental taps)'">
+                <svg x-show="!uiLocked" viewBox="0 0 24 24" width="14" height="14"
+                     style="vertical-align:middle">
+                    <rect x="5" y="11" width="14" height="9" rx="2"
+                          fill="none" stroke="currentColor" stroke-width="2"/>
+                    <path d="M8 11V8a4 4 0 0 1 8 0"
+                          fill="none" stroke="currentColor" stroke-width="2"
+                          stroke-linecap="round"/>
+                </svg>
+                <svg x-show="uiLocked" viewBox="0 0 24 24" width="14" height="14"
+                     style="vertical-align:middle">
+                    <rect x="5" y="11" width="14" height="9" rx="2"
+                          fill="none" stroke="currentColor" stroke-width="2"/>
+                    <path d="M8 11V7a4 4 0 0 1 8 0v4"
+                          fill="none" stroke="currentColor" stroke-width="2"
+                          stroke-linecap="round"/>
                 </svg>
             </button>
         </div>
@@ -13292,6 +13317,25 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          the ✕ ends the session, the – minimises (keeps it alive, the card
          shows "Show terminal"). Lives at body scope so the session survives
          tab switches. -->
+    <!-- UI lock overlay. A full-window layer that swallows pointer events
+         so nothing under it can be triggered by accident (kid/cat/elbow on
+         a tablet at the scope). Transparent so the live frame stays
+         visible; the only interactive element is the floating unlock pill.
+         Sits below modals (10000) so a modal opened before locking is still
+         usable, but above the app + status bar controls. -->
+    <div class="ui-lock-overlay" x-show="uiLocked" x-cloak
+         @click.self.stop @pointerdown.self.stop @wheel.self.stop>
+        <button class="ui-lock-pill" @click="toggleUiLock()">
+            <svg viewBox="0 0 24 24" width="16" height="16" style="vertical-align:middle">
+                <rect x="5" y="11" width="14" height="9" rx="2"
+                      fill="none" stroke="currentColor" stroke-width="2"/>
+                <path d="M8 11V7a4 4 0 0 1 8 0v4"
+                      fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            UI locked — tap to unlock
+        </button>
+    </div>
+
     <div class="term-modal-overlay" x-show="term.modalOpen" x-cloak
          @click.self="term.modalOpen = false">
         <div class="term-window">
@@ -13459,7 +13503,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260614-termmodal"></script>
+    <script src="/js/app.js?v=20260614-uilock"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
