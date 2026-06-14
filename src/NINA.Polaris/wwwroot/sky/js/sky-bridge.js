@@ -494,7 +494,13 @@
     function skyFovGeoJson(centre, color, glow) {
         var raDeg = centre.raDeg, decDeg = centre.decDeg;
         var w = centre.widthDeg, h = centre.heightDeg;
-        var rot = centre.rotationDeg || 0;
+        // +180°: the plate-solve position angle convention used upstream is
+        // opposite to how the rectangle is drawn here, so the FOV rectangle
+        // (its label edge + crosshair, the visible "up") rendered upside
+        // down relative to the captured frame. Flipping the draw rotation by
+        // 180° lines the sky rectangle up with the frame. Applies to both
+        // the mount and target rectangles (both share this draw path).
+        var rot = (centre.rotationDeg || 0) + 180;
         var flipV = !!centre.flipV;
         // Sample each edge so a wide FOV's on-sky curvature renders smooth
         // (16 pts/edge); the crosshair lines below stay at 1 (just ends).

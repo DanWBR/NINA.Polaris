@@ -69,10 +69,34 @@ window.addEventListener('message', async (ev) => {
   // Let the child know native geolocation is available here.
   post({ __polarisGeoAck: true, id });
   const reply = (m) => post(Object.assign({ __polarisGeoRes: true, id }, m));
+
+  // Shell-side fallback: the app WebView's own navigator.geolocation. The
+  // shell page is the app origin (not the cross-origin iframe), so unlike
+  // the child it CAN use it — and it works whenever the OS location
+  // permission is granted, even if the @capacitor/geolocation plugin was
+  // never added to the build. This is what makes "Use my location" work
+  // without a hard dependency on the plugin.
+  const tryBrowser = () => {
+    if (!navigator.geolocation) {
+      reply({ ok: false, error: 'No geolocation available on this device' });
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => reply({
+        ok: true,
+        lat: pos.coords.latitude,
+        lon: pos.coords.longitude,
+        alt: (pos.coords.altitude != null) ? pos.coords.altitude : 0,
+      }),
+      (err) => reply({ ok: false, error: (err && err.message) || 'Location permission denied' }),
+      { enableHighAccuracy: false, timeout: 20000, maximumAge: 60000 });
+  };
+
+  // Prefer the Capacitor plugin when it's actually in the build (it drives
+  // the runtime permission prompt cleanly); otherwise fall straight to the
+  // WebView API. Any plugin failure also falls back instead of dead-ending.
+  if (!Geolocation) { tryBrowser(); return; }
   try {
-    if (!Geolocation) { reply({ ok: false, error: 'Geolocation plugin unavailable' }); return; }
-    // Ask for permission (shows the OS prompt the first time). Ignore the
-    // result and let getCurrentPosition surface the real error if denied.
     try { await Geolocation.requestPermissions({ permissions: ['location'] }); } catch { /* ignore */ }
     const pos = await Geolocation.getCurrentPosition(
       { enableHighAccuracy: false, timeout: 20000, maximumAge: 60000 });
@@ -83,7 +107,9 @@ window.addEventListener('message', async (ev) => {
       alt: (pos.coords.altitude != null) ? pos.coords.altitude : 0,
     });
   } catch (e) {
-    reply({ ok: false, error: (e && e.message) || String(e) });
+    // Plugin present but threw (not installed natively / not available /
+    // denied) → try the WebView API before giving up.
+    tryBrowser();
   }
 });
 

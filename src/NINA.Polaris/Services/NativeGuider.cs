@@ -738,6 +738,12 @@ public sealed class NativeGuider : IGuider, IDisposable {
     private async Task LoopAsync(LoopMode mode, CancellationToken ct) {
         var cam = _equipment.GuideCamera!;
         var mount = _equipment.Telescope;
+        // Field-diagnostic: confirm the exposure/gain/bin the loop is
+        // actually capturing with, so the debug log makes it obvious the
+        // settings are being applied (and at what values).
+        _logger.LogInformation(
+            "Native guide loop ({Mode}) starting: exposure={ExpMs}ms gain={Gain} bin={Bin}",
+            mode, Math.Max(50, Rig.NativeGuideExposureMs), Rig.NativeGuideGain, Rig.NativeGuideBin);
         try {
             while (!ct.IsCancellationRequested) {
                 try {

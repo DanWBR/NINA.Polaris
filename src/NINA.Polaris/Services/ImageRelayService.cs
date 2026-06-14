@@ -196,7 +196,14 @@ public class ImageRelayService : IDisposable {
     public void UnregisterClient(string id) {
         if (_clients.TryRemove(id, out var entry)) {
             var wasCapable = entry.WasmCapable;
-            entry.SendLock.Dispose();
+            // Do NOT dispose entry.SendLock here. A capture's relay
+            // (BroadcastFrameAsync) can be mid-fan-out on another thread
+            // and still touch this client's semaphore; disposing it raced
+            // that and threw ObjectDisposedException ("System.Threading.
+            // SemaphoreSlim"), which propagated out and failed the whole
+            // /api/camera/capture with HTTP 500. SemaphoreSlim only needs
+            // disposal when AvailableWaitHandle was used (we never do), so
+            // letting the GC reclaim it is correct and race-free.
             _logger.LogInformation("Image stream client removed: {Id} (remaining: {Count})", id, _clients.Count);
             // If we just lost our last WASM-capable client, the server
             // should drop back to Full mode so capture clients without
@@ -393,8 +400,20 @@ public class ImageRelayService : IDisposable {
                 continue;
             }
 
-            // Skip clients that are still sending the previous frame (backpressure)
-            if (!entry.SendLock.Wait(0)) {
+            // Skip clients that are still sending the previous frame
+            // (backpressure). Guard the whole semaphore interaction: a
+            // client can be unregistered concurrently, and even though we
+            // no longer dispose its SendLock, any per-client fault here
+            // must only kill THAT client — never propagate out and fail
+            // the capture that triggered this relay.
+            bool acquired;
+            try {
+                acquired = entry.SendLock.Wait(0);
+            } catch (ObjectDisposedException) {
+                deadClients.Add(id);
+                continue;
+            }
+            if (!acquired) {
                 entry.SkippedFrames++;
                 if (entry.SkippedFrames % 10 == 0) {
                     _logger.LogWarning("Client {Id} skipped {Count} frames (slow consumer)", id, entry.SkippedFrames);
@@ -426,7 +445,9 @@ public class ImageRelayService : IDisposable {
                 _logger.LogWarning(ex, "Unexpected error sending to client {Id}", id);
                 deadClients.Add(id);
             } finally {
-                entry.SendLock.Release();
+                // Release can't throw for a non-disposed semaphore, but
+                // guard anyway so a teardown race never escapes the relay.
+                try { entry.SendLock.Release(); } catch (ObjectDisposedException) { }
             }
         }
 
@@ -458,7 +479,7 @@ public class ImageRelayService : IDisposable {
     public void Dispose() {
         foreach (var (_, entry) in _clients) {
             try { entry.Ws.Dispose(); } catch { }
-            entry.SendLock.Dispose();
+            // SendLock intentionally not disposed — see UnregisterClient.
         }
         _clients.Clear();
     }
