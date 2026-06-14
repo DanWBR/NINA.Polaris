@@ -566,23 +566,58 @@ contentTypes.Mappings[".gz"] = "application/octet-stream";
 contentTypes.Mappings[".eph"] = "application/octet-stream";
 
 // Downloaded DSS tiles (orders 4-5) live in a WRITABLE data dir, not in the
-// read-only install wwwroot. Serve that dir FIRST at the exact request path
-// the sky engine fetches, so a downloaded high-order tile wins; anything not
-// present there falls through to the bundled baseline (orders 0-3) in the
-// wwwroot passes below. Registered before the wwwroot static handlers so it
-// gets first crack at /sky/data/skydata/surveys/dss/*.
-try {
+// read-only install wwwroot. Serve them FIRST at the exact request path the
+// sky engine fetches, so a downloaded high-order tile wins; anything not
+// present there falls through (next()) to the bundled baseline (orders 0-3)
+// in the wwwroot passes below.
+//
+// Served by a hand-rolled middleware doing a plain stream copy — NOT
+// UseStaticFiles. On the Pi the static-file handler reset the connection
+// ("Empty reply from server", no logged exception) when serving this
+// PhysicalFileProvider rooted under /home, most likely a sendfile / OnStarting
+// edge case. A manual File.OpenRead + CopyToAsync sidesteps sendfile and the
+// static middleware entirely, with explicit error handling. Runs before the
+// auth gate, same as the wwwroot static handlers, so tiles load without a token.
+{
     var dssDownload = app.Services.GetRequiredService<NINA.Polaris.Services.External.DssDownloadService>();
-    Directory.CreateDirectory(dssDownload.DownloadDir);   // PhysicalFileProvider needs an existing root
-    app.UseStaticFiles(new StaticFileOptions {
-        RequestPath = "/sky/data/skydata/surveys/dss",
-        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(dssDownload.DownloadDir),
-        OnPrepareResponse = ctx =>
-            ctx.Context.Response.Headers["Cache-Control"] = "public, max-age=604800"  // 7 days, like the bundled tiles
+    var dssRoot = Path.GetFullPath(dssDownload.DownloadDir);
+    try { Directory.CreateDirectory(dssRoot); } catch { /* non-fatal */ }
+    const string dssPrefix = "/sky/data/skydata/surveys/dss/";
+    app.Use(async (ctx, next) => {
+        var path = ctx.Request.Path.Value;
+        if (path == null
+            || !path.StartsWith(dssPrefix, StringComparison.Ordinal)
+            || !HttpMethods.IsGet(ctx.Request.Method)) {
+            await next();
+            return;
+        }
+        var rel = Uri.UnescapeDataString(path.Substring(dssPrefix.Length));
+        // Path-traversal guard: resolve and confirm the result stays under root.
+        var full = Path.GetFullPath(Path.Combine(dssRoot, rel.Replace('/', Path.DirectorySeparatorChar)));
+        if (!full.StartsWith(dssRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            || !File.Exists(full)) {
+            await next();   // not a downloaded tile -> let the bundled baseline try
+            return;
+        }
+        try {
+            var ext = Path.GetExtension(full).ToLowerInvariant();
+            ctx.Response.ContentType = ext is ".jpg" or ".jpeg" ? "image/jpeg"
+                : ext == ".png" ? "image/png"
+                : ext == ".fits" ? "application/fits"
+                : "application/octet-stream";
+            ctx.Response.Headers["Cache-Control"] = "public, max-age=604800";   // 7 days
+            var fi = new FileInfo(full);
+            ctx.Response.ContentLength = fi.Length;
+            await using var fs = new FileStream(full, FileMode.Open, FileAccess.Read,
+                FileShare.Read, 65536, useAsync: true);
+            await fs.CopyToAsync(ctx.Response.Body, ctx.RequestAborted);
+        } catch (OperationCanceledException) {
+            /* client went away mid-tile — normal during fast panning */
+        } catch (Exception ex) {
+            app.Logger.LogWarning(ex, "Failed to serve downloaded DSS tile {Path}", full);
+            if (!ctx.Response.HasStarted) ctx.Response.StatusCode = 500;
+        }
     });
-} catch (Exception ex) {
-    app.Logger.LogWarning(ex, "Could not mount the writable DSS download directory; "
-        + "downloaded sky imagery won't be served (bundled baseline still works).");
 }
 
 app.UseStaticFiles(new StaticFileOptions {
