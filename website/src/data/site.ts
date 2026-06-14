@@ -18,6 +18,7 @@ export const site = {
   issues: 'https://github.com/DanWBR/NINA.Polaris/issues',
   readme: 'https://github.com/DanWBR/NINA.Polaris/blob/master/README.md',
   donate: 'https://buy.stripe.com/9B68wPeoLcMSgOz2iJbMQ02',
+  patreon: 'https://www.patreon.com/c/nina_polaris',
 };
 
 export const navLinks = [
@@ -37,6 +38,7 @@ export const footerCols = [
       { label: 'GitHub repo', href: site.repo },
       { label: 'README', href: site.readme },
       { label: 'Issues / requests', href: site.issues },
+      { label: 'Patreon (dev news)', href: site.patreon },
     ],
   },
   {
