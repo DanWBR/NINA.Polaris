@@ -5187,6 +5187,13 @@ label select.input-sm {
         grid-column: 1 / -1;
     }
 }
+/* Three columns on very wide screens. */
+@media (min-width: 1700px) {
+    .settings-grid.settings-accordion {
+        grid-template-columns: 1fr 1fr 1fr;
+        max-width: 1900px;
+    }
+}
 /* Explicit body wrapper used by sections whose content lives inside
    <template x-if> branches (Network). The template-rendered children
    would otherwise sit as direct children of .settings-section and
