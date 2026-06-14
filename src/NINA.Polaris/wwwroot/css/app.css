@@ -5168,6 +5168,25 @@ label select.input-sm {
 .settings-accordion .settings-cat-header:first-child {
     margin-top: 0;
 }
+/* Two-column settings when there's room. The accordion is normally a
+   single ~820px column (see .settings-grid); on wide screens flow the
+   cards into two columns so the horizontal space isn't wasted. Category
+   headers span both columns so each group stays a clean full-width
+   separator, and align-items:start keeps each card its natural height
+   (an expanded card doesn't stretch its row-neighbour). Scoped to
+   .settings-accordion so the nested field .settings-grid inside cards is
+   untouched. */
+@media (min-width: 1200px) {
+    .settings-grid.settings-accordion {
+        grid-template-columns: 1fr 1fr;
+        max-width: 1320px;
+        column-gap: 16px;
+        align-items: start;
+    }
+    .settings-accordion .settings-cat-header {
+        grid-column: 1 / -1;
+    }
+}
 /* Explicit body wrapper used by sections whose content lives inside
    <template x-if> branches (Network). The template-rendered children
    would otherwise sit as direct children of .settings-section and
