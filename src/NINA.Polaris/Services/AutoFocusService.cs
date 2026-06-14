@@ -161,6 +161,24 @@ public class AutoFocusService {
                     $"Not enough valid samples to fit parabola ({validPoints.Count} of {positions.Count})");
             }
 
+            // Trim the flat shoulders first: on a fast scope / coarse step the
+            // sweep extremes saturate (HFR stops growing), so the V-curve looks
+            // like a skate ramp with a plateau on each side. Those plateaus are
+            // many consistent points the residual sigma-clip below won't catch,
+            // and they pull the parabola wider/flatter and shift the vertex off
+            // true focus. Fit only the inner V. Dropped points are flagged (not
+            // deleted) so the chart still shows them.
+            var innerPoints = TrimPlateaus(validPoints);
+            foreach (var p in validPoints) {
+                if (!innerPoints.Contains(p)) p.Rejected = true;
+            }
+            int trimmedCount = validPoints.Count - innerPoints.Count;
+            if (trimmedCount > 0) {
+                _logger.LogInformation(
+                    "AF: trimmed {Count} flat plateau point(s) from the V-curve shoulders before fitting",
+                    trimmedCount);
+            }
+
             // Reject spurious points: a single bad HFR (passing cloud, cosmic
             // ray, a satellite trail mis-measured as a tight star) sits far off
             // the V-curve and drags the least-squares parabola sideways, landing
@@ -168,7 +186,7 @@ public class AutoFocusService {
             // whose residual to the fit is an outlier, then refit on the
             // survivors. The dropped points are flagged (not deleted) so the
             // chart still shows them.
-            var (fit, inliers, rejected) = FitParabolaRobust(validPoints);
+            var (fit, inliers, rejected) = FitParabolaRobust(innerPoints);
             foreach (var r in rejected) r.Rejected = true;
             if (rejected.Count > 0) {
                 _logger.LogInformation(
@@ -426,6 +444,66 @@ public class AutoFocusService {
 
         fit = FitParabola(inliers);
         return (fit, inliers, rejected);
+    }
+
+    /// <summary>
+    /// Trim the flat shoulders ("plateaus") from the ends of a V-curve before
+    /// fitting. With a fast scope or a coarse step the extreme samples saturate:
+    /// the star defocuses into a large blob whose measured HFR stops growing, so
+    /// the curve looks like a skate ramp — a V with a flat platform on each side.
+    /// Those platforms are many mutually-consistent points (not isolated
+    /// outliers, so the residual sigma-clip in <see cref="FitParabolaRobust"/>
+    /// won't catch them) and they drag a least-squares parabola wider and
+    /// flatter, pushing the fitted vertex away from true focus. This keeps only
+    /// the inner V: from each end it drops trailing points whose slope toward
+    /// the vertex is nearly flat relative to the steepest slope on the curve.
+    /// </summary>
+    /// <param name="points">Valid sweep samples (any order).</param>
+    /// <param name="levelTolFraction">Two trailing samples count as the same
+    /// saturation level when their HFR differs by less than this fraction of
+    /// the curve's HFR range. A shelf is only trimmed when it has at least two
+    /// co-level samples, so a clean V (whose extreme is a single high point,
+    /// not a flat run) is never trimmed.</param>
+    /// <param name="minKeep">Never trim below this many points; if trimming
+    /// would, the untrimmed set is returned so a fit is still possible.</param>
+    /// <returns>The inner points, sorted by position.</returns>
+    public static List<AutoFocusPoint> TrimPlateaus(
+            IReadOnlyList<AutoFocusPoint> points,
+            double levelTolFraction = 0.1,
+            int minKeep = 5) {
+        var sorted = points.OrderBy(p => p.Position).ToList();
+        int n = sorted.Count;
+        if (n <= minKeep) return sorted;
+
+        // Vertex = lowest HFR (best focus). Plateaus are the high-HFR ends.
+        int vertex = 0;
+        double minHfr = sorted[0].HFR, maxHfr = sorted[0].HFR;
+        for (int i = 1; i < n; i++) {
+            if (sorted[i].HFR < sorted[vertex].HFR) vertex = i;
+            if (sorted[i].HFR < minHfr) minHfr = sorted[i].HFR;
+            if (sorted[i].HFR > maxHfr) maxHfr = sorted[i].HFR;
+        }
+        double range = maxHfr - minHfr;
+        if (range <= 0) return sorted;   // perfectly flat — nothing to do
+        double levelTol = levelTolFraction * range;
+
+        // Right shelf: a contiguous run of trailing samples all co-level with
+        // the extreme (within levelTol). It's a saturation plateau only when it
+        // holds >= 2 samples — a clean V's extreme is a lone high point. Drop
+        // the whole shelf; keep down to the sample just inside it.
+        int rp = n - 1;
+        while (rp - 1 > vertex && Math.Abs(sorted[rp - 1].HFR - sorted[n - 1].HFR) <= levelTol)
+            rp--;
+        int hi = (n - rp >= 2 && rp - 1 > vertex) ? rp - 1 : n - 1;
+
+        // Left shelf: mirror from the low-position end.
+        int lp = 0;
+        while (lp + 1 < vertex && Math.Abs(sorted[lp + 1].HFR - sorted[0].HFR) <= levelTol)
+            lp++;
+        int lo = (lp + 1 >= 2 && lp + 1 < vertex) ? lp + 1 : 0;
+
+        var trimmed = sorted.GetRange(lo, hi - lo + 1);
+        return trimmed.Count >= minKeep ? trimmed : sorted;
     }
 
     /// <summary>

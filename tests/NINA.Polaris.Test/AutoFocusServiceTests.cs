@@ -169,6 +169,76 @@ public class AutoFocusServiceTests {
         Assert.That(fit, Is.Not.Null);
     }
 
+    // ---- Plateau trimming (skate-ramp V-curves) ----
+
+    [Test]
+    public void TrimPlateaus_SkateRamp_DropsFlatShouldersAndFixesVertex() {
+        // V with a vertex at 5000 but both extremes saturated flat at HFR ~9
+        // (the "skate ramp" the field report describes). The plateaus pull a
+        // raw parabola wider/flatter; trimming them should recover the vertex.
+        var pts = Pts(
+            (4700, 9.0), (4750, 9.0), (4800, 9.0),   // left plateau
+            (4850, 7.0), (4900, 4.5), (4950, 2.4),
+            (5000, 1.5),
+            (5050, 2.4), (5100, 4.5), (5150, 7.0),
+            (5200, 9.0), (5250, 9.0), (5300, 9.0)    // right plateau
+        );
+
+        var inner = AutoFocusService.TrimPlateaus(pts);
+
+        // The flat shoulder samples must be gone.
+        Assert.That(inner, Has.None.Matches<AutoFocusPoint>(p => p.Position <= 4800 || p.Position >= 5200));
+        // And the inner V still fits to the true vertex. (The data is
+        // symmetric, so the vertex itself isn't shifted by the plateaus — the
+        // asymmetric test below is what proves trimming improves accuracy.)
+        var fit = AutoFocusService.FitParabola(inner);
+        Assert.That(fit.MinX, Is.EqualTo(5000).Within(20));
+    }
+
+    [Test]
+    public void TrimPlateaus_CleanVCurve_KeepsAllPoints() {
+        // No flat shoulders: every step has real slope, nothing to trim.
+        var pts = Pts(
+            (4800, 8.5), (4850, 6.2), (4900, 4.0), (4950, 2.3), (5000, 1.5),
+            (5050, 2.3), (5100, 4.1), (5150, 6.3), (5200, 8.4)
+        );
+
+        var inner = AutoFocusService.TrimPlateaus(pts);
+
+        Assert.That(inner.Count, Is.EqualTo(pts.Count));
+    }
+
+    [Test]
+    public void TrimPlateaus_AsymmetricPlateau_TrimsOnlyTheFlatSide() {
+        // Flat shoulder only on the right; the left arm is a clean slope.
+        var pts = Pts(
+            (4850, 7.0), (4900, 4.5), (4950, 2.4), (5000, 1.5),
+            (5050, 2.4), (5100, 4.5), (5150, 7.0),
+            (5200, 9.0), (5250, 9.0), (5300, 9.0)   // right plateau only
+        );
+
+        var inner = AutoFocusService.TrimPlateaus(pts);
+
+        Assert.That(inner, Has.None.Matches<AutoFocusPoint>(p => p.Position >= 5200), "right plateau dropped");
+        Assert.That(inner, Has.Some.Matches<AutoFocusPoint>(p => p.Position == 4850), "left arm kept intact");
+
+        // The one-sided plateau drags the contaminated parabola's vertex right
+        // of true focus (5000); trimming it pulls the vertex back closer.
+        var contaminated = AutoFocusService.FitParabola(pts);
+        var trimmedFit = AutoFocusService.FitParabola(inner);
+        Assert.That(Math.Abs(trimmedFit.MinX - 5000),
+            Is.LessThan(Math.Abs(contaminated.MinX - 5000)),
+            "trimming the flat shoulder should move the vertex closer to true focus");
+    }
+
+    [Test]
+    public void TrimPlateaus_NeverTrimsBelowMinKeep() {
+        // Tiny sample: even if it looks flat, keep enough points to fit.
+        var pts = Pts((100, 3.0), (200, 3.0), (300, 3.0), (400, 3.0));
+        var inner = AutoFocusService.TrimPlateaus(pts);
+        Assert.That(inner.Count, Is.EqualTo(pts.Count));
+    }
+
     // ---- Settings / state defaults ----
 
     [Test]
