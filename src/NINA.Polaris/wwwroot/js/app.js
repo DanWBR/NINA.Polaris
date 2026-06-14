@@ -4600,6 +4600,26 @@ function ninaApp() {
             }
         },
 
+        // Turn the remote terminal back off (clears profile.TerminalEnabled).
+        // Disconnects any live session first. Note: if the host also sets
+        // Terminal:Enabled=true in appsettings.json, that static gate keeps
+        // the endpoint live regardless — the toast flags that case is only
+        // changeable in the file.
+        async disableTerminal() {
+            if (this.term.enabling) return;
+            if (this.term.connected) this.termDisconnect();
+            this.term.enabling = true;
+            try {
+                await this.apiPost('/api/system/terminal/enabled', { enabled: false });
+                this.term.serverEnabled = false;
+                this.toast('Remote terminal disabled', 'ok');
+            } catch (e) {
+                this.toast('Failed to disable terminal: ' + (e.message || e), 'error');
+            } finally {
+                this.term.enabling = false;
+            }
+        },
+
         async termConnect() {
             if (this.term.connected || this.term.connecting) return;
             if (!this.term.host || !this.term.user) {

@@ -9631,6 +9631,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <span x-show="!term.connecting">Connect</span>
                             <span x-show="term.connecting">Connecting…</span>
                         </button>
+                        <button class="btn btn-sm" style="margin-left:8px"
+                                @click="disableTerminal()" :disabled="term.enabling"
+                                title="Turn the remote terminal back off">
+                            Disable terminal
+                        </button>
                     </div>
                     <div class="term-actions" x-show="term.connected" x-cloak>
                         <span class="term-conn-info">
@@ -13421,7 +13426,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260614-terminal-enable"></script>
+    <script src="/js/app.js?v=20260614-terminal-disable"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
