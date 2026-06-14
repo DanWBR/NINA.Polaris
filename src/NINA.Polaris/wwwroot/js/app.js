@@ -5464,52 +5464,136 @@ function ninaApp() {
 
             const img = new Image();
             img.onload = () => {
-                // JPEG mode has no header to carry the FrameKind, so
-                // the caller passes it through from the WS dispatch
-                // when known. Default to Live for legacy callers.
-                const targets = this._canvasIdsForFrameKind(frameKind);
-                let drewAny = false;
-                let firstDrawn = null;
-                for (const id of targets) {
-                    const canvas = document.getElementById(id);
-                    if (!canvas) continue;
-                    const container = canvas.parentElement;
-                    if (!container) continue;
-                    const cw = container.clientWidth;
-                    const ch = container.clientHeight;
-                    // Skip canvases whose container is collapsed (parent
-                    // tab not visible). They'll get a fresh paint when
-                    // the user switches to that tab via the existing
-                    // mirror call.
-                    if (cw <= 0 || ch <= 0) continue;
-                    const scale = Math.min(cw / img.width, ch / img.height, 1);
-                    canvas.width  = Math.round(img.width  * scale);
-                    canvas.height = Math.round(img.height * scale);
-                    const ctx = canvas.getContext('2d');
-                    ctx.imageSmoothingEnabled = true;
-                    ctx.imageSmoothingQuality = 'high';
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    if (!firstDrawn) firstDrawn = canvas;
-                    drewAny = true;
+                // Cache the decoded RGB pixels so the histogram handles can
+                // re-stretch the frame client-side. The colour OSC live stack
+                // is broadcast as an already-rendered JPEG (no raw 16-bit
+                // buffer reaches the client), so without this cache moving the
+                // black/white/mid handles did nothing while OSC stacking was
+                // on. The server downscales the JPEG to <=1280px, so the
+                // decoded buffer is small enough to keep + re-LUT every drag.
+                try {
+                    const cache = this._jpegCacheCanvas
+                        || (this._jpegCacheCanvas = document.createElement('canvas'));
+                    cache.width = img.width;
+                    cache.height = img.height;
+                    const cctx = cache.getContext('2d', { willReadFrequently: true });
+                    cctx.drawImage(img, 0, 0);
+                    this._lastJpegFrame = {
+                        imageData: cctx.getImageData(0, 0, img.width, img.height),
+                        width: img.width, height: img.height, frameKind
+                    };
+                    // A JPEG frame has no raw buffer; clear any stale raw cache
+                    // so applyManualStretch routes through the JPEG re-stretch
+                    // path instead of re-rendering an old mono frame.
+                    this._lastRawFrame = null;
+                    // JPEG handles live in 8-bit display space, so the
+                    // histogram range is always the full 0..1 (a stale zoom
+                    // range from a previous raw frame would misplace them).
+                    this.histo.dispLo = 0;
+                    this.histo.dispHi = 1;
+                    // The server already auto-stretched this JPEG. Seed the
+                    // handles at identity (black 0, mid 0.5, white 1) so the
+                    // first drag flips to manual without a brightness jump.
+                    if (this.stretchAuto) {
+                        this.histo.blackFrac = 0;
+                        this.histo.whiteFrac = 1;
+                        this.histo.midFrac = 0.5;
+                        this.histo._autoMid = 0.5;
+                    }
+                } catch (e) {
+                    this._lastJpegFrame = null;
                 }
                 URL.revokeObjectURL(url);
 
-                if (drewAny) {
-                    this.redrawOverlay();
-                    // Also fan out to any still-hidden canvases via the
-                    // mirror path so the latest frame is ready when the
-                    // user switches tabs.
+                // Draw through the shared painter so the auto and manual paths
+                // are identical (manual applies a screen-transfer LUT on top of
+                // the server's already-stretched 8-bit image).
+                const source = this._buildJpegDisplayCanvas();
+                if (source) {
+                    this._paintJpegToCanvases(source, frameKind);
+                    // Fan out to still-hidden canvases for tab switches.
                     this._mirrorLiveToPreviewCanvas();
-                    // JPEG frames carry no raw pixel buffer, so the normal
-                    // _lastRawFrame-based histogram can't see them — the
-                    // colour OSC live stack is broadcast as a rendered JPEG.
-                    // Feed the histogram from the decoded canvas instead so
-                    // it tracks the stack instead of going stale.
-                    this._drawCanvasHistogram(firstDrawn);
                 }
             };
             img.onerror = () => URL.revokeObjectURL(url);
             img.src = url;
+        },
+
+        // Build a native-resolution canvas holding the JPEG ready to draw.
+        // Auto mode: the server already stretched it, so blit the cached pixels
+        // unchanged. Manual mode: apply an MTF screen-transfer driven by the
+        // black/white/mid handles. Returns null when there's no cached frame.
+        _buildJpegDisplayCanvas() {
+            const f = this._lastJpegFrame;
+            if (!f) return null;
+            const out = this._jpegDrawCanvas
+                || (this._jpegDrawCanvas = document.createElement('canvas'));
+            out.width = f.width;
+            out.height = f.height;
+            const octx = out.getContext('2d');
+            if (this.stretchAuto) {
+                octx.putImageData(f.imageData, 0, 0);
+                return out;
+            }
+            // 256-entry LUT: re-map the 8-bit server image through the manual
+            // black/white window + midtone MTF. Same channel LUT for R/G/B so
+            // the server's colour balance is preserved.
+            const black = Math.max(0, Math.min(1, this.stretchBlack)) * 255;
+            let white = Math.max(0, Math.min(1, this.stretchWhite)) * 255;
+            if (white <= black) white = black + 1;
+            const mid = Math.min(0.999, Math.max(0.001, this.stretchMid || 0.5));
+            const inv = 1 / (white - black);
+            const lut = new Uint8ClampedArray(256);
+            for (let v = 0; v < 256; v++) {
+                let x = (v - black) * inv;
+                x = x < 0 ? 0 : x > 1 ? 1 : x;
+                lut[v] = Math.round(this._mtf(x, mid) * 255);
+            }
+            const src = f.imageData.data;
+            const res = octx.createImageData(f.width, f.height);
+            const dst = res.data;
+            for (let i = 0; i < src.length; i += 4) {
+                dst[i]     = lut[src[i]];
+                dst[i + 1] = lut[src[i + 1]];
+                dst[i + 2] = lut[src[i + 2]];
+                dst[i + 3] = 255;
+            }
+            octx.putImageData(res, 0, 0);
+            return out;
+        },
+
+        // Scale-draw a prepared JPEG display canvas into every canvas that
+        // belongs to the frame's FrameKind, refresh the overlay, and feed the
+        // canvas-based histogram. Returns whether anything was drawn.
+        _paintJpegToCanvases(source, frameKind = 0) {
+            const targets = this._canvasIdsForFrameKind(frameKind);
+            let drewAny = false;
+            let firstDrawn = null;
+            for (const id of targets) {
+                const canvas = document.getElementById(id);
+                if (!canvas) continue;
+                const container = canvas.parentElement;
+                if (!container) continue;
+                const cw = container.clientWidth;
+                const ch = container.clientHeight;
+                // Skip canvases whose container is collapsed (parent tab not
+                // visible). They get a fresh paint on tab switch.
+                if (cw <= 0 || ch <= 0) continue;
+                const scale = Math.min(cw / source.width, ch / source.height, 1);
+                canvas.width  = Math.round(source.width  * scale);
+                canvas.height = Math.round(source.height * scale);
+                const ctx = canvas.getContext('2d');
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+                if (!firstDrawn) firstDrawn = canvas;
+                drewAny = true;
+            }
+            if (drewAny) {
+                this.redrawOverlay();
+                this._drawCanvasHistogram(firstDrawn);
+            }
+            return drewAny;
         },
 
         // LEGACY: used to copy liveCanvas to every other panel's
@@ -5744,7 +5828,17 @@ function ninaApp() {
         // Called when sliders move + on tab/videoTab change via $watch.
         applyManualStretch() {
             const f = this._lastRawFrame;
-            if (!f) return;
+            if (!f) {
+                // No raw buffer — this is a server-rendered JPEG (the colour
+                // OSC live stack). Re-stretch the cached decoded JPEG so the
+                // histogram handles take effect immediately instead of waiting
+                // for the next stacked frame (which they'd never change).
+                if (this._lastJpegFrame) {
+                    const src = this._buildJpegDisplayCanvas();
+                    if (src) this._paintJpegToCanvases(src, this._lastJpegFrame.frameKind || 0);
+                }
+                return;
+            }
             const { shadow, scaleFactor, midtone } =
                 this._computeStretchParams(f.pixels, f.maxVal);
             // Match _renderRawFrame: OSC frame + auto-stretch -> per-channel
