@@ -117,6 +117,11 @@
     return a;
   }
   function onOrientation(e) {
+    // When the Generic Sensor API AbsoluteOrientationSensor is driving
+    // (Android Chrome/WebView), it owns heading + pitch — ignore the
+    // DeviceOrientation events, which on many Android devices are
+    // relative-only (no true-north heading).
+    if (state._absSensor) return;
     state.sensorsOk = true;
     // Heading: iOS exposes a true-north compass heading directly.
     if (typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)) {
@@ -148,22 +153,99 @@
   async function enableSensors() {
     var hint = el('enableHint');
     try {
+      // iOS 13+: DeviceOrientation needs an explicit, gesture-gated grant
+      // and then exposes a true-north webkitCompassHeading.
       var DOE = window.DeviceOrientationEvent;
       if (DOE && typeof DOE.requestPermission === 'function') {
-        var res = await DOE.requestPermission(); // iOS 13+, needs user gesture
-        if (res !== 'granted') { hint.textContent = 'Permission denied. You can still use manual inputs.'; }
+        try {
+          var res = await DOE.requestPermission();
+          if (res !== 'granted') hint.textContent = 'Permission denied. You can still use manual inputs.';
+        } catch (e) { /* not iOS, or already decided */ }
       }
+
+      // Android (Chrome/Capacitor WebView): the plain deviceorientation
+      // events are frequently RELATIVE only (no absolute north), so the
+      // compass never locks. The Generic Sensor API's
+      // AbsoluteOrientationSensor fuses magnetometer + accel + gyro into a
+      // true-north quaternion — and asking for it is what actually prompts
+      // for / grants the underlying sensor permissions on Android. Use it
+      // as the primary source when available.
+      await startAbsoluteOrientationSensor(hint);
+
+      // Always also wire DeviceOrientation: it's the iOS path and a
+      // fallback where the Generic Sensor API isn't present. onOrientation
+      // no-ops while the absolute sensor is driving (see its guard).
       window.addEventListener('deviceorientationabsolute', onOrientation, true);
       window.addEventListener('deviceorientation', onOrientation, true);
+
       enableOverlay.hidden = true; stage.hidden = false;
       maybeGeolocate();
       render();
-      // If no sensor event arrives shortly, still show the UI (numbers
-      // work; the dial just won't track until sensors report).
-      setTimeout(function () { if (!state.sensorsOk) hint.textContent = ''; }, 1500);
+      // If nothing reports shortly, keep the UI usable (manual inputs work)
+      // and guide the operator: Android compasses need a figure-8 calibration
+      // and some devices simply lack an absolute-heading sensor.
+      setTimeout(function () {
+        if (!state.sensorsOk) {
+          hint.textContent = 'No compass data yet — wave the phone in a figure-8 to calibrate. '
+            + 'Manual azimuth/altitude inputs still work.';
+        }
+      }, 2500);
     } catch (err) {
       hint.textContent = 'Sensor error: ' + (err && err.message || err);
       enableOverlay.hidden = true; stage.hidden = false;
+    }
+  }
+
+  // Generic Sensor API absolute-orientation path (Android Chrome/WebView).
+  // Returns true when started. Computes a true compass heading + altitude
+  // from the fused quaternion by rotating the phone's "aim" axis (the back
+  // of the device, -Z) into the world East-North-Up frame.
+  async function startAbsoluteOrientationSensor(hint) {
+    if (typeof window.AbsoluteOrientationSensor !== 'function') return false;
+    try {
+      // Request the underlying sensor permissions (Chrome surfaces these
+      // via the Permissions API; a 'denied' means we must fall back).
+      if (navigator.permissions && navigator.permissions.query) {
+        var names = ['accelerometer', 'magnetometer', 'gyroscope'];
+        var states = await Promise.all(names.map(function (n) {
+          return navigator.permissions.query({ name: n })
+            .then(function (r) { return r.state; })
+            .catch(function () { return 'granted'; }); // unknown -> assume ok
+        }));
+        if (states.indexOf('denied') !== -1) {
+          if (hint) hint.textContent = 'Motion-sensor permission denied. Manual inputs still work.';
+          return false;
+        }
+      }
+      var sensor = new AbsoluteOrientationSensor({ frequency: 20, referenceFrame: 'device' });
+      sensor.addEventListener('reading', function () {
+        var q = sensor.quaternion;
+        if (!q) return;
+        var x = q[0], y = q[1], z = q[2], w = q[3];
+        // Aim vector = device -Z rotated into world ENU (x=E, y=N, z=Up).
+        var vE = -2 * (x * z + y * w);
+        var vN = 2 * (x * w - y * z);
+        var vU = 2 * (x * x + y * y) - 1;
+        state._absSensor = true;
+        state.sensorsOk = true;
+        state.heading = (Math.atan2(vE, vN) * 180 / Math.PI + 360) % 360;
+        state.pitch = Math.max(0, Math.min(90, Math.asin(Math.max(-1, Math.min(1, vU))) * 180 / Math.PI));
+        render();
+      });
+      sensor.addEventListener('error', function (ev) {
+        var name = ev.error && ev.error.name;
+        console.warn('[aim] AbsoluteOrientationSensor error:', name);
+        // Permission/availability failure -> let DeviceOrientation take over.
+        state._absSensor = false;
+        if (hint && name === 'NotAllowedError') {
+          hint.textContent = 'Motion-sensor permission denied. Manual inputs still work.';
+        }
+      });
+      sensor.start();
+      return true;
+    } catch (e) {
+      console.warn('[aim] AbsoluteOrientationSensor unavailable:', e);
+      return false;
     }
   }
 
