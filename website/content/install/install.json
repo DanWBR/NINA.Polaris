@@ -68,6 +68,7 @@
       {
         "device": "Raspberry Pi 4",
         "badge": "arm64",
+        "color": "#e11d6b",
         "url": "https://drive.google.com/uc?export=download&id=1z0mKVaDFnYPENUNlHShsQw6Bsu0KJWtv",
         "os": "Raspberry Pi OS 64-bit (Debian Trixie)",
         "polaris": "0.83.2 (2026-06-14)",
@@ -77,6 +78,7 @@
       {
         "device": "Raspberry Pi 5",
         "badge": "arm64",
+        "color": "#e11d6b",
         "url": "https://drive.google.com/uc?export=download&id=1mIsdpXUVcCC_xjf5RTZst6jLtEE-my3u",
         "os": "Raspberry Pi OS 64-bit (Debian Trixie)",
         "polaris": "0.83.2 (2026-06-14)",
@@ -86,6 +88,7 @@
       {
         "device": "Orange Pi 4 Pro",
         "badge": "arm64",
+        "color": "#ff7a18",
         "url": "",
         "os": "",
         "polaris": "",
@@ -95,6 +98,7 @@
       {
         "device": "Orange Pi 5 Pro",
         "badge": "arm64",
+        "color": "#ff7a18",
         "url": "https://drive.google.com/uc?export=download&id=1HnaqiXaOzcrnHBJ3kpuAicJvkI_eaZrP",
         "os": "Armbian 26.8.0 KDE (Ubuntu 26.04, kernel 6.1.115)",
         "polaris": "",
@@ -106,6 +110,7 @@
       {
         "device": "Radxa Dragon Q6A",
         "badge": "arm64",
+        "color": "#10b981",
         "url": "",
         "os": "",
         "polaris": "",
@@ -115,6 +120,7 @@
       {
         "device": "PC Stick",
         "badge": "x86-64",
+        "color": "#8b5cf6",
         "url": "",
         "os": "",
         "polaris": "",

@@ -167,6 +167,7 @@ export default defineConfig({
                 fields: [
                   { type: 'string', name: 'device', label: 'Device' },
                   { type: 'string', name: 'badge', label: 'Badge (arch)' },
+                  { type: 'string', name: 'color', label: 'Icon accent color (hex, optional)' },
                   { type: 'string', name: 'url', label: 'Download URL (empty = Coming soon)' },
                   { type: 'string', name: 'os', label: 'Base OS (optional)' },
                   { type: 'string', name: 'polaris', label: 'Polaris version (optional)' },

@@ -41,7 +41,24 @@ const statusClass = (s: string) => {
           {g.images.items.map((it) => (
             <article class="img-card">
               <header>
-                <h3>{it.device}</h3>
+                <div class="img-id">
+                  <span class="img-icon" style={it.color ? `--ic: ${it.color}` : undefined}>
+                    {it.badge === 'x86-64' ? (
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="3" y="8.5" width="13" height="7" rx="1.5"/>
+                        <path d="M16 10.5h3a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2h-3"/>
+                        <path d="M6 11.5v2M9 11.5v2"/>
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="7" y="7" width="10" height="10" rx="1.5"/>
+                        <rect x="10.5" y="10.5" width="3" height="3" rx="0.5" fill="currentColor" stroke="none"/>
+                        <path d="M9.5 7V4M14.5 7V4M9.5 20v-3M14.5 20v-3M7 9.5H4M7 14.5H4M20 9.5h-3M20 14.5h-3"/>
+                      </svg>
+                    )}
+                  </span>
+                  <h3>{it.device}</h3>
+                </div>
                 {it.badge && <span class="badge">{it.badge}</span>}
               </header>
               {(it.gpu || it.npu) && (
@@ -502,6 +519,20 @@ const statusClass = (s: string) => {
     margin-bottom: 12px;
   }
   .img-card h3 { font-size: 16px; font-weight: 700; }
+  .img-id { display: flex; align-items: center; gap: 11px; min-width: 0; }
+  .img-icon {
+    --ic: var(--accent);
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    color: var(--ic);
+    background: color-mix(in srgb, var(--ic) 16%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ic) 40%, transparent);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--ic) 22%, transparent);
+  }
   .img-spec { margin: 0 0 14px; display: flex; flex-direction: column; gap: 8px; }
   .img-spec-row { display: grid; grid-template-columns: 54px 1fr; gap: 10px; align-items: baseline; }
   .img-spec dt {
