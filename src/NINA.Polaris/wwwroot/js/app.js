@@ -13889,6 +13889,22 @@ function ninaApp() {
             return `~${h} h ${m} m`;
         },
 
+        // LIVE metrics bar: time until the target transits the meridian.
+        // mfTimeToMeridianMinutes comes from the meridianFlip WS payload
+        // (LST − RA of the live mount pointing). Positive = before the
+        // meridian; negative = already past it (west side), shown with a
+        // leading "+" so the operator knows a flip is overdue.
+        formatTimeToMeridian() {
+            const m = this.mfTimeToMeridianMinutes;
+            if (m == null || !isFinite(m)) return '—';
+            const past = m < 0;
+            const mins = Math.abs(Math.round(m));
+            if (mins < 1) return 'now';
+            const h = Math.floor(mins / 60), mm = mins % 60;
+            const txt = h > 0 ? `${h}h ${mm}m` : `${mm}m`;
+            return past ? `+${txt}` : txt;
+        },
+
         // SNR-7: debounced PUT for the LIVE tab's target-SNR input.
         // Null / 0 in the input means "drop the override, use the
         // active rig's TargetSnr". Same debounce pattern as the

@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260614-tapcontrols">
+    <link rel="stylesheet" href="/css/app.css?v=20260614-meridian-eta">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -876,6 +876,11 @@
                                 <span class="lsq-label">ETA</span>
                                 <span class="lsq-value"
                                       x-text="formatSnrEta(liveStackStatus)"></span>
+                            </div>
+                            <div class="lsq-cell" x-show="mfTimeToMeridianMinutes != null"
+                                 title="Time until the target crosses the meridian (a flip may be needed past it)">
+                                <span class="lsq-label">Meridian</span>
+                                <span class="lsq-value" x-text="formatTimeToMeridian()"></span>
                             </div>
                             <div class="lsq-target">
                                 <label>Target
@@ -13506,7 +13511,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260614-tapcontrols"></script>
+    <script src="/js/app.js?v=20260614-meridian-eta"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

@@ -113,13 +113,20 @@ public static class SnrEtaCalculator {
         if (varY < 1e-9) return null;
         double r = (sumXY / n - meanX * meanY) / Math.Sqrt(varX * varY);
         double r2 = r * r;
-        if (r2 < MinConfidence) return null;
+        // Weak fit: the log-log regression is too noisy to trust — the
+        // common real-world case in the first frames of a session (seeing
+        // + alignment jitter). Instead of showing "—" until it eventually
+        // converges, fall back to a coarse √N projection so the operator
+        // still gets a ballpark ETA. Genuinely flat data was already
+        // rejected above (varY ≈ 0), so this only fires on noisy-but-
+        // rising stacks.
+        if (r2 < MinConfidence) return SqrtNFallback(samples, targetSnr, averageExposureSeconds);
 
         // Slope sanity check. Negative or zero slope means SNR is
         // flat or decreasing — fit doesn't extrapolate to anything
         // useful, and the user probably has a different problem
         // (clouds, focus drift) the LIVE chart is more honest about.
-        if (slope <= 0.05) return null;
+        if (slope <= 0.05) return SqrtNFallback(samples, targetSnr, averageExposureSeconds);
 
         // Solve targetSnr = exp(intercept) · N^slope for N.
         // N_target = exp((log(target) − intercept) / slope)
@@ -133,5 +140,41 @@ public static class SnrEtaCalculator {
 
         double remainingSec = remaining * Math.Max(0.001, averageExposureSeconds);
         return new EtaResult(remaining, remainingSec, r2, slope);
+    }
+
+    /// <summary>
+    /// Coarse √N ETA used when the rigorous log-log fit is too noisy to
+    /// pass the R²/slope gates. Pins the model at the ideal slope 0.5 and
+    /// anchors it on the most recent sample: SNR ∝ √N ⇒
+    /// N_target = N_last · (target / snr_last)². Only returns a value when
+    /// the stack is genuinely rising (last clearly above first) and the
+    /// projection is within the cap — otherwise null (caller shows "—").
+    /// Reported with a low confidence so the UI/telemetry can flag it as
+    /// an estimate.
+    /// </summary>
+    private static EtaResult? SqrtNFallback(
+            IReadOnlyList<(int frame, double snr)> samples,
+            double targetSnr, double averageExposureSeconds) {
+        (int frame, double snr) first = default, last = default;
+        bool haveFirst = false;
+        foreach (var s in samples) {
+            if (s.frame <= 0 || s.snr <= 0) continue;
+            if (!haveFirst) { first = s; haveFirst = true; }
+            last = s;
+        }
+        if (!haveFirst || last.frame <= first.frame) return null;
+        if (last.snr >= targetSnr) return new EtaResult(0, 0, 0.3, 0.5);
+        // Require a real upward trend (>2% growth end-to-end) so a flat /
+        // wandering stack doesn't get a fabricated ETA.
+        if (last.snr <= first.snr * 1.02) return null;
+
+        double ratio = targetSnr / last.snr;
+        double nTarget = last.frame * ratio * ratio;
+        int remaining = (int)Math.Ceiling(nTarget) - last.frame;
+        if (remaining <= 0) return new EtaResult(0, 0, 0.3, 0.5);
+        if (remaining > MaxProjection) return null;
+
+        double remainingSec = remaining * Math.Max(0.001, averageExposureSeconds);
+        return new EtaResult(remaining, remainingSec, 0.3, 0.5);
     }
 }
