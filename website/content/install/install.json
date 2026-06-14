@@ -68,9 +68,9 @@
       {
         "device": "Raspberry Pi 4",
         "badge": "arm64",
-        "url": "https://drive.google.com/uc?export=download&id=1NaA_rILy2zaun93RGbTMKRL6peFjtkLh",
-        "size": "7.11 GB (.7z)",
-        "note": "Raspberry Pi OS 64-bit (Debian Trixie, released 2026-04-21). 7-Zip archive; extract before flashing."
+        "url": "https://drive.google.com/uc?export=download&id=1z0mKVaDFnYPENUNlHShsQw6Bsu0KJWtv",
+        "size": "7.1 GB (.7z)",
+        "note": "Raspberry Pi OS 64-bit (Debian Trixie, released 2026-04-21) with Polaris 0.83.2 (2026-06-14). 7-Zip archive; extract before flashing."
       },
       {
         "device": "Raspberry Pi 5",
