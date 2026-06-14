@@ -217,6 +217,8 @@
     {
       "name": "Raspberry Pi 4 / 5",
       "badge": ".deb",
+      "icon": "chip",
+      "color": "#e11d6b",
       "summary": "The recommended path. The .deb creates the user, a systemd unit, the indi-web venv, apt dependencies, and a self-signed HTTPS cert.",
       "steps": "wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb\nsudo apt install ./polaris_arm64.deb",
       "notes": "Running at https://<hostname>.local:5000 in about 30 seconds. Manage it with: sudo systemctl status polaris, sudo journalctl -u polaris -f, sudo systemctl restart polaris."
@@ -224,6 +226,8 @@
     {
       "name": "Other Linux (portable)",
       "badge": "tar.gz",
+      "icon": "terminal",
+      "color": "#f59e0b",
       "summary": "For Fedora, Arch, or any non-Debian distro, or when you prefer no systemd integration. Replace linux-arm64 with linux-x64 for Intel/AMD.",
       "steps": "wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-linux-arm64.tar.gz\ntar -xzf polaris-linux-arm64.tar.gz\ncd polaris-linux-arm64\n./NINA.Polaris",
       "notes": "Runs in the foreground. Wire your own service unit if you want it to survive reboots."
@@ -231,6 +235,8 @@
     {
       "name": "Windows mini PC",
       "badge": ".zip",
+      "icon": "windows",
+      "color": "#38bdf8",
       "summary": "Portable, no installer. ARM64 build also available (polaris-win-arm64.zip) for Surface Pro X and some Copilot+ PCs.",
       "steps": "Invoke-WebRequest -Uri \"https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-x64.zip\" -OutFile polaris.zip\nExpand-Archive polaris.zip\ncd polaris-win-x64\n.\\NINA.Polaris.exe",
       "notes": "Open https://localhost:5000 and accept the self-signed cert once. Remember to open the firewall (see below)."
@@ -238,6 +244,8 @@
     {
       "name": "Docker",
       "badge": "multi-arch",
+      "icon": "container",
+      "color": "#2496ed",
       "summary": "Multi-arch image (arm64 + amd64). The compose file in the repo includes indiserver in the same stack.",
       "steps": "docker run -d --network host \\\n  -v $(pwd)/config:/config \\\n  -v $(pwd)/images:/images \\\n  ghcr.io/danwbr/nina-polaris:latest",
       "notes": "Volumes mount /config (profiles) and /images (FITS output). On Linux use --network host, or port-forward TCP 5000 and UDP 5353 in compose."
@@ -245,6 +253,8 @@
     {
       "name": "Build from source",
       "badge": "dev",
+      "icon": "code",
+      "color": "#a78bfa",
       "summary": "For developers or unsupported platforms. Needs the .NET 10 SDK and Git (with submodules).",
       "steps": "git clone https://github.com/DanWBR/NINA.Polaris.git\ncd NINA.Polaris\n./deploy/publish-linux-arm64.sh   # or publish-linux-x64.sh / publish-win-x64.ps1\n./publish/linux-arm64/NINA.Polaris",
       "notes": "Build and test target net10.0. The stellarium-web submodule ships pinned .js/.wasm, so Emscripten is only needed if you bump the engine."
@@ -264,6 +274,8 @@
   "optionalGroups": [
     {
       "name": "Equipment drivers",
+      "icon": "plug",
+      "color": "#2196f3",
       "intro": "At least one bus is required to control hardware. Both can coexist; the active rig stores a per-device driver choice.",
       "items": [
         {
@@ -294,6 +306,8 @@
     },
     {
       "name": "Plate solving",
+      "icon": "target",
+      "color": "#f59e0b",
       "intro": "Required for Slew & Center (the centering loop). Without any solver, Slew Only still slews the mount. Polaris dispatches primary then blind fallback across whatever is installed.",
       "items": [
         {
@@ -332,6 +346,8 @@
     },
     {
       "name": "Autoguiding",
+      "icon": "signal",
+      "color": "#10b981",
       "intro": "Polaris guides out of the box with a built-in, native PHD2, so there is nothing to install for basic guiding.",
       "items": [
         {
@@ -354,6 +370,8 @@
     },
     {
       "name": "Post-processing",
+      "icon": "wand",
+      "color": "#ec4899",
       "intro": "Detected at startup via the binary locator. Polaris grays out the matching STUDIO buttons when missing.",
       "items": [
         {
@@ -376,6 +394,8 @@
     },
     {
       "name": "Simulators (no hardware)",
+      "icon": "beaker",
+      "color": "#8b5cf6",
       "intro": "Test the whole pipeline without a scope. Settings then Equipment simulator detects the install and spawns the stack with one click.",
       "items": [
         {
@@ -398,6 +418,8 @@
     },
     {
       "name": "More integrations",
+      "icon": "puzzle",
+      "color": "#06b6d4",
       "intro": "Extra conveniences, all optional.",
       "items": [
         {

@@ -279,6 +279,8 @@ export default defineConfig({
             fields: [
               { type: 'string', name: 'name', label: 'Name' },
               { type: 'string', name: 'badge', label: 'Badge' },
+              { type: 'string', name: 'icon', label: 'Icon (chip, terminal, windows, container, code)' },
+              { type: 'string', name: 'color', label: 'Icon accent color (hex)' },
               { type: 'string', name: 'summary', label: 'Summary', ui: { component: 'textarea' } },
               { type: 'string', name: 'steps', label: 'Install commands', ui: { component: 'textarea' } },
               { type: 'string', name: 'notes', label: 'Notes', ui: { component: 'textarea' } },
@@ -313,6 +315,8 @@ export default defineConfig({
             ui: { itemProps: (i) => ({ label: i?.name }) },
             fields: [
               { type: 'string', name: 'name', label: 'Group name' },
+              { type: 'string', name: 'icon', label: 'Icon (plug, target, signal, wand, beaker, puzzle)' },
+              { type: 'string', name: 'color', label: 'Icon accent color (hex)' },
               { type: 'string', name: 'intro', label: 'Intro', ui: { component: 'textarea' } },
               {
                 type: 'object',
