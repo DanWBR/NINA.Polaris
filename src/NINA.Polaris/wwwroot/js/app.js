@@ -5298,6 +5298,7 @@ function ninaApp() {
                 // when known. Default to Live for legacy callers.
                 const targets = this._canvasIdsForFrameKind(frameKind);
                 let drewAny = false;
+                let firstDrawn = null;
                 for (const id of targets) {
                     const canvas = document.getElementById(id);
                     if (!canvas) continue;
@@ -5317,6 +5318,7 @@ function ninaApp() {
                     ctx.imageSmoothingEnabled = true;
                     ctx.imageSmoothingQuality = 'high';
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    if (!firstDrawn) firstDrawn = canvas;
                     drewAny = true;
                 }
                 URL.revokeObjectURL(url);
@@ -5327,6 +5329,12 @@ function ninaApp() {
                     // mirror path so the latest frame is ready when the
                     // user switches tabs.
                     this._mirrorLiveToPreviewCanvas();
+                    // JPEG frames carry no raw pixel buffer, so the normal
+                    // _lastRawFrame-based histogram can't see them — the
+                    // colour OSC live stack is broadcast as a rendered JPEG.
+                    // Feed the histogram from the decoded canvas instead so
+                    // it tracks the stack instead of going stale.
+                    this._drawCanvasHistogram(firstDrawn);
                 }
             };
             img.onerror = () => URL.revokeObjectURL(url);
@@ -5685,6 +5693,65 @@ function ninaApp() {
                 marker(this.histo.blackFrac, 'rgba(255,255,255,0.55)');
                 marker(this.histo.whiteFrac, 'rgba(255,255,255,0.55)');
             } catch (e) { /* canvas not ready / context lost — ignore */ }
+        },
+
+        // Histogram for JPEG frames (the colour OSC live stack, which the
+        // server broadcasts already rendered — there's no raw pixel buffer
+        // for _ensureHistogram to read). Computes a 256-bin luminance
+        // histogram directly from the decoded canvas and draws bars onto the
+        // tab's histo canvas. No black/white handles: the stack is already
+        // stretched server-side, so the manual stretch markers don't apply.
+        _drawCanvasHistogram(srcCanvas) {
+            try {
+                const t = this.tab;
+                if (t !== 'live' && t !== 'preview' && t !== 'sequence') return;
+                if (!srcCanvas || !srcCanvas.width || !srcCanvas.height) return;
+                const cv = document.getElementById(this._histoCanvasId());
+                if (!cv) return;
+                const rect = cv.getBoundingClientRect();
+                if (rect.width < 2 || rect.height < 2) return;
+
+                let data;
+                try {
+                    const sctx = srcCanvas.getContext('2d');
+                    data = sctx.getImageData(0, 0, srcCanvas.width, srcCanvas.height).data;
+                } catch (e) { return; }  // tainted/empty canvas
+
+                const NB = 256;
+                const bins = new Float64Array(NB);
+                const npx = (data.length / 4) | 0;
+                const step = Math.max(1, Math.floor(npx / 150000)); // subsample
+                let peak = 1;
+                for (let i = 0; i < npx; i += step) {
+                    const o = i * 4;
+                    const v = (data[o] * 0.299 + data[o + 1] * 0.587 + data[o + 2] * 0.114) | 0;
+                    const b = v < 0 ? 0 : v > 255 ? 255 : v;
+                    bins[b]++;
+                }
+                for (let i = 0; i < NB; i++) if (bins[i] > peak) peak = bins[i];
+                const logPeak = Math.log1p(peak) || 1;
+
+                const dpr = window.devicePixelRatio || 1;
+                const w = Math.round(rect.width), h = Math.round(rect.height);
+                if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+                    cv.width = Math.round(w * dpr);
+                    cv.height = Math.round(h * dpr);
+                }
+                const ctx = cv.getContext('2d');
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                ctx.clearRect(0, 0, w, h);
+                const barW = Math.max(1, w / NB);
+                ctx.fillStyle = 'rgba(150,180,220,0.8)';
+                for (let b = 0; b < NB; b++) {
+                    const x = (b / NB) * w;
+                    const bh = (Math.log1p(bins[b]) / logPeak) * (h - 1);
+                    ctx.fillRect(x, h - bh, barW, bh);
+                }
+                const xm = 0.5 * w;
+                ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+                ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.moveTo(xm, 0); ctx.lineTo(xm, h); ctx.stroke();
+            } catch (e) { /* ignore */ }
         },
 
         // Handle X position (%) within the drawn range, for the draggable
@@ -21250,7 +21317,15 @@ function ninaApp() {
                 this.phd2SelectedProfileId = parseInt(id);
                 this.toast('PHD2 profile switched', 'ok');
                 // Equipment is disconnected by SetProfileAsync, refresh
-                await this.fetchPhd2EquipmentConnected();
+                // the connected flag AND the per-profile settings so the
+                // panel fields mirror the running PHD2's new profile.
+                await Promise.allSettled([
+                    this.fetchPhd2EquipmentConnected(),
+                    this.fetchPhd2Exposure(),
+                    this.fetchPhd2DecMode(),
+                    this.loadPhd2AlgoPresets(),
+                    this.loadPhd2AlgoParams()
+                ]);
             } catch (e) { this.toast('Profile switch failed: ' + e.message, 'error'); }
         },
 

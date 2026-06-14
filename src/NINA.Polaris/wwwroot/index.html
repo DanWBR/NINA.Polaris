@@ -3984,7 +3984,7 @@
 
                 <!-- Single-row control bar, pinned to the bottom of the panel. -->
                 <div class="guide-bottombar" x-show="guider.connected">
-                    <label class="gb-field">Exp (s)<select
+                    <label class="gb-field" x-show="guider.backend === 'native'">Exp (s)<select
                                x-model.number="guideExp"
                                @change="setGuideExposure(guideExp)"
                                title="Guide-camera exposure per frame">
@@ -13389,7 +13389,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260613-dsothumbs"></script>
+    <script src="/js/app.js?v=20260613-fieldfix2"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
