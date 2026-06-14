@@ -204,12 +204,17 @@ public class PolarAlignmentService {
                 // 3. Sliding-window: evict oldest baseline point, append
                 //    the fresh one. Re-index so they read 0/1/2 in
                 //    order for the UI table.
+                // Precess J2000 solve → of-date, same as the TPPA path, so
+                // refine points share the frame of the carried-over baseline.
+                var refUtc = DateTime.UtcNow;
+                var (refRa, refDec) = PolarAlignmentMath.PrecessJ2000ToDate(
+                    solve.RaHours, solve.DecDeg, refUtc);
                 var newPoint = new PolarPoint(
                     Index: 2,
-                    RaHours: solve.RaHours,
-                    DecDeg: solve.DecDeg,
+                    RaHours: refRa,
+                    DecDeg: refDec,
                     RotationDeg: solve.RotationDeg,
-                    AtUtc: DateTime.UtcNow);
+                    AtUtc: refUtc);
                 if (job.Points.Count >= 3) {
                     job.Points.RemoveAt(0);
                 }
@@ -365,12 +370,21 @@ public class PolarAlignmentService {
                     return;
                 }
 
+                // ASTAP solves in J2000; the polar-axis fit works in the
+                // of-date Alt/Az frame (LST-based), so precess the solved
+                // coords to the equinox of date before storing the point —
+                // otherwise the whole 3-point set is biased by ~0.35° of
+                // accumulated precession and the reported polar error is
+                // systematically wrong.
+                var ptUtc = DateTime.UtcNow;
+                var (raDate, decDate) = PolarAlignmentMath.PrecessJ2000ToDate(
+                    result.RaHours, result.DecDeg, ptUtc);
                 job.Points.Add(new PolarPoint(
                     Index: i,
-                    RaHours: result.RaHours,
-                    DecDeg: result.DecDeg,
+                    RaHours: raDate,
+                    DecDeg: decDate,
                     RotationDeg: result.RotationDeg,
-                    AtUtc: DateTime.UtcNow));
+                    AtUtc: ptUtc));
 
                 // Force a WS push so the UI's "Point N of 3 solved"
                 // ticker updates immediately instead of waiting for the
@@ -658,7 +672,16 @@ public class PolarAlignmentService {
                 SetPhase(job, PolarAlignmentPhase.RudimentarySlewing);
                 _notify.Push("info",
                     $"Rudimentary align: slewing to {(job.TargetName ?? "target")}", 2500);
-                await telescope.SlewAsync(job.TargetRaHours.Value, job.TargetDecDeg.Value, ct);
+                // Targets come from the catalog in J2000; INDI's
+                // EQUATORIAL_EOD_COORD is of-date (JNow). Slewing the raw
+                // J2000 numbers points the mount ~0.35° off, which the
+                // single-target error would then misread as polar error
+                // that never zeroes out. Precess to date for the slew.
+                // (The error math still compares J2000 target vs J2000
+                // solve, where the epoch offset cancels.)
+                var (slewRa, slewDec) = PolarAlignmentMath.PrecessJ2000ToDate(
+                    job.TargetRaHours.Value, job.TargetDecDeg.Value, DateTime.UtcNow);
+                await telescope.SlewAsync(slewRa, slewDec, ct);
                 // Same fix as TPPA: block until the mount actually arrives,
                 // not just until the slew command is acknowledged, or we
                 // capture + solve mid-slew at the wrong pointing.

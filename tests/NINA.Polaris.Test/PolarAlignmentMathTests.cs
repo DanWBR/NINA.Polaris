@@ -294,6 +294,32 @@ public class PolarAlignmentMathTests {
         return (raHours, decRad * 180.0 / Math.PI);
     }
 
+    // ---- Precession (J2000 -> date) -----------------------------------
+
+    [Test]
+    public void PrecessJ2000ToDate_AtJ2000Epoch_IsIdentity() {
+        // J2000.0 = 2000-01-01 12:00 TT ≈ same UT for our purposes. At
+        // T=0 all precession angles vanish, so output == input.
+        var j2000 = new DateTime(2000, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var (ra, dec) = PolarAlignmentMath.PrecessJ2000ToDate(6.0, 60.0, j2000);
+        Assert.That(ra, Is.EqualTo(6.0).Within(1e-4));
+        Assert.That(dec, Is.EqualTo(60.0).Within(1e-4));
+    }
+
+    [Test]
+    public void PrecessJ2000ToDate_ShiftMagnitudeMatchesPrecessionRate() {
+        // ~26 years of precession ≈ 50.29"/yr along the ecliptic, which
+        // for a star away from the pole shows up as ~0.3–0.4° of total
+        // coordinate shift. Confirm the helper moves the point by that
+        // order of magnitude (catches a dropped term / wrong scale).
+        double ra0 = 6.0, dec0 = 20.0;
+        var date = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var (ra, dec) = PolarAlignmentMath.PrecessJ2000ToDate(ra0, dec0, date);
+        double sep = PolarAlignmentMath.AngularSeparationDeg(ra0, dec0, ra, dec);
+        Assert.That(sep, Is.GreaterThan(0.25).And.LessThan(0.45),
+            $"26 yr precession should be ~0.35°, got {sep:F3}°");
+    }
+
     // ---- RDPA-1: single-target polar error tests ----------------------
 
     [Test]

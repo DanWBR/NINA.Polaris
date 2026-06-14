@@ -176,6 +176,53 @@ public static class PolarAlignmentMath {
         return (azErrSec, altErrSec);
     }
 
+    /// <summary>
+    /// Precess equatorial coordinates from J2000.0 to the mean equator and
+    /// equinox of date (rigorous precession, Meeus "Astronomical Algorithms"
+    /// 2nd ed., ch. 21, eqs. 21.2–21.4).
+    ///
+    /// Why this is needed: plate solvers (ASTAP) return J2000, but the
+    /// Alt/Az transform here uses Local *Sidereal* Time of date. Feeding
+    /// J2000 coordinates straight in offsets every direction by the
+    /// accumulated precession since 2000 (~0.35° in 2026) — for a single
+    /// set of points compared against the true (of-date) pole, as TPPA
+    /// does, that becomes a real systematic polar-error bias far larger
+    /// than the arcminute alignment goal. So the caller must precess the
+    /// solved J2000 coordinates to date before building a PolarPoint.
+    ///
+    /// Nutation (≤17″) and aberration (≤20″) are intentionally omitted:
+    /// they're below the polar-alignment target and keep this routine
+    /// dependency-free (no SOFA/NOVAS in Polaris).
+    /// </summary>
+    public static (double raHours, double decDeg) PrecessJ2000ToDate(
+        double raHours, double decDeg, DateTime atUtc) {
+        double jd = atUtc.ToOADate() + 2415018.5;
+        double t = (jd - 2451545.0) / 36525.0;   // Julian centuries from J2000
+
+        // Accumulation angles, arcsec → radians. Starting epoch is J2000
+        // so the constant (T0-based) terms in Meeus 21.2 vanish.
+        const double asToRad = Math.PI / 180.0 / 3600.0;
+        double zeta = (2306.2181 * t + 0.30188 * t * t + 0.017998 * t * t * t) * asToRad;
+        double zed = (2306.2181 * t + 1.09468 * t * t + 0.018203 * t * t * t) * asToRad;
+        double theta = (2004.3109 * t - 0.42665 * t * t - 0.041833 * t * t * t) * asToRad;
+
+        double ra0 = raHours * 15.0 * Math.PI / 180.0;
+        double dec0 = decDeg * Math.PI / 180.0;
+
+        double A = Math.Cos(dec0) * Math.Sin(ra0 + zeta);
+        double B = Math.Cos(theta) * Math.Cos(dec0) * Math.Cos(ra0 + zeta)
+                 - Math.Sin(theta) * Math.Sin(dec0);
+        double C = Math.Sin(theta) * Math.Cos(dec0) * Math.Cos(ra0 + zeta)
+                 + Math.Cos(theta) * Math.Sin(dec0);
+
+        double ra = Math.Atan2(A, B) + zed;
+        double dec = Math.Asin(Math.Clamp(C, -1.0, 1.0));
+
+        double raH = ra * 180.0 / Math.PI / 15.0;
+        raH = ((raH % 24.0) + 24.0) % 24.0;
+        return (raH, dec * 180.0 / Math.PI);
+    }
+
     // ---------------------------------------------------------------
     // Internals
     // ---------------------------------------------------------------
