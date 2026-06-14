@@ -2244,6 +2244,13 @@ label select.input-sm {
     align-items: center;
     justify-content: center;
 }
+/* AUTORUN docks the histogram panel along the bottom of the frame, where
+   the image-adjust toolbar normally sits — they overlap. Move the toolbar
+   to the top-left corner here so both stay usable. */
+.autorun-preview .pz-toolbar {
+    bottom: auto;
+    top: 8px;
+}
 .pz-toolbar button:hover { background: rgba(255, 255, 255, 0.16); }
 .pz-toolbar button.pz-active {
     background: rgba(99, 102, 241, 0.25);
