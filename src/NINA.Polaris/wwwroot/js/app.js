@@ -2082,7 +2082,7 @@ function ninaApp() {
             this.stack.masterFlats = [];
             this.stack.masterBiases = [];
             this._stackPersist();
-            this.toast('Slots limpos', 'ok');
+            this.toast('Slots cleared', 'ok');
         },
 
         // Pretty short name from an absolute path (just the filename).
@@ -5026,9 +5026,9 @@ function ninaApp() {
             try {
                 await this.apiFetch('/api/logs/', { method: 'DELETE' });
                 this.logs.entries = [];
-                this.toast('Log do servidor limpo', 'ok');
+                this.toast('Server log cleared', 'ok');
             } catch (e) {
-                this.toast('Falha ao limpar log: ' + (e.message || ''), 'error');
+                this.toast('Failed to clear log: ' + (e.message || ''), 'error');
             }
         },
 

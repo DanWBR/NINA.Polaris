@@ -147,9 +147,9 @@ public static class PolarAlignmentMath {
         // 2. Decompose delta. Altitude is the easy axis (no
         //    cosine factor); azimuth has to be scaled by cos(alt)
         //    so 1" of azimuth at the zenith reads the same arcsec
-        //    magnitude as 1" near the horizon (otherwise alvos
-        //    altos reportariam erros az inflados que o usuário
-        //    não consegue ajustar fisicamente).
+        //    magnitude as 1" near the horizon (otherwise high-altitude
+        //    targets would report inflated az errors the user can't
+        //    physically adjust).
         double altErrDeg = solvedAltDeg - targetAltDeg;
         double azErrDeg = NormalizeAzDelta(solvedAzDeg - targetAzDeg);
 
