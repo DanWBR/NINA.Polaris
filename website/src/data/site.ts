@@ -26,6 +26,7 @@ export const navLinks = [
   { label: 'Benchmarks', href: '/#benchmarks' },
   { label: 'Get Started', href: '/getting-started' },
   { label: 'Download & Install', href: '/install' },
+  { label: 'Patreon ↗', href: site.patreon, external: true },
   { label: 'GitHub ↗', href: site.repo, external: true },
 ];
 
