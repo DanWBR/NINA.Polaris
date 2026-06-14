@@ -11788,6 +11788,19 @@ function ninaApp() {
                 ? this.solveRotationDeg
                 : (this.fov.rotationDeg || 0);
 
+            // The displayed/captured frame is vertically flipped on the
+            // client for cameras with the verticalFlipImage quirk (e.g.
+            // SV405CC), but the plate-solve rotation is measured on the raw
+            // (un-flipped) frame. So the FOV rectangles drew top-for-bottom
+            // vs what the operator sees in PREVIEW/LIVE. Pass the flip down
+            // so the bridge mirrors both overlays to match the display.
+            let flipV = false;
+            try {
+                const q = (this.cameraQuirks || []).find(
+                    c => c.cameraId === this.activeCameraIdForQuirks);
+                flipV = !!(q && q.verticalFlipImage);
+            } catch (e) { /* no quirks loaded yet */ }
+
             let mount = null;
             if (this.mount?.connected
                 && Number.isFinite(this.mount.ra)
@@ -11795,7 +11808,7 @@ function ninaApp() {
                 mount = {
                     raDeg: this.mount.ra * 15,
                     decDeg: this.mount.dec,
-                    widthDeg: w, heightDeg: h, rotationDeg: mountRot
+                    widthDeg: w, heightDeg: h, rotationDeg: mountRot, flipV: flipV
                 };
             }
 
@@ -11805,7 +11818,7 @@ function ninaApp() {
             // needed; the rectangle's "celestial position" IS the
             // current map centre, which the user is dragging around.
             const target = {
-                widthDeg: w, heightDeg: h, rotationDeg: targetRot
+                widthDeg: w, heightDeg: h, rotationDeg: targetRot, flipV: flipV
             };
 
             // Skip when nothing actually changed since last push.

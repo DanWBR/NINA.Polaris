@@ -437,7 +437,7 @@
     // Tangent-plane approximation is sufficient for camera-scale FOVs
     // (< 10°). Returns 5 [ra, dec] pairs (closed polygon — first ==
     // last per the GeoJSON spec).
-    function skyFovRect(raDeg, decDeg, wDeg, hDeg, rotDeg, segments) {
+    function skyFovRect(raDeg, decDeg, wDeg, hDeg, rotDeg, segments, flipV) {
         // True sensor footprint via INVERSE GNOMONIC (tangent-plane)
         // projection. The old code did ra = ra0 + x/cos(dec0) for every
         // corner, applying the centre's cos(dec) to the whole box -- which
@@ -459,6 +459,12 @@
         var sinD0 = Math.sin(dec0), cosD0 = Math.cos(dec0);
 
         function project(lx, ly) {
+            // verticalFlipImage rig quirk: the captured frame is shown
+            // mirrored top-for-bottom on the client, but the solve rotation
+            // is in raw-frame coords. Mirror the sensor's vertical axis so
+            // the drawn rectangle (footprint + label edge + crosshair)
+            // matches what the operator sees instead of being upside down.
+            if (flipV) ly = -ly;
             // rotate in the tangent plane, then to radians standard coords
             var xi = (lx * cosR - ly * sinR) * D2R;   // East (RA)
             var eta = (lx * sinR + ly * cosR) * D2R;  // North (Dec)
@@ -489,9 +495,10 @@
         var raDeg = centre.raDeg, decDeg = centre.decDeg;
         var w = centre.widthDeg, h = centre.heightDeg;
         var rot = centre.rotationDeg || 0;
+        var flipV = !!centre.flipV;
         // Sample each edge so a wide FOV's on-sky curvature renders smooth
         // (16 pts/edge); the crosshair lines below stay at 1 (just ends).
-        var ring = skyFovRect(raDeg, decDeg, w, h, rot, 16);
+        var ring = skyFovRect(raDeg, decDeg, w, h, rot, 16, flipV);
         // Engine geojson parser only knows: stroke, fill, stroke-width,
         // stroke-opacity, fill-opacity, stroke-glow. Plus title +
         // text-anchor + text-offset on Point features.
@@ -507,8 +514,8 @@
         // midpoint to edge midpoint, matching the rotation of the
         // rectangle. Built with the same tangent-plane helper so the
         // dec scaling stays consistent with the perimeter ring.
-        var crossH = skyFovRect(raDeg, decDeg, w, 0, rot);
-        var crossV = skyFovRect(raDeg, decDeg, 0, h, rot);
+        var crossH = skyFovRect(raDeg, decDeg, w, 0, rot, 1, flipV);
+        var crossV = skyFovRect(raDeg, decDeg, 0, h, rot, 1, flipV);
         var hLine = [crossH[0], crossH[1]];
         var vLine = [crossV[0], crossV[1]];
         var crossProps = {
@@ -716,7 +723,12 @@
         var rotDeg = cameraRollDeg + parallacticDeg;
         el.style.width = wPx + 'px';
         el.style.height = hPx + 'px';
-        el.style.transform = 'translate(-50%, -50%) rotate(' + rotDeg.toFixed(2) + 'deg)';
+        // verticalFlipImage: mirror the rectangle top-for-bottom (scaleY
+        // before rotate reverses the rotation sense too) so the red box
+        // matches the vertically-flipped captured frame, like the blue box.
+        var flipTf = target.flipV ? ' scaleY(-1)' : '';
+        el.style.transform = 'translate(-50%, -50%)' + flipTf
+            + ' rotate(' + rotDeg.toFixed(2) + 'deg)';
         el.style.display = 'block';
 
         // SWE-5: single combined label "Target — W°×H° — Rotation X°"
