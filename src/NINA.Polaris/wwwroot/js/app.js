@@ -18903,7 +18903,13 @@ function ninaApp() {
         // Use after the user installs Siril or changes the path override.
         async sirilRedetect() {
             try {
-                const r = await this.apiPost('/api/siril/redetect');
+                // apiPost resolves to the raw Response (apiGet parses JSON,
+                // apiPost does not). Parse here, otherwise r.available is
+                // undefined and redetect always reports "not found" even
+                // when the binary is present (it shows up fine at boot via
+                // apiGet /status).
+                const resp = await this.apiPost('/api/siril/redetect');
+                const r = await resp.json();
                 this.siril.status = {
                     available: r.available,
                     binaryPath: r.binaryPath,
@@ -19201,7 +19207,11 @@ function ninaApp() {
 
         async graxpertRedetect() {
             try {
-                const r = await this.apiPost('/api/graxpert/redetect');
+                // apiPost resolves to the raw Response, not parsed JSON —
+                // parse it, otherwise r.available is undefined and redetect
+                // always reports "not found" (boot detects fine via apiGet).
+                const resp = await this.apiPost('/api/graxpert/redetect');
+                const r = await resp.json();
                 this.graxpert.status = r;
                 this.toast(r.available
                     ? 'GraXpert detected: v' + (r.version || '?')
