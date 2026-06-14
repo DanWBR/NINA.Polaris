@@ -32,6 +32,23 @@ namespace NINA.Polaris.Endpoints;
 ///   - the studio-root mutator (writes through to ProfileService.Save)
 /// </summary>
 public static class FilesEndpoints {
+    // Field-safety: bound concurrent heavy image decodes. The FILES grid
+    // fires one /thumb (and /preview) per visible file at once; each FITS
+    // decode loads the WHOLE frame into RAM (a 3-channel OSC colour master
+    // is ~100 MB peak after the per-channel stretch). On a Raspberry Pi a
+    // directory of large FITS spawned N simultaneous decodes and OOM-froze
+    // the board (reported: opening FILES right after saving a live stack
+    // required a hard reboot). This gate caps concurrent decodes so peak
+    // memory stays bounded no matter how many thumbnails the browser asks
+    // for at once; the on-disk render cache makes repeat views cheap.
+    private static readonly SemaphoreSlim _renderGate = new(2, 2);
+
+    private static async Task<T> RenderGatedAsync<T>(Func<T> render, CancellationToken ct) {
+        await _renderGate.WaitAsync(ct);
+        try { return await Task.Run(render, ct); }
+        finally { _renderGate.Release(); }
+    }
+
     public static void MapFilesEndpoints(this WebApplication app) {
         var g = app.MapGroup("/api/files");
 
@@ -189,7 +206,7 @@ public static class FilesEndpoints {
                         // ASP.NET answers conditional GETs with 304.
                         var key = RenderCache.KeyForFile(full, "fits", max,
                             stretchRefFull, bayer);
-                        return await Task.Run(() => RenderCache.ServeCached(
+                        return await RenderGatedAsync(() => RenderCache.ServeCached(
                             ctx, key, "jpg", "image/jpeg",
                             () => FitsThumbnailer.RenderJpegFromPath(full,
                                     maxDim: max, quality: 90,
@@ -208,7 +225,7 @@ public static class FilesEndpoints {
                     case PreviewKind.TiffDecode: {
                         var key = RenderCache.KeyForFile(full, "tiff", max);
                         try {
-                            return await Task.Run(() => RenderCache.ServeCached(
+                            return await RenderGatedAsync(() => RenderCache.ServeCached(
                                 ctx, key, "png", "image/png",
                                 () => DecodeRasterToPng(full, max)
                                       ?? throw new RenderFailedException()), ct);
@@ -398,11 +415,11 @@ public static class FilesEndpoints {
                 }
 
                 byte[]? jpeg = kind switch {
-                    PreviewKind.Fits             => await Task.Run(()
+                    PreviewKind.Fits             => await RenderGatedAsync(()
                         => FitsThumbnailer.RenderJpegFromPath(full, 256, 80), ct),
-                    PreviewKind.RasterPassthrough => await Task.Run(()
+                    PreviewKind.RasterPassthrough => await RenderGatedAsync(()
                         => DecodeRasterToJpeg(full, 256), ct),
-                    PreviewKind.TiffDecode       => await Task.Run(()
+                    PreviewKind.TiffDecode       => await RenderGatedAsync(()
                         => DecodeRasterToJpeg(full, 256), ct),
                     _ => null
                 };
