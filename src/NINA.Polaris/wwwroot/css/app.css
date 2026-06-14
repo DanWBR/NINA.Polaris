@@ -973,7 +973,8 @@ body {
 
 /* Histogram docked inside the AUTORUN frame panel, bottom edge, instead
    of a full-window-width strip. Translucent so the frame shows through. */
-.autorun-preview .histo-panel.autorun-histo {
+.autorun-preview .histo-panel.autorun-histo,
+.preview-area .histo-panel.histo-overlay {
     position: absolute;
     left: 8px;
     right: 8px;
@@ -2250,6 +2251,15 @@ label select.input-sm {
 .autorun-preview .pz-toolbar {
     bottom: auto;
     top: 8px;
+}
+/* LIVE: the histogram now overlays the bottom of the frame and the
+   star/crosshair/grid cluster (.preview-overlay-controls) sits top-LEFT,
+   so move the image-adjust toolbar to the top-RIGHT corner to avoid both. */
+.live-pane .pz-toolbar {
+    top: 8px;
+    right: 8px;
+    left: auto;
+    bottom: auto;
 }
 .pz-toolbar button:hover { background: rgba(255, 255, 255, 0.16); }
 .pz-toolbar button.pz-active {
