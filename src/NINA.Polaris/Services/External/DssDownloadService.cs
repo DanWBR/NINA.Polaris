@@ -169,8 +169,15 @@ public sealed class DssDownloadService {
             }
 
             // Root metadata first (cheap, makes the survey self-describing).
+            // Force these into the WRITABLE dir even if the bundled baseline
+            // already has a copy: the sky engine decides LOCAL-vs-remote by
+            // probing <dss>/properties, and the writable dir is served with
+            // priority. If properties only lived in the (maybe-not-shipped)
+            // bundle, an offline Pi could silently fall back to remote CDS and
+            // render nothing. A guaranteed local properties makes the offline
+            // path deterministic.
             foreach (var meta in new[] { "properties", "Moc.fits" }) {
-                await FetchAsync($"{Remote}/{meta}", Path.Combine(_dssDir, meta), ct);
+                await FetchAsync($"{Remote}/{meta}", Path.Combine(_dssDir, meta), ct, forceLocal: true);
             }
 
             using var gate = new SemaphoreSlim(8);
@@ -224,13 +231,18 @@ public sealed class DssDownloadService {
     //         bundled wwwroot baseline — so we never re-download orders 0-3).
     // Missing = upstream 404 / empty (sparse survey — normal, not fatal).
     // Error = network/IO failure (the caller treats a run of these as fatal).
-    private async Task<FetchResult> FetchAsync(string url, string outPath, CancellationToken ct) {
+    private async Task<FetchResult> FetchAsync(string url, string outPath, CancellationToken ct,
+            bool forceLocal = false) {
         try {
             if (File.Exists(outPath) && new FileInfo(outPath).Length > 0) return FetchResult.Ok;
-            // Already shipped in the read-only baseline? Don't re-fetch it.
-            var rel = Path.GetRelativePath(_dssDir, outPath);
-            var bundled = Path.Combine(_bundledDir, rel);
-            if (File.Exists(bundled) && new FileInfo(bundled).Length > 0) return FetchResult.Ok;
+            // Already shipped in the read-only baseline? Don't re-fetch it —
+            // unless forceLocal, used for the survey metadata that MUST exist
+            // in the writable dir for the engine's local-source probe.
+            if (!forceLocal) {
+                var rel = Path.GetRelativePath(_dssDir, outPath);
+                var bundled = Path.Combine(_bundledDir, rel);
+                if (File.Exists(bundled) && new FileInfo(bundled).Length > 0) return FetchResult.Ok;
+            }
             Directory.CreateDirectory(Path.GetDirectoryName(outPath)!);
             using var resp = await Http.GetAsync(url, ct);
             if (resp.StatusCode == HttpStatusCode.NotFound) return FetchResult.Missing;

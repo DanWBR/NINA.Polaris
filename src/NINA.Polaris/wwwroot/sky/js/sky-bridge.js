@@ -1468,17 +1468,39 @@
                     try {
                         var LOCAL_DSS = SKYDATA_BASE + 'surveys/dss';
                         var REMOTE_DSS = 'https://alasky.cds.unistra.fr/DSS/DSSColor';
-                        fetch(LOCAL_DSS + '/properties', { method: 'GET' })
-                            .then(function (r) { return r && r.ok ? LOCAL_DSS : REMOTE_DSS; })
-                            .catch(function () { return REMOTE_DSS; })
-                            .then(function (url) {
-                                try {
-                                    core.dss.addDataSource({ url: url });
-                                    core.dss.visible = true;
-                                    console.log('[Sky] DSS source: '
-                                        + (url === LOCAL_DSS ? 'LOCAL bundle' : 'remote CDS'));
-                                } catch (e) { console.warn('[Sky] DSS register failed:', e); }
-                            });
+                        // REMOTE-FIRST. The CDS HiPS serves EVERY order, so
+                        // zoom keeps resolving real detail. The LOCAL bundle
+                        // only holds the orders the operator downloaded
+                        // (coarse), so preferring it caps detail whenever a
+                        // connection exists — the "blotches when zoomed out,
+                        // nothing when zoomed in" symptom, since the local
+                        // pyramid simply has no high-order tiles. So: probe
+                        // CDS (short timeout); use it when reachable, and fall
+                        // back to the local bundle only when CDS can't be
+                        // reached (true offline at the scope).
+                        var probeRemote = function () {
+                            return Promise.race([
+                                fetch(REMOTE_DSS + '/properties',
+                                      { method: 'GET', cache: 'no-store', mode: 'cors' })
+                                    .then(function (r) { return !!(r && r.ok); })
+                                    .catch(function () { return false; }),
+                                new Promise(function (res) { setTimeout(function () { res(false); }, 3500); })
+                            ]);
+                        };
+                        probeRemote().then(function (remoteOk) {
+                            if (remoteOk) return REMOTE_DSS;
+                            // CDS unreachable: use the local bundle if present.
+                            return fetch(LOCAL_DSS + '/properties', { method: 'GET' })
+                                .then(function (r) { return r && r.ok ? LOCAL_DSS : REMOTE_DSS; })
+                                .catch(function () { return REMOTE_DSS; });
+                        }).then(function (url) {
+                            try {
+                                core.dss.addDataSource({ url: url });
+                                core.dss.visible = true;
+                                console.log('[Sky] DSS source: '
+                                    + (url === LOCAL_DSS ? 'LOCAL bundle (CDS unreachable)' : 'remote CDS'));
+                            } catch (e) { console.warn('[Sky] DSS register failed:', e); }
+                        });
                     } catch (dssOuter) {
                         console.warn('[Sky] DSS probe failed:', dssOuter);
                     }
