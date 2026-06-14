@@ -5504,6 +5504,71 @@ function ninaApp() {
             };
         },
 
+        // Median/MAD black point + scale for ONE channel's sample array.
+        // Same "median - 3*MAD shadow, white = maxVal" rule the global
+        // auto-stretch (_computeStretchParams) uses, factored out so the
+        // per-channel OSC path can reuse it. Midtone is intentionally NOT
+        // returned: the shader shares a single u_mtf across channels, so
+        // only the per-channel shadow + scale differ.
+        _autoStretchEndpoints(sampleArr, maxVal) {
+            if (!sampleArr || sampleArr.length === 0) {
+                return { shadow: 0, scale: maxVal > 0 ? 1.0 / maxVal : 1.0 };
+            }
+            const sorted = Float32Array.from(sampleArr).sort();
+            const median = sorted[Math.floor(sorted.length * 0.5)];
+            const devs = Float32Array.from(sorted, v => Math.abs(v - median)).sort();
+            const mad = devs[Math.floor(devs.length * 0.5)];
+            const shadow = Math.max(0, median - 3.0 * mad);
+            const scale = maxVal > shadow ? 1.0 / (maxVal - shadow) : 1.0;
+            return { shadow, scale };
+        },
+
+        // Per-channel auto-stretch for an OSC (Bayer) frame: sample the
+        // raw mosaic into R / G / B buckets and compute an independent
+        // shadow + scale for each. This is the client mirror of the
+        // server-side colour live stack, which stretches every channel
+        // against its own histogram so the background neutralises by
+        // construction (no residual blue cast, no need for WB gains).
+        // Returns { r:{shadow,scale}, g, b } or null when the frame isn't
+        // colour / has no usable signal (caller falls back to the single
+        // global stretch). The 2x2 super-pixel walk + zero-cell skip
+        // mirrors _computeAutoWB so the two stay consistent.
+        _computePerChannelStretch(pixels, width, height, bayerPattern, maxVal) {
+            if (!bayerPattern || bayerPattern < 1 || bayerPattern > 4) return null;
+            if (!pixels || width < 4 || height < 4) return null;
+            const rArr = [], gArr = [], bArr = [];
+            // Target ~40k cells sampled per channel regardless of sensor
+            // size: stride over 2x2 Bayer cells.
+            const cells = Math.floor(width / 2) * Math.floor(height / 2);
+            const stride = Math.max(1, Math.floor(Math.sqrt(cells / 40000)));
+            const sat = maxVal;
+            const push = (arr, v) => { if (v > 0 && v < sat) arr.push(v); };
+            for (let y = 0; y + 1 < height; y += 2 * stride) {
+                for (let x = 0; x + 1 < width; x += 2 * stride) {
+                    const p00 = pixels[y * width + x];
+                    const p10 = pixels[y * width + x + 1];
+                    const p01 = pixels[(y + 1) * width + x];
+                    const p11 = pixels[(y + 1) * width + x + 1];
+                    // Skip pure-black cells (subframe edges / unfilled
+                    // accumulator) so a dark border can't drag a channel's
+                    // black point toward zero.
+                    if (p00 === 0 && p10 === 0 && p01 === 0 && p11 === 0) continue;
+                    switch (bayerPattern) {
+                        case 1: push(rArr, p00); push(gArr, p10); push(gArr, p01); push(bArr, p11); break; // RGGB
+                        case 2: push(bArr, p00); push(gArr, p10); push(gArr, p01); push(rArr, p11); break; // BGGR
+                        case 3: push(gArr, p00); push(bArr, p10); push(rArr, p01); push(gArr, p11); break; // GBRG
+                        case 4: push(gArr, p00); push(rArr, p10); push(bArr, p01); push(gArr, p11); break; // GRBG
+                    }
+                }
+            }
+            if (rArr.length === 0 || gArr.length === 0 || bArr.length === 0) return null;
+            return {
+                r: this._autoStretchEndpoints(rArr, maxVal),
+                g: this._autoStretchEndpoints(gArr, maxVal),
+                b: this._autoStretchEndpoints(bArr, maxVal)
+            };
+        },
+
         // Re-render the cached last frame with current stretch settings.
         // Called when sliders move + on tab/videoTab change via $watch.
         applyManualStretch() {
@@ -5511,6 +5576,16 @@ function ninaApp() {
             if (!f) return;
             const { shadow, scaleFactor, midtone } =
                 this._computeStretchParams(f.pixels, f.maxVal);
+            // Match _renderRawFrame: OSC frame + auto-stretch -> per-channel
+            // black point + scale so a tab switch / slider change re-renders
+            // with the same neutral-background colour, not the bluish global
+            // stretch.
+            let perChan = null;
+            const isColorFrame = (f.bayerPattern | 0) >= 1 && (f.bayerPattern | 0) <= 4;
+            if (isColorFrame && this.stretchAuto) {
+                perChan = this._computePerChannelStretch(
+                    f.pixels, f.width, f.height, f.bayerPattern, f.maxVal);
+            }
             // Pass the original frameKind so the re-render lands on
             // the SAME canvas the frame first painted into. Default
             // kind=0 here would silently shove PREVIEW snaps onto
@@ -5518,7 +5593,7 @@ function ninaApp() {
             // 'snap appears in LIVE too' regression after the kind
             // routing fix.
             this._tryRenderWebGL(f.pixels, f.width, f.height, f.bitDepth,
-                f.bayerPattern, shadow, scaleFactor, midtone, f.frameKind || 0);
+                f.bayerPattern, shadow, scaleFactor, midtone, f.frameKind || 0, perChan);
             // Keep the histogram mini-panel (handles + bars) in sync with the
             // stretch we just applied. Cheap: bins are cached per-frame.
             this.drawHistogram();
@@ -6038,8 +6113,6 @@ function ninaApp() {
                 uniform vec2 u_outSize;   // debayer output canvas size in pixels
                 uniform int u_cellStep;   // texels per output pixel along each axis (EVEN for color)
                 uniform int u_fullDebayer; // 1 = full-res bilinear demosaic, 0 = half-res superpixel
-                uniform float u_wbR;   // red channel gain  (default 1.7 for daylight OSC)
-                uniform float u_wbB;   // blue channel gain (default 1.5 for daylight OSC)
                 in vec2 v_uv;
                 out vec4 fragColor;
 
@@ -6071,6 +6144,20 @@ function ninaApp() {
                     ivec2 p = ivec2(uv * u_texSize);
                     p = clamp(p, ivec2(0), ivec2(u_texSize) - ivec2(1));
                     return float(texelFetch(u_tex, p, 0).r);
+                }
+
+                // Per-channel auto-stretch endpoints (OSC). Each colour
+                // channel gets its own shadow (background) + scale, mirroring
+                // the server-side colour live-stack (RenderJpegFromRgbPlanes),
+                // so the sky background neutralises per channel instead of
+                // relying on global stretch + fixed WB gains (which left a
+                // blue cast). Shared midtone (u_mtf).
+                uniform vec3 u_shadow3;
+                uniform vec3 u_scale3;
+                float stretchM(float v, float sh, float sc) {
+                    float n = clamp((v - sh) * sc, 0.0, 1.0);
+                    float denom = (2.0 * u_mtf - 1.0) * n - u_mtf;
+                    return ((u_mtf - 1.0) * n) / (denom - 1e-12);
                 }
 
                 float stretch(float v) {
@@ -6123,12 +6210,10 @@ function ninaApp() {
                         float r = cR > 0.0 ? sumR / cR : 0.0;
                         float g = cG > 0.0 ? sumG / cG : 0.0;
                         float b = cB > 0.0 ? sumB / cB : 0.0;
-                        float fr = stretch(r);
-                        float fg = stretch(g);
-                        float fb = stretch(b);
-                        fragColor = vec4(clamp(fr * u_wbR, 0.0, 1.0),
-                                         fg,
-                                         clamp(fb * u_wbB, 0.0, 1.0), 1.0);
+                        float fr = stretchM(r, u_shadow3.r, u_scale3.r);
+                        float fg = stretchM(g, u_shadow3.g, u_scale3.g);
+                        float fb = stretchM(b, u_shadow3.b, u_scale3.b);
+                        fragColor = vec4(fr, fg, fb, 1.0);
                         return;
                     }
                     // Half-resolution superpixel debayer. CRITICAL:
@@ -6163,25 +6248,21 @@ function ninaApp() {
                     else if (u_bayer == 2) { b = p00; g = 0.5 * (p10 + p01); r = p11; }   // BGGR
                     else if (u_bayer == 3) { g = 0.5 * (p00 + p11); b = p10; r = p01; }   // GBRG
                     else /* 4 GRBG */      { g = 0.5 * (p00 + p11); r = p10; b = p01; }
-                    // Stretch FIRST, then apply per-channel white
-                    // balance. Earlier this multiplied R and B by 1.7
-                    // / 1.5 before stretch, which on a near-uniform
-                    // bias / dark frame (all pixels at the noise floor
-                    // ~ADU 1024) pushed R and B above the auto-stretch
-                    // shadow point while G stayed at it -- result was
-                    // pure magenta noise instead of grey noise. By
-                    // stretching first we let the auto-stretch see the
-                    // raw signal and only colour-balance the normalised
-                    // output, which clamps cleanly to [0, 1]. Defaults
-                    // 1.7 / 1.5 still approximate daylight WB for OSC
-                    // sensors (ZWO ASI224/462/715, QHY5III678C, etc.)
-                    // when there IS real signal above the noise floor.
-                    float sr = stretch(r);
-                    float sg = stretch(g);
-                    float sb = stretch(b);
-                    fragColor = vec4(clamp(sr * u_wbR, 0.0, 1.0),
-                                     sg,
-                                     clamp(sb * u_wbB, 0.0, 1.0), 1.0);
+                    // Per-channel auto-stretch: each of R/G/B is
+                    // stretched against its OWN histogram (shadow +
+                    // scale), exactly like the server's OSC colour live
+                    // stack (FitsThumbnailer.RenderJpegFromRgbPlanes).
+                    // This neutralises the background by construction --
+                    // each channel's noise floor maps to ~0 -- so there
+                    // is no residual colour cast and no need for separate
+                    // white-balance gains (the old sr*u_wbR / sb*u_wbB
+                    // approach left a bluish background because a single
+                    // global stretch can't equalise three channels with
+                    // different black points).
+                    float fr = stretchM(r, u_shadow3.r, u_scale3.r);
+                    float fg = stretchM(g, u_shadow3.g, u_scale3.g);
+                    float fb = stretchM(b, u_shadow3.b, u_scale3.b);
+                    fragColor = vec4(fr, fg, fb, 1.0);
                 }`;
 
             const compile = (type, src) => {
@@ -6222,21 +6303,21 @@ function ninaApp() {
                 texSize: gl.getUniformLocation(prog, 'u_texSize'),
                 shadow: gl.getUniformLocation(prog, 'u_shadow'),
                 scale: gl.getUniformLocation(prog, 'u_scale'),
+                shadow3: gl.getUniformLocation(prog, 'u_shadow3'),
+                scale3: gl.getUniformLocation(prog, 'u_scale3'),
                 mtf: gl.getUniformLocation(prog, 'u_mtf'),
                 bayer: gl.getUniformLocation(prog, 'u_bayer'),
                 bayerOff: gl.getUniformLocation(prog, 'u_bayerOff'),
                 outSize: gl.getUniformLocation(prog, 'u_outSize'),
                 cellStep: gl.getUniformLocation(prog, 'u_cellStep'),
-                fullDebayer: gl.getUniformLocation(prog, 'u_fullDebayer'),
-                wbR: gl.getUniformLocation(prog, 'u_wbR'),
-                wbB: gl.getUniformLocation(prog, 'u_wbB')
+                fullDebayer: gl.getUniformLocation(prog, 'u_fullDebayer')
             };
             this._glTexture = gl.createTexture();
             console.info('WebGL2 renderer initialised');
             return true;
         },
 
-        _tryRenderWebGL(pixels, width, height, bitDepth, bayerPattern, shadow, scaleFactor, midtone, frameKind = 0) {
+        _tryRenderWebGL(pixels, width, height, bitDepth, bayerPattern, shadow, scaleFactor, midtone, frameKind = 0, perChan = null) {
             if (!this._initWebGL()) return false;
             const gl = this._gl;
             // GPU surface is an OFFSCREEN canvas, not the LIVE display.
@@ -6356,20 +6437,27 @@ function ninaApp() {
             gl.uniform2f(this._glLocs.outSize, canvas.width, canvas.height);
             gl.uniform1i(this._glLocs.cellStep, cellStep);
             gl.uniform1i(this._glLocs.fullDebayer, useFullDebayer ? 1 : 0);
-            // Per-channel WB gain. Defaults give a roughly neutral
-            // daylight look on raw OSC data; users can tune via the
-            // existing WB Red / WB Blue sliders in VIDEO (and soon
-            // in PREVIEW). Server-side WB writes via /api/camera/
-            // white-balance still happen too, these multipliers
-            // stack on top for client-side preview correction.
-            // Shared WB state (this.wb.{r,b}). previewWbR / previewWbB
-            // were the legacy fallback names — kept here as a final
-            // safety net so any legacy debug poke from the console
-            // still works, but the canonical source is wb.{r,b}.
-            gl.uniform1f(this._glLocs.wbR,
-                this.wb?.r ?? this.previewWbR ?? 1.7);
-            gl.uniform1f(this._glLocs.wbB,
-                this.wb?.b ?? this.previewWbB ?? 1.5);
+            // Per-channel auto-stretch endpoints for the OSC colour path
+            // (u_shadow3 / u_scale3, consumed by stretchM in the shader).
+            // When the caller supplies per-channel shadow/scale -- the
+            // auto-stretch path on a Bayer frame -- each R/G/B channel is
+            // stretched against its OWN black point + scale, exactly the
+            // philosophy the server uses for the colour live stack
+            // (FitsThumbnailer.RenderJpegFromRgbPlanes). That neutralises
+            // the sky background per channel and removes the bluish cast
+            // the old global-stretch-plus-WB-gains approach left behind.
+            // Otherwise (mono, manual stretch, or no per-channel data) we
+            // replicate the single global shadow/scale across all three so
+            // stretchM reduces to the same result as the old global stretch.
+            if (perChan && perChan.r && perChan.g && perChan.b) {
+                gl.uniform3f(this._glLocs.shadow3,
+                    perChan.r.shadow, perChan.g.shadow, perChan.b.shadow);
+                gl.uniform3f(this._glLocs.scale3,
+                    perChan.r.scale, perChan.g.scale, perChan.b.scale);
+            } else {
+                gl.uniform3f(this._glLocs.shadow3, shadow, shadow, shadow);
+                gl.uniform3f(this._glLocs.scale3, scaleFactor, scaleFactor, scaleFactor);
+            }
 
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
@@ -6931,9 +7019,20 @@ function ninaApp() {
             const { shadow, scaleFactor, midtone } =
                 this._computeStretchParams(pixels, maxVal);
 
+            // OSC colour: when auto-stretch is on, compute an independent
+            // black point + scale per Bayer channel so the GPU renders the
+            // same neutral-background colour the server's live stack does
+            // (fixes the bluish preview / autorun / autofocus cast). In
+            // manual mode the user's global endpoints apply to all channels.
+            let perChan = null;
+            const isColorFrame = (bayerPattern | 0) >= 1 && (bayerPattern | 0) <= 4;
+            if (isColorFrame && this.stretchAuto) {
+                perChan = this._computePerChannelStretch(pixels, width, height, bayerPattern, maxVal);
+            }
+
             // Try WebGL2 path first (GPU does debayer + stretch in microseconds)
             if (this._tryRenderWebGL(pixels, width, height, bitDepth,
-                    bayerPattern, shadow, scaleFactor, midtone, frameKind)) {
+                    bayerPattern, shadow, scaleFactor, midtone, frameKind, perChan)) {
                 this.drawHistogram();   // refresh the histogram mini-panel
                 return;
             }
