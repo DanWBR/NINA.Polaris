@@ -40,18 +40,33 @@ public sealed class DssDownloadService {
         Timeout = TimeSpan.FromSeconds(60)
     };
 
+    // Downloads land in a WRITABLE data directory (next to the profiles),
+    // never in the install's wwwroot — on a packaged install (.deb under
+    // /opt/polaris) wwwroot is root-owned/read-only, so writing there fails
+    // with UnauthorizedAccess. Program.cs serves this dir at the same request
+    // path the engine fetches (/sky/data/skydata/surveys/dss) with priority
+    // over the bundled baseline, so a downloaded tile is picked up live.
     private readonly string _dssDir;
+    // The read-only baseline shipped in wwwroot (HEALPix orders 0-3). Used to
+    // skip re-downloading bundled tiles and to report the installed order.
+    private readonly string _bundledDir;
     private readonly ILogger<DssDownloadService> _logger;
     private readonly object _lock = new();
 
     private CancellationTokenSource? _cts;
     private volatile DssDownloadStatus _status = new();
 
-    public DssDownloadService(IWebHostEnvironment env, ILogger<DssDownloadService> logger) {
+    public DssDownloadService(IWebHostEnvironment env, ProfileService profiles, ILogger<DssDownloadService> logger) {
         _logger = logger;
-        _dssDir = Path.Combine(env.WebRootPath ?? Directory.GetCurrentDirectory(),
+        _bundledDir = Path.Combine(env.WebRootPath ?? Directory.GetCurrentDirectory(),
             "sky", "data", "skydata", "surveys", "dss");
+        _dssDir = Path.Combine(profiles.DataDir, "sky", "dss");
     }
+
+    /// <summary>The writable directory downloaded DSS tiles are stored in;
+    /// Program.cs serves it at /sky/data/skydata/surveys/dss with priority
+    /// over the bundled baseline.</summary>
+    public string DownloadDir => _dssDir;
 
     /// <summary>12 * 4^order tiles per HEALPix order.</summary>
     private static long TilesAt(int order) => 12L * (long)Math.Pow(4, order);
@@ -66,13 +81,16 @@ public sealed class DssDownloadService {
     public int InstalledMaxOrder() {
         int max = -1;
         for (int o = 0; o <= 8; o++) {
-            var dir = Path.Combine(_dssDir, $"Norder{o}");
-            bool has = Directory.Exists(dir) &&
-                       Directory.EnumerateFiles(dir, "*.jpg", SearchOption.AllDirectories).Any();
+            bool has = HasTiles(Path.Combine(_dssDir, $"Norder{o}"))
+                    || HasTiles(Path.Combine(_bundledDir, $"Norder{o}"));
             if (has) max = o; else break;
         }
         return max;
     }
+
+    private static bool HasTiles(string dir) =>
+        Directory.Exists(dir) &&
+        Directory.EnumerateFiles(dir, "*.jpg", SearchOption.AllDirectories).Any();
 
     public DssDownloadStatus GetStatus() {
         var s = _status;
@@ -128,7 +146,8 @@ public sealed class DssDownloadService {
                 File.Delete(probe);
             } catch (Exception ex) {
                 Finish(0, 0, $"Sky data folder is not writable ({ex.GetType().Name}: {ex.Message}). "
-                    + "Run Polaris with write access to its wwwroot, or use scripts/fetch-stellarium-dss.sh.");
+                    + $"Polaris could not write to '{_dssDir}'. Check that the service user owns "
+                    + "its data directory, or use scripts/fetch-stellarium-dss.sh.");
                 return;
             }
 
@@ -201,12 +220,17 @@ public sealed class DssDownloadService {
         }
     }
 
-    // Ok    = downloaded now, or already present.
+    // Ok    = downloaded now, or already present (in the writable dir OR the
+    //         bundled wwwroot baseline — so we never re-download orders 0-3).
     // Missing = upstream 404 / empty (sparse survey — normal, not fatal).
     // Error = network/IO failure (the caller treats a run of these as fatal).
-    private static async Task<FetchResult> FetchAsync(string url, string outPath, CancellationToken ct) {
+    private async Task<FetchResult> FetchAsync(string url, string outPath, CancellationToken ct) {
         try {
             if (File.Exists(outPath) && new FileInfo(outPath).Length > 0) return FetchResult.Ok;
+            // Already shipped in the read-only baseline? Don't re-fetch it.
+            var rel = Path.GetRelativePath(_dssDir, outPath);
+            var bundled = Path.Combine(_bundledDir, rel);
+            if (File.Exists(bundled) && new FileInfo(bundled).Length > 0) return FetchResult.Ok;
             Directory.CreateDirectory(Path.GetDirectoryName(outPath)!);
             using var resp = await Http.GetAsync(url, ct);
             if (resp.StatusCode == HttpStatusCode.NotFound) return FetchResult.Missing;

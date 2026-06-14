@@ -564,6 +564,27 @@ contentTypes.Mappings[".gz"] = "application/octet-stream";
 // add a scoped ServeUnknownFileTypes pass below for the no-ext
 // `properties` files inside /sky/data/skydata/.
 contentTypes.Mappings[".eph"] = "application/octet-stream";
+
+// Downloaded DSS tiles (orders 4-5) live in a WRITABLE data dir, not in the
+// read-only install wwwroot. Serve that dir FIRST at the exact request path
+// the sky engine fetches, so a downloaded high-order tile wins; anything not
+// present there falls through to the bundled baseline (orders 0-3) in the
+// wwwroot passes below. Registered before the wwwroot static handlers so it
+// gets first crack at /sky/data/skydata/surveys/dss/*.
+try {
+    var dssDownload = app.Services.GetRequiredService<NINA.Polaris.Services.External.DssDownloadService>();
+    Directory.CreateDirectory(dssDownload.DownloadDir);   // PhysicalFileProvider needs an existing root
+    app.UseStaticFiles(new StaticFileOptions {
+        RequestPath = "/sky/data/skydata/surveys/dss",
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(dssDownload.DownloadDir),
+        OnPrepareResponse = ctx =>
+            ctx.Context.Response.Headers["Cache-Control"] = "public, max-age=604800"  // 7 days, like the bundled tiles
+    });
+} catch (Exception ex) {
+    app.Logger.LogWarning(ex, "Could not mount the writable DSS download directory; "
+        + "downloaded sky imagery won't be served (bundled baseline still works).");
+}
+
 app.UseStaticFiles(new StaticFileOptions {
     ContentTypeProvider = contentTypes,
     // Force the browser to revalidate every cached asset on every
