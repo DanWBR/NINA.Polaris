@@ -1,11 +1,20 @@
 ---
 import { benchmarks } from '../data/site';
+import FruitIcon from './FruitIcon.astro';
 
 // Highest score drives the relative score bars.
 const maxScore = Math.max(
   ...benchmarks.rows.map((r) => Number(String(r.score).replace(/[^\d.]/g, '')) || 0),
   1,
 );
+
+// Pick a fruit glyph from the device name.
+const fruitFor = (name: string): 'raspberry' | 'orange' | null => {
+  const t = (name || '').toLowerCase();
+  if (t.includes('raspberry')) return 'raspberry';
+  if (t.includes('orange')) return 'orange';
+  return null;
+};
 ---
 
 <section id="benchmarks" class="section section-alt">
@@ -32,6 +41,7 @@ const maxScore = Math.max(
             return (
               <tr class={r.highlight ? 'is-highlight' : ''}>
                 <td class="left device">
+                  {fruitFor(r.device) && <FruitIcon name={fruitFor(r.device)!} />}
                   {r.url ? (
                     <a href={r.url} target="_blank" rel="noopener">{r.device}</a>
                   ) : (

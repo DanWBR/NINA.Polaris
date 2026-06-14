@@ -2,7 +2,16 @@
 import Layout from '../layouts/Layout.astro';
 import Footer from '../components/Footer.astro';
 import Icon from '../components/Icon.astro';
+import FruitIcon from '../components/FruitIcon.astro';
 import { installGuide as g } from '../data/site';
+
+// Pick a fruit glyph from a board name.
+const fruitFor = (name: string): 'raspberry' | 'orange' | null => {
+  const t = (name || '').toLowerCase();
+  if (t.includes('raspberry')) return 'raspberry';
+  if (t.includes('orange')) return 'orange';
+  return null;
+};
 
 // Map a free-text status to a colour class for the requirements table.
 const statusClass = (s: string) => {
@@ -182,6 +191,7 @@ const statusClass = (s: string) => {
               {g.requirements.rows.map((r) => (
                 <tr class={r.highlight ? 'is-highlight' : ''}>
                   <td class="left rowlabel">
+                    {fruitFor(r.host) && <FruitIcon name={fruitFor(r.host)!} />}
                     {r.host}
                     {r.highlight && <span class="gpu-tag">GPU + NPU</span>}
                   </td>
