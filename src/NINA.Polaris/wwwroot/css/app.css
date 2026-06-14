@@ -2402,13 +2402,12 @@ label select.input-sm {
     touch-action: none;
     overscroll-behavior: contain;
 }
-/* The one interactive thing while locked. Centred near the top so it's
-   findable without covering the live view. */
+/* The one interactive thing while locked. Tucked into the bottom-left
+   corner so it never covers the framed image / live view. */
 .ui-lock-pill {
     position: absolute;
-    top: 14px;
-    left: 50%;
-    transform: translateX(-50%);
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    left: calc(14px + env(safe-area-inset-left, 0px));
     display: inline-flex;
     align-items: center;
     gap: 8px;
