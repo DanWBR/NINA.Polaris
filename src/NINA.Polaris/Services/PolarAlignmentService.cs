@@ -218,14 +218,32 @@ public class PolarAlignmentService {
                     job.Points[i] = job.Points[i] with { Index = i };
                 }
 
-                // 4. Recompute error.
+                // 4. Recompute error — but ONLY if the 3 points still span
+                //    a usable arc. Refinement captures at the current mount
+                //    position (no slew), so as the sliding window fills with
+                //    frames taken seconds apart the three directions collapse
+                //    onto each other; the small-circle cross-product then
+                //    degenerates and the error vector becomes pure noise.
+                //    Require a minimum pairwise separation (the TPPA baseline
+                //    used 30° steps; once any pair drops below ~2° the fit is
+                //    untrustworthy) and otherwise keep the last good value
+                //    plus surface a clear hint instead of broadcasting junk.
                 if (job.Points.Count == 3) {
-                    var (azErr, altErr) = PolarAlignmentMath.ComputeError(
-                        job.Points[0], job.Points[1], job.Points[2],
-                        userProfile.Latitude, userProfile.Longitude);
-                    job.AzErrorArcsec = azErr;
-                    job.AltErrorArcsec = altErr;
-                    job.TotalErrorArcsec = PolarAlignmentMath.TotalErrorArcsec(azErr, altErr);
+                    double minSepDeg = MinPairwiseSeparationDeg(job.Points);
+                    if (minSepDeg >= 2.0) {
+                        var (azErr, altErr) = PolarAlignmentMath.ComputeError(
+                            job.Points[0], job.Points[1], job.Points[2],
+                            userProfile.Latitude, userProfile.Longitude);
+                        job.AzErrorArcsec = azErr;
+                        job.AltErrorArcsec = altErr;
+                        job.TotalErrorArcsec = PolarAlignmentMath.TotalErrorArcsec(azErr, altErr);
+                        job.LastError = null;
+                    } else {
+                        // Window has collapsed — stop pretending we can refit.
+                        job.LastError =
+                            "Refine: tracking points have converged; re-run the 3-point " +
+                            "sweep (or use Rudimentary mode) to get a fresh error vector.";
+                    }
                 }
 
                 // 5. Push update + settle before next iteration.
@@ -299,6 +317,15 @@ public class PolarAlignmentService {
                 SetPhase(job, MovingPhaseFor(i));
                 _notify.Push("info", $"Polar align: slewing to point {i + 1}/3 (RA {targetRa:F3}h)", 2000);
                 await telescope.SlewAsync(targetRa, dec0, ct);
+
+                // CRITICAL: SlewAsync only waits for the driver to ACK the
+                // coord write (slew accepted/started), NOT for the mount to
+                // arrive. Without blocking on IsSlewing the capture below
+                // fires mid-slew — the frame is trailed and the plate solve
+                // fails or solves a position that isn't the intended RA,
+                // which silently corrupts the 3-point fit. Wait for arrival,
+                // THEN settle.
+                await WaitForSlewCompleteAsync(telescope, ct);
 
                 // Settle, mount stops shaking, INDI driver finishes
                 // emitting EQUATORIAL_EOD_COORD updates.
@@ -399,14 +426,21 @@ public class PolarAlignmentService {
     /// FITS regardless of outcome. Caller decides what to do with
     /// failures (retry / fail the job).</summary>
     private async Task<PlateSolveResult> SolveOnceAsync(
-        IImageData image, ITelescope telescope, CancellationToken ct) {
+        IImageData image, ITelescope? telescope, CancellationToken ct,
+        double? hintRaHours = null, double? hintDecDeg = null) {
         var path = WriteTempFits(image);
         try {
+            // RA hint in hours, Dec hint in degrees. Prefer an explicit
+            // hint (rudimentary mode passes the target, which is valid even
+            // when no mount is connected), then the live mount pointing,
+            // else leave null for a blind solve. Reading telescope.* when
+            // telescope is null would NRE — rudimentary manual-mount mode
+            // legitimately runs with no telescope connected.
+            double? hintRa = hintRaHours ?? (telescope != null ? telescope.RightAscension : null);
+            double? hintDec = hintDecDeg ?? (telescope != null ? telescope.Declination : null);
             var opts = new PlateSolveOptions {
-                // RA hint in hours, Dec hint in degrees. Helps every
-                // solver narrow the search, especially ASTAP.
-                HintRa = telescope.RightAscension,
-                HintDec = telescope.Declination,
+                HintRa = hintRa,
+                HintDec = hintDec,
                 SearchRadiusDeg = 30,
                 ScaleArcsecPerPixel = ComputePixelScaleHint(),
                 FovDeg = 0  // let the solver derive from pixel scale + image size
@@ -415,6 +449,41 @@ public class PolarAlignmentService {
         } finally {
             try { File.Delete(path); } catch { /* housekeeping */ }
         }
+    }
+
+    /// <summary>Block until the mount finishes slewing (IsSlewing clears)
+    /// or a timeout elapses. <see cref="ITelescope.SlewAsync"/> only waits
+    /// for the driver to acknowledge the coord write (slew accepted), not
+    /// for the mount to physically arrive — so every TPPA / rudimentary
+    /// capture has to gate on this first, otherwise it shoots a frame
+    /// while the mount is still moving. Mirrors
+    /// SlewCenterService.WaitForSlewComplete.</summary>
+    private async Task WaitForSlewCompleteAsync(ITelescope telescope, CancellationToken ct) {
+        // Give the driver a beat to raise EQUATORIAL_EOD_COORD to Busy so a
+        // stale Ok left over from before the slew isn't read as "already
+        // arrived" on the very first poll.
+        await Task.Delay(750, ct);
+        for (int i = 0; i < 300; i++) {   // up to ~5 min, then give up
+            ct.ThrowIfCancellationRequested();
+            if (!telescope.IsSlewing) return;
+            await Task.Delay(1000, ct);
+        }
+        _logger.LogWarning("Polar align: slew did not complete within 5 minutes; proceeding anyway");
+    }
+
+    /// <summary>Smallest great-circle separation (degrees) among any pair
+    /// of the supplied solved points. Used to detect a degenerate 3-point
+    /// set in refine mode before it poisons the small-circle fit.</summary>
+    private static double MinPairwiseSeparationDeg(IReadOnlyList<PolarPoint> pts) {
+        double min = double.MaxValue;
+        for (int i = 0; i < pts.Count; i++) {
+            for (int j = i + 1; j < pts.Count; j++) {
+                double sep = PolarAlignmentMath.AngularSeparationDeg(
+                    pts[i].RaHours, pts[i].DecDeg, pts[j].RaHours, pts[j].DecDeg);
+                if (sep < min) min = sep;
+            }
+        }
+        return min == double.MaxValue ? 0 : min;
     }
 
     private static PolarAlignmentPhase MovingPhaseFor(int index) => index switch {
@@ -590,6 +659,10 @@ public class PolarAlignmentService {
                 _notify.Push("info",
                     $"Rudimentary align: slewing to {(job.TargetName ?? "target")}", 2500);
                 await telescope.SlewAsync(job.TargetRaHours.Value, job.TargetDecDeg.Value, ct);
+                // Same fix as TPPA: block until the mount actually arrives,
+                // not just until the slew command is acknowledged, or we
+                // capture + solve mid-slew at the wrong pointing.
+                await WaitForSlewCompleteAsync(telescope, ct);
                 if (job.Options.SettleSeconds > 0) {
                     await Task.Delay(job.Options.SettleSeconds * 1000, ct);
                 }
@@ -608,7 +681,11 @@ public class PolarAlignmentService {
             // Plate solve, with one retry on doubled exposure (same
             // rescue TPPA uses for marginal star count on first try).
             SetPhase(job, PolarAlignmentPhase.RudimentarySolving);
-            var solve = await SolveOnceAsync(image, telescope!, ct);
+            // Hint with the TARGET coords (valid even on a manual mount with
+            // no telescope connected — passing telescope! here would NRE in
+            // SolveOnceAsync when reading RightAscension).
+            var solve = await SolveOnceAsync(image, telescope, ct,
+                hintRaHours: job.TargetRaHours, hintDecDeg: job.TargetDecDeg);
             if (!solve.Success) {
                 _logger.LogInformation(
                     "Rudimentary: first solve failed ({Err}), retrying with 2x exposure",
@@ -618,7 +695,8 @@ public class PolarAlignmentService {
                     new CaptureOptions(Gain: job.Options.Gain, ImageType: "POLAR"),
                     ct);
                 if (retry != null && retry.Properties.Width > 0) {
-                    solve = await SolveOnceAsync(retry, telescope!, ct);
+                    solve = await SolveOnceAsync(retry, telescope, ct,
+                        hintRaHours: job.TargetRaHours, hintDecDeg: job.TargetDecDeg);
                 }
             }
             if (!solve.Success) {

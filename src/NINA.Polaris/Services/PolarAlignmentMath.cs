@@ -97,6 +97,22 @@ public static class PolarAlignmentMath {
         return Math.Sqrt(azErrSec * azErrSec + altErrSec * altErrSec);
     }
 
+    /// <summary>Great-circle separation between two RA/Dec positions, in
+    /// degrees. Used to reject a degenerate 3-point set (points too close
+    /// together) before feeding them to <see cref="ComputeError"/> — three
+    /// near-coincident directions give a cross-product dominated by noise,
+    /// so the fitted axis (and the error vector) would be garbage.</summary>
+    public static double AngularSeparationDeg(
+        double ra1Hours, double dec1Deg, double ra2Hours, double dec2Deg) {
+        double ra1 = ra1Hours * 15.0 * Math.PI / 180.0;
+        double ra2 = ra2Hours * 15.0 * Math.PI / 180.0;
+        double d1 = dec1Deg * Math.PI / 180.0;
+        double d2 = dec2Deg * Math.PI / 180.0;
+        double cosSep = Math.Sin(d1) * Math.Sin(d2)
+                      + Math.Cos(d1) * Math.Cos(d2) * Math.Cos(ra1 - ra2);
+        return Math.Acos(Math.Clamp(cosSep, -1.0, 1.0)) * 180.0 / Math.PI;
+    }
+
     /// <summary>
     /// RDPA-1: single-target polar-error estimate. Used by the
     /// "rudimentary" alignment workflow: user slews to ONE known
