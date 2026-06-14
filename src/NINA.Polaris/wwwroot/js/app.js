@@ -4931,6 +4931,75 @@ function ninaApp() {
             document.body.removeChild(a);
         },
 
+        // Render one log entry as the same single-line text the panel shows
+        // (plus its stack trace, if any, on following lines). Shared by the
+        // copy-to-clipboard helpers so what you copy matches what you see.
+        _logLineText(e) {
+            const ts = (e.at || '').replace('T', ' ').slice(11, 23);
+            const lvl = (e.level || '').toUpperCase().padEnd(5).slice(0, 5);
+            let line = ts + ' [' + lvl + '] ' + (e.source || '') +
+                (e.category ? ' ' + e.category : '') +
+                ' ' + (e.message || '') +
+                (e.exceptionType ? ' :: ' + e.exceptionType + ': ' + (e.exceptionMsg || '') : '');
+            if (e.stackTrace) line += '\n' + e.stackTrace;
+            return line;
+        },
+
+        // Copy text to the clipboard, working around the live re-render that
+        // blows away a drag-selection and the fact that navigator.clipboard is
+        // unavailable on a plain-HTTP origin (e.g. http://polaris-pi.local:5000,
+        // not a secure context). Falls back to a hidden textarea + execCommand.
+        async _copyText(text) {
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(text);
+                    return true;
+                }
+            } catch { /* fall through to legacy path */ }
+            try {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.setAttribute('readonly', '');
+                ta.style.position = 'fixed';
+                ta.style.top = '-1000px';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                const ok = document.execCommand('copy');
+                document.body.removeChild(ta);
+                return ok;
+            } catch {
+                return false;
+            }
+        },
+
+        // Copy every entry currently shown (after level/source/search filters),
+        // oldest-first so it reads top-to-bottom like a log file.
+        async logCopyAll() {
+            const rows = this.logFiltered().slice().reverse();   // chronological
+            if (rows.length === 0) { this.toast('No log entries to copy', 'warn'); return; }
+            const text = rows.map(e => this._logLineText(e)).join('\n');
+            if (await this._copyText(text)) {
+                this.toast('Copied ' + rows.length + ' log line(s)', 'ok');
+            } else {
+                this.toast('Copy failed — use Export TXT instead', 'error');
+            }
+        },
+
+        // Tap/click a single row to copy just that line (handy on the tablet,
+        // where drag-selecting a live-updating panel is painful). If the user
+        // has an active text selection, leave it alone so manual select+copy
+        // still works on desktop.
+        async logCopyLine(e) {
+            const sel = window.getSelection && window.getSelection().toString();
+            if (sel && sel.trim().length > 0) return;
+            if (await this._copyText(this._logLineText(e))) {
+                this.toast('Line copied', 'ok', 1500);
+            } else {
+                this.toast('Copy failed', 'error');
+            }
+        },
+
         // DBGLOG-8: confirm + wipe the server ring buffer. Local cursor
         // intentionally NOT reset — subsequent WS ticks will see a
         // truncated:true flag and the panel UI can show "buffer cleared".

@@ -13191,6 +13191,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <input class="log-ctl" type="text" x-model="logs.searchText"
                        placeholder="Search…"
                        style="flex:1; min-width:140px;">
+                <button class="btn btn-sm" @click="logCopyAll()" title="Copy all visible log lines to the clipboard">Copy</button>
                 <button class="btn btn-sm" @click="logExport('jsonl')">Export JSONL</button>
                 <button class="btn btn-sm" @click="logExport('txt')">Export TXT</button>
                 <button class="btn btn-sm btn-danger" @click="logClear()">Clear</button>
@@ -13206,10 +13207,14 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                  align. Font dropped back to 13px after the 16px experiment
                  felt too large. -->
             <div class="log-panel-body" style="flex:1; overflow-y:scroll; font-family:var(--font-mono, monospace);
-                        font-size:13px; line-height:1.3; padding:4px 10px;">
+                        font-size:13px; line-height:1.3; padding:4px 10px;
+                        -webkit-user-select:text; user-select:text; cursor:text;">
                 <template x-for="e in logFiltered()" :key="e.id">
                     <div :class="'log-row log-' + e.level"
-                         style="padding:1px 0; border-bottom:1px solid rgba(255,255,255,0.04);">
+                         @click="logCopyLine(e)"
+                         title="Click to copy this line"
+                         style="padding:1px 0; border-bottom:1px solid rgba(255,255,255,0.04);
+                                cursor:pointer;">
                         <!-- Single-line summary. Splitting from the stack
                              trace below so x-text on this div doesn't
                              nuke the <pre> sibling. -->
@@ -13389,7 +13394,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260613-perchanstretch"></script>
+    <script src="/js/app.js?v=20260614-logcopy"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
