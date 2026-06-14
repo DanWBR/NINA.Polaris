@@ -168,6 +168,8 @@ export default defineConfig({
                   { type: 'string', name: 'device', label: 'Device' },
                   { type: 'string', name: 'badge', label: 'Badge (arch)' },
                   { type: 'string', name: 'url', label: 'Download URL (empty = Coming soon)' },
+                  { type: 'string', name: 'os', label: 'Base OS (optional)' },
+                  { type: 'string', name: 'polaris', label: 'Polaris version (optional)' },
                   { type: 'string', name: 'size', label: 'File size (optional)' },
                   { type: 'string', name: 'note', label: 'Note (optional)' },
                   {

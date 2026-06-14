@@ -69,20 +69,26 @@
         "device": "Raspberry Pi 4",
         "badge": "arm64",
         "url": "https://drive.google.com/uc?export=download&id=1z0mKVaDFnYPENUNlHShsQw6Bsu0KJWtv",
+        "os": "Raspberry Pi OS 64-bit (Debian Trixie)",
+        "polaris": "0.83.2 (2026-06-14)",
         "size": "7.1 GB (.7z)",
-        "note": "Raspberry Pi OS 64-bit (Debian Trixie, released 2026-04-21) with Polaris 0.83.2 (2026-06-14). 7-Zip archive; extract before flashing."
+        "note": "7-Zip archive; extract before flashing."
       },
       {
         "device": "Raspberry Pi 5",
         "badge": "arm64",
         "url": "https://drive.google.com/uc?export=download&id=1mIsdpXUVcCC_xjf5RTZst6jLtEE-my3u",
+        "os": "Raspberry Pi OS 64-bit (Debian Trixie)",
+        "polaris": "0.83.2 (2026-06-14)",
         "size": "8.64 GB (.7z)",
-        "note": "Raspberry Pi OS 64-bit (Debian Trixie, released 2026-04-21) with Polaris 0.83.2 (2026-06-14). 7-Zip archive; extract before flashing."
+        "note": "7-Zip archive; extract before flashing."
       },
       {
         "device": "Orange Pi 4 Pro",
         "badge": "arm64",
         "url": "",
+        "os": "",
+        "polaris": "",
         "size": "",
         "note": ""
       },
@@ -90,8 +96,10 @@
         "device": "Orange Pi 5 Pro",
         "badge": "arm64",
         "url": "https://drive.google.com/uc?export=download&id=1HnaqiXaOzcrnHBJ3kpuAicJvkI_eaZrP",
+        "os": "Armbian 26.8.0 KDE (Ubuntu 26.04, kernel 6.1.115)",
+        "polaris": "",
         "size": "7.51 GB (.7z)",
-        "note": "Armbian 26.8.0 KDE (Ubuntu 26.04, kernel 6.1.115). 7-Zip archive; extract before flashing.",
+        "note": "7-Zip archive; extract before flashing.",
         "gpu": "yes",
         "npu": "yes"
       },
@@ -99,6 +107,8 @@
         "device": "Radxa Dragon Q6A",
         "badge": "arm64",
         "url": "",
+        "os": "",
+        "polaris": "",
         "size": "",
         "note": ""
       },
@@ -106,6 +116,8 @@
         "device": "PC Stick",
         "badge": "x86-64",
         "url": "",
+        "os": "",
+        "polaris": "",
         "size": "",
         "note": "x86 board: flash to USB or write to the internal eMMC, not an SD card."
       }
