@@ -464,7 +464,10 @@ function ninaApp() {
             // serverEnabled mirrors the persisted Terminal:Enabled gate
             // (hydrated from /api/system/profile). enabling guards the
             // one-shot enable button while the POST is in flight.
-            serverEnabled: false, enabling: false
+            serverEnabled: false, enabling: false,
+            // modalOpen drives the floating terminal-window modal that the
+            // live xterm session renders into (Connect opens it).
+            modalOpen: false
         },
         _termInstance: null, _termSocket: null, _termFitAddon: null,
         _termResizeObserver: null,
@@ -4633,6 +4636,13 @@ function ninaApp() {
             this.term.connecting = true;
             this.term.lastError = '';
 
+            // Pop the terminal-window modal and let Alpine paint it before
+            // we mount xterm — the FitAddon needs the mount to have real
+            // dimensions, which it only does once the modal is displayed
+            // (x-show flips off display:none).
+            this.term.modalOpen = true;
+            await this.$nextTick();
+
             // Build xterm instance fresh on every Connect, recycling
             // across sessions leaks DOM state from the previous host.
             this._termInstance = new Terminal({
@@ -4730,6 +4740,13 @@ function ninaApp() {
             this._termCleanup();
             this.term.connected = false;
             this.term.connecting = false;
+        },
+
+        // Close the terminal-window modal. Ends the live session first so a
+        // dangling SSH socket isn't left open behind a hidden modal.
+        termCloseModal() {
+            if (this.term.connected || this.term.connecting) this.termDisconnect();
+            this.term.modalOpen = false;
         },
 
         _termCleanup() {

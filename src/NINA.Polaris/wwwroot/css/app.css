@@ -224,6 +224,91 @@ body {
     margin-top: 6px;
 }
 
+/* Remote-terminal modal — a floating window styled like a standard
+   terminal app. Backdrop dims the page; the window centres with a
+   title bar (traffic-light dots) over a dark xterm body. */
+.term-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+}
+.term-window {
+    display: flex;
+    flex-direction: column;
+    width: min(1000px, 96vw);
+    height: min(640px, 88vh);
+    background: #0b0f18;
+    border: 1px solid #2a3140;
+    border-radius: 10px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+}
+.term-window-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: linear-gradient(#202632, #171c26);
+    border-bottom: 1px solid #2a3140;
+    user-select: none;
+}
+.term-window-dots { display: inline-flex; gap: 7px; }
+.term-window-dots .twd {
+    width: 12px; height: 12px; border-radius: 50%;
+    display: inline-block;
+}
+.term-window-dots .twd-r { background: #ff5f57; }
+.term-window-dots .twd-y { background: #febc2e; }
+.term-window-dots .twd-g { background: #28c840; }
+.term-window-title {
+    flex: 1;
+    text-align: center;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    color: #aeb6c4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.term-window-ctrls { display: inline-flex; gap: 6px; }
+.term-window-btn {
+    width: 26px; height: 22px;
+    border: 1px solid #2a3140;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.05);
+    color: #cdd3de;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+}
+.term-window-btn:hover { background: rgba(255, 255, 255, 0.14); }
+.term-window-close:hover { background: #ff5f57; color: #fff; border-color: #ff5f57; }
+.term-window-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    background: #0b0f18;
+    padding: 8px;
+    overflow: hidden;
+}
+.term-window-footer {
+    flex: 0 0 auto;
+    padding: 6px 12px;
+    border-top: 1px solid #2a3140;
+    font-size: 12px;
+    background: #0c0c10;
+}
+@media (max-width: 640px) {
+    .term-modal-overlay { padding: 0; }
+    .term-window { width: 100vw; height: 100vh; border-radius: 0; border: 0; }
+}
+
 /* Two-column label + input grid used by the location section in
    Settings. Labels right-align against a fixed first column;
    inputs share a single fixed width in the second column so the

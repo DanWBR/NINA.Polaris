@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260614-settings3col">
+    <link rel="stylesheet" href="/css/app.css?v=20260614-termmodal">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -9637,23 +9637,23 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             Disable terminal
                         </button>
                     </div>
-                    <div class="term-actions" x-show="term.connected" x-cloak>
+                    <!-- The live session opens in a floating terminal-window
+                         modal (see #term-modal at the end of body); the card
+                         only hosts the connect form. A reopen affordance for a
+                         still-live session that the operator minimised away. -->
+                    <div class="term-actions" x-show="term.serverEnabled && term.connected && !term.modalOpen" x-cloak>
                         <span class="term-conn-info">
                             <span class="status-indicator-sm ok">connected</span>
                             <span x-text="term.user + '@' + term.host + ':' + term.port"></span>
                         </span>
+                        <button class="btn btn-sm" @click="term.modalOpen = true">Show terminal</button>
                         <button class="btn btn-sm btn-danger" @click="termDisconnect()">
                             Disconnect
                         </button>
                     </div>
                     <div class="term-error text-warn"
-                         x-show="term.lastError" x-cloak
+                         x-show="term.lastError && !term.modalOpen" x-cloak
                          x-text="term.lastError"></div>
-                    <!-- Live terminal, xterm.js mounts here. Hidden
-                         until we have a session so the page doesn't
-                         render an empty black box on first paint. -->
-                    <div class="term-mount" x-show="term.connected || term.lastError"
-                         x-cloak x-ref="termMount"></div>
                 </div>
 
                 <!-- INDI Server + INDI Status cards removed from Settings:
@@ -13286,6 +13286,39 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
+    <!-- Remote-terminal window. A floating modal styled like a standard
+         terminal app (title bar with traffic-light dots), the live xterm.js
+         session mounts into .term-window-body. Opened by termConnect();
+         the ✕ ends the session, the – minimises (keeps it alive, the card
+         shows "Show terminal"). Lives at body scope so the session survives
+         tab switches. -->
+    <div class="term-modal-overlay" x-show="term.modalOpen" x-cloak
+         @click.self="term.modalOpen = false">
+        <div class="term-window">
+            <div class="term-window-bar">
+                <span class="term-window-dots">
+                    <span class="twd twd-r"></span>
+                    <span class="twd twd-y"></span>
+                    <span class="twd twd-g"></span>
+                </span>
+                <span class="term-window-title"
+                      x-text="term.connecting ? 'Connecting…'
+                              : (term.connected ? (term.user + '@' + term.host + ':' + term.port)
+                              : (term.lastError ? 'Disconnected' : 'Terminal'))"></span>
+                <span class="term-window-ctrls">
+                    <button class="term-window-btn" title="Minimise (keep session)"
+                            @click="term.modalOpen = false">–</button>
+                    <button class="term-window-btn term-window-close"
+                            title="Close session" @click="termCloseModal()">✕</button>
+                </span>
+            </div>
+            <div class="term-window-body" x-ref="termMount"></div>
+            <div class="term-window-footer" x-show="term.lastError" x-cloak>
+                <span class="text-warn" x-text="term.lastError"></span>
+            </div>
+        </div>
+    </div>
+
     <!-- App-wide confirmation modal -- replaces native window.confirm()
          so OK/Cancel labels stay in English regardless of the
          browser's OS locale. Driven by the _confirmAsync() helper in
@@ -13426,7 +13459,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260614-terminal-disable"></script>
+    <script src="/js/app.js?v=20260614-termmodal"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
