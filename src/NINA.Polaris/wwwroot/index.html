@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260614-livehisto">
+    <link rel="stylesheet" href="/css/app.css?v=20260614-guideretract">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -3506,7 +3506,9 @@
                      backend !== 'native'; the PHD2-style view is gated to
                      backend === 'native'. -->
                 <div x-show="guideTab === 'control' || guideTab === 'native'" class="guide-shell">
-                <div class="guide-pane">
+                <div class="guide-pane"
+                     :class="{ 'guide-controls-collapsed': guideSideCollapsed,
+                               'guide-has-side': (guider.connected || guiderDriver === 'native') }">
                 <div class="guide-main">
 
                 <!-- "PHD2 not installed" banner -->
@@ -3744,7 +3746,15 @@
 
                 <!-- Right-side guiding parameters panel (native guider only),
                      mirrors the PREVIEW/LIVE side panel placement. -->
-                <div class="guide-side" x-show="guider.connected || guiderDriver === 'native'">
+                <div class="guide-side" :class="{ 'guide-side--collapsed': guideSideCollapsed }"
+                     x-show="guider.connected || guiderDriver === 'native'">
+                    <!-- Retract handle, same affordance as the LIVE/PREVIEW
+                         floating control panels (reuses .quick-controls-toggle). -->
+                    <button class="quick-controls-toggle"
+                            @click="toggleGuideSide()"
+                            :title="guideSideCollapsed ? 'Show guiding parameters' : 'Hide guiding parameters'"
+                            x-text="guideSideCollapsed ? '◀' : '▶'"></button>
+                    <div class="quick-controls-scroll">
                     <!-- Live metrics (moved from the main column) -->
                     <div x-show="guider.connected" class="guide-info" style="margin-bottom:10px">
                         <div class="info-row"><span>State:</span><strong x-text="guider.appState"></strong></div>
@@ -3983,6 +3993,7 @@
                         </label>
                     </div>
                     </div><!-- /native params -->
+                    </div><!-- /quick-controls-scroll -->
                 </div>
 
                 </div><!-- /guide-pane -->
@@ -13411,7 +13422,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260614-ptstrings"></script>
+    <script src="/js/app.js?v=20260614-guideretract"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

@@ -11615,10 +11615,24 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .tab-panel-guide { display:flex; flex-direction:column; min-height:0; }
 .guide-shell { display:flex; flex-direction:column; flex:1; min-height:0; }
 .guide-pane { display:flex; flex-direction:row; gap:12px; align-items:stretch;
-    flex:1; min-height:0; }
+    flex:1; min-height:0; position:relative; }
 .guide-main { flex:1; min-width:0; overflow-y:auto; }
-.guide-side { width:280px; flex:0 0 280px; background:#0a0a0c; border:1px solid #222;
-    border-radius:6px; padding:10px 12px; overflow-y:auto; }
+/* When the parameters panel is present it floats over the right edge of the
+   pane (same model as the LIVE/PREVIEW sidebars); the main column reserves
+   room for it so its content stays clear, and the reserve shrinks to just the
+   retract handle when collapsed. */
+.guide-pane.guide-has-side > .guide-main { margin-right:292px; /* 280 panel + 12 gap */
+    transition:margin-right 200ms ease; }
+.guide-pane.guide-has-side.guide-controls-collapsed > .guide-main { margin-right:36px; }
+.guide-side { position:absolute; right:0; top:0; bottom:0; width:280px; z-index:4;
+    display:flex; flex-direction:column; gap:8px;
+    /* padding-left reserves room for the full-height retract handle */
+    padding:10px 12px 10px 44px; overflow:hidden;
+    background:rgba(10,10,12,0.94); backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px); border:1px solid #222;
+    border-radius:6px; transition:transform 200ms ease; }
+/* Collapsed: slide off to the right leaving only the 28px handle visible. */
+.guide-side.guide-side--collapsed { transform:translateX(calc(100% - 28px)); }
 .guide-side-title { font-size:12px; color:#888; margin-bottom:8px;
     text-transform:uppercase; letter-spacing:.04em; }
 .guide-backend-radios { display:inline-flex; align-items:center; gap:10px;
@@ -11641,4 +11655,15 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .guide-bottombar .gb-check { display:flex; align-items:center; gap:5px; font-size:12px;
     color:#cdd3de; cursor:pointer; align-self:flex-end; padding-bottom:6px; }
 .guide-bottombar .gb-sep { width:1px; align-self:stretch; background:#222; margin:0 4px; }
-@media (max-width:900px){ .guide-pane { flex-direction:column; } .guide-side { width:auto; flex:none; } }
+@media (max-width:900px){
+    .guide-pane { flex-direction:column; }
+    /* Stacked layout: the panel docks below the main column in normal flow
+       instead of floating, so undo the desktop overlay positioning. */
+    .guide-pane.guide-has-side > .guide-main,
+    .guide-pane.guide-has-side.guide-controls-collapsed > .guide-main { margin-right:0; }
+    .guide-side { position:static; width:auto; flex:none; transform:none;
+        padding:10px 12px; overflow-y:auto; }
+    .guide-side.guide-side--collapsed { transform:none; }
+    /* The retract handle is meaningless in the stacked layout. */
+    .guide-side > .quick-controls-toggle { display:none; }
+}

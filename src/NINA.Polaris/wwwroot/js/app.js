@@ -88,6 +88,13 @@ function ninaApp() {
             try { return localStorage.getItem('polaris.quickControlsCollapsed') === '1'; }
             catch { return false; }
         })(),
+        // Retract state for the GUIDE tab's right-side parameters panel,
+        // mirroring quickControlsCollapsed for LIVE/PREVIEW. Persisted so the
+        // operator's choice survives reloads during a session.
+        guideSideCollapsed: (function() {
+            try { return localStorage.getItem('polaris.guideSideCollapsed') === '1'; }
+            catch { return false; }
+        })(),
         liveStackFrames: 0,
         // SNR-7: session-level target SNR override + ETA debounce
         // timer (PUT is fired ~400 ms after the user stops typing).
@@ -16303,6 +16310,16 @@ function ninaApp() {
             try {
                 localStorage.setItem('polaris.quickControlsCollapsed',
                     this.quickControlsCollapsed ? '1' : '0');
+            } catch { /* private-browsing / quota — silent */ }
+        },
+
+        // Retract the GUIDE tab's parameters panel (same UX as the LIVE/PREVIEW
+        // sidebars). Persisted so it stays collapsed across reloads.
+        toggleGuideSide() {
+            this.guideSideCollapsed = !this.guideSideCollapsed;
+            try {
+                localStorage.setItem('polaris.guideSideCollapsed',
+                    this.guideSideCollapsed ? '1' : '0');
             } catch { /* private-browsing / quota — silent */ }
         },
 
