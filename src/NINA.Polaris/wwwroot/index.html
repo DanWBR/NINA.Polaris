@@ -6171,6 +6171,13 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <input type="checkbox" x-model="skyDssVisible"
                                @change="_skyToggleDss()">
                         DSS imagery
+                        <span x-show="skyDssSourceActive" x-cloak
+                              x-text="skyDssSourceActive === 'local' ? '· offline' : '· online'"
+                              :style="'margin-left:4px; font-size:11px; opacity:0.7; color:' +
+                                      (skyDssSourceActive === 'local' ? '#4ade80' : '#60a5fa')"
+                              :title="skyDssSourceActive === 'local'
+                                  ? 'Using the downloaded offline tiles (CDS was unreachable at load)'
+                                  : 'Streaming from CDS Strasbourg (online)'"></span>
                     </label>
                     <label class="sky-autocenter-toggle"
                            title="When on, picking a target (click on the map, search hit, or Stellarium import) smoothly pans the map to the object. Turn off if you want to keep your current framing while inspecting picks.">
@@ -13399,7 +13406,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260614-nowline"></script>
+    <script src="/js/app.js?v=20260614-dsssrc"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

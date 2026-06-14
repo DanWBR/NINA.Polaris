@@ -1497,8 +1497,16 @@
                             try {
                                 core.dss.addDataSource({ url: url });
                                 core.dss.visible = true;
+                                var isLocal = (url === LOCAL_DSS);
                                 console.log('[Sky] DSS source: '
-                                    + (url === LOCAL_DSS ? 'LOCAL bundle (CDS unreachable)' : 'remote CDS'));
+                                    + (isLocal ? 'LOCAL bundle (CDS unreachable)' : 'remote CDS'));
+                                // Tell the parent which source won so the UI can
+                                // show "remote" vs "local" next to the toggle.
+                                postToParent({
+                                    type: 'dss-source',
+                                    source: isLocal ? 'local' : 'remote',
+                                    __from: 'sky-bridge'
+                                });
                             } catch (e) { console.warn('[Sky] DSS register failed:', e); }
                         });
                     } catch (dssOuter) {

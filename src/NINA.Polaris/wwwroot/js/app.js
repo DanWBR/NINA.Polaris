@@ -431,6 +431,10 @@ function ninaApp() {
         // off when offline (the engine logs HEALPix tile 404s
         // otherwise) or when the user prefers a cleaner vector view.
         skyDssVisible: true,
+        // Which DSS source the sky engine actually registered, reported by the
+        // bridge: 'remote' (CDS stream) | 'local' (downloaded offline bundle)
+        // | '' (not reported yet). Shown next to the DSS toggle.
+        skyDssSourceActive: '',
 
         // Settings -> Sky imagery (offline DSS). Mirrors the
         // DssDownloadService status; polled while the card is open and
@@ -8380,6 +8384,14 @@ function ninaApp() {
                     case 'webgl-unavailable':
                         this._skyWebGLAvailable = false;
                         console.warn('[Polaris] Sky engine: WebGL2 unavailable, fallback in place');
+                        break;
+                    case 'dss-source':
+                        // Which DSS source the engine actually registered:
+                        // 'remote' (streaming from CDS) or 'local' (the
+                        // downloaded offline bundle). Shown next to the DSS
+                        // toggle so the operator knows where the imagery
+                        // comes from.
+                        this.skyDssSourceActive = msg.source === 'local' ? 'local' : 'remote';
                         break;
                     case 'search-result':
                         // SWE-4: resolve the pending search promise so
