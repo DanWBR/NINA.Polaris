@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260614-uilock">
+    <link rel="stylesheet" href="/css/app.css?v=20260614-tapcontrols">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -773,7 +773,8 @@
                      falls back to a column stack (see media query in
                      app.css). -->
                 <div class="live-pane"
-                     :class="{ 'controls-collapsed': quickControlsCollapsed }">
+                     :class="{ 'controls-collapsed': quickControlsCollapsed,
+                               'frame-controls-hidden': frameControlsHidden }">
                 <div class="preview-area"
                      @mousemove="onPreviewMouseMove($event)"
                      @mouseleave="hoverPixel = null">
@@ -2541,7 +2542,8 @@
                      control sidebar 320px on the right. Mobile (≤900px)
                      collapses back to a single-column stack. -->
                 <div class="preview-pane"
-                     :class="{ 'controls-collapsed': quickControlsCollapsed }">
+                     :class="{ 'controls-collapsed': quickControlsCollapsed,
+                               'frame-controls-hidden': frameControlsHidden }">
                 <div class="preview-area">
                     <!-- Dedicated canvas pair (separate ids from LIVE so
                          both tabs can coexist in the DOM and the
@@ -2935,7 +2937,8 @@
 
                 <!-- ===== Tab 1: Capture ===== -->
                 <div x-show="videoTab === 'capture'" class="video-pane"
-                     :class="{ 'controls-collapsed': quickControlsCollapsed }">
+                     :class="{ 'controls-collapsed': quickControlsCollapsed,
+                               'frame-controls-hidden': frameControlsHidden }">
                     <div class="preview-area">
                         <canvas id="videoCaptureCanvas" class="preview-canvas"
                                 @click="videoCenterRoiAt($event)"
@@ -13503,7 +13506,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260614-uilock"></script>
+    <script src="/js/app.js?v=20260614-tapcontrols"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

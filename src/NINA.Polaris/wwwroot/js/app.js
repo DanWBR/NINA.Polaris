@@ -102,6 +102,11 @@ function ninaApp() {
             try { return localStorage.getItem('polaris.uiLocked') === '1'; }
             catch { return false; }
         })(),
+        // A simple click/tap on a LIVE/PREVIEW/VIDEO frame hides the overlay
+        // controls (toolbar, sidebar, histogram, crosshair cluster) for a
+        // clean view; tap again to bring them back. Not persisted — a fresh
+        // load should always show the controls.
+        frameControlsHidden: false,
         liveStackFrames: 0,
         // SNR-7: session-level target SNR override + ETA debounce
         // timer (PUT is fired ~400 ms after the user stops typing).
@@ -7546,11 +7551,22 @@ function ninaApp() {
             areaEl.addEventListener('pointerdown', function(e) {
                 if (e.button !== 0) return;
                 const s = self._pzGet(canvasId);
+                // Tap-to-toggle candidacy: only a clean press on the bare
+                // image surface (not on a button/handle/panel) counts. The
+                // pz-toolbar already stops propagation, but the histogram
+                // handles + overlay clusters don't, so gate on the target.
+                s._tapCandidate = !e.target.closest(
+                    'button, input, select, label, .histo-panel, .pz-toolbar, ' +
+                    '.preview-overlay-controls, .af-preview-badge, [data-no-tap]');
+                s._tapX0 = e.clientX;
+                s._tapY0 = e.clientY;
+                s._suppressTap = false;
                 // Double-tap / double-click resets to fit (handy escape
                 // hatch on a live canvas; OSD leaves click unbound).
                 const now = Date.now();
                 if (now - s._lastTapTime < 300) {
                     s._lastTapTime = 0;
+                    s._suppressTap = true;   // don't also toggle controls
                     self._pzReset(canvasId);
                     return;
                 }
@@ -7587,7 +7603,20 @@ function ninaApp() {
                 s._dragging = false;
                 areaEl.style.cursor = '';
             };
-            areaEl.addEventListener('pointerup', endDrag);
+            // pointerup is where we decide tap-vs-drag: a clean tap (little
+            // movement, on the bare surface, not the 2nd half of a double
+            // tap, not a pinch) toggles the overlay controls.
+            areaEl.addEventListener('pointerup', function(e) {
+                const s = self._pzGet(canvasId);
+                const moved = Math.hypot(
+                    e.clientX - (s._tapX0 ?? e.clientX),
+                    e.clientY - (s._tapY0 ?? e.clientY));
+                const isTap = s._tapCandidate && !s._suppressTap
+                    && !s._pinchActive && moved < 6;
+                s._tapCandidate = false;   // consume so a bubbled up can't reuse it
+                endDrag();
+                if (isTap) self.toggleFrameControls();
+            });
             areaEl.addEventListener('pointercancel', endDrag);
             areaEl.addEventListener('pointerleave', endDrag);
 
@@ -7597,6 +7626,7 @@ function ninaApp() {
                     e.preventDefault();
                     const s = self._pzGet(canvasId);
                     s._dragging = false;
+                    s._pinchActive = true;   // suppress tap-toggle on release
                     const t0 = e.touches[0], t1 = e.touches[1];
                     s._pinchDist0 = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY) || 1;
                     s._pinchScale0 = s.scale;
@@ -7636,6 +7666,11 @@ function ninaApp() {
                 if (e.touches.length < 2) {
                     const s = self._pzGet(canvasId);
                     s._pinchDist0 = 0;
+                    // Keep tap suppressed until all fingers lift so the
+                    // pinch's final pointerup doesn't toggle the controls.
+                    if (e.touches.length === 0) {
+                        setTimeout(() => { s._pinchActive = false; }, 50);
+                    }
                 }
             });
         },
@@ -16388,6 +16423,14 @@ function ninaApp() {
                 localStorage.setItem('polaris.quickControlsCollapsed',
                     this.quickControlsCollapsed ? '1' : '0');
             } catch { /* private-browsing / quota — silent */ }
+        },
+
+        // Toggle the floating overlay chrome on the image frames. Called by
+        // the pan/zoom tap detector (a clean tap on the bare canvas), so the
+        // operator can clear the view to inspect the frame and tap to
+        // restore. Global across LIVE/PREVIEW/VIDEO.
+        toggleFrameControls() {
+            this.frameControlsHidden = !this.frameControlsHidden;
         },
 
         // Lock / unlock the whole UI. When locked, the .ui-lock-overlay

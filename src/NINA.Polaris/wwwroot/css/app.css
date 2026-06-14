@@ -2359,6 +2359,22 @@ label select.input-sm {
     border-color: var(--accent);
     color: var(--accent);
 }
+
+/* Tap-to-hide overlay chrome on the LIVE/PREVIEW/VIDEO frames. A simple
+   tap on the bare image toggles .frame-controls-hidden on the pane (see
+   toggleFrameControls / the pan-zoom tap detector); we fade out every
+   floating control so the frame is unobstructed, and disable pointer
+   events so the now-invisible panel can't be hit. Tapping again restores.
+   The canvas + overlay canvas are deliberately untouched. */
+.frame-controls-hidden .pz-toolbar,
+.frame-controls-hidden .quick-controls,
+.frame-controls-hidden .histo-panel.histo-overlay,
+.frame-controls-hidden .preview-overlay-controls,
+.frame-controls-hidden .polaris-shutter {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+}
 .fullscreen-badge-active {
     color: var(--accent);
     border-color: var(--accent);
