@@ -531,6 +531,25 @@ public class IndiCamera : ICamera {
             width = MaxX > 0 ? MaxX : 0;
             height = MaxY > 0 ? MaxY : 0;
         }
+        // Idempotent guard. Writing CCD_FRAME re-allocates the ROI / capture
+        // buffer inside many INDI drivers (notably indi_asi_ccd). The native
+        // guide + calibration loop resets to full frame before EVERY capture,
+        // so without this guard we poked CCD_FRAME on every single guide frame.
+        // On a USB2 cam (ASI120MM Mini) that repeated re-init is a way to wedge
+        // the driver into dropping a BLOB, especially when it overlaps a mount
+        // guide pulse on the shared indiserver connection — which is exactly
+        // the deterministic "calibration stalls at RA reversal" failure. PHD2
+        // sets the frame once and then just loops exposures; match that by
+        // skipping the write when CCD_FRAME already holds the requested
+        // geometry. Only applied once we know real dimensions (width/height>0)
+        // so the first, genuine configuration still goes through.
+        if (width > 0 && height > 0
+            && (int)_client.GetNumber(DeviceName, "CCD_FRAME", "X") == x
+            && (int)_client.GetNumber(DeviceName, "CCD_FRAME", "Y") == y
+            && (int)_client.GetNumber(DeviceName, "CCD_FRAME", "WIDTH") == width
+            && (int)_client.GetNumber(DeviceName, "CCD_FRAME", "HEIGHT") == height) {
+            return;
+        }
         await _client.SetNumberAsync(DeviceName, "CCD_FRAME",
             new Dictionary<string, double> {
                 ["X"] = x, ["Y"] = y,
