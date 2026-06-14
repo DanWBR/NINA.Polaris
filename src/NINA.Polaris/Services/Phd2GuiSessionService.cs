@@ -304,15 +304,51 @@ public class Phd2GuiSessionService : BackgroundService {
             _logger.LogWarning("{Error}", LastError);
             return false;
         }
-        // xpra forks into the background, give it a moment then probe
-        for (int i = 0; i < 20; i++) {
+        // xpra forks into the background. Gate readiness on PHD2 actually
+        // RUNNING, not just on the TCP port answering.
+        //
+        // The bind-tcp port comes up the instant xpra's server starts —
+        // well before the `--start=phd2` child has launched and mapped its
+        // window. Returning on the port alone is why the GUI tab sometimes
+        // shows the bare xpra desktop (just the wallpaper), and the HTML
+        // client occasionally hangs connecting to a server that isn't fully
+        // serving yet. Worse, when `--start=phd2` silently fails (a startup
+        // race on a slow Pi), the port is up forever with no PHD2 at all.
+        //
+        // So: poll for port + PHD2 process. If the port has been up for a
+        // few seconds but PHD2 never appeared, recover once by issuing a
+        // start-child — the same thing the UI's "Relaunch PHD2" button does.
+        bool portUp = false;
+        bool recovered = false;
+        for (int i = 0; i < 40; i++) {   // ~20s budget (PHD2 cold-start on a Pi is slow)
             try { await Task.Delay(500, ct); } catch (TaskCanceledException) { return false; }
-            if (await ProbeHealthAsync(ct)) {
-                _logger.LogInformation("xpra session on :{Display} listening on 127.0.0.1:{Port}",
+            await ProbeHealthAsync(ct);   // refreshes SessionRunning + Phd2Running
+            if (SessionRunning) portUp = true;
+            if (SessionRunning && Phd2Running) {
+                _logger.LogInformation("xpra :{Display} ready (port {Port} + PHD2 up)",
                     DisplayNumber, BindPort);
                 LastError = null;
                 return true;
             }
+            // Port up but no PHD2 after ~5s -> the --start=phd2 child didn't
+            // take. Kick a start-child once to recover the empty-desktop case.
+            if (portUp && !Phd2Running && !recovered && i >= 10) {
+                recovered = true;
+                _logger.LogWarning(
+                    "xpra :{Display} up but PHD2 absent after ~5s; issuing start-child phd2 recovery",
+                    DisplayNumber);
+                try {
+                    await RunCommandAsync("xpra", $"control :{DisplayNumber} start-child phd2",
+                        ct, timeoutMs: 10000);
+                } catch { /* best effort; keep polling */ }
+            }
+        }
+        if (portUp) {
+            // Session exists so the UI can still attach + offer Relaunch PHD2,
+            // but flag that the guide GUI itself never came up.
+            LastError = "xpra session is up but PHD2 did not start — use Relaunch PHD2.";
+            _logger.LogWarning("{Error}", LastError);
+            return true;
         }
         LastError = "xpra start succeeded but TCP probe never responded";
         return false;
