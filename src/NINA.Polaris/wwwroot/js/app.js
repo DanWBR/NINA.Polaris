@@ -8005,6 +8005,20 @@ function ninaApp() {
         //   tighten security later.
         // ---------------------------------------------------------------
 
+        // Force the sky iframe to reload (re-runs the engine bootstrap + DSS
+        // source probe). Re-assigning src avoids cross-origin reload() issues
+        // in the mobile wrapper. The bridge 'ready' handler re-pushes observer
+        // / time / grid / ecliptic / FOV overlays afterwards, so state is
+        // restored automatically. No-op if the iframe isn't in the DOM yet.
+        _reloadSkyFrame() {
+            const frame = document.getElementById('skyFrame');
+            if (frame && frame.src) {
+                this._skyBridgeReady = false;
+                this._skyPending = this._skyPending || [];
+                frame.src = frame.src;
+            }
+        },
+
         _skySendMessage(msg) {
             if (!msg || !msg.type) return;
             const frame = document.getElementById('skyFrame');
@@ -8170,7 +8184,14 @@ function ninaApp() {
                 clearInterval(this._dssPollTimer); this._dssPollTimer = null;
                 if (!this.dssDownload.error) {
                     this.toast('Sky imagery downloaded (order '
-                        + this.dssDownload.installedOrder + '). Reload the SKY tab.', 'ok');
+                        + this.dssDownload.installedOrder + ').', 'ok');
+                    // The sky engine registers the DSS survey ONCE at load and
+                    // pins it to whichever source answered then (the bundled
+                    // baseline or, if nothing was local yet, remote CDS). The
+                    // tiles we just wrote won't be used until it re-probes, so
+                    // reload the iframe — re-registration now finds the LOCAL
+                    // bundle (incl. the freshly downloaded high-order tiles).
+                    this._reloadSkyFrame();
                 } else if (this.dssDownload.error !== 'cancelled') {
                     this.toast('Sky imagery download failed: ' + this.dssDownload.error, 'error');
                 }
@@ -11805,6 +11826,60 @@ function ninaApp() {
         // works for static templates, not the dynamic x-for loop here.
         // Instead resolve the canvas by id and keep instances in a
         // separate dict so refresh can destroy them.
+        // Inline Chart.js plugin: draw a dashed vertical "now" marker on a
+        // time-vs-altitude chart when the current clock falls inside the
+        // x-axis window. The x scale is category-based (one label per sample),
+        // so we locate the current moment by interpolating between adjacent
+        // sample timestamps and map that fractional index to a pixel. Samples
+        // can be passed in (fixed-data charts) or read from chart.$nowSamples
+        // (charts whose data is filled after construction). No-op when now is
+        // outside the range or the engine hasn't laid out the scale yet.
+        _nowLinePlugin(staticSamples) {
+            return {
+                id: 'nowLine',
+                afterDatasetsDraw(chart) {
+                    const samples = staticSamples || chart.$nowSamples;
+                    if (!samples || samples.length < 2) return;
+                    const times = samples.map(s => new Date(s.utc).getTime());
+                    const loT = Math.min(times[0], times[times.length - 1]);
+                    const hiT = Math.max(times[0], times[times.length - 1]);
+                    const now = Date.now();
+                    if (!isFinite(loT) || !isFinite(hiT) || now < loT || now > hiT) return;
+                    let idx = -1;
+                    for (let i = 0; i < times.length - 1; i++) {
+                        const a = times[i], b = times[i + 1];
+                        if ((now >= a && now <= b) || (now <= a && now >= b)) {
+                            idx = i + (b !== a ? (now - a) / (b - a) : 0);
+                            break;
+                        }
+                    }
+                    if (idx < 0) return;
+                    const x = chart.scales.x, area = chart.chartArea;
+                    if (!x || !area) return;
+                    const lo = Math.floor(idx), hi = Math.min(times.length - 1, Math.ceil(idx));
+                    const xa = x.getPixelForValue(lo), xb = x.getPixelForValue(hi);
+                    if (!isFinite(xa) || !isFinite(xb)) return;
+                    const px = xa + (xb - xa) * (idx - lo);
+                    const ctx = chart.ctx;
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.setLineDash([4, 3]);
+                    ctx.lineWidth = 1.5;
+                    ctx.strokeStyle = '#ffb74d';
+                    ctx.moveTo(px, area.top);
+                    ctx.lineTo(px, area.bottom);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.fillStyle = '#ffb74d';
+                    ctx.font = '9px sans-serif';
+                    const right = px > (area.left + area.right) / 2;
+                    ctx.textAlign = right ? 'right' : 'left';
+                    ctx.fillText('now', px + (right ? -3 : 3), area.top + 8);
+                    ctx.restore();
+                }
+            };
+        },
+
         async _renderTonightChart(item) {
             const safe = this.tonightSafeKey(item);
             const canvasId = 'tonightChart_' + safe;
@@ -11826,6 +11901,7 @@ function ninaApp() {
                 const samples = data.samples || [];
                 this._tonightCharts[safe] = new Chart(canvas, {
                     type: 'line',
+                    plugins: [ this._nowLinePlugin(samples) ],
                     data: {
                         labels: samples.map(s => new Date(s.utc).toLocaleTimeString([],
                             { hour: '2-digit', minute: '2-digit' })),
@@ -22081,6 +22157,7 @@ function ninaApp() {
             // Simpler: shade the whole panel via a second dataset that fills to 0.
             const c = this._ensureChart('altChart', 'alt', 'line', () => ({
                 type: 'line',
+                plugins: [ this._nowLinePlugin() ],   // reads chart.$nowSamples, set below
                 data: {
                     labels: [],
                     datasets: [
@@ -22107,6 +22184,7 @@ function ninaApp() {
                 return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
             });
             c.data.datasets[0].data = samples.map(s => s.altitudeDeg);
+            c.$nowSamples = samples;   // feed the "now" marker plugin
             c.update('none');
         },
 
