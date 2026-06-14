@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260614-previewhisto">
+    <link rel="stylesheet" href="/css/app.css?v=20260614-afsidebyside">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -2459,6 +2459,10 @@
                         </div>
                     </div>
 
+                    <!-- Frame (left) + V-curve (right), side by side. The
+                         chart column only appears once the sweep has points;
+                         until then the frame spans the full width. -->
+                    <div class="af-bottom-row">
                     <!-- Focus preview canvas. Receives a mirror of the
                          most recent frame from the multi-canvas render
                          path; AutoFocusService now relays each sample
@@ -2491,6 +2495,7 @@
                             <span x-show="autoFocus.bestHfr"><strong x-text="'HFR ≈ ' + autoFocus.bestHfr?.toFixed(2)"></strong></span>
                         </div>
                     </div>
+                    </div><!-- /af-bottom-row -->
                 </div>
                 </div><!-- /focusTab === 'vcurve' wrapper -->
             </div>

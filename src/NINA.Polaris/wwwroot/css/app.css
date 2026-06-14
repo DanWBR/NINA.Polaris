@@ -4203,6 +4203,19 @@ label select.input-sm {
    each sweep exposure through ImageRelayService, the multi-canvas
    renderer mirrors that into #focusCanvas. Fixed-height to keep the
    layout stable as the V-curve chart appears below. */
+/* Frame (left) + V-curve (right) side by side. The chart column carries
+   x-show, so when there are no points it is display:none and the frame's
+   flex:1 makes it span the whole row. */
+.af-bottom-row {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+}
+.af-bottom-row > .af-preview-area { flex: 1 1 0; min-width: 0; }
+.af-bottom-row > .af-chart { flex: 1 1 0; min-width: 0; }
+@media (max-width: 900px) {
+    .af-bottom-row { flex-direction: column; }
+}
 .af-preview-area {
     position: relative;
     background: #000;
@@ -4259,6 +4272,13 @@ label select.input-sm {
     overflow: hidden;
     display: flex;
     flex-direction: column;
+}
+/* When sitting beside the frame the chart stretches to the frame's height
+   (align-items:stretch); let the plot grow to fill, legend pinned below. */
+.af-bottom-row > .af-chart .chart-container {
+    height: auto;
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 .af-chart svg {
