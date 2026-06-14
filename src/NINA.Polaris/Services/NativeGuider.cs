@@ -494,7 +494,7 @@ public sealed class NativeGuider : IGuider, IDisposable {
         _calProgress = "Calibrating: locating star...";
         try {
             // Seed the process with the current centroid.
-            var (curX, curY, found) = await FindStarAsync(cam, ct);
+            var (curX, curY, found) = await FindStarWithRetryAsync(cam, ct);
             if (!found) { RaiseAlert("Calibration failed: star lost at start."); SetAppState("Stopped"); return; }
             // Track the star: re-centre the search window on the last position.
             _lockX = curX; _lockY = curY;
@@ -539,9 +539,9 @@ public sealed class NativeGuider : IGuider, IDisposable {
                     }
                     await SettleAfterPulse(step.DurationMs, ct);
                 }
-                (curX, curY, found) = await FindStarAsync(cam, ct, calRegion);
+                (curX, curY, found) = await FindStarWithRetryAsync(cam, ct, calRegion);
                 if (!found) {
-                    RaiseAlert("Calibration failed: star lost mid-sequence.");
+                    RaiseAlert("Calibration failed: star lost mid-sequence (no frame after retries — check guide camera USB/power, especially at slew/reversal).");
                     SetAppState("Stopped");
                     return;
                 }
@@ -892,14 +892,38 @@ public sealed class NativeGuider : IGuider, IDisposable {
 
     // ----- Capture + centroid helpers -----
 
+    // Hard ceiling on how long a single guide/calibration capture may wait
+    // for its BLOB. IndiCamera's own deadline is exposure + 60 s, sized for
+    // big imaging downloads; for a guide cam that turns ONE dropped frame
+    // into a 60 s+ stall (and, during calibration, aborts the whole run).
+    // A guide BLOB is tiny, so exposure + this cushion is plenty even on a
+    // Pi over USB + LAN, while failing fast enough to retry.
+    private const int GuideCaptureCushionMs = 8000;
+
     private async Task<IImageData?> CaptureFullAsync(ICamera cam, CancellationToken ct) {
         int expMs = Math.Max(50, Rig.NativeGuideExposureMs);
         int bin = Math.Clamp(Rig.NativeGuideBin <= 0 ? 1 : Rig.NativeGuideBin, 1, 4);
         var opts = new CaptureOptions(
             Gain: Rig.NativeGuideGain > 0 ? Rig.NativeGuideGain : (int?)null,
             BinX: bin, BinY: bin);
+        // Bound the capture to a guide-sized budget. CaptureAsync honours the
+        // token (it registers cancellation on its BLOB TCS), so a linked CTS
+        // that fires our deadline unblocks the await without waiting on the
+        // imaging-sized 60 s budget. A dropped BLOB is common at RA direction
+        // reversal on USB guide cams (e.g. ASI120MM Mini) when motor inrush
+        // glitches the camera/USB; here it fails in seconds so the caller can
+        // re-capture instead of the whole sequence dying.
+        int budgetMs = expMs + GuideCaptureCushionMs;
+        using var capCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        capCts.CancelAfter(budgetMs);
         try {
-            return await cam.CaptureAsync(expMs / 1000.0, opts, ct);
+            return await cam.CaptureAsync(expMs / 1000.0, opts, capCts.Token);
+        } catch (OperationCanceledException) when (!ct.IsCancellationRequested) {
+            // Our budget elapsed, not a user Stop: a dropped/stalled frame.
+            // Abort the exposure so the driver resets before the next attempt.
+            _logger.LogWarning("Guide capture exceeded {Ms} ms budget (dropped BLOB?); aborting to recover", budgetMs);
+            try { await cam.AbortExposureAsync(CancellationToken.None); } catch { }
+            return null;
         } catch (OperationCanceledException) {
             throw;
         } catch (Exception ex) {
@@ -1030,6 +1054,30 @@ public sealed class NativeGuider : IGuider, IDisposable {
             int? searchRegion = null) {
         var (x, y, found, _, _) = await FindStarDetailedAsync(cam, ct, searchRegion);
         return (x, y, found);
+    }
+
+    /// <summary>Capture + locate the guide star with a few retries. A single
+    /// dropped INDI BLOB (common at RA direction reversal on USB guide cams
+    /// such as the ASI120MM Mini, where motor inrush glitches the camera)
+    /// must never abort the whole calibration, so re-capture (no extra pulse)
+    /// a few times before giving up. Returns found=false only if every
+    /// attempt fails.</summary>
+    private async Task<(double x, double y, bool found)> FindStarWithRetryAsync(
+            ICamera cam, CancellationToken ct, int? searchRegion = null, int attempts = 3) {
+        for (int a = 1; a <= attempts; a++) {
+            ct.ThrowIfCancellationRequested();
+            var (x, y, found) = await FindStarAsync(cam, ct, searchRegion);
+            if (found) {
+                if (a > 1) _logger.LogInformation("Calibration capture recovered on attempt {A}/{N}", a, attempts);
+                return (x, y, true);
+            }
+            if (a < attempts) {
+                _logger.LogWarning("Calibration capture attempt {A}/{N} found no star (dropped frame?); retrying", a, attempts);
+                _calProgress = $"Recovering dropped frame ({a}/{attempts})...";
+                try { await Task.Delay(500, ct); } catch (OperationCanceledException) { }
+            }
+        }
+        return (_lockX, _lockY, false);
     }
 
     private async Task<(double x, double y, bool found, double snr, double hfd)>
