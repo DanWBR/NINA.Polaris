@@ -827,6 +827,18 @@ public class UserProfile {
     /// have a measurable cost on the SD card in the Pi.
     /// </summary>
     public bool LogToDisk { get; set; } = false;
+
+    /// <summary>
+    /// Runtime opt-in for the in-browser SSH remote terminal. The
+    /// <see cref="WebSocket.TerminalSocketHandler"/> is normally gated by
+    /// the <c>Terminal:Enabled</c> appsettings key (default false); this
+    /// persisted flag lets the operator turn the feature on from the
+    /// Settings UI (behind a risk-acknowledgement modal) without editing a
+    /// JSON file on a headless host. Either source being true enables the
+    /// endpoint. Default OFF — full shell access to the host is a serious
+    /// capability, so it stays opt-in.
+    /// </summary>
+    public bool TerminalEnabled { get; set; } = false;
 }
 
 /// <summary>Persisted native-guider calibration (the fields needed to rebuild a

@@ -9591,10 +9591,25 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <p class="text-muted" style="font-size: 12px; max-width:560px">
                         SSH into the Polaris host (or any other Linux box on your LAN)
                         from the browser. Credentials are sent per-session and never
-                        saved. Enable on the server with
-                        <code>Terminal:Enabled = true</code> in <code>appsettings.json</code>.
+                        saved.
                     </p>
-                    <div class="term-form" x-show="!term.connected">
+
+                    <!-- Disabled state: the feature is gated server-side. Offer
+                         an in-app enable button (behind a risk modal) so the
+                         operator doesn't have to edit appsettings.json on a
+                         headless host. -->
+                    <div x-show="!term.serverEnabled">
+                        <p class="text-warn" style="font-size:12px; max-width:560px">
+                            The remote terminal is currently disabled.
+                        </p>
+                        <button class="btn btn-primary" @click="enableTerminal()"
+                                :disabled="term.enabling">
+                            <span x-show="!term.enabling">Enable terminal…</span>
+                            <span x-show="term.enabling">Enabling…</span>
+                        </button>
+                    </div>
+
+                    <div class="term-form" x-show="term.serverEnabled && !term.connected">
                         <label>Host
                             <input type="text" x-model="term.host" class="input-md"
                                    placeholder="localhost or 192.168.x.x">
@@ -9636,25 +9651,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                          x-cloak x-ref="termMount"></div>
                 </div>
 
-                <div class="settings-section">
-                    <h3><span class="settings-card-icon">🔌</span>INDI Server</h3>
-                    <label>Host<input type="text" x-model="settings.indiHost" class="input-md"></label>
-                    <label>Port<input type="number" x-model.number="settings.indiPort" class="input-sm"></label>
-                    <div class="control-row actions">
-                        <button class="btn btn-primary" @click="connectIndi()" x-show="!indiConnected">Connect</button>
-                        <button class="btn btn-danger" @click="disconnectIndi()" x-show="indiConnected">Disconnect</button>
-                        <button class="btn" @click="refreshDevices()" x-show="indiConnected">Refresh Devices</button>
-                    </div>
-                </div>
-
-                <div class="settings-section" x-show="indiConnected">
-                    <h3><span class="settings-card-icon">✅</span>INDI Status</h3>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span class="status-indicator ok" style="font-size: 11px;">Connected</span>
-                        <span class="text-muted" style="font-size: 12px;" x-text="devices.length + ' devices found'"></span>
-                        <button class="btn btn-sm" @click="tab = 'equip'" style="margin-left: auto;">Manage Equipment</button>
-                    </div>
-                </div>
+                <!-- INDI Server + INDI Status cards removed from Settings:
+                     redundant with the RIGS tab, which owns INDI connection
+                     + live device status. -->
 
                 <!-- SIM panel intentionally absent from the Settings UI.
                      End users do not run the built-in simulator; backend
@@ -10479,17 +10478,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </p>
                 </div>
 
-                <div class="settings-section">
-                    <h3><span class="settings-card-icon">📑</span>Sequencer</h3>
-                    <label class="checkbox-label" title="Land on the Advanced (tree-based) sequencer tab by default. Both sequencers stay available regardless.">
-                        <input type="checkbox" x-model="settings.preferAdvancedSequencer" @change="saveSettingsToServer()">
-                        Use Advanced Sequencer by default
-                    </label>
-                    <p class="hint" style="margin-top:6px">
-                        <strong>Simple:</strong> flat list of (filter, exposure, count) items, quick to set up, no triggers.<br>
-                        <strong>Advanced:</strong> tree with containers, loop conditions, and event triggers (auto-focus on temp/HFR/time, meridian flip, dither, safety abort).
-                    </p>
-                </div>
+                <!-- Sequencer card removed from Settings: redundant with the
+                     Simple/Advanced switch available directly in the sequencer
+                     tabs. The preferAdvancedSequencer flag still persists. -->
 
                 <!-- DBGLOG-9: opt-in disk persistence for the debug log
                      buffer. Off by default to avoid SD-card wear on the
@@ -13430,7 +13421,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260614-guideretract"></script>
+    <script src="/js/app.js?v=20260614-terminal-enable"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

@@ -67,10 +67,19 @@ public static class TerminalSocketHandler {
             .CreateLogger("TerminalSocketHandler");
 
         var config = context.RequestServices.GetRequiredService<IConfiguration>();
-        if (!config.GetValue("Terminal:Enabled", false)) {
+        // Two ways to enable: the static appsettings Terminal:Enabled key,
+        // or the persisted per-profile runtime flag the operator can flip
+        // from the Settings UI (behind a risk modal) without SSHing in to
+        // edit a JSON file on a headless host. Either being true is enough.
+        var profiles = context.RequestServices
+            .GetService<Services.ProfileService>();
+        var enabled = config.GetValue("Terminal:Enabled", false)
+            || (profiles?.Active?.TerminalEnabled ?? false);
+        if (!enabled) {
             context.Response.StatusCode = 403;
             await context.Response.WriteAsync(
-                "Remote terminal disabled. Set Terminal:Enabled=true in appsettings to enable.");
+                "Remote terminal disabled. Enable it from Settings > Remote terminal, "
+                + "or set Terminal:Enabled=true in appsettings.");
             return;
         }
 

@@ -440,8 +440,20 @@ public static class SystemEndpoints {
                 indiHost = p.IndiHost,
                 indiPort = p.IndiPort,
                 // DBGLOG-9: surface the toggle so the Settings UI hydrates correctly.
-                logToDisk = p.LogToDisk
+                logToDisk = p.LogToDisk,
+                // Remote-terminal opt-in (persisted runtime override of the
+                // appsettings Terminal:Enabled gate).
+                terminalEnabled = p.TerminalEnabled
             });
+        });
+
+        // Enable / disable the in-browser SSH remote terminal at runtime.
+        // Persisted on the profile so it survives restarts. The Settings UI
+        // gates this behind a risk-acknowledgement modal; full shell access
+        // to the host is a serious capability, so the default stays OFF.
+        group.MapPost("/terminal/enabled", (TerminalEnableRequest req, ProfileService profiles) => {
+            profiles.UpdateSettings(p => p.TerminalEnabled = req.Enabled);
+            return Results.Ok(new { enabled = req.Enabled });
         });
 
         // Friendly device name shown when this Pi is discovered on the
@@ -470,4 +482,5 @@ public static class SystemEndpoints {
     record DeviceNameRequest(string? Name);
     record AutoStartRequest(bool Enable);
     record GpuToggleRequest(bool Enabled);
+    record TerminalEnableRequest(bool Enabled);
 }

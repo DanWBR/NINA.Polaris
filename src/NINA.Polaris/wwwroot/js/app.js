@@ -460,7 +460,11 @@ function ninaApp() {
         // + WebSocket + addon so we can tear down cleanly.
         term: {
             host: 'localhost', port: 22, user: '', password: '',
-            connected: false, connecting: false, lastError: ''
+            connected: false, connecting: false, lastError: '',
+            // serverEnabled mirrors the persisted Terminal:Enabled gate
+            // (hydrated from /api/system/profile). enabling guards the
+            // one-shot enable button while the POST is in flight.
+            serverEnabled: false, enabling: false
         },
         _termInstance: null, _termSocket: null, _termFitAddon: null,
         _termResizeObserver: null,
@@ -4570,6 +4574,32 @@ function ninaApp() {
 
         // ----- Remote terminal (xterm.js + SSH via /ws/terminal) -----
 
+        // Turn on the remote terminal at runtime from the Settings card,
+        // behind a risk-acknowledgement modal, so the operator doesn't have
+        // to SSH in and edit appsettings.json on a headless host. Persists
+        // server-side (profile.TerminalEnabled); the SSH WebSocket gate
+        // honours it on the next Connect.
+        async enableTerminal() {
+            if (this.term.enabling || this.term.serverEnabled) return;
+            const ok = await this._confirmAsync(
+                'This turns on a browser SSH terminal with FULL shell access to '
+                + 'this host for anyone who can reach Polaris and log in. Only '
+                + 'enable it on a network you trust. You can disable it again by '
+                + 'setting Terminal:Enabled=false in appsettings.json. Continue?',
+                { title: 'Enable remote terminal?', okLabel: 'Enable', danger: true });
+            if (!ok) return;
+            this.term.enabling = true;
+            try {
+                await this.apiPost('/api/system/terminal/enabled', { enabled: true });
+                this.term.serverEnabled = true;
+                this.toast('Remote terminal enabled', 'ok');
+            } catch (e) {
+                this.toast('Failed to enable terminal: ' + (e.message || e), 'error');
+            } finally {
+                this.term.enabling = false;
+            }
+        },
+
         async termConnect() {
             if (this.term.connected || this.term.connecting) return;
             if (!this.term.host || !this.term.user) {
@@ -7736,6 +7766,9 @@ function ninaApp() {
                     this.settings.autoConnectOnStartup = !!data.autoConnectOnStartup;
                     // DBGLOG-9: hydrate the persist-to-disk toggle.
                     this.settings.logToDisk = !!data.logToDisk;
+                    // Remote-terminal opt-in gate (controls the connect form
+                    // vs. the in-app "Enable terminal" button on the card).
+                    this.term.serverEnabled = !!data.terminalEnabled;
                     // Mirror to the logs sub-object so the panel can
                     // surface the current state (informational only).
                     if (this.logs) this.logs.persistToDisk = !!data.logToDisk;
