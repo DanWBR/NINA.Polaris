@@ -2261,6 +2261,13 @@ label select.input-sm {
     left: auto;
     bottom: auto;
 }
+/* PREVIEW: histogram now overlays the bottom of the frame too. Unlike LIVE
+   the top-left has no overlay cluster, so dock the image-adjust toolbar in
+   the top-LEFT corner (out of the histogram's way). */
+.preview-pane .pz-toolbar {
+    top: 8px;
+    bottom: auto;
+}
 .pz-toolbar button:hover { background: rgba(255, 255, 255, 0.16); }
 .pz-toolbar button.pz-active {
     background: rgba(99, 102, 241, 0.25);

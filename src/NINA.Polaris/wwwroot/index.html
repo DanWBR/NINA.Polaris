@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260614-guideretract">
+    <link rel="stylesheet" href="/css/app.css?v=20260614-previewhisto">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -2533,6 +2533,38 @@
                                     ? 'Pick exposure + bin, then Take snap'
                                     : 'No camera connected, connect from Rigs tab first'"></p>
                     </div>
+
+                    <!-- ASIAIR-style histogram + stretch mini-panel, docked as a
+                         translucent overlay along the bottom of the frame (same
+                         treatment as LIVE/AUTORUN) instead of a full-width bar
+                         below it. -->
+                    <div class="histo-panel histo-overlay" x-show="selectedCamera || _lastRawFrame">
+                        <div class="histo-stats">
+                            <div class="hs-cell"><span class="hs-v" x-text="histo.max"></span><span class="hs-l">Max</span></div>
+                            <div class="hs-cell"><span class="hs-v" x-text="histo.avg"></span><span class="hs-l">Avg</span></div>
+                            <div class="hs-cell"><span class="hs-v" x-text="histo.min"></span><span class="hs-l">Min</span></div>
+                            <div class="hs-cell"><span class="hs-v" x-text="histo.std"></span><span class="hs-l">Std</span></div>
+                        </div>
+                        <div class="histo-graph">
+                            <canvas id="histoCanvas-preview" class="histo-canvas"></canvas>
+                            <div class="histo-axis"><span>0</span><span>32768</span><span>65535</span></div>
+                            <div class="histo-handle histo-handle-black"
+                                 :style="'left:' + histoMarkerPct('black') + '%'"
+                                 @pointerdown="histoHandleDown($event,'black')" title="Black point"></div>
+                            <div class="histo-handle histo-handle-mid"
+                                 :style="'left:' + histoMarkerPct('mid') + '%'"
+                                 @pointerdown="histoHandleDown($event,'mid')" title="Midtones"></div>
+                            <div class="histo-handle histo-handle-white"
+                                 :style="'left:' + histoMarkerPct('white') + '%'"
+                                 @pointerdown="histoHandleDown($event,'white')" title="White point"></div>
+                        </div>
+                        <div class="histo-actions">
+                            <button class="btn btn-sm" :class="stretchAuto ? 'btn-active' : ''"
+                                    @click="histoAuto()" title="Auto-stretch">Auto</button>
+                            <button class="btn btn-sm" :class="histoZoom ? 'btn-active' : ''"
+                                    @click="histoToggleZoom()" title="Zoom the histogram to the data">Zoom</button>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="quick-controls"
@@ -2850,35 +2882,6 @@
                           x-text="'last: ' + (preview.lastSnapAt
                                               ? new Date(preview.lastSnapAt).toLocaleTimeString()
                                               : '')"></span>
-                </div>
-
-                <!-- ASIAIR-style histogram + stretch mini-panel -->
-                <div class="histo-panel" x-show="selectedCamera || _lastRawFrame">
-                    <div class="histo-stats">
-                        <div class="hs-cell"><span class="hs-v" x-text="histo.max"></span><span class="hs-l">Max</span></div>
-                        <div class="hs-cell"><span class="hs-v" x-text="histo.avg"></span><span class="hs-l">Avg</span></div>
-                        <div class="hs-cell"><span class="hs-v" x-text="histo.min"></span><span class="hs-l">Min</span></div>
-                        <div class="hs-cell"><span class="hs-v" x-text="histo.std"></span><span class="hs-l">Std</span></div>
-                    </div>
-                    <div class="histo-graph">
-                        <canvas id="histoCanvas-preview" class="histo-canvas"></canvas>
-                        <div class="histo-axis"><span>0</span><span>32768</span><span>65535</span></div>
-                        <div class="histo-handle histo-handle-black"
-                             :style="'left:' + histoMarkerPct('black') + '%'"
-                             @pointerdown="histoHandleDown($event,'black')" title="Black point"></div>
-                        <div class="histo-handle histo-handle-mid"
-                             :style="'left:' + histoMarkerPct('mid') + '%'"
-                             @pointerdown="histoHandleDown($event,'mid')" title="Midtones"></div>
-                        <div class="histo-handle histo-handle-white"
-                             :style="'left:' + histoMarkerPct('white') + '%'"
-                             @pointerdown="histoHandleDown($event,'white')" title="White point"></div>
-                    </div>
-                    <div class="histo-actions">
-                        <button class="btn btn-sm" :class="stretchAuto ? 'btn-active' : ''"
-                                @click="histoAuto()" title="Auto-stretch">Auto</button>
-                        <button class="btn btn-sm" :class="histoZoom ? 'btn-active' : ''"
-                                @click="histoToggleZoom()" title="Zoom the histogram to the data">Zoom</button>
-                    </div>
                 </div>
             </div>
 
