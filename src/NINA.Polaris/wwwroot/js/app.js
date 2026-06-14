@@ -520,6 +520,11 @@ function ninaApp() {
         // toolbar button; pushed to the engine via the set-grid bridge msg
         // and re-applied whenever the engine (re)loads.
         skyGridMode: 'none',
+        // SKY ecliptic line toggle. Off by default; the plane of the solar
+        // system (where the Sun/Moon/planets ride) is handy for planning, but
+        // adds clutter, so it's opt-in. Pushed via the set-ecliptic bridge msg
+        // and re-applied whenever the engine (re)loads.
+        skyEclipticVisible: false,
         slewCenterJobId: null,
         slewCenterStatus: null,
         // On a FAILED slew & center we keep the solver console around in a
@@ -2885,6 +2890,13 @@ function ninaApp() {
             }
             this.$watch('skyDssVisible', (v) => {
                 localStorage.setItem('nina-sky-dss', v ? '1' : '0');
+            });
+
+            // Ecliptic line toggle, same persistence pattern.
+            const eclSaved = localStorage.getItem('nina-sky-ecliptic');
+            if (eclSaved !== null) this.skyEclipticVisible = eclSaved === '1';
+            this.$watch('skyEclipticVisible', (v) => {
+                localStorage.setItem('nina-sky-ecliptic', v ? '1' : '0');
             });
 
             // ZWO gain presets, static lookup table. Tiny file (~1 KB)
@@ -8033,6 +8045,13 @@ function ninaApp() {
                  : 'Grid: off';
         },
 
+        // SKY ecliptic line toggle (the plane of the solar system). Flips the
+        // state, persists it (via the $watch), and pushes it to the engine.
+        toggleSkyEcliptic() {
+            this.skyEclipticVisible = !this.skyEclipticVisible;
+            this._skySendMessage({ type: 'set-ecliptic', visible: this.skyEclipticVisible });
+        },
+
         _skyPushObserverAndTime() {
             const lat = this.settings.latitude;
             const lng = this.settings.longitude;
@@ -8058,6 +8077,10 @@ function ninaApp() {
                 // to its defaults on (re)load).
                 if (this.skyGridMode && this.skyGridMode !== 'none') {
                     this._skySendMessage({ type: 'set-grid', mode: this.skyGridMode });
+                }
+                // Re-apply the ecliptic choice (engine resets lines on reload).
+                if (this.skyEclipticVisible) {
+                    this._skySendMessage({ type: 'set-ecliptic', visible: true });
                 }
                 if (this.mount?.connected
                     && Number.isFinite(this.mount.ra)

@@ -1109,6 +1109,16 @@
                     }
                 } catch (e) { console.warn('[Sky] grid toggle failed:', e); }
                 break;
+            case 'set-ecliptic':
+                // Parent toggle for the ecliptic line (the plane of the solar
+                // system, where the Sun/Moon/planets travel). Independent of
+                // the coordinate grid above. Standard stellarium-web-engine
+                // line-module id; guarded since the module set varies by build.
+                try {
+                    var ln = stel.core && stel.core.lines;
+                    if (ln && ln.ecliptic) ln.ecliptic.visible = !!msg.visible;
+                } catch (e) { console.warn('[Sky] ecliptic toggle failed:', e); }
+                break;
             case 'set-dss-visible':
                 // Parent toggle for the DSS Color HiPS streamed from
                 // CDS Strasbourg. Turn off when offline (no network) or
