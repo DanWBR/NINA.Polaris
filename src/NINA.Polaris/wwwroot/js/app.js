@@ -15197,6 +15197,21 @@ function ninaApp() {
             const d = new Date(ms);
             return String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');
         },
+        // Plan times are stored as UTC "HH:mm" (the sequencer interprets them
+        // as UTC). These convert to/from the operator's local time for display
+        // and the <input type="time"> fields only — storage stays UTC.
+        _todUtcToLocal(hhmm) {
+            const m = /^(\d{1,2}):(\d{2})/.exec(hhmm || '');
+            if (!m) return '';
+            const d = new Date(); d.setUTCHours(+m[1], +m[2], 0, 0);
+            return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        },
+        _todLocalToUtc(hhmm) {
+            const m = /^(\d{1,2}):(\d{2})/.exec(hhmm || '');
+            if (!m) return '';
+            const d = new Date(); d.setHours(+m[1], +m[2], 0, 0);
+            return String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');
+        },
         // Map a "HH:mm" UTC time-of-day to the absolute ms instant inside the
         // chart window (handles the overnight wrap).
         _planTodToMs(t, hhmm) {

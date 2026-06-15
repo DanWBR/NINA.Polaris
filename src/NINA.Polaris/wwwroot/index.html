@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260615-plantime">
+    <link rel="stylesheet" href="/css/app.css?v=20260615-planlocal">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -7439,8 +7439,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <option value="AtTime">At time (UTC)</option>
                                 </select>
                             </label>
-                            <label x-show="plan.startMode === 'AtTime'">Start time (UTC)
-                                <input type="time" x-model="plan.startAtUtc" @change="savePlan()">
+                            <label x-show="plan.startMode === 'AtTime'">Start time (local)
+                                <input type="time" :value="_todUtcToLocal(plan.startAtUtc)" @change="plan.startAtUtc = _todLocalToUtc($event.target.value); savePlan()">
                             </label>
                             <label>End
                                 <select x-model="plan.endMode" @change="savePlan()">
@@ -7449,8 +7449,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <option value="AtTime">At time (UTC)</option>
                                 </select>
                             </label>
-                            <label x-show="plan.endMode === 'AtTime'">End time (UTC)
-                                <input type="time" x-model="plan.endAtUtc" @change="savePlan()">
+                            <label x-show="plan.endMode === 'AtTime'">End time (local)
+                                <input type="time" :value="_todUtcToLocal(plan.endAtUtc)" @change="plan.endAtUtc = _todLocalToUtc($event.target.value); savePlan()">
                             </label>
                         </div>
                         <div class="plan-set-toggles">
@@ -7515,9 +7515,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         <template x-if="t.scheduleMode === 'TimeWindow'">
                                             <div class="plan-altchart-wrap">
                                                 <div class="plan-altchart-head">
-                                                    <span class="muted">Elevation tonight (UTC) — drag the green handles to set start &amp; end</span>
+                                                    <span class="muted">Elevation tonight — drag the green handles to set start &amp; end</span>
                                                     <span class="plan-window-times">
-                                                        <span x-text="(t.startAtUtc||'—') + ' → ' + (t.endAtUtc||'—') + ' UTC'"></span>
+                                                        <span x-text="(t.startAtUtc ? _todUtcToLocal(t.startAtUtc) : '—') + ' → ' + (t.endAtUtc ? _todUtcToLocal(t.endAtUtc) : '—') + ' local'"></span>
                                                         <button class="btn btn-sm" @click="planLoadAlt(t, true)" title="Refresh chart">↻</button>
                                                     </span>
                                                 </div>
@@ -7555,8 +7555,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                     </svg>
                                                 </template>
                                                 <div class="plan-window-fields">
-                                                    <label>Start (UTC) <input type="time" x-model="t.startAtUtc" @change="savePlan()"></label>
-                                                    <label>End (UTC) <input type="time" x-model="t.endAtUtc" @change="savePlan()"></label>
+                                                    <label>Start (local) <input type="time" :value="_todUtcToLocal(t.startAtUtc)" @change="t.startAtUtc = _todLocalToUtc($event.target.value); savePlan()"></label>
+                                                    <label>End (local) <input type="time" :value="_todUtcToLocal(t.endAtUtc)" @change="t.endAtUtc = _todLocalToUtc($event.target.value); savePlan()"></label>
                                                 </div>
                                             </div>
                                         </template>
@@ -13760,7 +13760,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260615-plantime"></script>
+    <script src="/js/app.js?v=20260615-planlocal"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
