@@ -3102,8 +3102,18 @@ function ninaApp() {
             const method = options.method || 'GET';
             const key = method + ' ' + url;
 
-            // Deduplicate: if same request is already in flight, return its promise
-            if (this._pending[key]) return this._pending[key];
+            // Dedup is skippable for large/streamed bodies (apiDownload) where
+            // cloning would tee the whole body into memory. Default on.
+            const dedup = options.dedup !== false;
+
+            // Deduplicate: if the same request is already in flight, share it.
+            // Each caller gets its OWN clone of the Response — the body stream
+            // can only be read once, so handing the same Response to two callers
+            // (e.g. the imaging + guide camera pickers both discovering the same
+            // driver) made the second resp.json() throw "body stream already
+            // read". clone() is safe because the base Response is never read
+            // directly (see the return below).
+            if (dedup && this._pending[key]) return this._pending[key].then(r => r.clone());
 
             // NET-1: account for upload bytes (Performance API only
             // surfaces transferSize for the response). For JSON bodies
@@ -3232,8 +3242,11 @@ function ninaApp() {
                 throw err;
             });
 
+            if (!dedup) return promise;   // streamed/large body: hand back the raw Response
             this._pending[key] = promise;
-            return promise;
+            // Return a clone so the cached base Response stays unread and every
+            // caller (this one + any deduped sharers) reads an independent body.
+            return promise.then(r => r.clone());
         },
 
         // POST JSON shorthand
@@ -3465,7 +3478,9 @@ function ninaApp() {
         // / .json() / .blob() on the returned Response. apiFetch handles
         // auth + 401 + abort + deduplication; we just wrap the body read.
         async apiDownload(url, opts = {}) {
-            const resp = await this.apiFetch(url, opts);
+            // Skip dedup/clone: the body is large and streamed (cloning would
+            // tee the whole download into memory).
+            const resp = await this.apiFetch(url, { ...opts, dedup: false });
             if (!resp || !resp.ok) return resp;
 
             const totalHeader = resp.headers.get('Content-Length');
