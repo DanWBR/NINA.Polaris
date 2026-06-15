@@ -15168,6 +15168,56 @@ function ninaApp() {
             } catch (e) { this.toast('Duplicate failed: ' + (e.message || e), 'error'); }
         },
 
+        // Export the selected plan as a shareable JSON file (download).
+        exportPlan() {
+            if (!this.plan) return;
+            try {
+                // Strip the library id so a re-import lands as a new plan
+                // rather than implying it's the same stored entry.
+                const out = JSON.parse(JSON.stringify(this.plan));
+                out.id = '';
+                const data = JSON.stringify({ _polarisPlan: 1, plan: out }, null, 2);
+                const blob = new Blob([data], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const safe = (this.plan.name || 'plan').replace(/[^\w.-]+/g, '_').slice(0, 60);
+                a.href = url; a.download = `polaris-plan-${safe}.json`;
+                document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                this.toast('Plan exported', 'ok');
+            } catch (e) { this.toast('Export failed: ' + (e.message || e), 'error'); }
+        },
+
+        // Open the file picker for importing a plan JSON.
+        importPlanPrompt() {
+            const el = this.$refs.planImportFile;
+            if (el) el.click();
+        },
+
+        // Read a plan JSON file (exported here or hand-shared) and add it to
+        // the library as a new plan.
+        async importPlanFile(ev) {
+            const file = ev.target.files && ev.target.files[0];
+            if (ev.target) ev.target.value = '';   // allow re-importing the same file
+            if (!file) return;
+            try {
+                const text = await file.text();
+                let obj = JSON.parse(text);
+                // Accept either the wrapped export ({_polarisPlan,plan}) or a
+                // bare plan object.
+                let p = (obj && obj.plan && Array.isArray(obj.plan.targets)) ? obj.plan : obj;
+                if (!p || !Array.isArray(p.targets)) throw new Error('Not a Polaris plan file');
+                p.id = '';
+                if (!p.name) p.name = 'Imported plan';
+                (p.targets || []).forEach(t => { t.id = 'T' + Math.random().toString(36).slice(2); });
+                const r = await this.apiPost('/api/plan/plans', p);
+                const created = await r.json();
+                this.plans.push(created);
+                this.selectPlan(created.id);
+                this.toast('Plan imported: ' + (created.name || ''), 'ok');
+            } catch (e) { this.toast('Import failed: ' + (e.message || e), 'error'); }
+        },
+
         async deletePlan() {
             if (!this.plan) return;
             if (!confirm('Delete plan "' + (this.plan.name || '') + '"? This cannot be undone.')) return;
