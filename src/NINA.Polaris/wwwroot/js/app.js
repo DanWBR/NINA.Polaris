@@ -556,6 +556,12 @@ function ninaApp() {
         // Pushed via the set-ecliptic bridge msg and re-applied whenever the
         // engine (re)loads. Persisted to localStorage, so a saved choice wins.
         skyEclipticVisible: true,
+        // SKY constellations: stick-figure lines (on by default, matching the
+        // engine) and the bundled IAU western illustration art (off — it's
+        // pretty but busy). Both pushed via the set-constellations bridge msg
+        // and re-applied whenever the engine (re)loads.
+        skyConstLines: true,
+        skyConstArt: false,
         slewCenterJobId: null,
         slewCenterStatus: null,
         // On a FAILED slew & center we keep the solver console around in a
@@ -8349,6 +8355,17 @@ function ninaApp() {
             this._skySendMessage({ type: 'set-ecliptic', visible: this.skyEclipticVisible });
         },
 
+        // SKY constellation stick-figure lines + labels.
+        toggleSkyConstLines() {
+            this.skyConstLines = !this.skyConstLines;
+            this._skySendMessage({ type: 'set-constellations', lines: this.skyConstLines });
+        },
+        // SKY constellation artwork (the bundled IAU western figure drawings).
+        toggleSkyConstArt() {
+            this.skyConstArt = !this.skyConstArt;
+            this._skySendMessage({ type: 'set-constellations', art: this.skyConstArt });
+        },
+
         _skyPushObserverAndTime() {
             const lat = this.settings.latitude;
             const lng = this.settings.longitude;
@@ -8379,6 +8396,14 @@ function ninaApp() {
                 if (this.skyEclipticVisible) {
                     this._skySendMessage({ type: 'set-ecliptic', visible: true });
                 }
+                // Re-apply constellation lines + figures. Always pushed (not
+                // just when on) so the bridge also forces show_only_pointed
+                // off — otherwise the engine shows lines for just the centred
+                // constellation, not the whole sky.
+                this._skySendMessage({
+                    type: 'set-constellations',
+                    lines: this.skyConstLines, art: this.skyConstArt
+                });
                 if (this.mount?.connected
                     && Number.isFinite(this.mount.ra)
                     && Number.isFinite(this.mount.dec)) {
