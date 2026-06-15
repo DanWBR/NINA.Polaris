@@ -12,6 +12,8 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using System.Text.Json.Serialization;
+
 namespace NINA.Polaris.Services.Plan;
 
 /// <summary>
@@ -94,5 +96,11 @@ public class PlanFrame {
     public string ImageType { get; set; } = "LIGHT";
 }
 
+// Serialize as strings ("Now", "AllDone", …) — the SPA sends/reads these as
+// strings, and the API uses the default System.Text.Json options (which map
+// enums to integers without this attribute, breaking model binding).
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum PlanStartMode { Now, AtTime }
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum PlanEndMode { AllDone, Dawn, AtTime }
