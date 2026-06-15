@@ -52,6 +52,12 @@ public interface IGuider {
     /// false (PHD2 surfaces dither via its own settle reporting).</summary>
     bool IsDithering => false;
 
+    /// <summary>Live settle telemetry for an ASIAIR-style readout (current total
+    /// error vs the tolerance, time within tolerance vs the required settle time,
+    /// elapsed vs timeout), or null when not settling. Native backend only;
+    /// PHD2 reports settle through its own event stream.</summary>
+    object? SettleProgress => null;
+
     /// <summary>RA/Dec correction aggressiveness (0..2 fraction of the error
     /// corrected per frame). Surfaced so the UI shows the live value; native
     /// reads it from the rig profile. PHD2 manages its own, so defaults stand.</summary>

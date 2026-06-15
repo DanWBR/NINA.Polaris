@@ -184,6 +184,7 @@ public static class StatusStreamHandler {
                             looping = activeGuider.IsLooping,
                             settling = activeGuider.IsSettling,
                             dithering = activeGuider.IsDithering,
+                            settleProgress = activeGuider.SettleProgress,
                             raAggression = activeGuider.RaAggression,
                             decAggression = activeGuider.DecAggression,
                             pixelScale = activeGuider.PixelScale,

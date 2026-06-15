@@ -88,7 +88,19 @@ public sealed class GuidingSettler {
 
     public enum State { Settling, Done, TimedOut }
 
+    // Live progress for the ASIAIR-style settle readout. Updated each Update().
+    public double LastErrorPx { get; private set; }
+    public double ThresholdPx => _pixels;
+    public double SettleSeconds => _settleMs / 1000.0;
+    public double TimeoutSeconds => _timeoutMs / 1000.0;
+    /// <summary>Seconds the error has been continuously at/under the threshold
+    /// (the bar that must reach <see cref="SettleSeconds"/> to finish). 0 when
+    /// currently above threshold.</summary>
+    public double BelowSeconds(long nowMs) => _belowSinceMs < 0 ? 0 : (nowMs - _belowSinceMs) / 1000.0;
+    public double ElapsedSeconds(long nowMs) => (nowMs - _startMs) / 1000.0;
+
     public State Update(double totalErrorPx, long nowMs) {
+        LastErrorPx = totalErrorPx;
         if (nowMs - _startMs > _timeoutMs) return State.TimedOut;
         if (totalErrorPx <= _pixels) {
             if (_belowSinceMs < 0) _belowSinceMs = nowMs;

@@ -113,6 +113,13 @@ public sealed class NativeGuider : IGuider, IDisposable {
     private volatile bool _paused;
     private GuidingSettler? _settler;
     private double _settleThresholdPx = 1.5;
+    private double _settleTimeSec = 10;
+    private double _settleTimeoutSec = 40;
+    // Live settle snapshot (written by the guide loop, read by the WS payload)
+    // so the UI can show an ASIAIR-style "settling: err / tol, t / settleTime"
+    // readout. _settleActive mirrors IsSettling for a lock-free read.
+    private volatile bool _settleActive;
+    private double _settleErrPx, _settleBelowSec, _settleElapsedSec;
     private int _starLostCount;
     private int _mountLostCount;
 
@@ -136,6 +143,19 @@ public sealed class NativeGuider : IGuider, IDisposable {
     // freeze RMS/error history while the star is deliberately being chased to
     // the new lock point (otherwise the dither delta inflates RMS).
     public bool IsDithering { get; private set; }
+
+    /// <summary>Live settle telemetry (null unless settling) for the ASIAIR-style
+    /// readout: current total error vs the tolerance, how long it has been within
+    /// tolerance vs the required settle time, and elapsed vs timeout.</summary>
+    public object? SettleProgress => _settleActive ? new {
+        errorPx = _settleErrPx,
+        thresholdPx = _settleThresholdPx,
+        belowSec = _settleBelowSec,
+        settleSec = _settleTimeSec,
+        elapsedSec = _settleElapsedSec,
+        timeoutSec = _settleTimeoutSec,
+        dithering = IsDithering
+    } : null;
 
     public double PixelScale { get; private set; }
     public string? LastAlert { get; private set; }
@@ -276,6 +296,10 @@ public sealed class NativeGuider : IGuider, IDisposable {
         BuildAlgorithms();
         await BuildMultiStarAsync(ct);
         _settleThresholdPx = settlePixels;
+        _settleTimeSec = settleTime;
+        _settleTimeoutSec = settleTimeout;
+        _settleActive = true;
+        _settleErrPx = 0; _settleBelowSec = 0; _settleElapsedSec = 0;
         _settler = new GuidingSettler(settlePixels, settleTime, settleTimeout, NowMs());
         await StartLoopAsync(LoopMode.Guide);
     }
@@ -332,6 +356,10 @@ public sealed class NativeGuider : IGuider, IDisposable {
         IsDithering = true;
         LastSettleStatus = "settling";
         _settleThresholdPx = settlePixels;
+        _settleTimeSec = settleTime;
+        _settleTimeoutSec = settleTimeout;
+        _settleActive = true;
+        _settleErrPx = mag; _settleBelowSec = 0; _settleElapsedSec = 0;
         _settler = new GuidingSettler(settlePixels, settleTime, settleTimeout, NowMs());
         _logger.LogInformation("Native dither: {Px}px (raOnly={RaOnly})", pixels, raOnly);
         return Task.CompletedTask;
@@ -732,6 +760,9 @@ public sealed class NativeGuider : IGuider, IDisposable {
         }
         _loopCts = null;
         _loopTask = null;
+        IsSettling = false;
+        IsDithering = false;
+        _settleActive = false;
         if (AppState is "Guiding" or "Looping" or "Paused" or "LostLock") SetAppState("Stopped");
     }
 
@@ -881,9 +912,15 @@ public sealed class NativeGuider : IGuider, IDisposable {
         // Settle progress (dither / start).
         if (_settler != null) {
             double totalErrPx = Math.Sqrt(raPx * raPx + decPx * decPx);
-            var state = _settler.Update(totalErrPx, NowMs());
+            long now = NowMs();
+            var state = _settler.Update(totalErrPx, now);
+            // Snapshot live progress for the WS/UI ASIAIR-style readout.
+            _settleErrPx = totalErrPx;
+            _settleBelowSec = _settler.BelowSeconds(now);
+            _settleElapsedSec = _settler.ElapsedSeconds(now);
             if (state != GuidingSettler.State.Settling) {
                 IsSettling = false;
+                _settleActive = false;
                 bool ok = state == GuidingSettler.State.Done;
                 LastSettleStatus = ok ? "done" : "failed";
                 // A dither just finished settling: drop the error history that

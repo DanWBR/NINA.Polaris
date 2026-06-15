@@ -25671,8 +25671,15 @@ function ninaApp() {
             // Dither/settle take priority over the steady "GUIDING" label so
             // the operator sees the scope is deliberately being moved + settled
             // (the native backend keeps appState "Guiding" through a dither).
-            if (g.dithering) return tag + ' DITHERING';
-            if (g.settling) return tag + ' SETTLING';
+            // When the live settle telemetry is present, show error/tolerance.
+            if (g.dithering || g.settling) {
+                const sp = g.settleProgress;
+                const verb = g.dithering ? 'DITHER' : 'SETTLE';
+                if (sp && sp.errorPx != null && sp.thresholdPx != null) {
+                    return `${tag} ${verb} ${sp.errorPx.toFixed(1)}/${sp.thresholdPx.toFixed(1)}px`;
+                }
+                return tag + (g.dithering ? ' DITHERING' : ' SETTLING');
+            }
             if (g.guiding) {
                 const rms = (g.rmsTotal != null) ? g.rmsTotal.toFixed(2) : '--';
                 return `${tag} GUIDING (${rms}")`;
@@ -25694,8 +25701,18 @@ function ninaApp() {
             const g = this.guider || {};
             const tag = (g.backend === 'native') ? 'Native guider' : 'PHD2';
             if (!g.connected) return tag + ' not connected, click for Guider';
-            if (g.dithering) return `${tag}: dithering (settling to the new lock), click for Guider`;
-            if (g.settling) return `${tag}: settling, click for Guider`;
+            if (g.dithering || g.settling) {
+                const sp = g.settleProgress;
+                const verb = g.dithering ? 'Dithering' : 'Settling';
+                if (sp) {
+                    const e = (sp.errorPx != null) ? sp.errorPx.toFixed(2) : '--';
+                    const t = (sp.thresholdPx != null) ? sp.thresholdPx.toFixed(2) : '--';
+                    const b = (sp.belowSec != null) ? sp.belowSec.toFixed(0) : '0';
+                    const s = (sp.settleSec != null) ? sp.settleSec.toFixed(0) : '--';
+                    return `${verb}: error ${e}px (need ≤ ${t}px for ${b}/${s}s), click for Guider`;
+                }
+                return `${tag}: ${verb.toLowerCase()}, click for Guider`;
+            }
             if (g.guiding) {
                 const rms = (g.rmsTotal != null) ? g.rmsTotal.toFixed(2) : '--';
                 return `Guiding, RMS ${rms}", click for Guider`;

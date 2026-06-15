@@ -2579,6 +2579,31 @@ label select.input-sm {
     font-size: 13px;
 }
 
+/* ASIAIR-style settle readout (GUIDE tab). Shows live error vs tolerance and
+   a bar that fills as the error stays within tolerance toward the settle time. */
+.settle-readout {
+    margin: 6px 0; padding: 8px 10px; border-radius: 8px;
+    background: color-mix(in srgb, var(--warn, #e0a52b) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--warn, #e0a52b) 35%, transparent);
+}
+.settle-readout.is-dither {
+    background: color-mix(in srgb, var(--accent, #4f8cff) 12%, transparent);
+    border-color: color-mix(in srgb, var(--accent, #4f8cff) 35%, transparent);
+}
+.settle-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 13px; font-weight: 600; margin-bottom: 6px;
+}
+.settle-bar {
+    height: 6px; border-radius: 3px; overflow: hidden;
+    background: color-mix(in srgb, var(--text-muted, #9aa4b2) 25%, transparent);
+}
+.settle-bar-fill {
+    height: 100%; border-radius: 3px; background: var(--ok, #3fb950);
+    transition: width 0.3s ease;
+}
+.settle-sub { font-size: 11px; margin-top: 4px; }
+
 .info-row span {
     color: var(--text-secondary);
 }

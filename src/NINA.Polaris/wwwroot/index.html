@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260615-ditherbadge">
+    <link rel="stylesheet" href="/css/app.css?v=20260615-settle">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -3862,10 +3862,25 @@
                         <!-- Dither / settle status. Dithering takes precedence
                              over plain settling so the operator sees that the
                              excursion is intentional (and that RMS is frozen). -->
-                        <div class="info-row" x-show="guider.dithering">
-                            <span class="text-warn">⤡ Dithering — settling…</span></div>
-                        <div class="info-row" x-show="guider.settling && !guider.dithering">
-                            <span class="text-warn">Settling…</span></div>
+                        <!-- ASIAIR-style settle readout: live error vs the
+                             tolerance, with a bar that fills as the error stays
+                             within tolerance toward the required settle time.
+                             Shown for any settle (dither or post-start). -->
+                        <div class="settle-readout" x-show="guider.settling"
+                             :class="{ 'is-dither': guider.dithering }">
+                            <div class="settle-head">
+                                <span x-text="guider.dithering ? '⤡ Dithering — settling' : 'Settling'"></span>
+                                <strong x-show="guider.settleProgress"
+                                        :class="guider.settleProgress && guider.settleProgress.errorPx <= guider.settleProgress.thresholdPx ? 'text-ok' : 'text-warn'"
+                                        x-text="guider.settleProgress ? (guider.settleProgress.errorPx.toFixed(2) + ' / ' + guider.settleProgress.thresholdPx.toFixed(2) + ' px') : ''"></strong>
+                            </div>
+                            <div class="settle-bar" x-show="guider.settleProgress">
+                                <div class="settle-bar-fill"
+                                     :style="'width:' + Math.min(100, 100 * ((guider.settleProgress.belowSec||0) / (guider.settleProgress.settleSec||1))) + '%'"></div>
+                            </div>
+                            <div class="settle-sub muted" x-show="guider.settleProgress"
+                                 x-text="'within tolerance ' + (guider.settleProgress.belowSec||0).toFixed(0) + '/' + (guider.settleProgress.settleSec||0).toFixed(0) + ' s · elapsed ' + (guider.settleProgress.elapsedSec||0).toFixed(0) + '/' + (guider.settleProgress.timeoutSec||0).toFixed(0) + ' s'"></div>
+                        </div>
                         <div class="info-row" x-show="!guider.settling && guider.lastSettleStatus === 'done'">
                             <span class="text-ok">✓ Settled</span></div>
                         <div class="info-row" x-show="!guider.settling && guider.lastSettleStatus === 'failed'">
@@ -14015,7 +14030,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260615-ditherbadge"></script>
+    <script src="/js/app.js?v=20260615-settle"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
