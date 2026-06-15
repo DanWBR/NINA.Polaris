@@ -605,6 +605,8 @@ function ninaApp() {
         planShutdownConfirm: false,// risk modal for the host-shutdown toggle
         planTargetToRemove: null,  // target pending removal (confirm modal)
         planAlt: {},               // per-target altitude-track cache (keyed by target id)
+        planVizOpen: false,        // "View plan" timeline modal visibility
+        planViz: null,             // computed timeline model (built by openPlanViz)
 
         // Flat Wizard state. Form fields mirror EquipmentProfile.FlatWizard
         // (FW-1) and are hydrated by flatWizardOpenTab() from
@@ -15556,6 +15558,148 @@ function ninaApp() {
             };
             window.addEventListener('pointermove', move);
             window.addEventListener('pointerup', up);
+        },
+
+        // ----- PLAN: whole-plan visualization modal -----
+
+        // Distinct colour per target (cycles if there are more than the palette).
+        planVizColor(i) {
+            const p = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#a855f7',
+                       '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#14b8a6'];
+            return p[((i % p.length) + p.length) % p.length];
+        },
+        _todSec(hhmm) {
+            const m = /^(\d{1,2}):(\d{2})/.exec(hhmm || '');
+            return m ? (+m[1]) * 3600 + (+m[2]) * 60 : null;
+        },
+        // "HH:mm" UTC window length in seconds, wrapping past midnight (mirror of
+        // PlanCompilerService.WindowSeconds).
+        _planWindowSeconds(start, end) {
+            const s = this._todSec(start), e = this._todSec(end);
+            if (s == null || e == null) return 0;
+            let d = e - s; if (d <= 0) d += 24 * 3600; return d;
+        },
+        // Sum of frame counts for a target.
+        _planTargetFrames(t) {
+            return (t.frames || []).reduce((a, f) => a + Math.max(0, f.count || 0), 0);
+        },
+        // Per-target wall-clock estimate in seconds (mirror of
+        // PlanCompilerService.EstimateSeconds, one target).
+        _planTargetSeconds(t) {
+            const SLEW = 30, SOLVE = 20, PERFRAME = 5;
+            let s = SLEW + SOLVE + Math.max(0, t.firstDelaySec || 0);
+            if (t.scheduleMode === 'TimeWindow') {
+                s += this._planWindowSeconds(t.startAtUtc, t.endAtUtc);
+            } else {
+                for (const f of (t.frames || []))
+                    s += Math.max(0, f.count || 0) * (Math.max(0, f.exposureSeconds || 0) + PERFRAME);
+            }
+            return s;
+        },
+        // Map a "HH:mm" UTC time-of-day to the absolute ms instant at/after a
+        // window start (same wrap logic as _planTodToMs but domain-explicit, so
+        // it works without a per-target altitude cache entry).
+        _planTodToWinMs(fromMs, hhmm) {
+            const m = /^(\d{1,2}):(\d{2})/.exec(hhmm || '');
+            if (!m) return null;
+            const tod = (+m[1]) * 3600000 + (+m[2]) * 60000;
+            const f = new Date(fromMs);
+            let cand = Date.UTC(f.getUTCFullYear(), f.getUTCMonth(), f.getUTCDate()) + tod;
+            while (cand < fromMs) cand += 86400000;
+            return cand;
+        },
+
+        closePlanViz() { this.planVizOpen = false; },
+
+        // Build the whole-plan timeline model and open the modal: a combined
+        // night graph (one elevation curve per target in its colour) plus a
+        // Gantt strip of each target's scheduled sub-interval, start → end.
+        async openPlanViz() {
+            if (!this.plan) return;
+            this.planVizOpen = true;
+            this.planViz = { loading: true };
+            try {
+                const targets = (this.plan.targets || []).filter(t => t.enabled);
+                if (!targets.length) { this.planViz = { loading: false, empty: true }; return; }
+
+                // Make sure we have a fresh estimate for the totals line.
+                try { await this.planEstimateRefresh(); } catch (e) { /* non-fatal */ }
+
+                // Altitude tracks share one night window (computed from the
+                // observer, target-independent), so they overlay directly.
+                await Promise.all(targets.map(t => this.planLoadAlt(t)));
+
+                let dom = null;
+                for (const t of targets) {
+                    const a = this.planAlt[t.id];
+                    if (a && a.fromMs && a.span) { dom = a; break; }
+                }
+                if (!dom) { this.planViz = { loading: false, error: true }; return; }
+
+                const { fromMs, toMs, span, VBW, VBH, ticks, nightX0, nightX1, y30, duskMs, dawnMs } = dom;
+                const xOf = ms => Math.max(0, Math.min(VBW, ((ms - fromMs) / span) * VBW));
+                const toLocal = ms => this.planFormatLocalTime(new Date(ms).toISOString());
+
+                // Sequential cursor for AllDone targets; TimeWindow targets sit
+                // at their explicit window and still advance the cursor.
+                let cursor = (this.plan.startMode === 'AtTime' && this.plan.startAtUtc)
+                    ? (this._planTodToWinMs(fromMs, this.plan.startAtUtc) ?? fromMs)
+                    : (duskMs && duskMs > fromMs ? duskMs : fromMs);
+                const planStartMs = cursor;
+
+                const segs = targets.map((t, i) => {
+                    let s0, s1;
+                    if (t.scheduleMode === 'TimeWindow' && t.startAtUtc && t.endAtUtc) {
+                        s0 = this._planTodToWinMs(fromMs, t.startAtUtc);
+                        s1 = this._planTodToWinMs(fromMs, t.endAtUtc);
+                        if (s0 == null || s1 == null) { s0 = cursor; s1 = cursor + this._planTargetSeconds(t) * 1000; }
+                        else { if (s1 <= s0) s1 += 86400000; cursor = Math.max(cursor, s1); }
+                    } else {
+                        s0 = cursor; s1 = cursor + this._planTargetSeconds(t) * 1000; cursor = s1;
+                    }
+                    const a = this.planAlt[t.id];
+                    return {
+                        id: t.id, name: t.name || ('Target ' + (i + 1)),
+                        color: this.planVizColor(i),
+                        x0: xOf(s0), x1: xOf(s1),
+                        startLocal: toLocal(s0), endLocal: toLocal(s1),
+                        mode: t.scheduleMode === 'TimeWindow' ? 'Window' : 'Sequential',
+                        frames: this._planTargetFrames(t),
+                        durationSec: Math.max(0, Math.round((s1 - s0) / 1000)),
+                        ra: t.raHours, dec: t.decDeg,
+                        path: (a && a.path && !a.empty && !a.error) ? a.path : null,
+                        maxAlt: (a && isFinite(a.maxAlt)) ? a.maxAlt : null
+                    };
+                });
+
+                let planEndMs;
+                if (this.plan.endMode === 'Dawn') planEndMs = (dawnMs && dawnMs <= toMs) ? dawnMs : toMs;
+                else if (this.plan.endMode === 'AtTime' && this.plan.endAtUtc)
+                    planEndMs = this._planTodToWinMs(fromMs, this.plan.endAtUtc) ?? cursor;
+                else planEndMs = cursor;
+
+                const rowH = 24, gap = 6, top = 6;
+                const ganttH = top * 2 + targets.length * rowH + Math.max(0, targets.length - 1) * gap;
+
+                this.planViz = {
+                    loading: false, fromMs, toMs, span, VBW, VBH, ticks,
+                    nightX0, nightX1, y30,
+                    planStartX: xOf(planStartMs), planEndX: xOf(planEndMs),
+                    planStartLocal: toLocal(planStartMs), planEndLocal: toLocal(planEndMs),
+                    endMode: this.plan.endMode,
+                    segs, rowH, gap, top, ganttH,
+                    targetCount: targets.length,
+                    totalFrames: segs.reduce((a, s) => a + s.frames, 0),
+                    totalSeconds: this.planEstimateSeconds || segs.reduce((a, s) => a + s.durationSec, 0)
+                };
+            } catch (e) {
+                this.planViz = { loading: false, error: true };
+            }
+        },
+        // Gantt row Y for the i-th target (viewBox units).
+        planVizRowY(i) {
+            const v = this.planViz; if (!v) return 0;
+            return v.top + i * (v.rowH + v.gap);
         },
 
         // --- End-of-run actions ---

@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260615-calmodal">
+    <link rel="stylesheet" href="/css/app.css?v=20260615-planviz">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -7434,6 +7434,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <button class="btn btn-sm btn-danger" @click="deletePlan()" :disabled="!plan">Delete</button>
                     <button class="btn btn-sm" @click="planSettingsOpen = !planSettingsOpen" :disabled="!plan"
                             :class="{ 'btn-active': planSettingsOpen }" title="Plan settings">⬡ Settings</button>
+                    <button class="btn btn-sm" @click="openPlanViz()"
+                            :disabled="!plan || planTargetCount() === 0"
+                            title="Visualize the whole plan timeline (elevation + sub-intervals)">▦ View plan</button>
                 </div>
 
                 <div x-show="!plan" class="plan-empty">No plans yet. Tap <b>＋ New</b> to create one.</div>
@@ -7666,6 +7669,113 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </div>
                 </div>
             </div>
+
+            <!-- View-plan timeline modal. Teleported to <body> so its fixed
+                 backdrop overlays the viewport regardless of panel containing
+                 blocks. Combined night graph (one elevation curve per target,
+                 coloured) + Gantt strip of each target's sub-interval. -->
+            <template x-teleport="body">
+            <div class="plan-viz-backdrop" x-show="planVizOpen" x-cloak @click.self="closePlanViz()">
+                <div class="plan-viz">
+                    <div class="plan-viz-head">
+                        <span x-text="(plan && plan.name) ? ('Plan — ' + plan.name) : 'Plan'"></span>
+                        <button class="btn btn-sm" @click="closePlanViz()">✕</button>
+                    </div>
+                    <div class="plan-viz-body">
+                        <template x-if="planViz && planViz.loading">
+                            <div class="text-muted" style="padding:24px;text-align:center">Building timeline…</div>
+                        </template>
+                        <template x-if="planViz && planViz.empty">
+                            <div class="text-muted" style="padding:24px;text-align:center">No enabled targets in this plan.</div>
+                        </template>
+                        <template x-if="planViz && planViz.error">
+                            <div class="text-muted" style="padding:24px;text-align:center">Could not load altitude data for the plan.</div>
+                        </template>
+                        <template x-if="planViz && !planViz.loading && !planViz.empty && !planViz.error">
+                        <div style="display:flex;flex-direction:column;gap:14px">
+                            <!-- Totals -->
+                            <div class="plan-viz-summary">
+                                <span><span class="muted">Start</span> <strong x-text="planViz.planStartLocal"></strong></span>
+                                <span><span class="muted">End</span> <strong x-text="planViz.planEndLocal"></strong>
+                                    <span class="muted" x-show="planViz.endMode" x-text="'(' + planViz.endMode + ')'"></span></span>
+                                <span><span class="muted">Targets</span> <strong x-text="planViz.targetCount"></strong></span>
+                                <span><span class="muted">Frames</span> <strong x-text="planViz.totalFrames"></strong></span>
+                                <span><span class="muted">Est. time</span> <strong x-text="planFormatDuration(planViz.totalSeconds)"></strong></span>
+                            </div>
+
+                            <!-- Combined elevation graph: night band, 30° guide,
+                                 per-target curve + sub-interval band, plan
+                                 start/end markers. preserveAspectRatio=none so
+                                 x maps linearly to width (markers/gantt align). -->
+                            <div class="plan-altchart-wrap">
+                                <svg class="plan-viz-altchart" :viewBox="'0 0 ' + planViz.VBW + ' ' + planViz.VBH" preserveAspectRatio="none">
+                                    <rect :x="planViz.nightX0" y="0" :width="Math.max(0, planViz.nightX1 - planViz.nightX0)"
+                                          :height="planViz.VBH" class="plan-alt-night"></rect>
+                                    <template x-for="tk in (planViz.ticks || [])" :key="'vg'+tk.x">
+                                        <line :x1="tk.x" y1="0" :x2="tk.x" :y2="planViz.VBH" class="plan-alt-tick"></line>
+                                    </template>
+                                    <line x1="0" :y1="planViz.y30" :x2="planViz.VBW" :y2="planViz.y30" class="plan-alt-guide"></line>
+                                    <template x-for="s in planViz.segs" :key="'vb'+s.id">
+                                        <g>
+                                            <rect :x="s.x0" y="0" :width="Math.max(0, s.x1 - s.x0)" :height="planViz.VBH"
+                                                  :fill="s.color" opacity="0.10"></rect>
+                                            <template x-if="s.path">
+                                                <path :d="s.path" fill="none" :stroke="s.color" stroke-width="3" vector-effect="non-scaling-stroke"></path>
+                                            </template>
+                                        </g>
+                                    </template>
+                                    <line :x1="planViz.planStartX" y1="0" :x2="planViz.planStartX" :y2="planViz.VBH" class="plan-viz-marker"></line>
+                                    <line :x1="planViz.planEndX" y1="0" :x2="planViz.planEndX" :y2="planViz.VBH" class="plan-viz-marker"></line>
+                                </svg>
+                                <div class="plan-altchart-axis">
+                                    <template x-for="tk in (planViz.ticks || [])" :key="'va'+tk.x">
+                                        <span class="plan-axis-tick" :style="`left:${tk.leftPct}%`" x-text="tk.label"></span>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- Gantt strip: one colored bar per target sub-interval. -->
+                            <div class="plan-viz-gantt">
+                                <svg :viewBox="'0 0 ' + planViz.VBW + ' ' + planViz.ganttH" preserveAspectRatio="none"
+                                     :style="`width:100%;height:${planViz.ganttH}px`">
+                                    <template x-for="tk in (planViz.ticks || [])" :key="'gg'+tk.x">
+                                        <line :x1="tk.x" y1="0" :x2="tk.x" :y2="planViz.ganttH" class="plan-alt-tick"></line>
+                                    </template>
+                                    <template x-for="(s, si) in planViz.segs" :key="'gr'+s.id">
+                                        <rect :x="s.x0" :y="planVizRowY(si)" :width="Math.max(2, s.x1 - s.x0)"
+                                              :height="planViz.rowH" :fill="s.color" rx="3" opacity="0.85"></rect>
+                                    </template>
+                                    <line :x1="planViz.planStartX" y1="0" :x2="planViz.planStartX" :y2="planViz.ganttH" class="plan-viz-marker"></line>
+                                    <line :x1="planViz.planEndX" y1="0" :x2="planViz.planEndX" :y2="planViz.ganttH" class="plan-viz-marker"></line>
+                                </svg>
+                            </div>
+
+                            <!-- Per-target legend / details -->
+                            <table class="plan-viz-table">
+                                <thead><tr>
+                                    <th></th><th>Target</th><th>Mode</th><th>Window (local)</th>
+                                    <th>Frames</th><th>Est.</th><th>Max alt</th>
+                                </tr></thead>
+                                <tbody>
+                                    <template x-for="s in planViz.segs" :key="'vt'+s.id">
+                                        <tr>
+                                            <td><span class="plan-viz-swatch" :style="`background:${s.color}`"></span></td>
+                                            <td x-text="s.name"></td>
+                                            <td x-text="s.mode"></td>
+                                            <td x-text="s.startLocal + ' – ' + s.endLocal"></td>
+                                            <td x-text="s.frames"></td>
+                                            <td x-text="planFormatDuration(s.durationSec)"></td>
+                                            <td x-text="s.maxAlt != null ? (s.maxAlt + '°') : '—'"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+            </template>
 
             <div x-show="tab === 'sequence'" class="tab-panel tab-panel-autorun">
                 <div class="panel-header">
@@ -13813,7 +13923,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260615-calmodal"></script>
+    <script src="/js/app.js?v=20260615-planviz"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

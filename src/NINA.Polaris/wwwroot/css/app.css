@@ -12026,3 +12026,23 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 }
 .plan-window-fields { display: flex; gap: 14px; }
 .plan-window-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--text-muted, #9aa4b2); }
+
+/* PLANVIZ: whole-plan visualization modal. */
+.plan-viz-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000;
+    display: flex; align-items: center; justify-content: center; padding: 20px; }
+.plan-viz { background: #0d0f15; border: 1px solid #333; border-radius: 8px;
+    width: min(980px, 96vw); max-height: 92vh; display: flex; flex-direction: column; overflow: hidden; }
+.plan-viz-head { display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 14px; border-bottom: 1px solid #222; font-weight: 600; flex: 0 0 auto; }
+.plan-viz-body { padding: 14px; overflow-y: auto; }
+.plan-viz-summary { display: flex; flex-wrap: wrap; gap: 18px; font-size: 13px; }
+.plan-viz-summary .muted { color: var(--text-muted, #9aa4b2); }
+.plan-viz-altchart { width: 100%; height: 220px; display: block;
+    background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius); }
+.plan-viz-marker { stroke: #e5e7eb; stroke-width: 1.5; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
+.plan-viz-gantt svg { display: block; background: var(--bg-input);
+    border: 1px solid var(--border); border-radius: var(--radius); }
+.plan-viz-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.plan-viz-table th { text-align: left; color: #888; font-weight: 600; border-bottom: 1px solid #222; padding: 5px 8px; }
+.plan-viz-table td { border-bottom: 1px solid #1a1a1a; padding: 5px 8px; }
+.plan-viz-swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: middle; }
