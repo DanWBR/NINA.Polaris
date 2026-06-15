@@ -15278,16 +15278,25 @@ function ninaApp() {
             const curFrac = (curMs != null) ? (curMs - a.fromMs) / a.span : null;
             const pointerFrac0 = (ev.clientX - rect0.left) / Math.max(1, rect0.width);
             const offset = (curFrac != null) ? (pointerFrac0 - curFrac) : 0;
-            const move = (e) => {
+            // Throttle the handle update to one per animation frame. Each
+            // update mutates t.startAtUtc/endAtUtc which re-renders the chart;
+            // without coalescing the many pointermove events per frame back up
+            // and the handle trails the cursor.
+            let raf = 0, pendingX = ev.clientX;
+            const apply = () => {
+                raf = 0;
                 const rect = svg.getBoundingClientRect();
-                let frac = (e.clientX - rect.left) / Math.max(1, rect.width) - offset;
+                let frac = (pendingX - rect.left) / Math.max(1, rect.width) - offset;
                 frac = Math.max(0, Math.min(1, frac));
                 const hhmm = this._planMsToTod(a.fromMs + frac * a.span);
                 if (which === 'start') t.startAtUtc = hhmm; else t.endAtUtc = hhmm;
             };
+            const move = (e) => { pendingX = e.clientX; if (!raf) raf = requestAnimationFrame(apply); };
             const up = () => {
                 window.removeEventListener('pointermove', move);
                 window.removeEventListener('pointerup', up);
+                if (raf) { cancelAnimationFrame(raf); raf = 0; }
+                apply();            // final position
                 this.savePlan();
             };
             window.addEventListener('pointermove', move);
@@ -20950,6 +20959,19 @@ function ninaApp() {
                 (ev.changedTouches && ev.changedTouches[0] ? ev.changedTouches[0].clientX : 0);
             const cy = ev.clientY != null ? ev.clientY :
                 (ev.changedTouches && ev.changedTouches[0] ? ev.changedTouches[0].clientY : 0);
+            // Refresh the displayed image size from the LIVE layout. The
+            // @load-time cache (cropOnImageLoaded) goes stale when the image
+            // or modal resizes after load, which made the ROI fractions wrong:
+            // the rectangle lagged the cursor and couldn't reach the right /
+            // bottom edge (an invisible ceiling at the stale size's ratio).
+            const img = pickerEl.querySelector('.crop-picker-img');
+            if (img) {
+                const ir = img.getBoundingClientRect();
+                if (ir.width > 0 && ir.height > 0) {
+                    this.crop.imgDisplayWidth = ir.width;
+                    this.crop.imgDisplayHeight = ir.height;
+                }
+            }
             // Clamp to picker bounds so a drag that overshoots the
             // image edge still produces a valid ROI snapped to the
             // displayed image area.
@@ -20968,14 +20990,31 @@ function ninaApp() {
 
         cropOnPointerMove(ev) {
             if (!this.crop.dragging) return;
-            const picker = ev.currentTarget;
-            const { x, y } = this._cropPointerXY(ev, picker);
-            this.crop.roi.endX = x;
-            this.crop.roi.endY = y;
+            // Throttle to one update per frame: a drag fires many pointermove
+            // events per frame, and each one triggers a reactive overlay
+            // re-render — without coalescing they back up and the rectangle
+            // visibly trails the cursor.
+            this._cropPendingXY = this._cropPointerXY(ev, ev.currentTarget);
+            if (this._cropRaf) return;
+            this._cropRaf = requestAnimationFrame(() => {
+                this._cropRaf = 0;
+                if (this._cropPendingXY && this.crop.dragging) {
+                    this.crop.roi.endX = this._cropPendingXY.x;
+                    this.crop.roi.endY = this._cropPendingXY.y;
+                }
+            });
         },
 
         cropOnPointerUp(ev) {
             if (!this.crop.dragging) return;
+            // Flush any pending throttled position so the final rectangle
+            // matches where the pointer was released.
+            if (this._cropRaf) { cancelAnimationFrame(this._cropRaf); this._cropRaf = 0; }
+            if (this._cropPendingXY) {
+                this.crop.roi.endX = this._cropPendingXY.x;
+                this.crop.roi.endY = this._cropPendingXY.y;
+                this._cropPendingXY = null;
+            }
             this.crop.dragging = false;
             // Treat a click-without-drag (< 4 px in either axis) as a
             // clear instead of an accidental zero-size rectangle.
