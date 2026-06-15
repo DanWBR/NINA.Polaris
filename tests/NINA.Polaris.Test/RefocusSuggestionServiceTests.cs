@@ -150,7 +150,7 @@ public class RefocusSuggestionServiceTests {
     }
 
     [Test]
-    public void StarCountCrash_FiresSuggestion() {
+    public void StarCountCrash_FlatHfr_IsCloudsNotFocus_DoesNotFire() {
         var svc = MakeService(out _);
         var t = DateTime.UtcNow;
         // First 20 stable samples with 100 stars
@@ -159,17 +159,40 @@ public class RefocusSuggestionServiceTests {
         }
         Assert.That(svc.CurrentStatus.Suggesting, Is.False);
 
-        // Next samples: HFR stays stable but star count crashes to 30
-        // (70% drop, well past the 30% threshold). Need enough frames
-        // for the rolling-mean window (5) to fill with low-star samples.
+        // Next samples: star count crashes to 30 (70% drop) but HFR
+        // stays flat at the baseline — this is passing clouds dimming
+        // out the faint stars, NOT focus drift. The suggestion must NOT
+        // fire (the field-reported false positive this guard fixes).
         for (int i = 21; i <= 30; i++) {
             svc.InjectFrameForTest(i, 2.0, 30, t.AddSeconds(i));
         }
+        Assert.That(svc.CurrentStatus.Suggesting, Is.False,
+            "A star-count crash with flat HFR is transparency (clouds), "
+            + "not a focus problem, and must not raise a refocus suggestion");
+    }
+
+    [Test]
+    public void StarCountCrash_WithElevatedHfr_FiresSuggestion() {
+        var svc = MakeService(out _);
+        var t = DateTime.UtcNow;
+        // First 20 stable samples with 100 stars (baseline HFR ~2.0)
+        for (int i = 1; i <= 20; i++) {
+            svc.InjectFrameForTest(i, 2.0, 100, t.AddSeconds(i));
+        }
+        Assert.That(svc.CurrentStatus.Suggesting, Is.False);
+
+        // Now both signals move together: star count crashes to 30 AND
+        // HFR jumps to a steady ~2.6 (30% above baseline, > the 10%
+        // guard). Flat slope means the primary trend trigger stays
+        // quiet, so this exercises the secondary star-crash path.
+        for (int i = 21; i <= 30; i++) {
+            svc.InjectFrameForTest(i, 2.6, 30, t.AddSeconds(i));
+        }
         var st = svc.CurrentStatus;
         Assert.That(st.Suggesting, Is.True,
-            $"Star count crash should fire even with stable HFR. "
-            + $"baselineStars={st.BaselineStarCount}, samples={st.SampleCount}");
-        Assert.That(st.Reason, Does.Contain("Star count").Or.Contain("star count"));
+            $"Star crash paired with elevated HFR is real focus drift. "
+            + $"baselineStars={st.BaselineStarCount}, baselineHfr={st.BaselineHfr}");
+        Assert.That(st.Reason, Does.Contain("Star count").Or.Contain("HFR"));
     }
 
     [Test]

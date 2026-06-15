@@ -36,11 +36,14 @@ namespace NINA.Polaris.Services;
 /// jitter (oscillates around a mean) while catching systematic drift
 /// (trends in one direction).
 ///
-/// Secondary signal: a >30% drop in detected star count fires
-/// regardless of HFR. When focus drifts very far, the dimmer stars
-/// dim out entirely and HFR is computed on a shrinking subset of
-/// brighter stars, so HFR can look misleadingly stable while the
-/// image visibly degrades.
+/// Secondary signal: a >30% drop in detected star count, but ONLY
+/// when the HFR is also elevated above baseline. A star-count drop on
+/// its own does not fire — passing clouds / poor transparency dim out
+/// the faint stars without affecting focus, so the HFR of the bright
+/// stars that survive stays flat. Real focus drift bloats every star,
+/// so the count drop comes paired with rising HFR; that pairing is
+/// what this trigger looks for, which keeps cloud cover from being
+/// mistaken for a focus problem.
 ///
 /// Frame handler is awaited sequentially inside
 /// <see cref="LiveStackingService.AddFrameAsync"/>, but the work
@@ -88,8 +91,20 @@ public class RefocusSuggestionService : IDisposable {
     private const double FireExtrapolatedSlopeRatio = 0.30;
 
     /// <summary>Star count crash trigger: secondary signal. 0.70 = a
-    /// 30% drop in star count vs baseline fires on its own.</summary>
+    /// 30% drop in star count vs baseline.</summary>
     private const double StarCountCrashRatio = 0.70;
+
+    /// <summary>Star-count crash guard. A star-count drop is only
+    /// treated as a focus problem when the rolling-mean HFR is also at
+    /// least this fraction above baseline. Below it the drop is treated
+    /// as poor transparency (passing clouds) and the suggestion is
+    /// suppressed: clouds dim out the faint stars — collapsing the
+    /// count — without touching focus, so the HFR of the bright stars
+    /// that survive stays flat, whereas real focus drift bloats every
+    /// star and pushes HFR up alongside the count drop. 1.10 = HFR must
+    /// be ≥10% degraded (comfortably above stable seeing jitter, which
+    /// sits a few % above the 5th-percentile baseline).</summary>
+    private const double StarCrashRequiresHfrRatio = 1.10;
 
     /// <summary>Auto-clear when rolling mean falls back to within
     /// this fraction of baseline.</summary>
@@ -367,12 +382,24 @@ public class RefocusSuggestionService : IDisposable {
             return RaiseSuggestion(reason, out fireToast, out toastReason);
         }
 
-        // ---- Secondary trigger: star count crash without HFR trigger.
-        //      Covers very-out-of-focus where HFR computes on a
-        //      shrinking set of bright stars and looks stable.
-        if (_baselineStarCount > 0 && rollingStars < _baselineStarCount * StarCountCrashRatio) {
+        // ---- Secondary trigger: star count crash WITH HFR also up.
+        //      A star-count drop on its own is ambiguous and was a
+        //      source of false alarms: passing clouds / poor
+        //      transparency dim out the faint stars (the count
+        //      collapses) while focus — and so the HFR of the bright
+        //      stars that survive — is untouched. Real focus drift
+        //      bloats every star, pushing HFR up *together with* the
+        //      count drop. So we only fire here when HFR is also
+        //      meaningfully above baseline; a star crash with flat HFR
+        //      is treated as transparency and left alone (no
+        //      suggestion), which is what the user actually wants when
+        //      it's just cloud cover.
+        if (_baselineStarCount > 0
+                && rollingStars < _baselineStarCount * StarCountCrashRatio
+                && rollingMean > _baselineHfr * StarCrashRequiresHfrRatio) {
             var pctDrop = (1.0 - rollingStars / _baselineStarCount) * 100.0;
-            var reason = $"Star count dropped {pctDrop:F0}% (focus or transparency)";
+            var pctOver = (rollingMean / _baselineHfr - 1.0) * 100.0;
+            var reason = $"Star count dropped {pctDrop:F0}% with HFR up {pctOver:F0}%";
             return RaiseSuggestion(reason, out fireToast, out toastReason);
         }
 
