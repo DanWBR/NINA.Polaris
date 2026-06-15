@@ -13667,16 +13667,16 @@ function ninaApp() {
                         labels,
                         datasets: [
                             { label: 'RA', data: raVals, borderColor: '#e57373',
-                              backgroundColor: 'transparent', tension: 0.2,
+                              backgroundColor: 'transparent', tension: 0,
                               pointRadius: 0, borderWidth: 1.5 },
                             { label: 'Dec', data: decVals, borderColor: '#64b5f6',
-                              backgroundColor: 'transparent', tension: 0.2,
+                              backgroundColor: 'transparent', tension: 0,
                               pointRadius: 0, borderWidth: 1.5 },
                             { label: 'RA pred', data: predRaVals, borderColor: 'rgba(255,167,38,0.85)',
-                              backgroundColor: 'transparent', tension: 0.2,
+                              backgroundColor: 'transparent', tension: 0,
                               pointRadius: 0, borderWidth: 1.1, borderDash: [4, 3] },
                             { label: 'Dec pred', data: predDecVals, borderColor: 'rgba(178,235,242,0.8)',
-                              backgroundColor: 'transparent', tension: 0.2,
+                              backgroundColor: 'transparent', tension: 0,
                               pointRadius: 0, borderWidth: 1.1, borderDash: [4, 3] }
                         ]
                     },
@@ -13822,23 +13822,29 @@ function ninaApp() {
             const n = steps.length;
             const dx = n > 1 ? w / (n - 1) : w;
 
-            // correction impulse bars (RA + Dec durations, scaled to a fraction
-            // of the half-height so they read as activity, not absolute ms).
-            const maxDur = Math.max(1, ...steps.map(s => Math.max(s.raDur || 0, s.decDur || 0)));
+            // correction impulse bars (RA + Dec pulse durations). Scale each
+            // axis against its configured Max Duration cap (a fixed reference)
+            // rather than the rolling max of the window — otherwise a single
+            // big pulse (e.g. a dither recovery) flattens every other bar to
+            // invisibility. Clamped to the half-height.
+            const raRef = Math.max(50, this.nativeMaxRaDurationMs || 2500);
+            const decRef = Math.max(50, this.nativeMaxDecDurationMs || 2500);
             // Bar width adapts to sample spacing so the impulses read clearly
             // (RA + Dec sit side by side within each slot). Clamped so a sparse
             // history doesn't draw fat slabs and a dense one stays legible.
             const bw = Math.max(3, Math.min(9, dx * 0.7));
             const half = bw / 2;
+            const barMax = h / 2 - 8;
             for (let i = 0; i < n; i++) {
                 const x = i * dx;
                 const s = steps[i];
-                const raB = ((s.raDur || 0) / maxDur) * (h / 2 - 8);
-                const decB = ((s.decDur || 0) / maxDur) * (h / 2 - 8);
+                // A visible floor (2px) so a real but small pulse still shows.
+                const raB = (s.raDur > 0) ? Math.max(2, Math.min(1, s.raDur / raRef) * barMax) : 0;
+                const decB = (s.decDur > 0) ? Math.max(2, Math.min(1, s.decDur / decRef) * barMax) : 0;
                 // RA bar nudged left of the slot centre, Dec right, so both are
                 // visible when the same frame pulses on both axes.
                 if (raB > 0) {
-                    ctx.fillStyle = 'rgba(229,115,115,0.35)';
+                    ctx.fillStyle = 'rgba(229,115,115,0.6)';
                     // The pulse opposes the error (pushes the star back toward
                     // lock), so a positive RA error draws a downward bar. Canvas
                     // +y is down, so positive error (line up) -> +raB (bar down).
@@ -13846,7 +13852,7 @@ function ninaApp() {
                     ctx.fillRect(x - half, mid, half, dir * raB);
                 }
                 if (decB > 0) {
-                    ctx.fillStyle = 'rgba(100,181,246,0.35)';
+                    ctx.fillStyle = 'rgba(100,181,246,0.6)';
                     const dir = (s.decPx ?? 0) >= 0 ? 1 : -1;
                     ctx.fillRect(x, mid, half, dir * decB);
                 }
