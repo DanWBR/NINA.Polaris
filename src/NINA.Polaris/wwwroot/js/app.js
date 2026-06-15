@@ -2959,6 +2959,18 @@ function ninaApp() {
                 localStorage.setItem('nina-sky-ecliptic', v ? '1' : '0');
             });
 
+            // Constellation lines + figure artwork toggles, same pattern.
+            const consLinesSaved = localStorage.getItem('nina-sky-cons-lines');
+            if (consLinesSaved !== null) this.skyConstLines = consLinesSaved === '1';
+            this.$watch('skyConstLines', (v) => {
+                localStorage.setItem('nina-sky-cons-lines', v ? '1' : '0');
+            });
+            const consArtSaved = localStorage.getItem('nina-sky-cons-art');
+            if (consArtSaved !== null) this.skyConstArt = consArtSaved === '1';
+            this.$watch('skyConstArt', (v) => {
+                localStorage.setItem('nina-sky-cons-art', v ? '1' : '0');
+            });
+
             // ZWO gain presets, static lookup table. Tiny file (~1 KB)
             // so fire-and-forget. If the fetch fails the L/M/H buttons
             // simply never appear (zwoPresetsForActiveCamera returns null).
