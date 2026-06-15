@@ -15354,6 +15354,34 @@ function ninaApp() {
             if (!s || !s.active) return 'error';
             return s.engineState === 'running' ? 'ok' : 'warn';
         },
+        // ----- PLAN: bottom-bar progress (current target + whole plan) -----
+        planItemProgressPct() {
+            const s = this.planStatus;
+            if (!s || !s.active || !(s.currentItemTotal > 0)) return 0;
+            return Math.max(0, Math.min(100,
+                (s.currentItemCompleted / s.currentItemTotal) * 100));
+        },
+        planTotalProgressPct() {
+            const s = this.planStatus;
+            if (!s || !s.active || !(s.totalFrames > 0)) return 0;
+            return Math.max(0, Math.min(100,
+                (s.totalCompleted / s.totalFrames) * 100));
+        },
+        planItemProgressLabel() {
+            const s = this.planStatus;
+            if (s && s.active && s.currentItemTotal > 0)
+                return `${s.currentItemCompleted}/${s.currentItemTotal}`;
+            return '—';
+        },
+        planTotalProgressLabel() {
+            const s = this.planStatus;
+            if (s && s.active && s.totalFrames > 0)
+                return `${s.totalCompleted}/${s.totalFrames} frames`;
+            // Idle: show the plan size + rough time estimate instead.
+            const n = this.planTargetCount();
+            return n + ' target' + (n === 1 ? '' : 's')
+                + ' · ' + this.planFormatDuration(this.planEstimateSeconds);
+        },
         planFormatDuration(sec) {
             sec = Math.max(0, Math.round(sec || 0));
             const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);

@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260615-redsync">
+    <link rel="stylesheet" href="/css/app.css?v=20260615-planbar">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -7626,26 +7626,38 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </div>
                     </div>
 
-                    <!-- Run control + progress -->
-                    <div class="plan-run">
-                        <button class="plan-run-btn" :class="{ running: planIsRunning() }"
-                                @click="planIsRunning() ? stopPlan() : startPlan()"
-                                :disabled="!plan || planTargetCount() === 0"
-                                x-text="planIsRunning() ? 'Stop plan' : 'Start plan'"></button>
-                        <div class="plan-progress">
-                            <div><span class="muted">Targets:</span> <span x-text="planTargetCount()"></span></div>
-                            <div><span class="muted">Est. time:</span> <span x-text="planFormatDuration(planEstimateSeconds)"></span></div>
-                            <template x-if="planIsRunning()">
-                                <div class="plan-progress-live">
-                                    <div><span class="muted">Phase:</span> <span x-text="planChipLabel()"></span></div>
-                                    <div x-show="planStatus && planStatus.currentTarget"><span class="muted">Now:</span> <span x-text="planStatus && planStatus.currentTarget"></span></div>
-                                    <div x-show="planStatus && planStatus.endsAtUtc"><span class="muted">Ends:</span> <span x-text="planFormatLocalTime(planStatus && planStatus.endsAtUtc)"></span></div>
-                                </div>
-                            </template>
+                </div>
+                </template>
+
+                <!-- Run control + progress: fixed bottom bar. Start/Stop on
+                     the left, two progress bars (current target + whole plan)
+                     filling the remaining horizontal space. -->
+                <div class="plan-runbar" x-show="plan">
+                    <button class="plan-run-btn" :class="{ running: planIsRunning() }"
+                            @click="planIsRunning() ? stopPlan() : startPlan()"
+                            :disabled="!plan || planTargetCount() === 0"
+                            x-text="planIsRunning() ? 'Stop' : 'Start'"></button>
+                    <div class="plan-runbar-bars">
+                        <div class="plan-pbar">
+                            <div class="plan-pbar-head">
+                                <span x-text="(planIsRunning() && planStatus && planStatus.currentTarget) ? planStatus.currentTarget : 'Current target'"></span>
+                                <span x-text="planItemProgressLabel()"></span>
+                            </div>
+                            <div class="plan-pbar-track">
+                                <div class="plan-pbar-fill item" :style="`width:${planItemProgressPct()}%`"></div>
+                            </div>
+                        </div>
+                        <div class="plan-pbar">
+                            <div class="plan-pbar-head">
+                                <span>Total</span>
+                                <span x-text="planTotalProgressLabel()"></span>
+                            </div>
+                            <div class="plan-pbar-track">
+                                <div class="plan-pbar-fill total" :style="`width:${planTotalProgressPct()}%`"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                </template>
             </div>
 
             <div x-show="tab === 'sequence'" class="tab-panel tab-panel-autorun">
@@ -13794,7 +13806,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260615-redsync"></script>
+    <script src="/js/app.js?v=20260615-planbar"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

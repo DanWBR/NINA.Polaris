@@ -11911,13 +11911,29 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .plan-cat-item:hover { background: rgba(255,255,255,0.06); }
 .plan-cat-item .muted { color: var(--text-muted, #9aa4b2); font-size: 11px; white-space: nowrap; }
 
-.plan-run { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; border-top: 1px solid var(--border, #2a2f3a); padding-top: 12px; }
-.plan-run-btn { padding: 12px 28px; font-size: 15px; font-weight: 700; border-radius: 999px; border: none; cursor: pointer; background: #16a34a; color: #fff; }
+/* Fixed bottom run bar: pinned to the bottom of the scrolling plan
+   panel. Start/Stop on the left; two progress bars (current target +
+   whole plan) fill the remaining width. Negative margins bleed it to
+   the panel edges so it reads as a full-width footer. */
+.plan-runbar {
+    position: sticky; bottom: 0; z-index: 5;
+    display: flex; align-items: center; gap: 16px;
+    margin: 4px -12px -12px; padding: 10px 12px;
+    border-top: 1px solid var(--border, #2a2f3a);
+    background: var(--bg-secondary, #161a22);
+}
+.plan-run-btn { flex: 0 0 auto; padding: 12px 28px; font-size: 15px; font-weight: 700; border-radius: 999px; border: none; cursor: pointer; background: #16a34a; color: #fff; }
 .plan-run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .plan-run-btn.running { background: #dc2626; }
-.plan-progress { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; }
-.plan-progress .muted { color: var(--text-muted, #9aa4b2); }
-.plan-progress-live { display: flex; gap: 18px; flex-wrap: wrap; }
+.plan-runbar-bars { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.plan-pbar { display: flex; flex-direction: column; gap: 3px; }
+.plan-pbar-head { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--text-muted, #9aa4b2); }
+.plan-pbar-head span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-pbar-head span:last-child { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.plan-pbar-track { height: 9px; border-radius: 999px; background: var(--bg-tertiary, #0f1218); overflow: hidden; }
+.plan-pbar-fill { height: 100%; border-radius: 999px; transition: width .3s ease; }
+.plan-pbar-fill.item { background: #3b82f6; }
+.plan-pbar-fill.total { background: #16a34a; }
 
 .plan-frame-banner {
     position: fixed; left: 50%; transform: translateX(-50%);

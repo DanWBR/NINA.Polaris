@@ -13,6 +13,8 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using NINA.Polaris.Services.Sequencer;
+using NINA.Polaris.Services.Sequencer.Containers;
+using NINA.Polaris.Services.Sequencer.Instructions;
 
 namespace NINA.Polaris.Services.Plan;
 
@@ -45,6 +47,7 @@ public class PlanRunnerService : IHostedService {
     private DateTime? _endsAtUtc;       // resolved end instant for Dawn / AtTime
     private Phase _phase = Phase.Idle;
     private bool _userAborted;
+    private int _mainPlannedFrames;   // total light frames the main doc will capture
 
     private CancellationTokenSource? _cts;
     private Task? _monitor;
@@ -82,6 +85,7 @@ public class PlanRunnerService : IHostedService {
                 return (false, "The plan has no enabled targets.");
 
             var doc = _compiler.Compile(plan);
+            _mainPlannedFrames = CountFrames(doc.Root);
             _engine.Load(doc);
             _engine.Start();
             if (_engine.State != AdvancedSequenceState.Running) {
@@ -112,6 +116,36 @@ public class PlanRunnerService : IHostedService {
 
     public PlanStatus GetStatus() {
         lock (_lock) {
+            // Progress: walk the live engine tree (Main phase) so the two
+            // progress bars can show current-target + whole-plan completion.
+            // The plan runs on AdvancedSequenceEngine, whose global frame
+            // counter increments per captured light frame.
+            int totalFrames = _mainPlannedFrames;
+            int totalDone = 0, curDone = 0, curTotal = 0;
+            if (_active != null) {
+                if (_phase == Phase.Main) {
+                    int fc = _engine.FramesCompleted;
+                    totalDone = Math.Min(fc, totalFrames);
+                    if (_engine.Document.Root is SequenceContainer root) {
+                        int prior = 0;
+                        foreach (var item in root.Items) {
+                            if (item is not DeepSkyObjectContainer dso) continue;
+                            int planned = CountFrames(dso);
+                            if (dso.Status == SequenceEntityStatus.Completed) prior += planned;
+                            else if (dso.Status == SequenceEntityStatus.Running) curTotal = planned;
+                        }
+                        // Frames done in the running target = total done minus all
+                        // frames from targets that already finished (sequential run).
+                        curDone = Math.Clamp(fc - prior, 0, curTotal > 0 ? curTotal : fc);
+                    }
+                } else if (_phase == Phase.Ending) {
+                    // Main capture is over; show the imaging bars complete while
+                    // the end-of-session actions document runs.
+                    totalDone = totalFrames;
+                    curDone = curTotal = 0;
+                }
+            }
+
             return new PlanStatus(
                 Active: _active != null,
                 PlanId: _active?.Id,
@@ -120,8 +154,23 @@ public class PlanRunnerService : IHostedService {
                 EngineState: _engine.State.ToString().ToLowerInvariant(),
                 CurrentTarget: _active != null ? CurrentRunningName() : null,
                 StartedAtUtc: _startedAtUtc,
-                EndsAtUtc: _endsAtUtc);
+                EndsAtUtc: _endsAtUtc,
+                CurrentItemCompleted: curDone,
+                CurrentItemTotal: curTotal,
+                TotalCompleted: totalDone,
+                TotalFrames: totalFrames);
         }
+    }
+
+    /// <summary>Recursively sum the frame counts of every TakeExposure
+    /// instruction under an entity (used for PLAN progress totals).</summary>
+    private static int CountFrames(ISequenceEntity entity) {
+        int sum = 0;
+        if (entity is TakeExposureInstruction tx) sum += Math.Max(0, tx.Count);
+        if (entity is SequenceContainer c) {
+            foreach (var child in c.Items) sum += CountFrames(child);
+        }
+        return sum;
     }
 
     // ---- internals ----
@@ -183,6 +232,7 @@ public class PlanRunnerService : IHostedService {
         _endsAtUtc = null;
         _startedAtUtc = null;
         _userAborted = false;
+        _mainPlannedFrames = 0;
 
         if (plan == null) return;
         _logger.LogInformation("Plan '{Name}' finished ({How})",
@@ -235,4 +285,8 @@ public record PlanStatus(
     string EngineState,
     string? CurrentTarget,
     DateTime? StartedAtUtc,
-    DateTime? EndsAtUtc);
+    DateTime? EndsAtUtc,
+    int CurrentItemCompleted = 0,
+    int CurrentItemTotal = 0,
+    int TotalCompleted = 0,
+    int TotalFrames = 0);

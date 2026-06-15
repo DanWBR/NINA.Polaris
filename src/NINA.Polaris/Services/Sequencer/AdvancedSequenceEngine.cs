@@ -32,9 +32,16 @@ public class AdvancedSequenceEngine {
 
     private CancellationTokenSource? _cts;
     private Task? _runTask;
+    private SequenceContext? _ctx;
 
     public SequenceDocument Document { get; private set; } = new();
     public AdvancedSequenceState State { get; private set; } = AdvancedSequenceState.Idle;
+
+    /// <summary>Total light frames captured by the current/last run's context
+    /// (the global counter <see cref="TakeExposureInstruction"/> bumps per
+    /// frame). A fresh context is built on each <see cref="Start"/>, so this
+    /// resets to 0 when a new run begins. Used by PLAN-mode progress.</summary>
+    public int FramesCompleted => _ctx?.FramesCompleted ?? 0;
     public string? LastError { get; private set; }
     public DateTime? StartedAt { get; private set; }
     public DateTime? FinishedAt { get; private set; }
@@ -106,6 +113,7 @@ public class AdvancedSequenceEngine {
         SequenceContext ctx;
         try {
             ctx = BuildContext();
+            _ctx = ctx;   // expose FramesCompleted for PLAN-mode progress
         } catch (Exception ex) {
             LastError = "DI build failed: " + ex.Message;
             State = AdvancedSequenceState.Idle;
