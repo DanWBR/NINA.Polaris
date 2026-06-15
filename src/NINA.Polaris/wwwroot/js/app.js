@@ -15185,12 +15185,27 @@ function ninaApp() {
                 const duskMs = Date.parse(j.twilight && j.twilight.astronomicalDusk);
                 const dawnMs = Date.parse(j.twilight && j.twilight.astronomicalDawn);
                 const xOf = (ms) => isFinite(ms) ? Math.max(0, Math.min(VBW, ((ms - fromMs) / span) * VBW)) : null;
+                // X-axis ticks at whole local hours (2-hourly on long nights so
+                // the labels don't crowd). x is in viewBox units (gridlines),
+                // leftPct positions the HTML label over the chart.
+                const ticks = [];
+                const stepH = (span > 8 * 3600000) ? 2 : 1;
+                const fd = new Date(fromMs); fd.setMinutes(0, 0, 0);
+                if (fd.getTime() < fromMs) fd.setHours(fd.getHours() + 1);
+                while (fd.getHours() % stepH !== 0) fd.setHours(fd.getHours() + 1);
+                for (let ms = fd.getTime(); ms <= toMs; ms += stepH * 3600000) {
+                    ticks.push({
+                        x: ((ms - fromMs) / span) * VBW,
+                        leftPct: ((ms - fromMs) / span) * 100,
+                        label: String(new Date(ms).getHours()).padStart(2, '0') + ':00'
+                    });
+                }
                 this.planAlt[key] = {
                     loading: false, sig, fromMs, toMs, span, VBW, VBH, path: d,
                     duskMs, dawnMs,
                     nightX0: xOf(duskMs) ?? 0, nightX1: xOf(dawnMs) ?? VBW,
                     y30: VBH - (30 / 90) * VBH,
-                    maxAlt: Math.round(maxAlt)
+                    maxAlt: Math.round(maxAlt), ticks
                 };
             } catch (e) {
                 this.planAlt[key] = { loading: false, sig, error: true };

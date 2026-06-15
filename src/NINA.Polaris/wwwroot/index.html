@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260615-apiclone">
+    <link rel="stylesheet" href="/css/app.css?v=20260615-planaxis">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -7534,6 +7534,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                         <rect :x="planAlt[t.id].nightX0" y="0"
                                                               :width="Math.max(0, planAlt[t.id].nightX1 - planAlt[t.id].nightX0)"
                                                               :height="planAlt[t.id].VBH" class="plan-alt-night"></rect>
+                                                        <!-- hourly gridlines -->
+                                                        <template x-for="tk in (planAlt[t.id].ticks || [])" :key="'g'+tk.x">
+                                                            <line :x1="tk.x" y1="0" :x2="tk.x" :y2="planAlt[t.id].VBH" class="plan-alt-tick"></line>
+                                                        </template>
                                                         <!-- 30° guide line -->
                                                         <line x1="0" :y1="planAlt[t.id].y30" :x2="planAlt[t.id].VBW" :y2="planAlt[t.id].y30" class="plan-alt-guide"></line>
                                                         <!-- selected window shading -->
@@ -7553,6 +7557,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                             <rect :x="planAltX(t, t.endAtUtc) - 14" y="0" width="28" :height="planAlt[t.id].VBH" class="plan-alt-handle-hit"></rect>
                                                         </g>
                                                     </svg>
+                                                </template>
+                                                <!-- X-axis hour labels (local), positioned over the chart width -->
+                                                <template x-if="planAlt[t.id] && planAlt[t.id].ticks">
+                                                    <div class="plan-altchart-axis">
+                                                        <template x-for="tk in planAlt[t.id].ticks" :key="'l'+tk.x">
+                                                            <span class="plan-axis-tick" :style="'left:' + tk.leftPct + '%'" x-text="tk.label"></span>
+                                                        </template>
+                                                    </div>
                                                 </template>
                                                 <div class="plan-window-fields">
                                                     <label>Start (local) <input type="time" :value="_todUtcToLocal(t.startAtUtc)" @change="t.startAtUtc = _todLocalToUtc($event.target.value); savePlan()"></label>
@@ -13760,7 +13772,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260615-apiclone"></script>
+    <script src="/js/app.js?v=20260615-planaxis"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

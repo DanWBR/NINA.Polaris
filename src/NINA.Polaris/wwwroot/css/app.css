@@ -11995,11 +11995,17 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     touch-action: none;
 }
 .plan-alt-night { fill: rgba(120, 160, 220, 0.06); }
+.plan-alt-tick { stroke: rgba(255,255,255,0.10); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .plan-alt-guide { stroke: rgba(255,255,255,0.18); stroke-width: 1; stroke-dasharray: 6 6; }
 .plan-alt-sel { fill: rgba(34, 197, 94, 0.14); }
 .plan-alt-curve { fill: none; stroke: #f0b21a; stroke-width: 3; vector-effect: non-scaling-stroke; }
 .plan-alt-handle { cursor: ew-resize; }
 .plan-alt-handle-line { stroke: #22c55e; stroke-width: 2; vector-effect: non-scaling-stroke; }
 .plan-alt-handle-hit { fill: transparent; cursor: ew-resize; }
+.plan-altchart-axis { position: relative; height: 14px; margin-top: 2px; }
+.plan-axis-tick {
+    position: absolute; transform: translateX(-50%);
+    font-size: 10px; color: var(--text-muted, #9aa4b2); white-space: nowrap;
+}
 .plan-window-fields { display: flex; gap: 14px; }
 .plan-window-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--text-muted, #9aa4b2); }
