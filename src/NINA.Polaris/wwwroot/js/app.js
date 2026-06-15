@@ -25666,30 +25666,41 @@ function ninaApp() {
         // x-show cascade rendered empty in some Alpine eval orders.
         phd2BadgeText() {
             const g = this.guider || {};
-            if (!g.connected) return 'PHD2 OFF';
+            const tag = (g.backend === 'native') ? 'GUIDE' : 'PHD2';
+            if (!g.connected) return tag + ' OFF';
+            // Dither/settle take priority over the steady "GUIDING" label so
+            // the operator sees the scope is deliberately being moved + settled
+            // (the native backend keeps appState "Guiding" through a dither).
+            if (g.dithering) return tag + ' DITHERING';
+            if (g.settling) return tag + ' SETTLING';
             if (g.guiding) {
                 const rms = (g.rmsTotal != null) ? g.rmsTotal.toFixed(2) : '--';
-                return `PHD2 GUIDING (${rms}")`;
+                return `${tag} GUIDING (${rms}")`;
             }
             const st = g.appState || '';
-            if (!st || st === 'Stopped') return 'PHD2 ON';
-            return 'PHD2 ' + st.toUpperCase();
+            if (!st || st === 'Stopped') return tag + ' ON';
+            return tag + ' ' + st.toUpperCase();
         },
         phd2BadgeClass() {
             const g = this.guider || {};
             if (!g.connected) return 'off';
+            // Dither/settle is a transient, attention-worthy state -> amber.
+            if (g.dithering || g.settling) return 'warn';
             if (g.guiding) return 'ok';
             if (g.appState === 'LostLock') return 'error';
             return 'warn';
         },
         phd2BadgeTitle() {
             const g = this.guider || {};
-            if (!g.connected) return 'PHD2 not connected, click for Guider';
+            const tag = (g.backend === 'native') ? 'Native guider' : 'PHD2';
+            if (!g.connected) return tag + ' not connected, click for Guider';
+            if (g.dithering) return `${tag}: dithering (settling to the new lock), click for Guider`;
+            if (g.settling) return `${tag}: settling, click for Guider`;
             if (g.guiding) {
                 const rms = (g.rmsTotal != null) ? g.rmsTotal.toFixed(2) : '--';
                 return `Guiding, RMS ${rms}", click for Guider`;
             }
-            return `PHD2 ${g.appState || 'connected'}, click for Guider`;
+            return `${tag} ${g.appState || 'connected'}, click for Guider`;
         },
         hostDeviceTooltip() {
             const d = this.host && this.host.device;
