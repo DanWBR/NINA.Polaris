@@ -732,7 +732,7 @@ public sealed class NativeGuider : IGuider, IDisposable {
         }
         _loopCts = null;
         _loopTask = null;
-        if (AppState is "Guiding" or "Looping" or "Paused") SetAppState("Stopped");
+        if (AppState is "Guiding" or "Looping" or "Paused" or "LostLock") SetAppState("Stopped");
     }
 
     private async Task LoopAsync(LoopMode mode, CancellationToken ct) {
@@ -784,12 +784,24 @@ public sealed class NativeGuider : IGuider, IDisposable {
 
         if (!found) {
             _starLostCount++;
-            // Keep guiding state but skip the pulse; alert occasionally.
+            // Surface a distinct state the GUIDE UI already understands (PHD2
+            // parity: StarLost -> "LostLock"). Without this the badge stayed
+            // green "Guiding" through a whole cloud-out and the user had no
+            // signal the star was gone. Skip the pulse; alert occasionally.
+            if (AppState == "Guiding") SetAppState("LostLock");
             if (_starLostCount % 5 == 1) RaiseAlert("Guide star lost; skipping correction.");
             PushStep(new PortableGuideStep(NowMs(), 0, 0, 0, 0, 0, 0, snr, hfd, false));
             BuildView(curX, curY, snr, false);
+            // Back off while the star is gone so a long cloud-out doesn't spin
+            // the loop at full tilt hammering captures (and, on short exposures,
+            // the shared INDI link). The dwell scales with the exposure period.
+            int dwell = Math.Clamp(Math.Max(50, Rig.NativeGuideExposureMs), 200, 2000);
+            try { await Task.Delay(dwell, ct); } catch (OperationCanceledException) { }
             return;
         }
+        // Star reacquired: clear the lost-lock state so the UI goes back to
+        // "Guiding" the moment a frame finds it again.
+        if (_starLostCount > 0 && AppState == "LostLock") SetAppState("Guiding");
         _starLostCount = 0;
 
         double dx = curX - _lockX;
@@ -928,7 +940,16 @@ public sealed class NativeGuider : IGuider, IDisposable {
             // Our budget elapsed, not a user Stop: a dropped/stalled frame.
             // Abort the exposure so the driver resets before the next attempt.
             _logger.LogWarning("Guide capture exceeded {Ms} ms budget (dropped BLOB?); aborting to recover", budgetMs);
-            try { await cam.AbortExposureAsync(CancellationToken.None); } catch { }
+            // Bound the abort: if the INDI link itself wedged (dropped BLOB at
+            // RA reversal / cloud-out on a USB guide cam), an unbounded abort
+            // hangs the loop forever -- Stop then times out and abandons a
+            // zombie that still holds the guide camera, so reconnecting can't
+            // recover and the user is forced over to external PHD2. Cap it so
+            // the loop always stays responsive to Stop/Disconnect.
+            try {
+                using var abortCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                await cam.AbortExposureAsync(abortCts.Token);
+            } catch { }
             return null;
         } catch (OperationCanceledException) {
             throw;
