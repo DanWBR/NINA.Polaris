@@ -611,6 +611,7 @@ function ninaApp() {
         planFramingActive: false,  // true while picking framing in the SKY tab
         planShutdownConfirm: false,// risk modal for the host-shutdown toggle
         planTargetToRemove: null,  // target pending removal (confirm modal)
+        planDeleteConfirm: false,  // delete-plan confirm modal (styled, not native confirm)
         planAlt: {},               // per-target altitude-track cache (keyed by target id)
         planVizOpen: false,        // "View plan" timeline modal visibility
         planViz: null,             // computed timeline model (built by openPlanViz)
@@ -15274,9 +15275,15 @@ function ninaApp() {
             } catch (e) { this.toast('Import failed: ' + (e.message || e), 'error'); }
         },
 
-        async deletePlan() {
+        // Open the styled delete-plan confirmation (replaces the native confirm).
+        deletePlan() {
             if (!this.plan) return;
-            if (!confirm('Delete plan "' + (this.plan.name || '') + '"? This cannot be undone.')) return;
+            this.planDeleteConfirm = true;
+        },
+
+        async planConfirmDelete() {
+            this.planDeleteConfirm = false;
+            if (!this.plan) return;
             const id = this.plan.id;
             try {
                 await this.apiFetch('/api/plan/plans/' + encodeURIComponent(id), { method: 'DELETE' });

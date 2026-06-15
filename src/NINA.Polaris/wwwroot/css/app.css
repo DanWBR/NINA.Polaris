@@ -11967,14 +11967,43 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     position: fixed; inset: 0; z-index: 9600; display: flex;
     align-items: center; justify-content: center; padding: 20px;
     background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    animation: modal-fade 0.18s ease-out;
+}
+@keyframes modal-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modal-pop {
+    from { opacity: 0; transform: translateY(8px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 .modal-card {
-    max-width: 420px; width: 100%;
-    background: var(--panel-bg, #161a22); border: 1px solid var(--border, #2a2f3a);
-    border-radius: 10px; padding: 18px 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+    position: relative; max-width: 440px; width: 100%;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--panel-bg, #161a22) 92%, #fff 8%), var(--panel-bg, #161a22));
+    border: 1px solid var(--border, #2a2f3a);
+    border-radius: 14px; padding: 20px 22px 18px;
+    box-shadow: 0 18px 60px rgba(0,0,0,0.62), 0 2px 8px rgba(0,0,0,0.4);
+    overflow: hidden;
+    animation: modal-pop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.modal-card h3 { margin: 0 0 8px; font-size: 16px; }
-.modal-card p { margin: 0 0 16px; font-size: 13px; line-height: 1.5; color: var(--text-muted, #9aa4b2); }
+/* Accent strip across the top — neutral (accent) by default, red for
+   destructive confirmations (.modal-card.danger). */
+.modal-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--accent, #4f8cff);
+}
+.modal-card.danger::before { background: var(--danger, #e5484d); }
+.modal-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.modal-icon {
+    flex: 0 0 auto; width: 38px; height: 38px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 19px;
+    background: color-mix(in srgb, var(--accent, #4f8cff) 16%, transparent);
+    color: var(--accent, #4f8cff);
+}
+.modal-card.danger .modal-icon {
+    background: color-mix(in srgb, var(--danger, #e5484d) 16%, transparent);
+    color: var(--danger, #e5484d);
+}
+.modal-head h3, .modal-card h3 { margin: 0; font-size: 16px; font-weight: 650; }
+.modal-card p { margin: 0 0 18px; font-size: 13px; line-height: 1.55; color: var(--text-muted, #9aa4b2); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
 
 /* Theme the PLAN form controls to match the rest of the app (the dark

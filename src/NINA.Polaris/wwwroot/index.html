@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260615-roireset">
+    <link rel="stylesheet" href="/css/app.css?v=20260615-planmodals">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -13780,9 +13780,13 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     </div>
 
     <!-- PLAN: host-shutdown risk confirmation -->
-    <div class="modal-overlay" x-show="planShutdownConfirm" x-cloak @click.self="planShutdownConfirm = false">
-        <div class="modal-card">
-            <h3>Shut down the host at the end?</h3>
+    <div class="modal-overlay" x-show="planShutdownConfirm" x-cloak @click.self="planShutdownConfirm = false"
+         @keydown.escape.window="planShutdownConfirm = false">
+        <div class="modal-card danger">
+            <div class="modal-head">
+                <span class="modal-icon">⏻</span>
+                <h3>Shut down the host at the end?</h3>
+            </div>
             <p>When this plan finishes (or reaches its end time), the device running Polaris
                will <b>power off completely</b>. You'll need to physically power it back on.</p>
             <div class="modal-actions">
@@ -13792,10 +13796,31 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
+    <!-- PLAN: delete-plan confirmation -->
+    <div class="modal-overlay" x-show="planDeleteConfirm" x-cloak @click.self="planDeleteConfirm = false"
+         @keydown.escape.window="planDeleteConfirm = false">
+        <div class="modal-card danger">
+            <div class="modal-head">
+                <span class="modal-icon">🗑</span>
+                <h3>Delete plan?</h3>
+            </div>
+            <p>Delete <b x-text="plan ? (plan.name || 'this plan') : ''"></b> permanently?
+               All its targets and frame lists will be lost. This cannot be undone.</p>
+            <div class="modal-actions">
+                <button class="btn btn-sm" @click="planDeleteConfirm = false">Cancel</button>
+                <button class="btn btn-sm btn-danger" @click="planConfirmDelete()">Delete plan</button>
+            </div>
+        </div>
+    </div>
+
     <!-- PLAN: remove-target confirmation -->
-    <div class="modal-overlay" x-show="planTargetToRemove" x-cloak @click.self="planTargetToRemove = null">
-        <div class="modal-card">
-            <h3>Remove target?</h3>
+    <div class="modal-overlay" x-show="planTargetToRemove" x-cloak @click.self="planTargetToRemove = null"
+         @keydown.escape.window="planTargetToRemove = null">
+        <div class="modal-card danger">
+            <div class="modal-head">
+                <span class="modal-icon">✕</span>
+                <h3>Remove target?</h3>
+            </div>
             <p>Remove <b x-text="planTargetToRemove ? (planTargetToRemove.name || 'this target') : ''"></b>
                from the plan? Its frame list and schedule will be lost.</p>
             <div class="modal-actions">
@@ -13972,7 +13997,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260615-roireset"></script>
+    <script src="/js/app.js?v=20260615-planmodals"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
