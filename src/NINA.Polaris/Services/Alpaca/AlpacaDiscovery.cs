@@ -46,6 +46,21 @@ public class AlpacaDiscovery {
 
         using var udp = new UdpClient();
         udp.EnableBroadcast = true;
+        // Windows: by default a UDP socket that sent to a port nobody is
+        // listening on receives an ICMP "port unreachable", which the
+        // stack surfaces as WSAECONNRESET (10054) on the NEXT ReceiveAsync.
+        // During broadcast discovery that's normal and expected, but it
+        // would otherwise abort the receive with a spurious error and a
+        // 500. Disable that behaviour (SIO_UDP_CONNRESET = false) so the
+        // receive just keeps waiting for real replies.
+        try {
+            if (OperatingSystem.IsWindows()) {
+                const int SIO_UDP_CONNRESET = unchecked((int)0x9800000C);
+                udp.Client.IOControl((IOControlCode)SIO_UDP_CONNRESET, new byte[] { 0, 0, 0, 0 }, null);
+            }
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "Could not disable SIO_UDP_CONNRESET (non-fatal)");
+        }
         udp.Client.Bind(new IPEndPoint(IPAddress.Any, 0));
 
         var bytes = Encoding.ASCII.GetBytes(DiscoveryMessage);
@@ -80,7 +95,17 @@ public class AlpacaDiscovery {
         using var cts = new CancellationTokenSource(to);
         try {
             while (!cts.IsCancellationRequested) {
-                var result = await udp.ReceiveAsync(cts.Token);
+                UdpReceiveResult result;
+                try {
+                    result = await udp.ReceiveAsync(cts.Token);
+                } catch (SocketException ex) {
+                    // Defence in depth for platforms where the
+                    // SIO_UDP_CONNRESET suppression above isn't available:
+                    // a connection-reset from a prior probe is harmless,
+                    // keep listening until the discovery timeout.
+                    _logger.LogDebug(ex, "Alpaca discovery receive reset (ignored)");
+                    continue;
+                }
                 try {
                     var json = Encoding.ASCII.GetString(result.Buffer);
                     using var doc = JsonDocument.Parse(json);
