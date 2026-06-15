@@ -15430,6 +15430,7 @@ function ninaApp() {
                 const span = toMs - fromMs;
                 const VBW = 1000, VBH = 240;
                 let d = '', maxAlt = -90;
+                const pts = [];   // {ms, alt} kept for the View-plan windowed curve
                 for (let i = 0; i < samples.length; i++) {
                     const ms = Date.parse(samples[i].utc);
                     const x = ((ms - fromMs) / span) * VBW;
@@ -15438,6 +15439,7 @@ function ninaApp() {
                     const a = Math.max(0, Math.min(90, altRaw));
                     const y = VBH - (a / 90) * VBH;
                     d += (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1) + ' ';
+                    pts.push({ ms, alt: a });
                 }
                 const duskMs = Date.parse(j.twilight && j.twilight.astronomicalDusk);
                 const dawnMs = Date.parse(j.twilight && j.twilight.astronomicalDawn);
@@ -15459,7 +15461,7 @@ function ninaApp() {
                 }
                 this.planAlt[key] = {
                     loading: false, sig, fromMs, toMs, span, VBW, VBH, path: d,
-                    duskMs, dawnMs,
+                    duskMs, dawnMs, pts,
                     nightX0: xOf(duskMs) ?? 0, nightX1: xOf(dawnMs) ?? VBW,
                     y30: VBH - (30 / 90) * VBH,
                     maxAlt: Math.round(maxAlt), ticks
@@ -15647,6 +15649,40 @@ function ninaApp() {
                     : (duskMs && duskMs > fromMs ? duskMs : fromMs);
                 const planStartMs = cursor;
 
+                // Linear-interpolated altitude (clamped 0..90) at an instant.
+                const altAt = (pts, ms) => {
+                    if (!pts || !pts.length) return null;
+                    if (ms <= pts[0].ms) return pts[0].alt;
+                    if (ms >= pts[pts.length - 1].ms) return pts[pts.length - 1].alt;
+                    for (let i = 1; i < pts.length; i++) {
+                        if (pts[i].ms >= ms) {
+                            const p = pts[i - 1], q = pts[i];
+                            const f = (ms - p.ms) / Math.max(1, q.ms - p.ms);
+                            return p.alt + (q.alt - p.alt) * f;
+                        }
+                    }
+                    return pts[pts.length - 1].alt;
+                };
+                // Build the SVG path of the elevation curve restricted to a
+                // [s0,s1] window (endpoints interpolated so short windows still
+                // draw a segment, not a single point).
+                const winPathOf = (pts, s0, s1) => {
+                    if (!pts || !pts.length) return null;
+                    const lo = Math.min(s0, s1), hi = Math.max(s0, s1);
+                    const wp = [];
+                    const a0 = altAt(pts, lo); if (a0 != null) wp.push({ ms: lo, alt: a0 });
+                    for (const p of pts) if (p.ms > lo && p.ms < hi) wp.push(p);
+                    const a1 = altAt(pts, hi); if (a1 != null) wp.push({ ms: hi, alt: a1 });
+                    if (wp.length < 2) return null;
+                    let dd = '';
+                    for (let i = 0; i < wp.length; i++) {
+                        const x = ((wp[i].ms - fromMs) / span) * VBW;
+                        const y = VBH - (wp[i].alt / 90) * VBH;
+                        dd += (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1) + ' ';
+                    }
+                    return dd;
+                };
+
                 const segs = targets.map((t, i) => {
                     let s0, s1;
                     if (t.scheduleMode === 'TimeWindow' && t.startAtUtc && t.endAtUtc) {
@@ -15658,6 +15694,7 @@ function ninaApp() {
                         s0 = cursor; s1 = cursor + this._planTargetSeconds(t) * 1000; cursor = s1;
                     }
                     const a = this.planAlt[t.id];
+                    const pts = (a && a.pts && !a.empty && !a.error) ? a.pts : null;
                     return {
                         id: t.id, name: t.name || ('Target ' + (i + 1)),
                         color: this.planVizColor(i),
@@ -15667,7 +15704,8 @@ function ninaApp() {
                         frames: this._planTargetFrames(t),
                         durationSec: Math.max(0, Math.round((s1 - s0) / 1000)),
                         ra: t.raHours, dec: t.decDeg,
-                        path: (a && a.path && !a.empty && !a.error) ? a.path : null,
+                        path: pts ? (a.path || null) : null,
+                        winPath: winPathOf(pts, s0, s1),
                         maxAlt: (a && isFinite(a.maxAlt)) ? a.maxAlt : null
                     };
                 });
@@ -15677,17 +15715,50 @@ function ninaApp() {
                 else if (this.plan.endMode === 'AtTime' && this.plan.endAtUtc)
                     planEndMs = this._planTodToWinMs(fromMs, this.plan.endAtUtc) ?? cursor;
                 else planEndMs = cursor;
+                const planStartX = xOf(planStartMs), planEndX = xOf(planEndMs);
 
                 const rowH = 24, gap = 6, top = 6;
                 const ganttH = top * 2 + targets.length * rowH + Math.max(0, targets.length - 1) * gap;
 
+                // Build the SVG markup as strings and inject via x-html. Alpine's
+                // x-for does not create elements in the SVG namespace, so any
+                // dynamic <rect>/<path>/<line> generated that way renders blank;
+                // emitting the finished markup and letting the browser parse it
+                // as SVG avoids that entirely.
+                const W = Math.max(0, nightX1 - nightX0);
+                let chart = `<svg class="plan-viz-altchart" viewBox="0 0 ${VBW} ${VBH}" preserveAspectRatio="none">`;
+                chart += `<rect x="${nightX0}" y="0" width="${W}" height="${VBH}" fill="rgba(120,160,220,0.06)"/>`;
+                for (const tk of (ticks || []))
+                    chart += `<line x1="${tk.x}" y1="0" x2="${tk.x}" y2="${VBH}" stroke="rgba(255,255,255,0.10)" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
+                chart += `<line x1="0" y1="${y30}" x2="${VBW}" y2="${y30}" stroke="rgba(255,255,255,0.18)" stroke-width="1" stroke-dasharray="6 6"/>`;
+                // Per-target: colored sub-interval band, faint full-night curve,
+                // and the bright elevation curve during the capture window.
+                for (const s of segs)
+                    chart += `<rect x="${s.x0.toFixed(1)}" y="0" width="${Math.max(0, s.x1 - s.x0).toFixed(1)}" height="${VBH}" fill="${s.color}" fill-opacity="0.20"/>`;
+                for (const s of segs) if (s.path)
+                    chart += `<path d="${s.path}" fill="none" stroke="${s.color}" stroke-width="1.5" stroke-opacity="0.40" vector-effect="non-scaling-stroke"/>`;
+                for (const s of segs) if (s.winPath)
+                    chart += `<path d="${s.winPath}" fill="none" stroke="${s.color}" stroke-width="3.5" vector-effect="non-scaling-stroke"/>`;
+                chart += `<line x1="${planStartX.toFixed(1)}" y1="0" x2="${planStartX.toFixed(1)}" y2="${VBH}" stroke="#e5e7eb" stroke-width="1.5" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>`;
+                chart += `<line x1="${planEndX.toFixed(1)}" y1="0" x2="${planEndX.toFixed(1)}" y2="${VBH}" stroke="#e5e7eb" stroke-width="1.5" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>`;
+                chart += `</svg>`;
+
+                let gantt = `<svg viewBox="0 0 ${VBW} ${ganttH}" preserveAspectRatio="none" style="width:100%;height:${ganttH}px;display:block;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius)">`;
+                for (const tk of (ticks || []))
+                    gantt += `<line x1="${tk.x}" y1="0" x2="${tk.x}" y2="${ganttH}" stroke="rgba(255,255,255,0.10)" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
+                segs.forEach((s, i) => {
+                    const y = top + i * (rowH + gap);
+                    gantt += `<rect x="${s.x0.toFixed(1)}" y="${y}" width="${Math.max(2, s.x1 - s.x0).toFixed(1)}" height="${rowH}" rx="3" fill="${s.color}" fill-opacity="0.9"/>`;
+                });
+                gantt += `<line x1="${planStartX.toFixed(1)}" y1="0" x2="${planStartX.toFixed(1)}" y2="${ganttH}" stroke="#e5e7eb" stroke-width="1.5" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>`;
+                gantt += `<line x1="${planEndX.toFixed(1)}" y1="0" x2="${planEndX.toFixed(1)}" y2="${ganttH}" stroke="#e5e7eb" stroke-width="1.5" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>`;
+                gantt += `</svg>`;
+
                 this.planViz = {
-                    loading: false, fromMs, toMs, span, VBW, VBH, ticks,
-                    nightX0, nightX1, y30,
-                    planStartX: xOf(planStartMs), planEndX: xOf(planEndMs),
+                    loading: false, ticks,
                     planStartLocal: toLocal(planStartMs), planEndLocal: toLocal(planEndMs),
                     endMode: this.plan.endMode,
-                    segs, rowH, gap, top, ganttH,
+                    segs, chartHtml: chart, ganttHtml: gantt,
                     targetCount: targets.length,
                     totalFrames: segs.reduce((a, s) => a + s.frames, 0),
                     totalSeconds: this.planEstimateSeconds || segs.reduce((a, s) => a + s.durationSec, 0)
@@ -15695,11 +15766,6 @@ function ninaApp() {
             } catch (e) {
                 this.planViz = { loading: false, error: true };
             }
-        },
-        // Gantt row Y for the i-th target (viewBox units).
-        planVizRowY(i) {
-            const v = this.planViz; if (!v) return 0;
-            return v.top + i * (v.rowH + v.gap);
         },
 
         // --- End-of-run actions ---

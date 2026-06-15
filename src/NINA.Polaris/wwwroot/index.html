@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260615-runbar2">
+    <link rel="stylesheet" href="/css/app.css?v=20260615-planviz2">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -7723,25 +7723,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                  start/end markers. preserveAspectRatio=none so
                                  x maps linearly to width (markers/gantt align). -->
                             <div class="plan-altchart-wrap">
-                                <svg class="plan-viz-altchart" :viewBox="'0 0 ' + planViz.VBW + ' ' + planViz.VBH" preserveAspectRatio="none">
-                                    <rect :x="planViz.nightX0" y="0" :width="Math.max(0, planViz.nightX1 - planViz.nightX0)"
-                                          :height="planViz.VBH" class="plan-alt-night"></rect>
-                                    <template x-for="tk in (planViz.ticks || [])" :key="'vg'+tk.x">
-                                        <line :x1="tk.x" y1="0" :x2="tk.x" :y2="planViz.VBH" class="plan-alt-tick"></line>
-                                    </template>
-                                    <line x1="0" :y1="planViz.y30" :x2="planViz.VBW" :y2="planViz.y30" class="plan-alt-guide"></line>
-                                    <template x-for="s in planViz.segs" :key="'vb'+s.id">
-                                        <g>
-                                            <rect :x="s.x0" y="0" :width="Math.max(0, s.x1 - s.x0)" :height="planViz.VBH"
-                                                  :fill="s.color" opacity="0.10"></rect>
-                                            <template x-if="s.path">
-                                                <path :d="s.path" fill="none" :stroke="s.color" stroke-width="3" vector-effect="non-scaling-stroke"></path>
-                                            </template>
-                                        </g>
-                                    </template>
-                                    <line :x1="planViz.planStartX" y1="0" :x2="planViz.planStartX" :y2="planViz.VBH" class="plan-viz-marker"></line>
-                                    <line :x1="planViz.planEndX" y1="0" :x2="planViz.planEndX" :y2="planViz.VBH" class="plan-viz-marker"></line>
-                                </svg>
+                                <!-- SVG built as a string in openPlanViz and injected
+                                     here: Alpine x-for doesn't emit SVG-namespaced
+                                     nodes, so generating bands/curves that way drew
+                                     blank. The bright curve segment is the target's
+                                     elevation during its own capture window. -->
+                                <div x-html="planViz.chartHtml"></div>
                                 <div class="plan-altchart-axis">
                                     <template x-for="tk in (planViz.ticks || [])" :key="'va'+tk.x">
                                         <span class="plan-axis-tick" :style="`left:${tk.leftPct}%`" x-text="tk.label"></span>
@@ -7750,20 +7737,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             </div>
 
                             <!-- Gantt strip: one colored bar per target sub-interval. -->
-                            <div class="plan-viz-gantt">
-                                <svg :viewBox="'0 0 ' + planViz.VBW + ' ' + planViz.ganttH" preserveAspectRatio="none"
-                                     :style="`width:100%;height:${planViz.ganttH}px`">
-                                    <template x-for="tk in (planViz.ticks || [])" :key="'gg'+tk.x">
-                                        <line :x1="tk.x" y1="0" :x2="tk.x" :y2="planViz.ganttH" class="plan-alt-tick"></line>
-                                    </template>
-                                    <template x-for="(s, si) in planViz.segs" :key="'gr'+s.id">
-                                        <rect :x="s.x0" :y="planVizRowY(si)" :width="Math.max(2, s.x1 - s.x0)"
-                                              :height="planViz.rowH" :fill="s.color" rx="3" opacity="0.85"></rect>
-                                    </template>
-                                    <line :x1="planViz.planStartX" y1="0" :x2="planViz.planStartX" :y2="planViz.ganttH" class="plan-viz-marker"></line>
-                                    <line :x1="planViz.planEndX" y1="0" :x2="planViz.planEndX" :y2="planViz.ganttH" class="plan-viz-marker"></line>
-                                </svg>
-                            </div>
+                            <div class="plan-viz-gantt" x-html="planViz.ganttHtml"></div>
 
                             <!-- Per-target legend / details -->
                             <table class="plan-viz-table">
@@ -13938,7 +13912,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260615-runbar2"></script>
+    <script src="/js/app.js?v=20260615-planviz2"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
