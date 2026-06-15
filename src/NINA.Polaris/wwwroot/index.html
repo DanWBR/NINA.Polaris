@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260615-planviz2">
+    <link rel="stylesheet" href="/css/app.css?v=20260615-planviz3">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -7739,6 +7739,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <!-- Gantt strip: one colored bar per target sub-interval. -->
                             <div class="plan-viz-gantt" x-html="planViz.ganttHtml"></div>
 
+                            <div class="plan-viz-legend" x-show="planViz.anyDelay">
+                                <span class="plan-viz-hatch"></span>
+                                <span class="muted">Hatched = delay (waiting before capture starts)</span>
+                            </div>
+
                             <!-- Per-target legend / details -->
                             <table class="plan-viz-table">
                                 <thead><tr>
@@ -13912,7 +13917,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260615-planviz2"></script>
+    <script src="/js/app.js?v=20260615-planviz3"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

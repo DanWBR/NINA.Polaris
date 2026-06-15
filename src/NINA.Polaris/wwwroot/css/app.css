@@ -12064,3 +12064,9 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .plan-viz-table th { text-align: left; color: #888; font-weight: 600; border-bottom: 1px solid #222; padding: 5px 8px; }
 .plan-viz-table td { border-bottom: 1px solid #1a1a1a; padding: 5px 8px; }
 .plan-viz-swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: middle; }
+.plan-viz-legend { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.plan-viz-hatch { display: inline-block; width: 24px; height: 14px; border-radius: 3px;
+    border: 1px solid var(--border, #2a2f3a);
+    background-color: rgba(120, 160, 220, 0.20);
+    background-image: repeating-linear-gradient(45deg,
+        rgba(255,255,255,0.55) 0 1.6px, transparent 1.6px 6px); }

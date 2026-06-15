@@ -15695,10 +15695,16 @@ function ninaApp() {
                     }
                     const a = this.planAlt[t.id];
                     const pts = (a && a.pts && !a.empty && !a.error) ? a.pts : null;
+                    // Delay (firstDelaySec): the wait at the start of the slot
+                    // before frames begin — drawn as a hatch over the band start.
+                    const delaySec = Math.max(0, t.firstDelaySec || 0);
+                    const x0 = xOf(s0);
+                    const delayX1 = delaySec > 0 ? xOf(s0 + delaySec * 1000) : x0;
                     return {
                         id: t.id, name: t.name || ('Target ' + (i + 1)),
                         color: this.planVizColor(i),
-                        x0: xOf(s0), x1: xOf(s1),
+                        x0, x1: xOf(s1),
+                        delaySec, delayW: Math.max(0, delayX1 - x0),
                         startLocal: toLocal(s0), endLocal: toLocal(s1),
                         mode: t.scheduleMode === 'TimeWindow' ? 'Window' : 'Sequential',
                         frames: this._planTargetFrames(t),
@@ -15725,16 +15731,30 @@ function ninaApp() {
                 // dynamic <rect>/<path>/<line> generated that way renders blank;
                 // emitting the finished markup and letting the browser parse it
                 // as SVG avoids that entirely.
+                const anyDelay = segs.some(s => s.delayW > 0);
+                // Diagonal-hatch pattern marking the "delay / waiting" sub-region
+                // inside a target's coloured band. White stripes read on any
+                // target colour.
+                const hatch = (id) =>
+                    `<defs><pattern id="${id}" patternUnits="userSpaceOnUse" width="9" height="9">`
+                    + `<rect width="9" height="9" fill="rgba(0,0,0,0.18)"/>`
+                    + `<path d="M0,9 L9,0" stroke="rgba(255,255,255,0.55)" stroke-width="1.6"/>`
+                    + `<path d="M-2,2 L2,-2 M7,11 L11,7" stroke="rgba(255,255,255,0.55)" stroke-width="1.6"/>`
+                    + `</pattern></defs>`;
+
                 const W = Math.max(0, nightX1 - nightX0);
                 let chart = `<svg class="plan-viz-altchart" viewBox="0 0 ${VBW} ${VBH}" preserveAspectRatio="none">`;
+                chart += hatch('planviz-delay-c');
                 chart += `<rect x="${nightX0}" y="0" width="${W}" height="${VBH}" fill="rgba(120,160,220,0.06)"/>`;
                 for (const tk of (ticks || []))
                     chart += `<line x1="${tk.x}" y1="0" x2="${tk.x}" y2="${VBH}" stroke="rgba(255,255,255,0.10)" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
                 chart += `<line x1="0" y1="${y30}" x2="${VBW}" y2="${y30}" stroke="rgba(255,255,255,0.18)" stroke-width="1" stroke-dasharray="6 6"/>`;
-                // Per-target: colored sub-interval band, faint full-night curve,
-                // and the bright elevation curve during the capture window.
+                // Per-target: colored sub-interval band, delay hatch, faint
+                // full-night curve, and the bright capture-window curve.
                 for (const s of segs)
                     chart += `<rect x="${s.x0.toFixed(1)}" y="0" width="${Math.max(0, s.x1 - s.x0).toFixed(1)}" height="${VBH}" fill="${s.color}" fill-opacity="0.20"/>`;
+                for (const s of segs) if (s.delayW > 0)
+                    chart += `<rect x="${s.x0.toFixed(1)}" y="0" width="${s.delayW.toFixed(1)}" height="${VBH}" fill="url(#planviz-delay-c)"/>`;
                 for (const s of segs) if (s.path)
                     chart += `<path d="${s.path}" fill="none" stroke="${s.color}" stroke-width="1.5" stroke-opacity="0.40" vector-effect="non-scaling-stroke"/>`;
                 for (const s of segs) if (s.winPath)
@@ -15744,18 +15764,21 @@ function ninaApp() {
                 chart += `</svg>`;
 
                 let gantt = `<svg viewBox="0 0 ${VBW} ${ganttH}" preserveAspectRatio="none" style="width:100%;height:${ganttH}px;display:block;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius)">`;
+                gantt += hatch('planviz-delay-g');
                 for (const tk of (ticks || []))
                     gantt += `<line x1="${tk.x}" y1="0" x2="${tk.x}" y2="${ganttH}" stroke="rgba(255,255,255,0.10)" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
                 segs.forEach((s, i) => {
                     const y = top + i * (rowH + gap);
                     gantt += `<rect x="${s.x0.toFixed(1)}" y="${y}" width="${Math.max(2, s.x1 - s.x0).toFixed(1)}" height="${rowH}" rx="3" fill="${s.color}" fill-opacity="0.9"/>`;
+                    if (s.delayW > 0)
+                        gantt += `<rect x="${s.x0.toFixed(1)}" y="${y}" width="${s.delayW.toFixed(1)}" height="${rowH}" rx="3" fill="url(#planviz-delay-g)"/>`;
                 });
                 gantt += `<line x1="${planStartX.toFixed(1)}" y1="0" x2="${planStartX.toFixed(1)}" y2="${ganttH}" stroke="#e5e7eb" stroke-width="1.5" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>`;
                 gantt += `<line x1="${planEndX.toFixed(1)}" y1="0" x2="${planEndX.toFixed(1)}" y2="${ganttH}" stroke="#e5e7eb" stroke-width="1.5" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>`;
                 gantt += `</svg>`;
 
                 this.planViz = {
-                    loading: false, ticks,
+                    loading: false, ticks, anyDelay,
                     planStartLocal: toLocal(planStartMs), planEndLocal: toLocal(planEndMs),
                     endMode: this.plan.endMode,
                     segs, chartHtml: chart, ganttHtml: gantt,
