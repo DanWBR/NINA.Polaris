@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260615-home">
+    <link rel="stylesheet" href="/css/app.css?v=20260615-home2">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -691,6 +691,17 @@
                         <strong x-text="(seqState || 'idle').toUpperCase()"></strong>
                         <span class="home-status-sub" x-show="seqStatus?.totalFramesCompleted">
                             <span x-text="(seqStatus?.totalFramesCompleted || 0) + ' / ' + (seqStatus?.totalFrames || 0) + ' frames'"></span>
+                        </span>
+                    </div>
+                    <div class="home-status-card"
+                         :class="(planStatus && planStatus.active) ? (planStatus.engineState === 'running' ? 'ok' : 'warn') : 'idle'">
+                        <span class="home-status-label">Plan</span>
+                        <strong x-text="(planStatus && planStatus.active)
+                            ? (planStatus.phase === 'ending' ? 'ENDING' : 'RUNNING') : 'IDLE'"></strong>
+                        <span class="home-status-sub" x-show="planStatus && planStatus.active">
+                            <span x-show="planStatus && planStatus.currentTarget" x-text="planStatus.currentTarget"></span>
+                            <span x-show="planStatus && planStatus.totalFrames > 0"
+                                  x-text="(planStatus.currentTarget ? ' · ' : '') + (planStatus.totalCompleted || 0) + ' / ' + planStatus.totalFrames + ' frames'"></span>
                         </span>
                     </div>
                     <div class="home-status-card" :class="serverReachable ? 'ok' : 'error'">
@@ -13951,7 +13962,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260615-home"></script>
+    <script src="/js/app.js?v=20260615-home2"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
