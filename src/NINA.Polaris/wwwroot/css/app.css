@@ -11999,8 +11999,9 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .plan-alt-guide { stroke: rgba(255,255,255,0.18); stroke-width: 1; stroke-dasharray: 6 6; }
 .plan-alt-sel { fill: rgba(34, 197, 94, 0.14); }
 .plan-alt-curve { fill: none; stroke: #f0b21a; stroke-width: 3; vector-effect: non-scaling-stroke; }
-.plan-alt-handle { cursor: ew-resize; }
-.plan-alt-handle-line { stroke: #22c55e; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.plan-alt-handle { cursor: ew-resize; touch-action: none; }
+.plan-alt-handle-line { stroke: #22c55e; stroke-width: 4; vector-effect: non-scaling-stroke; }
+.plan-alt-handle-knob { fill: #22c55e; }
 .plan-alt-handle-hit { fill: transparent; cursor: ew-resize; }
 .plan-altchart-axis { position: relative; height: 14px; margin-top: 2px; }
 .plan-axis-tick {

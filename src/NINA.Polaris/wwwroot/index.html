@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260615-dragperf">
+    <link rel="stylesheet" href="/css/app.css?v=20260615-plantouch">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -7546,15 +7546,19 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                               :height="planAlt[t.id].VBH" class="plan-alt-sel"></rect>
                                                         <!-- altitude curve -->
                                                         <path :d="planAlt[t.id].path" class="plan-alt-curve"></path>
-                                                        <!-- start handle -->
+                                                        <!-- start handle (wide hit area + grab knobs for touch) -->
                                                         <g class="plan-alt-handle" @pointerdown="planAltHandleDown($event, t, 'start')">
                                                             <line :x1="planAltX(t, t.startAtUtc)" y1="0" :x2="planAltX(t, t.startAtUtc)" :y2="planAlt[t.id].VBH" class="plan-alt-handle-line start"></line>
-                                                            <rect :x="planAltX(t, t.startAtUtc) - 14" y="0" width="28" :height="planAlt[t.id].VBH" class="plan-alt-handle-hit"></rect>
+                                                            <rect :x="planAltX(t, t.startAtUtc) - 9" y="0" width="18" height="26" rx="4" class="plan-alt-handle-knob"></rect>
+                                                            <rect :x="planAltX(t, t.startAtUtc) - 9" :y="planAlt[t.id].VBH - 26" width="18" height="26" rx="4" class="plan-alt-handle-knob"></rect>
+                                                            <rect :x="planAltX(t, t.startAtUtc) - 26" y="0" width="52" :height="planAlt[t.id].VBH" class="plan-alt-handle-hit"></rect>
                                                         </g>
                                                         <!-- end handle -->
                                                         <g class="plan-alt-handle" @pointerdown="planAltHandleDown($event, t, 'end')">
                                                             <line :x1="planAltX(t, t.endAtUtc)" y1="0" :x2="planAltX(t, t.endAtUtc)" :y2="planAlt[t.id].VBH" class="plan-alt-handle-line end"></line>
-                                                            <rect :x="planAltX(t, t.endAtUtc) - 14" y="0" width="28" :height="planAlt[t.id].VBH" class="plan-alt-handle-hit"></rect>
+                                                            <rect :x="planAltX(t, t.endAtUtc) - 9" y="0" width="18" height="26" rx="4" class="plan-alt-handle-knob"></rect>
+                                                            <rect :x="planAltX(t, t.endAtUtc) - 9" :y="planAlt[t.id].VBH - 26" width="18" height="26" rx="4" class="plan-alt-handle-knob"></rect>
+                                                            <rect :x="planAltX(t, t.endAtUtc) - 26" y="0" width="52" :height="planAlt[t.id].VBH" class="plan-alt-handle-hit"></rect>
                                                         </g>
                                                     </svg>
                                                 </template>
@@ -13605,6 +13609,19 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
+    <!-- PLAN: remove-target confirmation -->
+    <div class="modal-overlay" x-show="planTargetToRemove" x-cloak @click.self="planTargetToRemove = null">
+        <div class="modal-card">
+            <h3>Remove target?</h3>
+            <p>Remove <b x-text="planTargetToRemove ? (planTargetToRemove.name || 'this target') : ''"></b>
+               from the plan? Its frame list and schedule will be lost.</p>
+            <div class="modal-actions">
+                <button class="btn btn-sm" @click="planTargetToRemove = null">Cancel</button>
+                <button class="btn btn-sm btn-danger" @click="planConfirmRemoveTarget()">Remove</button>
+            </div>
+        </div>
+    </div>
+
     <div class="term-modal-overlay" x-show="term.modalOpen" x-cloak
          @click.self="term.modalOpen = false">
         <div class="term-window">
@@ -13772,7 +13789,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260615-dragperf"></script>
+    <script src="/js/app.js?v=20260615-plantouch"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

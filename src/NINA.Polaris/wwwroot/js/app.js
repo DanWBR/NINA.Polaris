@@ -603,6 +603,7 @@ function ninaApp() {
         planCatResults: [],
         planFramingActive: false,  // true while picking framing in the SKY tab
         planShutdownConfirm: false,// risk modal for the host-shutdown toggle
+        planTargetToRemove: null,  // target pending removal (confirm modal)
         planAlt: {},               // per-target altitude-track cache (keyed by target id)
 
         // Flat Wizard state. Form fields mirror EquipmentProfile.FlatWizard
@@ -15047,8 +15048,16 @@ function ninaApp() {
             this.planSelectedTargetId = (this.planSelectedTargetId === t.id) ? null : t.id;
             if (this.planSelectedTargetId === t.id && t.scheduleMode === 'TimeWindow') this.planLoadAlt(t);
         },
+        // Open the confirm modal rather than deleting outright (easy to fat-
+        // finger the ✕ on a touch screen and lose a configured target).
         planRemoveTarget(t) {
             if (!this.plan) return;
+            this.planTargetToRemove = t;
+        },
+        planConfirmRemoveTarget() {
+            const t = this.planTargetToRemove;
+            this.planTargetToRemove = null;
+            if (!this.plan || !t) return;
             this.plan.targets = this.plan.targets.filter(x => x.id !== t.id);
             if (this.planSelectedTargetId === t.id) this.planSelectedTargetId = null;
             this.savePlan();
