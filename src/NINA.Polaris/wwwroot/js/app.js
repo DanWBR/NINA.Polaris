@@ -15240,9 +15240,17 @@ function ninaApp() {
             const svg = ev.currentTarget.closest('svg');
             const a = this.planAlt[t.id];
             if (!svg || !a || !a.span) return;
+            // Capture the offset between the pointer and the handle's current
+            // position so the drag is relative — without this the handle snaps
+            // to the raw pointer X on the first move (a visible jump).
+            const rect0 = svg.getBoundingClientRect();
+            const curMs = this._planTodToMs(t, which === 'start' ? t.startAtUtc : t.endAtUtc);
+            const curFrac = (curMs != null) ? (curMs - a.fromMs) / a.span : null;
+            const pointerFrac0 = (ev.clientX - rect0.left) / Math.max(1, rect0.width);
+            const offset = (curFrac != null) ? (pointerFrac0 - curFrac) : 0;
             const move = (e) => {
                 const rect = svg.getBoundingClientRect();
-                let frac = (e.clientX - rect.left) / Math.max(1, rect.width);
+                let frac = (e.clientX - rect.left) / Math.max(1, rect.width) - offset;
                 frac = Math.max(0, Math.min(1, frac));
                 const hhmm = this._planMsToTod(a.fromMs + frac * a.span);
                 if (which === 'start') t.startAtUtc = hhmm; else t.endAtUtc = hhmm;
