@@ -678,6 +678,25 @@
     function skyUpdateTargetFovBox(target) {
         __lastTargetFov = target || null;
         var el = document.getElementById('sky-target-fov');
+        // Celestial-anchored red target: when the parent supplies a
+        // raDeg/decDeg (set after a plate solve during imaging), the
+        // red rectangle is drawn as an engine geojson glued to the
+        // solved sky position — exactly like the blue mount rect — so
+        // it "syncs to blue" at each solve and then visibly drifts
+        // apart from the live mount rect between solves. When no
+        // celestial anchor is given we fall back to the legacy
+        // screen-anchored CSS box (used for drag-to-frame in SKY).
+        var celestial = !!(target && target.widthDeg > 0
+            && typeof target.raDeg === 'number' && isFinite(target.raDeg)
+            && typeof target.decDeg === 'number' && isFinite(target.decDeg));
+        if (celestial) {
+            if (el) el.style.display = 'none';   // hide the CSS box
+            skyRebuildTargetGeoJson();
+            return;
+        }
+        // Not celestial — drop any geojson target left over from a
+        // previous solve so we don't show two red rectangles.
+        skyRemoveObj('target');
         if (!el) return;
         if (!target || !(target.widthDeg > 0)) {
             el.style.display = 'none';
@@ -782,6 +801,28 @@
             __skyFovLayer.add(__skyFovObjs.mount);
         } catch (e) {
             console.warn('[Sky] mount geojson rebuild failed:', e);
+        }
+    }
+
+    // Rebuild the celestial-anchored red target rectangle from the
+    // last received target overlay. Mirrors skyRebuildMountGeoJson so
+    // a pan (centre parallactic changes) keeps the label glued to the
+    // rectangle. No-op unless the last target carried a raDeg/decDeg.
+    function skyRebuildTargetGeoJson() {
+        var stel = window.__stel;
+        if (!stel || !__skyFovLayer || !__lastTargetFov) return;
+        var t = __lastTargetFov;
+        if (!(t.widthDeg > 0)) return;
+        if (typeof t.raDeg !== 'number' || !isFinite(t.raDeg)) return;
+        if (typeof t.decDeg !== 'number' || !isFinite(t.decDeg)) return;
+        try {
+            skyRemoveObj('target');
+            __skyFovObjs.target = stel.createObj('geojson', {
+                data: skyFovGeoJson(t, '#dc2626', true)   // red, glow
+            });
+            __skyFovLayer.add(__skyFovObjs.target);
+        } catch (e) {
+            console.warn('[Sky] target geojson rebuild failed:', e);
         }
     }
 
@@ -951,9 +992,16 @@
                 if (!fovChanged && !poseChanged) return;
                 if (fovChanged) lastFov = fov;
                 if (poseChanged) { lastYaw = yaw; lastPitch = pitch; }
-                // Resize the target box on any fov change AND re-rotate
-                // it for the new parallactic angle on any pose change.
-                if (__lastTargetFov) skyUpdateTargetFovBox(__lastTargetFov);
+                // Resize the SCREEN-anchored target box on any fov change
+                // AND re-rotate it for the new parallactic angle on any
+                // pose change. A celestial-anchored target (raDeg set) is
+                // an engine geojson instead and is rebuilt below under the
+                // 100ms throttle, so skip it here to avoid per-tick thrash.
+                if (__lastTargetFov
+                    && !(typeof __lastTargetFov.raDeg === 'number'
+                         && isFinite(__lastTargetFov.raDeg))) {
+                    skyUpdateTargetFovBox(__lastTargetFov);
+                }
                 // The mount geojson's text-rotate depends on BOTH the
                 // rectangle's parallactic angle AND the projection
                 // centre's parallactic angle (see skyFovGeoJson). The
@@ -966,6 +1014,13 @@
                 if (now - lastEmit < 100) return;
                 lastEmit = now;
                 if (__lastMountFov) skyRebuildMountGeoJson();
+                // Same reasoning as the mount: a celestial-anchored red
+                // target needs its label re-rotated for the new centre
+                // parallactic on pan. Throttled with the mount rebuild.
+                if (__lastTargetFov && typeof __lastTargetFov.raDeg === 'number'
+                    && isFinite(__lastTargetFov.raDeg)) {
+                    skyRebuildTargetGeoJson();
+                }
                 postToParent({
                     type: 'center',
                     center: skyGetCenter(),

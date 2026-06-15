@@ -133,15 +133,17 @@ public static class PlateSolveEndpoints {
                     HintDec = hintDec,
                     SearchRadiusDeg = request?.SearchRadiusDeg ?? profiles.Active.PlateSolveSearchRadiusDeg
                 };
+                bool silent = request?.Silent ?? false;
                 logger.LogInformation(
-                    "PREVIEW plate solve: hint RA={Ra} Dec={Dec} radius={Rad}°",
-                    hintRa, hintDec, options.SearchRadiusDeg);
+                    "PREVIEW plate solve: hint RA={Ra} Dec={Dec} radius={Rad}°{Silent}",
+                    hintRa, hintDec, options.SearchRadiusDeg, silent ? " (silent)" : "");
 
-                progress.Begin("PREVIEW");
+                if (!silent) progress.Begin("PREVIEW");
                 PlateSolveResult result;
                 try {
-                    result = await solver.SolveAsync(tempFits, options, ct, progress.Append);
-                } finally { progress.End(); }
+                    result = await solver.SolveAsync(tempFits, options, ct,
+                        silent ? null : progress.Append);
+                } finally { if (!silent) progress.End(); }
 
                 if (!result.Success) {
                     return Results.Ok(new {
@@ -442,11 +444,16 @@ public static class PlateSolveEndpoints {
     /// <summary>POST body for <c>/api/platesolve/solve-latest</c>.
     /// Every field is optional, the endpoint falls back to mount
     /// pointing for the RA/Dec hint and a 30° default for the
-    /// search radius.</summary>
+    /// search radius. <c>Silent</c> suppresses the live progress
+    /// console stream (used by the background per-frame solve that
+    /// keeps the red FOV rectangle glued to the solved sky position
+    /// during live-stacking / autorun / plan — the operator never
+    /// asked for it, so it must not flood the solver-log panel).</summary>
     public record SolveLatestRequest(
         double? HintRa,
         double? HintDec,
-        double? SearchRadiusDeg);
+        double? SearchRadiusDeg,
+        bool? Silent = null);
 
     /// <summary>POST body for <c>/api/platesolve/annotate-latest</c>. Adds the
     /// DSO label options on top of the solve hints: a magnitude floor and a

@@ -12311,6 +12311,96 @@ function ninaApp() {
         // the active rig + connected camera and post a set-fov-overlays
         // message. Mount FOV anchors on the live mount RA/Dec, target
         // FOV anchors on skyTarget. Either side can be null to clear it.
+        // ---- Background per-frame silent plate solve ----------------
+        // Keeps the red FOV rectangle glued to the actual solved sky
+        // position during imaging. Triggered when a new frame lands in
+        // live-stack / autorun / plan, throttled so we solve at most
+        // once per 60 s ("after each captured frame OR every 60 s,
+        // whichever is greater"). Silent: no toast, no solver-log
+        // console stream (Silent flag on the endpoint).
+        _isImagingActive() {
+            return !!this.liveStackEnabled
+                || this.seqState === 'running'
+                || (this.planStatus && this.planStatus.phase
+                    && this.planStatus.phase !== 'idle');
+        },
+
+        // Called from the /ws/status handler after liveStack + sequence
+        // fields update. Detects a freshly-captured frame via a combined
+        // marker and kicks the throttled silent solve.
+        _checkSilentSolveTrigger() {
+            if (!this._silentSolve) {
+                this._silentSolve = { busy: false, lastAtMs: 0, lastMarker: null };
+            }
+            if (!this._isImagingActive()) {
+                // Leave solvedFrame in place (red stays put until the next
+                // solve) but reset the frame marker so the first frame of
+                // the next session doesn't instantly trigger a solve.
+                this._silentSolve.lastMarker = null;
+                return;
+            }
+            const lf = this.liveStackFrames || 0;
+            const sf = (this.seqStatus && this.seqStatus.totalFramesCompleted) || 0;
+            const marker = lf + ':' + sf;
+            const ss = this._silentSolve;
+            if (ss.lastMarker === marker) return;     // no new frame
+            const firstObservation = ss.lastMarker === null;
+            ss.lastMarker = marker;
+            if (firstObservation) return;             // don't solve on first sight
+            this._maybeSilentSolve();
+        },
+
+        async _maybeSilentSolve() {
+            const ss = this._silentSolve
+                || (this._silentSolve = { busy: false, lastAtMs: 0, lastMarker: null });
+            if (ss.busy) return;
+            const now = Date.now();
+            if (now - ss.lastAtMs < 60000) return;    // ≥60 s between solves
+            ss.busy = true;
+            // Stamp the time at request start so a slow solve doesn't let
+            // a flurry of fast frames queue up behind it.
+            ss.lastAtMs = now;
+            try {
+                const body = { silent: true };
+                if (this.mount?.connected
+                        && Number.isFinite(this.mount.ra)
+                        && Number.isFinite(this.mount.dec)) {
+                    body.hintRa = this.mount.ra;
+                    body.hintDec = this.mount.dec;
+                }
+                const resp = await this.apiPost(
+                    '/api/platesolve/solve-latest', body, { timeout: 180000 });
+                const r = await resp.json();
+                if (r && r.success) this._applySolvedFrame(r);
+            } catch (e) {
+                // Silent by design: a failed background solve must not
+                // toast or log loudly. Swallow and try again next frame.
+            } finally {
+                ss.busy = false;
+            }
+        },
+
+        // Anchor the red FOV rectangle to a solve result (manual or
+        // silent) so it "syncs to blue". Also refreshes the mount
+        // rotation and resets the silent-solve throttle so a manual
+        // solve doesn't immediately get re-done in the background.
+        _applySolvedFrame(r) {
+            if (!r) return;
+            const raDeg = Number.isFinite(r.raDeg) ? r.raDeg
+                : (Number.isFinite(r.raHours) ? r.raHours * 15 : NaN);
+            const decDeg = Number.isFinite(r.decDeg) ? r.decDeg : NaN;
+            if (!Number.isFinite(raDeg) || !Number.isFinite(decDeg)) return;
+            this.solvedFrame = {
+                raDeg, decDeg,
+                rotationDeg: Number.isFinite(r.rotationDeg) ? r.rotationDeg : 0
+            };
+            if (Number.isFinite(r.rotationDeg)) this.solveRotationDeg = r.rotationDeg;
+            if (this._silentSolve) this._silentSolve.lastAtMs = Date.now();
+            else this._silentSolve = { busy: false, lastAtMs: Date.now(), lastMarker: null };
+            try { this._pushSkyFovOverlays && this._pushSkyFovOverlays(); }
+            catch (e) { /* SKY engine may not be live */ }
+        },
+
         _pushSkyFovOverlays() {
             if (!this.aladinShowFov || !(this.fov?.width > 0)) {
                 this._skySendMessage({ type: 'set-fov-overlays',
@@ -12372,9 +12462,30 @@ function ninaApp() {
             // sized from widthDeg/heightDeg + engine fov. No RA/Dec
             // needed; the rectangle's "celestial position" IS the
             // current map centre, which the user is dragging around.
-            const target = {
-                widthDeg: w, heightDeg: h, rotationDeg: targetRot, flipV: flipV
-            };
+            //
+            // EXCEPTION (red-syncs-to-blue): while imaging is active
+            // (live-stack / autorun / plan) and we have a recent plate
+            // solve, anchor the red rectangle to the SOLVED sky
+            // position instead. The background per-frame silent solve
+            // refreshes `solvedFrame`, so red snaps onto blue at each
+            // solve and then visibly drifts off it as the mount tracks
+            // until the next solve — exactly the operator's request.
+            // When idle the screen-anchored box returns for drag-to-frame.
+            let target;
+            const sf = this.solvedFrame;
+            if (this._isImagingActive() && sf
+                && Number.isFinite(sf.raDeg) && Number.isFinite(sf.decDeg)) {
+                target = {
+                    raDeg: sf.raDeg, decDeg: sf.decDeg,
+                    widthDeg: w, heightDeg: h,
+                    rotationDeg: Number.isFinite(sf.rotationDeg) ? sf.rotationDeg : targetRot,
+                    flipV: flipV
+                };
+            } else {
+                target = {
+                    widthDeg: w, heightDeg: h, rotationDeg: targetRot, flipV: flipV
+                };
+            }
 
             // Skip when nothing actually changed since last push.
             // The mount status WS push fires several times per second
@@ -12389,7 +12500,11 @@ function ninaApp() {
                               w: mount.widthDeg.toFixed(3), rot: (mount.rotationDeg||0).toFixed(2) },
                 t: target && { w: target.widthDeg.toFixed(3),
                               h: target.heightDeg.toFixed(3),
-                              rot: (target.rotationDeg||0).toFixed(2) },
+                              rot: (target.rotationDeg||0).toFixed(2),
+                              // Include the celestial anchor (when present) so a
+                              // refreshed silent solve re-pushes the red rect.
+                              r: Number.isFinite(target.raDeg) ? target.raDeg.toFixed(3) : null,
+                              d: Number.isFinite(target.decDeg) ? target.decDeg.toFixed(3) : null },
                 // FIELD3-4: include solveRotationDeg in the key so a
                 // post-solve rotation update re-pushes the mount
                 // rectangle even when ra/dec haven't moved.
@@ -12404,7 +12519,9 @@ function ninaApp() {
             // and why (e.g. mount: false because mount.connected is false).
             console.log('[Polaris] _pushSkyFovOverlays mount=',
                 mount ? `${mount.raDeg.toFixed(2)}°/${mount.decDeg.toFixed(2)}°` : 'null',
-                'target=screen-centred',
+                'target=', Number.isFinite(target.raDeg)
+                    ? `${target.raDeg.toFixed(2)}°/${target.decDeg.toFixed(2)}° (solved)`
+                    : 'screen-centred',
                 'fov=', w.toFixed(2) + '°×' + h.toFixed(2) + '°');
 
             this._skySendMessage({ type: 'set-fov-overlays', mount, target,
@@ -16394,6 +16511,9 @@ function ninaApp() {
                 const r = await resp.json();
                 this.previewSolveResult = r || { success: false, error: 'No response' };
                 if (this.previewSolveResult.success) {
+                    // Sync the red FOV rectangle to this solve (and reset
+                    // the background silent-solve throttle).
+                    this._applySolvedFrame(this.previewSolveResult);
                     this.toast('Plate solve succeeded', 'ok');
                 } else {
                     this.toast('Plate solve failed: '
@@ -23561,6 +23681,16 @@ function ninaApp() {
                     try { this._pushSkyFovOverlays && this._pushSkyFovOverlays(); }
                     catch (e) { /* iframe not mounted; harmless */ }
                 }
+                // Sync the red FOV rectangle to the slew-and-center solve
+                // (actualRa is in hours). This makes red snap onto the
+                // freshly solved position the same way the background /
+                // manual solves do, and seeds the silent-solve throttle.
+                if (Number.isFinite(data?.actualRa) && Number.isFinite(data?.actualDec)) {
+                    this._applySolvedFrame({
+                        raHours: data.actualRa, decDeg: data.actualDec,
+                        rotationDeg: data.rotation
+                    });
+                }
 
                 if (data.state === 'centered') {
                     this.stopSlewCenterPolling();
@@ -25863,6 +25993,12 @@ function ninaApp() {
                     this.toast('Sequence completed!', 'ok', 6000);
                 }
             }
+
+            // Background per-frame silent plate solve: runs after the
+            // liveStack/sequence/plan state above is refreshed so it sees
+            // the current frame counts. Self-throttles to ≥60 s and only
+            // fires while imaging is active.
+            try { this._checkSilentSolveTrigger(); } catch (e) { /* never break status */ }
 
             // Activity-bar inputs. host, sirilJobs, graXpertJobs are
             // produced by HostMetricsService + the *.ActiveJobs surfaces
