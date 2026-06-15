@@ -101,6 +101,26 @@ public class AutoFocusEveryNMinutesTrigger : SequenceTrigger {
         AutoFocusOnTempChangeTrigger.RunAutoFocusAsync(ctx, ct);
 }
 
+/// <summary>Fire auto-focus every <see cref="EveryNFrames"/> captured frames.</summary>
+public class AutoFocusEveryNFramesTrigger : SequenceTrigger {
+    public override string Type => "AutoFocusEveryNFrames";
+    public int EveryNFrames { get; set; } = 20;
+
+    public override Task<bool> ShouldFireAsync(SequenceContext ctx, CancellationToken ct) {
+        if (EveryNFrames <= 0) return Task.FromResult(false);
+        var key = $"AFFrames:{Id}:last";
+        var last = ctx.Scratch.TryGetValue(key, out var v) ? (int)v : 0;
+        if (ctx.FramesCompleted - last >= EveryNFrames) {
+            ctx.Scratch[key] = ctx.FramesCompleted;
+            return Task.FromResult(true);
+        }
+        return Task.FromResult(false);
+    }
+
+    public override Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) =>
+        AutoFocusOnTempChangeTrigger.RunAutoFocusAsync(ctx, ct);
+}
+
 /// <summary>Fire auto-focus whenever the active filter changes between frames.</summary>
 public class AutoFocusOnFilterChangeTrigger : SequenceTrigger {
     public override string Type => "AutoFocusOnFilterChange";

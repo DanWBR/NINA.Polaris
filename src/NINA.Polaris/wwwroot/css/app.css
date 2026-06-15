@@ -12018,6 +12018,11 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .plan-sched-toggle { display: flex; gap: 6px; }
 .plan-sched-note { font-size: 11px; line-height: 1.4; }
 .plan-sched-note em { font-style: normal; color: var(--text-primary, #e5e7eb); }
+.plan-maint { display: flex; flex-direction: column; gap: 4px; }
+.plan-maint-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+.plan-maint-row { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; align-items: center; }
+.plan-maint-row label { display: inline-flex; align-items: center; gap: 6px; }
+.plan-maint-row input { width: 4em; }
 .plan-altchart-wrap { display: flex; flex-direction: column; gap: 6px; }
 .plan-altchart-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 11px; flex-wrap: wrap; }
 .plan-altchart-head .muted { color: var(--text-muted, #9aa4b2); }

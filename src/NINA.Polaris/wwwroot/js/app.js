@@ -15106,6 +15106,7 @@ function ninaApp() {
                 id: 'T' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
                 name: 'Target', raHours: 0, decDeg: 0, rotation: 0,
                 firstDelaySec: 0, enabled: true,
+                recenterEveryNFrames: 0, refocusEveryNFrames: 0, ditherEveryNFrames: 0,
                 scheduleMode: 'Frames', startAtUtc: '', endAtUtc: '',
                 frames: [{ exposureSeconds: 60, count: 10, filter: null, gain: null, binning: 1, imageType: 'LIGHT' }]
             };

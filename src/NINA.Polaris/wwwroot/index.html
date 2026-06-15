@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260615-planviz3">
+    <link rel="stylesheet" href="/css/app.css?v=20260615-maint">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -7605,6 +7605,19 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         </template>
                                     </div>
 
+                                    <!-- Periodic maintenance during this target (0 = off). -->
+                                    <div class="plan-maint">
+                                        <div class="plan-maint-title muted">During capture (0 = off)</div>
+                                        <div class="plan-maint-row">
+                                            <label>Re-center every
+                                                <input type="number" min="0" step="1" x-model.number="t.recenterEveryNFrames" @change="savePlan()"> frames</label>
+                                            <label>Re-focus every
+                                                <input type="number" min="0" step="1" x-model.number="t.refocusEveryNFrames" @change="savePlan()"> frames</label>
+                                            <label>Dither every
+                                                <input type="number" min="0" step="1" x-model.number="t.ditherEveryNFrames" @change="savePlan()"> frames</label>
+                                        </div>
+                                    </div>
+
                                     <div class="plan-frames">
                                         <div class="plan-frames-head">
                                             <span x-text="t.scheduleMode === 'TimeWindow' ? 'Frames (looped until end time)' : 'Frames'"></span>
@@ -13917,7 +13930,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260615-planviz3"></script>
+    <script src="/js/app.js?v=20260615-maint"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

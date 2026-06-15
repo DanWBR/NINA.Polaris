@@ -82,6 +82,14 @@ public class PlanTarget {
     /// <summary>Seconds to wait after centering before the first exposure (settle / let guiding lock).</summary>
     public int FirstDelaySec { get; set; } = 0;
 
+    // ---- Periodic maintenance during the target (0 = off) ------------
+    /// <summary>Plate-solve + re-center every N captured frames (drift correction).</summary>
+    public int RecenterEveryNFrames { get; set; } = 0;
+    /// <summary>Run an auto-focus pass every N captured frames (needs a focuser).</summary>
+    public int RefocusEveryNFrames { get; set; } = 0;
+    /// <summary>Dither via the guider every N captured frames (needs guiding).</summary>
+    public int DitherEveryNFrames { get; set; } = 0;
+
     /// <summary>Disabled targets are kept in the list but skipped when the plan runs.</summary>
     public bool Enabled { get; set; } = true;
 

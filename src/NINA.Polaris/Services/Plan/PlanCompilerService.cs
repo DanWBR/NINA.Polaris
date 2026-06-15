@@ -123,6 +123,26 @@ public class PlanCompilerService {
                     Name = "Meridian flip", RaHours = t.RaHours, DecDeg = t.DecDeg
                 });
             }
+            // Per-target periodic maintenance (0 = off).
+            if (t.RecenterEveryNFrames > 0) {
+                dso.Triggers.Add(new CenterAfterDriftTrigger {
+                    Name = $"Re-center every {t.RecenterEveryNFrames}",
+                    RaHours = t.RaHours, DecDeg = t.DecDeg,
+                    CheckEveryNFrames = t.RecenterEveryNFrames
+                });
+            }
+            if (t.RefocusEveryNFrames > 0) {
+                dso.Triggers.Add(new AutoFocusEveryNFramesTrigger {
+                    Name = $"Re-focus every {t.RefocusEveryNFrames}",
+                    EveryNFrames = t.RefocusEveryNFrames
+                });
+            }
+            if (t.DitherEveryNFrames > 0) {
+                dso.Triggers.Add(new DitherAfterNExposuresTrigger {
+                    Name = $"Dither every {t.DitherEveryNFrames}",
+                    EveryNFrames = t.DitherEveryNFrames
+                });
+            }
             // Time-window mode: loop the frame block (slew/center happens once in
             // the container preamble) until the target's end time is reached.
             if (timed && !string.IsNullOrWhiteSpace(t.EndAtUtc)) {
