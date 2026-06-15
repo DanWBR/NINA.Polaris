@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260615-plantouch">
+    <link rel="stylesheet" href="/css/app.css?v=20260615-meridianbar">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -881,11 +881,6 @@
                                 <span class="lsq-value"
                                       x-text="formatSnrEta(liveStackStatus)"></span>
                             </div>
-                            <div class="lsq-cell" x-show="mfTimeToMeridianMinutes != null"
-                                 title="Time until the target crosses the meridian (a flip may be needed past it)">
-                                <span class="lsq-label">Meridian</span>
-                                <span class="lsq-value" x-text="formatTimeToMeridian()"></span>
-                            </div>
                             <div class="lsq-target">
                                 <label>Target
                                     <input type="number" class="input-sm" min="0" max="500" step="1"
@@ -1659,6 +1654,8 @@
                          until the first frame lands. -->
                     <span>Stacking: <strong
                           x-text="liveStackStatus?.elapsedSeconds > 0 ? formatTime(liveStackStatus.elapsedSeconds) : '--'">--</strong></span>
+                    <span x-show="mfTimeToMeridianMinutes != null"
+                          title="Time until the target crosses the meridian (a flip may be needed past it)">Meridian: <strong x-text="formatTimeToMeridian()"></strong></span>
                     <button class="btn btn-sm" @click="loadFullStats()" style="margin-left:auto;"
                             :disabled="!selectedCamera">Detailed stats</button>
                 </div>
@@ -13789,7 +13786,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260615-plantouch"></script>
+    <script src="/js/app.js?v=20260615-meridianbar"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
