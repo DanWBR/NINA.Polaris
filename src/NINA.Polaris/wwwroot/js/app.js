@@ -2462,6 +2462,16 @@ function ninaApp() {
         // and label catalog objects in the field). Items are in IMAGE pixels.
         annotate: { active: false, busy: false, width: 0, height: 0, scaleArcsec: 1, items: [] },
         annotateFlip: false,   // mirror correction for flipped optical trains
+        // Quadrant rotation applied to annotation positions (0/90/180/270),
+        // applied CLIENT-SIDE around the image centre. Reconciles solver
+        // rotation conventions that land annotations rotated 90° from the
+        // displayed frame; cycling re-projects instantly without a re-solve.
+        annotateExtraRot: 0,
+        // STUDIO (FILES image viewer) annotation overlay. Items are in the
+        // saved frame's FULL-res IMAGE pixels; rendered as OSD overlays so they
+        // track zoom/pan. width/height are the solved frame's full dimensions.
+        studioAnnotate: { active: false, busy: false, width: 0, height: 0, items: [] },
+        imageViewerPath: '',   // absolute path of the file open in the viewer (FILES); '' for the live frame
         // LIVE tab image-history + HFR chart are now a semi-transparent
         // overlay over the stacked image. Default hidden so the focus
         // stays on the master being built. User toggles via the
@@ -11859,6 +11869,11 @@ function ninaApp() {
                 // overwrite changes the server-side cache key.
                 const url = '/api/files/preview?path=' + encodeURIComponent(entry.fullPath)
                           + '&maxDim=2400';
+                // Remember the source path so STUDIO annotate can solve this
+                // exact file, and drop any annotations from a prior file.
+                this.imageViewerPath = entry.fullPath;
+                this.studioAnnotate.active = false;
+                this.studioAnnotate.items = [];
                 this._openImageViewerWithUrl(url, entry.name);
                 // Kick off the FITS header fetch in parallel with the
                 // image load. The overlay panel renders as soon as the
@@ -12730,7 +12745,8 @@ function ninaApp() {
             ctx.textBaseline = 'bottom';
             ctx.lineJoin = 'round';
             for (const o of a.items) {
-                const x = o.x * sx, y = o.y * sy;
+                const [rx0, ry0] = this._rotAnnPoint(o.x, o.y, a.width, a.height, this.annotateExtraRot);
+                const x = rx0 * sx, y = ry0 * sy;
                 // Marker radius from the object's catalog size when known.
                 let r = 10;
                 if (o.sizeArcmin > 0 && a.scaleArcsec > 0) {
@@ -12751,6 +12767,109 @@ function ninaApp() {
                 ctx.fillText(label, lx, ly);
             }
             ctx.restore();
+        },
+
+        // Rotate an annotation point around the image centre by `deg`
+        // (0/90/180/270). Equivalent to the server's extraRotationDeg for the
+        // un-flipped case, but applied client-side so the rotation knob is
+        // instant (no re-solve). Returns [x, y] in the same full-res space.
+        _rotAnnPoint(x, y, w, h, deg) {
+            if (!deg) return [x, y];
+            const rad = (deg % 360) * Math.PI / 180;
+            const cx = w / 2, cy = h / 2;
+            const dx = x - cx, dy = y - cy;
+            const c = Math.cos(rad), s = Math.sin(rad);
+            return [cx + dx * c - dy * s, cy + dx * s + dy * c];
+        },
+
+        // Cycle the annotation rotation 0 -> 90 -> 180 -> 270 -> 0 and
+        // re-render whatever overlay is currently showing (LIVE/PREVIEW canvas
+        // and/or the STUDIO OSD overlay), without re-solving.
+        cycleAnnotateRotation() {
+            this.annotateExtraRot = (this.annotateExtraRot + 90) % 360;
+            try { this.redrawOverlay && this.redrawOverlay(); } catch (e) {}
+            try { this.redrawPreviewOverlay && this.redrawPreviewOverlay(); } catch (e) {}
+            if (this.studioAnnotate.active) this._renderStudioAnnotations();
+            this.toast('Annotation rotation: ' + this.annotateExtraRot + '°', 'info');
+        },
+
+        // ---- STUDIO (FILES image viewer) annotation -------------------
+        // Solve the file currently open in the OpenSeadragon viewer and overlay
+        // DSO labels as OSD overlays (so they track zoom/pan). Toggling off
+        // clears them. Use cycleAnnotateRotation() to fix a 90° convention
+        // mismatch live.
+        async studioAnnotateToggle() {
+            if (this.studioAnnotate.active) {
+                this.studioAnnotate.active = false;
+                this.studioAnnotate.items = [];
+                if (this._osdViewer) { try { this._osdViewer.clearOverlays(); } catch (e) {} }
+                return;
+            }
+            await this.studioAnnotateRun();
+        },
+
+        async studioAnnotateRun() {
+            if (!this.imageViewerPath) {
+                this.toast('Open a FITS file in the viewer first.', 'error');
+                return;
+            }
+            if (this.studioAnnotate.busy) return;
+            this.studioAnnotate.busy = true;
+            const tid = this._transferStart({ label: 'Annotate file (solve)', direction: 'down', total: 0 });
+            try {
+                // extraRotationDeg stays 0 server-side; we rotate client-side so
+                // the rotation knob is instant.
+                const r = await this.apiPost('/api/platesolve/annotate-file',
+                    { path: this.imageViewerPath, flip: !!this.annotateFlip, extraRotationDeg: 0 },
+                    { timeout: 180000 });
+                const j = await r.json();
+                if (!j.success) {
+                    this.toast('Annotate failed: ' + (j.error || 'plate solve unsuccessful'), 'error');
+                    return;
+                }
+                this.studioAnnotate.width = j.width;
+                this.studioAnnotate.height = j.height;
+                this.studioAnnotate.items = j.objects || [];
+                this.studioAnnotate.active = true;
+                this._renderStudioAnnotations();
+                this.toast(this.studioAnnotate.items.length
+                    ? `Annotated ${this.studioAnnotate.items.length} object(s)`
+                    : 'Solved, but no catalog objects in frame', 'ok');
+            } catch (e) {
+                this.toast('Annotate failed: ' + (e.message || e), 'error');
+            } finally {
+                this._transferEnd(tid);
+                this.studioAnnotate.busy = false;
+            }
+        },
+
+        // Paint the studio annotations as OSD overlays. Maps the saved frame's
+        // full-res pixel coords onto the (possibly downscaled) preview the
+        // viewer loaded, applies the client-side rotation, then converts to
+        // viewport coords so OSD keeps them glued through zoom/pan.
+        _renderStudioAnnotations() {
+            const v = this._osdViewer, a = this.studioAnnotate;
+            if (!v || typeof OpenSeadragon === 'undefined') return;
+            try { v.clearOverlays(); } catch (e) {}
+            if (!a.active || !a.items.length || !a.width || !a.height) return;
+            if (!v.world || v.world.getItemCount() === 0) return;
+            const content = v.world.getItemAt(0).getContentSize();
+            const sx = content.x / a.width, sy = content.y / a.height;
+            for (const o of a.items) {
+                const [rx, ry] = this._rotAnnPoint(o.x, o.y, a.width, a.height, this.annotateExtraRot);
+                const imgX = rx * sx, imgY = ry * sy;
+                if (imgX < 0 || imgY < 0 || imgX > content.x || imgY > content.y) continue;
+                const pt = v.viewport.imageToViewportCoordinates(new OpenSeadragon.Point(imgX, imgY));
+                const el = document.createElement('div');
+                el.className = 'osd-annot';
+                const label = o.commonName ? `${o.name} · ${o.commonName}` : o.name;
+                el.innerHTML = '<span class="osd-annot-dot"></span>' +
+                    '<span class="osd-annot-label"></span>';
+                el.querySelector('.osd-annot-label').textContent = label;
+                try {
+                    v.addOverlay({ element: el, location: pt, placement: OpenSeadragon.Placement.CENTER });
+                } catch (e) {}
+            }
         },
 
         // The PREVIEW tab has its own overlay canvas (previewOverlayCanvas).
@@ -13029,6 +13148,10 @@ function ninaApp() {
             // from any other tab doesn't accidentally re-open a file.
             this.imageViewerUrl = '/api/image/latest/preview';
             this.imageViewerTitle = 'Image Viewer, full resolution';
+            // Drop any STUDIO annotations + the tracked file path.
+            this.imageViewerPath = '';
+            this.studioAnnotate.active = false;
+            this.studioAnnotate.items = [];
             // Drop the header cache so reopening a different FITS doesn't
             // briefly flash the previous file's headers.
             this.fitsHeaders.data = null;

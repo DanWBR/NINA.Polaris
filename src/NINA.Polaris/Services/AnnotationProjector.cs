@@ -33,11 +33,17 @@ public static class AnnotationProjector {
     /// Project a sky point to image pixels. Returns null when the point is more
     /// than 90° from the field centre (behind the tangent plane).
     /// </summary>
+    /// <param name="extraRotationDeg">Additional rotation (degrees) added to the
+    /// solver's <paramref name="rotationDeg"/> before mapping sky axes to image
+    /// axes. Used to reconcile solver rotation conventions that differ by a
+    /// quadrant (90/180/270) from this projector's north-up/east-left frame, and
+    /// as a field-test knob until the right offset is nailed down.</param>
     public static (double x, double y)? Project(
             double centerRaHours, double centerDecDeg,
             double scaleArcsecPerPixel, double rotationDeg,
             int width, int height, bool flip,
-            double raHours, double decDeg) {
+            double raHours, double decDeg,
+            double extraRotationDeg = 0) {
         if (scaleArcsecPerPixel <= 0) return null;
 
         double ra0 = centerRaHours * Math.PI / 12.0;
@@ -61,8 +67,9 @@ public static class AnnotationProjector {
         double xiPx = xi * ArcsecPerRadian / scaleArcsecPerPixel;
         double etaPx = eta * ArcsecPerRadian / scaleArcsecPerPixel;
 
-        // Rotate the sky axes into the image axes by the solve rotation.
-        double th = rotationDeg * Math.PI / 180.0;
+        // Rotate the sky axes into the image axes by the solve rotation (plus
+        // any test/convention offset).
+        double th = (rotationDeg + extraRotationDeg) * Math.PI / 180.0;
         double cos = Math.Cos(th), sin = Math.Sin(th);
         double xr = xiPx * cos - etaPx * sin;
         double yr = xiPx * sin + etaPx * cos;

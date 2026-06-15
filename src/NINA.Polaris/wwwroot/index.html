@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260615-planmodals">
+    <link rel="stylesheet" href="/css/app.css?v=20260615-studioannot">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -13269,6 +13269,24 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         :class="fitsHeaders.visible ? 'btn-active' : ''"
                         @click="toggleFitsHeaders()"
                         title="Toggle FITS headers panel">ℹ</button>
+                <!-- Annotate: plate-solve this file + overlay catalog labels.
+                     Only meaningful for a saved file (FILES viewer). -->
+                <button class="btn btn-sm"
+                        x-show="imageViewerPath"
+                        :class="studioAnnotate.active ? 'btn-active' : ''"
+                        :disabled="studioAnnotate.busy"
+                        @click="studioAnnotateToggle()"
+                        title="Annotate: plate-solve this file and label catalog objects">
+                    <span x-show="!studioAnnotate.busy">✦ Annotate</span>
+                    <span x-show="studioAnnotate.busy" x-cloak>Solving…</span>
+                </button>
+                <!-- Rotate the annotation positions in 90° steps to reconcile a
+                     solver rotation-convention mismatch. -->
+                <button class="btn btn-sm"
+                        x-show="imageViewerPath && studioAnnotate.active"
+                        x-cloak
+                        @click="cycleAnnotateRotation()"
+                        :title="'Rotate annotations 90° (now ' + annotateExtraRot + '°)'">⟳ <span x-text="annotateExtraRot + '°'"></span></button>
                 <button class="btn btn-sm" @click="reloadImageViewer()" title="Reload">↻</button>
                 <button class="btn btn-sm btn-danger" @click="closeImageViewer()">✕</button>
             </div>
@@ -13997,7 +14015,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260615-planmodals"></script>
+    <script src="/js/app.js?v=20260615-studioannot"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

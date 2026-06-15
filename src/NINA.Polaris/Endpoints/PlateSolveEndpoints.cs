@@ -226,30 +226,9 @@ public static class PlateSolveEndpoints {
                 if (!result.Success)
                     return Results.Ok(new { success = false, error = result.Error, solverUsed = result.SolverUsed });
 
-                var objects = new List<object>();
-                if (dso.IsAvailable) {
-                    // Cone radius = half the frame diagonal + 10% margin.
-                    double diagPx = Math.Sqrt((double)width * width + (double)height * height);
-                    double radiusDeg = diagPx * result.ScaleArcsecPerPixel / 3600.0 / 2.0 * 1.10;
-                    double magLimit = request?.MagLimit ?? 14.0;
-                    bool flip = request?.Flip ?? false;
-                    double margin = 0.02 * Math.Max(width, height);
-
-                    var hits = await dso.QueryRegionAsync(result.RaHours, result.DecDeg,
-                        Math.Max(0.05, radiusDeg), magLimit, 300);
-                    foreach (var o in hits) {
-                        var p = AnnotationProjector.Project(result.RaHours, result.DecDeg,
-                            result.ScaleArcsecPerPixel, result.RotationDeg, width, height, flip,
-                            o.RaHours, o.DecDeg);
-                        if (p == null) continue;
-                        var (x, y) = p.Value;
-                        if (x < -margin || y < -margin || x > width + margin || y > height + margin) continue;
-                        objects.Add(new {
-                            name = o.Name, commonName = o.CommonName,
-                            x, y, type = o.Type, magnitude = o.Magnitude, sizeArcmin = o.SizeArcmin
-                        });
-                    }
-                }
+                var objects = await ProjectAnnotationsAsync(dso, result, width, height,
+                    request?.Flip ?? false, request?.MagLimit ?? 14.0,
+                    request?.ExtraRotationDeg ?? 0.0);
 
                 return Results.Ok(new {
                     success = true, width, height,
@@ -265,6 +244,99 @@ public static class PlateSolveEndpoints {
                 return Results.Ok(new { success = false, error = ex.Message });
             } finally {
                 try { File.Delete(tempFits); } catch { }
+            }
+        });
+
+        // ---- Annotate a file on disk (STUDIO / FILES viewer) ----
+        // Solve a saved FITS, then project the DSO catalog onto its full-res
+        // pixel grid so the FILES image viewer can overlay labels. Mirrors
+        // annotate-latest but sources the frame + its dimensions from the file
+        // (NAXIS1/NAXIS2) instead of the live relay, and supports the same
+        // flip + extraRotationDeg test knobs.
+        group.MapPost("/annotate-file", async (
+                AnnotateFileRequest request,
+                PlateSolveService solver,
+                ProfileService profiles,
+                EquipmentManager equip,
+                NINA.Polaris.Services.Sky.DsoCatalog dso,
+                PlateSolveProgressService progress,
+                ILogger<PlateSolveStatusMarker> logger,
+                CancellationToken ct) => {
+            if (string.IsNullOrWhiteSpace(request.Path))
+                return Results.BadRequest(new { error = "Path is required." });
+            if (!File.Exists(request.Path))
+                return Results.BadRequest(new { error = $"File not found: {request.Path}" });
+            if (!solver.IsAvailable)
+                return Results.BadRequest(new { error = "No plate solver configured / installed." });
+
+            // Headers give the RA/Dec hint and the full-resolution dimensions
+            // the projection must use (the viewer maps these onto its own
+            // possibly-downscaled preview).
+            int width = 0, height = 0;
+            double? hintRa = request.HintRa, hintDec = request.HintDec;
+            try {
+                using var hdrFs = File.OpenRead(request.Path);
+                var hdr = FITSReader.ReadHeadersOnly(hdrFs);
+                if (hdr != null) {
+                    if (hdr.TryGetValue("NAXIS1", out var n1)) int.TryParse(n1.Value, out width);
+                    if (hdr.TryGetValue("NAXIS2", out var n2)) int.TryParse(n2.Value, out height);
+                    if (!hintRa.HasValue && hdr.TryGetValue("RA", out var raC)
+                        && double.TryParse(raC.Value, System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out var raV) && raV != 0)
+                        hintRa = raV / 15.0;
+                    if (!hintDec.HasValue && hdr.TryGetValue("DEC", out var decC)
+                        && double.TryParse(decC.Value, System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out var decV) && Math.Abs(decV) <= 90)
+                        hintDec = decV;
+                }
+            } catch { /* non-FITS or unreadable header block */ }
+
+            // Dimensions are essential for projection; if the header lacked them
+            // (or it's a non-FITS image), read the pixel block to get them.
+            if (width <= 0 || height <= 0) {
+                try {
+                    using var fs = File.OpenRead(request.Path);
+                    var img = FITSReader.Read(fs);
+                    width = img.Properties.Width; height = img.Properties.Height;
+                } catch { return Results.Ok(new { success = false, error = "Could not read image dimensions." }); }
+            }
+
+            if (!hintRa.HasValue || !hintDec.HasValue) {
+                var tel = equip.Telescope;
+                if (tel != null && tel.IsConnected
+                        && !double.IsNaN(tel.RightAscension) && !double.IsNaN(tel.Declination)) {
+                    hintRa ??= tel.RightAscension; hintDec ??= tel.Declination;
+                }
+            }
+
+            try {
+                var options = new PlateSolveOptions {
+                    HintRa = hintRa, HintDec = hintDec,
+                    SearchRadiusDeg = request.SearchRadiusDeg ?? profiles.Active.PlateSolveSearchRadiusDeg
+                };
+                progress.Begin("ANNOTATE-FILE");
+                PlateSolveResult result;
+                try { result = await solver.SolveAsync(request.Path, options, ct, progress.Append); }
+                finally { progress.End(); }
+
+                if (!result.Success)
+                    return Results.Ok(new { success = false, error = result.Error, solverUsed = result.SolverUsed });
+
+                var objects = await ProjectAnnotationsAsync(dso, result, width, height,
+                    request.Flip ?? false, request.MagLimit ?? 14.0, request.ExtraRotationDeg ?? 0.0);
+
+                return Results.Ok(new {
+                    success = true, width, height,
+                    raHours = result.RaHours, decDeg = result.DecDeg,
+                    rotationDeg = result.RotationDeg, scaleArcsecPerPixel = result.ScaleArcsecPerPixel,
+                    solverUsed = result.SolverUsed,
+                    count = objects.Count, objects
+                });
+            } catch (OperationCanceledException) {
+                return Results.StatusCode(499);
+            } catch (Exception ex) {
+                logger.LogError(ex, "Annotate-file failed for {Path}", request.Path);
+                return Results.Ok(new { success = false, error = ex.Message });
             }
         });
 
@@ -441,6 +513,38 @@ public static class PlateSolveEndpoints {
         });
     }
 
+    /// <summary>Cone-search the DSO catalog over a solved field and project each
+    /// hit onto the image's pixel grid. Shared by annotate-latest (live frame)
+    /// and annotate-file (saved frame). <paramref name="extraRotationDeg"/> is the
+    /// convention/test offset added to the solver rotation in the projector.</summary>
+    private static async Task<List<object>> ProjectAnnotationsAsync(
+            NINA.Polaris.Services.Sky.DsoCatalog dso, PlateSolveResult result,
+            int width, int height, bool flip, double magLimit, double extraRotationDeg) {
+        var objects = new List<object>();
+        if (!dso.IsAvailable || result.ScaleArcsecPerPixel <= 0) return objects;
+
+        // Cone radius = half the frame diagonal + 10% margin.
+        double diagPx = Math.Sqrt((double)width * width + (double)height * height);
+        double radiusDeg = diagPx * result.ScaleArcsecPerPixel / 3600.0 / 2.0 * 1.10;
+        double margin = 0.02 * Math.Max(width, height);
+
+        var hits = await dso.QueryRegionAsync(result.RaHours, result.DecDeg,
+            Math.Max(0.05, radiusDeg), magLimit, 300);
+        foreach (var o in hits) {
+            var p = AnnotationProjector.Project(result.RaHours, result.DecDeg,
+                result.ScaleArcsecPerPixel, result.RotationDeg, width, height, flip,
+                o.RaHours, o.DecDeg, extraRotationDeg);
+            if (p == null) continue;
+            var (x, y) = p.Value;
+            if (x < -margin || y < -margin || x > width + margin || y > height + margin) continue;
+            objects.Add(new {
+                name = o.Name, commonName = o.CommonName,
+                x, y, type = o.Type, magnitude = o.Magnitude, sizeArcmin = o.SizeArcmin
+            });
+        }
+        return objects;
+    }
+
     /// <summary>POST body for <c>/api/platesolve/solve-latest</c>.
     /// Every field is optional, the endpoint falls back to mount
     /// pointing for the RA/Dec hint and a 30° default for the
@@ -463,7 +567,20 @@ public static class PlateSolveEndpoints {
         double? HintDec = null,
         double? SearchRadiusDeg = null,
         double? MagLimit = null,
-        bool? Flip = null);
+        bool? Flip = null,
+        double? ExtraRotationDeg = null);
+
+    /// <summary>POST body for <c>/api/platesolve/annotate-file</c>. Same options
+    /// as annotate-latest plus the absolute server-side path of the FITS to
+    /// solve and label.</summary>
+    public record AnnotateFileRequest(
+        string Path,
+        double? HintRa = null,
+        double? HintDec = null,
+        double? SearchRadiusDeg = null,
+        double? MagLimit = null,
+        bool? Flip = null,
+        double? ExtraRotationDeg = null);
 
     /// <summary>POST body for <c>/api/platesolve/solve-file</c>.
     /// Path is the absolute server-side path to the FITS file.</summary>
