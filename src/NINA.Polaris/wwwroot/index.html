@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260615-planbar">
+    <link rel="stylesheet" href="/css/app.css?v=20260615-calmodal">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -3896,7 +3896,13 @@
                         </div>
                     </div>
 
-                    <!-- Review Calibration modal (ASIAIR / PHD2 style) -->
+                    <!-- Review Calibration modal (ASIAIR / PHD2 style).
+                         Teleported to <body>: the .guide-side ancestor uses
+                         backdrop-filter, which makes it the containing block
+                         for position:fixed descendants, and with its
+                         overflow:hidden the fixed backdrop was trapped + clipped
+                         inside the 336px panel instead of overlaying the page. -->
+                    <template x-teleport="body">
                     <div class="cal-review-backdrop" x-show="showCalReview" x-cloak
                          @click.self="showCalReview = false">
                         <div class="cal-review" x-show="showCalReview">
@@ -3952,6 +3958,7 @@
                             </div>
                         </div>
                     </div>
+                    </template>
                     <div class="guide-side-title">Guiding parameters</div>
                     <div class="equip-driver-row">
                         <label class="equip-driver-label">RA algo</label>
@@ -13806,7 +13813,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260615-planbar"></script>
+    <script src="/js/app.js?v=20260615-calmodal"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
