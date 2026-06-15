@@ -589,6 +589,21 @@ function ninaApp() {
         // familiar pane. Switching to 'flat' triggers
         // flatWizardOpenTab() which hydrates form + trained cache.
         autorunTab: 'sequence',
+
+        // ───────── PLAN mode (ASIAIR-style multi-target night planner) ─────────
+        plans: [],                 // saved plan library (from /api/plan/plans)
+        plan: null,                // the plan currently being edited (object ref)
+        planSelectedId: '',        // bound to the picker <select>
+        planSettingsOpen: false,   // options sheet visibility
+        planSelectedTargetId: null,// which target card is expanded
+        planStatus: null,          // live status from /ws/status .plan
+        planEstimateSeconds: 0,    // compile-preview time estimate
+        planAddCatalogOpen: false, // inline catalog search visible
+        planCatQuery: '',
+        planCatResults: [],
+        planFramingActive: false,  // true while picking framing in the SKY tab
+        planShutdownConfirm: false,// risk modal for the host-shutdown toggle
+
         // Flat Wizard state. Form fields mirror EquipmentProfile.FlatWizard
         // (FW-1) and are hydrated by flatWizardOpenTab() from
         // activeRig.flatWizard. WS payload populates state/progress/
@@ -14836,6 +14851,275 @@ function ninaApp() {
             } catch (e) { /* server may not be reachable yet */ }
         },
 
+        // ───────────────────────── PLAN mode ─────────────────────────
+
+        _blankPlan() {
+            return {
+                id: '', name: 'New plan',
+                startMode: 'Now', startAtUtc: '21:00',
+                endMode: 'AllDone', endAtUtc: '05:00',
+                autoGuiding: true, autoMeridianFlip: true,
+                autoCooling: false, coolTargetC: -10, autoFocusOnStart: false,
+                endWarmCoolerOff: false, endGoHome: false, endEafZero: false, endShutdownHost: false,
+                targets: []
+            };
+        },
+        _blankTarget() {
+            return {
+                id: 'T' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
+                name: 'Target', raHours: 0, decDeg: 0, rotation: 0,
+                firstDelaySec: 0, enabled: true,
+                frames: [{ exposureSeconds: 60, count: 10, filter: null, gain: null, binning: 1, imageType: 'LIGHT' }]
+            };
+        },
+
+        async loadPlans() {
+            try {
+                const r = await this.apiFetch('/api/plan/plans');
+                this.plans = await r.json() || [];
+                // Keep the current selection if it still exists, else pick the first.
+                if (this.planSelectedId && this.plans.some(p => p.id === this.planSelectedId)) {
+                    this.selectPlan(this.planSelectedId);
+                } else if (this.plans.length) {
+                    this.selectPlan(this.plans[0].id);
+                } else {
+                    this.plan = null; this.planSelectedId = '';
+                }
+            } catch (e) { this.toast('Could not load plans: ' + (e.message || e), 'error'); }
+        },
+
+        selectPlan(id) {
+            const p = this.plans.find(x => x.id === id);
+            if (!p) { this.plan = null; this.planSelectedId = ''; return; }
+            this.plan = p;
+            this.planSelectedId = id;
+            this.planSelectedTargetId = null;
+            this.planEstimateRefresh();
+        },
+
+        async newPlan() {
+            const p = this._blankPlan();
+            try {
+                const r = await this.apiPost('/api/plan/plans', p);
+                const created = await r.json();
+                this.plans.push(created);
+                this.selectPlan(created.id);
+                this.planSettingsOpen = true;
+                this.toast('Plan created', 'ok');
+            } catch (e) { this.toast('Create failed: ' + (e.message || e), 'error'); }
+        },
+
+        async duplicatePlan() {
+            if (!this.plan) return;
+            const copy = JSON.parse(JSON.stringify(this.plan));
+            copy.id = ''; copy.name = (this.plan.name || 'Plan') + ' copy';
+            (copy.targets || []).forEach(t => t.id = 'T' + Math.random().toString(36).slice(2));
+            try {
+                const r = await this.apiPost('/api/plan/plans', copy);
+                const created = await r.json();
+                this.plans.push(created);
+                this.selectPlan(created.id);
+                this.toast('Plan duplicated', 'ok');
+            } catch (e) { this.toast('Duplicate failed: ' + (e.message || e), 'error'); }
+        },
+
+        async deletePlan() {
+            if (!this.plan) return;
+            if (!confirm('Delete plan "' + (this.plan.name || '') + '"? This cannot be undone.')) return;
+            const id = this.plan.id;
+            try {
+                await this.apiFetch('/api/plan/plans/' + encodeURIComponent(id), { method: 'DELETE' });
+                this.plans = this.plans.filter(p => p.id !== id);
+                if (this.plans.length) this.selectPlan(this.plans[0].id);
+                else { this.plan = null; this.planSelectedId = ''; }
+                this.toast('Plan deleted', 'ok');
+            } catch (e) { this.toast('Delete failed: ' + (e.message || e), 'error'); }
+        },
+
+        // Debounced persist of the whole plan object (PUT replaces it).
+        savePlan() {
+            if (!this.plan || !this.plan.id) return;
+            this.planEstimateRefresh();
+            clearTimeout(this._planSaveTimer);
+            this._planSaveTimer = setTimeout(async () => {
+                try {
+                    await this.apiPost('/api/plan/plans/' + encodeURIComponent(this.plan.id), this.plan, { method: 'PUT' });
+                    const i = this.plans.findIndex(p => p.id === this.plan.id);
+                    if (i >= 0) this.plans[i] = this.plan;
+                } catch (e) { this.toast('Save failed: ' + (e.message || e), 'error'); }
+            }, 500);
+        },
+
+        planTargetCount() { return this.plan ? this.plan.targets.filter(t => t.enabled).length : 0; },
+
+        _planPushTarget(t) {
+            if (!this.plan) return;
+            this.plan.targets.push(t);
+            this.planSelectedTargetId = t.id;
+            this.savePlan();
+        },
+
+        planAddTargetManual() {
+            const t = this._blankTarget();
+            this._planPushTarget(t);
+        },
+
+        planAddTargetFromMount() {
+            if (!Number.isFinite(this.mount.ra) || !Number.isFinite(this.mount.dec)) {
+                this.toast('Mount position unknown — connect the mount first', 'warn');
+                return;
+            }
+            const t = this._blankTarget();
+            t.name = 'Mount position';
+            t.raHours = this.mount.ra;
+            t.decDeg = this.mount.dec;
+            this._planPushTarget(t);
+            this.toast('Target added from current mount position', 'ok');
+        },
+
+        async planCatSearch() {
+            const q = (this.planCatQuery || '').trim();
+            if (q.length < 2) { this.planCatResults = []; return; }
+            try {
+                const r = await this.apiFetch('/api/sky/catalog/search?query=' + encodeURIComponent(q) + '&limit=10');
+                const json = await r.json();
+                this.planCatResults = Array.isArray(json) ? json : (json.results || []);
+            } catch (e) { this.planCatResults = []; }
+        },
+
+        planAddTargetFromCatalog(o) {
+            const t = this._blankTarget();
+            t.name = o.commonName || o.name || 'Target';
+            t.raHours = o.ra ?? o.raHours ?? 0;
+            t.decDeg = o.dec ?? o.decDeg ?? 0;
+            this._planPushTarget(t);
+            this.planAddCatalogOpen = false;
+            this.planCatQuery = ''; this.planCatResults = [];
+            this.toast('Added ' + t.name, 'ok');
+        },
+
+        // Frame a target visually in the SKY tab: switch over, drop a banner,
+        // and capture the map centre + rotation when the user confirms.
+        planFrameInSky() {
+            if (!this.plan) return;
+            this.planFramingActive = true;
+            this.tab = 'sky';
+            this.toast('Pan/zoom to frame the target, then tap "Add to plan"', 'info');
+        },
+        planCancelFraming() { this.planFramingActive = false; this.tab = 'plan'; },
+        async planAddTargetFromSky() {
+            try {
+                const c = await this._skyGetCenter();
+                if (!c || !Number.isFinite(c.raDeg) || !Number.isFinite(c.decDeg)) {
+                    this.toast('Could not read the sky map centre', 'warn');
+                    return;
+                }
+                const t = this._blankTarget();
+                t.name = this.skyTarget?.name || ('RA ' + (c.raDeg / 15).toFixed(2) + 'h');
+                t.raHours = c.raDeg / 15;
+                t.decDeg = c.decDeg;
+                t.rotation = this.solveRotationDeg ?? (this.fov && this.fov.rotationDeg) ?? 0;
+                this.planFramingActive = false;
+                this.tab = 'plan';
+                this._planPushTarget(t);
+                this.toast('Framed target added to plan', 'ok');
+            } catch (e) { this.toast('Framing failed: ' + (e.message || e), 'error'); }
+        },
+
+        planToggleTargetDetail(t) { this.planSelectedTargetId = (this.planSelectedTargetId === t.id) ? null : t.id; },
+        planRemoveTarget(t) {
+            if (!this.plan) return;
+            this.plan.targets = this.plan.targets.filter(x => x.id !== t.id);
+            if (this.planSelectedTargetId === t.id) this.planSelectedTargetId = null;
+            this.savePlan();
+        },
+        planMoveTarget(idx, dir) {
+            if (!this.plan) return;
+            const j = idx + dir;
+            if (j < 0 || j >= this.plan.targets.length) return;
+            const a = this.plan.targets;
+            [a[idx], a[j]] = [a[j], a[idx]];
+            this.savePlan();
+        },
+        planTargetFrameSummary(t) {
+            if (!t.frames || !t.frames.length) return 'no frames';
+            const n = t.frames.reduce((s, f) => s + (f.count || 0), 0);
+            return n + ' frame' + (n === 1 ? '' : 's');
+        },
+
+        planAddFrame(t) {
+            t.frames.push({ exposureSeconds: 60, count: 10, filter: null, gain: null, binning: 1, imageType: 'LIGHT' });
+            this.savePlan();
+        },
+        planRemoveFrame(t, fi) { t.frames.splice(fi, 1); this.savePlan(); },
+        planCopyFramesToAll(t) {
+            if (!this.plan) return;
+            const frames = JSON.parse(JSON.stringify(t.frames));
+            this.plan.targets.forEach(x => { if (x.id !== t.id) x.frames = JSON.parse(JSON.stringify(frames)); });
+            this.savePlan();
+            this.toast('Copied frames to all targets', 'ok');
+        },
+
+        async planEstimateRefresh() {
+            if (!this.plan) { this.planEstimateSeconds = 0; return; }
+            try {
+                const r = await this.apiPost('/api/plan/compile', this.plan);
+                const j = await r.json();
+                this.planEstimateSeconds = j.estimateSeconds || 0;
+            } catch (e) { /* estimate is best-effort */ }
+        },
+
+        async startPlan() {
+            if (!this.plan) return;
+            if (this.planTargetCount() === 0) { this.toast('Add at least one enabled target', 'warn'); return; }
+            // Make sure the latest edits are persisted before the server reads them.
+            clearTimeout(this._planSaveTimer);
+            try {
+                await this.apiPost('/api/plan/plans/' + encodeURIComponent(this.plan.id), this.plan, { method: 'PUT' });
+                const r = await this.apiPost('/api/plan/' + encodeURIComponent(this.plan.id) + '/start', {});
+                if (!r.ok) {
+                    const j = await r.json().catch(() => ({}));
+                    this.toast(j.error || 'Could not start the plan', 'error');
+                    return;
+                }
+                this.planStatus = await r.json();
+                this.toast('Plan started', 'ok');
+            } catch (e) { this.toast('Start failed: ' + (e.message || e), 'error'); }
+        },
+        async stopPlan() {
+            try {
+                const r = await this.apiPost('/api/plan/stop', {});
+                this.planStatus = await r.json();
+                this.toast('Plan stopped', 'ok');
+            } catch (e) { this.toast('Stop failed: ' + (e.message || e), 'error'); }
+        },
+
+        planIsRunning() { return !!(this.planStatus && this.planStatus.active); },
+        planChipLabel() {
+            const s = this.planStatus;
+            if (!s || !s.active) return 'IDLE';
+            if (s.phase === 'ending') return 'ENDING';
+            if (s.engineState === 'running') return 'RUNNING';
+            return (s.phase || 'active').toUpperCase();
+        },
+        planChipClass() {
+            const s = this.planStatus;
+            if (!s || !s.active) return 'error';
+            return s.engineState === 'running' ? 'ok' : 'warn';
+        },
+        planFormatDuration(sec) {
+            sec = Math.max(0, Math.round(sec || 0));
+            const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+            if (h > 0) return h + 'h ' + m + 'm';
+            if (m > 0) return m + 'm';
+            return sec + 's';
+        },
+        planFormatLocalTime(iso) {
+            if (!iso) return '—';
+            try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+            catch (e) { return '—'; }
+        },
+
         // --- End-of-run actions ---
 
         async loadEndActions() {
@@ -25227,6 +25511,9 @@ function ninaApp() {
                 // session (toggle ON + reference frame was Bayered).
                 if (typeof msg.liveStack.colorActive === 'boolean')
                     this.liveStackColorActive = msg.liveStack.colorActive;
+            }
+            if (msg.plan !== undefined) {
+                this.planStatus = msg.plan;
             }
             if (msg.sequence) {
                 this.seqStatus = msg.sequence;

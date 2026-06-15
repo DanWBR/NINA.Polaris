@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260614-zoomdetail">
+    <link rel="stylesheet" href="/css/app.css?v=20260615-planmode">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -570,6 +570,10 @@
             <button class="nav-btn" :class="{ active: tab === 'sequence' }" @click="tab = 'sequence'; loadEndActions()" title="Autorun (shooting schedule)">
                 <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="3" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="10" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="17" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Autorun</span>
+            </button>
+            <button class="nav-btn" :class="{ active: tab === 'plan' }" @click="tab = 'plan'; loadPlans()" title="Plan (multi-target night planner)">
+                <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="4" width="18" height="17" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 9h18M8 2v4M16 2v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7.5 14l2 2 4-4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span class="nav-label">Plan</span>
             </button>
             <button class="nav-btn" :class="{ active: tab === 'live' }" @click="tab = 'live'" title="Live View">
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
@@ -7398,6 +7402,170 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
             </div>
 
             <!-- SEQUENCE -->
+            <!-- ───────────────────────── PLAN tab ───────────────────────── -->
+            <div x-show="tab === 'plan'" class="tab-panel tab-panel-plan" x-cloak>
+                <div class="panel-header">
+                    Plan
+                    <span class="status-indicator-sm" :class="planChipClass()" x-text="planChipLabel()"></span>
+                </div>
+
+                <!-- Plan picker toolbar -->
+                <div class="plan-toolbar">
+                    <select class="plan-select" x-model="planSelectedId" @change="selectPlan(planSelectedId)">
+                        <option value="" disabled>— Select a plan —</option>
+                        <template x-for="p in plans" :key="p.id">
+                            <option :value="p.id" x-text="p.name"></option>
+                        </template>
+                    </select>
+                    <button class="btn-sm" @click="newPlan()">＋ New</button>
+                    <button class="btn-sm" @click="duplicatePlan()" :disabled="!plan">Duplicate</button>
+                    <button class="btn-sm btn-danger" @click="deletePlan()" :disabled="!plan">Delete</button>
+                    <button class="btn-sm" @click="planSettingsOpen = !planSettingsOpen" :disabled="!plan"
+                            :class="{ 'btn-active': planSettingsOpen }" title="Plan settings">⬡ Settings</button>
+                </div>
+
+                <div x-show="!plan" class="plan-empty">No plans yet. Tap <b>＋ New</b> to create one.</div>
+
+                <template x-if="plan">
+                <div class="plan-body">
+                    <input class="plan-name" type="text" x-model="plan.name" @change="savePlan()" placeholder="Plan name">
+
+                    <!-- Settings sheet -->
+                    <div x-show="planSettingsOpen" class="plan-settings card">
+                        <div class="plan-set-grid">
+                            <label>Start
+                                <select x-model="plan.startMode" @change="savePlan()">
+                                    <option value="Now">When I press Start</option>
+                                    <option value="AtTime">At time (UTC)</option>
+                                </select>
+                            </label>
+                            <label x-show="plan.startMode === 'AtTime'">Start time (UTC)
+                                <input type="time" x-model="plan.startAtUtc" @change="savePlan()">
+                            </label>
+                            <label>End
+                                <select x-model="plan.endMode" @change="savePlan()">
+                                    <option value="AllDone">When all frames are done</option>
+                                    <option value="Dawn">At astronomical dawn</option>
+                                    <option value="AtTime">At time (UTC)</option>
+                                </select>
+                            </label>
+                            <label x-show="plan.endMode === 'AtTime'">End time (UTC)
+                                <input type="time" x-model="plan.endAtUtc" @change="savePlan()">
+                            </label>
+                        </div>
+                        <div class="plan-set-toggles">
+                            <label class="chk"><input type="checkbox" x-model="plan.autoGuiding" @change="savePlan()"> Auto guiding</label>
+                            <label class="chk"><input type="checkbox" x-model="plan.autoMeridianFlip" @change="savePlan()"> Auto meridian flip</label>
+                            <label class="chk"><input type="checkbox" x-model="plan.autoCooling" @change="savePlan()"> Auto cooling</label>
+                            <label class="chk" x-show="plan.autoCooling">Target °C
+                                <input type="number" step="1" style="width:4em" x-model.number="plan.coolTargetC" @change="savePlan()">
+                            </label>
+                            <label class="chk"><input type="checkbox" x-model="plan.autoFocusOnStart" @change="savePlan()"> Auto-focus at start</label>
+                        </div>
+                        <div class="plan-set-end">
+                            <div class="plan-set-end-title">End of session</div>
+                            <label class="chk"><input type="checkbox" x-model="plan.endWarmCoolerOff" @change="savePlan()"> Warm camera + cooler off</label>
+                            <label class="chk"><input type="checkbox" x-model="plan.endGoHome" @change="savePlan()"> Go to home / park mount</label>
+                            <label class="chk"><input type="checkbox" x-model="plan.endEafZero" @change="savePlan()"> EAF return to zero</label>
+                            <label class="chk chk-danger">
+                                <input type="checkbox" x-model="plan.endShutdownHost"
+                                       @change="if (plan.endShutdownHost) { planShutdownConfirm = true; } savePlan()">
+                                Shut down the host at the end
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Target list -->
+                    <div class="plan-targets">
+                        <template x-for="(t, ti) in plan.targets" :key="t.id">
+                            <div class="plan-target-card" :class="{ 'is-open': planSelectedTargetId === t.id, 'is-disabled': !t.enabled }">
+                                <div class="plan-target-head">
+                                    <input type="checkbox" x-model="t.enabled" @change="savePlan()" title="Include in run">
+                                    <div class="plan-target-id" @click="planToggleTargetDetail(t)">
+                                        <span class="plan-target-name" x-text="t.name || 'Target'"></span>
+                                        <span class="plan-target-coords"
+                                              x-text="'RA ' + (t.raHours||0).toFixed(3) + 'h · Dec ' + (t.decDeg||0).toFixed(2) + '° · ' + planTargetFrameSummary(t)"></span>
+                                    </div>
+                                    <div class="plan-target-actions">
+                                        <button class="btn-icon" @click="planMoveTarget(ti, -1)" :disabled="ti===0" title="Move up">▲</button>
+                                        <button class="btn-icon" @click="planMoveTarget(ti, 1)" :disabled="ti===plan.targets.length-1" title="Move down">▼</button>
+                                        <button class="btn-icon" @click="planToggleTargetDetail(t)" title="Edit">✎</button>
+                                        <button class="btn-icon btn-danger" @click="planRemoveTarget(t)" title="Remove">✕</button>
+                                    </div>
+                                </div>
+                                <div x-show="planSelectedTargetId === t.id" class="plan-target-detail">
+                                    <div class="plan-detail-grid">
+                                        <label>Name <input type="text" x-model="t.name" @change="savePlan()"></label>
+                                        <label>First delay (s) <input type="number" min="0" x-model.number="t.firstDelaySec" @change="savePlan()"></label>
+                                        <label>RA (hours) <input type="number" step="0.0001" x-model.number="t.raHours" @change="savePlan()"></label>
+                                        <label>Dec (deg) <input type="number" step="0.001" x-model.number="t.decDeg" @change="savePlan()"></label>
+                                        <label>Rotation (°) <input type="number" step="0.1" x-model.number="t.rotation" @change="savePlan()"></label>
+                                    </div>
+                                    <div class="plan-frames">
+                                        <div class="plan-frames-head">
+                                            <span>Frames</span>
+                                            <span class="plan-frames-tools">
+                                                <button class="btn-sm" @click="planAddFrame(t)">＋ Frame</button>
+                                                <button class="btn-sm" @click="planCopyFramesToAll(t)" title="Copy this frame list to every target">Copy to all</button>
+                                            </span>
+                                        </div>
+                                        <template x-for="(f, fi) in t.frames" :key="fi">
+                                            <div class="plan-frame-row">
+                                                <label>Exp(s) <input type="number" step="0.1" min="0" x-model.number="f.exposureSeconds" @change="savePlan()"></label>
+                                                <label>× <input type="number" min="1" x-model.number="f.count" @change="savePlan()"></label>
+                                                <label>Filter <input type="text" style="width:5em" x-model="f.filter" @change="savePlan()" placeholder="—"></label>
+                                                <label>Gain <input type="number" style="width:5em" x-model.number="f.gain" @change="savePlan()" placeholder="auto"></label>
+                                                <label>Bin <input type="number" min="1" style="width:3.5em" x-model.number="f.binning" @change="savePlan()"></label>
+                                                <button class="btn-icon btn-danger" @click="planRemoveFrame(t, fi)" title="Remove frame">✕</button>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Add target -->
+                    <div class="plan-add-row">
+                        <button class="btn-sm" @click="planAddTargetManual()">＋ Manual</button>
+                        <button class="btn-sm" @click="planAddTargetFromMount()">＋ Mount position</button>
+                        <button class="btn-sm" @click="planAddCatalogOpen = !planAddCatalogOpen" :class="{ 'btn-active': planAddCatalogOpen }">＋ Catalog</button>
+                        <button class="btn-sm" @click="planFrameInSky()">Frame in SkyAtlas</button>
+                    </div>
+                    <div x-show="planAddCatalogOpen" class="plan-catalog">
+                        <input type="text" x-model="planCatQuery" @input.debounce.300ms="planCatSearch()" placeholder="Search catalog (e.g. M31, NGC 7000)…">
+                        <div class="plan-cat-results">
+                            <template x-for="o in planCatResults" :key="o.name">
+                                <div class="plan-cat-item" @click="planAddTargetFromCatalog(o)">
+                                    <span x-text="o.commonName || o.name"></span>
+                                    <span class="muted" x-text="(o.type || '') + ' · RA ' + ((o.ra ?? o.raHours)||0).toFixed(2) + 'h Dec ' + ((o.dec ?? o.decDeg)||0).toFixed(1) + '°'"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Run control + progress -->
+                    <div class="plan-run">
+                        <button class="plan-run-btn" :class="{ running: planIsRunning() }"
+                                @click="planIsRunning() ? stopPlan() : startPlan()"
+                                :disabled="!plan || planTargetCount() === 0"
+                                x-text="planIsRunning() ? 'Stop plan' : 'Start plan'"></button>
+                        <div class="plan-progress">
+                            <div><span class="muted">Targets:</span> <span x-text="planTargetCount()"></span></div>
+                            <div><span class="muted">Est. time:</span> <span x-text="planFormatDuration(planEstimateSeconds)"></span></div>
+                            <template x-if="planIsRunning()">
+                                <div class="plan-progress-live">
+                                    <div><span class="muted">Phase:</span> <span x-text="planChipLabel()"></span></div>
+                                    <div x-show="planStatus && planStatus.currentTarget"><span class="muted">Now:</span> <span x-text="planStatus && planStatus.currentTarget"></span></div>
+                                    <div x-show="planStatus && planStatus.endsAtUtc"><span class="muted">Ends:</span> <span x-text="planFormatLocalTime(planStatus && planStatus.endsAtUtc)"></span></div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+                </template>
+            </div>
+
             <div x-show="tab === 'sequence'" class="tab-panel tab-panel-autorun">
                 <div class="panel-header">
                     Autorun
@@ -13344,6 +13512,26 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </button>
     </div>
 
+    <!-- PLAN: SkyAtlas framing banner (shown while picking a target's framing) -->
+    <div class="plan-frame-banner" x-show="planFramingActive" x-cloak>
+        <span>Framing a target for the plan — pan/zoom, then add it.</span>
+        <button class="btn-sm" @click="planAddTargetFromSky()">Add to plan</button>
+        <button class="btn-sm" @click="planCancelFraming()">Cancel</button>
+    </div>
+
+    <!-- PLAN: host-shutdown risk confirmation -->
+    <div class="modal-overlay" x-show="planShutdownConfirm" x-cloak @click.self="planShutdownConfirm = false">
+        <div class="modal-card">
+            <h3>Shut down the host at the end?</h3>
+            <p>When this plan finishes (or reaches its end time), the device running Polaris
+               will <b>power off completely</b>. You'll need to physically power it back on.</p>
+            <div class="modal-actions">
+                <button class="btn-sm" @click="plan.endShutdownHost = false; planShutdownConfirm = false; savePlan()">Cancel</button>
+                <button class="btn-sm btn-danger" @click="planShutdownConfirm = false">Yes, shut down at end</button>
+            </div>
+        </div>
+    </div>
+
     <div class="term-modal-overlay" x-show="term.modalOpen" x-cloak
          @click.self="term.modalOpen = false">
         <div class="term-window">
@@ -13511,7 +13699,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260614-zoomdetail"></script>
+    <script src="/js/app.js?v=20260615-planmode"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

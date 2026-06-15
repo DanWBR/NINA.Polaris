@@ -166,6 +166,11 @@ builder.Services.AddSingleton<SequenceEngine>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Sequencer.SequenceTemplateStore>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Sequencer.AdvancedSequenceEngine>();
 builder.Services.AddSingleton<MosaicPlannerService>();
+// PLAN mode: compiles ImagingPlans to sequence documents + a hosted runner that
+// schedules the start, enforces the end condition, and runs end actions.
+builder.Services.AddSingleton<NINA.Polaris.Services.Plan.PlanCompilerService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Plan.PlanRunnerService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<NINA.Polaris.Services.Plan.PlanRunnerService>());
 builder.Services.AddSingleton<NINA.Polaris.Services.Plugins.PluginLoaderService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<NINA.Polaris.Services.Plugins.PluginLoaderService>());
 builder.Services.AddSingleton<SkyCatalogService>();
@@ -993,6 +998,7 @@ app.MapFlatWizardEndpoints();
 app.MapAlpacaEndpoints();
 app.MapStellariumEndpoints();
 app.MapSequenceEndpoints();
+app.MapPlanEndpoints();
 app.MapAdvancedSequenceEndpoints();
 app.MapMosaicEndpoints();
 app.MapPluginEndpoints();

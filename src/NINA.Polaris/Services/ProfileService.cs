@@ -661,6 +661,11 @@ public class UserProfile {
     public List<EquipmentProfile> EquipmentProfiles { get; set; } = new();
     public string? ActiveEquipmentProfileId { get; set; }
 
+    // PLAN mode: a global library of saved multi-target imaging plans
+    // (see Services/Plan/PlanModels.cs). Global rather than per-rig so a plan
+    // can be run with whatever rig is active.
+    public List<NINA.Polaris.Services.Plan.ImagingPlan> Plans { get; set; } = new();
+
     // Plate solver
     public string? AstapPath { get; set; }
     public double SolveToleranceArcsec { get; set; } = 30;

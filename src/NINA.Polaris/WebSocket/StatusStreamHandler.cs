@@ -57,6 +57,7 @@ public static class StatusStreamHandler {
         var flatWizard = context.RequestServices.GetRequiredService<FlatWizardService>();
         var liveStack = context.RequestServices.GetRequiredService<LiveStackingService>();
         var sequence = context.RequestServices.GetRequiredService<SequenceEngine>();
+        var planRunner = context.RequestServices.GetRequiredService<NINA.Polaris.Services.Plan.PlanRunnerService>();
         var phd2 = context.RequestServices.GetRequiredService<PHD2Client>();
         var guiders = context.RequestServices.GetRequiredService<ActiveGuiderProvider>();
         var profileSync = context.RequestServices.GetRequiredService<PHD2ProfileSyncService>();
@@ -395,6 +396,7 @@ public static class StatusStreamHandler {
                         guider = guiderPayload,
                         autoFocus = autoFocusPayload,
                         meridianFlip = meridianPayload,
+                        plan = planRunner.GetStatus(),
                         sequence = new {
                             state = seqStatus.State,
                             currentItemIndex = seqStatus.CurrentItemIndex,

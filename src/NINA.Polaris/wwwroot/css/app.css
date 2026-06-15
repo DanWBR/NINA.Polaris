@@ -11865,3 +11865,82 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     /* The retract handle is meaningless in the stacked layout. */
     .guide-side > .quick-controls-toggle { display:none; }
 }
+
+/* ───────────────────────── PLAN mode ───────────────────────── */
+.tab-panel-plan { padding: 12px; overflow-y: auto; }
+.plan-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.plan-select { flex: 1; min-width: 160px; padding: 6px 8px; }
+.plan-empty { color: var(--text-muted, #9aa4b2); padding: 24px 8px; text-align: center; }
+.plan-body { display: flex; flex-direction: column; gap: 12px; }
+.plan-name { font-size: 16px; font-weight: 600; padding: 8px 10px; width: 100%; box-sizing: border-box; }
+
+.plan-settings { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.plan-set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.plan-set-grid label, .plan-detail-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-muted, #9aa4b2); }
+.plan-set-grid select, .plan-set-grid input { padding: 6px 8px; }
+.plan-set-toggles { display: flex; flex-wrap: wrap; gap: 12px 18px; }
+.plan-set-end { border-top: 1px solid var(--border, #2a2f3a); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.plan-set-end-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted, #9aa4b2); }
+.chk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.chk-danger { color: #f87171; }
+
+.plan-targets { display: flex; flex-direction: column; gap: 8px; }
+.plan-target-card { border: 1px solid var(--border, #2a2f3a); border-radius: 8px; background: rgba(255,255,255,0.02); }
+.plan-target-card.is-open { border-color: var(--accent, #3b82f6); }
+.plan-target-card.is-disabled { opacity: 0.5; }
+.plan-target-head { display: flex; align-items: center; gap: 10px; padding: 8px 10px; }
+.plan-target-id { flex: 1; display: flex; flex-direction: column; cursor: pointer; min-width: 0; }
+.plan-target-name { font-weight: 600; }
+.plan-target-coords { font-size: 11px; color: var(--text-muted, #9aa4b2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plan-target-actions { display: flex; gap: 2px; }
+.plan-target-detail { padding: 10px; border-top: 1px solid var(--border, #2a2f3a); display: flex; flex-direction: column; gap: 12px; }
+.plan-detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.plan-detail-grid input { padding: 6px 8px; width: 100%; box-sizing: border-box; }
+
+.plan-frames-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted, #9aa4b2); }
+.plan-frames-tools { display: flex; gap: 6px; }
+.plan-frame-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; padding: 6px 0; border-top: 1px dashed var(--border, #2a2f3a); }
+.plan-frame-row label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--text-muted, #9aa4b2); }
+.plan-frame-row input { padding: 4px 6px; width: 5.5em; }
+
+.plan-add-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.plan-catalog { border: 1px solid var(--border, #2a2f3a); border-radius: 8px; padding: 10px; }
+.plan-catalog > input { width: 100%; box-sizing: border-box; padding: 7px 9px; }
+.plan-cat-results { max-height: 220px; overflow-y: auto; margin-top: 8px; }
+.plan-cat-item { display: flex; justify-content: space-between; gap: 10px; padding: 7px 8px; border-radius: 6px; cursor: pointer; }
+.plan-cat-item:hover { background: rgba(255,255,255,0.06); }
+.plan-cat-item .muted { color: var(--text-muted, #9aa4b2); font-size: 11px; white-space: nowrap; }
+
+.plan-run { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; border-top: 1px solid var(--border, #2a2f3a); padding-top: 12px; }
+.plan-run-btn { padding: 12px 28px; font-size: 15px; font-weight: 700; border-radius: 999px; border: none; cursor: pointer; background: #16a34a; color: #fff; }
+.plan-run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.plan-run-btn.running { background: #dc2626; }
+.plan-progress { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; }
+.plan-progress .muted { color: var(--text-muted, #9aa4b2); }
+.plan-progress-live { display: flex; gap: 18px; flex-wrap: wrap; }
+
+.plan-frame-banner {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    z-index: 9000; display: flex; gap: 10px; align-items: center;
+    background: rgba(20, 24, 34, 0.95); border: 1px solid var(--accent, #3b82f6);
+    border-radius: 999px; padding: 8px 16px; font-size: 13px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+}
+
+/* Generic card + modal used by the PLAN panel (no prior definition). */
+.plan-body .card,
+.card { border: 1px solid var(--border, #2a2f3a); border-radius: 8px; background: rgba(255,255,255,0.02); }
+.modal-overlay {
+    position: fixed; inset: 0; z-index: 9600; display: flex;
+    align-items: center; justify-content: center; padding: 20px;
+    background: rgba(0,0,0,0.55);
+}
+.modal-card {
+    max-width: 420px; width: 100%;
+    background: var(--panel-bg, #161a22); border: 1px solid var(--border, #2a2f3a);
+    border-radius: 10px; padding: 18px 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+}
+.modal-card h3 { margin: 0 0 8px; font-size: 16px; }
+.modal-card p { margin: 0 0 16px; font-size: 13px; line-height: 1.5; color: var(--text-muted, #9aa4b2); }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
