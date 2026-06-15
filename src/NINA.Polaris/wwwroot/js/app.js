@@ -603,6 +603,7 @@ function ninaApp() {
         planCatResults: [],
         planFramingActive: false,  // true while picking framing in the SKY tab
         planShutdownConfirm: false,// risk modal for the host-shutdown toggle
+        planAlt: {},               // per-target altitude-track cache (keyed by target id)
 
         // Flat Wizard state. Form fields mirror EquipmentProfile.FlatWizard
         // (FW-1) and are hydrated by flatWizardOpenTab() from
@@ -14859,7 +14860,7 @@ function ninaApp() {
                 startMode: 'Now', startAtUtc: '21:00',
                 endMode: 'AllDone', endAtUtc: '05:00',
                 autoGuiding: true, autoMeridianFlip: true,
-                autoCooling: false, coolTargetC: -10, autoFocusOnStart: false,
+                autoCooling: false, coolTargetC: -10, autoFocusOnStart: false, autoFocusEachTarget: false,
                 endWarmCoolerOff: false, endGoHome: false, endEafZero: false, endShutdownHost: false,
                 targets: []
             };
@@ -14869,6 +14870,7 @@ function ninaApp() {
                 id: 'T' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
                 name: 'Target', raHours: 0, decDeg: 0, rotation: 0,
                 firstDelaySec: 0, enabled: true,
+                scheduleMode: 'Frames', startAtUtc: '', endAtUtc: '',
                 frames: [{ exposureSeconds: 60, count: 10, filter: null, gain: null, binning: 1, imageType: 'LIGHT' }]
             };
         },
@@ -15026,7 +15028,10 @@ function ninaApp() {
             } catch (e) { this.toast('Framing failed: ' + (e.message || e), 'error'); }
         },
 
-        planToggleTargetDetail(t) { this.planSelectedTargetId = (this.planSelectedTargetId === t.id) ? null : t.id; },
+        planToggleTargetDetail(t) {
+            this.planSelectedTargetId = (this.planSelectedTargetId === t.id) ? null : t.id;
+            if (this.planSelectedTargetId === t.id && t.scheduleMode === 'TimeWindow') this.planLoadAlt(t);
+        },
         planRemoveTarget(t) {
             if (!this.plan) return;
             this.plan.targets = this.plan.targets.filter(x => x.id !== t.id);
@@ -15118,6 +15123,122 @@ function ninaApp() {
             if (!iso) return '—';
             try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
             catch (e) { return '—'; }
+        },
+
+        // ----- PLAN: per-target schedule mode + elevation chart -----
+
+        planSetScheduleMode(t, mode) {
+            t.scheduleMode = mode;
+            if (mode === 'TimeWindow') {
+                this.planLoadAlt(t).then(() => {
+                    if (!t.startAtUtc || !t.endAtUtc) this.planAltSeedWindow(t);
+                });
+            }
+            this.savePlan();
+        },
+
+        // Fetch tonight's altitude track for a target and pre-compute the SVG
+        // curve + twilight band. Cached per target; re-fetched when coords change.
+        async planLoadAlt(t, force) {
+            if (!t) return;
+            const key = t.id;
+            const sig = (t.raHours || 0).toFixed(4) + '|' + (t.decDeg || 0).toFixed(3);
+            const cur = this.planAlt[key];
+            if (!force && cur && cur.sig === sig && cur.path) return;
+            this.planAlt[key] = { loading: true, sig };
+            try {
+                const r = await this.apiFetch('/api/sky/altitude?ra=' + encodeURIComponent(t.raHours || 0)
+                    + '&dec=' + encodeURIComponent(t.decDeg || 0) + '&stepMinutes=10');
+                const j = await r.json();
+                const samples = j.samples || [];
+                const fromMs = Date.parse(j.fromUtc), toMs = Date.parse(j.toUtc);
+                if (!samples.length || !isFinite(fromMs) || !isFinite(toMs) || toMs <= fromMs) {
+                    this.planAlt[key] = { loading: false, sig, empty: true }; return;
+                }
+                const span = toMs - fromMs;
+                const VBW = 1000, VBH = 240;
+                let d = '', maxAlt = -90;
+                for (let i = 0; i < samples.length; i++) {
+                    const ms = Date.parse(samples[i].utc);
+                    const x = ((ms - fromMs) / span) * VBW;
+                    const altRaw = samples[i].altitudeDeg;
+                    if (altRaw > maxAlt) maxAlt = altRaw;
+                    const a = Math.max(0, Math.min(90, altRaw));
+                    const y = VBH - (a / 90) * VBH;
+                    d += (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1) + ' ';
+                }
+                const duskMs = Date.parse(j.twilight && j.twilight.astronomicalDusk);
+                const dawnMs = Date.parse(j.twilight && j.twilight.astronomicalDawn);
+                const xOf = (ms) => isFinite(ms) ? Math.max(0, Math.min(VBW, ((ms - fromMs) / span) * VBW)) : null;
+                this.planAlt[key] = {
+                    loading: false, sig, fromMs, toMs, span, VBW, VBH, path: d,
+                    duskMs, dawnMs,
+                    nightX0: xOf(duskMs) ?? 0, nightX1: xOf(dawnMs) ?? VBW,
+                    y30: VBH - (30 / 90) * VBH,
+                    maxAlt: Math.round(maxAlt)
+                };
+            } catch (e) {
+                this.planAlt[key] = { loading: false, sig, error: true };
+            }
+        },
+
+        // Default the window to the dark span (astro dusk → dawn), clamped to the chart.
+        planAltSeedWindow(t) {
+            const a = this.planAlt[t.id];
+            if (!a || !a.fromMs) return;
+            const s = (a.duskMs && a.duskMs > a.fromMs) ? a.duskMs : a.fromMs;
+            const e = (a.dawnMs && a.dawnMs < a.toMs) ? a.dawnMs : a.toMs;
+            t.startAtUtc = this._planMsToTod(s);
+            t.endAtUtc = this._planMsToTod(e);
+            this.savePlan();
+        },
+
+        _planMsToTod(ms) {
+            const d = new Date(ms);
+            return String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');
+        },
+        // Map a "HH:mm" UTC time-of-day to the absolute ms instant inside the
+        // chart window (handles the overnight wrap).
+        _planTodToMs(t, hhmm) {
+            const a = this.planAlt[t.id];
+            if (!a || !a.fromMs) return null;
+            const m = /^(\d{1,2}):(\d{2})/.exec(hhmm || '');
+            if (!m) return null;
+            const tod = (+m[1]) * 3600000 + (+m[2]) * 60000;
+            const f = new Date(a.fromMs);
+            let cand = Date.UTC(f.getUTCFullYear(), f.getUTCMonth(), f.getUTCDate()) + tod;
+            while (cand < a.fromMs) cand += 86400000;
+            return cand;
+        },
+        // X (viewBox units) for a target time-of-day on its chart.
+        planAltX(t, hhmm) {
+            const a = this.planAlt[t.id];
+            if (!a || !a.span) return 0;
+            const ms = this._planTodToMs(t, hhmm);
+            if (ms == null) return 0;
+            return Math.max(0, Math.min(a.VBW, ((ms - a.fromMs) / a.span) * a.VBW));
+        },
+
+        // Drag a start/end handle: clientX → window fraction → UTC HH:mm.
+        planAltHandleDown(ev, t, which) {
+            ev.preventDefault();
+            const svg = ev.currentTarget.closest('svg');
+            const a = this.planAlt[t.id];
+            if (!svg || !a || !a.span) return;
+            const move = (e) => {
+                const rect = svg.getBoundingClientRect();
+                let frac = (e.clientX - rect.left) / Math.max(1, rect.width);
+                frac = Math.max(0, Math.min(1, frac));
+                const hhmm = this._planMsToTod(a.fromMs + frac * a.span);
+                if (which === 'start') t.startAtUtc = hhmm; else t.endAtUtc = hhmm;
+            };
+            const up = () => {
+                window.removeEventListener('pointermove', move);
+                window.removeEventListener('pointerup', up);
+                this.savePlan();
+            };
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', up);
         },
 
         // --- End-of-run actions ---

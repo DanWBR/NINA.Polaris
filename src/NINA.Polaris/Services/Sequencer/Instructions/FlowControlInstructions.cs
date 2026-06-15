@@ -27,12 +27,26 @@ public class WaitUntilTimeInstruction : SequenceInstruction {
     /// <summary>UTC time of day, e.g. "21:30" or "21:30:00".</summary>
     public string TimeOfDayUtc { get; set; } = "21:00";
 
+    /// <summary>
+    /// When true, a target time that has already passed today means "go now"
+    /// (the instruction returns immediately) instead of rolling to tomorrow.
+    /// Used by PLAN-mode per-target start gates so a late launch doesn't park
+    /// a target's start ~24h out.
+    /// </summary>
+    public bool SkipIfPast { get; set; } = false;
+
     public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
         if (!TimeSpan.TryParse(TimeOfDayUtc, out var tod))
             throw new InvalidOperationException("Bad TimeOfDayUtc: " + TimeOfDayUtc);
         var now = DateTime.UtcNow;
         var target = now.Date + tod;
-        if (target <= now) target = target.AddDays(1);
+        if (target <= now) {
+            if (SkipIfPast) {
+                ctx.Logger.LogInformation("Start time {Tod} already passed; continuing now", TimeOfDayUtc);
+                return;
+            }
+            target = target.AddDays(1);
+        }
         var wait = target - now;
         ctx.Logger.LogInformation("Waiting {Wait} until UTC {Target}", wait, target);
         await Task.Delay(wait, ct);

@@ -53,6 +53,8 @@ public class ImagingPlan {
     public double CoolTargetC { get; set; } = -10;
     /// <summary>Run an auto-focus pass once at the start of the plan (needs a focuser).</summary>
     public bool AutoFocusOnStart { get; set; } = false;
+    /// <summary>Run an auto-focus pass at the start of every target (needs a focuser).</summary>
+    public bool AutoFocusEachTarget { get; set; } = false;
 
     // ---- End-of-session actions --------------------------------------
     public bool EndWarmCoolerOff { get; set; } = false;
@@ -83,6 +85,20 @@ public class PlanTarget {
     /// <summary>Disabled targets are kept in the list but skipped when the plan runs.</summary>
     public bool Enabled { get; set; } = true;
 
+    /// <summary>
+    /// How the target's capture is bounded. <see cref="PlanScheduleMode.Frames"/>
+    /// captures exactly the per-frame counts and moves on.
+    /// <see cref="PlanScheduleMode.TimeWindow"/> waits until <see cref="StartAtUtc"/>
+    /// (skipping the wait if already past), then keeps capturing the frame block
+    /// on a loop until <see cref="EndAtUtc"/> — the operator sets these by dragging
+    /// the start/end handles on the target's elevation chart.
+    /// </summary>
+    public PlanScheduleMode ScheduleMode { get; set; } = PlanScheduleMode.Frames;
+    /// <summary>UTC time-of-day "HH:mm" to begin this target (TimeWindow mode).</summary>
+    public string StartAtUtc { get; set; } = "";
+    /// <summary>UTC time-of-day "HH:mm" to stop this target (TimeWindow mode).</summary>
+    public string EndAtUtc { get; set; } = "";
+
     public List<PlanFrame> Frames { get; set; } = new();
 }
 
@@ -104,3 +120,6 @@ public enum PlanStartMode { Now, AtTime }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum PlanEndMode { AllDone, Dawn, AtTime }
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum PlanScheduleMode { Frames, TimeWindow }

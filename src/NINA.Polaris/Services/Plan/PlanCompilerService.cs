@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using NINA.Polaris.Services.Sequencer;
+using NINA.Polaris.Services.Sequencer.Conditions;
 using NINA.Polaris.Services.Sequencer.Containers;
 using NINA.Polaris.Services.Sequencer.Instructions;
 using NINA.Polaris.Services.Sequencer.Triggers;
@@ -77,6 +78,21 @@ public class PlanCompilerService {
         // ---- Targets ----
         foreach (var t in plan.Targets) {
             if (!t.Enabled) continue;
+            bool timed = t.ScheduleMode == PlanScheduleMode.TimeWindow;
+
+            // Per-target start gate (time-window mode): wait until the start
+            // time, but go now if it's already passed. Runs once, at root level,
+            // before the container's slew so it doesn't repeat per loop pass.
+            if (timed && !string.IsNullOrWhiteSpace(t.StartAtUtc)) {
+                root.Items.Add(new WaitUntilTimeInstruction {
+                    Name = $"Wait for {t.Name}", TimeOfDayUtc = t.StartAtUtc, SkipIfPast = true
+                });
+            }
+            // Per-target auto-focus: run once before the target starts.
+            if (plan.AutoFocusEachTarget) {
+                root.Items.Add(new AutoFocusInstruction { Name = $"Auto-focus ({t.Name})" });
+            }
+
             var dso = new DeepSkyObjectContainer {
                 Name = t.Name,
                 Target = t.Name,
@@ -105,6 +121,14 @@ public class PlanCompilerService {
             if (plan.AutoMeridianFlip) {
                 dso.Triggers.Add(new MeridianFlipTrigger {
                     Name = "Meridian flip", RaHours = t.RaHours, DecDeg = t.DecDeg
+                });
+            }
+            // Time-window mode: loop the frame block (slew/center happens once in
+            // the container preamble) until the target's end time is reached.
+            if (timed && !string.IsNullOrWhiteSpace(t.EndAtUtc)) {
+                dso.IsLoop = true;
+                dso.Conditions.Add(new LoopUntilTimeCondition {
+                    Name = $"Until {t.EndAtUtc}", TimeOfDayUtc = t.EndAtUtc
                 });
             }
             root.Items.Add(dso);
@@ -149,10 +173,24 @@ public class PlanCompilerService {
         foreach (var t in plan.Targets) {
             if (!t.Enabled) continue;
             total += SlewOverheadSeconds + PlateSolveSeconds + Math.Max(0, t.FirstDelaySec);
-            foreach (var f in t.Frames) {
-                total += Math.Max(0, f.Count) * (Math.Max(0, f.ExposureSeconds) + PerFrameOverheadSeconds);
+            if (t.ScheduleMode == PlanScheduleMode.TimeWindow) {
+                // Time-bounded: the contribution is the window length itself.
+                total += WindowSeconds(t.StartAtUtc, t.EndAtUtc);
+            } else {
+                foreach (var f in t.Frames) {
+                    total += Math.Max(0, f.Count) * (Math.Max(0, f.ExposureSeconds) + PerFrameOverheadSeconds);
+                }
             }
         }
         return total;
+    }
+
+    /// <summary>Length of a "HH:mm"→"HH:mm" UTC window in seconds, wrapping past
+    /// midnight (end before start = next day). Returns 0 on bad/empty input.</summary>
+    private static double WindowSeconds(string start, string end) {
+        if (!TimeSpan.TryParse(start, out var s) || !TimeSpan.TryParse(end, out var e)) return 0;
+        var d = (e - s).TotalSeconds;
+        if (d <= 0) d += 24 * 3600;
+        return d;
     }
 }

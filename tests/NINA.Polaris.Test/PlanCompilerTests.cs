@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using NINA.Polaris.Services.Plan;
+using NINA.Polaris.Services.Sequencer.Conditions;
 using NINA.Polaris.Services.Sequencer.Containers;
 using NINA.Polaris.Services.Sequencer.Instructions;
 using NINA.Polaris.Services.Sequencer.Triggers;
@@ -147,6 +148,53 @@ public class PlanCompilerTests {
             } }
         };
         Assert.That(_c.EstimateSeconds(plan), Is.EqualTo(80).Within(0.001));
+    }
+
+    [Test]
+    public void Compile_AutoFocusEachTarget_InsertsOnePassPerTarget() {
+        var plan = TwoTargetPlan();
+        plan.AutoFocusOnStart = false;
+        plan.AutoFocusEachTarget = true;
+        var items = ((SequentialContainer)_c.Compile(plan).Root).Items;
+        // One AutoFocus per target, each immediately before its DSO container.
+        Assert.That(items.OfType<AutoFocusInstruction>().Count(), Is.EqualTo(2));
+        var firstAfIdx = items.FindIndex(i => i is AutoFocusInstruction);
+        Assert.That(items[firstAfIdx + 1], Is.InstanceOf<DeepSkyObjectContainer>());
+    }
+
+    [Test]
+    public void Compile_TimeWindow_LoopsUntilEndWithStartGate() {
+        var plan = TwoTargetPlan();
+        var t = plan.Targets[0];
+        t.ScheduleMode = PlanScheduleMode.TimeWindow;
+        t.StartAtUtc = "23:00";
+        t.EndAtUtc = "01:30";
+
+        var items = ((SequentialContainer)_c.Compile(plan).Root).Items;
+        // A SkipIfPast wait precedes the timed target's container.
+        var wait = items.OfType<WaitUntilTimeInstruction>().Single(w => w.TimeOfDayUtc == "23:00");
+        Assert.That(wait.SkipIfPast, Is.True);
+
+        var dso = items.OfType<DeepSkyObjectContainer>().First(d => d.Target == "M31");
+        Assert.That(dso.IsLoop, Is.True);
+        var cond = dso.Conditions.OfType<LoopUntilTimeCondition>().Single();
+        Assert.That(cond.TimeOfDayUtc, Is.EqualTo("01:30"));
+        // The second (Frames-mode) target stays a non-looping container.
+        var dso2 = items.OfType<DeepSkyObjectContainer>().First(d => d.Target == "M42");
+        Assert.That(dso2.IsLoop, Is.False);
+    }
+
+    [Test]
+    public void EstimateSeconds_TimeWindow_UsesWindowLength() {
+        var plan = new ImagingPlan {
+            Targets = { new PlanTarget {
+                ScheduleMode = PlanScheduleMode.TimeWindow,
+                StartAtUtc = "22:00", EndAtUtc = "23:00",   // 1h window
+                Frames = { new PlanFrame { ExposureSeconds = 60, Count = 999 } } // ignored when timed
+            } }
+        };
+        // 3600s window + slew(30) + solve(20) = 3650s.
+        Assert.That(_c.EstimateSeconds(plan), Is.EqualTo(3650).Within(0.001));
     }
 
     [Test]
