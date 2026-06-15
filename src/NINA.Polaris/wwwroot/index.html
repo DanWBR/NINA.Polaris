@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260615-planmode">
+    <link rel="stylesheet" href="/css/app.css?v=20260615-planstyle">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -7417,10 +7417,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <option :value="p.id" x-text="p.name"></option>
                         </template>
                     </select>
-                    <button class="btn-sm" @click="newPlan()">＋ New</button>
-                    <button class="btn-sm" @click="duplicatePlan()" :disabled="!plan">Duplicate</button>
-                    <button class="btn-sm btn-danger" @click="deletePlan()" :disabled="!plan">Delete</button>
-                    <button class="btn-sm" @click="planSettingsOpen = !planSettingsOpen" :disabled="!plan"
+                    <button class="btn btn-sm" @click="newPlan()">＋ New</button>
+                    <button class="btn btn-sm" @click="duplicatePlan()" :disabled="!plan">Duplicate</button>
+                    <button class="btn btn-sm btn-danger" @click="deletePlan()" :disabled="!plan">Delete</button>
+                    <button class="btn btn-sm" @click="planSettingsOpen = !planSettingsOpen" :disabled="!plan"
                             :class="{ 'btn-active': planSettingsOpen }" title="Plan settings">⬡ Settings</button>
                 </div>
 
@@ -7487,10 +7487,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                               x-text="'RA ' + (t.raHours||0).toFixed(3) + 'h · Dec ' + (t.decDeg||0).toFixed(2) + '° · ' + planTargetFrameSummary(t)"></span>
                                     </div>
                                     <div class="plan-target-actions">
-                                        <button class="btn-icon" @click="planMoveTarget(ti, -1)" :disabled="ti===0" title="Move up">▲</button>
-                                        <button class="btn-icon" @click="planMoveTarget(ti, 1)" :disabled="ti===plan.targets.length-1" title="Move down">▼</button>
-                                        <button class="btn-icon" @click="planToggleTargetDetail(t)" title="Edit">✎</button>
-                                        <button class="btn-icon btn-danger" @click="planRemoveTarget(t)" title="Remove">✕</button>
+                                        <button class="btn btn-sm btn-icon" @click="planMoveTarget(ti, -1)" :disabled="ti===0" title="Move up">▲</button>
+                                        <button class="btn btn-sm btn-icon" @click="planMoveTarget(ti, 1)" :disabled="ti===plan.targets.length-1" title="Move down">▼</button>
+                                        <button class="btn btn-sm btn-icon" @click="planToggleTargetDetail(t)" title="Edit">✎</button>
+                                        <button class="btn btn-sm btn-icon btn-danger" @click="planRemoveTarget(t)" title="Remove">✕</button>
                                     </div>
                                 </div>
                                 <div x-show="planSelectedTargetId === t.id" class="plan-target-detail">
@@ -7505,8 +7505,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         <div class="plan-frames-head">
                                             <span>Frames</span>
                                             <span class="plan-frames-tools">
-                                                <button class="btn-sm" @click="planAddFrame(t)">＋ Frame</button>
-                                                <button class="btn-sm" @click="planCopyFramesToAll(t)" title="Copy this frame list to every target">Copy to all</button>
+                                                <button class="btn btn-sm" @click="planAddFrame(t)">＋ Frame</button>
+                                                <button class="btn btn-sm" @click="planCopyFramesToAll(t)" title="Copy this frame list to every target">Copy to all</button>
                                             </span>
                                         </div>
                                         <template x-for="(f, fi) in t.frames" :key="fi">
@@ -7516,7 +7516,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                 <label>Filter <input type="text" style="width:5em" x-model="f.filter" @change="savePlan()" placeholder="—"></label>
                                                 <label>Gain <input type="number" style="width:5em" x-model.number="f.gain" @change="savePlan()" placeholder="auto"></label>
                                                 <label>Bin <input type="number" min="1" style="width:3.5em" x-model.number="f.binning" @change="savePlan()"></label>
-                                                <button class="btn-icon btn-danger" @click="planRemoveFrame(t, fi)" title="Remove frame">✕</button>
+                                                <button class="btn btn-sm btn-icon btn-danger" @click="planRemoveFrame(t, fi)" title="Remove frame">✕</button>
                                             </div>
                                         </template>
                                     </div>
@@ -7527,10 +7527,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
 
                     <!-- Add target -->
                     <div class="plan-add-row">
-                        <button class="btn-sm" @click="planAddTargetManual()">＋ Manual</button>
-                        <button class="btn-sm" @click="planAddTargetFromMount()">＋ Mount position</button>
-                        <button class="btn-sm" @click="planAddCatalogOpen = !planAddCatalogOpen" :class="{ 'btn-active': planAddCatalogOpen }">＋ Catalog</button>
-                        <button class="btn-sm" @click="planFrameInSky()">Frame in SkyAtlas</button>
+                        <button class="btn btn-sm" @click="planAddTargetManual()">＋ Manual</button>
+                        <button class="btn btn-sm" @click="planAddTargetFromMount()">＋ Mount position</button>
+                        <button class="btn btn-sm" @click="planAddCatalogOpen = !planAddCatalogOpen" :class="{ 'btn-active': planAddCatalogOpen }">＋ Catalog</button>
+                        <button class="btn btn-sm" @click="planFrameInSky()">Frame in SkyAtlas</button>
                     </div>
                     <div x-show="planAddCatalogOpen" class="plan-catalog">
                         <input type="text" x-model="planCatQuery" @input.debounce.300ms="planCatSearch()" placeholder="Search catalog (e.g. M31, NGC 7000)…">
@@ -13515,8 +13515,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- PLAN: SkyAtlas framing banner (shown while picking a target's framing) -->
     <div class="plan-frame-banner" x-show="planFramingActive" x-cloak>
         <span>Framing a target for the plan — pan/zoom, then add it.</span>
-        <button class="btn-sm" @click="planAddTargetFromSky()">Add to plan</button>
-        <button class="btn-sm" @click="planCancelFraming()">Cancel</button>
+        <button class="btn btn-sm" @click="planAddTargetFromSky()">Add to plan</button>
+        <button class="btn btn-sm" @click="planCancelFraming()">Cancel</button>
     </div>
 
     <!-- PLAN: host-shutdown risk confirmation -->
@@ -13526,8 +13526,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <p>When this plan finishes (or reaches its end time), the device running Polaris
                will <b>power off completely</b>. You'll need to physically power it back on.</p>
             <div class="modal-actions">
-                <button class="btn-sm" @click="plan.endShutdownHost = false; planShutdownConfirm = false; savePlan()">Cancel</button>
-                <button class="btn-sm btn-danger" @click="planShutdownConfirm = false">Yes, shut down at end</button>
+                <button class="btn btn-sm" @click="plan.endShutdownHost = false; planShutdownConfirm = false; savePlan()">Cancel</button>
+                <button class="btn btn-sm btn-danger" @click="planShutdownConfirm = false">Yes, shut down at end</button>
             </div>
         </div>
     </div>
@@ -13699,7 +13699,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260615-planmode"></script>
+    <script src="/js/app.js?v=20260615-planstyle"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

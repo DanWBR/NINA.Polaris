@@ -11944,3 +11944,39 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .modal-card h3 { margin: 0 0 8px; font-size: 16px; }
 .modal-card p { margin: 0 0 16px; font-size: 13px; line-height: 1.5; color: var(--text-muted, #9aa4b2); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+/* Theme the PLAN form controls to match the rest of the app (the dark
+   input chrome used in Settings). Without this, native selects/inputs
+   render with the OS combobox look, which clashes with night mode. */
+.tab-panel-plan input[type="text"],
+.tab-panel-plan input[type="number"],
+.tab-panel-plan input[type="time"],
+.tab-panel-plan select,
+.modal-card input,
+.modal-card select {
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 7px 9px;
+    box-sizing: border-box;
+    outline: none;
+    color-scheme: dark;
+    transition: border-color var(--transition);
+}
+.tab-panel-plan input:focus,
+.tab-panel-plan select:focus,
+.modal-card input:focus,
+.modal-card select:focus { border-color: var(--accent); }
+.tab-panel-plan input[type="checkbox"] {
+    width: auto; padding: 0; accent-color: var(--accent); cursor: pointer;
+}
+/* Custom SVG chevron so the closed select matches the themed text fields
+   (mirrors .settings-section select). */
+.tab-panel-plan select {
+    appearance: none; -webkit-appearance: none; -moz-appearance: none;
+    cursor: pointer; padding-right: 30px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%23a8b3bf' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat; background-position: right 10px center;
+}
+.tab-panel-plan select option { background: var(--bg-secondary); color: var(--text-primary); }
