@@ -548,13 +548,14 @@ function ninaApp() {
         skyShowResults: false,
         // SKY coordinate-grid toggle: 'none' | 'altaz' | 'eq'. Cycled by the
         // toolbar button; pushed to the engine via the set-grid bridge msg
-        // and re-applied whenever the engine (re)loads.
-        skyGridMode: 'none',
-        // SKY ecliptic line toggle. Off by default; the plane of the solar
-        // system (where the Sun/Moon/planets ride) is handy for planning, but
-        // adds clutter, so it's opt-in. Pushed via the set-ecliptic bridge msg
-        // and re-applied whenever the engine (re)loads.
-        skyEclipticVisible: false,
+        // and re-applied whenever the engine (re)loads. Default = equatorial
+        // (the RA/Dec grid astrophotographers expect).
+        skyGridMode: 'eq',
+        // SKY ecliptic line toggle. On by default — the plane of the solar
+        // system (where the Sun/Moon/planets ride) is handy for planning.
+        // Pushed via the set-ecliptic bridge msg and re-applied whenever the
+        // engine (re)loads. Persisted to localStorage, so a saved choice wins.
+        skyEclipticVisible: true,
         slewCenterJobId: null,
         slewCenterStatus: null,
         // On a FAILED slew & center we keep the solver console around in a
