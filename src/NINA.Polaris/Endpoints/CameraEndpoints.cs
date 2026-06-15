@@ -321,11 +321,24 @@ public static class CameraEndpoints {
         group.MapGet("/discover", (EquipmentManager equip, string? driver)
             => Results.Ok(equip.GetDiscoveredCamerasFor(driver ?? "indi")));
 
-        group.MapPost("/connect", async (EquipmentManager equip) => {
+        group.MapPost("/connect", async (EquipmentManager equip, ILoggerFactory loggerFactory) => {
             if (equip.Camera == null)
                 return Results.BadRequest(new { error = "No camera selected. Use POST /api/camera/select/{name} first" });
 
             await equip.Camera.ConnectAsync();
+            // The camera's ROI (CCD_FRAME for INDI) is retained by the driver
+            // across browser sessions and even reconnects — the INDI server on
+            // the SBC keeps running. So a planetary ROI set in a prior VIDEO
+            // session would otherwise leak into PREVIEW / LIVE / sequence
+            // forever. Assert the full sensor on connect; VIDEO re-applies its
+            // own ROI when that tab is opened. Best-effort: backends that don't
+            // support ROI just no-op here.
+            try {
+                await equip.Camera.SetSubframeAsync(0, 0, 0, 0);
+            } catch (Exception ex) {
+                loggerFactory.CreateLogger("Polaris.Camera")
+                    .LogDebug(ex, "Full-frame reset on connect skipped (non-fatal)");
+            }
             return Results.Ok(new { status = "connected", device = equip.Camera.DeviceName });
         });
 

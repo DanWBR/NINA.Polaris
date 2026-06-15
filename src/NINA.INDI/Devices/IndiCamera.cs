@@ -531,6 +531,10 @@ public class IndiCamera : ICamera {
             width = MaxX > 0 ? MaxX : 0;
             height = MaxY > 0 ? MaxY : 0;
         }
+        // If we still don't know the real geometry (e.g. CCD_INFO hasn't
+        // arrived yet right after connect), don't write a zero/garbage
+        // CCD_FRAME — that would corrupt the ROI instead of resetting it.
+        if (width <= 0 || height <= 0) return;
         // Idempotent guard. Writing CCD_FRAME re-allocates the ROI / capture
         // buffer inside many INDI drivers (notably indi_asi_ccd). The native
         // guide + calibration loop resets to full frame before EVERY capture,
