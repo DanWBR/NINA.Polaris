@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260615-meridianbar">
+    <link rel="stylesheet" href="/css/app.css?v=20260615-annotate">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -794,6 +794,10 @@
                         <button @click="_pzZoomButton('liveCanvas', 1.3)" title="Zoom in">＋</button>
                         <button @click="_pzZoomButton('liveCanvas', 1/1.3)" title="Zoom out">－</button>
                         <button @click="toggleAutoStretch()" :class="stretchAuto ? 'pz-active' : ''" title="Auto-stretch brightness">◐</button>
+                        <button @click="toggleAnnotate()" :class="annotate.active ? 'pz-active' : ''" :disabled="annotate.busy"
+                                title="Annotate — plate-solve and label DSOs in the frame">
+                            <svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:middle"><circle cx="8" cy="16" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 13 L20 4 M15 4 h5 v5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </button>
                     </div>
                     <div class="preview-overlay" x-show="!liveActive">
                         <p x-text="selectedCamera ? 'Ready - ' + selectedCamera : 'No camera connected'"></p>
@@ -2565,6 +2569,10 @@
                         <button @click="_pzZoomButton('previewCanvas', 1.3)" title="Zoom in">＋</button>
                         <button @click="_pzZoomButton('previewCanvas', 1/1.3)" title="Zoom out">－</button>
                         <button @click="toggleAutoStretch()" :class="stretchAuto ? 'pz-active' : ''" title="Auto-stretch brightness">◐</button>
+                        <button @click="toggleAnnotate()" :class="annotate.active ? 'pz-active' : ''" :disabled="annotate.busy"
+                                title="Annotate — plate-solve and label DSOs in the frame">
+                            <svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:middle"><circle cx="8" cy="16" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 13 L20 4 M15 4 h5 v5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </button>
                     </div>
                     <div class="preview-overlay" x-show="!preview.lastSnapAt">
                         <p x-text="selectedCamera
@@ -13786,7 +13794,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260615-meridianbar"></script>
+    <script src="/js/app.js?v=20260615-annotate"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

@@ -2448,6 +2448,10 @@ function ninaApp() {
 
         // Star annotation + visual overlays
         showStarOverlay: false,
+        // DSO annotation overlay (plate-solve the current LIVE/PREVIEW frame
+        // and label catalog objects in the field). Items are in IMAGE pixels.
+        annotate: { active: false, busy: false, width: 0, height: 0, scaleArcsec: 1, items: [] },
+        annotateFlip: false,   // mirror correction for flipped optical trains
         // LIVE tab image-history + HFR chart are now a semi-transparent
         // overlay over the stacked image. Default hidden so the focus
         // stays on the master being built. User toggles via the
@@ -12481,6 +12485,7 @@ function ninaApp() {
             const ctx = ovr.getContext('2d');
             ctx.clearRect(0, 0, ovr.width, ovr.height);
             if (this.showStarOverlay && this.lastStars) this._drawStarsOnOverlay(ctx, ovr.width, ovr.height);
+            if (this.annotate.active) this._drawAnnotationsOn(ctx, ovr.width, ovr.height);
             if (this.showCrosshair) this._drawCrosshairOnOverlay(ctx, ovr.width, ovr.height);
             if (this.showGrid) this._drawGridOnOverlay(ctx, ovr.width, ovr.height);
             // PA-5: polar-alignment error vector. Visible whenever we
@@ -12490,6 +12495,102 @@ function ninaApp() {
             if (this.polar && this.polar.totalErrorArcsec > 0) {
                 this._drawPolarErrorVector(ctx, ovr.width, ovr.height);
             }
+        },
+
+        // ---- DSO annotation (plate-solve + label the current frame) ----
+
+        // Toggle: off → clear; on → solve + label the current frame.
+        async toggleAnnotate() {
+            if (this.annotate.active) {
+                this.annotate.active = false;
+                this.annotate.items = [];
+                this.redrawOverlay();
+                this.redrawPreviewOverlay();
+                return;
+            }
+            await this.annotateFrame();
+        },
+
+        async annotateFrame() {
+            if (this.annotate.busy) return;
+            this.annotate.busy = true;
+            const tid = this._transferStart({ label: 'Annotate (solve)', direction: 'down', total: 0 });
+            try {
+                const r = await this.apiPost('/api/platesolve/annotate-latest',
+                    { flip: !!this.annotateFlip }, { timeout: 180000 });
+                const j = await r.json();
+                if (!j.success) {
+                    this.toast('Annotate failed: ' + (j.error || 'plate solve unsuccessful'), 'error');
+                    return;
+                }
+                this.annotate.width = j.width;
+                this.annotate.height = j.height;
+                this.annotate.scaleArcsec = j.scaleArcsecPerPixel || 1;
+                this.annotate.items = j.objects || [];
+                this.annotate.active = true;
+                this.redrawOverlay();
+                this.redrawPreviewOverlay();
+                this.toast(this.annotate.items.length
+                    ? `Annotated ${this.annotate.items.length} object(s)`
+                    : 'Solved, but no catalog objects in frame', 'ok');
+            } catch (e) {
+                this.toast('Annotate failed: ' + (e.message || e), 'error');
+            } finally {
+                this._transferEnd(tid, true);
+                this.annotate.busy = false;
+            }
+        },
+
+        // Draw the DSO labels onto an overlay context. Item coords are in image
+        // (source) pixels; scale to the overlay's backing-store size. The
+        // overlay shares the canvas pan/zoom transform, so labels track zoom.
+        _drawAnnotationsOn(ctx, w, h) {
+            const a = this.annotate;
+            if (!a.active || !a.items.length || !a.width || !a.height) return;
+            const sx = w / a.width, sy = h / a.height;
+            const fontPx = Math.max(11, Math.round(h / 42));
+            ctx.save();
+            ctx.font = fontPx + 'px sans-serif';
+            ctx.textBaseline = 'bottom';
+            ctx.lineJoin = 'round';
+            for (const o of a.items) {
+                const x = o.x * sx, y = o.y * sy;
+                // Marker radius from the object's catalog size when known.
+                let r = 10;
+                if (o.sizeArcmin > 0 && a.scaleArcsec > 0) {
+                    r = (o.sizeArcmin * 60 / a.scaleArcsec) * sx / 2;
+                }
+                r = Math.max(7, Math.min(r, Math.max(w, h) * 0.25));
+                ctx.beginPath();
+                ctx.arc(x, y, r, 0, 2 * Math.PI);
+                ctx.strokeStyle = 'rgba(250, 204, 21, 0.85)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                const label = o.commonName ? `${o.name} · ${o.commonName}` : o.name;
+                const lx = x + r * 0.72, ly = y - r * 0.72;
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+                ctx.strokeText(label, lx, ly);
+                ctx.fillStyle = 'rgba(250, 204, 21, 0.95)';
+                ctx.fillText(label, lx, ly);
+            }
+            ctx.restore();
+        },
+
+        // The PREVIEW tab has its own overlay canvas (previewOverlayCanvas).
+        // redrawOverlay only manages the LIVE overlay, so paint annotations
+        // onto the preview overlay separately, sized to previewCanvas.
+        redrawPreviewOverlay() {
+            const base = document.getElementById('previewCanvas');
+            const ovr = document.getElementById('previewOverlayCanvas');
+            if (!base || !ovr) return;
+            if (ovr.width !== base.width || ovr.height !== base.height) {
+                ovr.width = base.width || 1;
+                ovr.height = base.height || 1;
+            }
+            const ctx = ovr.getContext('2d');
+            ctx.clearRect(0, 0, ovr.width, ovr.height);
+            if (this.annotate.active) this._drawAnnotationsOn(ctx, ovr.width, ovr.height);
         },
 
         // PA-5: polar error vector overlay.

@@ -177,6 +177,95 @@ public static class PlateSolveEndpoints {
             }
         });
 
+        // ---- Annotate the latest frame (LIVE / PREVIEW) ----
+        // Solve the most recent frame, then cone-search the DSO catalog over
+        // the resulting field and project each object to image pixels so the
+        // client can label what's in the frame.
+        group.MapPost("/annotate-latest", async (
+                AnnotateLatestRequest? request,
+                ImageRelayService relay,
+                PlateSolveService solver,
+                PlateSolveProgressService progress,
+                EquipmentManager equip,
+                ProfileService profiles,
+                NINA.Polaris.Services.Sky.DsoCatalog dso,
+                ILogger<PlateSolveStatusMarker> logger,
+                CancellationToken ct) => {
+            var image = relay.LatestImageData;
+            if (image == null)
+                return Results.BadRequest(new { error = "No image available; capture a frame first." });
+            if (!solver.IsAvailable)
+                return Results.BadRequest(new { error = "No plate solver configured / installed." });
+
+            int width = image.Properties.Width, height = image.Properties.Height;
+
+            double? hintRa = request?.HintRa, hintDec = request?.HintDec;
+            if (!hintRa.HasValue || !hintDec.HasValue) {
+                var tel = equip.Telescope;
+                if (tel != null && tel.IsConnected
+                        && !double.IsNaN(tel.RightAscension) && !double.IsNaN(tel.Declination)) {
+                    hintRa ??= tel.RightAscension;
+                    hintDec ??= tel.Declination;
+                }
+            }
+
+            var tempFits = Path.Combine(Path.GetTempPath(), $"polaris_annotate_{Guid.NewGuid():N}.fits");
+            try {
+                FITSWriter.Write(image, tempFits);
+                var options = new PlateSolveOptions {
+                    HintRa = hintRa, HintDec = hintDec,
+                    SearchRadiusDeg = request?.SearchRadiusDeg ?? profiles.Active.PlateSolveSearchRadiusDeg
+                };
+                progress.Begin("ANNOTATE");
+                PlateSolveResult result;
+                try { result = await solver.SolveAsync(tempFits, options, ct, progress.Append); }
+                finally { progress.End(); }
+
+                if (!result.Success)
+                    return Results.Ok(new { success = false, error = result.Error, solverUsed = result.SolverUsed });
+
+                var objects = new List<object>();
+                if (dso.IsAvailable) {
+                    // Cone radius = half the frame diagonal + 10% margin.
+                    double diagPx = Math.Sqrt((double)width * width + (double)height * height);
+                    double radiusDeg = diagPx * result.ScaleArcsecPerPixel / 3600.0 / 2.0 * 1.10;
+                    double magLimit = request?.MagLimit ?? 14.0;
+                    bool flip = request?.Flip ?? false;
+                    double margin = 0.02 * Math.Max(width, height);
+
+                    var hits = await dso.QueryRegionAsync(result.RaHours, result.DecDeg,
+                        Math.Max(0.05, radiusDeg), magLimit, 300);
+                    foreach (var o in hits) {
+                        var p = AnnotationProjector.Project(result.RaHours, result.DecDeg,
+                            result.ScaleArcsecPerPixel, result.RotationDeg, width, height, flip,
+                            o.RaHours, o.DecDeg);
+                        if (p == null) continue;
+                        var (x, y) = p.Value;
+                        if (x < -margin || y < -margin || x > width + margin || y > height + margin) continue;
+                        objects.Add(new {
+                            name = o.Name, commonName = o.CommonName,
+                            x, y, type = o.Type, magnitude = o.Magnitude, sizeArcmin = o.SizeArcmin
+                        });
+                    }
+                }
+
+                return Results.Ok(new {
+                    success = true, width, height,
+                    raHours = result.RaHours, decDeg = result.DecDeg,
+                    rotationDeg = result.RotationDeg, scaleArcsecPerPixel = result.ScaleArcsecPerPixel,
+                    solverUsed = result.SolverUsed,
+                    count = objects.Count, objects
+                });
+            } catch (OperationCanceledException) {
+                return Results.StatusCode(499);
+            } catch (Exception ex) {
+                logger.LogError(ex, "Annotate failed");
+                return Results.Ok(new { success = false, error = ex.Message });
+            } finally {
+                try { File.Delete(tempFits); } catch { }
+            }
+        });
+
         // ---- Solve from file (FILES tab) ----
         // The file is already a FITS on disk; no temp-write needed.
         // Body carries the absolute path + optional RA/Dec hints.
@@ -358,6 +447,16 @@ public static class PlateSolveEndpoints {
         double? HintRa,
         double? HintDec,
         double? SearchRadiusDeg);
+
+    /// <summary>POST body for <c>/api/platesolve/annotate-latest</c>. Adds the
+    /// DSO label options on top of the solve hints: a magnitude floor and a
+    /// horizontal-flip toggle for mirrored optical trains.</summary>
+    public record AnnotateLatestRequest(
+        double? HintRa = null,
+        double? HintDec = null,
+        double? SearchRadiusDeg = null,
+        double? MagLimit = null,
+        bool? Flip = null);
 
     /// <summary>POST body for <c>/api/platesolve/solve-file</c>.
     /// Path is the absolute server-side path to the FITS file.</summary>
