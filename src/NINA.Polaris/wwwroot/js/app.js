@@ -2971,6 +2971,24 @@ function ninaApp() {
                 localStorage.setItem('nina-sky-cons-art', v ? '1' : '0');
             });
 
+            // The VIDEO ROI is a planetary-capture subframe, but on the camera
+            // it's a single global CCD_FRAME shared with every other capture.
+            // Leaving it set meant PREVIEW / LIVE / sequences inherited the ROI
+            // and shot at e.g. 640x480. Treat ROI as VIDEO-only: when the user
+            // leaves the VIDEO tab (and nothing is streaming/recording), restore
+            // the full sensor. The picked ROI stays in this.video.roi* + the rig
+            // profile, so re-entering VIDEO re-applies it (loadCameraCapabilities).
+            this.$watch('tab', (newTab, oldTab) => {
+                if (oldTab === 'video' && newTab !== 'video'
+                    && this.video.roiW > 0
+                    && !this.cameraStream.running
+                    && !(this.videoRecording && this.videoRecording.recording)
+                    && this.cameraCaps.roi !== false) {
+                    this.apiPost('/api/camera/subframe',
+                        { x: 0, y: 0, width: 0, height: 0 }).catch(() => {});
+                }
+            });
+
             // ZWO gain presets, static lookup table. Tiny file (~1 KB)
             // so fire-and-forget. If the fetch fails the L/M/H buttons
             // simply never appear (zwoPresetsForActiveCamera returns null).
