@@ -597,7 +597,15 @@ public class LiveStackingService {
                     BayerPattern = BayerPatternEnum.None
                 };
                 var rgbImage = new BaseImageData(rgbPixels, rgbProps, imageData.MetaData);
-                await _relay.RelayRgbJpegAsync(rgbImage, kind: FrameKind.Live, ct: ct);
+                // The colour live stack is the image the operator zooms into on
+                // the LIVE tab, and it's broadcast only once per integrated
+                // frame (seconds apart), so it isn't fps-critical like the video
+                // stream. Send it at a much higher resolution + quality than the
+                // 1280/80 video default so zooming stays sharp instead of
+                // upscaling a downsized preview. Capped at the stack's native
+                // size by the renderer's scale<=1 clamp.
+                await _relay.RelayRgbJpegAsync(rgbImage, maxDim: 4096, quality: 90,
+                    kind: FrameKind.Live, ct: ct);
             } else {
                 var stackedPixels = GetStackedResult();
                 var stackedProps = new ImageProperties {

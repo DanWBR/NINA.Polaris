@@ -5579,9 +5579,12 @@ function ninaApp() {
                 // Skip canvases whose container is collapsed (parent tab not
                 // visible). They get a fresh paint on tab switch.
                 if (cw <= 0 || ch <= 0) continue;
-                const scale = Math.min(cw / source.width, ch / source.height, 1);
-                canvas.width  = Math.round(source.width  * scale);
-                canvas.height = Math.round(source.height * scale);
+                // Backing store at source resolution (CSS object-fit:contain
+                // handles display sizing) so zooming the JPEG stays sharp
+                // instead of upscaling a container-sized bitmap.
+                const [bw, bh] = this._displayBackingSize(source.width, source.height);
+                canvas.width  = bw;
+                canvas.height = bh;
                 const ctx = canvas.getContext('2d');
                 ctx.imageSmoothingEnabled = true;
                 ctx.imageSmoothingQuality = 'high';
@@ -7358,6 +7361,20 @@ function ninaApp() {
             }
         },
 
+        // Backing-store size for a display canvas. We render at the source
+        // resolution so CSS zoom stays sharp, but clamp the longest side to a
+        // ceiling so a huge sensor frame can't allocate a multi-hundred-MB
+        // canvas on a weak phone. The ceiling tracks the user's "Preview
+        // quality" setting (previewMaxDim; 0 = native -> generous 8192 cap).
+        _displayBackingSize(srcW, srcH) {
+            const want = this.previewMaxDim | 0;
+            const cap = want > 0 ? want : 8192;
+            const longest = Math.max(srcW, srcH);
+            if (longest <= cap) return [srcW, srcH];
+            const k = cap / longest;
+            return [Math.max(1, Math.round(srcW * k)), Math.max(1, Math.round(srcH * k))];
+        },
+
         _fanOutFrameToCanvases(src, srcW, srcH, frameKind = 0) {
             const targets = this._canvasIdsForFrameKind(frameKind);
             const skipLive = (src && src.id === 'liveCanvas');   // src IS liveCanvas → don't blit-to-self
@@ -7402,9 +7419,19 @@ function ninaApp() {
                     if (report) report.push(id + '=hidden(' + cw + 'x' + ch + ')');
                     continue;
                 }
-                const scale = Math.min(cw / srcW, ch / srcH, 1);
-                canvas.width  = Math.round(srcW * scale);
-                canvas.height = Math.round(srcH * scale);
+                // Size the backing store to the SOURCE resolution, not the
+                // fit-to-container size. The canvas is laid out by CSS
+                // (width/height:100% + object-fit:contain), so a denser
+                // backing store doesn't change the on-screen size — it gives
+                // the CSS pan/zoom transform real pixels to sample when the
+                // user zooms in, instead of magnifying a bitmap we'd already
+                // shrunk to the container (that pre-shrink was the source of
+                // the soft, low-detail zoom). Source is already bounded by
+                // previewMaxDim (raw) / the server JPEG maxDim, so the canvas
+                // stays a sane size.
+                const [bw, bh] = this._displayBackingSize(srcW, srcH);
+                canvas.width  = bw;
+                canvas.height = bh;
                 try {
                     const ctx = canvas.getContext('2d');
                     ctx.imageSmoothingEnabled = true;
@@ -17723,9 +17750,11 @@ function ninaApp() {
             if (!container) return;
             const cw = container.clientWidth, ch = container.clientHeight;
             if (cw <= 0 || ch <= 0) return;
-            const scale = Math.min(cw / cached.srcW, ch / cached.srcH, 1);
-            canvas.width  = Math.round(cached.srcW * scale);
-            canvas.height = Math.round(cached.srcH * scale);
+            // Match the fan-out: backing store at source resolution so a
+            // tab switch keeps the same crisp zoomable image.
+            const [bw, bh] = this._displayBackingSize(cached.srcW, cached.srcH);
+            canvas.width  = bw;
+            canvas.height = bh;
             try {
                 const ctx = canvas.getContext('2d');
                 ctx.imageSmoothingEnabled = true;
