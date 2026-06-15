@@ -12000,6 +12000,8 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 /* PLAN: per-target schedule mode + elevation chart */
 .plan-sched { display: flex; flex-direction: column; gap: 8px; }
 .plan-sched-toggle { display: flex; gap: 6px; }
+.plan-sched-note { font-size: 11px; line-height: 1.4; }
+.plan-sched-note em { font-style: normal; color: var(--text-primary, #e5e7eb); }
 .plan-altchart-wrap { display: flex; flex-direction: column; gap: 6px; }
 .plan-altchart-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 11px; flex-wrap: wrap; }
 .plan-altchart-head .muted { color: var(--text-muted, #9aa4b2); }

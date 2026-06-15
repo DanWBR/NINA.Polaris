@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260615-planviz">
+    <link rel="stylesheet" href="/css/app.css?v=20260615-tdelay">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -7512,7 +7512,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <div x-show="planSelectedTargetId === t.id" class="plan-target-detail">
                                     <div class="plan-detail-grid">
                                         <label>Name <input type="text" x-model="t.name" @change="savePlan()"></label>
-                                        <label>First delay (s) <input type="number" min="0" x-model.number="t.firstDelaySec" @change="savePlan()"></label>
+                                        <label title="Wait this many minutes before this target starts (relative to when the plan reaches it). Use this to push a target later without drawing a time window on the chart.">Delay start (min)
+                                            <input type="number" min="0" step="1"
+                                                   :value="Math.round((t.firstDelaySec || 0) / 60)"
+                                                   @change="t.firstDelaySec = Math.max(0, Math.round((+$event.target.value || 0) * 60)); savePlan()"></label>
                                         <label>RA (hours) <input type="number" step="0.0001" x-model.number="t.raHours" @change="savePlan(); planLoadAlt(t, true)"></label>
                                         <label>Dec (deg) <input type="number" step="0.001" x-model.number="t.decDeg" @change="savePlan(); planLoadAlt(t, true)"></label>
                                         <label>Rotation (°) <input type="number" step="0.1" x-model.number="t.rotation" @change="savePlan()"></label>
@@ -7526,6 +7529,18 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                             <button class="btn btn-sm" :class="{ 'btn-active': t.scheduleMode === 'TimeWindow' }"
                                                     @click="planSetScheduleMode(t, 'TimeWindow')">By time window</button>
                                         </div>
+
+                                        <template x-if="(t.scheduleMode || 'Frames') !== 'TimeWindow'">
+                                            <div class="plan-sched-note muted">
+                                                Starts as soon as the plan reaches it.
+                                                <template x-if="(t.firstDelaySec || 0) > 0">
+                                                    <span>Delayed <strong x-text="Math.round((t.firstDelaySec || 0) / 60)"></strong> min (set <em>Delay start</em> above).</span>
+                                                </template>
+                                                <template x-if="!((t.firstDelaySec || 0) > 0)">
+                                                    <span>Set <em>Delay start</em> above to push it later without using the time-window chart.</span>
+                                                </template>
+                                            </div>
+                                        </template>
 
                                         <template x-if="t.scheduleMode === 'TimeWindow'">
                                             <div class="plan-altchart-wrap">
@@ -13923,7 +13938,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260615-planviz"></script>
+    <script src="/js/app.js?v=20260615-tdelay"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
