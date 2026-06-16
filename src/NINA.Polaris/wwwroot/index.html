@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260616-targetrow">
+    <link rel="stylesheet" href="/css/app.css?v=20260616-trigtabs">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -1329,7 +1329,7 @@
                          starting). Banner-style status when an action runs. -->
                     <details class="livestack-triggers"
                              :open="liveStackTriggers.refocusEnabled || liveStackTriggers.recenterEnabled || liveStackTriggers.ditherEnabled">
-                        <summary>⚡ Auto re-focus / re-center / dither</summary>
+                        <summary>⚡ Auto dither / re-focus / re-center</summary>
 
                         <div class="livestack-triggers-row text-warn"
                              x-show="liveStackStatus?.triggers?.isExecuting">
@@ -1374,7 +1374,24 @@
                             </p>
                         </fieldset>
 
-                        <fieldset class="livestack-triggers-block">
+                        <!-- The three per-frame trigger blocks (dither,
+                             re-focus, re-center) live in a tab control so
+                             only one is shown at a time. trigTab is scoped
+                             to this panel; Dither is the default tab. -->
+                        <div x-data="{ trigTab: 'dither' }">
+                        <div class="livestack-trig-tabs">
+                            <button type="button" class="livestack-trig-tab"
+                                    :class="{ active: trigTab === 'dither' }"
+                                    @click="trigTab = 'dither'">⤡ Dither</button>
+                            <button type="button" class="livestack-trig-tab"
+                                    :class="{ active: trigTab === 'refocus' }"
+                                    @click="trigTab = 'refocus'">🎯 Re-focus</button>
+                            <button type="button" class="livestack-trig-tab"
+                                    :class="{ active: trigTab === 'recenter' }"
+                                    @click="trigTab = 'recenter'">⊹ Re-center</button>
+                        </div>
+
+                        <fieldset class="livestack-triggers-block" x-show="trigTab === 'refocus'">
                             <legend>
                                 <label class="checkbox-label">
                                     <input type="checkbox" x-model="liveStackTriggers.refocusEnabled"
@@ -1437,7 +1454,7 @@
                             </div>
                         </fieldset>
 
-                        <fieldset class="livestack-triggers-block">
+                        <fieldset class="livestack-triggers-block" x-show="trigTab === 'recenter'">
                             <legend>
                                 <label class="checkbox-label">
                                     <input type="checkbox" x-model="liveStackTriggers.recenterEnabled"
@@ -1499,7 +1516,7 @@
 
                         <!-- Auto dither: dither every N integrated frames,
                              routed through the active guider (native or PHD2). -->
-                        <fieldset class="livestack-triggers-block">
+                        <fieldset class="livestack-triggers-block" x-show="trigTab === 'dither'">
                             <legend>
                                 <label class="checkbox-label">
                                     <input type="checkbox" x-model="liveStackTriggers.ditherEnabled"
@@ -1555,6 +1572,7 @@
                                 Dithering…
                             </div>
                         </fieldset>
+                        </div><!-- /tab control wrapper (trigTab) -->
                     </details>
 
                     <!-- LSPP-6: per-frame pre-processing panel. Same
@@ -14150,7 +14168,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260616-targetrow"></script>
+    <script src="/js/app.js?v=20260616-trigtabs"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

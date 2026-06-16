@@ -10368,6 +10368,36 @@ label select.input-sm {
     border-radius: var(--radius);
     background: rgba(0,0,0,0.15);
 }
+/* Tab strip that groups the three per-frame trigger blocks (Dither /
+   Re-focus / Re-center). Mirrors the .sky-subtab-pill vocabulary but
+   compact enough for the narrow LIVE sidebar. */
+.livestack-trig-tabs {
+    display: flex;
+    gap: 4px;
+    margin: 8px 0 0;
+    flex-wrap: wrap;
+}
+.livestack-trig-tab {
+    flex: 1 1 auto;
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    padding: 5px 8px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+.livestack-trig-tab:hover {
+    background: rgba(255,255,255,0.04);
+    color: var(--text-primary);
+}
+.livestack-trig-tab.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
 .livestack-triggers-block > legend {
     padding: 0 6px;
     font-size: 11px;
