@@ -114,6 +114,26 @@ export default defineConfig({
               { type: 'string', name: 'sub', label: 'Subtitle', ui: { component: 'textarea' } },
             ],
           },
+          {
+            type: 'object',
+            name: 'gallery',
+            label: 'More screenshots',
+            fields: [
+              { type: 'string', name: 'title', label: 'Title' },
+              { type: 'string', name: 'sub', label: 'Subtitle', ui: { component: 'textarea' } },
+              {
+                type: 'object',
+                name: 'shots',
+                label: 'Screenshots',
+                list: true,
+                ui: { itemProps: (i) => ({ label: i?.caption }) },
+                fields: [
+                  { type: 'image', name: 'image', label: 'Image' },
+                  { type: 'string', name: 'caption', label: 'Caption' },
+                ],
+              },
+            ],
+          },
         ],
       },
       {

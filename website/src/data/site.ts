@@ -24,6 +24,7 @@ export const site = {
 export const navLinks = [
   { label: 'Features', href: '/#features' },
   { label: 'Benchmarks', href: '/#benchmarks' },
+  { label: 'Screenshots', href: '/#screenshots' },
   { label: 'Get Started', href: '/getting-started' },
   { label: 'Download & Install', href: '/install' },
   { label: 'Patreon ↗', href: site.patreon, external: true },
@@ -59,6 +60,7 @@ export const featuresSection = home.featuresSection;
 export const features = home.features;
 export const benchmarks = home.benchmarks;
 export const closing = home.closing;
+export const gallery = home.gallery;
 
 // ---- Install guide (content/install/install.json) ----
 export const installGuide = install;

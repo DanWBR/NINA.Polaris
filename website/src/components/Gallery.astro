@@ -1,0 +1,130 @@
+---
+import { gallery } from '../data/site';
+---
+
+{gallery && gallery.shots && gallery.shots.length > 0 && (
+  <section id="screenshots" class="section">
+    <div class="container">
+      <h2 class="section-title">{gallery.title}</h2>
+      {gallery.sub && <p class="section-sub">{gallery.sub}</p>}
+
+      <div class="shot-grid">
+        {gallery.shots.map((s) => (
+          <figure class="shot">
+            <img src={s.image} alt={s.caption} loading="lazy" />
+            {s.caption && <figcaption>{s.caption}</figcaption>}
+          </figure>
+        ))}
+      </div>
+    </div>
+
+    <!-- Click-to-zoom lightbox for the gallery -->
+    <div class="g-lightbox" id="g-lightbox" hidden role="dialog" aria-modal="true" aria-label="Screenshot">
+      <button class="g-lightbox-close" type="button" aria-label="Close">×</button>
+      <img class="g-lightbox-img" src="" alt="" />
+    </div>
+  </section>
+)}
+
+<script>
+  const lb = document.getElementById('g-lightbox');
+  const lbImg = lb?.querySelector('.g-lightbox-img') as HTMLImageElement | null;
+  const closeBtn = lb?.querySelector('.g-lightbox-close');
+
+  function open(src: string, alt: string) {
+    if (!lb || !lbImg) return;
+    lbImg.src = src;
+    lbImg.alt = alt;
+    lb.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+  function close() {
+    if (!lb || !lbImg) return;
+    lb.hidden = true;
+    lbImg.src = '';
+    document.body.style.overflow = '';
+  }
+
+  document.querySelectorAll<HTMLImageElement>('.shot img').forEach((img) => {
+    img.addEventListener('click', () => open(img.currentSrc || img.src, img.alt));
+  });
+  closeBtn?.addEventListener('click', close);
+  lb?.addEventListener('click', (e) => {
+    if (e.target === lb) close();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && lb && !lb.hidden) close();
+  });
+</script>
+
+<style>
+  .shot-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    margin-top: 8px;
+  }
+  .shot {
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--panel);
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  .shot:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .shot img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    object-fit: cover;
+    background: var(--bg-input);
+    cursor: zoom-in;
+  }
+  .shot figcaption {
+    padding: 12px 14px;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border);
+  }
+
+  /* Lightbox */
+  .g-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4vmin;
+    background: rgba(10, 9, 20, 0.93);
+    backdrop-filter: blur(6px);
+    cursor: zoom-out;
+  }
+  .g-lightbox[hidden] { display: none; }
+  .g-lightbox-img {
+    max-width: 94vw;
+    max-height: 92vh;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+    cursor: default;
+  }
+  .g-lightbox-close {
+    position: absolute;
+    top: 18px;
+    right: 24px;
+    width: 44px;
+    height: 44px;
+    font-size: 28px;
+    line-height: 1;
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .g-lightbox-close:hover { background: rgba(255, 255, 255, 0.16); color: var(--accent); }
+</style>

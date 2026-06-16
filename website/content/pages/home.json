@@ -125,5 +125,17 @@
   "closing": {
     "title": "Free, open-source, and ready to image.",
     "sub": "MIT-style license inherited from upstream N.I.N.A. Bring your own scope."
+  },
+  "gallery": {
+    "title": "More screenshots",
+    "sub": "A few more corners of the interface, all running in the browser. Click any shot to enlarge.",
+    "shots": [
+      { "image": "/assets/screenshots/gs-rigs.jpg", "caption": "Rig manager: telescope, camera, mount, focuser, and filter wheel in one place" },
+      { "image": "/assets/screenshots/gs-connect.jpg", "caption": "Equipment hub with INDI, ASCOM/Alpaca, and native driver selection" },
+      { "image": "/assets/screenshots/plan-editor.jpg", "caption": "Per-target scheduling with a draggable elevation window" },
+      { "image": "/assets/screenshots/guide-graph.jpg", "caption": "Live guiding graph with RA and Dec error tracking" },
+      { "image": "/assets/screenshots/calibration.jpg", "caption": "Guiding calibration review with the full mount calibration report" },
+      { "image": "/assets/screenshots/gs-live.jpg", "caption": "Annotated live view: deep-sky objects labelled over the integrated stack" }
+    ]
   }
 }
