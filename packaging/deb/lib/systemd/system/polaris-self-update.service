@@ -1,0 +1,16 @@
+[Unit]
+# On-demand unit that installs a .deb NINA.Polaris already downloaded.
+# Not enabled / not WantedBy anything — it is started explicitly by
+# UpdateService via `systemctl start polaris-self-update.service`, which
+# the polaris user is authorized to do without a password by the
+# 50-polaris-update.rules PolicyKit rule.
+#
+# Running the install in its own unit (separate cgroup) is what lets it
+# survive the polaris.service restart the new package's postinst triggers.
+Description=N.I.N.A. Polaris self-update (install downloaded .deb)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/polaris/bin/polaris-self-update.sh
+RemainAfterExit=no

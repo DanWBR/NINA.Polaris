@@ -576,6 +576,21 @@ body {
     animation: panic-pulse 1.6s ease-in-out infinite;
 }
 .status-panic-btn:hover { background: #d83030; }
+/* Self-update badge: a gentle green call-to-action in the status bar. */
+.status-update-btn {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    padding: 3px 12px;
+    border-radius: 10px;
+    color: #062;
+    background: #4ade80;
+    border: 1px solid #22c55e;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.status-update-btn:hover { background: #34d36a; }
+.update-notes { border: 1px solid var(--border, rgba(255,255,255,.12)); }
 @keyframes panic-pulse {
     0%, 100% { box-shadow: 0 0 0 0 rgba(255, 80, 80, 0.5); }
     50%      { box-shadow: 0 0 0 5px rgba(255, 80, 80, 0); }

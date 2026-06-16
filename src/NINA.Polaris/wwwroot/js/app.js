@@ -67,6 +67,16 @@ function ninaApp() {
         // UI), via the browser Battery Status API. supported stays false
         // on Firefox/Safari (no API) so the top-bar chip simply hides.
         battery: { supported: false, level: null, charging: false },
+        // Self-update (SBC .deb installs). Populated by checkUpdate() from
+        // /api/update/check; the badge + modal only surface when supported.
+        update: {
+            supported: false, available: false, modalOpen: false,
+            currentVersion: '', latestVersion: '', releaseName: '',
+            releaseNotes: '', publishedAt: '', htmlUrl: '',
+            assetName: '', assetSize: 0,
+            installing: false, done: false,
+            progress: '', error: ''
+        },
         cameraTemp: null,
         sessionCaptures: 0,
         imageHistory: [],
@@ -2737,6 +2747,11 @@ function ninaApp() {
             this.initBattery();
             this.loadDeviceName();
             this.updateFov();
+
+            // Self-update: check on boot, then hourly. No-ops off SBC .deb
+            // installs (server reports supported:false → badge stays hidden).
+            this.checkUpdate();
+            setInterval(() => this.checkUpdate(), 60 * 60 * 1000);
 
             // FIELD-6: rehydrate persisted chip dismissals. Only
             // uv-past survives reloads (the "Pi was under-voltage
@@ -25815,6 +25830,96 @@ function ninaApp() {
                 + '&body=' + encodeURIComponent(body);
             window.open(url, '_blank', 'noopener');
         },
+
+        // ─── Self-update (SBC .deb installs) ─────────────────────────────
+        // Poll GitHub releases via the server; surface a status-bar badge +
+        // modal when a newer .deb is available for this host's architecture.
+        async checkUpdate(force) {
+            try {
+                const r = await this.apiFetch('/api/update/check' + (force ? '?force=true' : ''));
+                if (!r.ok) return;
+                const u = await r.json();
+                this.update.supported = !!u.supported;
+                this.update.available = !!u.updateAvailable;
+                this.update.currentVersion = u.currentVersion || '';
+                this.update.latestVersion = u.latestVersion || '';
+                this.update.releaseName = u.releaseName || '';
+                this.update.releaseNotes = u.releaseNotes || '';
+                this.update.publishedAt = u.publishedAt || '';
+                this.update.htmlUrl = u.htmlUrl || '';
+                this.update.assetName = u.assetName || '';
+                this.update.assetSize = u.assetSize || 0;
+            } catch (e) { /* offline / not supported — leave badge hidden */ }
+        },
+        openUpdateModal() {
+            this.update.error = '';
+            this.update.installing = false;
+            this.update.done = false;
+            this.update.progress = '';
+            this.update.modalOpen = true;
+        },
+        updateAssetSizeText() {
+            const b = this.update.assetSize || 0;
+            if (b <= 0) return '?';
+            if (b >= 1024 * 1024) return (b / 1024 / 1024).toFixed(1) + ' MB';
+            return Math.round(b / 1024) + ' KB';
+        },
+        async installUpdate() {
+            if (this.update.installing) return;
+            this.update.error = '';
+            this.update.installing = true;
+            this.update.progress = 'Downloading and installing the new package…';
+            try {
+                const r = await this.apiFetch('/api/update/install', { method: 'POST' });
+                if (!r.ok) {
+                    let msg = 'Install failed.';
+                    try { const j = await r.json(); if (j && j.error) msg = j.error; } catch (e) {}
+                    this.update.error = msg;
+                    this.update.installing = false;
+                    return;
+                }
+                // The install runs in a transient systemd scope; polaris.service
+                // restarts under it. Poll /api/system/status until the reported
+                // version CHANGES from what we're running now, then reload.
+                // (Comparing against the old version is scheme-agnostic — the
+                // status 'version' string need not equal the GitHub tag.)
+                this.update.progress = 'Restarting service and applying update…';
+                this._pollUpdateComplete(this.appVersion || '', Date.now());
+            } catch (e) {
+                this.update.error = 'Install request failed: ' + (e.message || e);
+                this.update.installing = false;
+            }
+        },
+        async _pollUpdateComplete(oldVersion, startedAt) {
+            // Give it up to 3 minutes; the service restart + dotnet warmup on a
+            // Pi can take a while. Poll every 4s, tolerating the connection
+            // refusals that happen mid-restart.
+            const elapsed = Date.now() - startedAt;
+            if (elapsed > 3 * 60 * 1000) {
+                this.update.installing = false;
+                this.update.error = 'Update is taking longer than expected. '
+                    + 'It may still be installing — reload the page in a moment.';
+                return;
+            }
+            try {
+                const r = await this.apiFetch('/api/system/status');
+                if (r.ok) {
+                    const s = await r.json();
+                    const v = s.version || '';
+                    // Success once the server reports a version different from the
+                    // one we were running. Wait at least 8s so we don't catch the
+                    // pre-restart (old) server still answering.
+                    if (elapsed > 8000 && v && v !== oldVersion) {
+                        this.update.installing = false;
+                        this.update.done = true;
+                        setTimeout(() => window.location.reload(), 1500);
+                        return;
+                    }
+                }
+            } catch (e) { /* server down mid-restart — keep polling */ }
+            setTimeout(() => this._pollUpdateComplete(oldVersion, startedAt), 4000);
+        },
+
         formatHostRam(usedMB, totalMB) {
             if (!totalMB || totalMB <= 0) return ', /,';
             // Render in GB once we cross 1 GB total; below that

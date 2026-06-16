@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260615-srvbge">
+    <link rel="stylesheet" href="/css/app.css?v=20260616-autoupd">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -375,6 +375,14 @@
             <button class="status-panic-btn" x-show="seqState !== 'idle'" x-cloak
                     @click="panicAbortSequence()"
                     title="Abort the running sequence immediately">⛔ Abort run</button>
+            <!-- Self-update badge (SBC .deb installs only). Shown when GitHub
+                 has a newer release for this host's architecture; click opens
+                 the update modal with release notes + the install button. -->
+            <button class="status-update-btn" x-show="update.available" x-cloak
+                    @click="openUpdateModal()"
+                    :title="'Update available: ' + (update.latestVersion || '')">
+                ⬆ Update <span x-text="update.latestVersion"></span>
+            </button>
             <!-- Discovery / connection method badges. Click to jump to the
                  Equipment tab focused on that source. Each badge shows
                  ON / OFF / a count, and uses ok (green) / warn (amber) /
@@ -13893,6 +13901,75 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
+    <!-- Self-update modal: release details + sudo password + install.
+         The .deb is fetched and installed server-side in a transient systemd
+         scope; the service restarts, then the client polls for the new
+         version and reloads. The sudo password is the user's own, used only
+         to launch the privileged install and never stored. -->
+    <div class="modal-overlay" x-show="update.modalOpen" x-cloak
+         @click.self="!update.installing && (update.modalOpen = false)"
+         @keydown.escape.window="!update.installing && (update.modalOpen = false)">
+        <div class="modal-card" style="max-width:560px">
+            <div class="modal-head">
+                <span class="modal-icon">⬆</span>
+                <h3>Software update available</h3>
+            </div>
+            <p style="margin-bottom:8px">
+                <b x-text="update.releaseName || ('Version ' + (update.latestVersion || ''))"></b>
+                <span style="opacity:.7" x-show="update.publishedAt"
+                      x-text="' · ' + new Date(update.publishedAt).toLocaleDateString()"></span>
+            </p>
+            <p style="opacity:.8;font-size:.85em;margin-bottom:10px">
+                Installed <b x-text="update.currentVersion"></b>
+                → new <b x-text="update.latestVersion"></b>
+                <span x-show="update.assetName" x-text="' · ' + update.assetName + ' (' + updateAssetSizeText() + ')'"></span>
+            </p>
+            <div class="update-notes" x-show="update.releaseNotes"
+                 x-text="update.releaseNotes"
+                 style="max-height:200px;overflow:auto;white-space:pre-wrap;font-size:.82em;
+                        background:var(--bg-elevated, rgba(0,0,0,.2));border-radius:6px;
+                        padding:8px 10px;margin-bottom:12px"></div>
+            <a x-show="update.htmlUrl" :href="update.htmlUrl" target="_blank" rel="noopener"
+               style="font-size:.8em;display:inline-block;margin-bottom:12px">View release on GitHub ↗</a>
+
+            <!-- Install controls -->
+            <template x-if="!update.installing && !update.done">
+                <div>
+                    <p style="font-size:.82em;opacity:.85;margin-bottom:4px">
+                        The new package will be downloaded and installed, then Polaris
+                        restarts on the new version — no password needed.
+                    </p>
+                    <p class="update-error" x-show="update.error" x-text="update.error"
+                       style="color:var(--danger,#f87171);font-size:.82em;margin-top:8px"></p>
+                    <div class="modal-actions" style="margin-top:14px">
+                        <button class="btn btn-sm" @click="update.modalOpen = false">Cancel</button>
+                        <button class="btn btn-sm btn-primary" @click="installUpdate()">Download &amp; install</button>
+                    </div>
+                </div>
+            </template>
+
+            <!-- Installing / progress -->
+            <template x-if="update.installing">
+                <div style="text-align:center;padding:10px 0">
+                    <div class="spinner" style="margin:0 auto 10px"></div>
+                    <p x-text="update.progress || 'Installing update…'"></p>
+                    <p style="opacity:.7;font-size:.8em;margin-top:6px">
+                        The service will restart automatically. This page will reload when the
+                        new version is live — don't close it.
+                    </p>
+                </div>
+            </template>
+
+            <!-- Done -->
+            <template x-if="update.done">
+                <div style="text-align:center;padding:10px 0">
+                    <p style="font-size:1.4em">✅</p>
+                    <p>Update installed. Reloading…</p>
+                </div>
+            </template>
+        </div>
+    </div>
+
     <div class="term-modal-overlay" x-show="term.modalOpen" x-cloak
          @click.self="term.modalOpen = false">
         <div class="term-window">
@@ -14060,7 +14137,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260615-srvbge"></script>
+    <script src="/js/app.js?v=20260616-autoupd"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

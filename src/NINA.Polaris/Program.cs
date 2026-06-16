@@ -307,6 +307,10 @@ builder.Services.AddSingleton<NINA.Image.Gpu.IGpuCompute>(sp => {
 builder.Services.AddSingleton<FileBrowserService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.SirilService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.GraXpertService>();
+// Self-update (SBC .deb installs): checks GitHub releases + installs the new
+// .deb on request. AddHttpClient gives it an IHttpClientFactory.
+builder.Services.AddHttpClient();
+builder.Services.AddSingleton<NINA.Polaris.Services.External.UpdateService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.CropService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.FrameAnalysisService>();
 // TLS-2: DuckDNS HTTP client for setting TXT records during ACME
@@ -1020,6 +1024,7 @@ app.MapSensorAnalysisEndpoints();
 app.MapSirilEndpoints();
 app.MapDssEndpoints();
 app.MapGraXpertEndpoints();
+app.MapUpdateEndpoints();
 app.MapCropEndpoints();
 app.MapAnalysisEndpoints();
 

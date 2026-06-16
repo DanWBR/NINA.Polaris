@@ -1,0 +1,24 @@
+// PolicyKit rule shipped by the polaris .deb. Grants the 'polaris'
+// system user (created in postinst) the ability to start the on-demand
+// self-update unit, used by UpdateService when the browser POSTs
+// /api/update/install:
+//
+//   systemctl start polaris-self-update.service
+//
+// That unit (running as root, in its own cgroup) installs a .deb that
+// Polaris already downloaded into /home/polaris/.cache, then exits. The
+// install restarts polaris.service to swap in the new binary.
+//
+// Without this rule systemctl returns "Interactive authentication
+// required" and the update fails. Scope is intentionally narrow: only
+// the polaris user, only the polaris-self-update.service unit — the same
+// passwordless pattern as the power / clock / NetworkManager rules.
+polkit.addRule(function(action, subject) {
+    if (subject.user != "polaris") return;
+
+    if ((action.id == "org.freedesktop.systemd1.manage-units"
+            || action.id == "org.freedesktop.systemd1.manage-unit-files")
+        && action.lookup("unit") == "polaris-self-update.service") {
+        return polkit.Result.YES;
+    }
+});
