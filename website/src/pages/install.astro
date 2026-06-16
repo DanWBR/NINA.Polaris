@@ -97,9 +97,26 @@ const statusClass = (s: string) => {
         {g.images.update && (
           <div class="img-update">
             <h3 class="img-update-title">{g.images.update.title}</h3>
-            <p class="img-update-intro">{g.images.update.intro}</p>
-            <pre><code>{g.images.update.code}</code></pre>
-            {g.images.update.note && <p class="muted-note">{g.images.update.note}</p>}
+
+            {g.images.update.selfBody && (
+              <div class="self-update">
+                <div class="self-update-head">
+                  <span class="sq-icon" style="--ic: #4caf50"><Icon name="update" /></span>
+                  <h4>{g.images.update.selfTitle}</h4>
+                  {g.images.update.selfBadge && <span class="self-badge">{g.images.update.selfBadge}</span>}
+                </div>
+                <p class="img-update-intro">{g.images.update.selfBody}</p>
+              </div>
+            )}
+
+            {g.images.update.code && (
+              <div class="manual-update">
+                {g.images.update.manualTitle && <h4 class="manual-title">{g.images.update.manualTitle}</h4>}
+                <p class="img-update-intro">{g.images.update.intro}</p>
+                <pre><code>{g.images.update.code}</code></pre>
+                {g.images.update.note && <p class="muted-note">{g.images.update.note}</p>}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -502,10 +519,33 @@ const statusClass = (s: string) => {
     padding-top: 24px;
     max-width: 780px;
   }
-  .img-update-title { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+  .img-update-title { font-size: 17px; font-weight: 700; margin-bottom: 16px; }
   .img-update-intro { font-size: 14.5px; color: var(--text-muted); line-height: 1.6; }
   .img-update pre { margin: 14px 0 0; }
   .img-update .muted-note { margin-top: 12px; }
+
+  .self-update {
+    background: rgba(76, 175, 80, 0.06);
+    border: 1px solid rgba(76, 175, 80, 0.28);
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin-bottom: 26px;
+  }
+  .self-update-head { display: flex; align-items: center; gap: 11px; margin-bottom: 10px; }
+  .self-update-head h4 { font-size: 16px; font-weight: 700; }
+  .self-badge {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--success);
+    border: 1px solid rgba(76, 175, 80, 0.45);
+    background: rgba(76, 175, 80, 0.1);
+    border-radius: 999px;
+    padding: 3px 9px;
+    white-space: nowrap;
+  }
+  .manual-title { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
 
   .img-grid {
     display: grid;

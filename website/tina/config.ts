@@ -221,7 +221,11 @@ export default defineConfig({
                 label: 'Update instructions',
                 fields: [
                   { type: 'string', name: 'title', label: 'Title' },
-                  { type: 'string', name: 'intro', label: 'Intro', ui: { component: 'textarea' } },
+                  { type: 'string', name: 'selfTitle', label: 'Self-update title' },
+                  { type: 'string', name: 'selfBadge', label: 'Self-update badge' },
+                  { type: 'string', name: 'selfBody', label: 'Self-update body', ui: { component: 'textarea' } },
+                  { type: 'string', name: 'manualTitle', label: 'Manual update title' },
+                  { type: 'string', name: 'intro', label: 'Manual intro', ui: { component: 'textarea' } },
                   { type: 'string', name: 'code', label: 'Commands', ui: { component: 'textarea' } },
                   { type: 'string', name: 'note', label: 'Note', ui: { component: 'textarea' } },
                 ],

@@ -129,8 +129,12 @@
       }
     ],
     "update": {
-      "title": "Updating Polaris on a flashed image",
-      "intro": "Already running a flashed image? SSH in (user polaris, password polaris), download the latest .deb, and install it over the running version. Your profiles and data are kept.",
+      "title": "Keeping Polaris up to date",
+      "selfTitle": "One-click in-app update",
+      "selfBadge": "Recommended",
+      "selfBody": "Every .deb install (including the ready-to-flash images above) can update itself. Polaris checks GitHub for new releases on startup and once an hour; when a newer build exists for your board's architecture, a green Update badge appears in the top status bar with the new version. Click it for the release notes, then Download & install: Polaris fetches the matching .deb, installs it, and reloads on the new version. No SSH, no apt, and no sudo password (authorized by a tightly-scoped PolicyKit rule). Leave the page open while it refreshes itself. Your profiles and data are kept.",
+      "manualTitle": "Manual update over SSH",
+      "intro": "Prefer the command line, or updating several rigs at once? SSH in (user polaris, password polaris), download the latest .deb, and install it over the running version. Your profiles and data are kept.",
       "code": "ssh polaris@<ip-or-hostname>\nwget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb\nsudo dpkg -i polaris_arm64.deb",
       "note": "Use polaris_arm64.deb for ARM SBCs (Raspberry Pi, Orange Pi); pick the package that matches your board otherwise. Change the default polaris password after first login."
     }
