@@ -74,9 +74,9 @@ import { site, hero } from '../data/site';
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
   }
   .hero-eyebrow {
-    font-size: 12px;
+    font-size: clamp(9px, 2.2vw, 12px);
     font-weight: 600;
-    letter-spacing: 1.5px;
+    letter-spacing: 1.2px;
     text-transform: uppercase;
     color: var(--accent);
     padding: 6px 14px;
@@ -84,6 +84,7 @@ import { site, hero } from '../data/site';
     border-radius: 999px;
     background: rgba(var(--accent-rgb), 0.09);
     margin-bottom: 24px;
+    white-space: nowrap;
   }
   .hero-title {
     font-size: clamp(33px, 5.6vw, 70px);
