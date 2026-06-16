@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260615-osccolor">
+    <link rel="stylesheet" href="/css/app.css?v=20260615-planflip">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -7527,6 +7527,19 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <label class="chk"><input type="checkbox" x-model="plan.autoFocusOnStart" @change="savePlan()"> Auto-focus at start</label>
                             <label class="chk"><input type="checkbox" x-model="plan.autoFocusEachTarget" @change="savePlan()"> Auto-focus before each target</label>
                         </div>
+                        <!-- Meridian-flip tuning. Only shown when auto flip is on;
+                             these apply to the whole plan when it starts. -->
+                        <div class="plan-set-flip" x-show="plan.autoMeridianFlip" x-cloak>
+                            <div class="plan-set-end-title">Meridian flip</div>
+                            <div class="plan-set-toggles">
+                                <label class="chk">Flip when past meridian by (min)
+                                    <input type="number" min="0" max="60" step="1" style="width:4em"
+                                           x-model.number="plan.meridianFlipMinutesAfter" @change="savePlan()">
+                                </label>
+                                <label class="chk"><input type="checkbox" x-model="plan.meridianFlipRecenter" @change="savePlan()"> Re-center after flip (plate solve)</label>
+                                <label class="chk"><input type="checkbox" x-model="plan.meridianFlipAutoFocus" @change="savePlan()"> Auto-focus after flip</label>
+                            </div>
+                        </div>
                         <div class="plan-set-end">
                             <div class="plan-set-end-title">End of session</div>
                             <label class="chk"><input type="checkbox" x-model="plan.endWarmCoolerOff" @change="savePlan()"> Warm camera + cooler off</label>
@@ -14025,7 +14038,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260615-osccolor"></script>
+    <script src="/js/app.js?v=20260615-planflip"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

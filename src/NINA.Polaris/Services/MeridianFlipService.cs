@@ -33,7 +33,9 @@ namespace NINA.Polaris.Services;
 /// </summary>
 public class MeridianFlipService {
     private readonly EquipmentManager _equip;
-    private readonly PHD2Client _phd2;
+    // Pause/resume target the ACTIVE guider (PHD2 or the native guider), not
+    // PHD2 specifically, so the flip works the same with either backend.
+    private readonly ActiveGuiderProvider _guiders;
     private readonly SlewCenterService _slewCenter;
     private readonly AutoFocusService _autoFocus;
     private readonly ProfileService _profile;
@@ -48,10 +50,10 @@ public class MeridianFlipService {
     public string? LastFlipError { get; private set; }
     public int FlipsCompleted { get; private set; }
 
-    public MeridianFlipService(EquipmentManager equip, PHD2Client phd2, SlewCenterService slewCenter,
+    public MeridianFlipService(EquipmentManager equip, ActiveGuiderProvider guiders, SlewCenterService slewCenter,
         AutoFocusService autoFocus, ProfileService profile, ILogger<MeridianFlipService> logger) {
         _equip = equip;
-        _phd2 = phd2;
+        _guiders = guiders;
         _slewCenter = slewCenter;
         _autoFocus = autoFocus;
         _profile = profile;
@@ -170,14 +172,17 @@ public class MeridianFlipService {
             LastFlipError = null;
         }
 
+        // Capture the active guider once so pause + resume target the same
+        // backend even if the active rig were swapped mid-flip.
+        var guider = _guiders.Active;
         bool wasGuiding = false;
         try {
-            // 1. Pause PHD2 if guiding
-            if (_phd2.IsConnected && _phd2.IsGuiding) {
-                _logger.LogInformation("Meridian flip: pausing PHD2");
+            // 1. Pause the active guider if guiding
+            if (guider.IsConnected && guider.IsGuiding) {
+                _logger.LogInformation("Meridian flip: pausing guider ({Backend})", guider.Backend);
                 wasGuiding = true;
-                try { await _phd2.PauseAsync(); } catch (Exception ex) {
-                    _logger.LogWarning(ex, "PHD2 pause failed (continuing)");
+                try { await guider.PauseAsync(); } catch (Exception ex) {
+                    _logger.LogWarning(ex, "Guider pause failed (continuing)");
                 }
             }
 
@@ -233,14 +238,16 @@ public class MeridianFlipService {
             }
 
             // 6. Resume guiding
-            if (wasGuiding && _phd2.IsConnected) {
+            if (wasGuiding && guider.IsConnected) {
                 State = MeridianFlipState.ResumingGuiding;
-                _logger.LogInformation("Meridian flip: resuming PHD2 guiding");
-                try { await _phd2.ResumeAsync(); } catch (Exception ex) {
-                    _logger.LogWarning(ex, "PHD2 resume failed");
+                _logger.LogInformation("Meridian flip: resuming guider ({Backend})", guider.Backend);
+                try { await guider.ResumeAsync(); } catch (Exception ex) {
+                    _logger.LogWarning(ex, "Guider resume failed");
                 }
-                // PHD2 may need to recalibrate after a flip; that's handled by
-                // PHD2's own auto-flip-calibration setting and we don't force it here.
+                // The guider may need to re-establish after a flip: PHD2 handles
+                // that via its own auto-flip-calibration setting; the native
+                // guider mirrors/recalibrates on its pier-side change. We don't
+                // force either here.
             }
 
             lock (_stateLock) {
@@ -258,8 +265,8 @@ public class MeridianFlipService {
                 LastFlipError = "Cancelled";
             }
             // Try to resume guiding even on cancel
-            if (wasGuiding && _phd2.IsConnected) {
-                try { await _phd2.ResumeAsync(); } catch { }
+            if (wasGuiding && guider.IsConnected) {
+                try { await guider.ResumeAsync(); } catch { }
             }
             return false;
         } catch (Exception ex) {
@@ -268,8 +275,8 @@ public class MeridianFlipService {
                 State = MeridianFlipState.Idle;
                 LastFlipError = ex.Message;
             }
-            if (wasGuiding && _phd2.IsConnected) {
-                try { await _phd2.ResumeAsync(); } catch { }
+            if (wasGuiding && guider.IsConnected) {
+                try { await guider.ResumeAsync(); } catch { }
             }
             return false;
         } finally {

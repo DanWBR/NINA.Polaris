@@ -39,6 +39,7 @@ public class PlanRunnerService : IHostedService {
     private readonly PlanCompilerService _compiler;
     private readonly AltitudeService _altitude;
     private readonly PowerService _power;
+    private readonly MeridianFlipService _flip;
     private readonly ILogger<PlanRunnerService> _logger;
 
     private readonly object _lock = new();
@@ -55,11 +56,13 @@ public class PlanRunnerService : IHostedService {
     private enum Phase { Idle, Main, Ending }
 
     public PlanRunnerService(AdvancedSequenceEngine engine, PlanCompilerService compiler,
-        AltitudeService altitude, PowerService power, ILogger<PlanRunnerService> logger) {
+        AltitudeService altitude, PowerService power, MeridianFlipService flip,
+        ILogger<PlanRunnerService> logger) {
         _engine = engine;
         _compiler = compiler;
         _altitude = altitude;
         _power = power;
+        _flip = flip;
         _logger = logger;
     }
 
@@ -83,6 +86,24 @@ public class PlanRunnerService : IHostedService {
                 return (false, "A sequence is already running (Advanced/Autorun). Stop it first.");
             if (plan.Targets.All(t => !t.Enabled))
                 return (false, "The plan has no enabled targets.");
+
+            // Apply the plan's meridian-flip tuning to the shared service the
+            // MeridianFlipTrigger reads at runtime. Preserve the service's other
+            // settings (pause-before, tolerance, settle, live-stack flag) and
+            // only override the three knobs exposed in the PLAN panel.
+            if (plan.AutoMeridianFlip) {
+                var s = _flip.Settings;
+                _flip.UpdateSettings(new MeridianFlipSettings {
+                    Enabled = true,
+                    MinutesAfterMeridian = plan.MeridianFlipMinutesAfter,
+                    RecenterAfterFlip = plan.MeridianFlipRecenter,
+                    AutoFocusAfterFlip = plan.MeridianFlipAutoFocus,
+                    PauseBeforeMeridianMinutes = s.PauseBeforeMeridianMinutes,
+                    RecenterToleranceArcsec = s.RecenterToleranceArcsec,
+                    SettleSecondsAfterFlip = s.SettleSecondsAfterFlip,
+                    AutoFlipDuringLiveStack = s.AutoFlipDuringLiveStack
+                });
+            }
 
             var doc = _compiler.Compile(plan);
             _mainPlannedFrames = CountFrames(doc.Root);

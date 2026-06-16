@@ -49,6 +49,12 @@ public class ImagingPlan {
     // ---- Plan-wide automation toggles --------------------------------
     public bool AutoGuiding { get; set; } = true;
     public bool AutoMeridianFlip { get; set; } = true;
+    // Meridian-flip tuning surfaced in the PLAN panel. Applied to the shared
+    // MeridianFlipService when the plan starts (only the three knobs the user
+    // tends to tweak per session; the rest stay at the service defaults).
+    public double MeridianFlipMinutesAfter { get; set; } = 5;
+    public bool MeridianFlipRecenter { get; set; } = true;
+    public bool MeridianFlipAutoFocus { get; set; } = false;
     public bool AutoCooling { get; set; } = false;
     public double CoolTargetC { get; set; } = -10;
     /// <summary>Run an auto-focus pass once at the start of the plan (needs a focuser).</summary>

@@ -36,15 +36,15 @@ public class SequenceEngineDitherTests {
         var profile = new ProfileService(emptyConfig, NullLogger<ProfileService>.Instance);
         var stream = new CameraStreamService(equip, relay, NullLogger<CameraStreamService>.Instance);
         var slewCenter = new SlewCenterService(equip, plateSolve, profile, stream, NullLogger<SlewCenterService>.Instance);
-        var meridianFlip = new MeridianFlipService(equip, phd2, slewCenter, autoFocus, profile,
+        var native = new NativeGuider(equip, profile, NullLogger<NativeGuider>.Instance);
+        var guiders = new ActiveGuiderProvider(profile, phd2, native);
+        var meridianFlip = new MeridianFlipService(equip, guiders, slewCenter, autoFocus, profile,
             NullLogger<MeridianFlipService>.Instance);
         var imageWriter = new ImageWriterService(equip, profile, NullLogger<ImageWriterService>.Instance);
         var graXpert = new NINA.Polaris.Services.External.GraXpertService(emptyConfig, profile,
             NullLogger<NINA.Polaris.Services.External.GraXpertService>.Instance);
         var flatWizard = new FlatWizardService(equip, imageWriter, profile,
             NullLogger<FlatWizardService>.Instance, emptyConfig);
-        var native = new NativeGuider(equip, profile, NullLogger<NativeGuider>.Instance);
-        var guiders = new ActiveGuiderProvider(profile, phd2, native);
         return new SequenceEngine(equip, relay, liveStack, phd2, guiders, meridianFlip, imageWriter,
             graXpert, flatWizard, profile, NullLogger<SequenceEngine>.Instance);
     }

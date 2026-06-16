@@ -15296,6 +15296,7 @@ function ninaApp() {
                 startMode: 'Now', startAtUtc: '21:00',
                 endMode: 'AllDone', endAtUtc: '05:00',
                 autoGuiding: true, autoMeridianFlip: true,
+                meridianFlipMinutesAfter: 5, meridianFlipRecenter: true, meridianFlipAutoFocus: false,
                 autoCooling: false, coolTargetC: -10, autoFocusOnStart: false, autoFocusEachTarget: false,
                 endWarmCoolerOff: false, endGoHome: false, endEafZero: false, endShutdownHost: false,
                 targets: []
