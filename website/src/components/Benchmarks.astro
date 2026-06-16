@@ -32,6 +32,7 @@ const fruitFor = (name: string): 'raspberry' | 'orange' | null => {
             <th>Stacking</th>
             <th>Capture</th>
             <th>Memory BW</th>
+            <th>Approx. USD</th>
           </tr>
         </thead>
         <tbody>
@@ -58,6 +59,7 @@ const fruitFor = (name: string): 'raspberry' | 'orange' | null => {
                 <td>{r.stacking}</td>
                 <td>{r.capture}</td>
                 <td>{r.memory}</td>
+                <td class="price">{r.price}</td>
               </tr>
             );
           })}
@@ -84,7 +86,7 @@ const fruitFor = (name: string): 'raspberry' | 'orange' | null => {
   .bench {
     width: 100%;
     border-collapse: collapse;
-    min-width: 720px;
+    min-width: 840px;
     font-size: 14.5px;
   }
   .bench th,
@@ -107,6 +109,7 @@ const fruitFor = (name: string): 'raspberry' | 'orange' | null => {
   .bench tbody tr:last-child { border-bottom: 0; }
   .bench tbody td { color: var(--text-muted); }
   .device { color: var(--text); font-weight: 600; }
+  .bench td.price { color: var(--text); font-weight: 600; font-family: var(--font-mono); white-space: nowrap; }
   .device a { color: var(--text); text-decoration: none; }
   .device a:hover { color: var(--accent); text-decoration: underline; }
 

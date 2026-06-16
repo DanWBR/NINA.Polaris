@@ -86,6 +86,7 @@
         "stacking": "22.2 Mpx/s",
         "capture": "11.5 Mpx/s",
         "memory": "4.7 GB/s",
+        "price": "~$55",
         "highlight": false
       },
       {
@@ -96,6 +97,7 @@
         "stacking": "39.9 Mpx/s",
         "capture": "27.3 Mpx/s",
         "memory": "7.7 GB/s",
+        "price": "~$80",
         "highlight": false
       },
       {
@@ -106,6 +108,7 @@
         "stacking": "46.2 Mpx/s",
         "capture": "30.9 Mpx/s",
         "memory": "23.1 GB/s",
+        "price": "~$140",
         "highlight": true
       },
       {
@@ -116,10 +119,11 @@
         "stacking": "99.4 Mpx/s",
         "capture": "89 Mpx/s",
         "memory": "41 GB/s",
+        "price": "~$1,800",
         "highlight": false
       }
     ],
-    "note": "Polaris score is the headline figure; Mpx/s columns are live-stack and capture throughput. The Orange Pi 5 Pro is shown with the OpenCL GPU backend on (242; 227 CPU only) and the Pi 5 at its best, actively cooled run. Full per-device tables and methodology in the benchmark docs.",
+    "note": "Polaris score is the headline figure; Mpx/s columns are live-stack and capture throughput. The Orange Pi 5 Pro is shown with the OpenCL GPU backend on (242; 227 CPU only) and the Pi 5 at its best, actively cooled run. Prices are rough street estimates for the board alone (no SD card, power, or case); the Core i9 row is a full desktop build for reference, not an SBC. Full per-device tables and methodology in the benchmark docs.",
     "docUrl": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/user-guide/benchmark.md"
   },
   "closing": {

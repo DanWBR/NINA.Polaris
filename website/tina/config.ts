@@ -98,6 +98,7 @@ export default defineConfig({
                   { type: 'string', name: 'stacking', label: 'Stacking (Mpx/s)' },
                   { type: 'string', name: 'capture', label: 'Capture (Mpx/s)' },
                   { type: 'string', name: 'memory', label: 'Memory bandwidth' },
+                  { type: 'string', name: 'price', label: 'Approx. price (USD)' },
                   { type: 'boolean', name: 'highlight', label: 'Highlight this row' },
                 ],
               },
