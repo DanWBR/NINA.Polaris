@@ -141,7 +141,7 @@ public static class FITSWriter {
         // ---- Target ----
         if (!string.IsNullOrEmpty(meta.Target.Name)) {
             AddStr(cards, "OBJECT", meta.Target.Name);
-            Add(cards, "OBJCTRA", Fmt(meta.Target.RightAscension * 15.0), "Target RA (deg)");
+            Add(cards, "OBJCTRA", Fmt(RaToDeg(meta.Target.RightAscension)), "Target RA (deg)");
             Add(cards, "OBJCTDEC", Fmt(meta.Target.Declination), "Target Dec (deg)");
             if (Math.Abs(meta.Target.Rotation) > 0.001)
                 Add(cards, "OBJCTROT", Fmt(meta.Target.Rotation), "Planned rotation (deg)");
@@ -178,7 +178,7 @@ public static class FITSWriter {
             Add(cards, "FOCRATIO", Fmt(meta.Telescope.FocalRatio), "Focal ratio (f/N)");
         // RA/DEC are hours / degrees in our ImageMetaData
         if (meta.Telescope.RightAscension != 0 || meta.Telescope.Declination != 0) {
-            Add(cards, "RA", Fmt(meta.Telescope.RightAscension * 15.0), "Mount RA (deg)");
+            Add(cards, "RA", Fmt(RaToDeg(meta.Telescope.RightAscension)), "Mount RA (deg)");
             Add(cards, "DEC", Fmt(meta.Telescope.Declination), "Mount Dec (deg)");
         }
         if (meta.Telescope.SideOfPier != PierSide.pierUnknown) {
@@ -306,6 +306,16 @@ public static class FITSWriter {
         // Strip trailing zeros but keep at least one decimal digit
         return v.ToString("0.######", CultureInfo.InvariantCulture);
     }
+
+    /// <summary>
+    /// Convert a right ascension to degrees for the FITS RA / OBJCTRA keywords.
+    /// The metadata contract is RA in HOURS (0–24), so the normal case is
+    /// hours × 15. Defensive guard: if a mount adapter ever hands us a value
+    /// already in degrees (> 24, which is impossible as hours), pass it through
+    /// instead of multiplying again — otherwise we'd write a garbage RA like
+    /// 1263° (84.2° × 15) that breaks plate solving. A no-op for valid hours.
+    /// </summary>
+    private static double RaToDeg(double ra) => ra > 24.0 ? ra : ra * 15.0;
 }
 
 public class RotatorMetaData {
