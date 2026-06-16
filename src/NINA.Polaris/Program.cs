@@ -456,12 +456,17 @@ app.Services.GetRequiredService<RefocusSuggestionService>();
     ApplySaveFramesPolicy("startup");
     profiles.EquipmentProfileActivated += _ => ApplySaveFramesPolicy("rig-switch");
 
-    // Per-rig colour (OSC debayer → RGB) live-stacking toggle. Same
-    // dual-source pattern as save-frames: the runtime flag wins at
-    // frame time, the profile field persists. Default OFF for legacy
-    // profiles. Takes full effect on the next Reset (reference frame).
+    // Colour (OSC debayer → RGB) live-stacking. This is now ALWAYS engaged:
+    // OSC colour stacking is the only mode for one-shot-colour cameras and the
+    // default everywhere. It is harmless on mono/narrowband rigs because the
+    // service only actually debayers when the reference frame is Bayered
+    // (LiveStackingService: _colorActive = ColorStacking && props.IsBayered);
+    // a mono frame has no Bayer pattern, so it falls back to plain mono
+    // accumulation. The per-rig LiveStackColor profile field is no longer
+    // consulted (the UI toggle was removed). Takes full effect on the next
+    // Reset (reference frame).
     void ApplyColorStackingPolicy(string trigger) {
-        var enabled = profiles.ActiveEquipmentProfile?.LiveStackColor ?? false;
+        const bool enabled = true;
         if (liveStack.ColorStacking != enabled) {
             liveStack.ColorStacking = enabled;
             liveStackLogger.LogInformation(

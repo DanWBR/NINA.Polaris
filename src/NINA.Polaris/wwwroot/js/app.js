@@ -130,13 +130,12 @@ function ninaApp() {
         // most users want both the integrated preview AND an
         // archive they can re-stack offline.
         liveStackSaveFrames: true,
-        // Colour (OSC debayer → RGB) live-stacking toggle. Mirrors the
-        // LIVE tab checkbox. PUT /api/livestack/color updates both the
-        // running service flag and the active rig's LiveStackColor
-        // profile field. Default OFF (mono/CFA accumulation). Takes
-        // full effect on the next Reset (reference frame). liveStackColorActive
-        // reflects whether colour is actually engaged this session.
-        liveStackColor: false,
+        // Colour (OSC debayer → RGB) live-stacking. Now ALWAYS on (the toggle
+        // was removed): OSC cameras stack in colour as the only mode, mono rigs
+        // fall back to plain accumulation automatically (no Bayer pattern on
+        // their frames). liveStackColorActive reflects whether colour is
+        // actually engaged this session (server: ColorStacking + Bayered ref).
+        liveStackColor: true,
         liveStackColorActive: false,
 
         // LSTR-5: live-stack auto-refocus + auto-recenter triggers.
@@ -14565,9 +14564,10 @@ function ninaApp() {
             // post-redesign) so legacy rigs adopt the same friendly
             // behaviour without a manual flip.
             this.liveStackSaveFrames = rig.liveStackSaveFramesToDisk !== false;
-            // Per-rig colour-stacking toggle. Defaults OFF (mono/CFA)
-            // when the field is missing, matching the server default.
-            this.liveStackColor = rig.liveStackColor === true;
+            // Colour stacking is always on now (OSC = colour only; mono falls
+            // back automatically). The per-rig LiveStackColor field is no longer
+            // consulted and the toggle was removed.
+            this.liveStackColor = true;
             // Auto-pause cap in MINUTES (UI unit). Backend stores
             // seconds. 0 = unlimited (default).
             this.liveStackMaxMinutes = Math.round(
