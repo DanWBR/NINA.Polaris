@@ -783,6 +783,13 @@ function ninaApp() {
         equipFlatBrightness: 128,
         equipDomeTarget: 0,
         equipCameraInfo: { coolerOn: false, binX: 0, binY: 0, bitDepth: 0 },
+        // Optimistic cooler toggle: the /ws/status tick replaces equipCameraInfo
+        // every second, so a freshly-clicked toggle would snap back to the
+        // camera's old coolerOn until the driver reports the change. Hold the
+        // user's intent for a short window so the toggle doesn't flicker; the WS
+        // value takes over again as soon as it agrees (or the window expires).
+        _coolerPendingValue: null,
+        _coolerPendingUntil: 0,
 
         // Camera driver state (DSLR support). cameraDriver picks
         // which backend the next Select call uses ('indi' default,
@@ -17784,6 +17791,13 @@ function ninaApp() {
         },
 
         async setCooler(enabled, temp) {
+            // Optimistically reflect the user's intent so the toggle holds its
+            // new position instead of snapping back to the camera's old coolerOn
+            // on the next 1 Hz status tick. The WS value takes over again as
+            // soon as it agrees (handled in the status handler) or after ~6 s.
+            this._coolerPendingValue = !!enabled;
+            this._coolerPendingUntil = Date.now() + 6000;
+            this.equipCameraInfo = { ...this.equipCameraInfo, coolerOn: !!enabled };
             try {
                 // Explicit null check: `temp || null` collapses 0 to
                 // null because 0 is falsy, which silently swallowed
@@ -17797,6 +17811,10 @@ function ninaApp() {
                     enabled, targetTemperature: target
                 });
             } catch (e) {
+                // Command failed — drop the optimistic hold so the toggle
+                // reflects the camera's real state on the next tick.
+                this._coolerPendingValue = null;
+                this._coolerPendingUntil = 0;
                 this.toast('Cooler command failed', 'error');
             }
         },
@@ -26313,8 +26331,23 @@ function ninaApp() {
                 if (!this.equipCameraChoice && eq.camera.name) {
                     this.equipCameraChoice = eq.camera.name;
                 }
+                // Cooler: honor a recent optimistic toggle until the camera
+                // reports the same value (or the hold window expires), so the
+                // toggle doesn't flicker between the click and the driver
+                // catching up.
+                let coolerOn = eq.camera.coolerOn || false;
+                if (this._coolerPendingValue !== null && Date.now() < this._coolerPendingUntil) {
+                    if (coolerOn === this._coolerPendingValue) {
+                        this._coolerPendingValue = null; this._coolerPendingUntil = 0;
+                    } else {
+                        coolerOn = this._coolerPendingValue;
+                    }
+                } else if (this._coolerPendingValue !== null) {
+                    // Window expired — release the hold, trust the camera.
+                    this._coolerPendingValue = null; this._coolerPendingUntil = 0;
+                }
                 this.equipCameraInfo = {
-                    coolerOn: eq.camera.coolerOn || false,
+                    coolerOn: coolerOn,
                     binX: eq.camera.binX || 0,
                     binY: eq.camera.binY || 0,
                     bitDepth: eq.camera.bitDepth || 0,
