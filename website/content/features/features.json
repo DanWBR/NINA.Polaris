@@ -106,7 +106,7 @@
         { "label": "Plan-level automation", "text": "auto guiding, auto cooling (with target temp), per-target or initial auto-focus, and auto meridian flip with exposed flip tuning (minutes-after, recenter, autofocus-on-flip)." },
         { "label": "End actions", "text": "warm and cooler-off, park or go-home, focuser-to-zero, and a confirm-gated host shutdown." },
         { "label": "Elevation chart", "text": "of each target across the night for sanity-checking the order." },
-        { "label": "Global plan library", "text": "saved plans are runnable with any active rig." }
+        { "label": "Global plan library", "text": "saved plans live in a global library, runnable with any active rig, and can be exported and imported as JSON to share between hosts." }
       ]
     },
     {
@@ -114,7 +114,7 @@
       "intro": "Real-time electronically-assisted-astronomy stacking that builds an image as frames arrive.",
       "items": [
         { "label": "Continuous integration", "text": "with live alignment (star matching) and a growing preview." },
-        { "label": "Per-frame pre-processing", "text": "optional calibration (auto-matched master dark/flat/bias) and GraXpert background extraction applied before each frame is added." },
+        { "label": "Per-frame pre-processing", "text": "optional calibration (auto-matched master dark/flat/bias) and GraXpert background extraction applied before each frame is added, running wherever the stack runs: in the browser via WebAssembly and WebGPU, or server-side through the GraXpert CLI or the RK3588 NPU." },
         { "label": "OSC color stacking", "text": "automatic for one-shot-color cameras." },
         { "label": "Auto re-focus and re-center triggers", "text": "kick off an auto-focus or a re-center when HFR drifts or the target wanders." },
         { "label": "Save the current stack", "text": "to FITS at any time, into a dedicated stacked folder." },
