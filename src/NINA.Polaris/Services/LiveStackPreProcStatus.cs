@@ -96,4 +96,11 @@ public class LiveStackPreProcStatus {
         FramesBgeFallback = fallback;
         if (error != null) LastBgeError = error;
     }
+
+    /// <summary>Server-side BGE (Full stack mode): increment the per-session
+    /// counters one frame at a time as GraXpert BGE runs on the host.</summary>
+    public void RecordServerBge(bool ok, string? error) {
+        if (ok) FramesBgeProcessed++;
+        else { FramesBgeFallback++; if (error != null) LastBgeError = error; }
+    }
 }

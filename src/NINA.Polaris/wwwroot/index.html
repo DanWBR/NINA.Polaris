@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260615-ghreport">
+    <link rel="stylesheet" href="/css/app.css?v=20260615-srvbge">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -1611,9 +1611,12 @@
                                  x-show="liveStackPreProc.bgeEnabled
                                           && !liveStackStatus?.preProc?.bge?.supportedThisSession"
                                  style="font-size:11px;">
-                                ⓘ BGE only runs in client-mode stacking
-                                (current stack mode: server-side). Switch the
-                                rig's "Compute mode" to client/auto to enable.
+                                ⓘ BGE isn't available this session. It runs
+                                client-side in client/auto compute mode, or
+                                server-side when stacking on the host if the
+                                GraXpert CLI (or an RK3588 NPU) is installed.
+                                Install GraXpert on the host, or switch the rig's
+                                "Compute mode" to client/auto.
                             </div>
                             <div class="livestack-triggers-row">
                                 <label>
@@ -14057,7 +14060,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260615-ghreport"></script>
+    <script src="/js/app.js?v=20260615-srvbge"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

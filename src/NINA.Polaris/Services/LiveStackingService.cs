@@ -19,6 +19,8 @@ using NINA.Image.Gpu;
 using NINA.Image.ImageAnalysis;
 using NINA.Image.ImageData;
 using NINA.Image.Interfaces;
+using NINA.Image.FileFormat.FITS;
+using NINA.Polaris.Services.External;
 
 namespace NINA.Polaris.Services;
 
@@ -228,6 +230,11 @@ public class LiveStackingService {
     // alignment-based auto-detect (B1) still handles a flip on its own.
     private readonly EquipmentManager? _equipment;
     private readonly MeridianFlipService? _meridian;
+    // Optional GraXpert backend for server-side BGE in Full stack mode.
+    private readonly GraXpertService? _graxpert;
+    // Latches when GraXpert (CLI + NPU) is absent so we stop retrying BGE
+    // every frame and don't spam the log; reset on Reset().
+    private bool _serverBgeUnavailable;
     public LiveStackPreProcStatus PreProcStatus { get; } = new();
 
     public LiveStackingService(ImageRelayService relay,
@@ -237,7 +244,8 @@ public class LiveStackingService {
                                 LiveStackPreProcessor? preProcessor = null,
                                 EquipmentManager? equipment = null,
                                 MeridianFlipService? meridian = null,
-                                IGpuCompute? gpu = null) {
+                                IGpuCompute? gpu = null,
+                                GraXpertService? graxpert = null) {
         _relay = relay;
         _writer = writer;
         _logger = logger;
@@ -245,6 +253,7 @@ public class LiveStackingService {
         _preProcessor = preProcessor;
         _equipment = equipment;
         _meridian = meridian;
+        _graxpert = graxpert;
         // GPU compute is optional; null (and the test doubles) get the CPU path.
         _gpu = gpu ?? new CpuGpuCompute();
         // SNR-3: keep TargetSnr aligned with the active rig until the
@@ -264,6 +273,56 @@ public class LiveStackingService {
             };
         }
     }
+    /// <summary>Run GraXpert background extraction on one live-stack frame
+    /// (Full mode). Round-trips through a temp FITS because the GraXpert
+    /// backends (CLI + RK3588 NPU) work on files. Returns the BGE'd pixels, or
+    /// the input unchanged on any failure. Latches <see cref="_serverBgeUnavailable"/>
+    /// when no backend is installed so we don't retry + log every frame.</summary>
+    private async Task<ushort[]> ApplyServerBgeAsync(ushort[] data, ImageProperties props,
+            ImageMetaData meta, LiveStackPreProcSettings s, CancellationToken ct) {
+        var tmpIn = Path.Combine(Path.GetTempPath(), $"polaris_lsbge_{Guid.NewGuid():N}.fits");
+        string? tmpOut = null;
+        try {
+            FITSWriter.Write(new BaseImageData(data, props, meta), tmpIn);
+            var opts = new GraXpertOptions(
+                Operation: GraXpertOperation.BackgroundExtraction,
+                Correction: string.IsNullOrWhiteSpace(s.BgeCorrection) ? "Subtraction" : s.BgeCorrection,
+                Smoothing: s.BgeSmoothing,
+                UseNpu: true);
+            var res = await _graxpert!.ProcessFrameAsync(tmpIn, opts, ct);
+            if (res.Error != null || string.IsNullOrEmpty(res.OutputPath) || !File.Exists(res.OutputPath)) {
+                if (res.Error != null && res.Error.Contains("not installed", StringComparison.OrdinalIgnoreCase)) {
+                    _serverBgeUnavailable = true;
+                    _logger.LogWarning("Live-stack server BGE unavailable (no GraXpert CLI / NPU); "
+                        + "disabling for this session. Install GraXpert on the host or use client-side stacking.");
+                } else {
+                    _logger.LogWarning("Live-stack server BGE failed for frame {N}: {Err}",
+                        _frameCount + 1, res.Error);
+                }
+                PreProcStatus.RecordServerBge(ok: false, error: res.Error);
+                return data;
+            }
+            tmpOut = res.OutputPath;
+            BaseImageData outImg;
+            using (var fs = File.OpenRead(tmpOut)) outImg = FITSReader.Read(fs);
+            if (outImg?.Data != null
+                    && outImg.Properties.Width == props.Width
+                    && outImg.Properties.Height == props.Height) {
+                PreProcStatus.RecordServerBge(ok: true, error: null);
+                return outImg.Data;
+            }
+            PreProcStatus.RecordServerBge(ok: false, error: "BGE output dimensions mismatch");
+            return data;
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "Live-stack server BGE error on frame {N}", _frameCount + 1);
+            PreProcStatus.RecordServerBge(ok: false, error: ex.Message);
+            return data;
+        } finally {
+            try { File.Delete(tmpIn); } catch { }
+            try { if (tmpOut != null) File.Delete(tmpOut); } catch { }
+        }
+    }
+
     private double? _targetSnrOverride;
     /// <summary>Called by the /api/livestack/target-snr endpoint to
     /// distinguish a session override from a rig-default refresh.</summary>
@@ -326,6 +385,7 @@ public class LiveStackingService {
             // next frame re-resolves with the new filter/exposure/gain.
             _preProcessor?.Reset();
             PreProcStatus.Reset();
+            _serverBgeUnavailable = false;   // re-probe BGE backend next session
             _logger.LogInformation("Live stacking reset");
         }
     }
@@ -429,7 +489,10 @@ public class LiveStackingService {
         // just tracks supportedThisSession for the WS payload.
         var preProcSettings = _profiles?.ActiveEquipmentProfile?.LiveStackPreProcessing
                               ?? new LiveStackPreProcSettings();
-        PreProcStatus.BgeSupportedThisSession = (mode == StackMode.MetricsOnly);
+        // BGE is supported client-side in MetricsOnly, and now server-side in
+        // Full mode when a GraXpert backend (CLI / NPU) is present.
+        PreProcStatus.BgeSupportedThisSession = (mode == StackMode.MetricsOnly)
+            || (mode == StackMode.Full && _graxpert != null && !_serverBgeUnavailable);
         if (preProcSettings.CalibrationEnabled && _preProcessor != null) {
             var res = await _preProcessor.ApplyAsync(imageData, preProcSettings, ct);
             if (res.Success && (res.MasterDarkUsed != null
@@ -454,6 +517,17 @@ public class LiveStackingService {
                 // went wrong, there just wasn't anything to apply.
                 PreProcStatus.RecordCalibrationNoMatch();
             }
+        }
+
+        // Server-side BGE — Full (server-stacked) mode only. The client WASM
+        // path already does BGE in MetricsOnly mode; this covers the case where
+        // the SBC integrates the stack, so a Pi/SBC session still gets gradient
+        // removal. One BGE per exposure (GraXpert CLI, or the RK3588 NPU when
+        // present) is cheap at capture cadence. Honours the same BgeEnabled
+        // toggle; fully graceful (any failure feeds the un-BGE'd frame).
+        if (mode == StackMode.Full && preProcSettings.BgeEnabled
+                && _graxpert != null && !_serverBgeUnavailable) {
+            data = await ApplyServerBgeAsync(data, props, imageData.MetaData, preProcSettings, ct);
         }
 
         // StarDetector runs in BOTH modes:

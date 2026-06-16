@@ -46,11 +46,11 @@ public class LiveStackPreProcSettings {
     /// available. Null = auto-match by gain.</summary>
     public int? MasterBiasOverrideId { get; set; }
 
-    /// <summary>When true, run GraXpert BGE on every frame inside
-    /// the browser BEFORE adding it to the stack. Only takes effect
-    /// in MetricsOnly (client-side stack) mode -- server-side stacks
-    /// can't reach the WASM BGE pipeline and silently no-op when
-    /// this is on. UI shows a banner explaining the constraint.</summary>
+    /// <summary>When true, run GraXpert BGE on every frame BEFORE adding it to
+    /// the stack. Applied wherever the stack runs: client-side (WASM) in
+    /// MetricsOnly mode, or server-side in Full mode when a GraXpert backend
+    /// (CLI, or RK3588 NPU) is installed on the host. No-ops when neither is
+    /// available; the UI banner explains why.</summary>
     public bool BgeEnabled { get; set; } = false;
 
     /// <summary>BGE smoothing parameter [0.0, 1.0]. Default 1.0
