@@ -41,8 +41,15 @@ Secondary toggles + buttons:
 - **Reset** (visible when Stack ON), discards the running stack +
   reference. Next incoming frame becomes the new reference.
 - **⛶ View**, OpenSeadragon viewer on the current stack
+- **Save**, write the current stack to FITS on demand. User-requested
+  saves land in a dedicated `stacked/` subfolder (separate from the
+  per-frame light captures) so the integrated result is easy to find.
 - **Compute** (Auto / Server / Client), per-rig override for
   where the per-frame math runs (server CPU vs client WASM)
+
+For one-shot-colour (OSC) cameras, colour live stacking is automatic —
+there is no mono/colour toggle; the stacker debayers and integrates in
+colour by default.
 
 ## Stats bar
 
@@ -310,17 +317,19 @@ LiveStackingService.Reset (e.g. target switch).
 ### BGE (background extraction)
 
 Toggle `Apply GraXpert BGE to each frame before stacking`. Runs the
-GraXpert BGE model **in the browser** via WebAssembly + WebGPU for
-every frame before stacking.
+GraXpert BGE model on every frame before it is added to the stack —
+**wherever the stack actually runs**:
 
-- **Client-mode stacking only.** When the rig's "Compute mode" is
-  server-side, the BGE checkbox is grey and a warning banner appears.
-  Server-side ONNX would require adding native runtime deps to the
-  Pi build, which isn't worth the ~150MB binary footprint for what
-  is largely a fallback compute path. Switch the rig to client/auto
-  mode to enable BGE.
-- The 208MB BGE model is downloaded lazily the first time BGE is
-  enabled in a session -- spares bandwidth on rigs that never use it.
+- **Client-mode (MetricsOnly) stacking** — the browser runs the BGE
+  model via WebAssembly + WebGPU. The 208MB model is downloaded lazily
+  the first time BGE is enabled in a session (spares bandwidth on rigs
+  that never use it).
+- **Server-mode (Full) stacking** — the host runs BGE through its
+  GraXpert backend: the GraXpert CLI, or the RK3588 **NPU** fast path
+  where available (see [NPU acceleration](npu-acceleration.md)). Per-frame
+  BGE on a Pi 4/5 CPU is fast enough at normal exposure cadence. If no
+  server-side GraXpert backend is installed, the banner explains it's
+  unavailable and the frame is stacked without BGE.
 - Counters mirror the calibration ones (processed / fallback / last
   error). The browser posts them back to the server so every other
   connected browser sees the same numbers.

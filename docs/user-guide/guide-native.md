@@ -126,6 +126,19 @@ Both route through whichever guider backend is active, so dithering works the
 same with the native guider and external PHD2. The guider must be actively
 guiding; the dithered frame waits to settle before the next exposure/integration.
 
+While a dither settles, the native guider shows an **ASIAIR-style settle
+readout** — the live error vs the settle tolerance plus a progress indicator —
+so you can see it converge instead of guessing. The dither/settle state is also
+surfaced in the top status-bar guider badge.
+
+## Star lost
+
+If the native guider loses its guide star it reports **LostLock** (the same
+state PHD2 uses), surfaced in the GUIDE panel and the status bar, and keeps the
+loop responsive while it tries to reacquire — it does not freeze the session.
+(Note: a stuck INDI BLOB on some drivers can still require restarting the INDI
+driver; that's a driver-level wedge, not a Polaris reconnect.)
+
 ## Mount safety
 
 If you press Start Guiding (or auto-guide from a restored calibration) without a

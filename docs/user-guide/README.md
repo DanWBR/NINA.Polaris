@@ -70,6 +70,10 @@ Each tab in the sidebar has its own page. Read the ones you need:
   automated flat-field acquisition (binary-search exposure per
   filter, trained-exposure cache, per-rig defaults).
 - **[ADV](adv-sequencer.md)**, advanced tree-based sequencer (NINA-style).
+- **[PLAN](plan.md)**, ASIAIR-style multi-target night planner. Queue
+  several targets, each with its own frame list, run in order with
+  automatic slew + plate-solve-center, guiding, cooling, auto-focus,
+  meridian-flip handling, and end-of-session actions.
 - **[LIVE](live-stacking.md)**, real-time EAA stacking with auto
   re-focus / re-center triggers. See also
   [client-side compute](client-side-compute.md) for the WASM offload
@@ -105,6 +109,10 @@ Each tab in the sidebar has its own page. Read the ones you need:
 - **[Remote terminal](remote-terminal.md)**, embedded SSH terminal
   (xterm.js + SSH.NET) in SETTINGS. Restart services on a headless Pi
   from the browser, without plugging in a screen.
+- **[Software self-update](self-update.md)**, on Pi/SBC `.deb` installs
+  a status-bar badge offers a one-click update to the latest GitHub
+  release — download + install the matching `.deb` and reload, no SSH or
+  sudo password.
 
 ## Reference
 
