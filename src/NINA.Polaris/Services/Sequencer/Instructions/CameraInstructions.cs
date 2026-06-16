@@ -71,9 +71,25 @@ public class TakeExposureInstruction : SequenceInstruction {
                 Filter, fs, ctx.Logger, ct);
         }
 
+        // Build the per-exposure options once (mirrors the AUTORUN path) so the
+        // driver actually receives gain / offset / binning / frame-type / filter
+        // — previously the tree sequencer only set binning and captured with
+        // defaults, so gain and the CCD_FRAME_TYPE tag were never applied.
+        // Offset falls back to the rig's DefaultOffset (bias pedestal) when the
+        // instruction doesn't pin one.
+        var rigOffset = ctx.Profiles.ActiveEquipmentProfile?.DefaultOffset ?? 0;
+        var capOpts = new NINA.Image.Interfaces.CaptureOptions(
+            Gain: Gain,
+            Offset: Offset ?? (rigOffset > 0 ? rigOffset : (int?)null),
+            BinX: Binning > 0 ? Binning : (int?)null,
+            BinY: Binning > 0 ? Binning : (int?)null,
+            ImageType: string.IsNullOrWhiteSpace(ImageType) ? "LIGHT" : ImageType,
+            Filter: string.IsNullOrEmpty(Filter) ? null : Filter,
+            TargetName: string.IsNullOrEmpty(TargetName) ? null : TargetName);
+
         for (int i = 0; i < Count; i++) {
             ct.ThrowIfCancellationRequested();
-            var image = await ctx.Equipment.Camera.CaptureAsync(ExposureSeconds, ct);
+            var image = await ctx.Equipment.Camera.CaptureAsync(ExposureSeconds, capOpts, ct);
 
             image.MetaData.Exposure.ExposureTime = ExposureSeconds;
             if (!string.IsNullOrEmpty(Filter)) image.MetaData.Exposure.Filter = Filter;
