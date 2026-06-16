@@ -236,6 +236,32 @@ public class IndiCamera : ICamera {
         } catch { /* out of range / rejected — non-fatal */ }
     }
 
+    /// <summary>Tell the driver what kind of frame this is via CCD_FRAME_TYPE
+    /// (FRAME_LIGHT / FRAME_BIAS / FRAME_DARK / FRAME_FLAT) so the BLOB the
+    /// driver returns is tagged correctly (some drivers stamp the FITS FRAME
+    /// keyword from it, and a few engage shutter/closed-loop behaviour). The
+    /// AUTORUN/sequencer already routes folders + the IMAGETYP header from the
+    /// requested type; this also reflects it on the device. Best-effort: many
+    /// drivers don't publish CCD_FRAME_TYPE (or use it), so a miss is a no-op.</summary>
+    private async Task TrySetFrameTypeAsync(string? imageType, CancellationToken ct) {
+        if (string.IsNullOrWhiteSpace(imageType)) return;
+        var member = imageType.Trim().ToUpperInvariant() switch {
+            "BIAS" => "FRAME_BIAS",
+            "DARK" => "FRAME_DARK",
+            "DARKFLAT" => "FRAME_DARK",   // no standard FRAME_DARKFLAT; closest is dark
+            "FLAT" => "FRAME_FLAT",
+            "LIGHT" => "FRAME_LIGHT",
+            _ => "FRAME_LIGHT"
+        };
+        if (_client.GetProperty(DeviceName, "CCD_FRAME_TYPE") is not IndiSwitchProperty sw
+            || !sw.Values.ContainsKey(member)) return;   // driver doesn't expose it / no such member
+        // One-of switch: set the chosen member true, the rest false.
+        var payload = sw.Values.Keys.ToDictionary(k => k, k => k == member);
+        try {
+            await _client.SetSwitchAsync(DeviceName, "CCD_FRAME_TYPE", payload, ct);
+        } catch { /* driver rejected — non-fatal */ }
+    }
+
     // ── Capture bit-depth (RAW16) enforcement ──────────────────────────
     // The SVBONY SV405CC (and ASI) INDI drivers expose a switch to pick the
     // frame format. If it gets left on RAW8 — e.g. after a fast video-stream
@@ -484,6 +510,10 @@ public class IndiCamera : ICamera {
         if (opts?.Offset is int off) {
             await TrySetOffsetAsync(off, ct);
         }
+        // Reflect the requested frame kind (Light/Bias/Dark/Flat) on the driver
+        // so the returned BLOB is tagged correctly. Defaults to LIGHT when the
+        // caller didn't specify (e.g. PREVIEW snaps).
+        await TrySetFrameTypeAsync(opts?.ImageType ?? "LIGHT", ct);
 
         await _client.SetNumberAsync(DeviceName, "CCD_EXPOSURE",
             new Dictionary<string, double> { ["CCD_EXPOSURE_VALUE"] = exposureSeconds }, ct);

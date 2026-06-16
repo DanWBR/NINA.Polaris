@@ -1344,17 +1344,20 @@ button,
    2π × 38 ≈ 238.76; inline style sets offset = 238.76 × (1 - p). */
 .polaris-shutter .shutter-track-inner {
     fill: none;
-    stroke: rgba(255, 255, 255, 0.07);
-    stroke-width: 3;
+    stroke: rgba(255, 255, 255, 0.10);
+    stroke-width: 4;
 }
 .polaris-shutter .shutter-progress-inner {
     fill: none;
     /* Cyan so it reads as distinct from the red outer (sequence) ring. */
-    stroke: #67e8f9;
-    stroke-width: 3;
+    stroke: #22d3ee;
+    stroke-width: 4;
     stroke-linecap: round;
     stroke-dasharray: 238.76 238.76;
     stroke-dashoffset: 238.76;
+    /* Subtle glow so the current-frame fill is unmistakable against the
+       outer sequence ring. */
+    filter: drop-shadow(0 0 2px rgba(34, 211, 238, 0.7));
     transition: stroke-dashoffset 0.2s linear;
 }
 .polaris-shutter .shutter-inner {
