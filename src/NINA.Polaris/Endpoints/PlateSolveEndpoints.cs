@@ -537,9 +537,18 @@ public static class PlateSolveEndpoints {
             if (p == null) continue;
             var (x, y) = p.Value;
             if (x < -margin || y < -margin || x > width + margin || y > height + margin) continue;
+            // Marker radius in image pixels = half the object's angular size,
+            // converted through the solved plate scale, so the circle hugs the
+            // object instead of being a fixed dot. sizeArcmin is the major axis
+            // (diameter); 0/unknown → 0 (UI falls back to a small default).
+            double sizeArcmin = o.SizeArcmin ?? 0;
+            double radiusPx = sizeArcmin > 0
+                ? (sizeArcmin * 60.0 / 2.0) / result.ScaleArcsecPerPixel
+                : 0;
             objects.Add(new {
                 name = o.Name, commonName = o.CommonName,
-                x, y, type = o.Type, magnitude = o.Magnitude, sizeArcmin = o.SizeArcmin
+                x, y, type = o.Type, magnitude = o.Magnitude,
+                sizeArcmin = o.SizeArcmin, radiusPx
             });
         }
         return objects;

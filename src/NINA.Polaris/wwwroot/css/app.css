@@ -4229,6 +4229,14 @@ label select.input-sm {
     font: 600 12px sans-serif; color: rgba(250, 204, 21, 0.97);
     text-shadow: 0 0 3px #000, 0 0 3px #000, 0 0 3px #000;
 }
+/* Sized object ring: OSD scales this element to the object's angular size
+   (placed via an image-space rectangle), so it zooms with the image and
+   hugs the object. box-sizing keeps the 2px border inside the rect. */
+.osd-annot-ring {
+    box-sizing: border-box; width: 100%; height: 100%;
+    border: 2px solid rgba(250, 204, 21, 0.85); border-radius: 50%;
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.7); pointer-events: none;
+}
 
 /* FITS header overlay panel docked on the right inside the viewer.
    Width capped + scroll so a master with 200 cards doesn't push the

@@ -12909,10 +12909,29 @@ function ninaApp() {
                 const imgX = rx * sx, imgY = ry * sy;
                 if (imgX < 0 || imgY < 0 || imgX > content.x || imgY > content.y) continue;
                 const pt = v.viewport.imageToViewportCoordinates(new OpenSeadragon.Point(imgX, imgY));
+
+                // Sized ring: the object's catalog radius (radiusPx, in the
+                // solved image's pixels) scaled into content pixels. Placed via
+                // an image-space rectangle so the ring zooms WITH the image and
+                // hugs the object, instead of a fixed dot. Skipped when the
+                // catalog has no size (radiusPx 0) → the dot below marks it.
+                const rContent = (o.radiusPx > 0 ? o.radiusPx : 0) * sx;
+                let hasRing = false;
+                if (rContent >= 4) {
+                    const d = rContent * 2;
+                    const rect = v.viewport.imageToViewportRectangle(
+                        new OpenSeadragon.Rect(imgX - rContent, imgY - rContent, d, d));
+                    const ring = document.createElement('div');
+                    ring.className = 'osd-annot-ring';
+                    try { v.addOverlay({ element: ring, location: rect }); hasRing = true; } catch (e) {}
+                }
+
+                // Label (+ a small dot only when there's no sized ring) at the
+                // object centre, fixed-size so it stays readable at any zoom.
                 const el = document.createElement('div');
                 el.className = 'osd-annot';
                 const label = o.commonName ? `${o.name} · ${o.commonName}` : o.name;
-                el.innerHTML = '<span class="osd-annot-dot"></span>' +
+                el.innerHTML = (hasRing ? '' : '<span class="osd-annot-dot"></span>') +
                     '<span class="osd-annot-label"></span>';
                 el.querySelector('.osd-annot-label').textContent = label;
                 try {
