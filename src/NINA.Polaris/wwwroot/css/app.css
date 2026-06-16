@@ -2070,6 +2070,15 @@ label select.input-sm {
 .target-row .btn {
     flex: 0 0 auto;
 }
+/* In the narrow LIVE/PREVIEW sidebar the generic .control-row rule
+   forces flex-direction: column, which stacks the identify (🔍)
+   button below the Target input. Keep this particular row horizontal
+   so the button sits right after the input. */
+.live-pane > .quick-controls .control-row.target-row,
+.preview-pane > .quick-controls .control-row.target-row {
+    flex-direction: row;
+    align-items: flex-end;
+}
 
 .btn-lg {
     padding: 10px 18px;
