@@ -12406,10 +12406,24 @@ function ninaApp() {
             if (!this._silentSolve) {
                 this._silentSolve = { busy: false, lastAtMs: 0, lastMarker: null };
             }
-            if (!this._isImagingActive()) {
-                // Leave solvedFrame in place (red stays put until the next
-                // solve) but reset the frame marker so the first frame of
-                // the next session doesn't instantly trigger a solve.
+            const active = this._isImagingActive();
+            // Imaging just STOPPED: release the celestially-anchored red FOV
+            // rectangle back to the screen-centred drag-to-frame box so the
+            // operator can immediately reframe + slew to another object. The
+            // anchor is correct WHILE imaging (red glued to the solved sky
+            // position); it must not persist once nothing is running, otherwise
+            // the only way to free it was a browser reload. Clearing solvedFrame
+            // also stops a stale solve from re-anchoring red the instant the
+            // next session starts (before its first fresh solve).
+            if (this._wasImagingActive && !active) {
+                this.solvedFrame = null;
+                try { this._pushSkyFovOverlays && this._pushSkyFovOverlays(); }
+                catch (e) { /* SKY engine may not be live */ }
+            }
+            this._wasImagingActive = active;
+            if (!active) {
+                // Reset the frame marker so the first frame of the next session
+                // doesn't instantly trigger a solve.
                 this._silentSolve.lastMarker = null;
                 return;
             }
