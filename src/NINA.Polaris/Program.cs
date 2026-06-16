@@ -759,6 +759,15 @@ app.Map("/phd2-gui/{**rest}", async (HttpContext ctx, Phd2GuiSessionService gui)
         rest = rest["/phd2-gui".Length..];
         if (string.IsNullOrEmpty(rest)) rest = "/";
     }
+    // Strip the optional /t/<token> auth segment the cross-origin Capacitor
+    // wrapper embeds (see AuthEndpoints.ExtractPathToken). xpra never sees
+    // it; AuthMiddleware already validated the token from the original path.
+    if (rest.StartsWith("/t/", StringComparison.Ordinal)) {
+        var after = rest[3..];
+        var slash = after.IndexOf('/');
+        rest = slash >= 0 ? after[slash..] : "/";
+    }
+    if (string.IsNullOrEmpty(rest)) rest = "/";
     ctx.Request.Path = rest;
     var target = $"http://127.0.0.1:{gui.BindPort}";
     var err = await phd2GuiForwarder.SendAsync(ctx, target, phd2GuiHttpClient,

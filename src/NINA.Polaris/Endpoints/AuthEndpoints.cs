@@ -139,12 +139,47 @@ public static class AuthEndpoints {
                 hdr.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) {
             return hdr["Bearer ".Length..].Trim();
         }
+        // Path-embedded token for cross-origin embedded sub-apps (xpra PHD2
+        // GUI). The Capacitor wrapper loads the Polaris UI in a cross-origin
+        // iframe, so the Android/iOS WebView blocks the third-party session
+        // cookie and the embedded xpra client — whose own asset + WebSocket
+        // requests we can't add an Authorization header to — has no way to
+        // authenticate. The client carries the token as a path segment
+        // (/phd2-gui/t/<token>/...) so every relative sub-request AND the
+        // WebSocket inherit it; the proxy strips /t/<token> before forwarding
+        // upstream. Checked before ?token=/cookie so it wins for these
+        // requests even when a stale cookie is also present.
+        var pathToken = ExtractPathToken(ctx.Request.Path.Value);
+        if (!string.IsNullOrEmpty(pathToken)) return pathToken;
         var q = ctx.Request.Query["token"].ToString();
         if (!string.IsNullOrEmpty(q)) return q;
         if (ctx.Request.Cookies.TryGetValue(AuthService.CookieName, out var c))
             return c;
         return null;
     }
+
+    /// <summary>
+    /// Pulls a token from a <c>/&lt;proxy-root&gt;/t/&lt;token&gt;/...</c>
+    /// path used by cross-origin embedded sub-apps (see ExtractToken). Only
+    /// the proxied sub-app roots in <see cref="PathTokenRoots"/> opt in.
+    /// Returns null when the path doesn't match the convention.
+    /// </summary>
+    internal static string? ExtractPathToken(string? path) {
+        if (string.IsNullOrEmpty(path)) return null;
+        foreach (var root in PathTokenRoots) {
+            if (path.StartsWith(root, StringComparison.OrdinalIgnoreCase)) {
+                var after = path[root.Length..];
+                var slash = after.IndexOf('/');
+                var tok = slash >= 0 ? after[..slash] : after;
+                if (!string.IsNullOrEmpty(tok)) return Uri.UnescapeDataString(tok);
+            }
+        }
+        return null;
+    }
+
+    // Proxy roots that accept a path-embedded token. Keep in sync with the
+    // matching strip logic in the reverse-proxy map in Program.cs.
+    private static readonly string[] PathTokenRoots = { "/phd2-gui/t/" };
 
     private static void SetSessionCookie(HttpContext ctx, string token) {
         // Cookie carries auth for the embedded sub-apps (phd2-gui,

@@ -23513,13 +23513,28 @@ function ninaApp() {
                 await this.loadPhd2GuiStatus();
             }
         },
+        // Build the xpra proxy base URL. In the Capacitor (Android/iOS)
+        // wrapper the Polaris UI runs in a CROSS-ORIGIN iframe, so the
+        // WebView blocks the third-party session cookie and the embedded
+        // xpra client — whose own asset + WebSocket requests we can't add an
+        // Authorization header to — has no way to authenticate. Carry the
+        // token as a PATH segment (/phd2-gui/t/<token>/...) so every relative
+        // sub-request AND the xpra WebSocket inherit it; the server proxy
+        // strips /t/<token> before forwarding to xpra. Falls back to the
+        // plain path when there's no token (auth disabled / loopback), where
+        // the cookie/loopback bypass already covers it.
+        _phd2GuiBase() {
+            return this.auth?.token
+                ? '/phd2-gui/t/' + encodeURIComponent(this.auth.token) + '/'
+                : '/phd2-gui/';
+        },
         _reloadPhd2GuiIframe() {
             // Drive the iframe src from state (Alpine :src binding) with a
             // cache-buster so xpra's HTML5 client re-fetches after a session
             // restart / phd2 relaunch. Bound in the template as
             // :src="phd2GuiReady ? phd2GuiIframeSrc : 'about:blank'".
             this.phd2GuiReady = true;
-            this.phd2GuiIframeSrc = '/phd2-gui/?_=' + Date.now();
+            this.phd2GuiIframeSrc = this._phd2GuiBase() + '?_=' + Date.now();
         },
 
         // ----- PH2VNC: Windows TightVNC + noVNC bridge lifecycle -----
