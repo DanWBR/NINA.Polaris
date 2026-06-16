@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260615-planflip">
+    <link rel="stylesheet" href="/css/app.css?v=20260615-lockframe">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -13813,6 +13813,10 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </button>
     </div>
 
+    <!-- Yellow frame around the whole app while in lock mode. Pointer-events
+         none so it never intercepts taps (the overlay above handles that). -->
+    <div class="ui-lock-frame" x-show="uiLocked" x-cloak aria-hidden="true"></div>
+
     <!-- PLAN: SkyAtlas framing banner (shown while picking a target's framing) -->
     <div class="plan-frame-banner" x-show="planFramingActive" x-cloak>
         <span>Framing a target for the plan — pan/zoom, then add it.</span>
@@ -14038,7 +14042,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260615-planflip"></script>
+    <script src="/js/app.js?v=20260615-lockframe"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

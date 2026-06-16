@@ -2402,6 +2402,17 @@ label select.input-sm {
     touch-action: none;
     overscroll-behavior: contain;
 }
+/* Yellow frame around the whole app while in lock mode, an at-a-glance "this
+   session is locked" cue. Sits above the overlay but is click-through. */
+.ui-lock-frame {
+    position: fixed;
+    inset: 0;
+    z-index: 9550;
+    pointer-events: none;
+    border: 3px solid #facc15;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4),
+                inset 0 0 14px rgba(250, 204, 21, 0.35);
+}
 /* The one interactive thing while locked. Tucked into the bottom-left
    corner so it never covers the framed image / live view. */
 .ui-lock-pill {
