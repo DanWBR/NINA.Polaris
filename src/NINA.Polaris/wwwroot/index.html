@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260616-annotsize">
+    <link rel="stylesheet" href="/css/app.css?v=20260616-annotrot">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -832,6 +832,8 @@
                                 title="Annotate — plate-solve and label DSOs in the frame">
                             <svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:middle"><circle cx="8" cy="16" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 13 L20 4 M15 4 h5 v5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         </button>
+                        <button x-show="annotate.active" @click="cycleAnnotateRotation()"
+                                :title="'Rotate annotations 90° (now ' + annotateExtraRot + '°)'">⟳ <span x-text="annotateExtraRot + '°'"></span></button>
                     </div>
                     <div class="preview-overlay" x-show="!liveActive">
                         <p x-text="selectedCamera ? 'Ready - ' + selectedCamera : 'No camera connected'"></p>
@@ -2605,6 +2607,8 @@
                                 title="Annotate — plate-solve and label DSOs in the frame">
                             <svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:middle"><circle cx="8" cy="16" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 13 L20 4 M15 4 h5 v5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         </button>
+                        <button x-show="annotate.active" @click="cycleAnnotateRotation()"
+                                :title="'Rotate annotations 90° (now ' + annotateExtraRot + '°)'">⟳ <span x-text="annotateExtraRot + '°'"></span></button>
                     </div>
                     <div class="preview-overlay" x-show="!preview.lastSnapAt">
                         <p x-text="selectedCamera
@@ -13341,8 +13345,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <button class="btn btn-sm"
                         x-show="imageViewerPath && studioAnnotate.active"
                         x-cloak
-                        @click="cycleAnnotateRotation()"
-                        :title="'Rotate annotations 90° (now ' + annotateExtraRot + '°)'">⟳ <span x-text="annotateExtraRot + '°'"></span></button>
+                        @click="cycleStudioAnnotateRotation()"
+                        :title="'Rotate annotations 90° (now ' + studioAnnotateExtraRot + '°)'">⟳ <span x-text="studioAnnotateExtraRot + '°'"></span></button>
                 <button class="btn btn-sm" @click="reloadImageViewer()" title="Reload">↻</button>
                 <button class="btn btn-sm btn-danger" @click="closeImageViewer()">✕</button>
             </div>
@@ -14144,7 +14148,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260616-annotsize"></script>
+    <script src="/js/app.js?v=20260616-annotrot"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

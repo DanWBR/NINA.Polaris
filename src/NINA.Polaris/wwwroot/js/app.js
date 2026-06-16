@@ -2483,6 +2483,10 @@ function ninaApp() {
         // rotation conventions that land annotations rotated 90° from the
         // displayed frame; cycling re-projects instantly without a re-solve.
         annotateExtraRot: 0,
+        // Separate quadrant-rotation knob for the STUDIO viewer so adjusting it
+        // there doesn't move the LIVE/PREVIEW overlay (different solve + display
+        // path) and vice-versa.
+        studioAnnotateExtraRot: 0,
         // STUDIO (FILES image viewer) annotation overlay. Items are in the
         // saved frame's FULL-res IMAGE pixels; rendered as OSD overlays so they
         // track zoom/pan. width/height are the solved frame's full dimensions.
@@ -12835,11 +12839,17 @@ function ninaApp() {
         // re-render whatever overlay is currently showing (LIVE/PREVIEW canvas
         // and/or the STUDIO OSD overlay), without re-solving.
         cycleAnnotateRotation() {
+            // LIVE / PREVIEW only — STUDIO has its own knob.
             this.annotateExtraRot = (this.annotateExtraRot + 90) % 360;
             try { this.redrawOverlay && this.redrawOverlay(); } catch (e) {}
             try { this.redrawPreviewOverlay && this.redrawPreviewOverlay(); } catch (e) {}
-            if (this.studioAnnotate.active) this._renderStudioAnnotations();
             this.toast('Annotation rotation: ' + this.annotateExtraRot + '°', 'info');
+        },
+        cycleStudioAnnotateRotation() {
+            // STUDIO viewer only — independent of the LIVE/PREVIEW knob.
+            this.studioAnnotateExtraRot = (this.studioAnnotateExtraRot + 90) % 360;
+            if (this.studioAnnotate.active) this._renderStudioAnnotations();
+            this.toast('Annotation rotation: ' + this.studioAnnotateExtraRot + '°', 'info');
         },
 
         // ---- STUDIO (FILES image viewer) annotation -------------------
@@ -12905,7 +12915,7 @@ function ninaApp() {
             const content = v.world.getItemAt(0).getContentSize();
             const sx = content.x / a.width, sy = content.y / a.height;
             for (const o of a.items) {
-                const [rx, ry] = this._rotAnnPoint(o.x, o.y, a.width, a.height, this.annotateExtraRot);
+                const [rx, ry] = this._rotAnnPoint(o.x, o.y, a.width, a.height, this.studioAnnotateExtraRot);
                 const imgX = rx * sx, imgY = ry * sy;
                 if (imgX < 0 || imgY < 0 || imgX > content.x || imgY > content.y) continue;
                 const pt = v.viewport.imageToViewportCoordinates(new OpenSeadragon.Point(imgX, imgY));
