@@ -2759,6 +2759,23 @@ function ninaApp() {
             this.loadDeviceName();
             this.updateFov();
 
+            // LIVE capture settings persistence. exposure / gain / binning
+            // are client-side UI prefs read by the capture loop per frame;
+            // without this they snapped back to hardcoded defaults on every
+            // reload / reconnect. Load the last-used values, then persist on
+            // change so a session resumes with the operator's settings.
+            try {
+                const le = localStorage.getItem('polaris.live.exposure');
+                if (le !== null && le !== '' && !isNaN(parseFloat(le))) this.exposure = parseFloat(le);
+                const lg = localStorage.getItem('polaris.live.gain');
+                if (lg !== null && lg !== '' && !isNaN(parseInt(lg, 10))) this.gain = parseInt(lg, 10);
+                const lb = localStorage.getItem('polaris.live.binning');
+                if (lb) this.binning = lb;
+            } catch (e) { /* private mode; ignore */ }
+            this.$watch('exposure', v => { try { localStorage.setItem('polaris.live.exposure', String(v)); } catch (e) {} });
+            this.$watch('gain', v => { try { localStorage.setItem('polaris.live.gain', String(v)); } catch (e) {} });
+            this.$watch('binning', v => { try { localStorage.setItem('polaris.live.binning', String(v)); } catch (e) {} });
+
             // Self-update: check on boot, then hourly. No-ops off SBC .deb
             // installs (server reports supported:false → badge stays hidden).
             this.checkUpdate();
