@@ -32,6 +32,12 @@
       "image": "/assets/screenshots/sky-explorer.jpg"
     },
     {
+      "icon": "📅",
+      "title": "Plan your whole night",
+      "body": "Queue several targets and let the planner schedule them by visibility. Each one gets an elevation curve and a capture window you drag to set start and end, with per-target re-center, re-focus, and dither cadence. Polaris sequences the targets across the night and reports the total run time up front.",
+      "image": "/assets/screenshots/plan.jpg"
+    },
+    {
       "icon": "📸",
       "title": "Complete live stacking panel",
       "body": "EAA-style live stacking with registration, integration, and real-time stretch over a bandwidth-adaptive WebSocket stream, so the image builds up live as each frame lands.",
