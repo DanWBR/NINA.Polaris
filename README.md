@@ -32,6 +32,7 @@ Browser (laptop / tablet / phone)        Raspberry Pi / Mini PC
   - [Auto-Focus (V-Curve)](#auto-focus-v-curve)
   - [Meridian Flip Automation](#meridian-flip-automation)
   - [Advanced Sequencer (tree-based)](#advanced-sequencer-tree-based)
+  - [Multi-Target Night Planner (PLAN)](#multi-target-night-planner-plan)
   - [Mosaic Planner](#mosaic-planner)
   - [Plugin System](#plugin-system)
   - [Dithering](#dithering)
@@ -52,6 +53,7 @@ Browser (laptop / tablet / phone)        Raspberry Pi / Mini PC
   - [Network Resilience](#network-resilience)
   - [Discovery & Cross-Platform Drivers](#discovery--cross-platform-drivers)
   - [Remote Terminal (SSH from the browser)](#remote-terminal-ssh-from-the-browser)
+  - [Software Self-Update (SBC)](#software-self-update-sbc)
   - [Polar Alignment (TPPA)](#polar-alignment-tppa)
 - [Architecture](#architecture)
   - [Technology Stack](#technology-stack)
@@ -416,6 +418,32 @@ Simple Sequencer. Toggle the default tab via **Settings → Sequencer →
 - Live status mirroring, during a run the tree colours update every 2s
   showing what's Running / Completed / Failed / Skipped, plus the
   Safety-trigger abort reason if one fires
+
+### Multi-Target Night Planner (PLAN)
+
+ASIAIR-style whole-night planning. The **PLAN** tab queues several targets,
+each with its own frame list, and runs them in order with automatic slew +
+plate-solve-center between targets:
+
+- **Plan library** stored in the profile (runnable with any active rig),
+  with new / duplicate / delete and JSON **export / import**
+- **Per-target frame lists** plus per-target re-center / re-focus / dither
+  every N frames and a manual start delay
+- **Add targets** from catalog search, manual RA/DEC, the current mount
+  position, or by framing visually in the Sky map
+- **Scheduling**: start now or at a clock time; end when all frames are done,
+  at astronomical dawn, or at a set time
+- **Plan-level automation**: auto guiding, auto cooling, per-target/initial
+  auto-focus, and auto meridian flip with exposed tuning (minutes-after,
+  recenter, autofocus-on-flip) that pauses/resumes the active guider
+- **End actions**: warm + cooler off, park/go-home, focuser to zero, and a
+  confirm-gated host shutdown
+- **View plan** whole-night elevation timeline + a pinned run bar with
+  current-target and total progress
+
+PLAN compiles to an Advanced-Sequencer document and runs on the same engine
+as the ADV tab, so only one of the two runs at a time. See
+[docs/user-guide/plan.md](docs/user-guide/plan.md).
 
 ### Mosaic Planner
 
@@ -1148,6 +1176,25 @@ screen.
 - Resizes with the panel; supports `vim`, `htop`, `tmux`, colours, scrollback
 
 See [docs/user-guide/remote-terminal.md](docs/user-guide/remote-terminal.md).
+
+### Software Self-Update (SBC)
+
+On Linux `.deb` installs (Raspberry Pi / SBC / PC via `apt`), Polaris updates
+itself from GitHub Releases with one click:
+
+- A green **⬆ Update** badge appears in the top status bar when a newer
+  release exists for the host's architecture (`arm64` / `armhf` / `amd64`);
+  the check runs at startup and hourly (cached 30 min)
+- The modal shows release notes + the matched asset; **Download & install**
+  fetches the architecture-matched `.deb` (URL resolved server-side) and
+  installs it, then the browser polls and reloads on the new version
+- **No sudo password** — the install runs via an on-demand systemd unit the
+  `polaris` user is authorized to start through a scoped PolicyKit rule, in
+  its own cgroup so it survives the service restart
+- Only the first release with the updater needs a manual
+  `sudo apt install ./polaris_<arch>.deb`; after that, updates are one click
+
+See [docs/user-guide/self-update.md](docs/user-guide/self-update.md).
 
 ### Polar Alignment (TPPA + Rudimentary)
 
