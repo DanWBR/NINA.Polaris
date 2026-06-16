@@ -80,9 +80,9 @@
         "device": "Raspberry Pi 5",
         "badge": "arm64",
         "color": "#e11d6b",
-        "url": "https://drive.google.com/uc?export=download&id=1mIsdpXUVcCC_xjf5RTZst6jLtEE-my3u",
+        "url": "https://drive.google.com/uc?export=download&id=1bV0I9k8DkcZ_hqSmmvrXCauZ0Mp0WPrM",
         "os": "Raspberry Pi OS 64-bit (Debian Trixie)",
-        "polaris": "0.83.2 (2026-06-14)",
+        "polaris": "0.84.1",
         "size": "8.64 GB (.7z)",
         "access": "https://polaris-pi.local:5000/",
         "note": "7-Zip archive; extract before flashing."
