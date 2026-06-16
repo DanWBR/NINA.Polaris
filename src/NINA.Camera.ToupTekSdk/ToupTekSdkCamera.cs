@@ -310,6 +310,9 @@ public sealed class ToupTekSdkCamera : ICamera {
         meta.Camera.Gain = _gain;
         meta.Camera.PixelSizeX = _pixelSize;
         meta.Camera.PixelSizeY = _pixelSize;
+        // FITS/XISF writers stamp BAYERPAT from meta.Camera.BayerPattern, not
+        // props — propagate the detected pattern so OSC frames save with it.
+        meta.Camera.BayerPattern = _bayer;
         return new BaseImageData(pixels, props, meta);
     }
 

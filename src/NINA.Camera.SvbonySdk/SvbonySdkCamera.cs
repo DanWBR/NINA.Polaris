@@ -242,6 +242,11 @@ public sealed class SvbonySdkCamera : ICamera {
                     "SVBSetCameraMode(TRIG_SOFT)");
                 Check(SVBStartVideoCapture(_cameraId), "SVBStartVideoCapture");
                 try {
+                    // Re-apply the exposure AFTER the mode switch: some SVBony
+                    // bodies reset the exposure control when the camera mode
+                    // changes, which made the soft-triggered frame come back at
+                    // a stale/short exposure instead of the requested time.
+                    ApplyExposureGain(exposureSeconds, opts?.Gain, opts?.Offset);
                     // Let the mode + exposure value latch before triggering.
                     Thread.Sleep(20);
                     Check(SVBSendSoftTrigger(_cameraId), "SVBSendSoftTrigger");
@@ -253,12 +258,29 @@ public sealed class SvbonySdkCamera : ICamera {
                     State = CameraStates.Idle;
                 }
             } else {
-                // Camera without trigger support: continuous mode. Best effort,
-                // unchanged behaviour.
+                // Camera without soft-trigger support: continuous video mode.
+                // The SDK hands back whatever frame is already in flight, which
+                // started integrating BEFORE we set this exposure, so the first
+                // frame comes back almost immediately (the running video
+                // cadence) instead of after the requested time. That made every
+                // AUTORUN dark return in a couple of seconds and the whole run
+                // appear to finish "all at once". Discard frames that came back
+                // materially sooner than the requested integration until we get
+                // a full-length one (capped so an oddly-reporting camera can't
+                // loop forever). Skipped for ~zero exposures (bias) where the
+                // first frame is already correct.
                 Check(SVBStartVideoCapture(_cameraId), "SVBStartVideoCapture");
                 try {
-                    var err = SVBGetVideoData(_cameraId, bytes, new CLong(bytes.Length), waitMs);
-                    Check(err, "SVBGetVideoData");
+                    double minIntegrationMs = exposureSeconds * 1000.0 * 0.6;
+                    for (int attempt = 1; ; attempt++) {
+                        ct.ThrowIfCancellationRequested();
+                        long t0 = Environment.TickCount64;
+                        var err = SVBGetVideoData(_cameraId, bytes, new CLong(bytes.Length), waitMs);
+                        Check(err, "SVBGetVideoData");
+                        long elapsedMs = Environment.TickCount64 - t0;
+                        if (exposureSeconds <= 0.05 || elapsedMs >= minIntegrationMs || attempt >= 3)
+                            break;
+                    }
                 } finally {
                     try { SVBStopVideoCapture(_cameraId); } catch { }
                     State = CameraStates.Idle;
@@ -332,9 +354,14 @@ public sealed class SvbonySdkCamera : ICamera {
     // ----- helpers -----
 
     private void ApplyExposureGain(double exposureSeconds, int? gainOverride, int? offsetOverride = null) {
-        _exposureSec = exposureSeconds > 0 ? exposureSeconds : _exposureSec;
-        SVBSetControlValue(_cameraId, SVB_CONTROL_TYPE.SVB_EXPOSURE,
-            new CLong((nint)Math.Round(_exposureSec * 1_000_000)), 0); // microseconds
+        // Honor an explicit 0 (BIAS) by driving the hardware to its shortest
+        // exposure, instead of keeping the previous value (a prior DARK's 60 s
+        // would otherwise leak into a following bias frame). Keep the field at
+        // the last POSITIVE value so the video-stream default isn't left at 0.
+        double effExp = exposureSeconds >= 0 ? exposureSeconds : _exposureSec;
+        if (exposureSeconds > 0) _exposureSec = exposureSeconds;
+        long us = Math.Max(1, (long)Math.Round(effExp * 1_000_000)); // ≥1 µs
+        SVBSetControlValue(_cameraId, SVB_CONTROL_TYPE.SVB_EXPOSURE, new CLong((nint)us), 0); // microseconds
         if (gainOverride is int g) _gain = g;
         SVBSetControlValue(_cameraId, SVB_CONTROL_TYPE.SVB_GAIN, new CLong(_gain), 0);
         if (offsetOverride is int o) {
@@ -376,6 +403,10 @@ public sealed class SvbonySdkCamera : ICamera {
         meta.Camera.Offset = _offset;
         meta.Camera.PixelSizeX = _pixelSize;
         meta.Camera.PixelSizeY = _pixelSize;
+        // The FITS/XISF writers stamp BAYERPAT from meta.Camera.BayerPattern,
+        // not props, so a colour OSC frame would otherwise save with no Bayer
+        // info. Propagate the detected pattern here too.
+        meta.Camera.BayerPattern = _bayer;
         return new BaseImageData(pixels, props, meta);
     }
 
