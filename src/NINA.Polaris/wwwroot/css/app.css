@@ -4625,9 +4625,9 @@ label select.input-sm {
 .sky-subtabs {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 2px;
     margin: 0;
-    padding: 10px 14px 6px;
+    padding: 10px 14px 0;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border);
     flex-wrap: wrap;
@@ -4635,24 +4635,26 @@ label select.input-sm {
 .sky-subtab-pill {
     background: transparent;
     color: var(--text-secondary);
-    border: 1px solid transparent;
-    padding: 6px 14px;
-    border-radius: var(--radius);
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 7px 14px;
+    margin-bottom: -1px;
+    border-radius: 0;
     cursor: pointer;
     font-size: 13px;
     font-weight: 500;
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    transition: color 0.12s, border-color 0.12s;
 }
 .sky-subtab-pill:hover {
-    background: rgba(255, 255, 255, 0.04);
     color: var(--text-primary);
 }
 .sky-subtab-pill.active {
-    background: var(--accent);
-    color: white;
-    border-color: var(--accent);
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
 }
 .sky-subtab-icon { line-height: 1; }
 
@@ -5897,13 +5899,26 @@ label select.input-sm {
 
 /* ----------------------------- Equipment source picker (INDI vs Alpaca) ------- */
 .equip-source-tabs {
-    display: flex; gap: 4px; padding-bottom: 8px;
+    display: flex; gap: 2px; padding-bottom: 0;
     border-bottom: 1px solid var(--border, #334155);
     margin-bottom: 6px;
 }
+.equip-source-tabs .btn {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    color: var(--text-secondary);
+    margin-bottom: -1px;
+    transition: color 0.12s, border-color 0.12s;
+}
+.equip-source-tabs .btn:hover {
+    background: transparent;
+    color: var(--text-primary);
+}
 .equip-source-tabs .btn-active {
-    background: var(--accent, #38bdf8); color: #000;
-    border-color: var(--accent, #38bdf8); font-weight: 600;
+    background: transparent; color: var(--accent, #38bdf8);
+    border-bottom-color: var(--accent, #38bdf8); font-weight: 600;
 }
 
 /* ----------------------------- Advanced Sequencer tab ----------------------------- */
@@ -8046,29 +8061,30 @@ label select.input-sm {
 .cert-modal-tabs {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: 2px;
     margin: 8px 0 12px;
     border-bottom: 1px solid var(--border);
-    padding-bottom: 8px;
+    padding-bottom: 0;
 }
 .cert-modal-tab {
     background: transparent;
-    border: 1px solid var(--border);
+    border: none;
+    border-bottom: 2px solid transparent;
     color: var(--text-secondary);
-    padding: 6px 12px;
-    border-radius: 14px;
+    padding: 7px 12px;
+    margin-bottom: -1px;
+    border-radius: 0;
     font-size: 12px;
     cursor: pointer;
-    transition: background 0.12s, color 0.12s;
+    transition: color 0.12s, border-color 0.12s;
 }
 .cert-modal-tab:hover {
-    background: rgba(255,255,255,0.04);
     color: var(--text-primary);
 }
 .cert-modal-tab.active {
-    background: var(--accent, #5b8def);
-    border-color: var(--accent, #5b8def);
-    color: white;
+    color: var(--accent, #5b8def);
+    border-bottom-color: var(--accent, #5b8def);
+    font-weight: 600;
 }
 /* .cert-modal-content holds the per-OS tab body. Typography rules
    come from .cert-modal-frame above, only the pre block needs
@@ -9166,22 +9182,28 @@ label select.input-sm {
 /* ── STUDIO Analyze modal (tilt + aberration) ───────────────── */
 .analyze-tabs {
     display: flex;
-    gap: 6px;
+    gap: 2px;
     margin: 10px 0 4px;
+    border-bottom: 1px solid var(--border);
 }
 .analyze-tabs button {
-    background: var(--bg-input);
+    background: transparent;
     color: var(--text-secondary);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 6px 16px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    padding: 7px 16px;
+    margin-bottom: -1px;
     font-size: 13px;
     cursor: pointer;
+    transition: color 0.12s, border-color 0.12s;
 }
+.analyze-tabs button:hover { color: var(--text-primary); }
 .analyze-tabs button.active {
-    background: var(--accent);
-    color: #fff;
-    border-color: var(--accent);
+    background: transparent;
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
 }
 .analyze-body {
     display: flex;
@@ -9905,26 +9927,29 @@ label select.input-sm {
 .guide-tabstrip {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 2px;
     margin: 6px 0 10px;
     border-bottom: 1px solid var(--border);
-    padding-bottom: 6px;
+    padding-bottom: 0;
 }
 .guide-tab {
     background: transparent;
     color: var(--text-secondary);
-    border: 1px solid transparent;
-    padding: 6px 14px;
-    border-radius: var(--radius);
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 7px 14px;
+    margin-bottom: -1px;
+    border-radius: 0;
     cursor: pointer;
     font-size: 13px;
     font-weight: 500;
+    transition: color 0.12s, border-color 0.12s;
 }
-.guide-tab:hover { background: rgba(255,255,255,0.04); color: var(--text-primary); }
+.guide-tab:hover { color: var(--text-primary); }
 .guide-tab.active {
-    background: var(--accent);
-    color: white;
-    border-color: var(--accent);
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
 }
 
 /* Profile-sync chip in the tabstrip. Color reflects last sync phase. */
@@ -10041,26 +10066,29 @@ label select.input-sm {
 }
 .video-tabstrip {
     display: flex;
-    gap: 6px;
+    gap: 2px;
     margin: 6px 0 10px;
     border-bottom: 1px solid var(--border);
-    padding-bottom: 6px;
+    padding-bottom: 0;
 }
 .video-tab {
     background: transparent;
     color: var(--text-secondary);
-    border: 1px solid transparent;
-    padding: 6px 14px;
-    border-radius: var(--radius);
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 7px 14px;
+    margin-bottom: -1px;
+    border-radius: 0;
     cursor: pointer;
     font-size: 13px;
     font-weight: 500;
+    transition: color 0.12s, border-color 0.12s;
 }
-.video-tab:hover { background: rgba(255,255,255,0.04); color: var(--text-primary); }
+.video-tab:hover { color: var(--text-primary); }
 .video-tab.active {
-    background: var(--accent);
-    color: white;
-    border-color: var(--accent);
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
 }
 .video-pane {
     display: flex;
@@ -10373,30 +10401,33 @@ label select.input-sm {
    compact enough for the narrow LIVE sidebar. */
 .livestack-trig-tabs {
     display: flex;
-    gap: 4px;
+    gap: 2px;
     margin: 8px 0 0;
+    border-bottom: 1px solid var(--border);
     flex-wrap: wrap;
 }
 .livestack-trig-tab {
     flex: 1 1 auto;
     background: transparent;
     color: var(--text-secondary);
-    border: 1px solid var(--border);
-    padding: 5px 8px;
-    border-radius: var(--radius);
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 7px 8px;
+    margin-bottom: -1px;
+    border-radius: 0;
     cursor: pointer;
     font-size: 12px;
     font-weight: 500;
     white-space: nowrap;
+    transition: color 0.12s, border-color 0.12s;
 }
 .livestack-trig-tab:hover {
-    background: rgba(255,255,255,0.04);
     color: var(--text-primary);
 }
 .livestack-trig-tab.active {
-    background: var(--accent);
-    color: white;
-    border-color: var(--accent);
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
 }
 .livestack-triggers-block > legend {
     padding: 0 6px;
