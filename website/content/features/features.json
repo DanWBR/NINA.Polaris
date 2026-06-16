@@ -1,0 +1,241 @@
+{
+  "title": "Features",
+  "lede": "N.I.N.A. Polaris is a browser-controlled astrophotography platform that runs on a Raspberry Pi, mini-PC, or any small Linux or Windows host on your network. Point any device, laptop, tablet, or phone, at the host and you get the full equipment, capture, and processing workflow with no desktop application to install. Everything below runs from a single web UI, organized by sidebar panel.",
+  "glanceTitle": "At a glance",
+  "glance": [
+    { "label": "Runs anywhere small", "text": "Raspberry Pi 4/5, Orange Pi, x86 mini-PCs and sticks, or a Windows box. ARM64, ARMHF, and x86-64 are all supported." },
+    { "label": "Browser-native", "text": "no app to install on the client; works on phones, tablets, and laptops over WiFi." },
+    { "label": "Hardware-agnostic", "text": "INDI, ASCOM Alpaca, ASCOM Platform (Windows COM), and native vendor SDKs (ZWO, Svbony, Player One, ToupTek, Canon/Nikon/Sony DSLR) all in one app." },
+    { "label": "Acquire and process in one place", "text": "from polar alignment through capture, live stacking, calibration, integration, AI cleanup, and a final non-destructive editor pass with JPEG/PNG/TIFF export." },
+    { "label": "Offline-first", "text": "bundled deep-sky catalog, star catalog, and sky map work with no internet at the telescope." },
+    { "label": "Self-updating", "text": "on Pi/SBC .deb installs, a one-click in-app update from GitHub releases." }
+  ],
+  "sections": [
+    {
+      "icon": "🏠", "color": "#2196f3", "title": "HOME", "tag": "Dashboard",
+      "intro": "The landing dashboard shown on connect.",
+      "items": [
+        { "label": "Session summary", "text": "active rig, connection status of each device, and current activity at a glance." },
+        { "label": "Quick navigation", "text": "jump straight into the panel you need." },
+        { "label": "Host info", "text": "model, OS, architecture, core count, and CPU of the machine running Polaris." }
+      ]
+    },
+    {
+      "icon": "🔭", "color": "#e11d6b", "title": "RIGS", "tag": "Equipment management",
+      "intro": "Multi-rig equipment hub. Define several telescope setups (rigs) and switch between them in one click.",
+      "items": [
+        { "label": "Multi-rig profiles", "text": "save each optical train (main scope, camera, mount, guider, accessories) as a named rig; the whole app retargets when you switch the active rig." },
+        { "label": "Per-role device cards", "text": "Main Telescope, Camera, Mount, Focuser, Filter Wheel, Guidescope, Guide Camera, Rotator, Flat Panel, Dome, and Weather, each with connect/disconnect and live status." },
+        { "label": "Connection backends in one place", "text": "INDI (TCP/XML) full native client; ASCOM Alpaca (HTTP) auto-discovery and connect; ASCOM Platform (COM) Windows-only direct driver access; native vendor SDKs (ZWO ASI, Svbony, Player One, ToupTek-alike) driven directly; DSLR via Canon, Nikon, and Sony on Windows, gphoto2 on Linux." },
+        { "label": "Per-rig optical data", "text": "main and guider focal length (auto-updated from plate solves), a filter offsets table, and per-camera quirk overrides (Bayer pattern, vertical flip) for cameras that report wrong metadata." },
+        { "label": "Robust INDI handling", "text": "ack-based property writes, configurable per-device pre-connect delays, and idempotent connect logic." },
+        { "label": "Embedded INDI Drivers Manager", "text": "the indi-web UI inside the panel, so you can add or remove INDI drivers and start or stop the indiserver without SSH." },
+        { "label": "Live INDI property tree", "text": "browse and set any INDI property directly." }
+      ]
+    },
+    {
+      "icon": "🧭", "color": "#f59e0b", "title": "POLAR", "tag": "Polar alignment",
+      "intro": "Get the mount's polar axis aligned before the night starts.",
+      "items": [
+        { "label": "TPPA (Three-Point Polar Alignment)", "text": "plate-solve-driven. Capture, slew, and solve at three points, then a live error vector tells you which way to turn the altitude and azimuth bolts." },
+        { "label": "Refinement mode", "text": "a continuous capture and solve loop with an on-screen error overlay that updates as you adjust, so you converge to near-zero." },
+        { "label": "Rudimentary mode", "text": "single-target alignment helper for setups without a clear view of the celestial pole." }
+      ]
+    },
+    {
+      "icon": "🌌", "color": "#8b5cf6", "title": "SKY", "tag": "Sky explorer: map, tonight, weather",
+      "intro": "Plan what to shoot and where to point.",
+      "items": [
+        { "label": "Offline sky map", "text": "interactive sky atlas with bundled star data; works with no internet at the scope." },
+        { "label": "Target search", "text": "find deep-sky objects by name or catalog from the bundled DSO database, or enter manual RA/DEC." },
+        { "label": "FOV overlays and framing", "text": "draw your camera's field of view on the map, rotate it, and drag to frame a target; the red (mount) and blue (target) rectangles track plate-solve results." },
+        { "label": "Slew & center", "text": "send the mount to a target and plate-solve-center on it." },
+        { "label": "Mosaic planner", "text": "lay out multi-panel mosaics over a target." },
+        { "label": "Tonight", "text": "altitude curves and the best objects to image for your location and date, with twilight and night windows." },
+        { "label": "Weather", "text": "current conditions and forecast for the observing site." },
+        { "label": "Stellarium sync", "text": "drive the view from and to a Stellarium instance." }
+      ]
+    },
+    {
+      "icon": "🔬", "color": "#06b6d4", "title": "FOCUS", "tag": "Focusing & field analysis",
+      "intro": "Achieve and verify focus, and diagnose the optical train.",
+      "items": [
+        { "label": "Manual focus", "text": "step the focuser in and out with a live preview canvas and real-time HFR (half-flux radius) plus Laplacian-variance sharpness readout." },
+        { "label": "Auto-focus", "text": "automated V-curve sweep with parabola fit; robust on heavy defocus, with an HFR-vs-position chart of the run." },
+        { "label": "Bahtinov mask helper", "text": "overlay analysis of a Bahtinov diffraction pattern for precise manual focus." },
+        { "label": "Field analysis tools", "text": "shared capture with multiple views. Tilt: a sensor-tilt map from corner-vs-center star sizes. Aberration Inspector: a 3x3 mosaic of 1:1 corner and center crops to judge coma, astigmatism, and backfocus. Inspector: full-field star metrics (eccentricity, FWHM) to spot collimation and spacing problems." },
+        { "label": "Sensor analysis", "text": "characterize the camera sensor itself." }
+      ]
+    },
+    {
+      "icon": "📡", "color": "#10b981", "title": "GUIDE", "tag": "Autoguiding",
+      "intro": "Keep stars round during long exposures, with two interchangeable backends.",
+      "items": [
+        { "label": "Native guider", "text": "PHD2's guiding math ported to C#, driving the rig's guide camera and mount directly with no external PHD2 process. Multi-star guiding, per-equipment calibration save and restore, dithering with ASIAIR-style settle readout, star-lost detection with a responsive watchdog, a predictive algorithm option (periodic-error and drift modeling), and meridian-flip awareness." },
+        { "label": "PHD2 integration", "text": "full control of an external PHD2. Connect, manage profiles and equipment, set exposure, launch and shutdown, smart calibration orchestration, guiding-algorithm presets, and the embedded PHD2 GUI in the browser via xpra (Linux) or noVNC." },
+        { "label": "Live guiding telemetry", "text": "RA/Dec error graph, RMS, and dither/settle state surfaced in the top status bar." }
+      ]
+    },
+    {
+      "icon": "📷", "color": "#38bdf8", "title": "PREVIEW", "tag": "Test shots",
+      "intro": "Quick framing and check exposures.",
+      "items": [
+        { "label": "Snap single frames", "text": "with chosen exposure, gain, and binning, with optional save." },
+        { "label": "Continuous stream mode", "text": "for live framing." },
+        { "label": "Plate solve from preview", "text": "solve the current frame and sync or center." },
+        { "label": "Full image tools", "text": "stretch controls, statistics, star annotations, and crosshair/grid/pixel readout (shared with the Studio viewer)." }
+      ]
+    },
+    {
+      "icon": "▶️", "color": "#fb8c00", "title": "AUTORUN", "tag": "Shooting schedule",
+      "intro": "A straightforward sequence runner against the current target.",
+      "items": [
+        { "label": "Frame list editor", "text": "rows of exposure x count per filter, gain, and binning." },
+        { "label": "Polaris Shutter", "text": "start and stop control with live progress." },
+        { "label": "End-of-session actions", "text": "warm the camera and cooler off, park or go-home, send the focuser to zero, and optional host shutdown." },
+        { "label": "Flat Wizard sub-tab", "text": "automated flat-field acquisition with binary-search exposure per filter, a trained-exposure cache, and per-rig defaults." }
+      ]
+    },
+    {
+      "icon": "📅", "color": "#ec4899", "title": "PLAN", "tag": "Multi-target night planner",
+      "intro": "ASIAIR-style whole-night planning: queue several targets, each with its own frame list, run in order with automatic slew and plate-solve-center.",
+      "items": [
+        { "label": "Multiple targets per plan", "text": "added from catalog search, manual RA/DEC, the current mount position, or framed visually in the Sky map." },
+        { "label": "Per-target frame lists", "text": "and a first-light delay." },
+        { "label": "Scheduling", "text": "start now or at a clock time; end when all frames are done, at astronomical dawn, or at a set time." },
+        { "label": "Plan-level automation", "text": "auto guiding, auto cooling (with target temp), per-target or initial auto-focus, and auto meridian flip with exposed flip tuning (minutes-after, recenter, autofocus-on-flip)." },
+        { "label": "End actions", "text": "warm and cooler-off, park or go-home, focuser-to-zero, and a confirm-gated host shutdown." },
+        { "label": "Elevation chart", "text": "of each target across the night for sanity-checking the order." },
+        { "label": "Global plan library", "text": "saved plans are runnable with any active rig." }
+      ]
+    },
+    {
+      "icon": "📸", "color": "#3b82f6", "title": "LIVE", "tag": "Live stacking (EAA)",
+      "intro": "Real-time electronically-assisted-astronomy stacking that builds an image as frames arrive.",
+      "items": [
+        { "label": "Continuous integration", "text": "with live alignment (star matching) and a growing preview." },
+        { "label": "Per-frame pre-processing", "text": "optional calibration (auto-matched master dark/flat/bias) and GraXpert background extraction applied before each frame is added." },
+        { "label": "OSC color stacking", "text": "automatic for one-shot-color cameras." },
+        { "label": "Auto re-focus and re-center triggers", "text": "kick off an auto-focus or a re-center when HFR drifts or the target wanders." },
+        { "label": "Save the current stack", "text": "to FITS at any time, into a dedicated stacked folder." },
+        { "label": "Client-side compute offload", "text": "on a slow server (Pi 2/3) the stacking math can run in your browser via WebAssembly instead of the host." },
+        { "label": "Reference-frame suggestions", "text": "to improve alignment quality." }
+      ]
+    },
+    {
+      "icon": "🎥", "color": "#ef5350", "title": "VIDEO", "tag": "Planetary & lucky imaging",
+      "intro": "High-frame-rate capture and stacking for planets, the Moon, and the Sun.",
+      "items": [
+        { "label": "SER capture", "text": "high-fps video recording (tested to about 100 fps) with ROI subframing." },
+        { "label": "Frame-quality analysis", "text": "Laplacian-variance scoring to rank frames." },
+        { "label": "Lucky-imaging stacker", "text": "keep the best N% of frames and stack them." },
+        { "label": "Slew preview inset", "text": "a small live view while you center the planet." }
+      ]
+    },
+    {
+      "icon": "🌲", "color": "#66bb6a", "title": "ADV", "tag": "Advanced sequencer",
+      "intro": "A full NINA-style, tree-based sequencer for complex automated nights.",
+      "items": [
+        { "label": "Tree of containers, instructions, conditions, and triggers", "text": "with drag-and-drop editing." },
+        { "label": "Instruction library", "text": "camera (cool/warm/expose), mount (slew/park/find home), focuser, filter wheel, guider (start/stop/dither), flow control (wait-until-time), and more." },
+        { "label": "Loop conditions and event triggers", "text": "meridian flip, auto-focus on temperature, HFR, or time, and other operational triggers." },
+        { "label": "JSON serialization", "text": "save, load, and share sequence documents." }
+      ]
+    },
+    {
+      "icon": "🎨", "color": "#ab47bc", "title": "STUDIO", "tag": "Post-processing",
+      "intro": "Browse, calibrate, and integrate your captured frames on the host.",
+      "items": [
+        { "label": "Frame browser and library", "text": "scan and organize captured frames." },
+        { "label": "Master generation", "text": "build master darks, flats, and bias frames." },
+        { "label": "Calibration", "text": "apply masters to light frames." },
+        { "label": "Batch stacking", "text": "register and integrate a set of lights into a master, with progress reporting." },
+        { "label": "Channel combine", "text": "merge per-filter masters into one RGB image, with RGB compose (no luminance needed), LRGB (Lab or ratio combine when you have a luminance master), and PixelMath for narrowband palettes (HOO, SHO)." },
+        { "label": "Color calibration", "text": "Siril-style and plate-solve-driven: background neutralization (zero-config), manual (background patch and white-reference patch), and PCC, Photometric Color Calibration against the bundled APASS DR10 star catalog for science-grade color." },
+        { "label": "Quick processing", "text": "debayer, background extraction, noise reduction, and sharpening passes." },
+        { "label": "Crop tool", "text": "with a drag picker." }
+      ]
+    },
+    {
+      "icon": "🖌️", "color": "#26c6da", "title": "EDITOR", "tag": "Non-destructive image editor",
+      "intro": "A Lightroom-style finishing editor for your master image.",
+      "items": [
+        { "label": "Slider-based adjustments", "text": "grouped into Light, Color, Effects, and Detail, with an auto-tune button for a sensible starting point." },
+        { "label": "Non-destructive", "text": "edits are stored in a sidecar .edit.json next to the source file; the original is never overwritten." },
+        { "label": "AI section", "text": "run GraXpert BGE, Denoise, and Deconvolution from inside the editor with a before/after slider." },
+        { "label": "Export", "text": "to JPEG, PNG, or TIFF with quality and resize options." },
+        { "label": "Auto-stretch", "text": "ported from GraXpert (15% background, 3-sigma) as the default display stretch." }
+      ]
+    },
+    {
+      "icon": "🤖", "color": "#7e57c2", "title": "AI inference", "tag": "ONNX / GraXpert",
+      "intro": "GraXpert's AI models run on whatever hardware is fastest, with no per-frame cloud calls.",
+      "items": [
+        { "label": "Models", "text": "Background Extraction (BGE), Denoise (v2 and v3), and Deconvolution (stars and objects)." },
+        { "label": "In-browser inference", "text": "onnxruntime-web uses the client device's GPU (WebGPU) or WASM SIMD; the server just hosts the .onnx files." },
+        { "label": "Server-side CLI fallback", "text": "GraXpert on the host, when you prefer the host to do it." },
+        { "label": "NPU acceleration", "text": "on Rockchip RK3588 boards the models run on the NPU for a large speed-up." },
+        { "label": "OpenCL GPU backend", "text": "image math can offload to the SBC GPU where available." },
+        { "label": "RGB FITS support", "text": "throughout the AI pipelines." }
+      ]
+    },
+    {
+      "icon": "📁", "color": "#ffa726", "title": "FILES", "tag": "File explorer",
+      "intro": "Server-side file browser.",
+      "items": [
+        { "label": "Browse, download, and manage", "text": "captured frames and outputs on the host." },
+        { "label": "Upload images", "text": "into Studio or Editor as an entry point for processing." }
+      ]
+    },
+    {
+      "icon": "⚙️", "color": "#78909c", "title": "SETTINGS", "tag": "Configuration & connectivity",
+      "intro": "Global configuration, host management, and connectivity.",
+      "items": [
+        { "label": "Profiles and location", "text": "observer location (with a first-run setup modal), units, and app-wide preferences." },
+        { "label": "Appearance", "text": "theme and font picker." },
+        { "label": "Network mode (Hotspot and Station)", "text": "ASIAIR-style WiFi panel. The Pi ships as a hotspot on first boot so you can reach it without a monitor; flip it onto your home WiFi with a 30-second try-and-revert safety net." },
+        { "label": "Remote access (Relay)", "text": "TLS-tunneled access to your rig from outside the LAN, with optional DuckDNS and Let's Encrypt." },
+        { "label": "HTTPS setup", "text": "one-click self-signed certificate (port 5001) so client devices get WebGPU and multi-thread WASM for in-browser AI." },
+        { "label": "Authentication", "text": "login and first-run wizard protecting the UI and API." },
+        { "label": "Remote terminal", "text": "embedded SSH terminal (xterm.js) to manage a headless host from the browser." },
+        { "label": "Clock sync", "text": "push the browser's UTC to a Pi without an RTC." },
+        { "label": "Equipment simulator", "text": "built-in fake telescope, camera, focuser, and filter wheel that renders real stars at the simulated position, so plate solve, auto-focus, and live stacking all work without hardware." },
+        { "label": "Benchmark", "text": "synthetic workloads to compare hardware (and GPU vs CPU) with a saved results history." },
+        { "label": "Software self-update", "text": "on Pi/SBC .deb installs, a status-bar badge appears when a newer GitHub release exists; one click downloads the matching .deb, installs it, and reloads on the new version. No password needed, authorized via a scoped PolicyKit rule." }
+      ]
+    },
+    {
+      "icon": "❓", "color": "#42a5f5", "title": "HELP", "tag": "In-app guidance",
+      "intro": "In-app guidance.",
+      "items": [
+        { "label": "Step-by-step tutorials", "text": "capture-to-export, first-night checklist, and specific workflows (LRGB mono, planetary, PCC)." },
+        { "label": "Troubleshooting accordion", "text": "and links to the full user guide." },
+        { "label": "Report a problem", "text": "opens a pre-filled GitHub issue or discussion with client and server diagnostics attached." }
+      ]
+    },
+    {
+      "icon": "🛰️", "color": "#5c6bc0", "title": "Always-on UI", "tag": "Across every panel",
+      "intro": "Features present across every panel.",
+      "items": [
+        { "label": "Top status bar", "text": "connection badges (INDI, Alpaca, PHD2), camera temperature, live-stack frame count, client-device battery, clock, guider dither/settle state, a global sequence-abort button, the update badge, and the debug-log badge." },
+        { "label": "Activity and transfer chips", "text": "live network throughput, in-flight uploads and downloads, image-frame and exposure progress." },
+        { "label": "Debug log", "text": "every server log, HTTP request, toast, and browser exception collected in one panel, filterable and exportable as JSONL for bug reports." },
+        { "label": "Multi-instance tabs", "text": "manage several Polaris hosts from one browser." },
+        { "label": "Dismissable health chips", "text": "for example Raspberry Pi undervoltage warnings." }
+      ]
+    },
+    {
+      "icon": "🚀", "color": "#ff7043", "title": "Platform & deployment", "tag": "Run it your way",
+      "intro": "Run it where it suits you.",
+      "items": [
+        { "label": "One-command Pi install", "text": "the .deb package handles every dependency, systemd unit, indi-web, and user setup." },
+        { "label": "Windows and Linux", "text": "hosts both supported." },
+        { "label": "Docker image and compose", "text": "for containerized deployment." },
+        { "label": "Plate-solving", "text": "via ASTAP and other solver backends." },
+        { "label": "Plugin system", "text": "for extending the app." }
+      ]
+    }
+  ],
+  "docUrl": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/FEATURES.md",
+  "docLabel": "Full control-by-control reference on GitHub"
+}

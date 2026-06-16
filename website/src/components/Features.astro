@@ -38,6 +38,10 @@ const rows = features.map((f) => {
         </article>
       ))}
     </div>
+
+    <p class="features-more">
+      <a class="btn btn-ghost" href="/features">See every feature, panel by panel →</a>
+    </p>
   </div>
 
   <!-- Click-to-zoom lightbox for feature screenshots -->
@@ -109,6 +113,8 @@ const rows = features.map((f) => {
     transition: border-color 0.15s;
   }
   .feature-media img:hover { border-color: var(--accent); }
+
+  .features-more { text-align: center; margin-top: 48px; }
 
   /* Lightbox */
   .lightbox {

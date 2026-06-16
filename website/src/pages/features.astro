@@ -1,0 +1,162 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Footer from '../components/Footer.astro';
+import { featurePage as f } from '../data/site';
+---
+
+<Layout
+  title="Features, N.I.N.A. Polaris"
+  description="The full N.I.N.A. Polaris feature map, organized by sidebar panel: equipment, polar alignment, sky explorer, focus, guiding, capture, planning, live stacking, video, the advanced sequencer, studio post-processing, the editor, and AI inference."
+>
+  <main>
+    <header class="page-head">
+      <div class="container">
+        <a class="back" href="/">← Back to home</a>
+        <h1>{f.title}</h1>
+        <p class="lede">{f.lede}</p>
+      </div>
+    </header>
+
+    {f.glance && f.glance.length > 0 && (
+      <section class="section section-alt">
+        <div class="container">
+          <h2 class="block-title">{f.glanceTitle}</h2>
+          <div class="glance-grid">
+            {f.glance.map((g) => (
+              <div class="glance">
+                <span class="glance-dot" aria-hidden="true"></span>
+                <p><strong>{g.label}</strong> {g.text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    )}
+
+    <section class="section">
+      <div class="container">
+        <div class="panels">
+          {f.sections.map((s) => (
+            <article class="panel" id={s.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}>
+              <header class="panel-head">
+                <span class="sq-icon" style={s.color ? `--ic: ${s.color}` : undefined}>{s.icon}</span>
+                <div class="panel-id">
+                  <h2>{s.title}</h2>
+                  {s.tag && <span class="panel-tag">{s.tag}</span>}
+                </div>
+              </header>
+              {s.intro && <p class="panel-intro">{s.intro}</p>}
+              <ul class="panel-list">
+                {s.items.map((it) => (
+                  <li>
+                    {it.label && <strong>{it.label}</strong>}
+                    {it.label && it.text ? ' ' : ''}
+                    {it.text}
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+
+        {f.docUrl && (
+          <p class="doc-link">
+            <a href={f.docUrl} target="_blank" rel="noopener">{f.docLabel || 'Full reference'} →</a>
+          </p>
+        )}
+      </div>
+    </section>
+  </main>
+  <Footer />
+</Layout>
+
+<style>
+  .page-head {
+    padding: 56px 0 40px;
+    border-bottom: 1px solid var(--border);
+  }
+  .back { display: inline-block; font-size: 14px; margin-bottom: 18px; color: var(--text-muted); }
+  .back:hover { color: var(--accent); text-decoration: none; }
+  .page-head h1 { font-size: clamp(30px, 5vw, 48px); font-weight: 800; letter-spacing: -1px; margin-bottom: 14px; }
+  .lede { font-size: 17px; color: var(--text-muted); max-width: 78ch; line-height: 1.6; }
+  .section { padding: 56px 0; }
+  .block-title { font-size: clamp(22px, 3vw, 30px); font-weight: 700; letter-spacing: -0.5px; margin-bottom: 24px; }
+
+  /* At a glance */
+  .glance-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+  }
+  .glance { display: flex; gap: 12px; align-items: flex-start; }
+  .glance-dot {
+    margin-top: 8px;
+    width: 8px;
+    height: 8px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.7);
+  }
+  .glance p { font-size: 15px; color: var(--text-muted); line-height: 1.55; }
+  .glance strong { color: var(--text); }
+
+  /* Panels */
+  .panels {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+    gap: 24px;
+    align-items: start;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    scroll-margin-top: 88px;
+  }
+  .panel-head { display: flex; align-items: center; gap: 13px; margin-bottom: 14px; }
+  .sq-icon {
+    --ic: var(--accent);
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    font-size: 20px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--ic) 16%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ic) 40%, transparent);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--ic) 22%, transparent);
+  }
+  .panel-id { min-width: 0; }
+  .panel-id h2 { font-size: 19px; font-weight: 800; letter-spacing: 0.3px; line-height: 1.1; }
+  .panel-tag { font-size: 12.5px; color: var(--text-muted); }
+  .panel-intro { font-size: 14.5px; color: var(--text-muted); line-height: 1.55; margin-bottom: 14px; }
+  .panel-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .panel-list li {
+    position: relative;
+    padding-left: 18px;
+    font-size: 14px;
+    color: var(--text-muted);
+    line-height: 1.55;
+  }
+  .panel-list li::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 8px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--accent) 70%, transparent);
+  }
+  .panel-list strong { color: var(--text); font-weight: 600; }
+
+  .doc-link { text-align: center; margin-top: 40px; font-size: 15px; }
+
+  @media (max-width: 520px) {
+    .panels { grid-template-columns: 1fr; }
+    .glance-grid { grid-template-columns: 1fr; }
+  }
+</style>

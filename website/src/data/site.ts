@@ -6,6 +6,7 @@
 import home from '../../content/pages/home.json';
 import install from '../../content/install/install.json';
 import gettingStarted from '../../content/guide/getting-started.json';
+import featuresPage from '../../content/features/features.json';
 
 // ---- Static site config (links/meta, not editorial copy) ----
 export const site = {
@@ -22,7 +23,7 @@ export const site = {
 };
 
 export const navLinks = [
-  { label: 'Features', href: '/#features' },
+  { label: 'Features', href: '/features' },
   { label: 'Benchmarks', href: '/#benchmarks' },
   { label: 'Screenshots', href: '/#screenshots' },
   { label: 'Get Started', href: '/getting-started' },
@@ -35,6 +36,7 @@ export const footerCols = [
   {
     title: 'Project',
     links: [
+      { label: 'All features', href: '/features', external: false },
       { label: 'Getting started', href: '/getting-started', external: false },
       { label: 'Download & Install', href: '/install', external: false },
       { label: 'GitHub repo', href: site.repo },
@@ -67,3 +69,6 @@ export const installGuide = install;
 
 // ---- Getting started (content/guide/getting-started.json) ----
 export const guide = gettingStarted;
+
+// ---- Features page (content/features/features.json) ----
+export const featurePage = featuresPage;
