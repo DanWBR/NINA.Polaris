@@ -21806,31 +21806,37 @@ function ninaApp() {
         },
 
         _cropPointerXY(ev, pickerEl) {
-            const rect = pickerEl.getBoundingClientRect();
+            const pickerRect = pickerEl.getBoundingClientRect();
             // Touch events nest the coords under changedTouches[0];
             // fall back to clientX/Y for plain pointer/mouse.
             const cx = ev.clientX != null ? ev.clientX :
                 (ev.changedTouches && ev.changedTouches[0] ? ev.changedTouches[0].clientX : 0);
             const cy = ev.clientY != null ? ev.clientY :
                 (ev.changedTouches && ev.changedTouches[0] ? ev.changedTouches[0].clientY : 0);
-            // Refresh the displayed image size from the LIVE layout. The
-            // @load-time cache (cropOnImageLoaded) goes stale when the image
-            // or modal resizes after load, which made the ROI fractions wrong:
-            // the rectangle lagged the cursor and couldn't reach the right /
-            // bottom edge (an invisible ceiling at the stale size's ratio).
+            // Map everything relative to the IMAGE, not the picker. The
+            // displayed <img> can be smaller than / offset within the picker
+            // box (object-fit letterboxing, inline-block dead space), so
+            // measuring against the picker made the ROI fractions wrong — the
+            // rectangle couldn't cover the whole photo and the resulting crop
+            // came out as (near) the full frame. Read the image's live rect
+            // each time (it goes stale on resize) and store its offset inside
+            // the picker so the overlay + fractions stay consistent.
             const img = pickerEl.querySelector('.crop-picker-img');
-            if (img) {
-                const ir = img.getBoundingClientRect();
-                if (ir.width > 0 && ir.height > 0) {
-                    this.crop.imgDisplayWidth = ir.width;
-                    this.crop.imgDisplayHeight = ir.height;
-                }
-            }
-            // Clamp to picker bounds so a drag that overshoots the
-            // image edge still produces a valid ROI snapped to the
-            // displayed image area.
-            const x = Math.max(0, Math.min(rect.width, cx - rect.left));
-            const y = Math.max(0, Math.min(rect.height, cy - rect.top));
+            const imgRect = (img && img.getBoundingClientRect().width > 0)
+                ? img.getBoundingClientRect() : pickerRect;
+            const iw = imgRect.width, ih = imgRect.height;
+            this.crop.imgDisplayWidth = iw;
+            this.crop.imgDisplayHeight = ih;
+            // Offset of the image's top-left within the picker (overlay is
+            // positioned in picker coords, so the ROI is stored that way too).
+            const offLeft = imgRect.left - pickerRect.left;
+            const offTop = imgRect.top - pickerRect.top;
+            this.crop._imgOffLeft = offLeft;
+            this.crop._imgOffTop = offTop;
+            // Clamp the pointer to the IMAGE region so the selection snaps to
+            // the photo (can reach every edge, never strays into letterbox).
+            const x = Math.max(offLeft, Math.min(offLeft + iw, cx - pickerRect.left));
+            const y = Math.max(offTop, Math.min(offTop + ih, cy - pickerRect.top));
             return { x, y };
         },
 
@@ -21913,9 +21919,13 @@ function ninaApp() {
             const dispW = this.crop.imgDisplayWidth;
             const dispH = this.crop.imgDisplayHeight;
             if (!dispW || !dispH) return null;
+            // ROI is stored in picker coords; subtract the image's offset
+            // within the picker so the fractions are relative to the image.
+            const offL = this.crop._imgOffLeft || 0;
+            const offT = this.crop._imgOffTop || 0;
             const clamp01 = (v) => Math.max(0, Math.min(1, v));
-            const fx = clamp01(Math.min(r.startX, r.endX) / dispW);
-            const fy = clamp01(Math.min(r.startY, r.endY) / dispH);
+            const fx = clamp01((Math.min(r.startX, r.endX) - offL) / dispW);
+            const fy = clamp01((Math.min(r.startY, r.endY) - offT) / dispH);
             const fw = clamp01(Math.abs(r.endX - r.startX) / dispW);
             const fh = clamp01(Math.abs(r.endY - r.startY) / dispH);
             if (fw <= 0 || fh <= 0) return null;
