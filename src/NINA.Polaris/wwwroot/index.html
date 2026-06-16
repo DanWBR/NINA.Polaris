@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260615-lockframe">
+    <link rel="stylesheet" href="/css/app.css?v=20260615-ghreport">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -11935,6 +11935,21 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 </div>
                             </details>
 
+                            <details class="help-faq" open>
+                                <summary>Report a problem</summary>
+                                <div class="help-faq-body">
+                                    <p>Open a pre-filled GitHub report with your client + server
+                                       details (versions, host, browser, recent warnings) already
+                                       attached, so it's easier to diagnose. Nothing is sent
+                                       automatically — it opens GitHub in a new tab for you to
+                                       review and post.</p>
+                                    <div class="report-actions">
+                                        <button class="btn btn-sm btn-primary" @click="reportToGithub('issue')">🐞 Report a bug (issue)</button>
+                                        <button class="btn btn-sm" @click="reportToGithub('discussion')">💬 Start a discussion</button>
+                                    </div>
+                                </div>
+                            </details>
+
                             <details class="help-faq">
                                 <summary>Author &amp; contact</summary>
                                 <div class="help-faq-body">
@@ -14042,7 +14057,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260615-lockframe"></script>
+    <script src="/js/app.js?v=20260615-ghreport"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

@@ -25744,6 +25744,77 @@ function ninaApp() {
             if (d.cpu) s += '\n' + d.cpu;
             return s;
         },
+
+        // Open a pre-filled GitHub issue (kind='issue') or discussion
+        // (kind='discussion') on the project repo, with client + server
+        // diagnostics baked into the body so reports are actionable. Opens a
+        // new tab to GitHub's "new" form — nothing is submitted automatically;
+        // the user reviews + posts there.
+        reportToGithub(kind) {
+            const repo = 'https://github.com/DanWBR/NINA.Polaris';
+            const d = (this.host && this.host.device) || {};
+            const rig = (this.rigs || []).find(r => r.id === this.activeRigId);
+            // UI build = the ?v= cache-bust on the loaded app.js.
+            let uiBuild = 'unknown';
+            try {
+                const src = Array.from(document.scripts).map(x => x.src)
+                    .find(u => u && u.includes('/js/app.js'));
+                const m = src && src.match(/[?&]v=([^&]+)/);
+                if (m) uiBuild = decodeURIComponent(m[1]);
+            } catch (e) { /* best effort */ }
+
+            const L = [];
+            L.push('## Describe the problem', '',
+                '<!-- What happened? What did you expect? Steps to reproduce. -->',
+                '', '');
+            L.push('## Diagnostics',
+                '<details><summary>Client &amp; server info (auto-filled)</summary>', '',
+                '```');
+            L.push('— Polaris —');
+            L.push('Server version : ' + (this.appVersion || 'unknown'));
+            L.push('UI build       : ' + uiBuild);
+            L.push('Active tab     : ' + (this.tab || ''));
+            L.push('Active rig     : ' + (rig ? rig.name : '(none)'));
+            const g = this.guider || {};
+            L.push('Guider         : ' + (g.backend || '(none)')
+                + (g.connected ? ' · ' + (g.appState || 'connected') : ' · offline'));
+            L.push('');
+            L.push('— Server host —');
+            L.push('Model          : ' + (d.model || 'unknown'));
+            L.push('OS             : ' + (d.os || 'unknown'));
+            L.push('Arch / cores   : ' + ((d.architecture || '?') + ' / ' + (d.cores || '?')));
+            if (d.cpu) L.push('CPU            : ' + d.cpu);
+            L.push('');
+            L.push('— Client (browser) —');
+            L.push('User agent     : ' + navigator.userAgent);
+            L.push('Language       : ' + (navigator.language || ''));
+            L.push('Viewport       : ' + window.innerWidth + 'x' + window.innerHeight
+                + ' @' + (window.devicePixelRatio || 1) + 'x');
+            L.push('Location time  : ' + new Date().toString());
+
+            // Last few warnings/errors from the live log window, if any.
+            const errs = (this.logs && this.logs.entries || [])
+                .filter(e => /error|warn/i.test(e.level || ''))
+                .slice(-15);
+            if (errs.length) {
+                L.push('', '— Recent warnings/errors —');
+                for (const e of errs) {
+                    const lvl = (e.level || '?')[0];
+                    L.push('[' + lvl + '] ' + (e.source ? e.source + ': ' : '')
+                        + (e.message || '').replace(/\s+/g, ' ').slice(0, 200));
+                }
+            }
+            L.push('```', '</details>');
+
+            const body = L.join('\n');
+            const base = kind === 'discussion'
+                ? repo + '/discussions/new'
+                : repo + '/issues/new';
+            const url = base
+                + '?title=' + encodeURIComponent(kind === 'discussion' ? '' : '[bug] ')
+                + '&body=' + encodeURIComponent(body);
+            window.open(url, '_blank', 'noopener');
+        },
         formatHostRam(usedMB, totalMB) {
             if (!totalMB || totalMB <= 0) return ', /,';
             // Render in GB once we cross 1 GB total; below that

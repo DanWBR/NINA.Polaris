@@ -12057,6 +12057,8 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .modal-head h3, .modal-card h3 { margin: 0; font-size: 16px; font-weight: 650; }
 .modal-card p { margin: 0 0 18px; font-size: 13px; line-height: 1.55; color: var(--text-muted, #9aa4b2); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+/* "Report a problem" buttons in the Help/About FAQ. */
+.report-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 
 /* Theme the PLAN form controls to match the rest of the app (the dark
    input chrome used in Settings). Without this, native selects/inputs
