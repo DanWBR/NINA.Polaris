@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260616-settleguard">
+    <link rel="stylesheet" href="/css/app.css?v=20260616-livectrls">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -1694,8 +1694,10 @@
                           x-text="liveStackStatus?.elapsedSeconds > 0 ? formatTime(liveStackStatus.elapsedSeconds) : '--'">--</strong></span>
                     <span x-show="mfTimeToMeridianMinutes != null"
                           title="Time until the target crosses the meridian (a flip may be needed past it)">Meridian: <strong x-text="formatTimeToMeridian()"></strong></span>
-                    <button class="btn btn-sm" @click="loadFullStats()" style="margin-left:auto;"
-                            :disabled="!selectedCamera">Detailed stats</button>
+                    <button class="btn btn-sm" @click="fullStats ? (fullStats = null) : loadFullStats()" style="margin-left:auto;"
+                            :class="fullStats ? 'btn-active' : ''"
+                            :disabled="!selectedCamera"
+                            x-text="fullStats ? 'Hide stats' : 'Detailed stats'">Detailed stats</button>
                 </div>
 
                 <!-- (LIVE histogram moved into the frame as a bottom overlay,
@@ -14148,7 +14150,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260616-settleguard"></script>
+    <script src="/js/app.js?v=20260616-livectrls"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

@@ -2498,7 +2498,7 @@ function ninaApp() {
         // history button in .preview-overlay-controls; preference
         // persisted in localStorage so it survives reloads.
         liveOverlayVisible: false,
-        showCrosshair: true,
+        showCrosshair: false,
         showGrid: false,
         showPixelReadout: false,
         lastStars: null,        // { width, height, stars: [{x,y,hfr,...}] }
