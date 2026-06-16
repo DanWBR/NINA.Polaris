@@ -251,6 +251,12 @@ public class ImageWriterService {
             m.FilterWheel.Position = _equip.FilterWheel.Position;
             if (string.IsNullOrEmpty(m.Exposure.Filter))
                 m.Exposure.Filter = _equip.FilterWheel.CurrentFilterName ?? "";
+        } else if (string.IsNullOrEmpty(m.Exposure.Filter)
+                   && !string.IsNullOrEmpty(profile?.AttachedFilter)) {
+            // No filter wheel: stamp the rig's fixed "Attached Filter" code
+            // (a screwed-in LP / narrowband filter) so the FITS FILTER
+            // keyword and the {filter} filename token still record it.
+            m.Exposure.Filter = profile.AttachedFilter;
         }
 
         // Focuser

@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260616-modalbars">
+    <link rel="stylesheet" href="/css/app.css?v=20260616-attachedfilter">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -4716,6 +4716,64 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                x-show="settings.requiredBackspacingMm">
                                 Required backspacing: <strong x-text="settings.requiredBackspacingMm + ' mm'"></strong>
                             </p>
+
+                            <!-- Attached Filter: a fixed light-pollution /
+                                 narrowband filter screwed into the train when
+                                 there's NO filter wheel. Its code is stamped
+                                 into the FITS FILTER keyword + the {filter}
+                                 filename token on every capture. Ignored once
+                                 an actual filter wheel is connected (the wheel
+                                 reports the live filter instead). -->
+                            <div class="equip-meta-row" style="margin-top:8px">
+                                <label style="flex:1; min-width:0">Attached filter (no wheel)
+                                    <select x-model="settings.attachedFilter"
+                                            @change="saveOpticsDebounced()"
+                                            class="input-sm" style="width:100%">
+                                        <option value="">None</option>
+                                        <optgroup label="Generic / Narrowband">
+                                            <option value="L">Luminance / UV-IR Cut (L)</option>
+                                            <option value="UVIR-Cut">UV/IR Cut</option>
+                                            <option value="CLS">CLS (broadband LP)</option>
+                                            <option value="UHC">UHC (broadband LP)</option>
+                                            <option value="Ha">H-alpha</option>
+                                            <option value="OIII">O-III</option>
+                                            <option value="SII">S-II</option>
+                                        </optgroup>
+                                        <optgroup label="Optolong">
+                                            <option value="L-Pro">L-Pro</option>
+                                            <option value="L-eNhance">L-eNhance</option>
+                                            <option value="L-eXtreme">L-eXtreme</option>
+                                            <option value="L-Ultimate">L-Ultimate</option>
+                                            <option value="L-QEF">L-QEF</option>
+                                        </optgroup>
+                                        <optgroup label="SVBony">
+                                            <option value="SV220">SV220 (Ha+OIII 7nm)</option>
+                                            <option value="SV260">SV260 (Ha+OIII+SII)</option>
+                                        </optgroup>
+                                        <optgroup label="Altair">
+                                            <option value="TriBand">TriBand</option>
+                                            <option value="QuadBand">QuadBand</option>
+                                        </optgroup>
+                                        <optgroup label="Askar (ColourMagic)">
+                                            <option value="D1">D1 (Ha+OIII)</option>
+                                            <option value="D2">D2 (SII+OIII)</option>
+                                            <option value="C1">C1</option>
+                                            <option value="C2">C2</option>
+                                        </optgroup>
+                                        <optgroup label="Antlia">
+                                            <option value="ALP-T">ALP-T (Ha+OIII dual)</option>
+                                            <option value="Triband-RGB">Triband RGB Ultra</option>
+                                            <option value="Antlia-Quad">Quad Band</option>
+                                        </optgroup>
+                                        <optgroup label="ZWO">
+                                            <option value="Duo-Band">Duo-Band (Ha+OIII)</option>
+                                        </optgroup>
+                                        <optgroup label="ToupTek">
+                                            <option value="ToupTek-DualBand">Dual-Band (Ha+OIII)</option>
+                                        </optgroup>
+                                    </select>
+                                </label>
+                            </div>
                         </div>
                     </div>
 
@@ -14168,7 +14226,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260616-modalbars"></script>
+    <script src="/js/app.js?v=20260616-attachedfilter"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

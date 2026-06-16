@@ -220,6 +220,13 @@ public static class EquipmentEndpoints {
                 // the existing FlatWizard block untouched.
                 if (update.FlatWizard != null)
                     r.FlatWizard = update.FlatWizard;
+                // Attached Filter (fixed LP/narrowband filter when no
+                // wheel). Non-null guard: new clients always send it
+                // (including "" = None, which must be allowed to clear);
+                // a pre-feature client omits it and JSON binds the
+                // default "", so the worst case is a no-op.
+                if (update.AttachedFilter != null)
+                    r.AttachedFilter = update.AttachedFilter;
                 // INDIROB-3: per-device pre-connect delays. Replace
                 // wholesale when supplied (operator-driven full edit
                 // of the table), preserve when null/missing so a

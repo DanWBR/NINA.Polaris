@@ -696,6 +696,8 @@ function ninaApp() {
             accessoryModel: '',
             accessoryFactor: 1.0,
             requiredBackspacingMm: null,
+            // Attached fixed filter code (no filter wheel). '' = None.
+            attachedFilter: '',
             // Guidescope optics (mirrored from active rig).
             guiderFocalLengthMm: 200,
             guiderApertureMm: 50,
@@ -14760,6 +14762,7 @@ function ninaApp() {
             this.settings.accessoryModel = rig.accessoryModel || '';
             this.settings.accessoryFactor = rig.accessoryFactor || 1.0;
             this.settings.requiredBackspacingMm = rig.requiredBackspacingMm ?? null;
+            this.settings.attachedFilter = rig.attachedFilter || '';
             // Guidescope card
             this.settings.guiderFocalLengthMm = rig.guiderFocalLengthMm || 200;
             this.settings.guiderApertureMm   = rig.guiderApertureMm   || 50;
@@ -15334,6 +15337,7 @@ function ninaApp() {
                 accessoryModel: this.settings.accessoryModel,
                 accessoryFactor: this.settings.accessoryFactor,
                 requiredBackspacingMm: this.settings.requiredBackspacingMm,
+                attachedFilter: this.settings.attachedFilter || '',
                 // Guidescope card
                 guiderFocalLengthMm: this.settings.guiderFocalLengthMm,
                 guiderApertureMm:    this.settings.guiderApertureMm,

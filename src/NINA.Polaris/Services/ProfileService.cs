@@ -916,6 +916,13 @@ public class EquipmentProfile {
     /// <summary>Filter-wheel backend kind. Same enum as
     /// <see cref="FocuserDriver"/>.</summary>
     public string FilterWheelDriver { get; set; } = "indi";
+    /// <summary>Short code for a fixed filter screwed into the optical
+    /// train when there is NO filter wheel (e.g. a light-pollution or
+    /// dual/narrowband filter). When set and no wheel is connected, it is
+    /// stamped into the FITS FILTER keyword and the {filter} filename token
+    /// so captures still record what was in front of the sensor. Empty
+    /// string = "None" (default).</summary>
+    public string AttachedFilter { get; set; } = "";
     public string? Rotator { get; set; }
     public string? FlatDevice { get; set; }
     public string? Dome { get; set; }
