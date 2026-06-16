@@ -97,7 +97,8 @@ public class ImageWriterService {
     public string? SaveImage(IImageData imageData,
         string? targetName = null,
         string imageType = "LIGHT",
-        int gain = 0) {
+        int gain = 0,
+        bool stacked = false) {
 
         var profile = _profile.Active;
         var dir = profile.ImageOutputDir;
@@ -144,7 +145,12 @@ public class ImageWriterService {
             // active rig and the astronomical session date.
             var rigName = _profile.ActiveEquipmentProfile?.Name ?? "Default";
             var sessionDate = SessionDateForLocal(imageData.MetaData.CreationTime.ToLocalTime());
-            var subDir = BuildSubDir(imageType, imageData, profile, rigName, sessionDate);
+            // User-requested stacked saves go into their own "stacked" tree
+            // ({rig}/stacked/{target}/{filter}/{session}) so the integrated
+            // master sits apart from the raw lights/calibration frames.
+            var subDir = stacked
+                ? BuildStackedSubDir(imageData, rigName, sessionDate)
+                : BuildSubDir(imageType, imageData, profile, rigName, sessionDate);
             var targetDir = string.IsNullOrEmpty(subDir) ? dir : Path.Combine(dir, subDir);
             Directory.CreateDirectory(targetDir);
             var fullPath = Path.Combine(targetDir, fileName);
@@ -322,6 +328,19 @@ public class ImageWriterService {
                                 System.Globalization.CultureInfo.InvariantCulture))
         };
         return Path.Combine(rig, subPath);
+    }
+
+    /// <summary>Subdirectory for a user-requested stacked master:
+    /// {rig}/stacked/{target}/{filter}/{session}. Kept separate from the
+    /// lights/calibration trees so the integrated result is easy to find and
+    /// doesn't get mixed in with the raw subs.</summary>
+    public static string BuildStackedSubDir(IImageData img, string rigName, DateTime sessionDate) {
+        var m = img.MetaData;
+        var rig    = SanitizeFolder(string.IsNullOrEmpty(rigName) ? "Default" : rigName);
+        var target = SanitizeFolder(string.IsNullOrEmpty(m.Target.Name) ? "Unknown" : m.Target.Name);
+        var filter = SanitizeFolder(string.IsNullOrEmpty(m.Exposure.Filter) ? "L" : m.Exposure.Filter);
+        return Path.Combine(rig, "stacked", target, filter,
+            sessionDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
     }
 
     /// <summary>

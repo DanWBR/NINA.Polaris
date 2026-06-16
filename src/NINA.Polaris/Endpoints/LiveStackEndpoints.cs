@@ -316,12 +316,12 @@ public static class LiveStackEndpoints {
                     Target = new ImageMetaData.TargetInfo { Name = target }
                 });
 
-                // imageType="MASTER" routes through ImageWriterService's
-                // BuildSubDir to integrated/{target}/{filter}/, same place
-                // STUDIO ST-5 batch stacks land. From there
-                // FrameLibraryService picks it up on next rescan.
+                // User-requested stack save: imageType="MASTER" + stacked:true
+                // routes to {rig}/stacked/{target}/{filter}/{session} so the
+                // integrated result sits in its own folder, apart from the raw
+                // lights. FrameLibraryService still picks it up on next rescan.
                 var saved = writer.SaveImage(image, targetName: target,
-                                              imageType: "MASTER", gain: 0);
+                                              imageType: "MASTER", gain: 0, stacked: true);
                 if (saved == null) {
                     return Results.Problem(
                         detail: "ImageOutputDir not configured on the active profile. " +
@@ -369,7 +369,7 @@ public static class LiveStackEndpoints {
             if (string.IsNullOrWhiteSpace(name)) name = "live-stack";
             try {
                 var saved = writer.SaveImage(image, targetName: name,
-                                              imageType: "MASTER", gain: 0);
+                                              imageType: "MASTER", gain: 0, stacked: true);
                 if (saved == null) {
                     return Results.Problem(
                         detail: "ImageOutputDir not configured on the active profile. " +
