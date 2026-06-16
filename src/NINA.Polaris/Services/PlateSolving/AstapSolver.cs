@@ -60,6 +60,37 @@ public class AstapSolver : IPlateSolver {
         if (!IsAvailable) return PlateSolveResult.Failed("ASTAP not found at: " + SolverPath);
         if (!File.Exists(fitsPath)) return PlateSolveResult.Failed("FITS file not found: " + fitsPath);
 
+        var result = await SolveOnceAsync(fitsPath, options, ct, onLog);
+        if (result.Success) return result;
+
+        // Built-in blind retry. A hinted solve that detects plenty of stars but
+        // finds "no solution" is almost always a bad position/scale hint — most
+        // often a wrong focal length in the rig (so ASTAP searches at the wrong
+        // image scale) or garbage RA/Dec metadata. A classic field like M42
+        // solves trivially without hints, so drop the position + FOV constraints
+        // and let ASTAP read the scale straight from the frame. This runs before
+        // (and independently of) the external blind fallback in PlateSolveService.
+        bool hadHints = (options.HintRa.HasValue && options.HintDec.HasValue && options.SearchRadiusDeg > 0)
+                        || options.FovDeg > 0;
+        if (!hadHints || ct.IsCancellationRequested) return result;
+
+        var blind = new PlateSolveOptions {
+            SearchRadiusDeg = 0,   // omit -ra/-spd/-r (search the whole sky)
+            FovDeg = 0,            // omit -fov; don't trust a possibly-wrong scale
+            Downsample = options.Downsample,
+            ScaleArcsecPerPixel = options.ScaleArcsecPerPixel
+        };
+        _logger.LogInformation("ASTAP hinted solve failed; retrying blind (no position/FOV hint)");
+        try { onLog?.Invoke("== hinted solve failed; retrying ASTAP blind (auto position) =="); } catch { }
+        var blindResult = await SolveOnceAsync(fitsPath, blind, ct, onLog);
+        // Prefer the blind result when it solved; otherwise keep the richer
+        // original (hinted) error which usually has the more useful ASTAP log.
+        return blindResult.Success ? blindResult : result;
+    }
+
+    private async Task<PlateSolveResult> SolveOnceAsync(string fitsPath, PlateSolveOptions options,
+            CancellationToken ct, Action<string>? onLog) {
+
         // ASTAP only accepts 2-D FITS images. Multi-channel inputs
         // (NAXIS=3, e.g. the RGB master produced by ChannelCombine)
         // make it exit non-zero with no useful output. Detect that
