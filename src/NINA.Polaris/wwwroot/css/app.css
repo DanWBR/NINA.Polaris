@@ -120,6 +120,7 @@ html[data-font="system"] {
     --border: #2a2a4a;
     --sidebar-width: 64px;
     --statusbar-height: 40px;
+    --activitybar-height: 36px;   /* bottom activity bar (.activity-bar) */
     --statsbar-height: 32px;
     --controls-height: 100px;
     --radius: 6px;
@@ -12264,3 +12265,30 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     background-color: rgba(120, 160, 220, 0.20);
     background-image: repeating-linear-gradient(45deg,
         rgba(255,255,255,0.55) 0 1.6px, transparent 1.6px 6px); }
+
+/* ===== Dialog / background-task modal backdrops =====================
+   Many modals run a task in the background (plate solve, batch stack,
+   export, calibration review, plan preview, confirmations) while the
+   operator wants to keep an eye on the top + bottom status bars. For
+   those modals, don't black out the whole screen: inset the backdrop
+   between the two bars (which are opaque and sit flush at the viewport
+   edges, so they stay fully visible AND clickable), and replace the
+   dark fill with a faint tint + blur so the work area is only lightly
+   blurred, not darkened. The dialog cards are short/centred, so they
+   sit in the middle band and never cover a bar. Full-screen viewers /
+   editors / terminal / login / lock keep their own immersive backdrop
+   (intentionally not listed here). */
+.modal-overlay,
+.confirm-modal-overlay,
+.siril-modal,
+.plan-viz-backdrop,
+.cal-review-backdrop,
+.editor-export-backdrop {
+    top: var(--statusbar-height);
+    bottom: var(--activitybar-height);
+    left: 0;
+    right: 0;
+    background: rgba(8, 11, 18, 0.10);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+}
