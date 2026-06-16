@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260616-lsynergy">
+    <link rel="stylesheet" href="/css/app.css?v=20260616-filterlist2">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -4730,47 +4730,106 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                             @change="saveOpticsDebounced()"
                                             class="input-sm" style="width:100%">
                                         <option value="">None</option>
-                                        <optgroup label="Generic / Narrowband">
-                                            <option value="L">Luminance / UV-IR Cut (L)</option>
+                                        <optgroup label="Generic / broadband LP">
+                                            <option value="L">Luminance (L)</option>
                                             <option value="UVIR-Cut">UV/IR Cut</option>
                                             <option value="CLS">CLS (broadband LP)</option>
                                             <option value="UHC">UHC (broadband LP)</option>
+                                            <option value="IR-Pass">IR Pass (planetary)</option>
+                                        </optgroup>
+                                        <optgroup label="Generic / mono narrowband">
                                             <option value="Ha">H-alpha</option>
+                                            <option value="Ha-3nm">H-alpha 3nm</option>
+                                            <option value="Ha-5nm">H-alpha 5nm</option>
+                                            <option value="Ha-7nm">H-alpha 7nm</option>
                                             <option value="OIII">O-III</option>
+                                            <option value="OIII-3nm">O-III 3nm</option>
+                                            <option value="OIII-5nm">O-III 5nm</option>
+                                            <option value="OIII-7nm">O-III 7nm</option>
                                             <option value="SII">S-II</option>
+                                            <option value="SII-3nm">S-II 3nm</option>
+                                            <option value="SII-5nm">S-II 5nm</option>
+                                            <option value="Hb">H-beta</option>
+                                            <option value="NII">N-II</option>
                                         </optgroup>
                                         <optgroup label="Optolong">
                                             <option value="L-Pro">L-Pro</option>
-                                            <option value="L-eNhance">L-eNhance</option>
-                                            <option value="L-eXtreme">L-eXtreme</option>
-                                            <option value="L-Ultimate">L-Ultimate</option>
+                                            <option value="L-eNhance">L-eNhance (Ha+Hb+OIII)</option>
+                                            <option value="L-eXtreme">L-eXtreme (Ha+OIII 7nm)</option>
+                                            <option value="L-Ultimate">L-Ultimate (Ha+OIII 3nm)</option>
                                             <option value="L-Synergy">L-Synergy (SII+OIII dual)</option>
                                             <option value="L-QEF">L-QEF</option>
+                                            <option value="Optolong-UHC">UHC</option>
+                                            <option value="Optolong-CLS">CLS / CLS-CCD</option>
                                         </optgroup>
                                         <optgroup label="SVBony">
-                                            <option value="SV220">SV220 (Ha+OIII 7nm)</option>
+                                            <option value="SV220">SV220 (Ha+OIII 7nm dual)</option>
                                             <option value="SV260">SV260 (Ha+OIII+SII)</option>
+                                            <option value="SVBony-UHC">UHC</option>
+                                            <option value="SVBony-CLS">CLS</option>
                                         </optgroup>
                                         <optgroup label="Altair">
-                                            <option value="TriBand">TriBand</option>
-                                            <option value="QuadBand">QuadBand</option>
+                                            <option value="Altair-TriBand">TriBand</option>
+                                            <option value="Altair-QuadBand">QuadBand</option>
                                         </optgroup>
                                         <optgroup label="Askar (ColourMagic)">
                                             <option value="D1">D1 (Ha+OIII)</option>
                                             <option value="D2">D2 (SII+OIII)</option>
-                                            <option value="C1">C1</option>
+                                            <option value="C1">C1 (Ha+OIII+SII)</option>
                                             <option value="C2">C2</option>
                                         </optgroup>
                                         <optgroup label="Antlia">
-                                            <option value="ALP-T">ALP-T (Ha+OIII dual)</option>
+                                            <option value="ALP-T">ALP-T (Ha+OIII 5nm dual)</option>
+                                            <option value="ALP-T-3nm">ALP-T 3nm</option>
                                             <option value="Triband-RGB">Triband RGB Ultra</option>
                                             <option value="Antlia-Quad">Quad Band</option>
+                                            <option value="Antlia-Edge">Edge dual-band</option>
                                         </optgroup>
                                         <optgroup label="ZWO">
-                                            <option value="Duo-Band">Duo-Band (Ha+OIII)</option>
+                                            <option value="ZWO-Duo-Band">Duo-Band (Ha+OIII)</option>
                                         </optgroup>
                                         <optgroup label="ToupTek">
                                             <option value="ToupTek-DualBand">Dual-Band (Ha+OIII)</option>
+                                        </optgroup>
+                                        <optgroup label="Player One">
+                                            <option value="PlayerOne-Dual">Dual-Band (Ha+OIII)</option>
+                                            <option value="PlayerOne-AntiHalo-Ha">Anti-halo Ha</option>
+                                        </optgroup>
+                                        <optgroup label="IDAS">
+                                            <option value="NBZ">NBZ (Ha+OIII dual)</option>
+                                            <option value="NBZ-UHS">NBZ-UHS (fast scopes)</option>
+                                            <option value="NB1">NB1</option>
+                                            <option value="NB3">NB3</option>
+                                            <option value="NB12">NB12</option>
+                                            <option value="LPS-D1">LPS-D1</option>
+                                            <option value="LPS-D2">LPS-D2</option>
+                                            <option value="LPS-D3">LPS-D3</option>
+                                            <option value="LPS-P2">LPS-P2</option>
+                                            <option value="LPS-P3">LPS-P3</option>
+                                            <option value="GNB">GNB</option>
+                                            <option value="HEUIB-II">HEUIB-II</option>
+                                        </optgroup>
+                                        <optgroup label="Radian">
+                                            <option value="Triad-Ultra">Triad Ultra (quad)</option>
+                                            <option value="Triad">Triad (tri-band)</option>
+                                        </optgroup>
+                                        <optgroup label="Baader">
+                                            <option value="Baader-Neodymium">Neodymium (Moon &amp; Skyglow)</option>
+                                            <option value="Baader-UHC-S">UHC-S</option>
+                                            <option value="Baader-SemiAPO">Semi-APO</option>
+                                            <option value="Baader-f2-Ha">Highspeed f/2 Ha</option>
+                                            <option value="Baader-f2-OIII">Highspeed f/2 OIII</option>
+                                            <option value="Baader-f2-SII">Highspeed f/2 SII</option>
+                                        </optgroup>
+                                        <optgroup label="Astronomik">
+                                            <option value="Astronomik-CLS-CCD">CLS-CCD</option>
+                                            <option value="Astronomik-UHC">UHC</option>
+                                            <option value="Astronomik-UHC-E">UHC-E</option>
+                                            <option value="ProPlanet-742">ProPlanet 742 IR</option>
+                                            <option value="OWB">OWB (CCD-OWB)</option>
+                                        </optgroup>
+                                        <optgroup label="Chroma">
+                                            <option value="Chroma-LoGlow">LoGlow (LP)</option>
                                         </optgroup>
                                     </select>
                                 </label>
@@ -14227,7 +14286,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260616-lsynergy"></script>
+    <script src="/js/app.js?v=20260616-filterlist2"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
