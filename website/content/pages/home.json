@@ -86,7 +86,7 @@
         "stacking": "22.2 Mpx/s",
         "capture": "11.5 Mpx/s",
         "memory": "4.7 GB/s",
-        "price": "~$55",
+        "price": "$55-75",
         "highlight": false
       },
       {
@@ -97,7 +97,7 @@
         "stacking": "39.9 Mpx/s",
         "capture": "27.3 Mpx/s",
         "memory": "7.7 GB/s",
-        "price": "~$80",
+        "price": "$70-100",
         "highlight": false
       },
       {
@@ -108,7 +108,7 @@
         "stacking": "46.2 Mpx/s",
         "capture": "30.9 Mpx/s",
         "memory": "23.1 GB/s",
-        "price": "~$140",
+        "price": "$130-190",
         "highlight": true
       },
       {
@@ -119,7 +119,7 @@
         "stacking": "99.4 Mpx/s",
         "capture": "89 Mpx/s",
         "memory": "41 GB/s",
-        "price": "~$1,800",
+        "price": "$1,500-2,200",
         "highlight": false
       }
     ],
