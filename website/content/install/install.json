@@ -73,6 +73,7 @@
         "os": "Raspberry Pi OS 64-bit (Debian Trixie)",
         "polaris": "0.83.2 (2026-06-14)",
         "size": "7.1 GB (.7z)",
+        "access": "https://polaris-pi4-1.local:5000/",
         "note": "7-Zip archive; extract before flashing."
       },
       {
@@ -83,6 +84,7 @@
         "os": "Raspberry Pi OS 64-bit (Debian Trixie)",
         "polaris": "0.83.2 (2026-06-14)",
         "size": "8.64 GB (.7z)",
+        "access": "https://polaris-pi.local:5000/",
         "note": "7-Zip archive; extract before flashing."
       },
       {
@@ -103,6 +105,7 @@
         "os": "Armbian 26.8.0 KDE (Ubuntu 26.04, kernel 6.1.115)",
         "polaris": "",
         "size": "7.51 GB (.7z)",
+        "access": "https://polaris-opi5pro-1.local:5000/",
         "note": "7-Zip archive; extract before flashing.",
         "gpu": "yes",
         "npu": "yes"

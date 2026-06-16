@@ -192,6 +192,7 @@ export default defineConfig({
                   { type: 'string', name: 'os', label: 'Base OS (optional)' },
                   { type: 'string', name: 'polaris', label: 'Polaris version (optional)' },
                   { type: 'string', name: 'size', label: 'File size (optional)' },
+                  { type: 'string', name: 'access', label: 'First-boot access URL (optional)' },
                   { type: 'string', name: 'note', label: 'Note (optional)' },
                   {
                     type: 'string',
