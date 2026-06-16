@@ -35,7 +35,10 @@ public class TakeExposureInstruction : SequenceInstruction {
     public int? Offset { get; set; }
     public int Binning { get; set; } = 1;
 
-    /// <summary>Filter name written to the FITS header (UI hint; doesn't move the wheel).</summary>
+    /// <summary>Filter to capture through. Written to the FITS header AND used
+    /// to switch the wheel + apply the per-filter focuser offset (delta from the
+    /// previous filter) before capturing — when a wheel is connected. No-ops if
+    /// already on this filter or no wheel is present.</summary>
     public string? Filter { get; set; }
 
     /// <summary>Target name written to OBJECT keyword + image filename pattern.</summary>
@@ -56,6 +59,17 @@ public class TakeExposureInstruction : SequenceInstruction {
         if (ctx.Equipment.Camera == null) throw new InvalidOperationException("No camera connected");
 
         if (Binning != 1) await ctx.Equipment.Camera.SetBinningAsync(Binning, Binning, ct);
+
+        // Switch the filter wheel + apply its focuser offset (delta from the
+        // previous filter) before capturing. The per-run FilterState lives in
+        // Scratch so the delta is computed across instructions in this run.
+        if (!string.IsNullOrWhiteSpace(Filter)) {
+            var fs = (FilterState)ctx.Scratch.GetOrAdd("Filter:State", _ => new FilterState());
+            await FilterSwitcher.ApplyAsync(
+                ctx.Equipment.FilterWheel, ctx.Equipment.Focuser,
+                ctx.Profiles.ActiveEquipmentProfile?.FilterOffsets,
+                Filter, fs, ctx.Logger, ct);
+        }
 
         for (int i = 0; i < Count; i++) {
             ct.ThrowIfCancellationRequested();

@@ -55,6 +55,10 @@ public class SequenceEngine {
     /// <summary>Counter of frames captured since last dither (across all items).</summary>
     private int _framesSinceDither;
 
+    /// <summary>Tracks the loaded filter + applied focuser offset so filter
+    /// changes move the wheel and apply the offset as a delta (see FilterSwitcher).</summary>
+    private readonly FilterState _filterState = new();
+
     public List<SequenceItem> Items { get; private set; } = [];
     public SequenceState State { get; private set; } = SequenceState.Idle;
     public int CurrentItemIndex { get; private set; } = -1;
@@ -147,6 +151,10 @@ public class SequenceEngine {
         LastError = null;
         _framesSinceDither = 0;
         DithersIssued = 0;
+        // Reset filter tracking so the first filtered item moves the wheel +
+        // applies its offset from a clean baseline.
+        _filterState.CurrentFilter = null;
+        _filterState.AppliedOffset = 0;
         _imageWriter.ResetSessionCounter();
 
         if (_pauseGate.CurrentCount == 0)
@@ -276,6 +284,17 @@ public class SequenceEngine {
                     } catch (Exception ex) {
                         _logger.LogWarning(ex, "Set binning failed");
                     }
+                }
+
+                // Switch the filter wheel + apply its focuser offset (as a delta
+                // from the previous filter) before this item's frames. BIAS/DARK
+                // items usually carry no filter, so this no-ops for them. Best
+                // effort: a filter/focuser glitch never aborts the run.
+                if (!string.IsNullOrWhiteSpace(item.Filter)) {
+                    await FilterSwitcher.ApplyAsync(
+                        _equip.FilterWheel, _equip.Focuser,
+                        _profile.ActiveEquipmentProfile?.FilterOffsets,
+                        item.Filter, _filterState, _logger, ct);
                 }
 
                 // FLAT + AutoExposure: ask the wizard to resolve the
