@@ -85,6 +85,12 @@ public class PlanTarget {
     /// <summary>Target rotation / position angle in degrees (record-keeping until a rotator move lands).</summary>
     public double Rotation { get; set; }
 
+    /// <summary>Optional catalog designation slug (e.g. "M42", "NGC7000") used
+    /// purely to look up the bundled DSO preview thumbnail in the UI. Set when a
+    /// target is added from catalog search; null for manual / mount / framed
+    /// targets (the UI then falls back to parsing the name).</summary>
+    public string? ThumbKey { get; set; }
+
     /// <summary>Seconds to wait after centering before the first exposure (settle / let guiding lock).</summary>
     public int FirstDelaySec { get; set; } = 0;
 

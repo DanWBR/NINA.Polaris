@@ -8526,6 +8526,20 @@ function ninaApp() {
             return '/sky/data/skydata/dso-thumbs/' + slug + '.jpg';
         },
 
+        // PLAN: DSO preview thumbnail for a plan target. Uses the persisted
+        // thumbKey slug (set when the target was added from catalog search);
+        // otherwise falls back to parsing the target name (works for targets
+        // named like "M42" / "NGC 7000"). Returns '' when nothing matches so
+        // the <img> stays hidden, and a 404 is handled by the @error handler.
+        planTargetThumbUrl(t) {
+            if (!t) return '';
+            if (t.thumbKey) {
+                const slug = ('' + t.thumbKey).replace(/\s+/g, '').toUpperCase();
+                if (slug) return '/sky/data/skydata/dso-thumbs/' + slug + '.jpg';
+            }
+            return this.dsoThumbUrl({ name: t.name });
+        },
+
         // Settings -> Sky imagery (offline DSS). Poll status once; if a
         // download is running, keep polling every 1.5s for the progress bar
         // until it finishes.
@@ -15321,7 +15335,7 @@ function ninaApp() {
             return {
                 id: 'T' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
                 name: 'Target', raHours: 0, decDeg: 0, rotation: 0,
-                firstDelaySec: 0, enabled: true,
+                firstDelaySec: 0, enabled: true, thumbKey: null,
                 recenterEveryNFrames: 0, refocusEveryNFrames: 0, ditherEveryNFrames: 0,
                 scheduleMode: 'Frames', startAtUtc: '', endAtUtc: '',
                 frames: [{ exposureSeconds: 60, count: 10, filter: null, gain: null, binning: 1, imageType: 'LIGHT' }]
@@ -15503,6 +15517,13 @@ function ninaApp() {
             t.name = o.commonName || o.name || 'Target';
             t.raHours = o.ra ?? o.raHours ?? 0;
             t.decDeg = o.dec ?? o.decDeg ?? 0;
+            // Persist the catalog designation so the card thumbnail resolves
+            // even when the display name is a common name ("Orion Nebula").
+            if (o.catalog && (o.catalogId || o.catalogId === 0)) {
+                t.thumbKey = ('' + o.catalog + o.catalogId).replace(/\s+/g, '').toUpperCase();
+            } else if (o.name) {
+                t.thumbKey = o.name;
+            }
             this._planPushTarget(t);
             this.planAddCatalogOpen = false;
             this.planCatQuery = ''; this.planCatResults = [];
@@ -15975,6 +15996,7 @@ function ninaApp() {
                     const delayX1 = delaySec > 0 ? xOf(s0 + delaySec * 1000) : x0;
                     return {
                         id: t.id, name: t.name || ('Target ' + (i + 1)),
+                        thumbKey: t.thumbKey || null,
                         color: this.planVizColor(i),
                         x0, x1: xOf(s1),
                         delaySec, delayW: Math.max(0, delayX1 - x0),

@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260616-autoupd">
+    <link rel="stylesheet" href="/css/app.css?v=20260616-planthumb">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -7570,6 +7570,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <div class="plan-target-card" :class="{ 'is-open': planSelectedTargetId === t.id, 'is-disabled': !t.enabled }">
                                 <div class="plan-target-head">
                                     <input type="checkbox" x-model="t.enabled" @change="savePlan()" title="Include in run">
+                                    <img class="plan-target-thumb" loading="lazy"
+                                         x-show="planTargetThumbUrl(t)" :src="planTargetThumbUrl(t)"
+                                         @error="$el.style.display='none'" alt=""
+                                         @click="planToggleTargetDetail(t)">
                                     <div class="plan-target-id" @click="planToggleTargetDetail(t)">
                                         <span class="plan-target-name" x-text="t.name || 'Target'"></span>
                                         <span class="plan-target-coords"
@@ -7836,13 +7840,16 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <!-- Per-target legend / details -->
                             <table class="plan-viz-table">
                                 <thead><tr>
-                                    <th></th><th>Target</th><th>Mode</th><th>Window (local)</th>
+                                    <th></th><th></th><th>Target</th><th>Mode</th><th>Window (local)</th>
                                     <th>Frames</th><th>Est.</th><th>Max alt</th>
                                 </tr></thead>
                                 <tbody>
                                     <template x-for="s in planViz.segs" :key="'vt'+s.id">
                                         <tr>
                                             <td><span class="plan-viz-swatch" :style="`background:${s.color}`"></span></td>
+                                            <td><img class="plan-viz-thumb" loading="lazy"
+                                                     x-show="planTargetThumbUrl(s)" :src="planTargetThumbUrl(s)"
+                                                     @error="$el.style.display='none'" alt=""></td>
                                             <td x-text="s.name"></td>
                                             <td x-text="s.mode"></td>
                                             <td x-text="s.startLocal + ' – ' + s.endLocal"></td>
@@ -14137,7 +14144,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260616-autoupd"></script>
+    <script src="/js/app.js?v=20260616-planthumb"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
