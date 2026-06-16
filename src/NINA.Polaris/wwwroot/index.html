@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260616-annotrot">
+    <link rel="stylesheet" href="/css/app.css?v=20260616-settleguard">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -3886,10 +3886,10 @@
                             </div>
                             <div class="settle-bar" x-show="guider.settleProgress">
                                 <div class="settle-bar-fill"
-                                     :style="'width:' + Math.min(100, 100 * ((guider.settleProgress.belowSec||0) / (guider.settleProgress.settleSec||1))) + '%'"></div>
+                                     :style="'width:' + Math.min(100, 100 * ((guider.settleProgress?.belowSec||0) / (guider.settleProgress?.settleSec||1))) + '%'"></div>
                             </div>
                             <div class="settle-sub muted" x-show="guider.settleProgress"
-                                 x-text="'within tolerance ' + (guider.settleProgress.belowSec||0).toFixed(0) + '/' + (guider.settleProgress.settleSec||0).toFixed(0) + ' s · elapsed ' + (guider.settleProgress.elapsedSec||0).toFixed(0) + '/' + (guider.settleProgress.timeoutSec||0).toFixed(0) + ' s'"></div>
+                                 x-text="'within tolerance ' + (guider.settleProgress?.belowSec||0).toFixed(0) + '/' + (guider.settleProgress?.settleSec||0).toFixed(0) + ' s · elapsed ' + (guider.settleProgress?.elapsedSec||0).toFixed(0) + '/' + (guider.settleProgress?.timeoutSec||0).toFixed(0) + ' s'"></div>
                         </div>
                         <div class="info-row" x-show="!guider.settling && guider.lastSettleStatus === 'done'">
                             <span class="text-ok">✓ Settled</span></div>
@@ -14148,7 +14148,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260616-annotrot"></script>
+    <script src="/js/app.js?v=20260616-settleguard"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
