@@ -27,7 +27,7 @@ namespace NINA.Polaris.Services;
 /// renumber. Add new kinds at the end.</para>
 /// </summary>
 public enum FrameKind {
-    /// <summary>LIVE tab capture or sequence-engine frame. Goes to
+    /// <summary>LIVE tab capture / live-stack output. Goes to
     /// liveCanvas + feeds the running mean stacker.</summary>
     Live = 0,
     /// <summary>PREVIEW tab one-off snap. Goes to previewCanvas only.</summary>
@@ -41,5 +41,10 @@ public enum FrameKind {
     /// <summary>SKY-tab inset slew preview (background capture loop
     /// auto-fired while the mount is slewing). Goes to
     /// slewPreviewCanvas only.</summary>
-    SlewPreview = 4
+    SlewPreview = 4,
+    /// <summary>AUTORUN / ADV sequence-engine capture. Goes to
+    /// autorunCanvas only — kept distinct from <see cref="Live"/> so a
+    /// running sequence's frames don't leak onto the LIVE tab (and the
+    /// LIVE live-stack output doesn't leak into the AUTORUN preview).</summary>
+    Autorun = 5
 }

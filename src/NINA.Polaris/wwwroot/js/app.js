@@ -7588,12 +7588,14 @@ function ninaApp() {
                 case 2:  return ['focusCanvas', 'manualFocusCanvas'];       // Focus
                 case 3:  return ['videoCaptureCanvas'];                     // Video
                 case 4:  return ['slewPreviewCanvas'];                      // SlewPreview
-                // Live frames also mirror into the AUTORUN centre preview
-                // (sequence frames relay as FrameKind.Live), so the
-                // operator sees the last captured frame there with the
-                // same zoom / drag / stretch as PREVIEW.
+                // AUTORUN / ADV sequence captures land ONLY on the autorun
+                // centre preview — kept separate from Live so a running
+                // sequence doesn't bleed onto the LIVE tab (and vice-versa).
+                case 5:  return ['autorunCanvas'];                          // Autorun
+                // Live frames (LIVE-tab capture + live-stack output) go to
+                // liveCanvas only.
                 case 0:
-                default: return ['liveCanvas', 'autorunCanvas'];            // Live
+                default: return ['liveCanvas'];                            // Live
             }
         },
 

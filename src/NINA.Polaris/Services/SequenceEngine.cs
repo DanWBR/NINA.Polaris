@@ -445,8 +445,9 @@ public class SequenceEngine {
                         // by the LIVE tab; routing scheduled-capture frames into
                         // it would corrupt the stack and fire the live-stack
                         // triggers, and calibration frames (BIAS/DARK/FLAT) must
-                        // never be stacked at all. Always relay for preview only.
-                        await _relay.RelayImageAsync(imageData, ct);
+                        // never be stacked at all. Relay as Autorun so the frame
+                        // lands on the AUTORUN preview only, never the LIVE canvas.
+                        await _relay.RelayImageAsync(imageData, FrameKind.Autorun, ct);
 
                         CurrentFrameInItem = f + 1;
                         TotalFramesCompleted++;
@@ -462,8 +463,9 @@ public class SequenceEngine {
                             var imageData = await _equip.Camera.CaptureAsync(item.Exposure, capOpts, ct);
 
                             // Preview only (see note above): AUTORUN never feeds
-                            // the LIVE-tab stacking accumulator.
-                            await _relay.RelayImageAsync(imageData, ct);
+                            // the LIVE-tab stacking accumulator, and routes to the
+                            // AUTORUN preview canvas (FrameKind.Autorun), not LIVE.
+                            await _relay.RelayImageAsync(imageData, FrameKind.Autorun, ct);
 
                             CurrentFrameInItem = f + 1;
                             TotalFramesCompleted++;

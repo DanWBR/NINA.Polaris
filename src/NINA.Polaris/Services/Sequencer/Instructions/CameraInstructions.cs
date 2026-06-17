@@ -100,7 +100,8 @@ public class TakeExposureInstruction : SequenceInstruction {
             if (ctx.LiveStack.IsRunning) {
                 await ctx.LiveStack.AddFrameAsync(image, ct);
             } else {
-                await ctx.Relay.RelayImageAsync(image, ct);
+                // Sequence capture → AUTORUN preview canvas only, never LIVE.
+                await ctx.Relay.RelayImageAsync(image, NINA.Polaris.Services.FrameKind.Autorun, ct);
             }
 
             // Measure HFR + star count and stash in Scratch so the
