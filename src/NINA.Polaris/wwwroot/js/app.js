@@ -21836,10 +21836,19 @@ function ninaApp() {
             const pickerRect = pickerEl.getBoundingClientRect();
             // Touch events nest the coords under changedTouches[0];
             // fall back to clientX/Y for plain pointer/mouse.
-            const cx = ev.clientX != null ? ev.clientX :
+            let cx = ev.clientX != null ? ev.clientX :
                 (ev.changedTouches && ev.changedTouches[0] ? ev.changedTouches[0].clientX : 0);
-            const cy = ev.clientY != null ? ev.clientY :
+            let cy = ev.clientY != null ? ev.clientY :
                 (ev.changedTouches && ev.changedTouches[0] ? ev.changedTouches[0].clientY : 0);
+            // CSS `zoom` on <body> (0.85 / 0.75 on small screens — Android)
+            // is reported inconsistently by Blink/Android WebView:
+            // getBoundingClientRect() returns LAYOUT (unzoomed) coords while
+            // pointer clientX/Y come in VISUAL (zoomed) coords. Mixing them
+            // shrank the crop rectangle by exactly the zoom factor — only on
+            // mobile (PC runs at zoom 1, so this is a no-op there). Convert
+            // the pointer back into the rect's layout space.
+            const _bz = parseFloat(getComputedStyle(document.body).zoom);
+            if (_bz && _bz !== 1) { cx /= _bz; cy /= _bz; }
             // Map everything relative to the IMAGE, not the picker. The
             // displayed <img> can be smaller than / offset within the picker
             // box (object-fit letterboxing, inline-block dead space), so
