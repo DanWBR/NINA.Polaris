@@ -1882,3 +1882,85 @@
    PH2X: PHD2 deep-integration UI (Guide tab tabstrip + xpra GUI + presets)
    ========================================================================== */
 
+
+/* ==========================================================================
+   STUDIO batch-rename modal (🏷). Token chips + old→new preview table.
+   Reuses the siril-modal chrome + files-list table; only the chips, the
+   arrow column and the status badges are bespoke.
+   ========================================================================== */
+.br-tokens {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0 4px;
+}
+.br-token {
+    background: var(--bg-elevated, rgba(255, 255, 255, .05));
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 12px;
+    font-family: var(--font-mono, monospace);
+    cursor: pointer;
+    transition: color .12s, border-color .12s, background .12s;
+}
+.br-token:hover {
+    color: var(--text-primary);
+    border-color: var(--accent);
+}
+.br-preview {
+    max-height: 280px;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius, 6px);
+    margin: 8px 0;
+}
+.br-preview-table {
+    width: 100%;
+    font-size: 12px;
+}
+.br-preview-table td, .br-preview-table th {
+    padding: 4px 8px;
+    vertical-align: middle;
+}
+.br-preview-table .br-old {
+    color: var(--text-secondary);
+    word-break: break-all;
+}
+.br-preview-table .br-new {
+    color: var(--text-primary);
+    font-weight: 600;
+    word-break: break-all;
+}
+.br-preview-table .br-arrow {
+    color: var(--text-muted);
+    text-align: center;
+    width: 1.5em;
+}
+.br-col-status { width: 96px; }
+.br-badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    border: 1px solid transparent;
+}
+.br-badge-preview, .br-badge-renamed {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+.br-badge-unchanged {
+    color: var(--text-muted);
+    border-color: var(--border);
+}
+.br-badge-skipped {
+    color: var(--text-secondary);
+    border-color: var(--border);
+}
+.br-badge-error {
+    color: var(--danger);
+    border-color: var(--danger);
+}

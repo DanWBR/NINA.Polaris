@@ -2310,6 +2310,20 @@ function ninaApp() {
         // ratio before POST /api/crop/run so the server slice math
         // operates in real pixel space regardless of how the browser
         // scaled the preview.
+        // STUDIO batch-rename modal state. paths is the snapshot of the
+        // selection taken when the modal opens; items is the latest dry-run
+        // preview (old→new mapping). Template persists in localStorage.
+        batchRename: {
+            open: false,
+            template: '{OBJECT}_{FILTER}_{EXPTIME}s_{n:03}',
+            paths: [],
+            items: [],
+            busy: false,
+            error: '',
+            tokens: ['{OBJECT}', '{FILTER}', '{IMAGETYP}', '{EXPTIME}',
+                     '{GAIN}', '{DATE-OBS}', '{n:03}'],
+        },
+
         crop: {
             open: false,
             sourcePath: '',     // single file path being cropped
@@ -21858,6 +21872,112 @@ function ninaApp() {
         // ROI is drawn in DISPLAY pixels, converted to IMAGE pixels
         // at submit-time using the natural-vs-display width ratio
         // captured when the <img> loaded.
+
+        // ----- STUDIO batch rename (by FITS header) -----
+
+        batchRenameOpen() {
+            if (!this.files.selectedPaths || this.files.selectedPaths.length === 0) return;
+            // Snapshot the selection (it can change underneath the modal).
+            this.batchRename.paths = [...this.files.selectedPaths];
+            this.batchRename.items = [];
+            this.batchRename.error = '';
+            this.batchRename.busy = false;
+            const saved = localStorage.getItem('polaris.batchRename.template');
+            if (saved) this.batchRename.template = saved;
+            this.batchRename.open = true;
+            this.batchRenamePreview();
+        },
+        batchRenameClose() {
+            if (this.batchRename.busy) return;
+            this.batchRename.open = false;
+        },
+        batchRenameInsertToken(tok) {
+            const el = document.getElementById('batchRenameTemplate');
+            if (!el) { this.batchRename.template += tok; this.batchRenamePreview(); return; }
+            const s = el.selectionStart ?? el.value.length;
+            const e = el.selectionEnd ?? el.value.length;
+            const v = this.batchRename.template;
+            this.batchRename.template = v.slice(0, s) + tok + v.slice(e);
+            // Restore caret after the inserted token on the next tick.
+            this.$nextTick(() => {
+                el.focus();
+                const pos = s + tok.length;
+                el.setSelectionRange(pos, pos);
+            });
+            this.batchRenamePreview();
+        },
+        async batchRenamePreview() {
+            if (!this.batchRename.open) return;
+            const template = (this.batchRename.template || '').trim();
+            localStorage.setItem('polaris.batchRename.template', this.batchRename.template);
+            if (!template) { this.batchRename.items = []; this.batchRename.error = ''; return; }
+            try {
+                const r = await this.apiPost('/api/files/batch-rename',
+                    { paths: this.batchRename.paths, template, dryRun: true });
+                if (!r.ok) {
+                    let msg = 'Preview failed.';
+                    try { const j = await r.json(); if (j && j.error) msg = j.error; } catch (e) {}
+                    this.batchRename.error = msg; this.batchRename.items = [];
+                    return;
+                }
+                const res = await r.json();
+                this.batchRename.error = '';
+                this.batchRename.items = res.items || [];
+            } catch (e) {
+                this.batchRename.error = 'Preview failed: ' + (e.message || e);
+                this.batchRename.items = [];
+            }
+        },
+        batchRenameWillRename() {
+            return this.batchRename.items.filter(i => i.status === 'preview' || i.status === 'renamed').length;
+        },
+        batchRenameBadge(it) {
+            switch (it.status) {
+                case 'preview': return 'rename';
+                case 'renamed': return 'renamed';
+                case 'unchanged': return 'no change';
+                case 'skipped': return 'skipped';
+                case 'error': return it.error || 'error';
+                default: return it.status;
+            }
+        },
+        batchRenameSummary() {
+            const it = this.batchRename.items;
+            const will = this.batchRenameWillRename();
+            const skipped = it.filter(i => i.status === 'skipped').length;
+            const conflicts = it.filter(i =>
+                (i.status === 'preview' || i.status === 'renamed')
+                && /_\d+$/.test(i.newName.replace(/\.[^.]+$/, ''))).length;
+            let s = `${will} of ${it.length} will be renamed`;
+            if (conflicts > 0) s += ` · ${conflicts} auto-suffixed to avoid clashes`;
+            if (skipped > 0) s += ` · ${skipped} skipped (not FITS)`;
+            return s;
+        },
+        async batchRenameApply() {
+            if (this.batchRename.busy) return;
+            const template = (this.batchRename.template || '').trim();
+            if (!template || this.batchRenameWillRename() === 0) return;
+            this.batchRename.busy = true;
+            this.batchRename.error = '';
+            try {
+                const r = await this.apiPost('/api/files/batch-rename',
+                    { paths: this.batchRename.paths, template, dryRun: false });
+                if (!r.ok) {
+                    let msg = 'Rename failed.';
+                    try { const j = await r.json(); if (j && j.error) msg = j.error; } catch (e) {}
+                    this.batchRename.error = msg; this.batchRename.busy = false;
+                    return;
+                }
+                const res = await r.json();
+                this.batchRename.busy = false;
+                this.batchRename.open = false;
+                this.toast(`Renamed ${res.renamed ?? res.willRename ?? 0} file(s)`, 'ok');
+                await this.filesCd(this.files.cwd);
+            } catch (e) {
+                this.batchRename.error = 'Rename failed: ' + (e.message || e);
+                this.batchRename.busy = false;
+            }
+        },
 
         cropOpenForFile(path) {
             if (!path) return;

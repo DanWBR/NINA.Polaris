@@ -16,6 +16,7 @@ using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using NINA.Image.FileFormat.FITS;
 
 namespace NINA.Polaris.Services;
 
@@ -299,6 +300,124 @@ public class FileBrowserService {
         return Task.CompletedTask;
     }
 
+    // --- Batch rename by FITS header --------------------------------
+
+    private static readonly string[] FitsExtensions = [".fits", ".fit", ".fts"];
+
+    /// <summary>STUDIO batch-rename: rename many FITS files from a template
+    /// that references their header keywords (e.g.
+    /// <c>{OBJECT}_{FILTER}_{EXPTIME}s_{n:03}</c>). The same computation
+    /// drives both the preview (<paramref name="dryRun"/>=true, no I/O) and
+    /// the apply pass. Files are processed in the given order; <c>{n}</c>
+    /// counts FITS files only. Non-FITS files are skipped. Names are
+    /// sanitised via <see cref="SanitiseSegment"/> (which also blocks path
+    /// separators, so a template can never escape the file's folder); on a
+    /// collision — within this batch or against a file already on disk — a
+    /// numeric <c>_1</c>, <c>_2</c>… suffix is appended.</summary>
+    public async Task<BatchRenameResult> BatchRenameAsync(IReadOnlyList<string> paths,
+            string template, bool dryRun, CancellationToken ct) {
+        var items = new List<BatchRenameItem>();
+        if (string.IsNullOrWhiteSpace(template))
+            throw new ArgumentException("Template is empty");
+
+        var counter = 0;       // 1-based index over FITS files for {n}
+        int renamed = 0, conflicts = 0, errors = 0;
+        // Per-folder reservation of names already chosen in this batch, so two
+        // source files that map to the same name get distinct suffixes.
+        var reservedByFolder = new Dictionary<string, HashSet<string>>(
+            OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+
+        foreach (var rawPath in paths) {
+            ct.ThrowIfCancellationRequested();
+            var originalName = Path.GetFileName(rawPath);
+            try {
+                var src = ResolveSafe(rawPath, mustExist: true);
+                originalName = Path.GetFileName(src);
+                var ext = Path.GetExtension(src);
+                if (!FitsExtensions.Contains(ext.ToLowerInvariant())) {
+                    items.Add(new BatchRenameItem(src, originalName, originalName, "skipped", "Not a FITS file"));
+                    continue;
+                }
+
+                counter++;
+                var values = ReadHeaderValues(src);
+                var baseName = BatchRenameTemplate.Apply(template, values, counter);
+                var sanitized = SanitiseSegmentPublic(baseName + ext);
+                // If the template/sanitiser collapsed the stem to nothing,
+                // surface an error instead of writing a dot-file.
+                if (string.IsNullOrEmpty(sanitized)
+                        || string.IsNullOrEmpty(Path.GetFileNameWithoutExtension(sanitized))) {
+                    items.Add(new BatchRenameItem(src, originalName, originalName, "error",
+                        "Template produced an empty name"));
+                    errors++;
+                    continue;
+                }
+
+                var folder = Path.GetDirectoryName(src)!;
+                if (!reservedByFolder.TryGetValue(folder, out var reserved)) {
+                    reserved = new HashSet<string>(
+                        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+                    reservedByFolder[folder] = reserved;
+                }
+
+                // No-op rename (name already matches) → reserve + report.
+                if (string.Equals(sanitized, originalName,
+                        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) {
+                    reserved.Add(sanitized);
+                    items.Add(new BatchRenameItem(src, originalName, sanitized, "unchanged", null));
+                    continue;
+                }
+
+                // Collision resolution: reserved-in-batch OR exists on disk.
+                var finalName = sanitized;
+                if (reserved.Contains(finalName) || File.Exists(Path.Combine(folder, finalName))) {
+                    var stem = Path.GetFileNameWithoutExtension(sanitized);
+                    var e = Path.GetExtension(sanitized);
+                    var k = 1;
+                    do {
+                        finalName = $"{stem}_{k}{e}";
+                        k++;
+                    } while (reserved.Contains(finalName) || File.Exists(Path.Combine(folder, finalName)));
+                    conflicts++;
+                }
+                reserved.Add(finalName);
+
+                if (!dryRun) {
+                    await RenameAsync(src, finalName);
+                    renamed++;
+                }
+                items.Add(new BatchRenameItem(src, originalName, finalName,
+                    dryRun ? "preview" : "renamed", null));
+            } catch (Exception ex) {
+                items.Add(new BatchRenameItem(rawPath, originalName, originalName, "error", ex.Message));
+                errors++;
+            }
+        }
+
+        var willRename = items.Count(i => i.Status is "preview" or "renamed");
+        return new BatchRenameResult(true, items, items.Count, willRename, conflicts, errors);
+    }
+
+    /// <summary>Read a FITS file's header into a case-insensitive
+    /// keyword→cleaned-value map for template substitution. Values are
+    /// trimmed and have surrounding single quotes stripped (mirrors
+    /// FrameLibraryService's header reading).</summary>
+    private static IReadOnlyDictionary<string, string> ReadHeaderValues(string path) {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        using var fs = File.OpenRead(path);
+        var headers = FITSReader.ReadHeadersOnly(fs);
+        foreach (var kv in headers) {
+            var clean = kv.Value.Value?.Trim().Trim('\'').Trim() ?? "";
+            map[kv.Key] = clean;
+        }
+        return map;
+    }
+
+    /// <summary>Expose the private filename sanitiser for the batch-rename
+    /// preview, which must compute the exact on-disk name (for collision
+    /// detection) before the actual move.</summary>
+    public string SanitiseSegmentPublic(string name) => SanitiseSegment(name);
+
     // --- ZIP streaming -----------------------------------------------
 
     /// <summary>
@@ -536,3 +655,13 @@ public sealed record DirEntry(
 public sealed record DriveInfoDto(
     string Name, string DisplayName, string? VolumeLabel,
     long? TotalBytes, long? FreeBytes, string DriveFormat);
+
+// Batch-rename (STUDIO). Status is one of: preview (dry-run, would rename),
+// renamed (applied), unchanged (name already matches), skipped (not FITS),
+// error (Error carries the message).
+public sealed record BatchRenameItem(
+    string OriginalPath, string OriginalName, string NewName,
+    string Status, string? Error);
+public sealed record BatchRenameResult(
+    bool Ok, List<BatchRenameItem> Items,
+    int Total, int WillRename, int Conflicts, int Errors);

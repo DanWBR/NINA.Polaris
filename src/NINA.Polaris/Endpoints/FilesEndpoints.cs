@@ -496,6 +496,20 @@ public static class FilesEndpoints {
             } catch (Exception ex) { return MapError(ex); }
         });
 
+        // Batch rename from FITS header values. dryRun=true returns the
+        // old→new mapping for the preview without touching disk; the apply
+        // call (dryRun=false) performs the renames. See
+        // FileBrowserService.BatchRenameAsync for the template + collision
+        // rules.
+        g.MapPost("/batch-rename", async (FileBrowserService svc,
+                                          BatchRenameRequest req, CancellationToken ct) => {
+            try {
+                var result = await svc.BatchRenameAsync(
+                    req.Paths ?? [], req.Template ?? "", req.DryRun, ct);
+                return Results.Ok(result);
+            } catch (Exception ex) { return MapError(ex); }
+        });
+
         // --- Studio root setter -----------------------------------
 
         // Convenience endpoint: validates the path, writes through to
@@ -582,6 +596,7 @@ public static class FilesEndpoints {
     public record DeleteRequest(List<string> Paths, bool Confirmed);
     public record MkdirRequest(string Parent, string Name);
     public record RenameRequest(string Path, string NewName);
+    public record BatchRenameRequest(List<string> Paths, string Template, bool DryRun);
     public record ZipRequest(List<string> Paths, string? RootForNames, string? FileName);
     public record StudioRootRequest(string Path);
     public record GroupedCard(string Keyword, string Value, string Comment);

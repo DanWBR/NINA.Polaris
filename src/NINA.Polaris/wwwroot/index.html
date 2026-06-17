@@ -42,14 +42,14 @@
     <!-- app.css was split into ordered parts for readability. Load order is
          significant (CSS cascade) — keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
-    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260617-cssparts">
-    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260617-cssparts">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260617-cssparts">
-    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260617-cssparts">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260617-cssparts">
-    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260617-cssparts">
-    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260617-cssparts">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260617-cssparts">
+    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260617-batchrename">
+    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260617-batchrename">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260617-batchrename">
+    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260617-batchrename">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260617-batchrename">
+    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260617-batchrename">
+    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260617-batchrename">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260617-batchrename">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -9104,6 +9104,16 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             title="Rename selected file or folder" aria-label="Rename">
                         <span class="files-icon">✏</span>
                     </button>
+                    <!-- Batch rename FITS files from their header fields
+                         (e.g. {OBJECT}_{FILTER}_{EXPTIME}s_{n:03}). Preview
+                         before applying. Enabled for one or more selected. -->
+                    <button class="btn btn-sm btn-icon"
+                            @click="batchRenameOpen()"
+                            :disabled="files.selectedPaths.length < 1"
+                            title="Batch rename selected files from FITS header fields"
+                            aria-label="Batch rename">
+                        <span class="files-icon">🏷</span>
+                    </button>
                     <button class="btn btn-sm btn-icon btn-danger"
                             @click="filesDelete()"
                             :disabled="files.selectedPaths.length === 0"
@@ -13257,6 +13267,95 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
+    <!-- BATCH RENAME modal: rename the selected FITS files from their
+         header fields via a token template, with a live old→new preview
+         (dry-run) before applying. Mirrors the crop modal chrome. -->
+    <div class="siril-modal" x-show="batchRename.open" x-cloak
+         @click.self="batchRenameClose()"
+         @keydown.escape.window="batchRenameClose()">
+        <div class="siril-modal-frame">
+            <h2 style="font-size:18px;font-weight:600;display:flex;align-items:center;gap:8px">
+                🏷 Batch rename
+            </h2>
+            <p class="hint">
+                Build a new file name from each file's FITS header. Type any
+                header keyword in braces — e.g.
+                <code>{OBJECT}_{FILTER}_{EXPTIME}s_{n:03}</code> — plus
+                <code>{n}</code> for a counter (<code>{n:03}</code> pads to
+                001). The original extension is kept and the originals stay in
+                place; names that clash get a <code>_1</code>, <code>_2</code>…
+                suffix automatically.
+            </p>
+
+            <label class="hint" style="display:block;margin-bottom:4px">Template</label>
+            <input id="batchRenameTemplate" type="text" class="input"
+                   style="width:100%"
+                   x-model="batchRename.template"
+                   @input.debounce.300ms="batchRenamePreview()"
+                   placeholder="{OBJECT}_{FILTER}_{EXPTIME}s_{n:03}">
+
+            <!-- Clickable token chips (insert at the cursor). -->
+            <div class="br-tokens">
+                <template x-for="tok in batchRename.tokens" :key="tok">
+                    <button type="button" class="br-token"
+                            @click="batchRenameInsertToken(tok)"
+                            x-text="tok"></button>
+                </template>
+            </div>
+
+            <p class="hint" x-show="batchRename.error" style="color:var(--danger)"
+               x-text="batchRename.error"></p>
+
+            <!-- Old → new preview table. Reuses the files-list look. -->
+            <div class="br-preview" x-show="batchRename.items.length > 0">
+                <table class="files-list br-preview-table">
+                    <thead>
+                        <tr>
+                            <th>Current name</th>
+                            <th></th>
+                            <th>New name</th>
+                            <th class="br-col-status">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="(it, i) in batchRename.items" :key="i">
+                            <tr>
+                                <td class="br-old" x-text="it.originalName"></td>
+                                <td class="br-arrow">→</td>
+                                <td class="br-new" x-text="it.status === 'skipped' ? '—' : it.newName"></td>
+                                <td>
+                                    <span class="br-badge"
+                                          :class="'br-badge-' + it.status"
+                                          x-text="batchRenameBadge(it)"></span>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            <p class="hint" x-show="batchRename.items.length > 0"
+               x-text="batchRenameSummary()"></p>
+
+            <div class="siril-modal-progress" x-show="batchRename.busy">
+                <p class="hint">Renaming files…</p>
+            </div>
+
+            <div class="siril-modal-actions">
+                <button class="btn" @click="batchRenameClose()" :disabled="batchRename.busy">
+                    Cancel
+                </button>
+                <button class="btn btn-primary"
+                        @click="batchRenameApply()"
+                        :disabled="batchRename.busy || batchRenameWillRename() === 0">
+                    <span x-show="!batchRename.busy"
+                          x-text="'Rename ' + batchRenameWillRename() + ' file' + (batchRenameWillRename() === 1 ? '' : 's')"></span>
+                    <span x-show="batchRename.busy">Renaming…</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- ANALYZE modal: read-only optical diagnostics for one FITS. Two
          tabs (Tilt / Aberration) share one server-side star-detection
          pass (POST /api/analysis/frame). The preview <img> + overlay
@@ -14348,7 +14447,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260617-relnotesmd"></script>
+    <script src="/js/app.js?v=20260617-batchrename"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
