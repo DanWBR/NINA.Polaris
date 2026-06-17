@@ -1,0 +1,1624 @@
+/* GUIDE tab, give the content sensible horizontal breathing room.
+   Without this every row (info-row, settle inputs, control buttons,
+   smart-calibrate block) hugged the left edge of the viewport on wide
+   monitors. We don't pad .tab-panel globally because some tabs
+   (SKY, AUTORUN, STUDIO) manage their own gutters. */
+.tab-panel-guide > .panel-header,
+.tab-panel-guide > .guide-tabstrip,
+.tab-panel-guide > div > .phd2-mgmt,
+.tab-panel-guide > div > .guide-info,
+.tab-panel-guide > div > .guide-chart,
+.tab-panel-guide > div > .guide-settle-row,
+.tab-panel-guide > div > .control-row,
+.tab-panel-guide > div > .phd2-smart-block,
+.tab-panel-guide > div > .guide-connect-row,
+.tab-panel-guide > div > .warn-banner,
+.tab-panel-guide > div > .phd2-gui-banner,
+.tab-panel-guide > div > .phd2-gui-empty,
+.tab-panel-guide > div > .phd2-gui-frame-wrap {
+    padding-left: 18px;
+    padding-right: 18px;
+}
+
+/* POLAR tab, same horizontal gutters as GUIDE so the TPPA
+   parameter row, action buttons, progress bar, result block and
+   solved-points table don't hug the viewport edge. .panel-header
+   already carries its own padding, so skip it here. */
+.tab-panel-polar > .quick-controls,
+.tab-panel-polar > .af-progress,
+.tab-panel-polar > .stats-bar,
+.tab-panel-polar > .hint,
+.tab-panel-polar > p,
+.tab-panel-polar > div:not(.panel-header):not(.tab-panel-canvas-wrap) {
+    padding-left: 18px;
+    padding-right: 18px;
+}
+
+.panel-header {
+    padding: 12px 16px;
+    font-size: 15px;
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-secondary);
+}
+
+/* Preview Area (Live View) */
+.preview-area {
+    flex: 1;
+    position: relative;
+    background: #000;
+    min-height: 200px;
+    overflow: hidden;
+}
+
+/* LIVE + PREVIEW two-column layout. Same pattern as .video-pane
+   (VIDEO Capture tab): preview canvas on the left grows into all
+   available width + height; the existing control row (Exp/Gain/Bin/
+   Filter + action buttons + LIVE: Stack/Compute + REFSUG callout +
+   Auto re-focus triggers) drops into a fixed-width vertical sidebar
+   on the right. The horizontal bar that used to live below the
+   canvas added ~80 px of vertical chrome to every viewport; moving
+   it to the side reclaims that for the bitmap. Mobile breakpoint
+   (≤900px) collapses back to the legacy single-column stack. */
+.tab-panel-live,
+.preview-tab-panel,
+.tab-panel-autorun {
+    min-height: 0;
+    overflow: hidden;
+}
+.live-pane,
+.preview-pane,
+.autorun-pane,
+.flatwiz-pane {
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    padding: 8px 8px 0;
+    /* LIVE / PREVIEW (and indirectly VIDEO below) overlay their control
+       panels on top of the canvas so the bitmap always takes 100% of
+       the available pane width. position:relative anchors the
+       absolutely-positioned .quick-controls below. */
+    position: relative;
+}
+.live-pane > .preview-area,
+.preview-pane > .preview-area,
+.autorun-pane > .autorun-list-col,
+.flatwiz-pane > .autorun-list-col {
+    flex: 1;
+    min-width: 0;
+    min-height: 200px;
+    border-radius: var(--radius);
+}
+.live-pane > .quick-controls,
+.preview-pane > .quick-controls {
+    /* Floating translucent sidebar — overlays the canvas on the right
+       so the bitmap underneath spans the full pane width whether the
+       panel is open OR collapsed. Backdrop blur + 88% opacity keep the
+       text legible against bright nebulae / wide-field star fields
+       without fully hiding what's behind. */
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    bottom: 8px;
+    /* User-resizable width (drag the left-edge grip); default 320px,
+       persisted to localStorage and restored on load. */
+    width: var(--qc-width, 320px);
+    z-index: 4;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    /* Extra padding-left reserves room for the full-height toggle
+       handle that lives at the inside-left edge of the panel
+       (28px wide handle + 8px gap before content starts). */
+    padding: 12px 12px 12px 44px;
+    /* The panel itself no longer scrolls — an inner .quick-controls-scroll
+       wrapper does. This keeps the absolutely-positioned toggle handle sized
+       to the panel's full visible height; it used to scroll away with the
+       content, so the grab bar didn't reach the bottom when the panel
+       overflowed (had a scrollbar). */
+    overflow: hidden;
+    background: rgba(15, 23, 42, 0.88);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    transition: transform 200ms ease;
+}
+/* When the operator clicks the toggle handle, the panel slides off
+   to the right leaving only a 32 px tab visible with the chevron so
+   they can pull it back. The frame underneath gains the full width. */
+.live-pane > .quick-controls.quick-controls--collapsed,
+.preview-pane > .quick-controls.quick-controls--collapsed,
+.video-pane .quick-controls.quick-controls--collapsed {
+    transform: translateX(calc(100% - 28px));
+}
+/* Image area reserves room for the floating control panel so the bitmap
+   (and its "no image" placeholder) stays centred in the VISIBLE area
+   instead of sitting behind the panel. The reserve shrinks to just the
+   collapse handle when the panel is collapsed; the transition matches
+   the panel's 200ms slide so they move together. */
+.live-pane > .preview-area,
+.preview-pane > .preview-area {
+    margin-right: calc(var(--qc-width, 320px) + 12px); /* panel + 12px gap */
+    transition: margin-right 200ms ease;
+}
+.live-pane.controls-collapsed > .preview-area,
+.preview-pane.controls-collapsed > .preview-area {
+    margin-right: 36px;  /* 28px handle + 8px gap */
+}
+/* AUTORUN + Flat Wizard keep the old in-flow sidebar — they're
+   list-driven, not bitmap-driven, so a translucent overlay would
+   just hide content with no upside. */
+.autorun-pane > .quick-controls,
+.flatwiz-pane > .quick-controls {
+    flex: 0 0 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    overflow-y: auto;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    border-top: 1px solid var(--border);    /* override the default top-border-only style */
+}
+
+/* Toggle handle. Pinned to the left edge of the floating panel; the
+   chevron flips when collapsed so it always points the direction the
+   panel would slide if clicked. tap-friendly 32×40 px. */
+.quick-controls-toggle {
+    /* Full-height vertical handle on the inside-left edge of the
+       floating panel. Lives INSIDE .quick-controls (the panel has
+       overflow-y:auto which per CSS spec implicitly clips X-overflow
+       too, so the handle has to live within the panel bounds).
+       Spans top:0 → bottom:0 so the operator can grab it from any
+       vertical position. The .quick-controls panel has padding-left:
+       44px to reserve room so this handle never overlaps content.
+       When the panel is collapsed (transform translateX(100% - 28px)),
+       only its leftmost 28 px stays visible — exactly where this
+       handle sits. */
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 28px;
+    padding: 0;
+    background: rgba(56, 189, 248, 0.18);
+    border: 1px solid rgba(103, 232, 249, 0.45);
+    border-top: none;
+    border-bottom: none;
+    border-left: none;
+    border-radius: 0 var(--radius) var(--radius) 0;
+    color: #67e8f9;
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;       /* above the scrollable content of the panel */
+}
+.quick-controls-toggle:hover {
+    background: rgba(56, 189, 248, 0.35);
+    color: white;
+}
+/* Width-resize grip on the panel's extreme left edge (the boundary with
+   the canvas). Drag to resize; double-click to reset. Sits over the
+   leftmost few px of the collapse handle, leaving the rest of the handle
+   clickable. */
+.quick-controls-resize {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 7px;
+    cursor: ew-resize;
+    z-index: 11;
+    background: transparent;
+    touch-action: none;
+}
+.quick-controls-resize:hover,
+.quick-controls-resize.dragging {
+    background: rgba(103, 232, 249, 0.55);
+}
+/* Inner scroll region of the floating PREVIEW / LIVE / VIDEO sidebars. The
+   panel is a fixed-height flex column (top:8 → bottom:8); this wrapper takes
+   the remaining space and scrolls when the controls are taller than the
+   viewport, while the toggle handle stays pinned full-height alongside it. */
+.quick-controls-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* AUTORUN sidebar is shutter-only (no exposure / gain / filter
+   pickers like LIVE/PREVIEW have). Wide enough to give the dual
+   progress rings (sequence + current-exposure) room to breathe
+   and the stats block below room to read on one line. */
+.autorun-pane > .quick-controls {
+    flex: 0 0 260px;
+    align-items: center;
+}
+/* AUTORUN list column on the left is just a vertical stack with its
+   own scroll (sequence list + dither/MF panels can grow tall). */
+.autorun-pane > .autorun-list-col,
+.flatwiz-pane > .autorun-list-col {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 0 4px 12px;
+}
+/* AUTORUN Sequence sub-tab is now 3-column: a fixed-width left rail
+   (the item list + options), the centre preview (flex), and the
+   shutter sidebar on the right. The shared rule above gives the list
+   col flex:1; pin it to a fixed width here so the centre preview gets
+   the remaining space. Flat Wizard keeps the flex:1 single layout. */
+.autorun-pane > .autorun-list-col {
+    /* Resizable via the .col-splitter to its right; persisted. */
+    flex: 0 0 var(--autorun-list-w, 300px);
+    min-width: 0;
+}
+/* Vertical splitter between flex columns (AUTORUN list column <-> cards). A
+   thin flex item the user drags to resize the column on its left. */
+.col-splitter {
+    flex: 0 0 7px;
+    align-self: stretch;
+    margin: 0 -2px;
+    cursor: ew-resize;
+    border-radius: 3px;
+    background: transparent;
+    touch-action: none;
+    z-index: 5;
+}
+.col-splitter:hover,
+.col-splitter.dragging {
+    background: rgba(103, 232, 249, 0.55);
+}
+/* Col 2: the sequence cards rail. Own scroll, fixed width so the
+   centre preview keeps the rest. Cards stack vertically (one per row)
+   regardless of the wider auto-fit grid the list uses elsewhere. */
+.autorun-pane > .autorun-cards-col {
+    flex: 0 0 320px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 0 4px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+.autorun-pane > .autorun-cards-col .sequence-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 4px;
+}
+.autorun-pane > .autorun-preview {
+    flex: 1 1 auto;
+    min-width: 0;
+    border-radius: var(--radius);
+    /* Anchor the docked histogram at the bottom of the frame panel. */
+    position: relative;
+}
+
+/* Compact run control at the bottom of the controls column. Sticky so
+   the Start ring stays reachable while the controls above scroll. */
+.autorun-run-bar {
+    position: sticky;
+    bottom: 0;
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 6px 4px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+}
+.autorun-run-bar .autorun-run-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    min-width: 0;
+}
+/* Small shutter for the run bar (the big ring lived in the old right
+   sidebar; here it's ~64px so it tucks into the controls footer). */
+.polaris-shutter.shutter-compact {
+    width: 64px;
+    height: 64px;
+    flex: 0 0 64px;
+}
+.polaris-shutter.shutter-compact .shutter-countdown { font-size: 10px; }
+.polaris-shutter.shutter-compact .shutter-icon svg { width: 20px; height: 20px; }
+
+/* Histogram docked inside the AUTORUN frame panel, bottom edge, instead
+   of a full-window-width strip. Translucent so the frame shows through. */
+.autorun-preview .histo-panel.autorun-histo,
+.preview-area .histo-panel.histo-overlay {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    height: 78px;
+    z-index: 3;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: rgba(15, 23, 42, 0.82);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+/* Keep all three columns down to tablet-landscape widths; only stack on
+   genuinely narrow screens. When it DOES stack, the run-control sidebar
+   must go full-width too — otherwise it keeps its fixed 260px width and
+   wraps to a lonely box below the preview (the "run button ended up under
+   the preview" bug). */
+@media (max-width: 820px) {
+    .autorun-pane {
+        flex-wrap: wrap;
+        /* Stacked: the three rows together are taller than the pane, so
+           scroll the whole pane (the >820 layout keeps overflow:hidden and
+           lets each column scroll on its own instead). Without this the
+           sidebar/shutter sitting below the preview is clipped and
+           unreachable. */
+        overflow-y: auto;
+    }
+    /* Don't trap the rows in their own nested scrollers when stacked —
+       let them grow to content height and the pane scroll as one column. */
+    .autorun-pane > .autorun-list-col,
+    .autorun-pane > .autorun-cards-col {
+        flex: 1 1 100%;
+        overflow: visible;
+    }
+    .autorun-pane > .autorun-preview { flex: 1 1 100%; min-height: 280px; }
+    .autorun-pane > .quick-controls {
+        flex: 1 1 100%;
+        overflow: visible;
+    }
+    /* Stacked: don't pin the run bar, let it flow after the controls. */
+    .autorun-run-bar { position: static; }
+}
+.live-pane > .quick-controls .control-row,
+.preview-pane > .quick-controls .control-row {
+    /* Stack control items vertically inside the narrow 320px sidebar
+       so each row spans the full panel width — looks tidy and gives
+       the inputs / preset bars proper breathing room instead of the
+       jagged wrap the row-direction layout produces here. */
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    min-width: 0;
+}
+.live-pane > .quick-controls .control-row > label,
+.preview-pane > .quick-controls .control-row > label {
+    /* Each label = "title [input] suffix" laid out horizontally,
+       but the whole label spans the full sidebar width so multiple
+       labels stack instead of competing for one row. */
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+}
+.live-pane > .quick-controls .control-row > label > input:not([type="checkbox"]):not([type="radio"]),
+.live-pane > .quick-controls .control-row > label > select,
+.preview-pane > .quick-controls .control-row > label > input:not([type="checkbox"]):not([type="radio"]),
+.preview-pane > .quick-controls .control-row > label > select {
+    /* Input/select pinned to the right half of the row. The label
+       text stays on the left edge; margin-left: auto pushes the
+       control over so it sits at 50% width on the right side of
+       the row, with any trailing unit text ("s", "min", ...)
+       flowing to its right. Compact + readable in the narrow
+       sidebar. Excludes checkboxes/radios which keep their natural
+       18x18 box and stay next to their label text. */
+    flex: 0 0 50%;
+    margin-left: auto;
+    min-width: 0;
+}
+/* Preset button bars (ZWO L/M/H gain, BIN1..4) — make every button
+   share the row equally so they justify across the full sidebar. */
+.live-pane > .quick-controls .control-row > .zwo-gain-presets,
+.live-pane > .quick-controls .control-row > .bin-presets,
+.preview-pane > .quick-controls .control-row > .zwo-gain-presets,
+.preview-pane > .quick-controls .control-row > .bin-presets {
+    display: flex;
+    gap: 6px;
+    width: 100%;
+}
+.live-pane > .quick-controls .control-row > .zwo-gain-presets > button,
+.live-pane > .quick-controls .control-row > .bin-presets > button,
+.preview-pane > .quick-controls .control-row > .zwo-gain-presets > button,
+.preview-pane > .quick-controls .control-row > .bin-presets > button {
+    /* Override the compact 2-3px padding / 10px font-size of the global
+       .zwo-gain-preset and .bin-preset rules — these buttons sit alone
+       on their own row in the sidebar with empty vertical space below,
+       so a taller, more touch-friendly target reads better. */
+    flex: 1;
+    min-width: 0;
+    padding: 10px 8px;
+    font-size: 12px;
+}
+.live-pane > .quick-controls .control-row.actions,
+.preview-pane > .quick-controls .control-row.actions {
+    margin-top: 4px;
+}
+/* Inside the sidebar, the trigger details panel + refocus callout
+   should not blow up horizontally; rely on wrapping. */
+.live-pane > .quick-controls .livestack-triggers,
+.live-pane > .quick-controls .livestack-refocus-callout {
+    margin-top: 4px;
+}
+.live-pane > .quick-controls .text-muted,
+.live-pane > .quick-controls .text-warn,
+.live-pane > .quick-controls .text-err,
+.preview-pane > .quick-controls .text-muted,
+.preview-pane > .quick-controls .text-warn,
+.preview-pane > .quick-controls .text-err {
+    white-space: normal;
+}
+
+/* Mobile: revert to the legacy single-column stack so the canvas and
+   sidebar each get full viewport width. The sidebar becomes a docked
+   block below the canvas. Threshold matches .video-pane (≤900px). */
+@media (max-width: 900px) {
+    .live-pane,
+    .preview-pane,
+    .flatwiz-pane {
+        flex-direction: column;
+        padding: 0;
+        gap: 8px;
+    }
+    .live-pane > .quick-controls,
+    .preview-pane > .quick-controls,
+    .autorun-pane > .quick-controls,
+    .flatwiz-pane > .quick-controls {
+        flex: 0 0 auto;
+        max-height: none;
+    }
+    .live-pane > .preview-area,
+    .preview-pane > .preview-area {
+        border-radius: 0;
+        /* Stacked layout: panel docks below, no side reserve. */
+        margin-right: 0;
+    }
+}
+
+/* SHUT-1: Polaris Shutter — ASIAIR/StellaVita-style circular capture
+   button. Reused across LIVE, PREVIEW, FOCUS Manual, VIDEO Capture,
+   AUTORUN. SVG ring shows exposure progress, inner button morphs
+   between a solid circle (idle) and a square STOP icon (active).
+
+   Gesture model:
+     tap                  = snap once / start (delegated to onTap)
+     long-press 600ms     = enter loop / repeat (delegated to onLongPress)
+     tap during active    = abort / stop (delegated to onAbort)
+
+   See app.js shutterPointerDown/Up/Cancel for the gesture state machine.
+
+   Sidebar layout: the shutter expects a flex-column .quick-controls
+   parent with three children: top inputs (flex:0), .shutter-wrap
+   (flex:1, centered), bottom secondaries (flex:0). The shutter
+   itself uses .shutter-wrap so flex math automatically centers it
+   vertically between the surrounding blocks. */
+.polaris-shutter {
+    position: relative;
+    /* Sized to fill the vertical space inside the floating sidebar.
+       Previous 128px looked dwarfed by the new 320px pane; 200px
+       reads as the dominant action without crowding the inputs at
+       the top or the secondary controls at the bottom. */
+    width: 200px;
+    height: 200px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    /* Suppress the Android/iOS WebView long-press callout so the hold
+       gesture (loop/repeat) isn't hijacked by the native context menu. */
+    -webkit-touch-callout: none;
+    touch-action: manipulation;   /* disable double-tap zoom on mobile */
+}
+
+/* Long-press gesture controls (mount jog hold, etc.) and buttons in
+   general: kill the WebView text-selection callout + highlight so a
+   press-and-hold drives our handlers instead of the native menu. */
+button,
+.mount-jog-cluster,
+.pz-toolbar {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+/* LIVE / PREVIEW / VIDEO shutters are shrunk to ~75% (150px) of the
+   200px default. AUTORUN keeps the full size (it carries the dual
+   progress rings now) and FOCUS is left untouched. Stroke widths are
+   viewBox-relative so the rings scale automatically; only the pixel
+   sizes (box + icon + countdown) need overriding. */
+.live-pane .polaris-shutter,
+.preview-pane .polaris-shutter,
+.video-pane .polaris-shutter {
+    width: 150px;
+    height: 150px;
+}
+.live-pane .polaris-shutter .shutter-icon svg,
+.preview-pane .polaris-shutter .shutter-icon svg,
+.video-pane .polaris-shutter .shutter-icon svg {
+    width: 42px;
+    height: 42px;
+}
+.live-pane .polaris-shutter .shutter-countdown,
+.preview-pane .polaris-shutter .shutter-countdown,
+.video-pane .polaris-shutter .shutter-countdown {
+    font-size: 13px;
+    bottom: -22px;
+}
+.polaris-shutter[aria-disabled="true"] {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+.polaris-shutter .shutter-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    /* Rotate so progress starts at 12 o'clock (instead of 3) and
+       sweeps clockwise as the dashoffset shrinks. */
+    transform: rotate(-90deg);
+}
+.polaris-shutter .shutter-track {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.10);
+    stroke-width: 4;
+}
+.polaris-shutter .shutter-progress {
+    fill: none;
+    /* Cyan stellar gradient matches the brand (#0891b2 → #67e8f9). */
+    stroke: #67e8f9;
+    stroke-width: 4;
+    stroke-linecap: round;
+    /* Circumference of r=46 is 2π × 46 ≈ 289.027. dashoffset 289
+       = empty ring; 0 = full. Inline style on the element sets
+       offset = 289 * (1 - progress) for whatever the current
+       progress is. */
+    stroke-dasharray: 289 289;
+    stroke-dashoffset: 289;
+    transition: stroke-dashoffset 0.1s linear, stroke 0.2s ease;
+}
+.polaris-shutter.shutter-active .shutter-progress {
+    /* Red while capturing — matches the STOP semantic of the inner
+       icon, and matches the red REC chip convention. */
+    stroke: #ef4444;
+}
+.polaris-shutter.shutter-arming .shutter-progress {
+    /* Amber while user is holding to arm a loop. Faster fill via
+       a shorter transition so the ring keeps up with the 600ms hold
+       countdown without the default 0.1s lag making it look stuck. */
+    stroke: #fbbf24;
+    transition: stroke-dashoffset 60ms linear, stroke 0.15s ease;
+}
+/* Inner ring (AUTORUN only): progress of the CURRENT exposure.
+   Sits just inside the outer sequence ring. r=38 -> circumference
+   2π × 38 ≈ 238.76; inline style sets offset = 238.76 × (1 - p). */
+.polaris-shutter .shutter-track-inner {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.10);
+    stroke-width: 4;
+}
+.polaris-shutter .shutter-progress-inner {
+    fill: none;
+    /* Cyan so it reads as distinct from the red outer (sequence) ring. */
+    stroke: #22d3ee;
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-dasharray: 238.76 238.76;
+    stroke-dashoffset: 238.76;
+    /* Subtle glow so the current-frame fill is unmistakable against the
+       outer sequence ring. */
+    filter: drop-shadow(0 0 2px rgba(34, 211, 238, 0.7));
+    transition: stroke-dashoffset 0.2s linear;
+}
+.polaris-shutter .shutter-inner {
+    position: relative;
+    /* ~75% of the outer ring (200px). Keeps the visual ratio that
+       the old 128/96 pair had so the progress ring still reads
+       around the button rather than fused with it. */
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    background: linear-gradient(160deg, #1e3a8a 0%, #0891b2 100%);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45),
+                inset 0 1px 2px rgba(255, 255, 255, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease, transform 0.1s ease;
+}
+.polaris-shutter.shutter-active .shutter-inner {
+    background: linear-gradient(160deg, #7f1d1d 0%, #ef4444 100%);
+}
+.polaris-shutter.shutter-arming .shutter-inner {
+    background: linear-gradient(160deg, #78350f 0%, #f59e0b 100%);
+    transform: scale(0.97);
+}
+.polaris-shutter:not([aria-disabled="true"]):hover .shutter-inner {
+    box-shadow: 0 4px 18px rgba(103, 232, 249, 0.35),
+                inset 0 1px 2px rgba(255, 255, 255, 0.2);
+}
+.polaris-shutter:not([aria-disabled="true"]):active .shutter-inner {
+    transform: scale(0.94);
+}
+.polaris-shutter .shutter-icon {
+    color: white;
+    pointer-events: none;
+    line-height: 0;     /* prevents the SVG getting extra vertical space */
+}
+.polaris-shutter .shutter-icon svg {
+    width: 56px;
+    height: 56px;
+    fill: currentColor;
+    display: block;
+}
+.polaris-shutter .shutter-countdown {
+    position: absolute;
+    /* Pushed down a hair more so the bigger text still clears the
+       shutter ring without overlapping the SVG progress arc. */
+    bottom: -28px;
+    left: 50%;
+    transform: translateX(-50%);
+    /* Bumped from 12px → 17px. User reported the previous size was
+       hard to read at a glance during long exposures — the counter
+       is the primary 'how much time left' signal so it should pop. */
+    font-size: 17px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    pointer-events: none;
+    /* Subtle glow so the larger number stays legible over any
+       canvas-bleed background (PREVIEW / FOCUS panels render close
+       to the shutter sidebar on tight mobile layouts). */
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.polaris-shutter.shutter-active .shutter-countdown {
+    color: #fca5a5;
+    font-weight: 700;
+}
+
+/* Indeterminate spinner for cases where there is no known total
+   duration (e.g. VIDEO recording without maxDurationSec). The
+   progress ring rotates a fixed 25%-fill segment continuously. */
+@keyframes shutter-spin {
+    from { transform: rotate(-90deg); }
+    to   { transform: rotate(270deg); }
+}
+.polaris-shutter.shutter-indeterminate .shutter-svg {
+    animation: shutter-spin 1.4s linear infinite;
+}
+.polaris-shutter.shutter-indeterminate .shutter-progress {
+    stroke-dashoffset: 217;   /* 75% of 289 — leaves a 25% arc lit */
+    transition: stroke 0.2s ease;
+}
+
+/* Sidebar slot. Three vertical blocks inside .quick-controls when
+   it's hosting a shutter: inputs at top (auto height), shutter
+   centered in the leftover middle (flex:1), secondary toggles
+   at bottom (auto height). Used by .live-pane / .preview-pane /
+   .autorun-pane / video / focus sidebars. */
+.shutter-wrap {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Reserve enough headroom so the shutter never gets crushed by
+       a packed inputs block above. The 32px tail accommodates the
+       absolute-positioned countdown label below the SVG. */
+    min-height: 168px;
+    margin: 8px 0 32px;
+}
+.shutter-inputs {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.shutter-secondary {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.shutter-secondary .control-row {
+    gap: 6px 8px;
+}
+
+.preview-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    /* Preserve the source frame's aspect ratio inside whatever
+       container it lands in, without this the bitmap was being
+       stretched to fill (e.g. a 4:3 sensor came out 16:9 in the
+       PREVIEW tab). Canvas honours object-fit because the canvas
+       element is treated as a replaced element in HTML5. The
+       canvas .width/.height attributes are already set to the
+       source image dimensions in _renderJpegFrame /
+       _renderRawFrame, so contain letterboxes correctly. */
+    object-fit: contain;
+    object-position: center;
+    /* PANZOOM: the JS pan/zoom system applies CSS transform
+       (translate + scale) from the TOP-LEFT of the canvas. The
+       pixel-space pan math in app.js (_pz*) assumes origin 0 0;
+       a centre origin breaks the zoom-to-cursor offset. will-change
+       hints the compositor to promote the canvas to its own layer
+       for smooth pinch. */
+    transform-origin: 0 0;
+    will-change: transform;
+}
+
+.preview-overlay-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    display: block;
+    /* Same contain as the underlying .preview-canvas so star
+       annotations / crosshairs land on the right pixels even when
+       the bitmap is letterboxed by aspect ratio. */
+    object-fit: contain;
+    object-position: center;
+    /* PANZOOM: the overlay follows the same CSS transform as the
+       underlying .preview-canvas so annotations stay aligned. */
+    transform-origin: center center;
+    will-change: transform;
+}
+
+.preview-overlay-controls {
+    position: absolute;
+    top: 8px;
+    left: 8px;                       /* moved from right to clear the
+                                        floating .quick-controls panel
+                                        that now overlays the right side */
+    display: flex;
+    gap: 4px;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 4px;
+    padding: 4px;
+    z-index: 5;
+}
+
+.preview-overlay-controls .btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* LIVE tab floating overlay for image history + HFR chart. Sits at
+   the bottom of .preview-area as a semi-transparent panel so the
+   stacked image keeps the full viewport. Toggled by the ⊟ button
+   in .preview-overlay-controls. */
+.live-history-overlay {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    z-index: 4;                       /* above canvas, below controls */
+    background: rgba(5, 8, 20, 0.72);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: var(--text-primary);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 42vh;                 /* never eat more than ~half */
+}
+.live-history-overlay-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+}
+.live-history-overlay-header > span:first-child { margin-right: auto; }
+.live-history-overlay-header .btn {
+    padding: 3px 8px;
+    font-size: 11px;
+    min-height: 0;
+}
+.live-history-overlay-thumbs {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 4px;
+}
+.live-history-overlay-thumbs .history-thumb {
+    flex: 0 0 88px;
+    height: 64px;
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.05);
+}
+.live-history-overlay-thumbs .history-thumb img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.live-history-overlay-thumbs .history-thumb-meta {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    color: var(--text-primary);
+    font-size: 9px;
+    padding: 1px 4px;
+    display: flex;
+    justify-content: space-between;
+}
+/* SNR-7: top-of-overlay "stack quality" widget. Three big numbers
+   side by side (SNR / Frames / ETA) plus a tiny target input. */
+.live-stack-quality {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 4px 2px 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.live-stack-quality .lsq-cell {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+}
+.live-stack-quality .lsq-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-secondary);
+}
+.live-stack-quality .lsq-value {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+.live-stack-quality .lsq-target {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.live-stack-quality .lsq-target label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.live-stack-quality .lsq-target input {
+    /* override .input-sm bigger defaults so this fits neatly in
+       the overlay header row. min-height kills the 38 px floor. */
+    min-height: 0;
+    padding: 3px 6px;
+    font-size: 13px;
+    width: 64px;
+    min-width: 48px;
+}
+
+.live-history-overlay-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.live-history-overlay-chart-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+}
+.live-history-overlay-chart .chart-container {
+    height: 80px;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 4px;
+    padding: 4px;
+}
+
+.preview-overlay-info {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    background: rgba(0, 0, 0, 0.7);
+    color: var(--text-secondary);
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    pointer-events: none;
+    display: flex;
+    gap: 10px;
+    font-family: monospace;
+}
+
+.preview-overlay-info strong {
+    color: var(--text-primary);
+}
+
+.preview-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 15px;
+}
+
+.preview-overlay .hint {
+    font-size: 12px;
+    margin-top: 6px;
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+/* Quick Controls */
+.quick-controls {
+    padding: 10px 14px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+}
+
+.control-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.control-row label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.control-row.actions {
+    margin-top: 8px;
+    gap: 8px;
+}
+
+/* Stats Bar */
+.stats-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border);
+    min-height: var(--statsbar-height);
+}
+
+/* ASIAIR-style histogram + stretch mini-panel, pinned to the bottom of the
+   LIVE / PREVIEW / AUTORUN tabs: stats on the left, a 0..65535 histogram
+   with two draggable black/white-point handles in the middle, Auto + Zoom
+   on the right. */
+.histo-panel {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    height: 84px;
+    flex: 0 0 auto;
+    padding: 6px 12px;
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border);
+}
+.histo-stats {
+    display: grid;
+    grid-template-columns: auto auto;
+    grid-auto-rows: 1fr;
+    column-gap: 16px;
+    row-gap: 2px;
+    align-content: center;
+    min-width: 116px;
+    font-variant-numeric: tabular-nums;
+}
+.histo-stats .hs-cell { display: flex; flex-direction: column; line-height: 1.15; }
+.histo-stats .hs-v { font-size: 13px; color: var(--text-primary); }
+.histo-stats .hs-l {
+    font-size: 9px; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.05em;
+}
+.histo-graph {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    touch-action: none;
+}
+.histo-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+.histo-axis {
+    position: absolute;
+    left: 0; right: 0; bottom: 1px;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 3px;
+    font-size: 9px;
+    color: var(--text-muted);
+    pointer-events: none;
+    opacity: 0.7;
+}
+.histo-handle {
+    position: absolute;
+    top: 0; bottom: 0;
+    /* Wider hit area + fatter grab pill so the points are easy to drag
+       with a finger on the tablet (the 16px target was hard to grab). */
+    width: 30px;
+    margin-left: -15px;
+    cursor: ew-resize;
+    touch-action: none;
+    z-index: 2;
+}
+.histo-handle::before {   /* the thin vertical line at the exact point */
+    content: '';
+    position: absolute;
+    left: 14px; top: 0; bottom: 0;
+    width: 2px;
+    background: rgba(255, 255, 255, 0.7);
+}
+.histo-handle::after {    /* the grabbable pill */
+    content: '';
+    position: absolute;
+    left: 7px; top: 50%;
+    transform: translateY(-50%);
+    width: 16px; height: 38px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    background: rgba(56, 189, 248, 0.85);
+}
+.histo-handle-white::after { background: rgba(226, 232, 240, 0.92); }
+/* Midtones handle: amber, sits below black/white so it never blocks them. */
+.histo-handle-mid { z-index: 1; }
+.histo-handle-mid::before { background: rgba(255, 193, 7, 0.7); }
+.histo-handle-mid::after { background: rgba(255, 193, 7, 0.85); height: 28px; }
+.histo-actions {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+}
+.histo-actions .btn { min-width: 56px; }
+
+.stats-bar strong {
+    color: var(--text-primary);
+}
+
+/* Inputs */
+.input-sm {
+    /* field-sizing: content grows the input with its value on Chromium-
+       based browsers (Edge / Chrome 123+ / Opera). Firefox / Safari
+       fall back to the static width below. min-width keeps it usable
+       when empty + max-width prevents a long target name from blowing
+       out the row layout. Previously a fixed width: 80px crammed even
+       "-10" + the native number-spinner arrows so 3-digit cooler
+       targets rendered as "-1(" because the trailing digit fell behind
+       the spinner.
+       Tap-friendly height: ~38 px (9 px vertical padding + 14 px font
+       + 2 px border) — comfortable on phones / tablets without feeling
+       oversized on desktop. */
+    width: 96px;
+    min-width: 72px;
+    max-width: 220px;
+    field-sizing: content;
+    padding: 9px 10px;
+    min-height: 38px;
+    box-sizing: border-box;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-size: 14px;
+    outline: none;
+    transition: border-color var(--transition);
+}
+
+/* Exposure-preset inputs hold up to 4 chars + a decimal + spinner
+   arrows (e.g. "1000" or "0.0001"). Bump them a bit beyond the
+   default .input-sm so the value never gets cropped. Selector
+   matches both pre-disarm (list=...) and post-disarm
+   (data-exposure-presets=1) forms, see the popover script in
+   index.html. */
+input[list="exposure-presets"],
+input[data-exposure-presets] {
+    width: 100px;
+}
+
+.input-md {
+    width: 140px;
+    min-width: 100px;
+    max-width: 320px;
+    field-sizing: content;
+    /* Match .input-sm's tap-friendly height + font (see comment above). */
+    padding: 9px 10px;
+    min-height: 38px;
+    box-sizing: border-box;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-size: 14px;
+    outline: none;
+}
+
+.input-sm:focus, .input-md:focus {
+    border-color: var(--accent);
+}
+
+/* Generic `.input` (used by the prompt-style modals — STUDIO integration /
+   calibration method picker, folder/rename/password text fields). Without
+   this the bare class fell back to the OS combobox/field chrome (white bg,
+   no border-radius) that clashes with the dark theme. Match the same look
+   as .input-sm / Settings selects, with a custom SVG chevron for selects. */
+.input {
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 9px 10px;
+    min-height: 38px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color var(--transition);
+}
+.input:focus {
+    border-color: var(--accent);
+}
+select.input {
+    cursor: pointer;
+    padding-right: 32px;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    color-scheme: dark;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%23a8b3bf' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+}
+select.input option {
+    background: var(--bg-input);
+    color: var(--text-primary);
+}
+
+select.input-sm {
+    cursor: pointer;
+    /* 60px is fine for a 2-digit numeric input but cramps even the
+       shortest dropdown labels ("All types" overflows). Bump the
+       width 50% so the chevron + the longest option text both fit. */
+    width: 90px;
+}
+
+/* Any select.input-sm wrapped in a <label> stretches to fill the
+   label's width, the input-sm 90px default is for bare standalone
+   selects, but inside form-row labels the parent's flex/grow rules
+   already do the right thing, so the select should follow. Without
+   this rule, dropdown placeholders like "Pick a recorded SER" or
+   "Select device" get truncated to "Pick a recor…" / "Select dev…"
+   even when the surrounding label has plenty of horizontal room.
+   180px floor avoids visually-empty chevron-only stubs.
+
+   Numeric <input> children of <label> keep their explicit width
+   (the inline style="width:90px" overrides go untouched). */
+label > select.input-sm,
+label select.input-sm {
+    width: 100%;
+    min-width: 180px;
+}
+
+.search-input {
+    flex: 1;
+    /* Same tap-friendly height as .input-sm / .input-md (~38 px). */
+    padding: 9px 12px;
+    min-height: 38px;
+    box-sizing: border-box;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-size: 14px;
+    outline: none;
+}
+
+.search-input:focus {
+    border-color: var(--accent);
+}
+
+/* Buttons */
+.btn {
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background var(--transition), border-color var(--transition);
+    white-space: nowrap;
+    /* <a class="btn"> would otherwise inherit the browser default
+       underline + link colour — kills the button look (see the
+       TLS-A2 download links). Force-strip both at the .btn level so
+       any future link-as-button stays consistent. */
+    text-decoration: none;
+}
+.btn:hover, .btn:focus, .btn:active {
+    text-decoration: none;
+}
+
+.btn:hover {
+    background: var(--bg-secondary);
+    border-color: var(--text-muted);
+}
+
+.btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.btn-primary:hover {
+    background: var(--accent-hover);
+}
+
+.btn-danger {
+    background: rgba(244, 67, 54, 0.15);
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+.btn-danger:hover {
+    background: rgba(244, 67, 54, 0.25);
+}
+
+/* Factory-reset danger card: a subtle red accent so it reads as a
+   "careful" zone without shouting. */
+.danger-section {
+    border-color: var(--danger);
+    box-shadow: inset 0 0 0 1px rgba(244, 67, 54, 0.18);
+}
+
+.btn-sm {
+    padding: 4px 10px;
+    font-size: 12px;
+}
+
+.btn-xs {
+    padding: 2px 7px;
+    font-size: 11px;
+}
+
+/* Named autorun sets (save / reload presets) in the AUTORUN list column. */
+.seq-sets {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+}
+
+.seq-sets-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.7;
+    margin-bottom: 6px;
+}
+
+.seq-set-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+}
+
+.seq-set-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+}
+
+/* PREVIEW / LIVE target identification row: text field + Identify button
+   aligned along the input baseline. */
+.target-row {
+    align-items: center;
+    gap: 6px;
+}
+.target-row .btn {
+    flex: 0 0 auto;
+}
+/* In the narrow LIVE/PREVIEW sidebar the generic .control-row rule
+   forces flex-direction: column, which stacks the identify (🔍)
+   button below the Target input. Keep this particular row horizontal
+   so the button sits right after the input, all items vertically
+   centred on one baseline. */
+.live-pane > .quick-controls .control-row.target-row,
+.preview-pane > .quick-controls .control-row.target-row {
+    flex-direction: row;
+    align-items: center;
+}
+/* The label wraps "Target" + the input. Lay it out as a row so the
+   caption sits left and the input fills the remaining width, then
+   matches the identify button's height exactly. Overrides the generic
+   sidebar rule that pins wrapped inputs to a fixed 50% basis (which
+   left a big gap between the caption and a too-narrow input). */
+.target-row > label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+.live-pane > .quick-controls .control-row.target-row > label > input,
+.preview-pane > .quick-controls .control-row.target-row > label > input,
+.target-row > label > input {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    margin-left: 0;
+}
+/* Identify button: same tap-friendly height as .input-sm so the row
+   reads as a single aligned unit instead of mismatched boxes. */
+.target-row .btn {
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-lg {
+    padding: 10px 18px;
+    font-size: 16px;
+}
+
+.btn-icon {
+    padding: 4px 8px;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    font-size: 11px;
+    cursor: pointer;
+    transition: color var(--transition);
+}
+
+.btn-icon:hover {
+    color: var(--text-primary);
+}
+
+/* INDIPROP-2: native INDI property browser styling. Multi-column
+   responsive grid of device cards, themed inputs that match the
+   rest of the app (instead of browser defaults). Auto-fills 2 or
+   3 columns depending on viewport width. */
+.indi-props-subtab .indi-props-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+    gap: 14px;
+}
+.indi-props-subtab .indi-device-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.02);
+    display: flex;
+    flex-direction: column;
+}
+.indi-props-subtab .indi-device-card-header {
+    padding: 8px 12px;
+    background: rgba(91, 141, 255, 0.08);
+    font-weight: 600;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.indi-props-subtab .indi-device-card-body {
+    flex: 1;
+    overflow-y: auto;
+    /* Cap the per-card body height so a verbose device (50+ properties)
+       doesn't stretch the card to the page bottom; user scrolls
+       within the card. 600px ≈ 12 properties visible at once. */
+    max-height: 600px;
+}
+.indi-props-subtab .indi-group {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.indi-props-subtab .indi-group-header {
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.02);
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.indi-props-subtab .indi-group-body {
+    padding: 6px 12px 10px 12px;
+}
+.indi-props-subtab .indi-prop {
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
+}
+.indi-props-subtab .indi-prop:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+.indi-props-subtab .indi-prop-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    font-size: 12px;
+}
+.indi-props-subtab .indi-prop-meta {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+/* INDIPROP: the (?) help icon next to each property name. Faint by
+   default; gets the accent colour when a description (built-in or
+   operator note) is available, so the operator can tell at a glance
+   which properties are explained. */
+.indi-help-icon {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    line-height: 14px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid var(--border, #3a3a3a);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    opacity: 0.55;
+}
+.indi-help-icon:hover {
+    opacity: 1;
+    border-color: var(--accent, #4ea1ff);
+    color: var(--accent, #4ea1ff);
+}
+.indi-help-icon.has-desc {
+    opacity: 1;
+    border-color: var(--accent, #4ea1ff);
+    color: var(--accent, #4ea1ff);
+}
+/* The read-only built-in description block inside the note editor. */
+.indi-help-builtin {
+    margin-top: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--surface-2, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--border, #3a3a3a);
+    font-size: 12px;
+    line-height: 1.4;
+}
+.indi-props-subtab .indi-prop-rows {
+    /* One element per visual row. Flex column wrapper, each element
+       is a flex row (label | input | optional Set). Was a 3-column
+       grid before — when a property had many ro elements (no Set
+       button rendered), they packed multiple elements per row
+       because the grid kept flowing children into available cells.
+       Now layout is element-count-independent. */
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+}
+.indi-props-subtab .indi-prop-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.indi-props-subtab .indi-elem-label {
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* Fixed-width label column keeps inputs aligned vertically when
+       element names have different lengths (DRIVER_NAME vs
+       DRIVER_INTERFACE). flex-shrink:0 so a long label doesn't
+       squeeze the input. */
+    flex: 0 0 140px;
+}
+/* Inputs honour the global .input-sm theming (dark bg, accent
+   focus ring). Override the width/min-width that .input-sm bakes
+   in for the standalone use-case -- inside a grid cell we want
+   the input to fill its column. */
+.indi-props-subtab .indi-input {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    font-variant-numeric: tabular-nums;
+}
+.indi-props-subtab .indi-input:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+.indi-props-subtab .indi-switch-row {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    font-size: 12px;
+}
+.indi-props-subtab .indi-switch-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+}
+.indi-props-subtab .indi-state-dot {
+    font-size: 14px;
+    line-height: 1;
+}
+.indi-props-subtab .indi-state-ok    { color: #86efac; }
+.indi-props-subtab .indi-state-busy  { color: #fcd34d; }
+.indi-props-subtab .indi-state-alert { color: #f87171; }
+.indi-props-subtab .indi-state-idle  { color: #9ca3af; }
+
+/* Mobile: drop to a single column, expand card body to full
+   viewport height because side-scroll is awful on a phone. */
+@media (max-width: 640px) {
+    .indi-props-subtab .indi-props-grid {
+        grid-template-columns: 1fr;
+    }
+    .indi-props-subtab .indi-device-card-body {
+        max-height: none;
+    }
+}
+

@@ -1,0 +1,686 @@
+/* Editor export heading mirror. */
+.editor-export-modal h3 {
+    font-size: 17px !important;
+    font-weight: 600 !important;
+    color: var(--text-primary);
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px !important;
+}
+
+/* TLS-A2: HTTPS cert install wizard tabs.
+   Reuses the visual language of .video-tabstrip / .guide-tabstrip
+   so the OS picker feels native to the rest of the app. */
+.tls-os-tabs {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 10px;
+}
+.tls-os-tab {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: color 120ms ease, border-color 120ms ease;
+}
+.tls-os-tab:hover { color: var(--text-primary); }
+.tls-os-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
+}
+.tls-os-steps {
+    font-size: 12px;
+    color: var(--text-primary);
+}
+.tls-os-steps code {
+    background: rgba(255,255,255,0.05);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 11px;
+}
+
+/* RDPA-4: Rudimentary polar alignment sub-pane styles. */
+.polar-tabstrip {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 12px;
+}
+.polar-tab {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: color 120ms ease, border-color 120ms ease;
+}
+.polar-tab:hover { color: var(--text-primary); }
+.polar-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
+}
+.rudimentary-pane {
+    padding-top: 4px;
+}
+.rudimentary-search-results {
+    position: relative;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-top: 4px;
+    max-height: 240px;
+    overflow-y: auto;
+    z-index: 50;
+}
+.rudimentary-search-row {
+    padding: 6px 10px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border-bottom: 1px solid var(--border);
+}
+.rudimentary-search-row:last-child { border-bottom: none; }
+.rudimentary-search-row:hover { background: rgba(255,255,255,0.05); }
+.rudimentary-result {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-top: 8px;
+}
+.rudimentary-sparkline {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 32px;
+}
+.rudimentary-spark-bar {
+    display: inline-block;
+    width: 8px;
+    min-height: 2px;
+    border-radius: 1px;
+}
+.rudimentary-skymap-wrap {
+    margin-top: 10px;
+}
+.rudimentary-skymap {
+    width: 100%;
+    height: 280px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #000;
+}
+
+/* Slew & Center capture tune popup inside the sky map overlay actions.
+   Uses <details> so it stays out of the way until expanded. */
+.slew-center-tune {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+}
+.slew-center-tune summary {
+    cursor: pointer;
+    color: var(--text-muted);
+    user-select: none;
+}
+.slew-center-tune summary:hover { color: var(--text-primary); }
+.slew-center-tune[open] summary { color: var(--text-primary); margin-bottom: 4px; }
+
+/* ----- Checkbox + radio normalisation -----
+   The browser-default checkbox is a tiny 13px Windows 95 thing that
+   sits visually adrift from every other control. This brings them
+   into the same family as .btn / .input-sm: same border, same radius,
+   same hover / focus colour, same bg-input fill. Drawn purely with
+   CSS (no images) so dark / night mode picks up var() changes for
+   free.
+
+   Escape hatch: add class="checkbox-native" on the input to opt out
+   (useful inside iframes / third-party widgets that depend on the
+   default size). */
+input[type="checkbox"]:not(.checkbox-native),
+input[type="radio"]:not(.checkbox-native) {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    min-height: 18px;
+    margin: 0 6px 0 0;
+    padding: 0;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    position: relative;
+    vertical-align: middle;
+    transition: background var(--transition), border-color var(--transition);
+    flex-shrink: 0;
+}
+
+/* Radios stay round; checkboxes inherit the .input-sm radius. */
+input[type="radio"]:not(.checkbox-native) {
+    border-radius: 50%;
+}
+
+input[type="checkbox"]:not(.checkbox-native):hover,
+input[type="radio"]:not(.checkbox-native):hover {
+    border-color: var(--accent);
+}
+
+input[type="checkbox"]:not(.checkbox-native):focus-visible,
+input[type="radio"]:not(.checkbox-native):focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+input[type="checkbox"]:not(.checkbox-native):checked,
+input[type="radio"]:not(.checkbox-native):checked {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+/* Checkmark drawn as a rotated border-bottom + border-right rect.
+   Two-pixel strokes so it stays readable at 18px. */
+input[type="checkbox"]:not(.checkbox-native):checked::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 1px;
+    width: 5px;
+    height: 10px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+/* Radio bullet — solid filled circle centred in the ring. */
+input[type="radio"]:not(.checkbox-native):checked::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 4px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #fff;
+}
+
+input[type="checkbox"]:not(.checkbox-native):disabled,
+input[type="radio"]:not(.checkbox-native):disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Labels wrapping a checkbox were laid out with display:block by the
+   browser default — switching the input to inline-block above leaves
+   stray flex/grid items wrapping awkwardly. Force inline-flex on the
+   nearby <label class="checkbox-label"> (and any vanilla label that
+   contains a checkbox) so the label + text stay on one line and
+   align vertically with each other. */
+label:has(> input[type="checkbox"]:not(.checkbox-native)),
+label:has(> input[type="radio"]:not(.checkbox-native)),
+.checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Wheel-picker inline edit: number input that replaces the centre
+   item on double-click. Matches the .input-sm look so a wheel that
+   just popped its editor looks like any other text input in the panel. */
+.wheel-picker-edit {
+    background: var(--bg-input);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-size: 18px;
+    padding: 4px 8px;
+    outline: none;
+    /* Hide the spinner arrows — at 85% width they crowd the value;
+       the wheel itself is still available for click-to-step UX. */
+    -moz-appearance: textfield;
+}
+.wheel-picker-edit::-webkit-outer-spin-button,
+.wheel-picker-edit::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Subtle "double-click to type" hint on the centre item. cursor:text
+   nudges the operator that the centre is editable; the underline
+   that some browsers add for double-click selection is suppressed
+   inside the picker itself (already done via user-select earlier). */
+.wheel-picker-item--center {
+    cursor: ns-resize;   /* drag axis */
+}
+.wheel-picker-item--center:hover {
+    text-decoration: underline dotted rgba(255,255,255,0.4);
+    text-underline-offset: 4px;
+}
+
+/* ----- PHD2-style native guiding view ----- */
+.phd2-view { display:flex; flex-direction:column; gap:8px; margin-top:8px; }
+.phd2-graph { position:relative; background:#0a0a0c; border:1px solid #222; border-radius:6px; height:200px; }
+.phd2-graph-canvas { width:100%; height:100%; display:block; }
+.phd2-graph-hud { position:absolute; top:6px; left:8px; right:8px; display:flex;
+    justify-content:space-between; pointer-events:none; font-size:11px; }
+.phd2-rms { display:flex; gap:12px; }
+.phd2-rms i { font-style:normal; opacity:0.8; }
+.phd2-scale { display:flex; gap:4px; align-items:center; pointer-events:auto; }
+.phd2-scale-btn { background:#1a1a1f; color:#aaa; border:1px solid #333; border-radius:3px;
+    font-size:10px; padding:1px 6px; cursor:pointer; }
+.phd2-scale-btn.active { background:#2962ff; color:#fff; border-color:#2962ff; }
+.phd2-grid { display:grid; grid-template-columns:1fr 220px; gap:8px; }
+@media (max-width:760px){ .phd2-grid { grid-template-columns:1fr; } }
+.phd2-cam { position:relative; background:#000; border:1px solid #222; border-radius:6px;
+    min-height:260px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
+.phd2-cam-img { max-width:100%; max-height:420px; display:block; image-rendering:pixelated; }
+.phd2-cam-overlay { position:absolute; left:0; top:0; pointer-events:none; }
+.phd2-cam-empty { position:absolute; font-size:12px; }
+.cal-review-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000;
+    display:flex; align-items:center; justify-content:center; }
+.cal-review { background:#0d0f15; border:1px solid #333; border-radius:8px; width:min(720px,92vw);
+    max-height:90vh; overflow:auto; box-shadow:0 8px 40px rgba(0,0,0,0.6); }
+.cal-review-head { display:flex; justify-content:space-between; align-items:center;
+    padding:10px 14px; border-bottom:1px solid #222; font-weight:600; }
+.cal-review-body { display:flex; gap:14px; padding:14px; flex-wrap:wrap; }
+.cal-review-plot { width:240px; height:240px; flex:0 0 240px; background:#000;
+    border:1px solid #222; border-radius:6px; }
+.cal-review-tablewrap { flex:1 1 360px; min-width:300px; }
+.cal-review-section { font-size:11px; color:#888; text-transform:uppercase; margin-bottom:4px; }
+.cal-review-table { width:100%; border-collapse:collapse; font-size:12px; }
+.cal-review-table td { border:1px solid #222; padding:4px 8px; }
+.cal-review-table td:nth-child(odd) { color:#9aa; width:22%; }
+.cal-restored-tag { font-size:10px; color:#69f0ae; border:1px solid #2e6; border-radius:4px;
+    padding:1px 6px; margin-left:8px; vertical-align:middle; text-transform:uppercase; }
+.cal-corr-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:6px;
+    align-items:end; }
+.cal-corr-grid .gb-field { display:flex; flex-direction:column; gap:4px; font-size:10px;
+    color:#8a93a6; text-transform:uppercase; letter-spacing:.04em; }
+.cal-corr-grid .gb-field input { width:100%; background:#11151c; color:#e6e9ef;
+    border:1px solid #2a3140; border-radius:5px; padding:6px 7px; font-size:13px;
+    outline:none; transition:border-color .12s; text-transform:none; }
+.cal-corr-grid .gb-field input:focus { border-color:#2962ff; }
+.phd2-cal-banner { position:absolute; left:50%; top:10px; transform:translateX(-50%);
+    background:rgba(20,22,30,0.85); color:#ffd54f; border:1px solid #4caf50;
+    border-radius:6px; padding:4px 12px; font-size:12px; font-family:monospace;
+    white-space:nowrap; pointer-events:none; z-index:5; }
+/* Dither / settle banner over the guide-cam view (ASIAIR-style). Amber for
+   an active dither, blue for a plain post-start settle. Pulses to draw the
+   eye while guiding is intentionally chasing the star. */
+.phd2-dither-banner { position:absolute; left:50%; top:10px; transform:translateX(-50%);
+    background:rgba(180,120,10,0.92); color:#fff; border:1px solid #ffd54f;
+    border-radius:6px; padding:4px 12px; font-size:12px; font-weight:600;
+    white-space:nowrap; pointer-events:none; z-index:6;
+    animation: panic-pulse 1.6s ease-in-out infinite; }
+.phd2-settle-banner { background:rgba(40,90,160,0.92); border-color:#64b5f6; }
+
+/* RA/Dec aggressiveness sliders in the GUIDE sidebar. */
+.guide-aggr { margin-bottom:10px; display:flex; flex-direction:column; gap:8px; }
+.guide-aggr-row { display:flex; flex-direction:column; gap:2px; }
+.guide-aggr-row label { font-size:11px; color:#bbb; display:flex; justify-content:space-between; }
+.guide-aggr-row input[type=range] { width:100%; }
+
+.phd2-rightcol { display:flex; flex-direction:column; gap:8px; }
+.phd2-bullseye, .phd2-profile { background:#0a0a0c; border:1px solid #222; border-radius:6px; padding:6px; }
+.phd2-panel-title { font-size:11px; color:#888; margin-bottom:4px; }
+.phd2-sq-canvas { width:100%; aspect-ratio:1/1; display:block; }
+.phd2-starzoom { width:100%; height:120px; display:block;
+    background:#000; border:1px solid #222; border-radius:4px; image-rendering:pixelated; }
+.phd2-prof-canvas { width:100%; height:90px; display:block; }
+.phd2-statusbar { display:flex; gap:16px; flex-wrap:wrap; font-size:11px; color:#bbb;
+    background:#0a0a0c; border:1px solid #222; border-radius:6px; padding:5px 10px; font-family:monospace; }
+
+/* Guiding config block in the GUIDE tab (backend picker + native settings) */
+.guide-config-block { background:#0a0a0c; border:1px solid #222; border-radius:6px;
+    padding:8px 10px; margin-bottom:8px; }
+
+/* GUIDE tab: fixed-height column (no panel scroll), pane fills, bar pinned. */
+.tab-panel-guide { display:flex; flex-direction:column; min-height:0; }
+.guide-shell { display:flex; flex-direction:column; flex:1; min-height:0; }
+.guide-pane { display:flex; flex-direction:row; gap:12px; align-items:stretch;
+    flex:1; min-height:0; position:relative; }
+.guide-main { flex:1; min-width:0; overflow-y:auto; }
+/* When the parameters panel is present it floats over the right edge of the
+   pane (same model as the LIVE/PREVIEW sidebars); the main column reserves
+   room for it so its content stays clear, and the reserve shrinks to just the
+   retract handle when collapsed. */
+.guide-pane.guide-has-side > .guide-main { margin-right:calc(var(--guide-side-width, 336px) + 12px);
+    transition:margin-right 200ms ease; }
+.guide-pane.guide-has-side.guide-controls-collapsed > .guide-main { margin-right:36px; }
+.guide-side { position:absolute; right:0; top:0; bottom:0; width:var(--guide-side-width, 336px); z-index:4;
+    display:flex; flex-direction:column; gap:8px;
+    /* padding-left reserves room for the full-height retract handle */
+    padding:10px 12px 10px 44px; overflow:hidden;
+    background:rgba(10,10,12,0.94); backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px); border:1px solid #222;
+    border-radius:6px; transition:transform 200ms ease; }
+/* Collapsed: slide off to the right leaving only the 28px handle visible. */
+.guide-side.guide-side--collapsed { transform:translateX(calc(100% - 28px)); }
+.guide-side-title { font-size:12px; color:#888; margin-bottom:8px;
+    text-transform:uppercase; letter-spacing:.04em; }
+.guide-backend-radios { display:inline-flex; align-items:center; gap:10px;
+    margin-left:12px; font-size:12px; }
+.guide-backend-radios label { display:inline-flex; align-items:center; gap:4px; cursor:pointer; }
+/* Single-row control bar pinned to the bottom of the GUIDE panel. */
+.guide-bottombar { flex:0 0 auto; display:flex; flex-wrap:wrap; align-items:flex-end;
+    gap:8px; padding:8px 10px; margin-top:8px; border-top:1px solid #222;
+    background:#0c0c10; border-radius:6px; }
+.guide-bottombar .gb-field { display:flex; flex-direction:column; font-size:10px;
+    color:#8a93a6; gap:3px; text-transform:uppercase; letter-spacing:.04em; }
+.guide-bottombar .gb-field input { width:64px; background:#11151c; color:#e6e9ef;
+    border:1px solid #2a3140; border-radius:5px; padding:5px 7px; font-size:13px;
+    outline:none; transition:border-color .12s; }
+.guide-bottombar .gb-field input:focus { border-color:#2962ff; }
+.guide-bottombar .gb-field select { width:auto; min-width:64px; background:#11151c;
+    color:#e6e9ef; border:1px solid #2a3140; border-radius:5px; padding:5px 7px;
+    font-size:13px; outline:none; transition:border-color .12s; cursor:pointer; }
+.guide-bottombar .gb-field select:focus { border-color:#2962ff; }
+.guide-bottombar .gb-check { display:flex; align-items:center; gap:5px; font-size:12px;
+    color:#cdd3de; cursor:pointer; align-self:flex-end; padding-bottom:6px; }
+.guide-bottombar .gb-sep { width:1px; align-self:stretch; background:#222; margin:0 4px; }
+@media (max-width:900px){
+    .guide-pane { flex-direction:column; }
+    /* Stacked layout: the panel docks below the main column in normal flow
+       instead of floating, so undo the desktop overlay positioning. */
+    .guide-pane.guide-has-side > .guide-main,
+    .guide-pane.guide-has-side.guide-controls-collapsed > .guide-main { margin-right:0; }
+    .guide-side { position:static; width:auto; flex:none; transform:none;
+        padding:10px 12px; overflow-y:auto; }
+    .guide-side.guide-side--collapsed { transform:none; }
+    /* The retract handle is meaningless in the stacked layout. */
+    .guide-side > .quick-controls-toggle { display:none; }
+}
+
+/* ───────────────────────── PLAN mode ───────────────────────── */
+.tab-panel-plan { padding: 12px; overflow-y: auto; }
+.plan-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.plan-select { flex: 1; min-width: 160px; padding: 6px 8px; }
+.plan-empty { color: var(--text-muted, #9aa4b2); padding: 24px 8px; text-align: center; }
+.plan-body { display: flex; flex-direction: column; gap: 12px; }
+.plan-name { font-size: 16px; font-weight: 600; padding: 8px 10px; width: 100%; box-sizing: border-box; }
+
+.plan-settings { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.plan-set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.plan-set-grid label, .plan-detail-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-muted, #9aa4b2); }
+.plan-set-grid select, .plan-set-grid input { padding: 6px 8px; }
+.plan-set-toggles { display: flex; flex-wrap: wrap; gap: 12px 18px; }
+.plan-set-end { border-top: 1px solid var(--border, #2a2f3a); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.plan-set-end-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted, #9aa4b2); }
+.chk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.chk-danger { color: #f87171; }
+
+.plan-targets { display: flex; flex-direction: column; gap: 8px; }
+.plan-target-card { border: 1px solid var(--border, #2a2f3a); border-radius: 8px; background: rgba(255,255,255,0.02); }
+.plan-target-card.is-open { border-color: var(--accent, #3b82f6); }
+.plan-target-card.is-disabled { opacity: 0.5; }
+.plan-target-head { display: flex; align-items: center; gap: 10px; padding: 8px 10px; }
+.plan-target-thumb {
+    width: 40px; height: 40px; flex: 0 0 40px;
+    object-fit: cover; border-radius: 4px; cursor: pointer;
+    background: var(--bg-elevated); border: 1px solid var(--border);
+}
+.plan-viz-thumb {
+    width: 34px; height: 34px;
+    object-fit: cover; border-radius: 4px; display: block;
+    background: var(--bg-elevated); border: 1px solid var(--border);
+}
+.plan-target-id { flex: 1; display: flex; flex-direction: column; cursor: pointer; min-width: 0; }
+.plan-target-name { font-weight: 600; }
+.plan-target-coords { font-size: 11px; color: var(--text-muted, #9aa4b2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plan-target-actions { display: flex; gap: 2px; }
+.plan-target-detail { padding: 10px; border-top: 1px solid var(--border, #2a2f3a); display: flex; flex-direction: column; gap: 12px; }
+.plan-detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.plan-detail-grid input { padding: 6px 8px; width: 100%; box-sizing: border-box; }
+
+.plan-frames-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted, #9aa4b2); }
+.plan-frames-tools { display: flex; gap: 6px; }
+.plan-frame-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; padding: 6px 0; border-top: 1px dashed var(--border, #2a2f3a); }
+.plan-frame-row label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--text-muted, #9aa4b2); }
+.plan-frame-row input { padding: 4px 6px; width: 5.5em; }
+
+.plan-add-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.plan-catalog { border: 1px solid var(--border, #2a2f3a); border-radius: 8px; padding: 10px; }
+.plan-catalog > input { width: 100%; box-sizing: border-box; padding: 7px 9px; }
+.plan-cat-results { max-height: 220px; overflow-y: auto; margin-top: 8px; }
+.plan-cat-item { display: flex; justify-content: space-between; gap: 10px; padding: 7px 8px; border-radius: 6px; cursor: pointer; }
+.plan-cat-item:hover { background: rgba(255,255,255,0.06); }
+.plan-cat-item .muted { color: var(--text-muted, #9aa4b2); font-size: 11px; white-space: nowrap; }
+
+/* Fixed bottom run bar: pinned to the bottom of the scrolling plan
+   panel. Start/Stop on the left; two progress bars (current target +
+   whole plan) fill the remaining width. Negative margins bleed it to
+   the panel edges so it reads as a full-width footer. */
+.plan-runbar {
+    /* margin-top:auto pushes the bar to the bottom of the (flex-column)
+       plan panel when the content is short; position:sticky keeps it
+       pinned to the foot of the scroll viewport when the target list is
+       long. The negative side/bottom margins bleed it to the panel edges
+       so it reads as a full-width footer. */
+    position: sticky; bottom: 0; z-index: 5;
+    display: flex; align-items: center; gap: 12px;
+    margin: auto -12px -12px; padding: 10px 12px;
+    border-top: 1px solid var(--border, #2a2f3a);
+    background: var(--bg-secondary, #161a22);
+}
+/* Start/Stop: same metrics as the rest of the UI's .btn, with a green
+   (start) / red (stop) accent instead of the old oversized pill. */
+.plan-run-btn {
+    flex: 0 0 auto;
+    padding: 6px 18px;
+    font-size: 13px; font-weight: 600;
+    border-radius: var(--radius); border: 1px solid #16a34a;
+    cursor: pointer; background: #16a34a; color: #fff;
+    transition: background var(--transition), border-color var(--transition);
+}
+.plan-run-btn:hover { background: #15803d; border-color: #15803d; }
+.plan-run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.plan-run-btn.running { background: #dc2626; border-color: #dc2626; }
+.plan-run-btn.running:hover { background: #b91c1c; border-color: #b91c1c; }
+.plan-runbar-bars { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.plan-pbar { display: flex; flex-direction: column; gap: 3px; }
+.plan-pbar-head { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--text-muted, #9aa4b2); }
+.plan-pbar-head span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-pbar-head span:last-child { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.plan-pbar-track { height: 9px; border-radius: 999px; background: var(--bg-tertiary, #0f1218); overflow: hidden; }
+.plan-pbar-fill { height: 100%; border-radius: 999px; transition: width .3s ease; }
+.plan-pbar-fill.item { background: #3b82f6; }
+.plan-pbar-fill.total { background: #16a34a; }
+
+.plan-frame-banner {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    z-index: 9000; display: flex; gap: 10px; align-items: center;
+    background: rgba(20, 24, 34, 0.95); border: 1px solid var(--accent, #3b82f6);
+    border-radius: 999px; padding: 8px 16px; font-size: 13px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+}
+
+/* Generic card + modal used by the PLAN panel (no prior definition). */
+.plan-body .card,
+.card { border: 1px solid var(--border, #2a2f3a); border-radius: 8px; background: rgba(255,255,255,0.02); }
+.modal-overlay {
+    position: fixed; inset: 0; z-index: 9600; display: flex;
+    align-items: center; justify-content: center; padding: 20px;
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    animation: modal-fade 0.18s ease-out;
+}
+@keyframes modal-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modal-pop {
+    from { opacity: 0; transform: translateY(8px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.modal-card {
+    position: relative; max-width: 440px; width: 100%;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--panel-bg, #161a22) 92%, #fff 8%), var(--panel-bg, #161a22));
+    border: 1px solid var(--border, #2a2f3a);
+    border-radius: 14px; padding: 20px 22px 18px;
+    box-shadow: 0 18px 60px rgba(0,0,0,0.62), 0 2px 8px rgba(0,0,0,0.4);
+    overflow: hidden;
+    animation: modal-pop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+/* Accent strip across the top — neutral (accent) by default, red for
+   destructive confirmations (.modal-card.danger). */
+.modal-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--accent, #4f8cff);
+}
+.modal-card.danger::before { background: var(--danger, #e5484d); }
+.modal-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.modal-icon {
+    flex: 0 0 auto; width: 38px; height: 38px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 19px;
+    background: color-mix(in srgb, var(--accent, #4f8cff) 16%, transparent);
+    color: var(--accent, #4f8cff);
+}
+.modal-card.danger .modal-icon {
+    background: color-mix(in srgb, var(--danger, #e5484d) 16%, transparent);
+    color: var(--danger, #e5484d);
+}
+.modal-head h3, .modal-card h3 { margin: 0; font-size: 16px; font-weight: 650; }
+.modal-card p { margin: 0 0 18px; font-size: 13px; line-height: 1.55; color: var(--text-muted, #9aa4b2); }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+/* "Report a problem" buttons in the Help/About FAQ. */
+.report-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+
+/* Theme the PLAN form controls to match the rest of the app (the dark
+   input chrome used in Settings). Without this, native selects/inputs
+   render with the OS combobox look, which clashes with night mode. */
+.tab-panel-plan input[type="text"],
+.tab-panel-plan input[type="number"],
+.tab-panel-plan input[type="time"],
+.tab-panel-plan select,
+.modal-card input,
+.modal-card select {
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 7px 9px;
+    box-sizing: border-box;
+    outline: none;
+    color-scheme: dark;
+    transition: border-color var(--transition);
+}
+.tab-panel-plan input:focus,
+.tab-panel-plan select:focus,
+.modal-card input:focus,
+.modal-card select:focus { border-color: var(--accent); }
+.tab-panel-plan input[type="checkbox"] {
+    width: auto; padding: 0; accent-color: var(--accent); cursor: pointer;
+}
+/* Custom SVG chevron so the closed select matches the themed text fields
+   (mirrors .settings-section select). */
+.tab-panel-plan select {
+    appearance: none; -webkit-appearance: none; -moz-appearance: none;
+    cursor: pointer; padding-right: 30px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%23a8b3bf' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat; background-position: right 10px center;
+}
+.tab-panel-plan select option { background: var(--bg-secondary); color: var(--text-primary); }
+
+/* PLAN: per-target schedule mode + elevation chart */
+.plan-sched { display: flex; flex-direction: column; gap: 8px; }
+.plan-sched-toggle { display: flex; gap: 6px; }
+.plan-sched-note { font-size: 11px; line-height: 1.4; }
+.plan-sched-note em { font-style: normal; color: var(--text-primary, #e5e7eb); }
+.plan-maint { display: flex; flex-direction: column; gap: 4px; }
+.plan-maint-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+.plan-maint-row { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; align-items: center; }
+.plan-maint-row label { display: inline-flex; align-items: center; gap: 6px; }
+.plan-maint-row input { width: 4em; }
+.plan-altchart-wrap { display: flex; flex-direction: column; gap: 6px; }
+.plan-altchart-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 11px; flex-wrap: wrap; }
+.plan-altchart-head .muted { color: var(--text-muted, #9aa4b2); }
+.plan-window-times { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.plan-alt-msg { padding: 16px; text-align: center; font-size: 12px; }
+.plan-altchart {
+    width: 100%; height: 150px; display: block;
+    background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius);
+    touch-action: none;
+}
+.plan-alt-night { fill: rgba(120, 160, 220, 0.06); }
+.plan-alt-tick { stroke: rgba(255,255,255,0.10); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.plan-alt-guide { stroke: rgba(255,255,255,0.18); stroke-width: 1; stroke-dasharray: 6 6; }
+.plan-alt-sel { fill: rgba(34, 197, 94, 0.14); }
+.plan-alt-curve { fill: none; stroke: #f0b21a; stroke-width: 3; vector-effect: non-scaling-stroke; }
+.plan-alt-handle { cursor: ew-resize; touch-action: none; }
+.plan-alt-handle-line { stroke: #22c55e; stroke-width: 4; vector-effect: non-scaling-stroke; }
+.plan-alt-handle-knob { fill: #22c55e; }
+.plan-alt-handle-hit { fill: transparent; cursor: ew-resize; }
+.plan-altchart-axis { position: relative; height: 14px; margin-top: 2px; }
+.plan-axis-tick {
+    position: absolute; transform: translateX(-50%);
+    font-size: 10px; color: var(--text-muted, #9aa4b2); white-space: nowrap;
+}
+.plan-window-fields { display: flex; gap: 14px; }
+.plan-window-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--text-muted, #9aa4b2); }
+
+/* PLANVIZ: whole-plan visualization modal. */
+.plan-viz-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000;
+    display: flex; align-items: center; justify-content: center; padding: 20px; }
+.plan-viz { background: #0d0f15; border: 1px solid #333; border-radius: 8px;
+    width: min(980px, 96vw); max-height: 92vh; display: flex; flex-direction: column; overflow: hidden; }
+.plan-viz-head { display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 14px; border-bottom: 1px solid #222; font-weight: 600; flex: 0 0 auto; }
+.plan-viz-body { padding: 14px; overflow-y: auto; }
+.plan-viz-summary { display: flex; flex-wrap: wrap; gap: 18px; font-size: 13px; }
+.plan-viz-summary .muted { color: var(--text-muted, #9aa4b2); }
+.plan-viz-altchart { width: 100%; height: 220px; display: block;
+    background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius); }
+.plan-viz-marker { stroke: #e5e7eb; stroke-width: 1.5; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
+.plan-viz-gantt svg { display: block; background: var(--bg-input);
+    border: 1px solid var(--border); border-radius: var(--radius); }
+.plan-viz-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.plan-viz-table th { text-align: left; color: #888; font-weight: 600; border-bottom: 1px solid #222; padding: 5px 8px; }
+.plan-viz-table td { border-bottom: 1px solid #1a1a1a; padding: 5px 8px; }
+.plan-viz-swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: middle; }
+.plan-viz-legend { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.plan-viz-hatch { display: inline-block; width: 24px; height: 14px; border-radius: 3px;
+    border: 1px solid var(--border, #2a2f3a);
+    background-color: rgba(120, 160, 220, 0.20);
+    background-image: repeating-linear-gradient(45deg,
+        rgba(255,255,255,0.55) 0 1.6px, transparent 1.6px 6px); }
+
+/* ===== Dialog / background-task modal backdrops =====================
+   Many modals run a task in the background (plate solve, batch stack,
+   export, calibration review, plan preview, confirmations) while the
+   operator wants to keep an eye on the top + bottom status bars. For
+   those modals, don't black out the whole screen: inset the backdrop
+   between the two bars (which are opaque and sit flush at the viewport
+   edges, so they stay fully visible AND clickable), and replace the
+   dark fill with a faint tint + blur so the work area is only lightly
+   blurred, not darkened. The dialog cards are short/centred, so they
+   sit in the middle band and never cover a bar. Full-screen viewers /
+   editors / terminal / login / lock keep their own immersive backdrop
+   (intentionally not listed here). */
+.modal-overlay,
+.confirm-modal-overlay,
+.siril-modal,
+.plan-viz-backdrop,
+.cal-review-backdrop,
+.editor-export-backdrop {
+    top: var(--statusbar-height);
+    bottom: var(--activitybar-height);
+    left: 0;
+    right: 0;
+    background: rgba(8, 11, 18, 0.10);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+}

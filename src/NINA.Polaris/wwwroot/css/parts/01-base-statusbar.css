@@ -1,0 +1,795 @@
+/* Vendored Inter, variable font covers weights 100..900 and italic
+   in two woff2 files (~340 KB each). Self-hosted so the UI keeps
+   its typeface in offline / observatory setups where the Google
+   Fonts CDN isn't reachable. License at css/fonts/LICENSE. */
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('/css/fonts/InterVariable.woff2') format('woff2-variations'),
+         url('/css/fonts/InterVariable.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Inter';
+    font-style: italic;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url('/css/fonts/InterVariable-Italic.woff2') format('woff2-variations'),
+         url('/css/fonts/InterVariable-Italic.woff2') format('woff2');
+}
+
+/* FONT-1: vendored alternatives for the Settings → Appearance font
+   picker. All OFL-1.1; attribution + refresh script in
+   /fonts/README.md. Only Regular + Bold loaded to keep the bundle
+   ≤ 600 KB total across the four families. */
+@font-face {
+    font-family: 'Atkinson Hyperlegible';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Atkinson Hyperlegible';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('/fonts/atkinson/AtkinsonHyperlegible-Bold.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'IBM Plex Sans';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/fonts/plex-sans/IBMPlexSans-Regular.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'IBM Plex Sans';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('/fonts/plex-sans/IBMPlexSans-Bold.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'JetBrains Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/fonts/jetbrains-mono/JetBrainsMono-Regular.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'JetBrains Mono';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('/fonts/jetbrains-mono/JetBrainsMono-Bold.woff2') format('woff2');
+}
+
+/* Font picker theme variables. The body's font-family resolves to
+   var(--font-body); switching families is one data-font attribute on
+   <html>, no re-rendering required. Existing rules that hard-code
+   'JetBrains Mono' / 'Inter' keep working because we leave the
+   defaults wired to those; only data-font="atkinson" / "plex" /
+   "system" override the variables. */
+:root {
+    /* Default = Atkinson Hyperlegible. Picked over Inter because
+       Polaris's target operator is older / often low-vision, and
+       Atkinson's unique letter shapes (B/8, l/1/I, 0/O all
+       distinguishable at small UI sizes) win at the sidebar's
+       10px labels + the night-mode amber-on-black contrast. The
+       picker in Settings → Appearance lets anyone switch back. */
+    --font-body: 'Atkinson Hyperlegible', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
+}
+html[data-font="inter"] {
+    --font-body: 'Inter', 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+}
+html[data-font="plex"] {
+    --font-body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+html[data-font="system"] {
+    --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, system-ui, sans-serif;
+    --font-mono: ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    /* Inheriting font-family on every element makes sure form
+       controls (buttons, inputs, selects) get Inter too, those
+       elements normally default to the OS UI font even when body
+       has font-family set. */
+    font-family: inherit;
+}
+
+:root {
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-tertiary: #0f3460;
+    --bg-input: #0d1b30;
+    --text-primary: #e0e0e0;
+    --text-secondary: #a0a0b0;
+    --text-muted: #606070;
+    --accent: #2196f3;
+    --accent-hover: #1976d2;
+    --success: #4caf50;
+    --warning: #ff9800;
+    --danger: #f44336;
+    --border: #2a2a4a;
+    --sidebar-width: 64px;
+    --statusbar-height: 40px;
+    --activitybar-height: 36px;   /* bottom activity bar (.activity-bar) */
+    --statsbar-height: 32px;
+    --controls-height: 100px;
+    --radius: 6px;
+    --transition: 0.2s ease;
+}
+
+html, body {
+    height: 100%;
+    font-family: var(--font-body);
+    font-size: 14px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Body owns the vertical stack: header + app-layout + activity bar.
+   Flex column so the activity bar docks at the bottom as a regular
+   flow element instead of floating over content (which used to hide
+   Settings rows + Sky controls behind the bar). */
+body {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Mobile/small-screen global UI scale-down. The codebase uses
+   pixel units almost exclusively (no rem-based scale), so dialing
+   the root font-size does nothing. The CSS `zoom` property scales
+   every descendant including layout dimensions and absolutely-
+   positioned overlays, supported in Chromium, Safari, Edge and
+   modern Firefox.
+
+   Applied to <body> rather than <html> so fixed-position elements
+   (activity bar pinned to viewport bottom) keep their relationship
+   to the actual viewport instead of being scaled out of place.
+
+   Two breakpoints:
+   - tablets / large phones in portrait (≤960 px): 0.85, pulls in
+     about 15% so the cards fit two-up instead of stretching.
+   - phones (≤640 px): 0.75, comfortable density for thumb reach.
+   Numbers are conservative so tap targets stay finger-sized. */
+@media (max-width: 960px) {
+    body { zoom: 0.85; }
+}
+@media (max-width: 640px) {
+    body { zoom: 0.75; }
+}
+
+/* Always-show-all exposure preset popover (replaces the browser
+   native <datalist> dropdown, see <script> in index.html above
+   the body for the controller). Glassy panel anchored under the
+   focused exposure input; one button per preset, no filtering. */
+/* Remote terminal section in Settings, form row + xterm mount. */
+.term-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: end;
+    margin-top: 8px;
+    max-width: 720px;
+}
+.term-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.term-form .btn {
+    height: 32px;
+}
+.term-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 8px 0;
+    max-width: 720px;
+}
+.term-conn-info {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+}
+.term-error {
+    margin: 8px 0;
+    font-size: 12px;
+    max-width: 720px;
+}
+.term-mount {
+    /* Fixed height so xterm.js has something to measure on open();
+       the FitAddon then computes rows to fill it. 420 px is roughly
+       a 24-row terminal at our 13 px font + line-height. */
+    height: 420px;
+    background: #0b0f18;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 6px;
+    overflow: hidden;
+    margin-top: 6px;
+}
+
+/* Remote-terminal modal — a floating window styled like a standard
+   terminal app. Backdrop dims the page; the window centres with a
+   title bar (traffic-light dots) over a dark xterm body. */
+.term-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+}
+.term-window {
+    display: flex;
+    flex-direction: column;
+    width: min(1000px, 96vw);
+    height: min(640px, 88vh);
+    background: #0b0f18;
+    border: 1px solid #2a3140;
+    border-radius: 10px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+}
+.term-window-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: linear-gradient(#202632, #171c26);
+    border-bottom: 1px solid #2a3140;
+    user-select: none;
+}
+.term-window-dots { display: inline-flex; gap: 7px; }
+.term-window-dots .twd {
+    width: 12px; height: 12px; border-radius: 50%;
+    display: inline-block;
+}
+.term-window-dots .twd-r { background: #ff5f57; }
+.term-window-dots .twd-y { background: #febc2e; }
+.term-window-dots .twd-g { background: #28c840; }
+.term-window-title {
+    flex: 1;
+    text-align: center;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    color: #aeb6c4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.term-window-ctrls { display: inline-flex; gap: 6px; }
+.term-window-btn {
+    width: 26px; height: 22px;
+    border: 1px solid #2a3140;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.05);
+    color: #cdd3de;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+}
+.term-window-btn:hover { background: rgba(255, 255, 255, 0.14); }
+.term-window-close:hover { background: #ff5f57; color: #fff; border-color: #ff5f57; }
+.term-window-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    background: #0b0f18;
+    padding: 8px;
+    overflow: hidden;
+}
+.term-window-footer {
+    flex: 0 0 auto;
+    padding: 6px 12px;
+    border-top: 1px solid #2a3140;
+    font-size: 12px;
+    background: #0c0c10;
+}
+@media (max-width: 640px) {
+    .term-modal-overlay { padding: 0; }
+    .term-window { width: 100vw; height: 100vh; border-radius: 0; border: 0; }
+}
+
+/* Two-column label + input grid used by the location section in
+   Settings. Labels right-align against a fixed first column;
+   inputs share a single fixed width in the second column so the
+   three rows (Latitude / Longitude / Altitude) line up neatly. */
+.coords-grid {
+    display: grid;
+    grid-template-columns: max-content 180px;
+    gap: 8px 14px;
+    align-items: center;
+    max-width: 380px;
+}
+.coords-grid > label {
+    text-align: right;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+.coords-grid > input {
+    /* Override the per-class width so all three coord inputs end
+       up at the column's 180 px even though they previously had
+       .input-md / .input-sm with different widths. */
+    width: 100%;
+}
+
+/* ZWO L/M/H gain preset chips, sit inline next to a gain input on
+   Camera, PREVIEW, AUTORUN-row, POLAR, VIDEO. Three small pills:
+   L (low gain), M (medium), H (HCG threshold for the sensor). Click
+   writes the corresponding preset value to the bound gain field. */
+.zwo-gain-presets {
+    display: inline-flex;
+    gap: 4px;
+    vertical-align: middle;
+}
+.zwo-gain-preset {
+    min-width: 22px;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.2;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+.zwo-gain-preset:hover {
+    background: rgba(96, 165, 250, 0.18);
+    border-color: rgba(96, 165, 250, 0.5);
+}
+.zwo-gain-preset[data-active="true"] {
+    background: rgba(96, 165, 250, 0.28);
+    border-color: rgba(96, 165, 250, 0.7);
+}
+
+.exposure-presets-popover {
+    position: fixed;
+    z-index: 9000;
+    max-height: 260px;
+    overflow-y: auto;
+    padding: 4px;
+    background: rgba(10, 14, 24, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+.exposure-preset-item {
+    display: block;
+    width: 100%;
+    padding: 5px 12px;
+    background: transparent;
+    border: 0;
+    color: var(--text-primary);
+    text-align: left;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    border-radius: 3px;
+}
+.exposure-preset-item:hover,
+.exposure-preset-item:focus {
+    background: rgba(96, 165, 250, 0.22);
+    color: #fff;
+}
+
+/* ====================================================================
+   Universal scrollbar treatment, match the sidebar's thin glass look
+   across every scrollable element in the app (modals, file lists,
+   activity bar overflow, equipment card bodies, sequence trees, etc).
+   Single source of truth: change here, every scrollbar follows.
+
+   - Firefox honours the two `scrollbar-*` properties.
+   - WebKit / Blink uses the pseudo-elements. Pseudo rules only fire
+     on elements that actually overflow, so applying via `*` has no
+     runtime cost on non-scrolling elements.
+   - Up/down buttons hidden, the icon column was the prototype and
+     they look out of place in our dark UI.
+   - height:4px lets horizontal scrollbars (chip rows) share the
+     same slim look as vertical ones.
+   ==================================================================== */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+*::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+*::-webkit-scrollbar-track {
+    background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.14);
+    border-radius: 2px;
+}
+*::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+*::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+}
+*::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+/* Status Bar */
+.status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: var(--statusbar-height);
+    /* Tighter left padding so the brand badge sits closer to the
+       left edge of the viewport, user asked to "mover um pouco
+       à esquerda". Right side keeps the original gutter. */
+    padding: 0 12px 0 2px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    z-index: 100;
+}
+
+.status-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.logo {
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: 4px;
+    color: var(--accent);
+}
+
+.version {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* New brand block, star icon + gradient wordmark + pill + version. */
+.brand {
+    display: inline-flex;
+    align-items: center;
+    /* Tightened from 8px so the icon, N.I.N.A. and POLARIS sit as a
+       single compact wordmark. With the inner letter-spacing also
+       reduced (.brand-name / .brand-tag), 5px is enough to keep the
+       two words distinct without the previous airy mark. */
+    gap: 8px;
+    text-decoration: none;
+    color: inherit;
+    padding: 2px 4px;
+    border-radius: 6px;
+    transition: background 0.12s ease;
+}
+.brand:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+.brand-mark {
+    width: 22px;
+    height: 22px;
+    fill: var(--accent);
+    filter: drop-shadow(0 0 4px rgba(33, 150, 243, 0.5));
+    flex-shrink: 0;
+}
+/* Polaris mountain badge, bitmap version of the wordmark icon.
+   Sized to roughly match the SVG twinkle's optical weight in the
+   status bar. drop-shadow gives the same glow treatment so the
+   header has a consistent feel whether the bitmap or the SVG
+   fallback is rendered. */
+.brand-badge {
+    height: 28px;
+    width: auto;
+    border-radius: 4px;
+    flex-shrink: 0;
+    /* Glow tinted to the new icy-cyan brand mid-tone (#0891b2). */
+    filter: drop-shadow(0 0 4px rgba(8, 145, 178, 0.4));
+}
+.brand-name {
+    font-weight: 800;
+    font-size: 17px;
+    /* Tighter letter-spacing (was 2.5px) so the wordmark reads as
+       one compact unit instead of  N . I . N . A .  spread across
+       the header. 0.5px keeps the all-caps still visually
+       distinct from prose without the airy gap. */
+    letter-spacing: 1px;
+    line-height: 1;
+    /* Brand gradient: deep-night blue -> icy cyan -> stellar white.
+       Inspired by the colour temperature of O/B-class stars + dark
+       sky background. Replaces the previous blue->purple stock
+       gradient that read as a generic SaaS marketing splash. */
+    background: linear-gradient(90deg, #1e3a8a 0%, #0891b2 40%, #67e8f9 75%, #f0f9ff 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+}
+.brand-tag {
+    /* Match the N.I.N.A. wordmark, same gradient AND the same
+       optical weight so the two halves read as equal partners in
+       one continuous mark, not name+subtitle. */
+    font-weight: 800;
+    font-size: 17px;
+    /* Same tightened tracking as .brand-name — keeps POLARIS as a
+       solid block instead of  P O L A R I S  spread out. */
+    letter-spacing: 1px;
+    line-height: 1;
+    /* Brand gradient: deep-night blue -> icy cyan -> stellar white.
+       Inspired by the colour temperature of O/B-class stars + dark
+       sky background. Replaces the previous blue->purple stock
+       gradient that read as a generic SaaS marketing splash. */
+    background: linear-gradient(90deg, #1e3a8a 0%, #0891b2 40%, #67e8f9 75%, #f0f9ff 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+}
+.brand-version {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    margin-left: 0px;
+}
+
+.status-bar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Global panic / abort button in the status bar. Red, pulsing so it reads
+   as an emergency control, visible from every tab while a run is active. */
+.status-panic-btn {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    padding: 3px 12px;
+    border-radius: 10px;
+    color: #fff;
+    background: #b42424;
+    border: 1px solid #ff6b6b;
+    cursor: pointer;
+    white-space: nowrap;
+    animation: panic-pulse 1.6s ease-in-out infinite;
+}
+.status-panic-btn:hover { background: #d83030; }
+/* Self-update badge: a gentle green call-to-action in the status bar. */
+.status-update-btn {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    padding: 3px 12px;
+    border-radius: 10px;
+    color: #062;
+    background: #4ade80;
+    border: 1px solid #22c55e;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.status-update-btn:hover { background: #34d36a; }
+.update-notes { border: 1px solid var(--border, rgba(255,255,255,.12)); line-height: 1.45; }
+/* Rendered Markdown release notes (renderMarkdown -> x-html). */
+.update-notes h1, .update-notes h2, .update-notes h3,
+.update-notes h4, .update-notes h5, .update-notes h6 {
+    margin: 10px 0 4px; font-weight: 600; line-height: 1.25;
+}
+.update-notes h1 { font-size: 1.25em; }
+.update-notes h2 { font-size: 1.15em; }
+.update-notes h3 { font-size: 1.05em; }
+.update-notes h4, .update-notes h5, .update-notes h6 { font-size: 1em; }
+.update-notes > :first-child { margin-top: 0; }
+.update-notes p { margin: 6px 0; }
+.update-notes ul, .update-notes ol { margin: 6px 0; padding-left: 20px; }
+.update-notes li { margin: 2px 0; }
+.update-notes a { color: var(--accent); }
+.update-notes code {
+    background: rgba(127, 127, 127, .22);
+    padding: 1px 4px; border-radius: 4px;
+    font-family: var(--font-mono, monospace); font-size: .92em;
+}
+.update-notes pre {
+    background: rgba(0, 0, 0, .28);
+    border-radius: 6px; padding: 8px 10px; margin: 8px 0; overflow: auto;
+}
+.update-notes pre code { background: none; padding: 0; white-space: pre; }
+@keyframes panic-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 80, 80, 0.5); }
+    50%      { box-shadow: 0 0 0 5px rgba(255, 80, 80, 0); }
+}
+
+.status-indicator {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    user-select: none;
+    transition: filter 0.12s ease;
+}
+.status-indicator:hover {
+    filter: brightness(1.18);
+}
+
+.status-indicator.ok {
+    background: rgba(76, 175, 80, 0.2);
+    color: var(--success);
+}
+
+.status-indicator.error {
+    background: rgba(244, 67, 54, 0.15);
+    color: var(--danger);
+}
+
+/* Amber, running but not fully connected (e.g. PHD2 process up but
+   no camera/mount equipment hooked up yet). */
+.status-indicator.warn {
+    background: rgba(255, 152, 0, 0.18);
+    color: #ffb74d;
+}
+
+/* Grey, feature is disabled / not running. Less alarming than red:
+   "INDI OFF" or "no Alpaca servers found" isn't necessarily a bug,
+   the user may simply not be using that discovery method. */
+.status-indicator.off {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-secondary);
+}
+
+.status-chip {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.chip-icon {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+/* Top-bar clock. Tabular figures so the seconds tick without the
+   text width jittering. Hidden on narrow viewports to keep the badge
+   row from wrapping. */
+.status-clock {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary);
+    opacity: 0.85;
+}
+.status-battery {
+    gap: 5px;
+    font-variant-numeric: tabular-nums;
+}
+@media (max-width: 720px) {
+    .status-clock { display: none; }
+    .status-battery { display: none; }
+}
+
+/* App Layout */
+.app-layout {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+
+/* Sidebar */
+.sidebar {
+    display: flex;
+    flex-direction: column;
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border);
+    /* 6 px top, 42 px bottom so the last nav button can scroll up
+       above the 36 px fixed activity-bar at the viewport bottom.
+       Without this the bottom couple of icons sit under the bar
+       and are unclickable. */
+    padding: 6px 0 42px 0;
+    gap: 2px;
+    overflow-y: auto;
+    /* Firefox: thin, semi-transparent scrollbar. */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+/* WebKit/Blink (Chrome, Edge, Safari): make the scrollbar 4 px wide
+   so it doesn't eat into our already-cramped 64 px column. Track
+   stays invisible, thumb is a subtle translucent pill that brightens
+   on hover. */
+.sidebar::-webkit-scrollbar {
+    width: 4px;
+}
+.sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+.sidebar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.14);
+    border-radius: 2px;
+}
+.sidebar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+/* Hide the up / down scroll arrows that some browsers/OS combos
+   inject by default, they take vertical space and look out of place
+   in an icon column. */
+.sidebar::-webkit-scrollbar-button {
+    display: none;
+    height: 0;
+}
+
+.nav-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 8px 4px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color var(--transition), background var(--transition);
+    border-left: 3px solid transparent;
+}
+
+.nav-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.nav-btn.active {
+    color: var(--accent);
+    border-left-color: var(--accent);
+    background: rgba(33, 150, 243, 0.08);
+}
+
+.nav-btn svg {
+    flex-shrink: 0;
+}
+
+.nav-label {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Main Content */
+.content {
+    flex: 1;
+    overflow-y: auto;
+    min-width: 0;
+}
+
+.tab-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+

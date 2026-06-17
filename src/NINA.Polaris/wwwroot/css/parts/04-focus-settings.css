@@ -1,0 +1,1635 @@
+/* Frame (left) + V-curve (right) side by side. The chart column carries
+   x-show, so when there are no points it is display:none and the frame's
+   flex:1 makes it span the whole row. */
+.af-bottom-row {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+}
+.af-bottom-row > .af-preview-area { flex: 1 1 0; min-width: 0; }
+.af-bottom-row > .af-chart { flex: 1 1 0; min-width: 0; }
+@media (max-width: 900px) {
+    .af-bottom-row { flex-direction: column; }
+}
+.af-preview-area {
+    position: relative;
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    height: 320px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.af-preview-canvas {
+    /* Same letterbox-to-fit behaviour as the main preview canvases
+       so the focus crop keeps its source aspect ratio rather than
+       being stretched into the autofocus panel's square area. */
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center;
+    display: block;
+}
+.af-preview-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 13px;
+    text-align: center;
+    pointer-events: none;
+}
+/* Compact HUD chip in the corner, shows current AF sweep position +
+   HFR + star count so the user reads progress without leaving the
+   preview frame. */
+.af-preview-badge {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    background: rgba(0, 0, 0, 0.7);
+    color: var(--text-secondary);
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    pointer-events: none;
+    font-variant-numeric: tabular-nums;
+}
+.af-preview-badge strong { color: var(--text-primary); }
+
+.af-chart {
+    background: #0d0d18;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+/* When sitting beside the frame the chart stretches to the frame's height
+   (align-items:stretch); let the plot grow to fill, legend pinned below. */
+.af-bottom-row > .af-chart .chart-container {
+    height: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.af-chart svg {
+    width: 100%;
+    height: 180px;
+    display: block;
+}
+
+.af-chart-legend {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.03);
+    font-size: 11px;
+    color: var(--text-secondary);
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+
+/* PHD2 management panel */
+.phd2-mgmt {
+    padding: 8px 14px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+}
+
+.phd2-mgmt-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.phd2-mgmt-row label {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+/* Guider PHD2 graph */
+.guide-connect-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    padding: 10px 14px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+}
+
+.guide-chart {
+    margin: 12px 14px;
+    background: #0d0d18;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.guide-chart svg {
+    width: 100%;
+    height: 160px;
+    display: block;
+}
+
+.guide-chart-legend {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.03);
+    font-size: 11px;
+    color: var(--text-secondary);
+    border-top: 1px solid var(--border);
+}
+
+.legend-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    margin-right: 4px;
+    vertical-align: middle;
+}
+
+.guide-settle-row {
+    display: flex;
+    gap: 8px;
+    padding: 0 14px;
+    flex-wrap: wrap;
+}
+
+.guide-settle-row label {
+    display: flex;
+    flex-direction: column;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* Sky Explorer */
+
+/* Sub-tab pills for the Sky planning group (Sky map / Tonight /
+   Weather). Mirrors the canonical .video-tabstrip / .video-tab
+   pattern used by VIDEO, GUIDE, and AUTORUN so every tabstrip in
+   the app looks the same: filled accent on active, transparent
+   when idle, thin border-bottom under the strip. The icon span
+   just inherits the pill's font-size, no special treatment. */
+.sky-subtabs {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin: 0;
+    padding: 10px 14px 0;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+.sky-subtab-pill {
+    background: transparent;
+    color: var(--text-secondary);
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 7px 14px;
+    margin-bottom: -1px;
+    border-radius: 0;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: color 0.12s, border-color 0.12s;
+}
+.sky-subtab-pill:hover {
+    color: var(--text-primary);
+}
+.sky-subtab-pill.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
+}
+.sky-subtab-icon { line-height: 1; }
+
+/* When the sub-tab strip lives inside .tonight-panel / .weather-panel
+   it has to escape the panel's 16 px padding so it goes edge-to-edge
+   like the equivalent strip on the Sky map (which has no panel
+   padding). Negative margins eat the panel's top/left/right padding;
+   the flex gap (14-16 px) below the strip preserves breathing room
+   before the next child. */
+.tonight-panel > .sky-subtabs:first-child,
+.weather-panel > .sky-subtabs:first-child {
+    margin: -16px -16px 0;
+}
+
+.sky-toolbar {
+    display: flex;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+    flex-wrap: wrap;
+}
+.sky-autocenter-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    line-height: 1;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+    margin-left: auto;
+    align-self: center;
+    /* Match the surrounding buttons' vertical footprint so the
+       checkbox row sits on the same baseline as Search/Filters/
+       Stellarium even when the label wraps. */
+    min-height: 32px;
+}
+.sky-autocenter-toggle input {
+    cursor: pointer;
+    margin: 0;
+    vertical-align: middle;
+}
+
+/* Sky tab is a flex column: search bar / map / toolbar / actions. The map
+   takes whatever vertical space is left after the rest of the rows are
+   placed, and never extends past it. */
+.tab-panel-sky {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+.tab-panel-sky > .sky-toolbar,
+.tab-panel-sky > .sky-survey-row,
+.tab-panel-sky > .sky-info-panel,
+.tab-panel-sky > .sky-results,
+.tab-panel-sky > .sky-slew-progress {
+    flex: 0 0 auto;
+    /* When a target is picked the sky-info-panel grows with name +
+       common-name + aliases + coords + actions + altitude chart.
+       Without a cap the action row gets pushed below the viewport
+       and clipped by the tab-panel's overflow:hidden. Cap height and
+       scroll internally so the buttons always stay reachable. */
+    max-height: 38vh;
+    overflow-y: auto;
+}
+/* SWE-6: d3-celestial removed. The wrapper below hosts the
+   stellarium-web-engine iframe; no celestial.css cascade to fight
+   anymore so the !important overrides on #celestial-map.sky-viewer
+   below have been dropped along with the dead selectors. */
+/* SWE-5: wrapper around the iframe so the floating info card can
+   absolute-position itself over the sky map without escaping the
+   tab's content area. */
+.sky-viewer-wrap {
+    position: relative;
+    /* Removed the old .sky-info-panel below the iframe, so let the
+       map take whatever vertical space is left after the toolbar +
+       legend + slew progress row + activity-bar cushion. flex:1
+       grows it; tiny min-height keeps it readable on very short
+       viewports (older laptops). */
+    flex: 1 1 auto;
+    min-height: 320px;
+    width: 100%;
+}
+.sky-viewer-wrap > .sky-viewer-iframe {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+/* Stellarium Web-style translucent object info card, floating top-left
+   over the sky iframe. */
+.sky-info-card {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    width: 320px;
+    max-height: calc(100% - 28px);
+    overflow-y: auto;
+    padding: 16px 18px 14px;
+    background: rgba(8, 12, 22, 0.78);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    color: var(--text-primary);
+    z-index: 10;
+    font-size: 13px;
+}
+.sky-info-close {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    width: 24px;
+    height: 24px;
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+}
+.sky-info-close:hover { color: var(--text-primary); }
+.sky-info-head {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 14px;
+    padding-right: 24px;     /* room for close button */
+}
+.sky-info-thumb {
+    flex: 0 0 64px;
+    width: 64px;
+    height: 64px;
+    border-radius: 6px;
+    background-color: rgba(255, 255, 255, 0.04);
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    color: var(--text-muted);
+}
+.sky-info-title-block { min-width: 0; flex: 1; }
+.sky-info-title {
+    margin: 0 0 2px 0;
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.sky-info-subtitle {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.sky-info-stats {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 12px;
+}
+.sky-info-stats td {
+    padding: 3px 0;
+    vertical-align: top;
+}
+.sky-info-stats td:first-child {
+    color: var(--text-muted);
+    width: 35%;
+    font-size: 12px;
+}
+.sky-info-stats td:last-child {
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+}
+/* Translucent action bar pinned to the bottom-left of the iframe.
+   Same glassy treatment as .sky-info-card so the two overlays read
+   as a matched pair. pointer-events:auto on each button so they
+   stay clickable through the absolutely-positioned wrapper. */
+.sky-map-overlay-actions {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding: 8px;
+    background: rgba(8, 12, 22, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 5;
+    pointer-events: auto;
+}
+.sky-map-overlay-actions .btn {
+    white-space: nowrap;
+}
+
+/* Top-centre overlay used as the panic-stop affordance during any
+   mount motion. Same glass treatment as the actions overlay so the
+   two read as a matched set; sits well clear of the canvas centre
+   where the target rectangle lives. */
+.sky-map-overlay-status {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 12px;
+    background: rgba(8, 12, 22, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 999px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 6;
+    pointer-events: auto;
+    font-size: 12px;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+.sky-map-status-text { font-variant-numeric: tabular-nums; }
+
+.sky-info-chart-wrap {
+    /* Compact altitude track strip between the stats table and the
+       action buttons. 110 px tall is enough to read peak/trough
+       without taking over the card. */
+    height: 110px;
+    margin: 0 0 12px 0;
+    position: relative;
+}
+.sky-info-chart {
+    width: 100% !important;
+    height: 100% !important;
+}
+.sky-info-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.sky-info-actions .btn {
+    flex: 1 1 auto;
+    min-width: 110px;
+}
+
+.sky-viewer {
+    /* SWE-6: the iframe inherits 100% from its flex:1 parent
+       (.sky-viewer-wrap). No more celestial.css cascade fight, so the
+       !important overrides + extra svg/canvas centring rules that used
+       to live here are gone. */
+    height: 100%;
+    min-height: 320px;
+    width: 100%;
+    min-width: 0;
+    display: block;
+    background: #000;
+    position: relative;
+    overflow: hidden;
+}
+
+.sky-survey-row {
+    display: flex;
+    gap: 12px;
+    padding: 8px 14px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+    align-items: center;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.sky-survey-row label {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+/* Let select/number inputs in the sky toolbar size to their natural
+   content, no fixed widths. Just strip the browser's number-input
+   spinner arrows (they look noisy at small sizes). */
+.sky-survey-row select.input-sm,
+.sky-survey-row input[type="number"].input-sm {
+    width: auto;
+}
+.sky-survey-row input[type="number"].input-sm {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+.sky-survey-row input[type="number"].input-sm::-webkit-outer-spin-button,
+.sky-survey-row input[type="number"].input-sm::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+}
+
+.sky-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+}
+
+.sky-info-panel {
+    padding: 10px 14px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.sky-target {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+}
+
+.sky-target strong {
+    font-size: 15px;
+}
+
+.sky-target span {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.sky-coords {
+    display: flex;
+    gap: 14px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.sky-coords strong {
+    color: var(--text-primary);
+}
+
+/* Sequence */
+.sequence-empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    padding: 40px;
+}
+
+.sequence-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.sequence-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 6px;
+    background: var(--bg-secondary);
+    transition: background var(--transition);
+}
+
+.sequence-item:hover {
+    background: var(--bg-tertiary);
+}
+
+.seq-num {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.seq-name {
+    flex: 1;
+    font-weight: 500;
+}
+
+.seq-detail {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* Settings — card grid layout mirroring the RIGS tab. Each section
+   below renders as its own card. Column count is viewport-driven
+   instead of auto-fit/minmax math so narrow laptops always land on
+   2 cols (not 1) and wide desktops cap at 3 (auto-fit would slide
+   to 4 on a 32 inch screen, which makes per-card text feel cramped
+   when read across the room at night). */
+.settings-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 14px 16px;
+    /* FAQ-style accordion list: single column, capped width so the
+       collapsible cards read as a vertical list rather than a wide grid. */
+    max-width: 820px;
+}
+.settings-section {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0;
+    /* Uniform 400 px card height so a Hardware card (two checkboxes
+       + a hint line) does not look stunted next to a Network card
+       that has a status row + four buttons + body text. Matches the
+       400 px floor on the RIGS equip cards. Body content beyond
+       400 px scrolls inside the card; the h3 stays pinned at the
+       top via position:sticky below. */
+    height: 400px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    /* Baseline font-size for every text node inside a settings section.
+       Without this, the top sections that opt-in to `style="font-size: 11px/12px"`
+       inline look noticeably smaller than the bottom sections that inherit
+       the body's 14px default, and once the UI zoom slider is applied, the
+       size delta persists (zoom scales both proportionally, so the gap stays
+       visible). Pinning 12px here unifies the baseline so a single zoom value
+       scales everything to the same effective rendered size. */
+    font-size: 12px;
+    transition: border-color var(--transition);
+}
+.settings-section:hover {
+    border-color: rgba(255, 255, 255, 0.1);
+}
+/* .settings-section--wide previously forced full-row spans for
+   External tools / AI inference / HTTPS endpoints. Removed: with
+   the 400 px internal-scroll card pattern, long forms scroll inside
+   the card instead of breaking the column flow. The selector is
+   kept as a no-op so existing markup on the class does not have to
+   strip the attribute (harmless redundancy). */
+.settings-section--wide {}
+
+/* Inputs, selects, textareas inside settings inherit the same baseline so
+   their value text matches the labels around them, otherwise Chrome falls
+   back to its own ~13.33px form-control default and the value pops out
+   visually larger than the surrounding chrome. */
+.settings-section input,
+.settings-section select,
+.settings-section textarea,
+.settings-section button {
+    font-size: inherit;
+}
+
+/* Theme bare text-like inputs in Settings cards. Without this they fall
+   back to the OS default (white box, black text) which reads as a foreign
+   UI inside the dark theme -- same problem the bare-<select> rule below
+   fixes. Scoped to :not(.input-sm):not(.input-md) so the already-themed
+   compact fields keep their own sizing. textarea included so note/path
+   fields match too. */
+.settings-section input[type="text"]:not(.input-sm):not(.input-md),
+.settings-section input[type="number"]:not(.input-sm):not(.input-md),
+.settings-section input[type="password"]:not(.input-sm):not(.input-md),
+.settings-section input[type="search"]:not(.input-sm):not(.input-md),
+.settings-section input[type="url"]:not(.input-sm):not(.input-md),
+.settings-section input:not([type]):not(.input-sm):not(.input-md),
+.settings-section textarea:not(.input-sm):not(.input-md) {
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 9px 10px;
+    min-height: 38px;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color var(--transition);
+}
+.settings-section input[type="text"]:not(.input-sm):not(.input-md):focus,
+.settings-section input[type="number"]:not(.input-sm):not(.input-md):focus,
+.settings-section input[type="password"]:not(.input-sm):not(.input-md):focus,
+.settings-section input[type="search"]:not(.input-sm):not(.input-md):focus,
+.settings-section input[type="url"]:not(.input-sm):not(.input-md):focus,
+.settings-section input:not([type]):not(.input-sm):not(.input-md):focus,
+.settings-section textarea:not(.input-sm):not(.input-md):focus {
+    border-color: var(--accent);
+}
+
+/* Native <select> on dark themes defaults to the OS combobox
+   chrome (white background, black text, no border-radius), which
+   reads as a foreign UI inside the night-mode interface. Pin the
+   bare selects in Settings cards to the same input theme the
+   text/number fields already use, plus a custom SVG chevron so we
+   can drop the OS arrow without losing the affordance. .input-sm
+   already does this for narrow numeric dropdowns — this just
+   covers the wider full-row selects (e.g. the FONT-1 Font picker)
+   that don't fit .input-sm's 90px lockwidth. */
+.settings-section select:not(.input-sm):not(.input-md) {
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 9px 32px 9px 10px;
+    min-height: 38px;
+    cursor: pointer;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    /* Coach Chromium / Firefox to render the popup option list in
+       dark mode too (the closed combobox surface is fully styled
+       above, but the popup is OS-controlled and only honours
+       color-scheme). Scoped to the select so we don't toggle the
+       whole document into dark mode unintentionally. */
+    color-scheme: dark;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%23a8b3bf' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    transition: border-color var(--transition);
+}
+.settings-section select:not(.input-sm):not(.input-md):focus {
+    border-color: var(--accent);
+}
+/* The popup menu (option list) still uses the OS chrome — that's
+   browser-controlled and not reliably stylable. Best we can do is
+   coach Chromium via color-scheme so the popup matches dark mode. */
+.settings-section select:not(.input-sm):not(.input-md) option {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.settings-section > h3 {
+    /* h3 acts as the card header band, like .equip-card-header on
+       the RIGS cards: padded, darker background. position:sticky
+       pins it at the top of the scrolling card so the icon + title
+       stay visible while the body scrolls underneath. The icon
+       (.settings-card-icon span inside h3) sits inline before the
+       text. */
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0;
+    padding: 10px 14px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.settings-section > h3::before {
+    /* Subtle darker overlay so the header band reads distinct from
+       the body even though position:sticky requires a solid colour
+       (semi-transparent rgba would show body text scrolling through
+       on top of it). */
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.18);
+    z-index: -1;
+}
+.settings-card-icon {
+    /* Mirrors .equip-card-icon. Emoji glyphs render slightly larger
+       than the surrounding caps so they look balanced. */
+    font-size: 16px;
+    line-height: 1;
+    text-transform: none;
+    letter-spacing: 0;
+    flex-shrink: 0;
+}
+/* The card body: everything after the h3 collapses into one
+   scrolling block so all cards visually share the same height
+   even when their forms vary in length. The actual children stay
+   in document order so each section's existing form layout (label
+   stacks, .control-row.actions, .term-mount terminal embed, etc.)
+   keeps working.
+   Note: <template x-if> creates DOM siblings, but the rendered
+   content lands AFTER the <template> tag (which itself is
+   display:none). So h3 ~ * matches both the (invisible) templates
+   AND the rendered children, which means the padding-top on h3+*
+   (which matches the first <template>, also invisible) does no
+   harm and h3 ~ * still applies left/right padding to the
+   rendered <p>/<div>. */
+.settings-section > h3 ~ * {
+    padding-left: 14px;
+    padding-right: 14px;
+}
+.settings-section > h3 ~ *:first-of-type,
+.settings-section > h3 + * {
+    padding-top: 12px;
+}
+/* Template-rendered children also need the top padding so single-
+   branch x-if blocks (like the Network unsupported message) do not
+   hug the header band. Sibling combinator on TEMPLATE catches the
+   real rendered element that lands after it. */
+.settings-section > template + * {
+    padding-top: 12px;
+}
+/* Conditional sections (x-show / x-cloak) that render WITHOUT an
+   h3 (status-only mini-cards like "INDI Connected") get their own
+   padding block so they still look like a card body. */
+.settings-section > div:first-child:not(:has(h3)) {
+    padding: 12px 14px;
+}
+.settings-section > *:last-child {
+    padding-bottom: 12px;
+}
+
+/* ---- FAQ-style accordion (settings cards) ----
+   Class-based (NOT <details>) so we never touch the existing card markup
+   / closing tags. The grid adds .settings-accordion; clicking a card's
+   <h3> toggles .is-collapsed on that card (see settingsAccordionClick).
+   Collapsed cards hide everything but the h3 header and shrink to it. */
+.settings-accordion .settings-section {
+    height: auto;            /* drop the fixed 400px scroll box */
+    overflow: visible;
+}
+.settings-accordion .settings-section > h3 {
+    cursor: pointer;
+    padding-right: 32px;     /* room for the chevron */
+    user-select: none;
+}
+.settings-accordion .settings-section > h3::after {
+    content: "\25B8";        /* ▸ collapsed */
+    position: absolute;
+    right: 12px;
+    color: var(--text-muted);
+    transition: transform var(--transition);
+    transform: rotate(90deg);/* ▾ expanded by default */
+}
+.settings-accordion .settings-section.is-collapsed > h3::after {
+    transform: rotate(0deg);
+}
+/* Hide the card body when collapsed (everything that isn't the header). */
+.settings-accordion .settings-section.is-collapsed > *:not(h3) {
+    display: none !important;
+}
+/* Raw solver process output panel (plate-solve result card). */
+.solver-output > pre {
+    margin: 6px 0 0;
+    padding: 8px 10px;
+    max-height: 280px;
+    overflow: auto;
+    background: #0b0e13;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: #c9d2e0;
+}
+
+/* PHD2 GUI readiness overlay: shown over the embed area while the xpra
+   session + PHD2 are starting and the HTML5 server isn't serving yet. */
+.phd2-gui-starting {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: #0b0e13;
+    color: #c9d2e0;
+    font-size: 13px;
+}
+
+/* HCG (High Conversion Gain) badge shown next to a gain control when the
+   selected gain is at/above the camera's HCG threshold. */
+.hcg-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #06210f;
+    background: #34d399;
+    border: 1px solid #10b981;
+    cursor: help;
+    user-select: none;
+}
+
+/* Live plate-solve console: streamed solver output while solving. */
+.solver-output-live {
+    margin: 6px 0 0;
+    padding: 8px 10px;
+    max-height: 220px;
+    overflow: auto;
+    background: #0b0e13;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: #c9d2e0;
+}
+
+/* Small inline spinner (plate-solve in-progress banner, etc.). */
+.ps-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: ps-spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+@keyframes ps-spin { to { transform: rotate(360deg); } }
+
+/* Category group headers injected by reorderSettings(). */
+.settings-accordion .settings-cat-header {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent);
+    padding: 12px 4px 4px;
+    margin-top: 8px;
+    border-bottom: 1px solid var(--border);
+}
+.settings-accordion .settings-cat-header:first-child {
+    margin-top: 0;
+}
+/* Two-column settings when there's room. The accordion is normally a
+   single ~820px column (see .settings-grid); on wide screens flow the
+   cards into two columns so the horizontal space isn't wasted. Category
+   headers span both columns so each group stays a clean full-width
+   separator, and align-items:start keeps each card its natural height
+   (an expanded card doesn't stretch its row-neighbour). Scoped to
+   .settings-accordion so the nested field .settings-grid inside cards is
+   untouched. */
+@media (min-width: 1200px) {
+    .settings-grid.settings-accordion {
+        grid-template-columns: 1fr 1fr;
+        max-width: 1320px;
+        column-gap: 16px;
+        align-items: start;
+    }
+    .settings-accordion .settings-cat-header {
+        grid-column: 1 / -1;
+    }
+}
+/* Three columns on very wide screens. */
+@media (min-width: 1700px) {
+    .settings-grid.settings-accordion {
+        grid-template-columns: 1fr 1fr 1fr;
+        max-width: 1900px;
+    }
+}
+/* Explicit body wrapper used by sections whose content lives inside
+   <template x-if> branches (Network). The template-rendered children
+   would otherwise sit as direct children of .settings-section and
+   bypass the h3 + * padding-top rule (the rule matches the template
+   tag itself, not the rendered <p>/<div>). Forcing a real <div>
+   wrapper makes the padding land on actually-rendered content. */
+.settings-section > .settings-card-body {
+    padding: 12px 14px;
+}
+
+/* Custom scrollbar styling to match the .equip-card-body look. */
+.settings-section::-webkit-scrollbar {
+    width: 6px;
+}
+.settings-section::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 3px;
+}
+.settings-section::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.settings-section label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: inherit;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+/* Paragraphs and helper lines in settings, same as labels.
+   Without this rule a default <p> picks up the user-agent's larger
+   body-derived size. */
+.settings-section p,
+.settings-section .hint {
+    font-size: inherit;
+}
+
+.settings-section .btn {
+    margin-top: 4px;
+}
+
+/* Mobile (bottom tabs) */
+@media (max-width: 768px) {
+    .sidebar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        flex-direction: row;
+        width: 100%;
+        height: 56px;
+        min-width: unset;
+        border-right: none;
+        border-top: 1px solid var(--border);
+        padding: 0;
+        gap: 0;
+        z-index: 100;
+        overflow-x: auto;
+        justify-content: space-around;
+    }
+
+    .nav-btn {
+        flex: 1;
+        border-left: none;
+        border-top: 3px solid transparent;
+        padding: 6px 2px;
+        min-width: 0;
+    }
+
+    .nav-btn.active {
+        border-left-color: transparent;
+        border-top-color: var(--accent);
+    }
+
+    .nav-label {
+        font-size: 8px;
+    }
+
+    .app-layout {
+        flex-direction: column;
+    }
+
+    .content {
+        flex: 1;
+        margin-bottom: 56px;
+    }
+
+    .mount-layout {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .dpad-container {
+        grid-template-columns: 48px 48px 48px;
+        grid-template-rows: 48px 48px 48px;
+    }
+
+    .stepper .btn-lg {
+        padding: 8px 12px;
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    .status-bar {
+        padding: 0 8px;
+    }
+
+    .version {
+        display: none;
+    }
+
+    .control-row {
+        gap: 6px;
+    }
+
+    .control-row label {
+        font-size: 11px;
+    }
+
+    .input-sm {
+        width: 50px;
+    }
+
+    .stats-bar {
+        gap: 8px;
+        font-size: 11px;
+        padding: 6px 8px;
+    }
+}
+
+/* ----------------------------- Home / dashboard ------------------------------- */
+/* Background image lives on .home-panel so it stretches behind the
+   hero, the status strip, the get-started grid, and the footer, one
+   continuous nebula instead of the previous "image card on a flat
+   panel" split. The image is fixed-position so the panel can scroll
+   without scrolling the artwork (acts like a parallax backdrop). */
+.home-panel {
+    padding: 0 !important;
+    overflow-y: auto;
+    position: relative;
+    /* Flex column lets the footer use `margin-top: auto` to claim
+       the remaining vertical space and sit at the bottom even when
+       the content above doesn't fill the viewport. Without this,
+       position: sticky has no scroll to anchor against on a short
+       page and the footer just sits wherever the flow leaves it. */
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+    background:
+        /* Bottom darkening keeps the footer + lower cards legible. */
+        linear-gradient(180deg,
+            rgba(5, 8, 16, 0.10) 0%,
+            rgba(5, 8, 16, 0.30) 35%,
+            rgba(5, 8, 16, 0.75) 100%),
+        url("/img/horsehead.jpg") center/cover no-repeat fixed,
+        radial-gradient(ellipse at 30% 40%, #1a2440 0%, #050810 70%);
+}
+/* Hero only needs the gentler overlay that pulled the eye into the
+   title, no second copy of the nebula. The flex sizing stays the
+   same so the layout doesn't shift. */
+.home-hero {
+    position: relative;
+    /* Trimmed top/bottom padding (was 60 px each) and dropped the
+       320 px floor, the hero text + clock row only need ~180 px
+       of vertical room. Old values wasted ~80 px above the title
+       and another ~80 px between the clock row and the status
+       cards below. Horizontal 40 px stays for the gutter. */
+    min-height: 180px;
+    padding: 24px 40px;
+    display: flex; align-items: center;
+    background: linear-gradient(180deg,
+        rgba(5, 8, 16, 0.55) 0%,
+        rgba(5, 8, 16, 0.10) 60%,
+        rgba(5, 8, 16, 0.00) 100%);
+}
+.home-hero-text {  }
+.home-eyebrow {
+    /* Same brand wordmark as the header, no pill chrome. Children
+       (.brand-name, .brand-tag, .brand-version) inherit their look
+       from the header rules. The hero version is sized up a touch
+       relative to the header. */
+    display: inline-flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+.home-eyebrow .brand-name {
+    font-size: 22px;
+    /* Mirror the tightened header tracking — slightly looser than
+       the header because the hero is bigger and benefits from a
+       touch more breathing room, but still well below the old 3px
+       that made the wordmark feel stretched. */
+    letter-spacing: 1px;
+}
+.home-eyebrow .brand-tag {
+    /* Hero scale, match N.I.N.A. so POLARIS reads as the same word
+       not a sub-name. */
+    font-size: 22px;
+    letter-spacing: 1px;
+}
+.home-eyebrow .brand-version {
+    font-size: 11px;
+}
+.home-title {
+    font-size: clamp(32px, 5vw, 56px);
+    font-weight: 800;
+    letter-spacing: -1.5px;
+    line-height: 1.05;
+    margin: 0 0 14px;
+    text-shadow: 0 4px 30px rgba(0, 0, 0, 0.6);
+}
+.home-lede {
+    font-size: 16px;
+    color: var(--text, #e6ecf5);
+    max-width: 580px;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+}
+.home-clock {
+    margin-top: 18px;
+    /* Inter via the global body stack, tabular-nums + slashed-zero
+       keep the seconds digits in fixed columns (no jitter when the
+       clock ticks) and disambiguate the zero from O, without
+       dropping into a monospace face. */
+    font-family: inherit;
+    font-variant-numeric: tabular-nums slashed-zero;
+    font-feature-settings: "tnum", "zero";
+    font-size: 13px;
+    color: var(--text-muted, #94a3b8);
+    letter-spacing: 0.4px;
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0;
+}
+.home-clock-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.home-clock-icon {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.75;
+    flex-shrink: 0;
+}
+.home-clock-sep {
+    margin: 0 10px;
+    opacity: 0.4;
+}
+/* Location uses the body font (not mono), "São Paulo, Brazil" reads much
+   better in a humanist face than in tabular monospace. */
+.home-clock-loc {
+    font-family: inherit;
+    letter-spacing: 0.2px;
+}
+
+.home-status {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    padding: 24px 32px 8px;
+}
+.home-status-card {
+    /* Translucent dark glass so the nebula behind the panel shows
+       through. The backdrop-filter blur (where supported) keeps text
+       crisp on top of busy background regions. */
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid var(--border, #334155);
+    border-left: 3px solid var(--text-muted, #94a3b8);
+    border-radius: 6px;
+    padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 4px;
+}
+.home-status-card.ok    { border-left-color: var(--ok, #22c55e); }
+.home-status-card.warn  { border-left-color: var(--warn, #f59e0b); }
+.home-status-card.error { border-left-color: var(--danger, #ef4444); }
+.home-status-card.idle  { border-left-color: var(--text-muted, #94a3b8); opacity: 0.85; }
+.home-status-label {
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 1px; text-transform: uppercase;
+    color: var(--text-muted, #94a3b8);
+}
+.home-status-card strong {
+    font-size: 16px;
+    color: var(--text, #e6ecf5);
+    font-weight: 600;
+}
+.home-status-sub {
+    font-size: 12px;
+    color: var(--text-muted, #94a3b8);
+}
+
+.home-section-title {
+    font-size: 13px; font-weight: 700;
+    letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--text-muted, #94a3b8);
+    margin: 0 0 12px;
+}
+
+.home-quick {
+    padding: 24px 32px;
+}
+.home-quick-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 14px;
+}
+.home-quick-card {
+    /* Same glass treatment as the status cards so the row reads as a
+       single cohesive surface against the nebula. */
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid var(--border, #334155);
+    border-radius: 8px;
+    padding: 18px;
+    color: var(--text, #e6ecf5);
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+    transition: all 0.15s;
+    display: flex; flex-direction: column; gap: 6px;
+}
+.home-quick-card:hover {
+    border-color: var(--accent, #38bdf8);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+.home-quick-icon {
+    font-size: 22px;
+    width: 40px; height: 40px;
+    line-height: 40px; text-align: center;
+    background: rgba(56, 189, 248, 0.1);
+    border-radius: 8px;
+    margin-bottom: 4px;
+}
+.home-quick-card strong {
+    font-size: 15px;
+    font-weight: 600;
+}
+.home-quick-card p {
+    font-size: 12.5px;
+    color: var(--text-muted, #94a3b8);
+    margin: 0;
+    line-height: 1.45;
+}
+.home-quick-card code {
+    font-size: 11px;
+    background: rgba(0,0,0,0.25);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--accent, #38bdf8);
+}
+
+.home-footer {
+    /* Two-step pinning:
+       1. margin-top: auto eats remaining vertical space inside the
+          flex column home-panel so the footer drops to the bottom
+          on short pages (no scroll required).
+       2. position: sticky bottom: 0 keeps it parked at the viewport
+          edge once the page is long enough to scroll past it.
+       Both rules are needed; alone, the first only works on short
+       pages and the second only works on tall ones. */
+    margin-top: auto;
+    position: sticky;
+    bottom: 0;
+    background: rgba(0,0,0,0.8);
+    z-index: 5;
+    padding: 14px 32px;
+    border-top: 1px solid var(--border, #334155);
+    /* On narrow viewports (≤640 px ≈ phones) the GitHub + Donate
+       footer eats vertical real-estate that's better spent on the
+       hero CTAs. Hide entirely on mobile, both links are still
+       reachable from the README / About modal. */
+}
+@media (max-width: 960px) {
+    .home-footer { display: none; }
+    color: var(--text-muted, #94a3b8);
+    font-size: 12.5px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+    background: rgba(5, 8, 16, 0.78);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+.home-footer a { color: var(--accent, #38bdf8); }
+.home-credit { font-size: 11px; opacity: 0.7; }
+
+/* Footer info row: project name, tagline, badges all on one line
+   with consistent vertical alignment. flex-wrap keeps it sane on
+   narrow viewports. */
+.home-footer-info {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.home-footer-tag {
+    color: var(--text-muted, #94a3b8);
+    font-size: 12px;
+    margin-right: 4px;
+}
+
+/* Pill-shaped badges with an icon + label. Two flavours: the
+   GitHub badge sticks to the panel's neutral dark fill (matches
+   shields.io conventions); the donate badge is a warm pink so the
+   call-to-action stands out without being garish. Both lift on
+   hover for a small affordance. */
+.home-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none !important;
+    line-height: 1.4;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+.home-badge svg { flex-shrink: 0; }
+.home-badge:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
+}
+
+.home-badge-github {
+    background: rgba(36, 41, 47, 0.85);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #e6edf3 !important;
+}
+.home-badge-github:hover {
+    background: rgba(48, 54, 61, 0.95);
+    border-color: rgba(255, 255, 255, 0.22);
+}
+
+/* Donate uses the same neutral dark fill as the GitHub badge so the
+   pair reads as a matched set. Only the heart icon picks up the pink
+   accent, quietly conveys "this one's a financial ask" without
+   pulling the eye away from the rest of the page. */
+.home-badge-donate {
+    background: rgba(36, 41, 47, 0.85);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #e6edf3 !important;
+}
+.home-badge-donate svg { color: #ec4899; }
+.home-badge-donate:hover {
+    background: rgba(48, 54, 61, 0.95);
+    border-color: rgba(236, 72, 153, 0.45);
+}
+.home-badge-donate:hover svg { color: #f472b6; }
+
+@media (max-width: 700px) {
+    .home-hero { padding: 40px 20px; min-height: 240px; }
+    .home-status, .home-quick, .home-footer { padding-left: 16px; padding-right: 16px; }
+    .home-footer { flex-direction: column; }
+}
+
+/* ----------------------------- Equipment source picker (INDI vs Alpaca) ------- */
+.equip-source-tabs {
+    display: flex; gap: 2px; padding-bottom: 0;
+    border-bottom: 1px solid var(--border, #334155);
+    margin-bottom: 6px;
+}
+.equip-source-tabs .btn {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    color: var(--text-secondary);
+    margin-bottom: -1px;
+    transition: color 0.12s, border-color 0.12s;
+}
+.equip-source-tabs .btn:hover {
+    background: transparent;
+    color: var(--text-primary);
+}
+.equip-source-tabs .btn-active {
+    background: transparent; color: var(--accent, #38bdf8);
+    border-bottom-color: var(--accent, #38bdf8); font-weight: 600;
+}
+
+/* ----------------------------- Advanced Sequencer tab ----------------------------- */
+.advseq-toolbar {
+    display: flex; gap: 8px; align-items: center;
+    padding: 8px; background: var(--panel, #1e293b);
+    border-radius: 4px; margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+.advseq-layout {
+    display: grid;
+    grid-template-columns: 240px 1fr 320px;
+    gap: 8px;
+    height: calc(100vh - 220px);
+    min-height: 480px;
+}
+.advseq-palette, .advseq-tree, .advseq-props {
+    background: var(--panel, #1e293b);
+    border: 1px solid var(--border, #334155);
+    border-radius: 4px;
+    padding: 8px;
+    overflow-y: auto;
+}
+.advseq-panel-title {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    color: var(--text-muted, #94a3b8); letter-spacing: 0.05em;
+    padding-bottom: 6px; margin-bottom: 8px;
+    border-bottom: 1px solid var(--border, #334155);
+}
+.palette-category { margin-bottom: 10px; }
+.palette-category-name {
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    color: var(--text-muted, #94a3b8);
+    margin: 6px 0 4px;
+}
+.palette-item {
+    display: flex; align-items: center; gap: 6px;
+    width: 100%; padding: 4px 8px; margin: 1px 0;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid transparent; border-radius: 3px;
+    color: var(--text, #e2e8f0); font-size: 12px; text-align: left;
+    cursor: pointer;
+}
+.palette-item:hover:not(:disabled) {
+    background: rgba(56, 189, 248, 0.1); border-color: var(--accent, #38bdf8);
+}
+.palette-item:disabled { opacity: 0.4; cursor: not-allowed; }
+.palette-kind {
+    display: inline-block; width: 16px; height: 16px;
+    border-radius: 3px; text-align: center; line-height: 16px;
+    font-size: 10px; font-weight: 700; color: #000;
+}
+.palette-kind[data-kind="Container"]  { background: #fbbf24; }
+.palette-kind[data-kind="Instruction"] { background: #38bdf8; }
+.palette-kind[data-kind="Condition"]   { background: #a78bfa; }
+.palette-kind[data-kind="Trigger"]     { background: #f87171; }
+
+.advseq-tree-body { font-size: 13px; }
+.tree-node {
+    padding: 4px 6px; margin: 2px 0; border-radius: 3px;
+    background: rgba(255,255,255,0.02);
+    border-left: 3px solid transparent;
+    cursor: pointer; user-select: none;
+    display: flex; align-items: center; gap: 6px;
+}
+.tree-node:hover { background: rgba(255,255,255,0.06); }
+.tree-node.selected {
+    background: rgba(56, 189, 248, 0.15);
+    border-left-color: var(--accent, #38bdf8);
+}
+.tree-node.status-Running   { border-left-color: var(--ok, #22c55e); }
+.tree-node.status-Completed { border-left-color: #16a34a; opacity: 0.7; }
+.tree-node.status-Failed    { border-left-color: var(--danger, #ef4444); }
+.tree-node.status-Skipped   { border-left-color: #6b7280; opacity: 0.5; }
+
+.tree-handle {
+    cursor: grab; color: var(--text-muted, #94a3b8); font-weight: 700; font-size: 14px;
+}
+.tree-type-badge {
+    background: rgba(255,255,255,0.1); padding: 1px 5px; border-radius: 2px;
+    font-size: 10px; color: var(--text-muted, #94a3b8); text-transform: uppercase;
+}
+.tree-name { font-weight: 500; flex: 1; }
+.tree-error { font-size: 11px; color: var(--danger, #ef4444); }
+.tree-children {
+    margin-left: 18px; padding-left: 8px;
+    border-left: 1px dashed var(--border, #334155);
+}
+.tree-aux { padding-left: 20px; margin-top: 2px; }
+.tree-aux-label { font-size: 10px; color: var(--text-muted, #94a3b8); text-transform: uppercase; }
+
+.prop-row {
+    display: flex; flex-direction: column; gap: 3px;
+    margin-bottom: 8px;
+}
+.prop-row label {
+    font-size: 11px; color: var(--text-muted, #94a3b8); font-weight: 600;
+}
+.prop-row input[type="text"], .prop-row input[type="number"] {
+    padding: 9px 10px; min-height: 38px; box-sizing: border-box;
+    background: var(--bg, #0f172a);
+    border: 1px solid var(--border, #334155); color: var(--text, #e2e8f0);
+    border-radius: 3px; font-size: 14px;
+}
+
+/* Inline warning banner (e.g. PHD2 not installed) */
+.warn-banner {
+    background: rgba(245, 158, 11, 0.15);
+    border-left: 3px solid #f59e0b;
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    line-height: 1.45;
+}
+.warn-banner a {
+    color: var(--accent);
+    text-decoration: underline;
+    margin: 0 2px;
+}
+.warn-banner code {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+/* GX-1b: compact models table in the Settings AI panel. Matches the
+   visual weight of the rest of Settings (small text, muted borders,
+   stable column widths so the hash column doesn't shift). */
+.onnx-models-table {
+    width: 100%;
+    max-width: 640px;
+    border-collapse: collapse;
+    font-size: 11px;
+}
+.onnx-models-table th,
+.onnx-models-table td {
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+}
+.onnx-models-table th {
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 10px;
+}
+.onnx-models-table tr:last-child td { border-bottom: none; }
+

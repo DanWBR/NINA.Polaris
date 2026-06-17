@@ -1,0 +1,2148 @@
+/* DBGLOG-6: log badge in the status bar. Always present, swaps colour
+   on unread error/warning counts so the operator notices trouble
+   without staring at the panel. */
+.log-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+.log-badge-warn {
+    color: #fcd34d;
+    border-color: rgba(245, 158, 11, 0.5);
+}
+.log-badge-error {
+    color: #f87171;
+    border-color: rgba(239, 68, 68, 0.6);
+    background: rgba(239, 68, 68, 0.08);
+}
+.log-badge-count {
+    display: inline-block;
+    min-width: 14px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.15);
+    font-size: 10px;
+    text-align: center;
+}
+
+/* Fullscreen toggle badge in the top-right status row. Compact,
+   icon-only; lights up with the accent colour while fullscreen is
+   active so it doubles as a state indicator. */
+.fullscreen-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Image control toolbar pinned to the bottom-left of a .preview-area.
+   Zoom-to-fit / fit-width / fit-height / zoom in-out / stretch. Sits
+   above the canvas + overlay, semi-transparent so it never hides much
+   of the frame. Shared by LIVE, PREVIEW and VIDEO panes. */
+.pz-toolbar {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    z-index: 5;
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 6px;
+    background: rgba(5, 8, 20, 0.62);
+    backdrop-filter: blur(6px);
+    border: 1px solid var(--border);
+}
+.pz-toolbar button {
+    min-width: 30px;
+    height: 28px;
+    padding: 0 7px;
+    font-size: 13px;
+    line-height: 1;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+/* AUTORUN docks the histogram panel along the bottom of the frame, where
+   the image-adjust toolbar normally sits — they overlap. Move the toolbar
+   to the top-left corner here so both stay usable. */
+.autorun-preview .pz-toolbar {
+    bottom: auto;
+    top: 8px;
+}
+/* LIVE: the histogram now overlays the bottom of the frame and the
+   star/crosshair/grid cluster (.preview-overlay-controls) sits top-LEFT,
+   so move the image-adjust toolbar to the top-RIGHT corner to avoid both. */
+.live-pane .pz-toolbar {
+    top: 8px;
+    right: 8px;
+    left: auto;
+    bottom: auto;
+}
+/* PREVIEW: histogram now overlays the bottom of the frame too. Unlike LIVE
+   the top-left has no overlay cluster, so dock the image-adjust toolbar in
+   the top-LEFT corner (out of the histogram's way). */
+.preview-pane .pz-toolbar {
+    top: 8px;
+    bottom: auto;
+}
+.pz-toolbar button:hover { background: rgba(255, 255, 255, 0.16); }
+.pz-toolbar button.pz-active {
+    background: rgba(99, 102, 241, 0.25);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* Tap-to-hide overlay chrome on the LIVE/PREVIEW/VIDEO frames. A simple
+   tap on the bare image toggles .frame-controls-hidden on the pane (see
+   toggleFrameControls / the pan-zoom tap detector); we fade out every
+   floating control so the frame is unobstructed, and disable pointer
+   events so the now-invisible panel can't be hit. Tapping again restores.
+   The canvas + overlay canvas are deliberately untouched. */
+.frame-controls-hidden .pz-toolbar,
+.frame-controls-hidden .quick-controls,
+.frame-controls-hidden .histo-panel.histo-overlay,
+.frame-controls-hidden .preview-overlay-controls,
+.frame-controls-hidden .polaris-shutter {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+}
+.fullscreen-badge-active {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: rgba(99, 102, 241, 0.12);
+}
+
+/* UI lock badge in the status bar. Goes amber when engaged so it reads as
+   an active/holding state rather than a neutral toggle. */
+.ui-lock-badge-active {
+    color: #febc2e;
+    border-color: #febc2e;
+    background: rgba(254, 188, 46, 0.14);
+}
+
+/* Full-window lock overlay: transparent (frame stays visible) but captures
+   every pointer/scroll/touch event so nothing under it fires by accident.
+   Below modals (z 10000) so anything already open stays usable. */
+.ui-lock-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9500;
+    background: transparent;
+    cursor: not-allowed;
+    /* Belt + suspenders with the @click.self handlers: block scroll/zoom. */
+    touch-action: none;
+    overscroll-behavior: contain;
+}
+/* Yellow frame around the whole app while in lock mode, an at-a-glance "this
+   session is locked" cue. Sits above the overlay but is click-through. */
+.ui-lock-frame {
+    position: fixed;
+    inset: 0;
+    z-index: 9550;
+    pointer-events: none;
+    border: 3px solid #facc15;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4),
+                inset 0 0 14px rgba(250, 204, 21, 0.35);
+}
+/* The one interactive thing while locked. Tucked into the bottom-left
+   corner so it never covers the framed image / live view. */
+.ui-lock-pill {
+    position: absolute;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    left: calc(14px + env(safe-area-inset-left, 0px));
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 999px;
+    border: 1px solid #febc2e;
+    background: rgba(20, 16, 4, 0.86);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    color: #febc2e;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+.ui-lock-pill:hover { background: rgba(40, 32, 8, 0.92); }
+
+.btn-active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.btn-active:hover {
+    background: var(--accent-hover);
+}
+
+/* Text color helpers */
+.text-ok { color: var(--success); }
+.text-warn { color: var(--warning); }
+.text-err { color: var(--danger); }
+
+/* Status indicator small (inline in headers) */
+.status-indicator-sm {
+    font-size: 11px;
+    font-weight: 400;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 8px;
+}
+
+.status-indicator-sm.ok {
+    background: rgba(76, 175, 80, 0.15);
+    color: var(--success);
+}
+
+.status-indicator-sm.error {
+    background: rgba(244, 67, 54, 0.1);
+    color: var(--text-muted);
+}
+
+/* Device Card (settings) */
+.device-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 6px;
+    background: var(--bg-primary);
+}
+
+.device-name {
+    font-weight: 600;
+    font-size: 13px;
+    min-width: 120px;
+}
+
+.device-driver {
+    font-size: 11px;
+    color: var(--text-muted);
+    flex: 1;
+}
+
+.device-actions {
+    display: flex;
+    gap: 4px;
+}
+
+/* Focus info */
+.focus-info {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 0 8px;
+}
+
+/* Mount Layout */
+.mount-layout {
+    display: flex;
+    gap: 24px;
+    padding: 16px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.dpad-container {
+    display: grid;
+    grid-template-areas:
+        ".    n    ."
+        "w    stop e"
+        ".    s    .";
+    grid-template-columns: 56px 56px 56px;
+    grid-template-rows: 56px 56px 56px;
+    gap: 4px;
+}
+
+.dpad-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--transition);
+}
+
+.dpad-btn:hover {
+    background: var(--accent);
+    color: #fff;
+}
+
+.dpad-btn:active {
+    transform: scale(0.95);
+}
+
+.dpad-n { grid-area: n; }
+.dpad-s { grid-area: s; }
+.dpad-e { grid-area: e; }
+.dpad-w { grid-area: w; }
+.dpad-stop {
+    grid-area: stop;
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #fff;
+    font-size: 10px;
+}
+
+.dpad-stop:hover {
+    background: #d32f2f;
+}
+
+/* Mount / Info Rows */
+.mount-info, .guide-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 160px;
+    /* Top breathing room so the first row (State: Guiding) doesn't
+       collide with the connect-row's bottom border immediately above. */
+    padding-top: 12px;
+    /* Cap so values don't stretch to the right edge of the viewport
+       on wide monitors, info-row uses justify-content: space-between,
+       so the strong value would otherwise float ~1500px from its label
+       and become hard to scan. 480px gives a comfortable two-column
+       read. */
+    max-width: 480px;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 13px;
+}
+
+/* ASIAIR-style settle readout (GUIDE tab). Shows live error vs tolerance and
+   a bar that fills as the error stays within tolerance toward the settle time. */
+.settle-readout {
+    margin: 6px 0; padding: 8px 10px; border-radius: 8px;
+    background: color-mix(in srgb, var(--warn, #e0a52b) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--warn, #e0a52b) 35%, transparent);
+}
+.settle-readout.is-dither {
+    background: color-mix(in srgb, var(--accent, #4f8cff) 12%, transparent);
+    border-color: color-mix(in srgb, var(--accent, #4f8cff) 35%, transparent);
+}
+.settle-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 13px; font-weight: 600; margin-bottom: 6px;
+}
+.settle-bar {
+    height: 6px; border-radius: 3px; overflow: hidden;
+    background: color-mix(in srgb, var(--text-muted, #9aa4b2) 25%, transparent);
+}
+.settle-bar-fill {
+    height: 100%; border-radius: 3px; background: var(--ok, #3fb950);
+    transition: width 0.3s ease;
+}
+.settle-sub { font-size: 11px; margin-top: 4px; }
+
+.info-row span {
+    color: var(--text-secondary);
+}
+
+.info-row strong {
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Floating mount-control panel inside the Sky tab. position:fixed
+   so it overlays the celestial map and stays put while the user
+   pans/zooms underneath. Dragging is handled in app.js by writing
+   to mountPanel.x/y; this rule only paints. */
+.mount-float-panel {
+    position: fixed;
+    z-index: 90;
+    width: 400px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.35);
+    user-select: none;
+    -webkit-user-select: none;
+}
+.mount-float-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
+    border-top-left-radius: var(--radius);
+    border-top-right-radius: var(--radius);
+    cursor: move;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    touch-action: none;
+}
+.mount-float-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.mount-float-sub {
+    font-weight: 400;
+    color: var(--text-secondary);
+    font-size: 11px;
+    margin-left: 4px;
+}
+/* Close X moved out of the draggable header to dodge the
+   header's @mousedown handler stealing the click. Positioned
+   absolute relative to .mount-float-panel (which is position:
+   fixed -> establishes the containing block). High z-index +
+   explicit pointer-events: auto guarantees the click reaches
+   the button no matter what panel content might overlap.
+   touch-action: manipulation removes the iOS double-tap delay
+   so a single tap closes immediately. */
+.mount-float-close {
+    position: absolute;
+    top: 2px;
+    right: 4px;
+    z-index: 100;
+    pointer-events: auto;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: 4px;
+    touch-action: manipulation;
+    min-width: 24px;
+    min-height: 24px;
+}
+.mount-float-close:hover {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+.mount-float-body {
+    display: flex;
+    gap: 12px;
+    padding: 10px 12px;
+    align-items: flex-start;
+}
+/* Jog column inside the floating Mount panel: d-pad on top, slew-rate
+   slider stacked below it (operator request -- they want the rate
+   right under the direction buttons, not next to them). align-items:
+   center makes the intrinsic-width d-pad sit above the full-width
+   slider without manual margin math. */
+.mount-float-jog {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    min-width: 120px;
+}
+.mount-float-jog .mount-slew-rate {
+    width: 100%;
+    padding: 0;
+}
+.mount-float-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 12px 10px;
+}
+.mount-float-actions .btn {
+    flex: 1;
+    min-width: 0;
+}
+/* Compact variant of the dpad for the floating panel */
+.dpad-container-sm {
+    grid-template-columns: 36px 36px 36px;
+    grid-template-rows: 36px 36px 36px;
+    gap: 3px;
+}
+.dpad-container-sm .dpad-btn {
+    font-size: 11px;
+}
+.dpad-container-sm .dpad-stop {
+    font-size: 9px;
+}
+.mount-info-sm {
+    min-width: 0;
+    flex: 1;
+    gap: 4px;
+}
+.mount-info-sm .info-row {
+    font-size: 11px;
+}
+
+/* SLEWRATE: discrete-tick slider for TELESCOPE_SLEW_RATE. Shared by
+   the floating Mount panel (Sky tab) and the VIDEO Capture sidebar.
+   Tight stacked layout: small label row up top with the live element
+   name in bold on the right, then the slider, then the tick marks
+   inline below (the <datalist> renders native tick marks on the
+   browser but the styling varies; the explicit label row is what the
+   operator reads). The slider itself is `.range-with-controls` once
+   _augmentRangeInputs() wraps it so the [-] [+] step buttons appear
+   automatically -- those are useful for touch but only need ~28px,
+   so the wrapper inherits the slider's width:100%. */
+.mount-slew-rate {
+    padding: 4px 6px 2px;
+    min-width: 0;
+}
+.mount-slew-rate-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+}
+.mount-slew-rate-label > strong {
+    color: var(--text-primary);
+    font-size: 11px;
+    letter-spacing: 0;
+    text-transform: none;
+}
+.mount-slew-rate input[type="range"] {
+    width: 100%;
+    margin: 0;
+}
+/* When the _augmentRangeInputs() helper wraps with [-] / [+] step
+   buttons, override the default 28px button to a tighter 22px so
+   the whole block fits comfortably in the 320 px floating panel. */
+.mount-slew-rate .range-with-controls {
+    width: 100%;
+    gap: 4px;
+}
+.mount-slew-rate .range-step-btn {
+    width: 22px;
+    height: 22px;
+    font-size: 13px;
+}
+
+/* VIDEO Capture sidebar: titled mount-jog block that groups the d-pad
+   and the slew-rate slider. Lives right under the wheel pickers so
+   the operator can recenter a drifting planet without scrolling. */
+.mount-jog-cluster {
+    margin: 6px 0 10px;
+    padding: 6px 8px 4px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: rgba(255, 255, 255, 0.02);
+    /* Flex column with horizontal centering. Without this the d-pad
+       grid (~114 px wide) would sit at the left because grid
+       containers default to block-level full-width, leaving the
+       tracks anchored at the start. align-items:center centres the
+       intrinsic-width d-pad; the full-width children (slew slider,
+       Keep Centered btn) get explicit width:100% to override. */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.mount-jog-cluster-title {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    align-self: stretch;
+    text-align: center;
+}
+.mount-jog-cluster .dpad-container {
+    margin: 0;
+}
+.mount-jog-cluster .mount-slew-rate {
+    margin-top: 6px;
+    padding: 0;
+    width: 100%;
+}
+
+/* KC-1: Keep Centered toggle inside the mount-jog-cluster. Sits
+   below the slew-rate slider. Full-width + slightly taller than the
+   d-pad buttons so the operator can hit it with a thumb on a
+   touchscreen. When active uses the .btn-active accent the rest of
+   the toolbar shares. Disabled state (no stream / no tracking /
+   parked) dims the button -- the tooltip explains why. */
+.mount-jog-cluster .keep-centered-btn {
+    width: 100%;
+    margin-top: 8px;
+    padding: 7px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+}
+.mount-jog-cluster .keep-centered-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+/* One-line status under the toggle. Muted by default; the offset
+   number is in monospace so the value doesn't jitter the layout as
+   it ticks through one/two/three-digit pixel counts. */
+.mount-jog-cluster .keep-centered-status {
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Re-open pill (bottom-right of the Sky tab) */
+.mount-float-reopen,
+.camera-float-reopen {
+    position: fixed;
+    z-index: 89;
+    right: 16px;
+    /* Lifted off the bottom so the pill sits INSIDE the sky map
+       instead of straddling the legend row + activity bar at the
+       viewport edge. 36 px activity bar + ~28 px sky-survey-row
+       (mount/target legend) + a little breathing room ≈ 90 px. */
+    bottom: 90px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text-primary);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+/* Camera pill stacks above the Mount pill when both are visible so
+   they don't overlap. ~36 px clear (pill height + small gap). */
+.camera-float-reopen { bottom: 132px; }
+.camera-float-reopen:hover {
+    background: var(--accent);
+    color: #fff;
+}
+/* Active state -- the corresponding popup IS open. Filled blue +
+   subtle inset shadow signals "this is currently showing". Pill
+   stays a toggle, not a hide-only button. Applies to both pills
+   since they share the same toggle semantics now. */
+.mount-float-reopen.active,
+.camera-float-reopen.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4),
+                inset 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+/* Live-camera floating panel, clone of .mount-float-panel so the
+   two windows read as a matched draggable set. Slightly wider to
+   accommodate the live preview canvas without squishing 4:3 frames. */
+.cam-float-panel {
+    position: fixed;
+    z-index: 90;
+    width: 360px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.35);
+    user-select: none;
+    -webkit-user-select: none;
+}
+.cam-float-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
+    border-top-left-radius: var(--radius);
+    border-top-right-radius: var(--radius);
+    cursor: move;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    touch-action: none;
+}
+.cam-float-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.cam-float-sub {
+    font-weight: 400;
+    color: var(--text-secondary);
+    font-size: 11px;
+    margin-left: 4px;
+}
+/* Mirror of .mount-float-close -- same defensive defaults. */
+.cam-float-close {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    z-index: 100;
+    pointer-events: auto;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: 4px;
+    touch-action: manipulation;
+    min-width: 28px;
+    min-height: 28px;
+}
+.cam-float-close:hover {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+/* Brute-force hide rule for both float panels. Replaces x-show
+   because that was getting blocked by an Alpine reactivity quirk
+   (operator clicked close, slewPreviewVisible was set to false,
+   but x-show never re-rendered display:none). With !important +
+   visibility:hidden the panel is GUARANTEED to disappear regardless
+   of what other CSS rules or inline styles are competing. */
+.cam-float-panel.force-hidden,
+.mount-float-panel.force-hidden {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+/* Panel-level click-to-dismiss surface. Pointer hint so the user
+   sees that the whole popup is interactive and dismissible — even
+   when the X button in the corner is somehow blocked by some
+   stacking-context regression. Belt-and-suspenders with the X. */
+.cam-float-clickable {
+    cursor: pointer;
+}
+.cam-float-clickable .cam-float-header {
+    /* Header stays draggable -- cursor: move overrides the panel's
+       cursor: pointer so the affordance is correct. */
+    cursor: move;
+}
+.cam-float-body {
+    padding: 8px;
+    /* Hold the canvas in a 16:9 box so it doesn't collapse to 0 height
+       (canvas with no intrinsic size + flex parent = 0px tall). The
+       canvas itself uses object-fit:contain so 4:3 sensor frames
+       letterbox cleanly inside this box. */
+    aspect-ratio: 16 / 9;
+    background: #000;
+    border-bottom-left-radius: var(--radius);
+    border-bottom-right-radius: var(--radius);
+    overflow: hidden;
+}
+.mount-float-reopen:hover {
+    background: var(--accent);
+    color: #fff;
+}
+
+/* ===========================================================
+   FILES tab, server-side file explorer
+   ----------------------------------------------------------- */
+
+.files-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* UNIF-1: sub-tab pills sit inline in the panel header,
+   immediately after the "Files" label. Pill styling mirrors the
+   existing .video-tabstrip pattern used by the AUTORUN tab so the
+   whole app keeps one tabstrip vocabulary. Active pill gets the
+   accent fill + text bump; idle pills stay subtle so they don't
+   compete with the panel title. */
+/* The old .files-subtabs Stack/Edit pills are gone: Stack is
+   always visible on the right side of the FILES tab, Edit opens
+   in a fullscreen overlay modal. The pill CSS used to live here. */
+
+/* Fullscreen overlay editor modal. The whole Lightroom-style
+   editor (OpenSeadragon viewer + sliders + AI section + export
+   dialog) renders inside .files-editor-modal-panel; the
+   surrounding .files-editor-modal handles backdrop + z-index.
+   z-index 1000 keeps it above the activity bar (z-index 50) and
+   any tab-level chrome but still below toasts (4000). */
+.files-editor-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+}
+.files-editor-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+}
+.files-editor-modal-panel {
+    position: relative;
+    margin: 24px;
+    flex: 1 1 auto;
+    min-height: 0;            /* let the inner flex/grid bound itself
+                                 to the panel instead of overflowing */
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+    /* Hidden so the .editor-workspace grid sets its own scroll
+       regions (sliders column scrolls vertically; preview column
+       handles its own zoom/pan). Without this the whole editor
+       overflowed the modal and the sliders column's natural
+       height drove a scrollbar across the entire panel. */
+    overflow: hidden;
+    padding: 16px 20px 20px;
+    /* Stack the editor body vertically and let the workspace grid
+       claim the remaining height. */
+    display: flex;
+    flex-direction: column;
+}
+/* Children laid out inside .files-editor-modal-panel: the
+   panel-header + source-picker / loading state collapse to their
+   natural height; the editor-workspace grows to fill. min-height:0
+   on the workspace lets its preview column scroll its own canvas
+   and the controls column scroll its own sliders without the
+   modal panel growing past viewport. */
+.files-editor-modal-panel > .editor-workspace {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.files-editor-modal-close {
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+/* Loading state shown while /api/editor/load is in flight. Sits
+   between the empty source picker and the ready workspace; without
+   it the picker would render unchanged for the full duration of the
+   request and the user would think nothing was happening (or worse,
+   pick a second file). */
+.editor-loading {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--text-secondary);
+}
+.editor-loading-spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: editor-loading-spin 0.9s linear infinite;
+}
+@keyframes editor-loading-spin {
+    to { transform: rotate(360deg); }
+}
+.editor-loading-label {
+    font-size: 14px;
+    color: var(--text-primary);
+    margin: 0;
+}
+.editor-loading-path {
+    font-size: 12px;
+    font-family: var(--font-mono, monospace);
+    margin: 0;
+    max-width: 70ch;
+    overflow-wrap: anywhere;
+}
+
+.files-editor-modal-close:hover {
+    background: var(--bg-tertiary, var(--bg-secondary));
+    border-color: var(--accent);
+}
+@media (max-width: 900px) {
+    .files-editor-modal-panel { margin: 0; border-radius: 0; }
+}
+
+/* UNIF-1: 2-col split. Browser left fixed flex-basis, right pane
+   grows to fill remaining space. Mobile (<900 px) stacks into a
+   single column with the right pane below. Workspace panes inside
+   .files-right swap via x-show on filesSubTab. */
+.files-pane-split {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: row;
+    min-height: 0;
+    gap: 12px;
+    padding: 0 12px 12px;
+    overflow: hidden;
+}
+.files-left {
+    flex: 1 1 480px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+.files-right {
+    flex: 1 1 420px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.files-right-pane {
+    flex: 1 1 auto;
+    overflow: auto;
+    padding: 16px;
+}
+.files-right-placeholder {
+    color: var(--text-secondary);
+    text-align: center;
+    margin-top: 60px;
+}
+.files-right-placeholder h3 {
+    color: var(--text-primary);
+    margin: 0 0 8px;
+}
+@media (max-width: 900px) {
+    .files-pane-split { flex-direction: column; }
+    .files-left, .files-right { flex: 1 1 auto; }
+}
+
+/* UNIF-2: Stack workspace slot cards. Lives inside .files-right-
+   pane.stack-pane. Each slot is a <details> so the user can
+   collapse the big lights list when they're working on darks.
+   Item rows show only the basename (path goes to the title
+   attribute for hover) -- absolute paths blow up the card width. */
+.stack-pane { display: flex; flex-direction: column; }
+.stack-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.stack-title {
+    margin: 0;
+    flex: 1;
+    color: var(--text-primary);
+    font-size: 15px;
+    font-weight: 600;
+}
+.stack-slot {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 10px;
+    padding: 10px 12px;
+}
+.stack-slot[open] { padding-bottom: 12px; }
+.stack-slot-head {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    user-select: none;
+}
+.stack-slot-head::-webkit-details-marker { display: none; }
+.stack-slot-head::before {
+    content: '▸';
+    color: var(--text-muted);
+    font-size: 10px;
+    transition: transform 0.15s;
+}
+.stack-slot[open] .stack-slot-head::before {
+    transform: rotate(90deg);
+}
+.stack-slot-label {
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: 13px;
+}
+.stack-slot-count {
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+}
+.stack-slot-hint {
+    flex: 1;
+    color: var(--text-muted);
+    font-size: 11px;
+    text-align: right;
+}
+.stack-slot-actions {
+    display: flex;
+    gap: 6px;
+    margin: 8px 0;
+}
+.stack-slot-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 180px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-secondary);
+}
+.stack-slot-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    font-size: 12px;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border);
+}
+.stack-slot-item:last-child { border-bottom: none; }
+.stack-slot-name {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+}
+.stack-slot-remove {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0 4px;
+    border-radius: 3px;
+}
+.stack-slot-remove:hover {
+    color: var(--text-warn, #ef4444);
+    background: rgba(239, 68, 68, 0.1);
+}
+.stack-slot-empty {
+    color: var(--text-muted);
+    font-size: 12px;
+    font-style: italic;
+    margin: 6px 0 0;
+}
+.stack-actions-placeholder {
+    margin-top: 16px;
+    padding: 12px;
+    background: var(--bg-primary);
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    text-align: center;
+}
+/* UNIF-3b: real action toolbar. Two rows of buttons (master row +
+   pipeline row) followed by a status line that appears while a
+   job is running. Buttons wrap on narrow viewports. */
+.stack-actions {
+    margin-top: 14px;
+    padding: 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+.stack-actions-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+.stack-job-status {
+    margin-top: 10px;
+    padding: 8px 10px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--text-primary);
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+}
+
+/* UNIF-4: FITS metadata columns. Tabular-nums on Exp keeps the
+   column tight; muted color on the values keeps them subordinate
+   to the filename column. */
+.files-col-fitsmeta {
+    padding: 4px 8px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Address row: roots dropdown + breadcrumbs + hidden toggle. */
+.files-addr {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+.files-roots { min-width: 120px; }
+.files-crumbs {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+.files-crumbs a {
+    color: var(--accent);
+    text-decoration: none;
+}
+.files-crumbs a:hover { text-decoration: underline; }
+.files-crumb-sep {
+    margin: 0 4px;
+    color: var(--text-muted);
+}
+.files-hidden-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* Clipboard chip: shown while a cut/copy is pending. */
+.files-clipboard {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 14px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+}
+
+/* Action toolbar (mkdir, upload, copy, cut, paste, rename, delete, ⭐). */
+.files-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+}
+
+/* Icon-only variant. Buttons collapse to a square footprint showing
+   only the glyph; the action label lives in the native tooltip
+   (`title=`) which desktop browsers show on hover and mobile
+   browsers show on long-press. Saves a ton of horizontal real estate
+   so the whole toolbar fits on one line at typical widths. */
+.files-actions-icons {
+    gap: 4px;
+}
+.files-actions-icons .btn.btn-icon {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    line-height: 1;
+    /* Hint the OS to surface the title quickly on long-press. */
+    -webkit-touch-callout: none;
+}
+.files-actions-icons .btn.btn-icon .files-icon {
+    /* Glyphs include emoji + a few unicode symbols; line-height tight
+       keeps them visually centered regardless of font metrics. */
+    display: inline-block;
+    line-height: 1;
+}
+/* Thin vertical divider between logical groups (file ops / edit ops
+   / AI ops / studio root). Purely decorative, hidden from
+   accessibility tree via `aria-hidden`. */
+.files-actions-sep {
+    width: 1px;
+    height: 20px;
+    background: var(--border);
+    margin: 0 4px;
+    opacity: 0.6;
+}
+
+/* The list itself fills the rest of the panel and scrolls. */
+.files-list-wrap {
+    flex: 1 1 auto;
+    overflow: auto;
+    background: var(--bg-primary);
+}
+.files-list {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.files-list thead th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 10px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 12px;
+    z-index: 1;
+}
+.files-list tbody td {
+    padding: 6px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: var(--text-primary);
+    vertical-align: middle;
+}
+.files-row { cursor: default; }
+.files-row:hover { background: rgba(79, 195, 247, 0.05); }
+.files-row.selected { background: rgba(79, 195, 247, 0.18); }
+.files-row.selected td { color: var(--text-primary); }
+.files-row-dir td:nth-child(2) { font-weight: 500; }
+.files-row-hidden td { opacity: 0.55; }
+.files-row-parent td { color: var(--text-secondary); }
+
+.files-col-sel  { width: 32px; text-align: center; }
+.files-col-name { /* fills */ }
+.files-col-size { width: 100px; text-align: right; font-variant-numeric: tabular-nums; }
+.files-col-mod  { width: 160px; font-variant-numeric: tabular-nums; }
+.files-col-type { width: 80px; color: var(--text-muted); }
+
+.files-icon { display: inline-block; width: 18px; text-align: center; margin-right: 6px; }
+
+.files-empty {
+    text-align: center;
+    padding: 40px 16px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* Status bar pinned to the bottom of the panel. */
+.files-statusbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-secondary);
+    font-size: 11px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+.files-statusbar code {
+    background: rgba(255,255,255,0.06);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+}
+
+/* Text-preview modal (FITS/PNG/JPG reuse the OpenSeadragon viewer). */
+.files-text-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+.files-text-modal-inner {
+    width: min(900px, 100%);
+    max-height: 90vh;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.files-text-modal-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-tertiary);
+}
+.files-text-modal-head strong {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.files-text-modal-body {
+    flex: 1;
+    overflow: auto;
+    margin: 0;
+    padding: 14px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Focus Controls */
+.focus-controls {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Compact strip variant used in the FOCUS tab. Replaces the old
+   stacked layout (stepper + step-config + info) which was wasting
+   ~180 px before the focus preview. Single row: stepper left,
+   slow/fast inputs + temperature + reconnect inline right. Wraps
+   to two rows on narrow widths so the inputs never get clipped. */
+.focus-controls.focus-controls-compact {
+    padding: 8px 12px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+}
+
+.stepper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+}
+/* Tighter button + value sizing for the inline strip. The big
+   btn-lg / 20 px value was an artefact of the old vertically-stacked
+   layout; in a single-row strip the stepper still reads clearly at
+   regular button size + 16 px value. */
+.stepper-compact {
+    gap: 6px;
+}
+.stepper-compact .btn {
+    padding: 4px 9px;
+    font-size: 13px;
+    min-width: 30px;
+}
+.stepper-compact .stepper-value {
+    min-width: 60px;
+    font-size: 16px;
+}
+
+/* Inline meta strip: slow/fast inputs + temperature readout +
+   reconnect button. Pushed to the right of the stepper via
+   margin-left:auto so the layout reads "stepper | meta" left-to-right
+   even at intermediate viewport widths. */
+.focus-meta-strip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+    flex-wrap: wrap;
+    font-size: 11px;
+    color: var(--text-muted, var(--text-secondary));
+}
+.focus-step-inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.focus-step-inline input[type="number"] {
+    width: 56px;
+    padding: 3px 5px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+    background: var(--input-bg, rgba(255, 255, 255, 0.05));
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    text-transform: none;
+}
+.focus-step-inline input[type="number"]:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+/* Goto target can be a large absolute step count -> wider field. */
+.focus-goto-inline input[type="number"] {
+    width: 84px;
+}
+.focus-goto-inline {
+    width: 84px;
+}
+/* Inline focuser control row in the PREVIEW panel. */
+.preview-focus-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 12px;
+}
+.preview-focus-row .stepper-value {
+    min-width: 56px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+.focus-readout {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.04);
+}
+.focus-readout-warn {
+    color: var(--warn, #f5a623);
+    background: rgba(245, 166, 35, 0.12);
+    font-weight: 600;
+}
+.focus-reconnect-btn {
+    padding: 4px 9px;
+    font-size: 13px;
+    line-height: 1;
+}
+
+.stepper-value {
+    min-width: 80px;
+    text-align: center;
+    font-size: 20px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+}
+
+.slider-control {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.slider-control input[type="range"] {
+    flex: 1;
+    accent-color: var(--accent);
+    max-width: 200px;
+}
+
+/* SLOW / FAST step inputs for the focuser stepper. Sits below the
+   directional buttons, two columns side by side. Each input is
+   narrow (steps are small integers); label sits above the input
+   so the columns stay aligned even when labels wrap. */
+.focus-step-config {
+    display: flex;
+    gap: 16px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+.focus-step-input {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--text-muted, var(--text-secondary));
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.focus-step-input input[type="number"] {
+    width: 90px;
+    padding: 4px 6px;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+    background: var(--input-bg, rgba(255, 255, 255, 0.05));
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+    border-radius: 4px;
+}
+.focus-step-input input[type="number"]:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
+/* Chart / Placeholder */
+.chart-placeholder {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 16px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    color: var(--text-muted);
+    font-size: 13px;
+    min-height: 150px;
+}
+
+/* Manual stretch panel */
+.stretch-panel {
+    margin: 8px 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.stretch-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+}
+
+.stretch-sliders {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.stretch-sliders.disabled {
+    opacity: 0.5;
+}
+
+.stretch-sliders label {
+    display: flex;
+    flex-direction: column;
+    font-size: 11px;
+    color: var(--text-secondary);
+    gap: 2px;
+}
+
+.stretch-sliders input[type="range"] {
+    width: 100%;
+}
+
+/* Compact focus slider (PREVIEW "Focus" groupbox). appearance:none strips
+   the native range decorations — some Linux/Chromium (GTK) themes draw -/+
+   stepper buttons on the ends of range inputs — leaving a clean track + an
+   accent-coloured round thumb consistent with the rest of the UI. */
+.focus-slider {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--border);
+    cursor: pointer;
+    margin: 0;
+}
+.focus-slider:disabled { opacity: 0.5; cursor: default; }
+.focus-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 15px;
+    height: 15px;
+    border: none;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+}
+.focus-slider::-moz-range-thumb {
+    width: 15px;
+    height: 15px;
+    border: none;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+}
+.focus-slider::-moz-range-track {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--border);
+}
+
+/* Full statistics panel */
+.full-stats-panel {
+    margin: 8px 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.full-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 6px 14px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.full-stats-grid > div {
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px dotted var(--border);
+    padding-bottom: 2px;
+}
+
+.full-stats-grid strong {
+    color: var(--text-primary);
+}
+
+/* Equipment rig (profile) selector */
+.rig-bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 16px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+}
+
+.rig-bar-label {
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 10px;
+}
+
+.rig-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 12px 0;
+    max-height: 380px;
+    overflow-y: auto;
+}
+
+.rig-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+}
+
+.rig-row.active {
+    border-color: var(--accent);
+    background: rgba(33, 150, 243, 0.08);
+}
+
+.rig-row-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.rig-name-line {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.rig-devices {
+    display: flex;
+    gap: 10px;
+    font-size: 11px;
+    flex-wrap: wrap;
+}
+
+.rig-optics {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+
+.rig-optics label {
+    display: flex;
+    flex-direction: column;
+    font-size: 10px;
+    color: var(--text-secondary);
+    gap: 2px;
+}
+
+.rig-optics input {
+    width: 110px;
+}
+
+/* Telescope + accessory picker block above the resolved-value
+   inputs. Drives auto-fill of aperture / focal length / back-focus. */
+.rig-optics-picker {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-top: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.rig-picker-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.rig-picker-row label {
+    display: flex;
+    flex-direction: column;
+    font-size: 10px;
+    color: var(--text-secondary);
+    gap: 2px;
+    flex: 1;
+    min-width: 180px;
+}
+.rig-picker-row select {
+    min-width: 0;
+    width: 100%;
+}
+.rig-picker-readout {
+    font-size: 11px;
+    color: var(--text-muted);
+    padding-top: 2px;
+}
+.rig-picker-backfocus {
+    color: #ffd0a0;   /* amber, back-focus mistakes are common */
+}
+
+.rig-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* First-run location setup modal */
+.location-setup-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.location-setup-frame {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    max-width: 560px;
+    width: 100%;
+    color: var(--text-primary);
+}
+
+.location-setup-frame h2 {
+    margin: 0 0 12px;
+    font-size: 18px;
+}
+
+.location-search-row {
+    display: flex;
+    gap: 6px;
+    margin: 14px 0 4px;
+}
+
+.location-search-row input[type="text"],
+.location-search-row input[type="search"] {
+    flex: 1;
+    /* Same tap-friendly height as .input-sm / .input-md (~38 px). */
+    padding: 9px 12px;
+    min-height: 38px;
+    box-sizing: border-box;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 14px;
+    /* iOS Safari shows a native rounded-rectangle for input[type=search]
+       by default that clashes with our dark theme, strip the chrome. */
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.location-search-results {
+    max-height: 180px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 8px;
+    background: var(--bg-secondary);
+}
+
+.location-search-result {
+    padding: 6px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.location-search-result:last-child { border-bottom: none; }
+
+.location-search-result:hover {
+    background: rgba(33, 150, 243, 0.18);
+}
+
+.location-search-name {
+    font-size: 12px;
+    color: var(--text-primary);
+    line-height: 1.3;
+}
+
+.location-setup-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    margin: 12px 0 16px;
+}
+
+.location-setup-row label {
+    display: flex;
+    flex-direction: column;
+    font-size: 11px;
+    color: var(--text-secondary);
+    gap: 4px;
+}
+
+.location-setup-row input {
+    padding: 6px 8px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.location-setup-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+@media (max-width: 540px) {
+    .location-setup-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* OpenSeadragon image-viewer modal */
+.image-viewer-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+}
+
+/* Floating exit button shown only in OSD full-page mode. OSD reparents its
+   canvas to <body> with a high z-index and covers our modal header, so this
+   must sit above it (max z-index, fixed) to remain tappable on touch. */
+.image-viewer-fp-exit {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 2147483647;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    background: rgba(200, 40, 40, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: var(--radius);
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+}
+.image-viewer-fp-exit:hover { background: rgba(220, 60, 60, 0.98); }
+
+.image-viewer-frame {
+    background: #0a0a14;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    width: 96vw;
+    height: 92vh;
+    max-width: 1600px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.image-viewer-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.image-viewer-header > :first-child { flex: 1; }
+
+/* Canvas + optional headers panel share the rest of the frame
+   horizontally. Without this wrapper the FITS overlay would have
+   to position:absolute on top of OSD and cover stars. */
+.image-viewer-body {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    min-height: 0;
+}
+
+.image-viewer-canvas {
+    flex: 1;
+    background: #000;
+    position: relative;
+    min-width: 0;
+}
+
+/* STUDIO annotation overlays (OSD overlay elements). The element is a
+   zero-size anchor placed (CENTER) at the object's image point; the dot is
+   centred on it via negative margins and the label sits to the upper-right.
+   Fixed pixel sizing keeps labels readable at any zoom. */
+.osd-annot { position: relative; width: 0; height: 0; pointer-events: none; }
+.osd-annot-dot {
+    position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px;
+    border: 2px solid rgba(250, 204, 21, 0.9); border-radius: 50%;
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
+}
+.osd-annot-label {
+    position: absolute; left: 9px; top: -10px; white-space: nowrap;
+    font: 600 12px sans-serif; color: rgba(250, 204, 21, 0.97);
+    text-shadow: 0 0 3px #000, 0 0 3px #000, 0 0 3px #000;
+}
+/* Sized object ring: OSD scales this element to the object's angular size
+   (placed via an image-space rectangle), so it zooms with the image and
+   hugs the object. box-sizing keeps the 2px border inside the rect. */
+.osd-annot-ring {
+    box-sizing: border-box; width: 100%; height: 100%;
+    border: 2px solid rgba(250, 204, 21, 0.85); border-radius: 50%;
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.7); pointer-events: none;
+}
+
+/* FITS header overlay panel docked on the right inside the viewer.
+   Width capped + scroll so a master with 200 cards doesn't push the
+   image off-screen. Drops to a CSS-only animation on toggle. */
+.image-viewer-headers {
+    width: 340px;
+    flex: 0 0 340px;
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    color: var(--text-primary);
+    font-size: 12px;
+    overflow: hidden;
+}
+@media (max-width: 900px) {
+    .image-viewer-headers { width: 280px; flex-basis: 280px; }
+}
+.ivh-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
+}
+.ivh-head strong { flex: 1; font-size: 13px; }
+.ivh-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+}
+.ivh-empty {
+    padding: 16px;
+    text-align: center;
+    color: var(--text-muted);
+    font-style: italic;
+}
+.ivh-group {
+    padding: 8px 12px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.ivh-group h4 {
+    margin: 0 0 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+.ivh-group table {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+}
+.ivh-group tr {
+    cursor: help;  /* tooltip is on the row; signal it's hoverable */
+}
+.ivh-group td {
+    padding: 2px 4px;
+    vertical-align: top;
+    word-break: break-word;
+}
+.ivh-key {
+    width: 90px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--accent);
+}
+.ivh-val {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-primary);
+}
+.ivh-val-input {
+    width: 100%;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    border: 1px solid transparent;
+    border-radius: 3px;
+    padding: 1px 3px;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color 0.15s;
+}
+.ivh-val-input:hover { border-color: var(--border); }
+.ivh-val-input:focus { border-color: var(--accent); }
+.ivh-footer {
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-tertiary);
+}
+
+[x-cloak] { display: none !important; }
+
+/* Chart.js containers, fixed height, canvas fills it */
+.chart-container {
+    position: relative;
+    width: 100%;
+    height: 180px;
+}
+
+.chart-container-sm {
+    height: 140px;
+    padding: 8px;
+}
+
+.chart-container-xs {
+    height: 110px;
+    padding: 6px 0;
+}
+
+.chart-container canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Auto-Focus panel */
+.af-panel {
+    margin: 12px 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.af-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+}
+
+.af-params {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.af-params label {
+    display: flex;
+    flex-direction: column;
+    font-size: 11px;
+    color: var(--text-secondary);
+    gap: 3px;
+}
+
+.af-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.af-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.af-progress-bar {
+    height: 6px;
+    background: var(--bg-primary);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.af-progress-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.3s ease;
+}
+
+.af-progress-info {
+    display: flex;
+    gap: 16px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    flex-wrap: wrap;
+}
+
+/* Live frame preview inside the Focus tab. The AutoFocusService relays
+   each sweep exposure through ImageRelayService, the multi-canvas
+   renderer mirrors that into #focusCanvas. Fixed-height to keep the
+   layout stable as the V-curve chart appears below. */
