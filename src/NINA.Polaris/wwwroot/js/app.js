@@ -26360,6 +26360,74 @@ function ninaApp() {
             if (b >= 1024 * 1024) return (b / 1024 / 1024).toFixed(1) + ' MB';
             return Math.round(b / 1024) + ' KB';
         },
+
+        /// Minimal, dependency-free Markdown -> HTML for the release-notes
+        /// panel (GitHub release bodies). Deliberately a small subset:
+        /// headings, bold/italic, inline + fenced code, ordered/unordered
+        /// lists, links and paragraphs. SECURITY: the raw text is HTML-
+        /// escaped FIRST, then only the known tags below are introduced, and
+        /// links are restricted to http(s) — so untrusted release notes
+        /// cannot inject markup. Output is bound via x-html.
+        renderMarkdown(src) {
+            if (!src) return '';
+            const esc = (s) => s.replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const inline = (s) => s
+                .replace(/`([^`]+)`/g, (m, c) => '<code>' + c + '</code>')
+                .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+                    (m, t, u) => '<a href="' + u + '" target="_blank" rel="noopener">' + t + '</a>')
+                .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                .replace(/__([^_]+)__/g, '<strong>$1</strong>')
+                .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, '$1<em>$2</em>')
+                .replace(/(^|[^_])_([^_\s][^_]*)_/g, '$1<em>$2</em>');
+            const lines = esc(src).replace(/\r\n/g, '\n').split('\n');
+            let html = '', inCode = false, inUl = false, inOl = false;
+            let para = [];
+            const flushPara = () => {
+                if (para.length) { html += '<p>' + inline(para.join(' ')) + '</p>'; para = []; }
+            };
+            const closeLists = () => {
+                if (inUl) { html += '</ul>'; inUl = false; }
+                if (inOl) { html += '</ol>'; inOl = false; }
+            };
+            for (const line of lines) {
+                if (/^\s*```/.test(line)) {
+                    flushPara(); closeLists();
+                    if (!inCode) { html += '<pre><code>'; inCode = true; }
+                    else { html += '</code></pre>'; inCode = false; }
+                    continue;
+                }
+                if (inCode) { html += line + '\n'; continue; }
+                if (!line.trim()) { flushPara(); closeLists(); continue; }
+                const h = line.match(/^(#{1,6})\s+(.*)$/);
+                if (h) {
+                    flushPara(); closeLists();
+                    const lvl = h[1].length;
+                    html += '<h' + lvl + '>' + inline(h[2]) + '</h' + lvl + '>';
+                    continue;
+                }
+                const ul = line.match(/^\s*[-*+]\s+(.*)$/);
+                if (ul) {
+                    flushPara();
+                    if (inOl) { html += '</ol>'; inOl = false; }
+                    if (!inUl) { html += '<ul>'; inUl = true; }
+                    html += '<li>' + inline(ul[1]) + '</li>';
+                    continue;
+                }
+                const ol = line.match(/^\s*\d+\.\s+(.*)$/);
+                if (ol) {
+                    flushPara();
+                    if (inUl) { html += '</ul>'; inUl = false; }
+                    if (!inOl) { html += '<ol>'; inOl = true; }
+                    html += '<li>' + inline(ol[1]) + '</li>';
+                    continue;
+                }
+                para.push(line.trim());
+            }
+            flushPara(); closeLists();
+            if (inCode) html += '</code></pre>';
+            return html;
+        },
         async installUpdate() {
             if (this.update.installing) return;
             this.update.error = '';
