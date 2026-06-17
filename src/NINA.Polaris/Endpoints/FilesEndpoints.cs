@@ -75,18 +75,35 @@ public static class FilesEndpoints {
                         .ToList();
                     var meta = lib.BatchLookupByPath(paths);
                     var decorated = entries.Select(e => {
-                        var m = meta.TryGetValue(e.FullPath, out var row) ? row : null;
+                        object? fm = null;
+                        if (!e.IsDirectory) {
+                            // Prefer the indexed row; for folders the frame
+                            // library never scanned the cache is empty, so fall
+                            // back to reading the FITS header directly (cheap,
+                            // headers-only) — otherwise every column reads "—".
+                            var m = meta.TryGetValue(e.FullPath, out var row) ? row : null;
+                            if (m != null) {
+                                fm = new {
+                                    imageType = m.ImageType, filter = m.Filter,
+                                    target = m.Target, exposureSec = m.ExposureSec,
+                                    gain = m.Gain
+                                };
+                            } else {
+                                var d = lib.ReadMetaFromFile(e.FullPath);
+                                if (d != null) {
+                                    fm = new {
+                                        imageType = d.ImageType, filter = d.Filter,
+                                        target = d.Target, exposureSec = d.ExposureSec,
+                                        gain = d.Gain
+                                    };
+                                }
+                            }
+                        }
                         return new {
                             e.Name, e.FullPath, e.IsDirectory,
                             e.SizeBytes, e.ModifiedUtc, e.Mime,
                             e.IsHidden, e.IsReadOnly,
-                            fitsMeta = m == null ? null : new {
-                                imageType = m.ImageType,
-                                filter = m.Filter,
-                                target = m.Target,
-                                exposureSec = m.ExposureSec,
-                                gain = m.Gain
-                            }
+                            fitsMeta = fm
                         };
                     }).ToList<object>();
                     return Results.Ok(new { path, entries = decorated });

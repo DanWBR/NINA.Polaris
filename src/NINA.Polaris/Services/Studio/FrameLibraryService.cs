@@ -489,6 +489,28 @@ public class FrameLibraryService {
         File.WriteAllBytes(cachePath, jpeg);
     }
 
+    /// <summary>Read FITS metadata straight from a file's header, bypassing
+    /// the SQL index. The FILES browser uses this to populate the FITS
+    /// metadata columns for folders the frame library never scanned (e.g. an
+    /// arbitrary directory the user navigated to). Headers-only read, so it's
+    /// cheap. Returns null for non-FITS files or on any read error.</summary>
+    public FrameMeta? ReadMetaFromFile(string path) {
+        try {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (ext != ".fits" && ext != ".fit" && ext != ".fts") return null;
+            using var fs = File.OpenRead(path);
+            var headers = FITSReader.ReadHeadersOnly(fs);
+            return new FrameMeta(
+                ImageType:   HeaderString(headers, "IMAGETYP", ""),
+                Filter:      HeaderString(headers, "FILTER", ""),
+                Target:      HeaderString(headers, "OBJECT", ""),
+                ExposureSec: HeaderDouble(headers, "EXPOSURE", HeaderDouble(headers, "EXPTIME", 0)),
+                Gain:        HeaderInt(headers, "GAIN", 0));
+        } catch {
+            return null;
+        }
+    }
+
     // --- Header helpers ---
     private static string HeaderString(IDictionary<string, FITSHeaderCard> h, string key, string def) =>
         h.TryGetValue(key, out var c) ? c.Value?.Trim().Trim('\'').Trim() ?? def : def;
@@ -510,3 +532,5 @@ public record FrameRow(int Id, string Path, string FileName,
                        string DateObs, long FileSize);
 public record StudioStats(int TotalLights, double TotalExposureHours,
                           int DistinctTargets, int DistinctFilters);
+public record FrameMeta(string ImageType, string Filter, string Target,
+                        double ExposureSec, int Gain);
