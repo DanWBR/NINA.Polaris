@@ -56,7 +56,7 @@ public class RequestLoggingMiddleware {
         } finally {
             sw.Stop();
             var status = ctx.Response?.StatusCode ?? 0;
-            var level = SelectLevel(status, captured);
+            var level = SelectLevel(status, captured, ctx.Request.Method);
             var qIdx = path.IndexOf('?');
             var pathOnly = qIdx >= 0 ? path[..qIdx] : path;
             try {
@@ -101,8 +101,15 @@ public class RequestLoggingMiddleware {
         return false;
     }
 
-    private static string SelectLevel(int status, Exception? ex) {
+    private static string SelectLevel(int status, Exception? ex, string method) {
         if (ex != null) return "error";
+        // HTTP/2 clients negotiate WebSockets via an extended CONNECT
+        // (RFC 8441). Kestrel answers 501 to plain CONNECT requests, which
+        // is the correct, expected response — not an application fault. Don't
+        // surface it as a red error (it floods the log on startup when the
+        // noVNC/embedded clients probe). Treat any CONNECT as informational.
+        if (string.Equals(method, "CONNECT", StringComparison.OrdinalIgnoreCase))
+            return "info";
         return status switch {
             >= 500 => "error",
             >= 400 => "warn",

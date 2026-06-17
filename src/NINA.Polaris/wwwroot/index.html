@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260617-cropzoom3">
+    <link rel="stylesheet" href="/css/app.css?v=20260617-startuperr">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -102,7 +102,7 @@
             </div>
             <h2>Set a password</h2>
             <p class="auth-hint">
-                Polaris is reachable from any device on this network.
+                Polaris is reachable from any device on this network?.
                 Pick a password that protects this rig from
                 unauthorized access. You will use this on every fresh
                 browser / device.
@@ -702,14 +702,14 @@
                         </span>
                     </div>
                     <div class="home-status-card"
-                         :class="(planStatus && planStatus.active) ? (planStatus.engineState === 'running' ? 'ok' : 'warn') : 'idle'">
+                         :class="(planStatus && planStatus?.active) ? (planStatus?.engineState === 'running' ? 'ok' : 'warn') : 'idle'">
                         <span class="home-status-label">Plan</span>
-                        <strong x-text="(planStatus && planStatus.active)
-                            ? (planStatus.phase === 'ending' ? 'ENDING' : 'RUNNING') : 'IDLE'"></strong>
-                        <span class="home-status-sub" x-show="planStatus && planStatus.active">
-                            <span x-show="planStatus && planStatus.currentTarget" x-text="planStatus.currentTarget"></span>
-                            <span x-show="planStatus && planStatus.totalFrames > 0"
-                                  x-text="(planStatus.currentTarget ? ' · ' : '') + (planStatus.totalCompleted || 0) + ' / ' + planStatus.totalFrames + ' frames'"></span>
+                        <strong x-text="(planStatus && planStatus?.active)
+                            ? (planStatus?.phase === 'ending' ? 'ENDING' : 'RUNNING') : 'IDLE'"></strong>
+                        <span class="home-status-sub" x-show="planStatus && planStatus?.active">
+                            <span x-show="planStatus && planStatus?.currentTarget" x-text="planStatus?.currentTarget"></span>
+                            <span x-show="planStatus && planStatus?.totalFrames > 0"
+                                  x-text="(planStatus?.currentTarget ? ' · ' : '') + (planStatus?.totalCompleted || 0) + ' / ' + planStatus?.totalFrames + ' frames'"></span>
                         </span>
                     </div>
                     <div class="home-status-card" :class="serverReachable ? 'ok' : 'error'">
@@ -908,7 +908,7 @@
                                 <span class="lsq-label">SNR</span>
                                 <span class="lsq-value"
                                       x-text="liveStackStatus?.cumulativeSnr > 0
-                                              ? liveStackStatus.cumulativeSnr.toFixed(1)
+                                              ? liveStackStatus?.cumulativeSnr.toFixed(1)
                                               : '—'"></span>
                             </div>
                             <div class="lsq-cell">
@@ -1162,7 +1162,7 @@
                              one frame has been integrated. -->
                         <button class="btn"
                                 @click="saveServerStack()"
-                                x-show="liveStackStatus && liveStackStatus.mode !== 'metricsonly'"
+                                x-show="liveStackStatus && liveStackStatus?.mode !== 'metricsonly'"
                                 :disabled="!(liveStackStatus?.frameCount > 0)"
                                 title="Save the server-side accumulated stack as a FITS into integrated/{target}/ (RGB in colour mode)">
                             💾 Save current stack<span x-show="liveStackColorActive"> (colour)</span>
@@ -1200,7 +1200,7 @@
                             💾 Save each frame
                             <span class="text-muted"
                                   x-show="liveStackStatus?.framesSavedToDisk"
-                                  x-text="'(' + liveStackStatus.framesSavedToDisk + ' saved)'"></span>
+                                  x-text="'(' + liveStackStatus?.framesSavedToDisk + ' saved)'"></span>
                         </label>
                         <!-- Colour (OSC) live stacking is now always engaged:
                              OSC cameras stack in colour automatically (the only
@@ -1273,7 +1273,7 @@
                                   x-text="mfSettings.autoFlipDuringLiveStack ? 'Flip due (auto)…' : 'Flip due now'"></span>
                             <span class="text-muted"
                                   x-show="mount.connected && mfState === 'idle' && (liveStackStatus?.meridianFlipsHandled || 0) > 0"
-                                  x-text="liveStackStatus.meridianFlipsHandled + ' flip(s) handled this stack'"></span>
+                                  x-text="liveStackStatus?.meridianFlipsHandled + ' flip(s) handled this stack'"></span>
                         </div>
                         <div class="livestack-meridian-err text-err"
                              x-show="mfLastFlipError"
@@ -1580,7 +1580,7 @@
                          the operator's eye learns one pattern. Two
                          fieldsets: Calibration (always available) and
                          BGE (requires client-mode stacking + WASM).
-                         Counters live in liveStackStatus.preProc and
+                         Counters live in liveStackStatus?.preProc and
                          tick over the WS payload at 1Hz. -->
                     <details class="livestack-triggers"
                              :open="liveStackPreProc.calibrationEnabled || liveStackPreProc.bgeEnabled">
@@ -1701,7 +1701,7 @@
                          cumulative number (the stack quality, growing
                          √N) when stacking is active; fall back to the
                          single-frame SNR from the most recent capture. -->
-                    <span>SNR: <strong x-text="(liveStackStatus?.cumulativeSnr > 0 ? liveStackStatus.cumulativeSnr.toFixed(1) : (stats.snr || '--'))">--</strong></span>
+                    <span>SNR: <strong x-text="(liveStackStatus?.cumulativeSnr > 0 ? liveStackStatus?.cumulativeSnr.toFixed(1) : (stats.snr || '--'))">--</strong></span>
                     <span x-show="filterWheel.connected" class="text-ok" x-text="filterWheel.currentFilter"></span>
                     <span>Frames: <strong x-text="sessionCaptures"></strong></span>
                     <!-- Live-stacking elapsed integration time (replaces the
@@ -1709,7 +1709,7 @@
                          how long the current stack has been integrating; '--'
                          until the first frame lands. -->
                     <span>Stacking: <strong
-                          x-text="liveStackStatus?.elapsedSeconds > 0 ? formatTime(liveStackStatus.elapsedSeconds) : '--'">--</strong></span>
+                          x-text="liveStackStatus?.elapsedSeconds > 0 ? formatTime(liveStackStatus?.elapsedSeconds) : '--'">--</strong></span>
                     <span x-show="mfTimeToMeridianMinutes != null"
                           title="Time until the target crosses the meridian (a flip may be needed past it)">Meridian: <strong x-text="formatTimeToMeridian()"></strong></span>
                     <button class="btn btn-sm" @click="fullStats ? (fullStats = null) : loadFullStats()" style="margin-left:auto;"
@@ -1974,8 +1974,8 @@
                         <span :class="equipCameraInfo?.connected ? 'text-ok' : 'text-warn'">
                             <span x-text="equipCameraInfo?.connected ? '✓' : '✗'"></span> Camera
                         </span>
-                        <span :class="equipTelescopeInfo?.connected ? 'text-ok' : 'text-warn'">
-                            <span x-text="equipTelescopeInfo?.connected ? '✓' : '✗'"></span> Mount
+                        <span :class="mount?.connected ? 'text-ok' : 'text-warn'">
+                            <span x-text="mount?.connected ? '✓' : '✗'"></span> Mount
                         </span>
                         <span :class="(settings.latitude || settings.longitude) ? 'text-ok' : 'text-warn'">
                             <span x-text="(settings.latitude || settings.longitude) ? '✓' : '✗'"></span> Site location
@@ -2993,9 +2993,9 @@
                     Video (planetary)
                     <span class="status-indicator-sm"
                           :class="videoRecording.recording ? 'warn'
-                                  : (videoStack && !videoStack.done ? 'warn' : 'ok')"
+                                  : (videoStack && !videoStack?.done ? 'warn' : 'ok')"
                           x-text="videoRecording.recording ? ('REC ' + (videoRecording.frames || 0) + ' frames')
-                                  : (videoStack && !videoStack.done ? ('STACK · ' + videoStack.phase) : 'IDLE')"></span>
+                                  : (videoStack && !videoStack?.done ? ('STACK · ' + videoStack?.phase) : 'IDLE')"></span>
                 </div>
 
                 <div class="video-tabstrip">
@@ -3486,50 +3486,50 @@
                         <label>Keep top
                             <input type="number" x-model.number="video.keepPercent"
                                    min="1" max="100" step="5" class="input-sm" style="width:70px"
-                                   :disabled="videoStack && !videoStack.done"> %
+                                   :disabled="videoStack && !videoStack?.done"> %
                         </label>
                         <label>Output name
                             <input type="text" x-model="video.outputName" class="input-sm" style="width:120px"
-                                   :disabled="videoStack && !videoStack.done">
+                                   :disabled="videoStack && !videoStack?.done">
                         </label>
                         <button class="btn btn-primary" @click="videoStartStack()"
-                                :disabled="!video.processSerPath || (videoStack && !videoStack.done)">
-                            <span x-show="!videoStack || videoStack.done">▶ Stack</span>
-                            <span x-show="videoStack && !videoStack.done"
+                                :disabled="!video.processSerPath || (videoStack && !videoStack?.done)">
+                            <span x-show="!videoStack || videoStack?.done">▶ Stack</span>
+                            <span x-show="videoStack && !videoStack?.done"
                                   x-text="videoStack?.phase + '…'"></span>
                         </button>
                         <button class="btn btn-danger" @click="videoAbortStack()"
-                                :disabled="!videoStack || videoStack.done">Abort</button>
+                                :disabled="!videoStack || videoStack?.done">Abort</button>
                     </div>
 
                     <!-- Live progress -->
-                    <div class="af-progress" x-show="videoStack && !videoStack.done" style="margin-top:10px">
+                    <div class="af-progress" x-show="videoStack && !videoStack?.done" style="margin-top:10px">
                         <div class="af-progress-bar">
                             <div class="af-progress-fill" :style="'width: ' + videoStackPercent() + '%'"></div>
                         </div>
                         <div class="af-progress-info">
                             <span>Phase: <strong x-text="videoStack?.phase"></strong></span>
                             <span x-show="videoStack?.framesAnalyzed">
-                                Analyzed: <strong x-text="videoStack.framesAnalyzed + '/' + videoStack.totalFrames"></strong>
+                                Analyzed: <strong x-text="videoStack?.framesAnalyzed + '/' + videoStack?.totalFrames"></strong>
                             </span>
                             <span x-show="videoStack?.framesPicked">
-                                Kept: <strong x-text="videoStack.framesPicked"></strong>
+                                Kept: <strong x-text="videoStack?.framesPicked"></strong>
                             </span>
                             <span x-show="videoStack?.framesAligned">
-                                Aligned: <strong x-text="videoStack.framesAligned"></strong>
+                                Aligned: <strong x-text="videoStack?.framesAligned"></strong>
                             </span>
                             <span x-show="videoStack?.framesStacked">
-                                Stacked: <strong x-text="videoStack.framesStacked"></strong>
+                                Stacked: <strong x-text="videoStack?.framesStacked"></strong>
                             </span>
                         </div>
                     </div>
 
                     <div class="stats-bar" x-show="videoStack?.phase === 'Ok'" style="margin-top:10px">
                         <span class="text-ok">✓ Stack complete</span>
-                        <span>→ <code x-text="videoStack.outputPath"></code></span>
+                        <span>→ <code x-text="videoStack?.outputPath"></code></span>
                     </div>
                     <div class="stats-bar" x-show="videoStack?.phase === 'Fail'" style="margin-top:10px">
-                        <span class="text-err">✗ <span x-text="videoStack.error"></span></span>
+                        <span class="text-err">✗ <span x-text="videoStack?.error"></span></span>
                     </div>
                 </div>
             </div>
@@ -3618,10 +3618,10 @@
                 <div class="guide-main">
 
                 <!-- "PHD2 not installed" banner -->
-                <div x-show="guider.backend !== 'native' && !guider.connected && phd2Install && !phd2Install.installed"
+                <div x-show="guider.backend !== 'native' && !guider.connected && phd2Install && !phd2Install?.installed"
                      class="warn-banner" style="margin-bottom:0.5rem">
                     PHD2 not detected on this machine.
-                    <a :href="phd2Install.downloadUrl" target="_blank" rel="noopener">Download PHD2</a>
+                    <a :href="phd2Install?.downloadUrl" target="_blank" rel="noopener">Download PHD2</a>
                     then restart the Headless server (or set <code>PHD2:ExecutablePath</code>
                     in appsettings.json to a custom location).
                 </div>
@@ -4178,8 +4178,8 @@
                 <div x-show="guideTab === 'gui' && guider.backend !== 'native'" class="phd2-gui-tab">
                     <!-- ── Neither backend supported on this OS (macOS) ── -->
                     <div x-show="phd2GuiSession && phd2VncSession
-                                 && !phd2GuiSession.supportedOs
-                                 && !phd2VncSession.supportedOs"
+                                 && !phd2GuiSession?.supportedOs
+                                 && !phd2VncSession?.supportedOs"
                          class="phd2-gui-banner phd2-gui-banner-info">
                         <strong>Not supported on this OS.</strong>
                         Embedded PHD2 GUI requires either Linux + xpra or
@@ -4199,14 +4199,14 @@
                     <!-- Existing State 1: 32-bit ARM (Pi 2/3 with 32-bit
                          Raspbian, xpra installs but session-start crashes
                          due to dummy Xorg + GTK/Python issues on ARMv7). -->
-                    <div x-show="phd2GuiSession && phd2GuiSession.supportedOs
-                                 && !phd2GuiSession.supportedArch"
+                    <div x-show="phd2GuiSession && phd2GuiSession?.supportedOs
+                                 && !phd2GuiSession?.supportedArch"
                          class="phd2-gui-banner phd2-gui-banner-info">
                         <strong>Not supported on this CPU architecture.</strong>
                         <span x-text="phd2GuiSession?.unsupportedReason"></span>
                     </div>
                     <!-- State 2: Linux + supported arch but xpra not installed -->
-                    <div x-show="phd2GuiSession && phd2GuiSession.supportedOs && phd2GuiSession.supportedArch && !phd2GuiSession.xpraInstalled"
+                    <div x-show="phd2GuiSession && phd2GuiSession?.supportedOs && phd2GuiSession?.supportedArch && !phd2GuiSession?.xpraInstalled"
                          class="phd2-gui-banner phd2-gui-banner-warn">
                         <strong>xpra not installed.</strong>
                         Run on the Polaris host:
@@ -4216,7 +4216,7 @@
                         Assistant) so you can do everything remotely.
                     </div>
                     <!-- State 3: xpra installed but session not running -->
-                    <div x-show="phd2GuiSession && phd2GuiSession.supportedOs && phd2GuiSession.supportedArch && phd2GuiSession.xpraInstalled && !phd2GuiSession.running && !phd2GuiStarting"
+                    <div x-show="phd2GuiSession && phd2GuiSession?.supportedOs && phd2GuiSession?.supportedArch && phd2GuiSession?.xpraInstalled && !phd2GuiSession?.running && !phd2GuiStarting"
                          class="phd2-gui-empty">
                         <h3>PHD2 GUI session not running</h3>
                         <p>Starting takes ~5–10 seconds (spins up an Xorg-dummy
@@ -4227,7 +4227,7 @@
                             <span x-show="phd2GuiBusy">Starting…</span>
                         </button>
                         <p x-show="phd2GuiSession?.lastError" class="text-err"
-                           style="margin-top:8px" x-text="phd2GuiSession.lastError"></p>
+                           style="margin-top:8px" x-text="phd2GuiSession?.lastError"></p>
                     </div>
                     <!-- State 4: Session running, iframe + toolbar -->
                     <!-- xpra is up but its HTTP root 404s → the HTML5 client
@@ -4246,7 +4246,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </div>
                     </div>
 
-                    <div x-show="phd2GuiSession && phd2GuiSession.supportedOs && (phd2GuiSession.running || phd2GuiStarting) && !phd2GuiHtml5Missing" class="phd2-gui-frame-wrap">
+                    <div x-show="phd2GuiSession && phd2GuiSession?.supportedOs && (phd2GuiSession?.running || phd2GuiStarting) && !phd2GuiHtml5Missing" class="phd2-gui-frame-wrap">
                         <div class="phd2-gui-toolbar">
                             <span class="text-ok">✓ xpra v<span x-text="phd2GuiSession?.xpraVersion"></span></span>
                             <span class="text-muted" style="font-size:11px">
@@ -4260,7 +4260,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                  bare desktop.
 
                                  FIELD-5: the original gate
-                                 (`phd2GuiSession.phd2Running`) only
+                                 (`phd2GuiSession?.phd2Running`) only
                                  trusted the local `pgrep -x phd2` /
                                  `pgrep -x phd2.bin` health probe.
                                  Distros that ship PHD2 under a
@@ -4279,15 +4279,15 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                   class="text-ok" style="margin-left:14px">
                                 · PHD2 running
                             </span>
-                            <span x-show="phd2GuiSession && phd2GuiSession.running
-                                          && !phd2GuiSession.phd2Running
+                            <span x-show="phd2GuiSession && phd2GuiSession?.running
+                                          && !phd2GuiSession?.phd2Running
                                           && !guider?.connected"
                                   class="text-warn" style="margin-left:14px">
                                 · PHD2 not running inside session
                             </span>
                             <span style="flex:1"></span>
-                            <button x-show="phd2GuiSession && phd2GuiSession.running
-                                            && !phd2GuiSession.phd2Running
+                            <button x-show="phd2GuiSession && phd2GuiSession?.running
+                                            && !phd2GuiSession?.phd2Running
                                             && !guider?.connected"
                                     class="btn btn-sm btn-warn" @click="phd2GuiRelaunchPhd2()"
                                     :disabled="phd2GuiBusy"
@@ -4325,7 +4325,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
 
                     <!-- ───── WINDOWS / TightVNC + noVNC path ───── -->
                     <!-- Windows VNC State 1: TightVNC not installed -->
-                    <div x-show="phd2VncSession && phd2VncSession.supportedOs && !phd2VncSession.tightVncInstalled"
+                    <div x-show="phd2VncSession && phd2VncSession?.supportedOs && !phd2VncSession?.tightVncInstalled"
                          class="phd2-gui-banner phd2-gui-banner-warn">
                         <strong>TightVNC not installed.</strong>
                         Download the Windows installer from
@@ -4345,9 +4345,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </div>
 
                     <!-- Windows VNC State 2: Installed but service stopped -->
-                    <div x-show="phd2VncSession && phd2VncSession.supportedOs
-                                 && phd2VncSession.tightVncInstalled
-                                 && !phd2VncSession.serviceRunning"
+                    <div x-show="phd2VncSession && phd2VncSession?.supportedOs
+                                 && phd2VncSession?.tightVncInstalled
+                                 && !phd2VncSession?.serviceRunning"
                          class="phd2-gui-empty">
                         <h3>TightVNC service is stopped</h3>
                         <p>The TightVNC desktop server (<code>tvnserver</code>)
@@ -4369,14 +4369,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     :disabled="phd2VncBusy">⟳ Re-detect</button>
                         </div>
                         <p x-show="phd2VncSession?.lastError" class="text-err"
-                           style="margin-top:8px" x-text="phd2VncSession.lastError"></p>
+                           style="margin-top:8px" x-text="phd2VncSession?.lastError"></p>
                     </div>
 
                     <!-- Windows VNC State 3: Service running but port not listening -->
-                    <div x-show="phd2VncSession && phd2VncSession.supportedOs
-                                 && phd2VncSession.tightVncInstalled
-                                 && phd2VncSession.serviceRunning
-                                 && !phd2VncSession.listening"
+                    <div x-show="phd2VncSession && phd2VncSession?.supportedOs
+                                 && phd2VncSession?.tightVncInstalled
+                                 && phd2VncSession?.serviceRunning
+                                 && !phd2VncSession?.listening"
                          class="phd2-gui-banner phd2-gui-banner-warn">
                         <strong>TightVNC is running but not listening on port
                             <span x-text="phd2VncSession?.port"></span>.</strong>
@@ -4390,10 +4390,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </div>
 
                     <!-- Windows VNC State 4: All clear, iframe + toolbar -->
-                    <div x-show="phd2VncSession && phd2VncSession.supportedOs
-                                 && phd2VncSession.tightVncInstalled
-                                 && phd2VncSession.serviceRunning
-                                 && phd2VncSession.listening"
+                    <div x-show="phd2VncSession && phd2VncSession?.supportedOs
+                                 && phd2VncSession?.tightVncInstalled
+                                 && phd2VncSession?.serviceRunning
+                                 && phd2VncSession?.listening"
                          class="phd2-gui-frame-wrap">
                         <div class="phd2-gui-toolbar">
                             <span class="text-ok">✓ TightVNC v<span x-text="phd2VncSession?.tightVncVersion"></span></span>
@@ -6013,7 +6013,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                   x-text="indiWebStatusLabel()"></span>
                             <span class="text-muted" style="font-size:11px;"
                                   x-show="indiWeb.status?.version"
-                                  x-text="'v' + indiWeb.status.version"></span>
+                                  x-text="'v' + indiWeb.status?.version"></span>
                             <span style="flex:1;"></span>
                             <!-- Auto-start toggle is server-side
                                  only (IndiWeb:AutoStart in appsettings)
@@ -6043,7 +6043,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                              style="padding:12px;background:rgba(245,158,11,0.08);
                                     border:1px solid rgba(245,158,11,0.3);
                                     border-radius:6px;font-size:13px;"
-                             x-show="indiWeb.status &amp;&amp; !indiWeb.status.supportedOs">
+                             x-show="indiWeb.status &amp;&amp; !indiWeb.status?.supportedOs">
                             <strong>Not available on this OS.</strong>
                             <div style="margin-top:4px;color:var(--text-muted);"
                                  x-text="indiWeb.status?.unsupportedReason"></div>
@@ -6822,7 +6822,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             Error: <strong x-text="(slewCenterStatus?.errorArcsec || 0).toFixed(1) + '&quot;'"></strong>
                         </span>
                         <span x-show="slewCenterStatus?.scale">
-                            Scale: <strong x-text="(slewCenterStatus?.scale || 0).toFixed(2) + '\"/px'"></strong>
+                            Scale: <strong x-text="(slewCenterStatus?.scale || 0).toFixed(2) + '&quot;/px'"></strong>
                         </span>
                         <span x-show="slewCenterStatus?.rotation != null">
                             Rotation: <strong x-text="(slewCenterStatus?.rotation || 0).toFixed(1) + '°'"></strong>
@@ -7150,7 +7150,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <h3>Switch to Station mode</h3>
                     <p class="hint" style="margin-bottom: 8px">
                         Polaris will hand the Pi to your home WiFi and stop broadcasting
-                        the <code x-text="(network && network.hotspotSsid) || 'Polaris-Hotspot'"></code> hotspot.
+                        the <code x-text="(network && network?.hotspotSsid) || 'Polaris-Hotspot'"></code> hotspot.
                         If the connection fails (wrong password / out of range), the
                         hotspot auto-reverts after 30 s.
                     </p>
@@ -7903,7 +7903,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <div class="plan-runbar-bars">
                         <div class="plan-pbar">
                             <div class="plan-pbar-head">
-                                <span x-text="(planIsRunning() && planStatus && planStatus.currentTarget) ? planStatus.currentTarget : 'Current target'"></span>
+                                <span x-text="(planIsRunning() && planStatus && planStatus?.currentTarget) ? planStatus?.currentTarget : 'Current target'"></span>
                                 <span x-text="planItemProgressLabel()"></span>
                             </div>
                             <div class="plan-pbar-track">
@@ -8793,7 +8793,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                  class="text-muted" style="font-size:11px; margin-top:4px">
                                 <strong>Done:</strong>
                                 <ul style="margin:4px 0 0 12px; padding:0">
-                                    <template x-for="r in flatWizard.progress.filterResults" :key="r.filter">
+                                    <template x-for="r in flatWizard.progress?.filterResults" :key="r.filter">
                                         <li>
                                             <span x-text="r.filter"></span>:
                                             <strong x-show="r.converged" x-text="r.finalExposure.toFixed(3) + 's'"></strong>
@@ -10431,7 +10431,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div>
 
                 <!-- Device name: friendly label shown when this Pi is
-                     discovered on the network. Each Pi already self-names
+                     discovered on the network?. Each Pi already self-names
                      uniquely (polaris-app-XXXX from its hardware id), so a
                      cloned SD-card image just works; this lets the owner
                      give each one a readable name. -->
@@ -10439,7 +10439,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <h3><span class="settings-card-icon">🔭</span>Device name</h3>
                     <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
                         Shown when phones/tablets discover this telescope
-                        computer on the network. Give it a name you'll
+                        computer on the network?. Give it a name you'll
                         recognise (e.g. <em>Telescope on the balcony</em>).
                         Leave blank to use the automatic name.
                     </p>
@@ -10678,58 +10678,58 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                          message touched the card's left edge on
                          Windows. -->
                     <div class="settings-card-body">
-                    <template x-if="network && !network.supportedOs">
+                    <template x-if="network && !network?.supportedOs">
                         <p class="text-muted" style="font-size: 12px; max-width:560px">
-                            <span x-text="network.unsupportedReason || 'WiFi management not available'"></span>
+                            <span x-text="network?.unsupportedReason || 'WiFi management not available'"></span>
                         </p>
                     </template>
-                    <template x-if="network && network.supportedOs && !network.nmcliInstalled">
+                    <template x-if="network && network?.supportedOs && !network?.nmcliInstalled">
                         <p class="text-warn" style="font-size: 12px; max-width:560px">
                             nmcli not detected. Install with
                             <code>sudo apt install network-manager</code>
                             and reboot, then the WiFi panel will appear here.
                         </p>
                     </template>
-                    <template x-if="network && network.supportedOs && network.nmcliInstalled && !network.hasWifi">
+                    <template x-if="network && network?.supportedOs && network?.nmcliInstalled && !network?.hasWifi">
                         <p class="text-muted" style="font-size: 12px; max-width:560px">
                             No WiFi interface detected on this host. Ethernet-only
                             mini-PCs are managed via the OS settings.
                         </p>
                     </template>
-                    <template x-if="network && network.supportedOs && network.nmcliInstalled && network.hasWifi">
+                    <template x-if="network && network?.supportedOs && network?.nmcliInstalled && network?.hasWifi">
                         <div class="network-card">
                             <div class="network-status-row">
                                 <span class="network-mode-pill"
-                                      :class="'network-mode-' + (network.mode || 'unknown')">
+                                      :class="'network-mode-' + (network?.mode || 'unknown')">
                                     <span x-text="networkModeLabel()"></span>
                                 </span>
-                                <span class="network-ssid" x-text="network.ssid || '—'"></span>
-                                <span class="network-ip text-muted" x-text="network.ip || ''"></span>
-                                <template x-if="network.mode === 'station' && network.signal > 0">
+                                <span class="network-ssid" x-text="network?.ssid || '—'"></span>
+                                <span class="network-ip text-muted" x-text="network?.ip || ''"></span>
+                                <template x-if="network?.mode === 'station' && network?.signal > 0">
                                     <span class="network-signal text-muted"
-                                          x-text="network.signal + '% signal'"></span>
+                                          x-text="network?.signal + '% signal'"></span>
                                 </template>
                             </div>
-                            <template x-if="network.lastError">
+                            <template x-if="network?.lastError">
                                 <div class="text-warn" style="font-size: 12px; margin-top: 4px"
-                                     x-text="network.lastError"></div>
+                                     x-text="network?.lastError"></div>
                             </template>
-                            <template x-if="network.fallbackEngaged">
+                            <template x-if="network?.fallbackEngaged">
                                 <div class="text-warn" style="font-size: 12px; margin-top: 4px">
                                     Hotspot started automatically because no saved WiFi network
-                                    was found in range. Reconnect to <code x-text="network.hotspotSsid || 'Polaris-Hotspot'"></code>,
+                                    was found in range. Reconnect to <code x-text="network?.hotspotSsid || 'Polaris-Hotspot'"></code>,
                                     then switch to Station mode to join the WiFi here.
                                 </div>
                             </template>
                             <div class="control-row actions" style="margin-top: 8px">
                                 <button class="btn btn-primary"
                                         @click="networkOpenSwitchDialog()"
-                                        x-show="network.mode !== 'station'">
+                                        x-show="network?.mode !== 'station'">
                                     Switch to Station mode
                                 </button>
                                 <button class="btn"
                                         @click="networkSwitchToHotspot()"
-                                        x-show="network.mode === 'station'"
+                                        x-show="network?.mode === 'station'"
                                         :disabled="networkSwitching">
                                     Switch back to Hotspot
                                 </button>
@@ -10741,9 +10741,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <p class="text-muted" style="font-size: 11px; margin-top: 6px; max-width:560px">
                                 Default hotspot: <code>Polaris-Hotspot</code> / <code>polaris1234</code>.
                                 Switching to Station mode hands the Pi to your home WiFi
-                                so it stops broadcasting its own network. Auto-reverts
+                                so it stops broadcasting its own network?. Auto-reverts
                                 to Hotspot after 30 s if the new connection cannot get a DHCP lease.
-                                <template x-if="network.autoHotspotFallback">
+                                <template x-if="network?.autoHotspotFallback">
                                     <span> If you take the rig somewhere your saved WiFi is out of
                                     range, the hotspot comes back up on its own after about a minute
                                     so you never need an ethernet cable to reach it.</span>
@@ -11833,7 +11833,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     choose to turn on one of the optional
                                     internet features listed further down.</p>
                                     <p>You do not need to create an account to
-                                    use Polaris on your own network.</p>
+                                    use Polaris on your own network?.</p>
                                 </div>
                             </details>
 
@@ -14289,7 +14289,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260617-cropzoom3"></script>
+    <script src="/js/app.js?v=20260617-startuperr"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
