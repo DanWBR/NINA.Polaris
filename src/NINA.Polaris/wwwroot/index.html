@@ -3793,14 +3793,14 @@
                     <div class="phd2-smart-row">
                         <button class="btn btn-primary"
                                 @click="phd2SmartCalibrate()"
-                                :disabled="!!(guider.calibrateJob && !guider.calibrateJob.done)">
+                                :disabled="!!(guider.calibrateJob && !guider.calibrateJob?.done)">
                             🎯 Smart Calibrate
                         </button>
                         <label class="seq-dither-checkbox" title="Slew main mount to celestial equator before calibrating">
                             <input type="checkbox" x-model="smartCalibrate.slewToEquator">
                             Slew to equator
                         </label>
-                        <span class="text-muted" x-show="guider.calibrateJob && !guider.calibrateJob.done"
+                        <span class="text-muted" x-show="guider.calibrateJob && !guider.calibrateJob?.done"
                               x-text="'Phase: ' + (guider.calibrateJob?.phase || '')"></span>
                         <span class="text-ok" x-show="guider.calibrateJob?.phase === 'Ok'"
                               x-text="'✓ Step ' + (guider.calibrateJob?.stepMs ?? '--') + 'ms'"></span>
@@ -9496,7 +9496,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <span x-text="stack.activeJob?.stage || ''"></span>
                                 <span class="text-muted"
                                       x-show="stack.activeJob?.done != null && stack.activeJob?.total"
-                                      x-text="'(' + stack.activeJob.done + '/' + stack.activeJob.total + ')'"></span>
+                                      x-text="'(' + (stack.activeJob?.done) + '/' + (stack.activeJob?.total) + ')'"></span>
                             </div>
                         </div>
                     </div>
@@ -11172,7 +11172,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <span class="external-tool-status"
                                   :class="siril.status?.available ? 'ok' : 'idle'"
                                   x-text="siril.status?.available
-                                          ? ('✓ Detected v' + (siril.status.version || '?'))
+                                          ? ('✓ Detected v' + (siril.status?.version || '?'))
                                           : '✗ Not detected'"></span>
                             <button class="btn btn-sm" @click="sirilRedetect()" title="Re-probe Siril path + version">Re-detect</button>
                         </div>
@@ -11214,7 +11214,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <span class="external-tool-status"
                                   :class="graxpert.status?.available ? 'ok' : 'idle'"
                                   x-text="graxpert.status?.available
-                                          ? ('✓ Detected v' + (graxpert.status.version || '?')
+                                          ? ('✓ Detected v' + (graxpert.status?.version || '?')
                                              + (graxpert.status?.supportsDeconvolution
                                                 ? ', BGE + Decon + Denoise'
                                                 : ', BGE only'))
@@ -12762,8 +12762,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <div class="siril-modal-progress-bar">
                     <div class="siril-modal-progress-fill"
                          :style="'width: ' + (siril.modalBgePhase
-                             ? Math.round(100 * (siril.modalBgePhase.done + siril.modalBgePhase.failed)
-                                          / Math.max(1, siril.modalBgePhase.total))
+                             ? Math.round(100 * (siril.modalBgePhase?.done + siril.modalBgePhase?.failed)
+                                          / Math.max(1, siril.modalBgePhase?.total))
                              : 0) + '%'"></div>
                 </div>
                 <div class="siril-modal-progress-meta">
@@ -12822,14 +12822,14 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
 
             <div class="siril-modal-actions">
                 <button class="btn"
-                        x-show="!siril.currentJob || siril.currentJob.stage === 'done'
-                                || siril.currentJob.stage === 'failed'
-                                || siril.currentJob.stage === 'cancelled'"
+                        x-show="!siril.currentJob || siril.currentJob?.stage === 'done'
+                                || siril.currentJob?.stage === 'failed'
+                                || siril.currentJob?.stage === 'cancelled'"
                         @click="sirilCloseModal()">Close</button>
                 <button class="btn btn-danger"
-                        x-show="siril.currentJob && siril.currentJob.stage !== 'done'
-                                && siril.currentJob.stage !== 'failed'
-                                && siril.currentJob.stage !== 'cancelled'"
+                        x-show="siril.currentJob && siril.currentJob?.stage !== 'done'
+                                && siril.currentJob?.stage !== 'failed'
+                                && siril.currentJob?.stage !== 'cancelled'"
                         @click="sirilCancelCurrent()">Cancel job</button>
                 <button class="btn btn-primary"
                         x-show="!siril.currentJob"
@@ -13114,7 +13114,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         @click="graxpertCloseModal()"
                         x-text="graxpertIsRunning() ? 'Close (keep running)' : 'Close'"></button>
                 <button class="btn btn-primary"
-                        x-show="!graxpertIsRunning() && !graxpert.cliDone && (!graxpert.currentJob || graxpert.currentJob.completedAt)"
+                        x-show="!graxpertIsRunning() && !graxpert.cliDone && (!graxpert.currentJob || graxpert.currentJob?.completedAt)"
                         :disabled="graxpert.browserActive"
                         @click="graxpertStartRun()">Start</button>
             </div>
