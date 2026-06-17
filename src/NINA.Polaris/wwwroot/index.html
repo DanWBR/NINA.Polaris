@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260617-cropscale">
+    <link rel="stylesheet" href="/css/app.css?v=20260617-filesmulti">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -9294,7 +9294,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <td class="files-col-sel">
                                         <input type="checkbox"
                                                :checked="files.selectedPaths.includes(entry.fullPath)"
-                                               @click.stop="filesToggleSelect(entry.fullPath, $event)">
+                                               @click.stop="filesCheckboxToggle(entry.fullPath)">
                                     </td>
                                     <td class="files-col-name">
                                         <span class="files-icon" x-text="filesIcon(entry)"></span>
@@ -14289,7 +14289,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260617-cropscale"></script>
+    <script src="/js/app.js?v=20260617-filesmulti"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

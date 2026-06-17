@@ -11675,6 +11675,19 @@ function ninaApp() {
             this._filesLastShiftIndex = idx;
         },
 
+        // Per-row checkbox = additive toggle, independent of Ctrl/Shift. This
+        // is the multi-select path on touch devices, where there are no
+        // modifier keys: tap each row's checkbox to add/remove it from the
+        // selection (the row body itself stays single-select). Matches the
+        // intuitive meaning of a checkbox.
+        filesCheckboxToggle(path) {
+            const idx = this.files.entries.findIndex(e => e.fullPath === path);
+            const i = this.files.selectedPaths.indexOf(path);
+            if (i >= 0) this.files.selectedPaths.splice(i, 1);
+            else        this.files.selectedPaths.push(path);
+            if (idx >= 0) this._filesLastShiftIndex = idx;
+        },
+
         filesToggleAll(checked) {
             this.files.selectedPaths = checked
                 ? this.files.entries.map(e => e.fullPath)
@@ -22196,10 +22209,14 @@ function ninaApp() {
                                : this.crop.outputName;
                 this.toast(`Cropped — saved as ${out}`, 'success');
                 this.cropClose();
-                // Refresh the FILES library so the new sibling shows
-                // up without a manual rescan. RescanAsync on the
-                // server already runs but the client cache needs a
-                // re-fetch.
+                // Refresh the FILES browser listing so the new sibling file
+                // shows up immediately (studioRescan only reindexes the DB; the
+                // browser table is driven by /api/files/list, a separate fetch).
+                if (typeof this.filesCd === 'function' && this.files && this.files.cwd) {
+                    try { await this.filesCd(this.files.cwd); } catch {}
+                }
+                // Also reindex the Studio frame library so the new file's FITS
+                // metadata is cached for the columns / Studio views.
                 if (typeof this.studioRescan === 'function') {
                     try { this.studioRescan(); } catch {}
                 }
