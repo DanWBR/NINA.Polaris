@@ -134,26 +134,30 @@ public class FlatWizardService {
     /// </summary>
     public async Task<double?> AutoFindExposureAsync(
         string filter, int binning,
-        int targetAdu = 30000, double tolerance = 0.05,
+        int targetAdu = 33000, double tolerance = 0.05,
         double minExposure = 0.1, double maxExposure = 30.0,
-        int maxIterations = 10,
+        int maxIterations = 12,
         CancellationToken ct = default) {
         var camera = _equip.Camera ?? throw new InvalidOperationException("No camera connected");
         binning = Math.Max(1, binning);
+        int maxVal = (1 << camera.BitDepth) - 1;
+        if (maxVal <= 0) maxVal = 65535;
 
-        // Honour the same trained-exposure seed the main wizard uses, so
-        // the second invocation in a session converges in 1-2 iterations
-        // instead of 5-8.
+        // Seed: a previously-trained value if we have one, otherwise a cheap
+        // 0.5 s probe. Flats are in the camera's linear regime, so the median
+        // scales ~linearly with exposure — a proportional step (below) lands
+        // on target in 2-3 frames, and starting short keeps each probe fast
+        // (the old midpoint seed of ~15 s made every iteration crawl).
         var key = $"{filter ?? ""}_bin{binning}";
         double exposure = TrainedExposures.TryGetValue(key, out var trained)
-            ? trained
-            : (minExposure + maxExposure) / 2;
-        double lo = minExposure;
-        double hi = maxExposure;
+            ? Math.Clamp(trained, minExposure, maxExposure)
+            : Math.Clamp(0.5, minExposure, maxExposure);
 
         try { await camera.SetBinningAsync(binning, binning, ct); }
         catch (Exception ex) { _logger.LogWarning(ex, "Auto-flat: set binning {B} failed", binning); }
 
+        var lower = targetAdu * (1 - tolerance);
+        var upper = targetAdu * (1 + tolerance);
         for (int attempt = 0; attempt < maxIterations; attempt++) {
             ct.ThrowIfCancellationRequested();
             _logger.LogDebug("Auto-flat search iter {I} for {Filter} bin{B}: trying {Exp}s",
@@ -163,8 +167,6 @@ public class FlatWizardService {
             img.MetaData.Exposure.ImageType = "FLAT";
             var median = ComputeMedian(img);
 
-            var lower = targetAdu * (1 - tolerance);
-            var upper = targetAdu * (1 + tolerance);
             if (median >= lower && median <= upper) {
                 _logger.LogInformation(
                     "Auto-flat converged at {Exp}s for {Filter} bin{B} (median={Med}, target={Tgt})",
@@ -174,20 +176,41 @@ public class FlatWizardService {
                 return exposure;
             }
 
-            if (median > upper) { hi = exposure; exposure = (lo + exposure) / 2; }
-            else                { lo = exposure; exposure = (exposure + hi) / 2; }
-            exposure = Math.Clamp(exposure, minExposure, maxExposure);
-
-            if (Math.Abs(hi - lo) < 0.001) {
-                _logger.LogWarning("Auto-flat bracket collapsed for {Filter} bin{B} (last median {Med})",
-                    filter, binning, median);
+            var next = NextFlatExposure(exposure, median, targetAdu, maxVal, minExposure, maxExposure);
+            // next == exposure means we're pinned at a clamp boundary and still
+            // off target — this panel/light level can't reach the target ADU
+            // within [min, max], so give up rather than spin forever.
+            if (Math.Abs(next - exposure) < 1e-4) {
+                _logger.LogWarning(
+                    "Auto-flat can't reach {Tgt} ADU for {Filter} bin{B} within [{Min},{Max}]s (median {Med} at {Exp}s)",
+                    targetAdu, filter, binning, minExposure, maxExposure, median, exposure);
                 return null;
             }
+            exposure = next;
         }
 
         _logger.LogWarning("Auto-flat did not converge for {Filter} bin{B} after {N} iterations",
             filter, binning, maxIterations);
         return null;
+    }
+
+    /// <summary>Proportional next-exposure step for the flat search. Flats are
+    /// linear, so median ≈ k·exposure; the next guess is exposure·(target/median),
+    /// damped to avoid wild swings, with hard handling for a dark panel (median
+    /// near 0 → step up fast) and saturation (median near full-well → step down).
+    /// Result is clamped to [min, max].</summary>
+    private static double NextFlatExposure(double exp, double median, int target,
+                                           int maxVal, double min, double max) {
+        double next;
+        if (median < 1) {
+            next = exp * 4;                       // essentially dark — climb fast
+        } else if (median >= 0.97 * maxVal) {
+            next = exp * 0.5;                     // saturated — back off hard
+        } else {
+            double ratio = Math.Clamp(target / median, 0.25, 4.0);
+            next = exp * ratio;
+        }
+        return Math.Clamp(next, min, max);
     }
 
     private async Task RunAsync(FlatWizardRequest request, CancellationToken ct) {
@@ -216,14 +239,18 @@ public class FlatWizardService {
                 try { await camera.SetBinningAsync(binning, binning, ct); }
                 catch (Exception ex) { _logger.LogWarning(ex, "Set binning {B} failed", binning); }
 
-                // 3. Find converged exposure via binary search
+                // 3. Find converged exposure via a proportional search.
+                // Seed with a trained value if known, else a cheap 0.5 s probe
+                // and scale toward target (flats are linear; see
+                // NextFlatExposure). Starting short keeps the first probes fast
+                // instead of crawling from the [min,max] midpoint.
                 var key = $"{filterName}_bin{binning}";
                 double exposure = TrainedExposures.TryGetValue(key, out var trained)
-                    ? trained
-                    : (request.MinExposure + request.MaxExposure) / 2;
-                double lo = request.MinExposure;
-                double hi = request.MaxExposure;
+                    ? Math.Clamp(trained, request.MinExposure, request.MaxExposure)
+                    : Math.Clamp(0.5, request.MinExposure, request.MaxExposure);
                 bool converged = false;
+                var lower = request.TargetAdu * (1 - request.Tolerance);
+                var upper = request.TargetAdu * (1 + request.Tolerance);
 
                 for (int attempt = 0; attempt < request.MaxSearchIterations; attempt++) {
                     ct.ThrowIfCancellationRequested();
@@ -235,8 +262,6 @@ public class FlatWizardService {
                     var median = ComputeMedian(img);
                     Progress = Progress with { LastMedian = median };
 
-                    var lower = request.TargetAdu * (1 - request.Tolerance);
-                    var upper = request.TargetAdu * (1 + request.Tolerance);
                     if (median >= lower && median <= upper) {
                         _logger.LogInformation("Converged at {Exp}s (median={Med}, target={Tgt})",
                             exposure, median, request.TargetAdu);
@@ -246,19 +271,15 @@ public class FlatWizardService {
                         break;
                     }
 
-                    if (median > upper) {
-                        hi = exposure;
-                        exposure = (lo + exposure) / 2;
-                    } else { // median < lower
-                        lo = exposure;
-                        exposure = (exposure + hi) / 2;
-                    }
-                    exposure = Math.Clamp(exposure, request.MinExposure, request.MaxExposure);
-
-                    if (Math.Abs(hi - lo) < 0.001) {
-                        _logger.LogWarning("Search collapsed without converging (last median {Med})", median);
+                    var next = NextFlatExposure(exposure, median, request.TargetAdu, maxVal,
+                                                request.MinExposure, request.MaxExposure);
+                    if (Math.Abs(next - exposure) < 1e-4) {
+                        _logger.LogWarning(
+                            "Flat search pinned at {Exp}s, can't reach {Tgt} ADU (last median {Med})",
+                            exposure, request.TargetAdu, median);
                         break;
                     }
+                    exposure = next;
                 }
 
                 if (!converged) {

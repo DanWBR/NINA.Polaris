@@ -6299,8 +6299,12 @@ function ninaApp() {
             const up = () => {
                 window.removeEventListener('pointermove', move);
                 window.removeEventListener('pointerup', up);
+                if (this._histoRaf) { cancelAnimationFrame(this._histoRaf); this._histoRaf = null; }
                 this._histoDrag = null;
-                this.applyManualStretch();   // final crisp render + histo redraw
+                // Commit the new stretch to the frame ONLY on release, and defer
+                // it off the pointerup handler so the gesture ends instantly and
+                // the heavy full-frame re-render never blocks the drag.
+                requestAnimationFrame(() => this.applyManualStretch());
             };
             window.addEventListener('pointermove', move);
             window.addEventListener('pointerup', up);
@@ -6328,11 +6332,16 @@ function ninaApp() {
                 this.stretchMid = Math.max(0.001, Math.min(0.999, (cf - b) / Math.max(1e-6, w - b)));
                 this.histo.midFrac = cf;
             }
-            // Throttle the (relatively heavy) GPU re-render to one per frame.
+            // While dragging, do NOT re-render the frame (that full-frame
+            // stretch is what froze the UI). The handles track the pointer
+            // live via their reactive :style; only the lightweight histogram
+            // overlay (cached bins + shaded region) is redrawn, throttled to
+            // one per animation frame. The frame itself is committed once on
+            // release (see histoHandleDown's up handler).
             if (!this._histoRaf) {
                 this._histoRaf = requestAnimationFrame(() => {
                     this._histoRaf = null;
-                    this.applyManualStretch();
+                    this.drawHistogram();
                 });
             }
         },
