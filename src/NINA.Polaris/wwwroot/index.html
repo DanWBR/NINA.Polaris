@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260617-cropdbg">
+    <link rel="stylesheet" href="/css/app.css?v=20260617-cropscale">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -13175,10 +13175,6 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 Selected: <strong x-text="cropRoiSummary()"></strong>
             </p>
 
-            <!-- TEMP crop coordinate diagnostic (remove after fix) -->
-            <p class="hint" x-show="crop._dbg" style="font-family:monospace;font-size:11px;color:var(--accent);word-break:break-all"
-               x-text="crop._dbg"></p>
-
             <div class="siril-modal-progress" x-show="crop.busy">
                 <p class="hint">Cropping... saving the new file.</p>
             </div>
@@ -14293,7 +14289,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260617-cropdbg"></script>
+    <script src="/js/app.js?v=20260617-cropscale"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

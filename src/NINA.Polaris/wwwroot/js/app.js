@@ -2281,7 +2281,6 @@ function ninaApp() {
             previewUrl: '',     // /api/files/preview?path=... + auth token
             error: '',
             busy: false,
-            _dbg: '',           // TEMP coordinate diagnostic (remove after fix)
             // Drag rectangle in DISPLAY-pixel coordinates relative to
             // .crop-picker bounding rect. Both null when no selection.
             roi: { startX: null, startY: null, endX: null, endY: null },
@@ -22010,71 +22009,42 @@ function ninaApp() {
         _cropPointerXY(ev, pickerEl) {
             // The <img> and the overlay are both `pointer-events: none`, so the
             // event target is ALWAYS the .crop-picker div, which shrink-wraps
-            // the image exactly (inline-block, no padding). That lets us use two
-            // coordinate systems that are each internally consistent:
+            // the image exactly (inline-block, no padding).
             //
-            //   MOUSE → ev.offsetX/Y: the pointer position in the picker's OWN
-            //   CSS-pixel space (padding-edge origin). offsetX and clientWidth
-            //   are both unzoomed CSS px, so their ratio is correct regardless
-            //   of any ancestor CSS `zoom` — no detection, no correction. This
-            //   is what fixes the desktop "rectangle stops short of the edges
-            //   at <100% UI zoom" bug for good.
-            //
-            //   TOUCH → no offsetX exists, so fall back to clientX/Y minus the
-            //   picker's bounding rect, both read in the SAME space; on engines
-            //   whose getBoundingClientRect() is still layout-space (old Blink /
-            //   Android) the pointer is mapped back via _cumulativeZoom().
+            // Coordinate spaces under CSS `zoom` on <body> (measured live):
+            //   - pointer coords (clientX - rect.left) come back in the RENDERED
+            //     (zoomed) space, same as getBoundingClientRect().width.
+            //   - the overlay's `left:Npx` and clientWidth are in the picker's
+            //     UNZOOMED CSS space (the browser then scales by zoom).
+            // So we measure the pointer in rendered space, then convert to the
+            // picker's CSS space via scale = clientWidth / rect.width. That one
+            // conversion makes BOTH the saved fraction (x / clientWidth) AND the
+            // absolutely-positioned overlay (left:x px) land exactly under the
+            // cursor at any UI zoom. (An earlier rendered-vs-CSS mismatch left
+            // the rectangle short of the edges.)
+            const rect = pickerEl.getBoundingClientRect();
             const t = (ev.changedTouches && ev.changedTouches[0])
                    || (ev.touches && ev.touches[0]) || null;
-            let x, y, iw, ih;
-            if (!t && typeof ev.offsetX === 'number' && ev.target === pickerEl) {
-                x = ev.offsetX;
-                y = ev.offsetY;
-                // clientWidth/Height = content box (== image) in CSS px, the
-                // same space as offsetX/Y.
-                iw = pickerEl.clientWidth;
-                ih = pickerEl.clientHeight;
-            } else {
-                const rect = pickerEl.getBoundingClientRect();
-                let cx = (t ? t.clientX : ev.clientX) || 0;
-                let cy = (t ? t.clientY : ev.clientY) || 0;
-                if (!this._rectAppliesZoom()) {
-                    const z = this._cumulativeZoom(pickerEl);
-                    if (z && Math.abs(z - 1) > 0.001) { cx /= z; cy /= z; }
-                }
-                x = cx - rect.left;
-                y = cy - rect.top;
-                // Denominator must match the pointer's space (rect, not client).
-                iw = rect.width;
-                ih = rect.height;
+            let cx = (t ? t.clientX : ev.clientX) || 0;
+            let cy = (t ? t.clientY : ev.clientY) || 0;
+            // Old Blink / Android WebView: getBoundingClientRect() is still
+            // layout-space while clientX is visual — map the pointer back.
+            if (!this._rectAppliesZoom()) {
+                const z = this._cumulativeZoom(pickerEl);
+                if (z && Math.abs(z - 1) > 0.001) { cx /= z; cy /= z; }
             }
+            const scale = rect.width ? (pickerEl.clientWidth / rect.width) : 1;
+            let x = (cx - rect.left) * scale;
+            let y = (cy - rect.top) * (rect.height ? (pickerEl.clientHeight / rect.height) : 1);
+            // Picker CSS content box == image (shrink-wrapped, no padding).
+            const iw = pickerEl.clientWidth, ih = pickerEl.clientHeight;
             this.crop.imgDisplayWidth = iw;
             this.crop.imgDisplayHeight = ih;
-            // Picker shrink-wraps the image, so the image's offset inside the
-            // picker is zero on both axes.
             this.crop._imgOffLeft = 0;
             this.crop._imgOffTop = 0;
             // Clamp to the image region so the selection can reach every edge.
             x = Math.max(0, Math.min(iw, x));
             y = Math.max(0, Math.min(ih, y));
-
-            // TEMP DIAGNOSTIC: capture every candidate measurement so we can
-            // see, in the user's actual browser, which coordinate carries the
-            // CSS-zoom factor. Remove once the crop math is confirmed.
-            try {
-                const r = pickerEl.getBoundingClientRect();
-                const ecx = (t ? t.clientX : ev.clientX) || 0;
-                const ox = (typeof ev.offsetX === 'number') ? ev.offsetX : -1;
-                this.crop._dbg =
-                    'offX=' + (ox|0) + ' cliW=' + pickerEl.clientWidth +
-                    ' | cliX-rL=' + ((ecx - r.left)|0) + ' rectW=' + (r.width|0) +
-                    ' offW=' + pickerEl.offsetWidth +
-                    ' | zoom=' + this._cumulativeZoom(pickerEl).toFixed(2) +
-                    ' rectZoomed=' + this._rectAppliesZoom() +
-                    ' | fOff=' + (pickerEl.clientWidth ? (ox / pickerEl.clientWidth).toFixed(3) : '-') +
-                    ' fRect=' + (r.width ? ((ecx - r.left) / r.width).toFixed(3) : '-') +
-                    ' tgt=' + (ev.target === pickerEl ? 'picker' : (ev.target && ev.target.className || '?'));
-            } catch (e) {}
             return { x, y };
         },
 
