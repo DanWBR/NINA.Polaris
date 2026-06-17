@@ -270,7 +270,14 @@ public class ImageRelayService : IDisposable {
         // serve gallery thumbnails, that's a different consumer
         // that wants a static stretched image. Per-frame WS goes
         // RAW + LZ4 + client-side WebGL stretch every time.
-        var header = buffer.GetStreamHeader(frameKind);
+        // Tag calibration frames (BIAS/DARK/FLAT) so the client renders them
+        // with a neutral global stretch instead of the OSC per-channel
+        // sky-neutralising stretch — on a flat noise frame the per-channel path
+        // amplifies tiny channel offset differences into a strong colour cast
+        // (the "bias is all pink under auto-stretch" report).
+        var itype = (sourceData.MetaData?.Exposure?.ImageType ?? "").Trim().ToUpperInvariant();
+        int calibration = (itype is "BIAS" or "DARK" or "FLAT" or "DARKFLAT") ? 1 : 0;
+        var header = buffer.GetStreamHeader(frameKind, calibration);
         var compressed = buffer.ToLz4Compressed();
 
         _logger.LogInformation(

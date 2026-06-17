@@ -6000,7 +6000,9 @@ function ninaApp() {
             // stretch.
             let perChan = null;
             const isColorFrame = (f.bayerPattern | 0) >= 1 && (f.bayerPattern | 0) <= 4;
-            if (isColorFrame && this.stretchAuto) {
+            // Calibration frames render neutral (see _renderRawFrame) — no
+            // per-channel sky neutralisation, which would cast a flat frame.
+            if (isColorFrame && this.stretchAuto && !f.calibration) {
                 perChan = this._computePerChannelStretch(
                     f.pixels, f.width, f.height, f.bayerPattern, f.maxVal);
             }
@@ -7323,6 +7325,12 @@ function ninaApp() {
             // 0 = Live, 1 = Preview, 2 = Focus, 3 = Video, 4 = SlewPreview.
             const frameKind = (headerLen >= 24 && arrayBuffer.byteLength >= 28)
                 ? dv.getInt32(24, true) : 0;
+            // Calibration flag (header offset 24 -> arrayBuffer offset 28).
+            // 1 = BIAS/DARK/FLAT: skip the OSC per-channel sky-neutralising
+            // stretch, which casts a flat noise frame strongly (the "bias is
+            // all pink under auto-stretch" report); render it neutral instead.
+            const calibration = (headerLen >= 28 && arrayBuffer.byteLength >= 32)
+                ? dv.getInt32(28, true) : 0;
 
             // Bail on placeholder / heartbeat frames before they spam
             // the WebGL pipeline. We were seeing periodic 0x0 frames
@@ -7442,7 +7450,7 @@ function ninaApp() {
             // snap, switch tabs (triggers $watch('tab') -> applyManualStretch),
             // and the preview frame leaks onto the LIVE canvas because
             // the re-render forgot which panel originally owned it.
-            this._lastRawFrame = { pixels, width, height, bitDepth, bayerPattern, maxVal, frameKind };
+            this._lastRawFrame = { pixels, width, height, bitDepth, bayerPattern, maxVal, frameKind, calibration };
             // New frame → invalidate the cached histogram bins so the mini
             // panel recomputes min/max/avg/std + bars on the next draw.
             this._histoToken++;
@@ -7452,7 +7460,7 @@ function ninaApp() {
             // re-balancing every video frame. The shader picks up the
             // updated wb.r / wb.b the next time uniforms are set,
             // which happens immediately below in _tryRenderWebGL.
-            if (this.wb?.auto && bayerPattern) {
+            if (this.wb?.auto && bayerPattern && !calibration) {
                 const tNow = performance.now();
                 if (!this._wbLastAutoAt || tNow - this._wbLastAutoAt > 2000) {
                     this._wbLastAutoAt = tNow;
@@ -7472,7 +7480,11 @@ function ninaApp() {
             // manual mode the user's global endpoints apply to all channels.
             let perChan = null;
             const isColorFrame = (bayerPattern | 0) >= 1 && (bayerPattern | 0) <= 4;
-            if (isColorFrame && this.stretchAuto) {
+            // Skip per-channel neutralisation for calibration frames (BIAS/DARK
+            // /FLAT): they have no sky background to neutralise, so per-channel
+            // just amplifies channel offset noise into a colour cast. Render
+            // them with the single global stretch (neutral noise, like STUDIO).
+            if (isColorFrame && this.stretchAuto && !calibration) {
                 perChan = this._computePerChannelStretch(pixels, width, height, bayerPattern, maxVal);
             }
 
