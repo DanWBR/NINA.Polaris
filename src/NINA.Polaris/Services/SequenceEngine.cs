@@ -236,7 +236,14 @@ public class SequenceEngine {
 
     private async Task RunAsync(CancellationToken ct) {
         try {
-            for (int i = Math.Max(0, CurrentItemIndex); i < Items.Count; i++) {
+            // Resume point captured ONCE up front. CurrentItemIndex is rewritten
+            // on every iteration below, so the per-item start-frame check must
+            // compare against this snapshot — otherwise every item looked like
+            // "the resumed item" and inherited the previous item's finished
+            // frame counter, skipping all its frames (the 2nd-card-skipped bug).
+            int resumeItem = Math.Max(0, CurrentItemIndex);
+            int resumeFrame = Math.Max(0, CurrentFrameInItem);
+            for (int i = resumeItem; i < Items.Count; i++) {
                 ct.ThrowIfCancellationRequested();
                 CurrentItemIndex = i;
                 var item = Items[i];
