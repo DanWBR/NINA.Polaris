@@ -17052,6 +17052,21 @@ function ninaApp() {
             return 238.76 * (1 - this.autorunExposureProgress());
         },
 
+        /// Seconds remaining on the CURRENT exposure, for the per-card
+        /// live countdown shown on the active sequence card. Reads
+        /// shutterTick so it counts down between 1 Hz status updates.
+        /// Returns 0 for zero-second frames (BIAS) or when not running.
+        autorunFrameRemaining() {
+            // eslint-disable-next-line no-unused-expressions
+            this.shutterTick;   // reactivity dependency
+            if (this.seqState !== 'running' || !this.autorunFrameStart) return 0;
+            const st = this.seqStatus;
+            const item = (st && st.items) ? st.items[st.currentItemIndex] : null;
+            const exp = item ? item.exposure : 0;
+            if (!exp || exp <= 0) return 0;
+            return Math.max(0, Math.ceil(exp - (Date.now() - this.autorunFrameStart) / 1000));
+        },
+
         // ----- FW-2: Flat Wizard tab glue -----
 
         /// Hydrate form + trained cache when the user clicks the

@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260617-calibcast">
+    <link rel="stylesheet" href="/css/app.css?v=20260617-frameprog">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -8521,7 +8521,22 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         </label>
                                     </div>
                                     <div class="seq-item-progress" x-show="seqStatus && seqStatus.items && seqStatus.items[i]">
-                                        <span x-text="(seqStatus?.items?.[i]?.completed || 0) + '/' + item.count"></span>
+                                        <div class="seq-item-progress-row">
+                                            <span x-text="(seqStatus?.items?.[i]?.completed || 0) + '/' + item.count"></span>
+                                            <!-- Active card only: the current exposure's frame number
+                                                 + live seconds-remaining countdown. -->
+                                            <span class="seq-item-frame-now"
+                                                  x-show="seqState === 'running' && seqStatus?.currentItemIndex === i"
+                                                  x-text="item.exposure > 0
+                                                      ? ('frame ' + ((seqStatus?.items?.[i]?.completed || 0) + 1) + '/' + item.count + ' · ' + autorunFrameRemaining() + 's')
+                                                      : ('frame ' + ((seqStatus?.items?.[i]?.completed || 0) + 1) + '/' + item.count)"></span>
+                                        </div>
+                                        <!-- Live progress bar of the current exposure (active card). -->
+                                        <div class="seq-frame-bar"
+                                             x-show="seqState === 'running' && seqStatus?.currentItemIndex === i && item.exposure > 0">
+                                            <div class="seq-frame-bar-fill"
+                                                 :style="'width:' + (autorunExposureProgress() * 100).toFixed(1) + '%'"></div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -14323,7 +14338,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260617-calibcast"></script>
+    <script src="/js/app.js?v=20260617-frameprog"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

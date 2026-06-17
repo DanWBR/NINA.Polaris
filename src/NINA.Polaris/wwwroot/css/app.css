@@ -6759,6 +6759,38 @@ label select.input-sm {
     font-weight: 600;
 }
 
+.seq-item-progress-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+/* Active card: live current-exposure frame number + countdown. */
+.seq-item-frame-now {
+    color: var(--text-muted);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* Thin per-exposure progress bar under the frame counter, shown only
+   on the card that is currently capturing. */
+.seq-frame-bar {
+    margin-top: 4px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+    overflow: hidden;
+}
+
+.seq-frame-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.12s linear;
+}
+
 .btn-icon-only {
     width: 28px;
     height: 28px;
