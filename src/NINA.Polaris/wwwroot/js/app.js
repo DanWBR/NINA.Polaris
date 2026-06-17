@@ -1,3 +1,35 @@
+// =====================================================================
+// N.I.N.A. Polaris — frontend application script (Alpine.js)
+// ---------------------------------------------------------------------
+// This is a single large file by design: ninaApp() (below) returns ONE
+// Alpine x-data object (~740 methods) bound to <body> in index.html, so
+// every tab shares one reactive state bag. There is no bundler — the file
+// is served as-is — so it is organised by convention, not by modules.
+//
+// HOW TO NAVIGATE (line numbers drift; search for these anchors instead):
+//   • Module scope (pre-ninaApp): _polarisCharts, EXPOSURE_PRESETS_ALL
+//   • State + init .............. search "return {"  then "async init("
+//   • Networking helpers ........ apiFetch / apiGet / apiPost / apiUpload
+//   • WebSocket status .......... connectStatusWs / handleStatus
+//   • LIVE + image render ....... _renderRawFrame / applyManualStretch /
+//                                 _computePerChannelStretch / drawHistogram
+//   • AUTORUN sequencer ......... autorunShutterCtx / autorunExposureProgress
+//                                 / autorunFrameRemaining / seqProgress
+//   • PLAN (night planner) ...... loadPlans / startPlan / compilePlanPreview
+//   • Guiding (PHD2 + native) ... guiderPause / guide chart helpers
+//   • Focus ..................... autoFocus* / manualFocus* / bahtinov*
+//   • Plate solve / SKY ......... platesolve* / sky-bridge glue (_pushSky*)
+//   • Polar align ............... polar* (TPPA / rudimentary / refine)
+//   • Files + editor ............ filesCd / crop* / editor* / GraXpert glue
+//   • Calibration masters ....... loadCalibMasters / calibMasterLabel
+//   • Flat Wizard ............... flatWizard*
+//   • Resizable panels .......... _panelResize / _restorePanelWidths
+//   • Self-update modal ......... installUpdate / renderMarkdown
+//   • Shutter component ......... shutterPointerDown / _shutterArmProgress
+//
+// Styling lives in css/parts/*.css (split, loaded in order by index.html).
+// =====================================================================
+
 // Chart instances live OUTSIDE the Alpine component so Alpine's reactive
 // Proxy doesn't wrap them. Chart.js mutates its own internal state during
 // every update() / configure() / layout pass, when those objects were
