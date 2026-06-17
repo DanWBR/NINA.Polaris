@@ -22007,58 +22007,55 @@ function ninaApp() {
         },
 
         _cropPointerXY(ev, pickerEl) {
-            const pickerRect = pickerEl.getBoundingClientRect();
-            // Touch events nest the coords under changedTouches[0];
-            // fall back to clientX/Y for plain pointer/mouse.
-            let cx = ev.clientX != null ? ev.clientX :
-                (ev.changedTouches && ev.changedTouches[0] ? ev.changedTouches[0].clientX : 0);
-            let cy = ev.clientY != null ? ev.clientY :
-                (ev.changedTouches && ev.changedTouches[0] ? ev.changedTouches[0].clientY : 0);
-            // CSS `zoom` on <body> (0.85 / 0.75 at small widths, and on
-            // Android) is handled DIFFERENTLY across Chromium versions, so a
-            // blind "divide clientX by body.zoom" is wrong on at least one of
-            // them:
-            //   - Older Blink / Android WebView: getBoundingClientRect()
-            //     returns LAYOUT (unzoomed) coords while pointer clientX/Y are
-            //     VISUAL (zoomed) — they must be reconciled or the ROI is off
-            //     by the zoom factor.
-            //   - Chrome 128+ (desktop): getBoundingClientRect() already bakes
-            //     in `zoom`, so it matches clientX and NO correction is needed.
-            //     Dividing again over-corrected and shrank the rectangle to
-            //     ~zoom% of the image when the UI was scaled below 100%.
-            // The two builds can't be told apart from CSS values alone (both
-            // report the same rect/offset ratio), so probe the engine directly:
-            // _rectAppliesZoom() renders a zoom:2 element and checks whether its
-            // measured rect actually doubled. Only divide the pointer when the
-            // rect does NOT include zoom (the old layout-space behaviour).
-            if (!this._rectAppliesZoom()) {
-                const _cz = this._cumulativeZoom(pickerEl);
-                if (_cz && Math.abs(_cz - 1) > 0.001) { cx /= _cz; cy /= _cz; }
+            // The <img> and the overlay are both `pointer-events: none`, so the
+            // event target is ALWAYS the .crop-picker div, which shrink-wraps
+            // the image exactly (inline-block, no padding). That lets us use two
+            // coordinate systems that are each internally consistent:
+            //
+            //   MOUSE → ev.offsetX/Y: the pointer position in the picker's OWN
+            //   CSS-pixel space (padding-edge origin). offsetX and clientWidth
+            //   are both unzoomed CSS px, so their ratio is correct regardless
+            //   of any ancestor CSS `zoom` — no detection, no correction. This
+            //   is what fixes the desktop "rectangle stops short of the edges
+            //   at <100% UI zoom" bug for good.
+            //
+            //   TOUCH → no offsetX exists, so fall back to clientX/Y minus the
+            //   picker's bounding rect, both read in the SAME space; on engines
+            //   whose getBoundingClientRect() is still layout-space (old Blink /
+            //   Android) the pointer is mapped back via _cumulativeZoom().
+            const t = (ev.changedTouches && ev.changedTouches[0])
+                   || (ev.touches && ev.touches[0]) || null;
+            let x, y, iw, ih;
+            if (!t && typeof ev.offsetX === 'number' && ev.target === pickerEl) {
+                x = ev.offsetX;
+                y = ev.offsetY;
+                // clientWidth/Height = content box (== image) in CSS px, the
+                // same space as offsetX/Y.
+                iw = pickerEl.clientWidth;
+                ih = pickerEl.clientHeight;
+            } else {
+                const rect = pickerEl.getBoundingClientRect();
+                let cx = (t ? t.clientX : ev.clientX) || 0;
+                let cy = (t ? t.clientY : ev.clientY) || 0;
+                if (!this._rectAppliesZoom()) {
+                    const z = this._cumulativeZoom(pickerEl);
+                    if (z && Math.abs(z - 1) > 0.001) { cx /= z; cy /= z; }
+                }
+                x = cx - rect.left;
+                y = cy - rect.top;
+                // Denominator must match the pointer's space (rect, not client).
+                iw = rect.width;
+                ih = rect.height;
             }
-            // Map everything relative to the IMAGE, not the picker. The
-            // displayed <img> can be smaller than / offset within the picker
-            // box (object-fit letterboxing, inline-block dead space), so
-            // measuring against the picker made the ROI fractions wrong — the
-            // rectangle couldn't cover the whole photo and the resulting crop
-            // came out as (near) the full frame. Read the image's live rect
-            // each time (it goes stale on resize) and store its offset inside
-            // the picker so the overlay + fractions stay consistent.
-            const img = pickerEl.querySelector('.crop-picker-img');
-            const imgRect = (img && img.getBoundingClientRect().width > 0)
-                ? img.getBoundingClientRect() : pickerRect;
-            const iw = imgRect.width, ih = imgRect.height;
             this.crop.imgDisplayWidth = iw;
             this.crop.imgDisplayHeight = ih;
-            // Offset of the image's top-left within the picker (overlay is
-            // positioned in picker coords, so the ROI is stored that way too).
-            const offLeft = imgRect.left - pickerRect.left;
-            const offTop = imgRect.top - pickerRect.top;
-            this.crop._imgOffLeft = offLeft;
-            this.crop._imgOffTop = offTop;
-            // Clamp the pointer to the IMAGE region so the selection snaps to
-            // the photo (can reach every edge, never strays into letterbox).
-            const x = Math.max(offLeft, Math.min(offLeft + iw, cx - pickerRect.left));
-            const y = Math.max(offTop, Math.min(offTop + ih, cy - pickerRect.top));
+            // Picker shrink-wraps the image, so the image's offset inside the
+            // picker is zero on both axes.
+            this.crop._imgOffLeft = 0;
+            this.crop._imgOffTop = 0;
+            // Clamp to the image region so the selection can reach every edge.
+            x = Math.max(0, Math.min(iw, x));
+            y = Math.max(0, Math.min(ih, y));
             return { x, y };
         },
 
