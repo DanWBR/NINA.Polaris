@@ -9152,8 +9152,16 @@ label select.input-sm {
    width / height ratio. */
 .crop-picker {
     position: relative;
-    display: inline-block;
-    margin: 12px 0;
+    /* Shrink the picker to the image's ACTUAL rendered size (after the
+       img's max-width/max-height). The old display:inline-block left the
+       picker wider than a height-capped image, so the dead space on the
+       right meant the ROI clamp (image right edge) stopped well short of
+       the picker's right edge and the rectangle could never reach the
+       image border. fit-content makes picker == image in both axes. */
+    display: block;
+    width: fit-content;
+    width: -moz-fit-content;
+    margin: 12px auto;
     max-width: 100%;
     cursor: crosshair;
     user-select: none;
@@ -9165,9 +9173,13 @@ label select.input-sm {
        element owns all touch gestures. */
     touch-action: none;
     background: #000;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    overflow: hidden;
+    /* No border / overflow clip: a 1px border shifted the overlay's
+       coordinate origin (border box vs padding box) and overflow:hidden +
+       border-radius clipped the dashed rectangle right at the edges, so it
+       visually never met the image border. An outline frames it without
+       taking layout space or affecting coordinates. */
+    outline: 1px solid var(--border);
+    outline-offset: -1px;
 }
 .crop-picker-img {
     display: block;
