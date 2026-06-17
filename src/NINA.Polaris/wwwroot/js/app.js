@@ -2281,6 +2281,7 @@ function ninaApp() {
             previewUrl: '',     // /api/files/preview?path=... + auth token
             error: '',
             busy: false,
+            _dbg: '',           // TEMP coordinate diagnostic (remove after fix)
             // Drag rectangle in DISPLAY-pixel coordinates relative to
             // .crop-picker bounding rect. Both null when no selection.
             roi: { startX: null, startY: null, endX: null, endY: null },
@@ -22056,6 +22057,24 @@ function ninaApp() {
             // Clamp to the image region so the selection can reach every edge.
             x = Math.max(0, Math.min(iw, x));
             y = Math.max(0, Math.min(ih, y));
+
+            // TEMP DIAGNOSTIC: capture every candidate measurement so we can
+            // see, in the user's actual browser, which coordinate carries the
+            // CSS-zoom factor. Remove once the crop math is confirmed.
+            try {
+                const r = pickerEl.getBoundingClientRect();
+                const ecx = (t ? t.clientX : ev.clientX) || 0;
+                const ox = (typeof ev.offsetX === 'number') ? ev.offsetX : -1;
+                this.crop._dbg =
+                    'offX=' + (ox|0) + ' cliW=' + pickerEl.clientWidth +
+                    ' | cliX-rL=' + ((ecx - r.left)|0) + ' rectW=' + (r.width|0) +
+                    ' offW=' + pickerEl.offsetWidth +
+                    ' | zoom=' + this._cumulativeZoom(pickerEl).toFixed(2) +
+                    ' rectZoomed=' + this._rectAppliesZoom() +
+                    ' | fOff=' + (pickerEl.clientWidth ? (ox / pickerEl.clientWidth).toFixed(3) : '-') +
+                    ' fRect=' + (r.width ? ((ecx - r.left) / r.width).toFixed(3) : '-') +
+                    ' tgt=' + (ev.target === pickerEl ? 'picker' : (ev.target && ev.target.className || '?'));
+            } catch (e) {}
             return { x, y };
         },
 
