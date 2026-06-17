@@ -6457,7 +6457,10 @@ label select.input-sm {
 
 /* Dither settings panel */
 .seq-dither-panel {
-    margin: 8px 16px 0;
+    /* Full width below the tab header: the .livestack-trig-tabs strip
+       above has no horizontal margin, so match it (was 16px sides,
+       which left the panel narrower than its own tab header). */
+    margin: 8px 0 0;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: var(--radius);
