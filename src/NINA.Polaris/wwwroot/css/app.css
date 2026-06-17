@@ -1032,8 +1032,25 @@ body {
    col flex:1; pin it to a fixed width here so the centre preview gets
    the remaining space. Flat Wizard keeps the flex:1 single layout. */
 .autorun-pane > .autorun-list-col {
-    flex: 0 0 300px;
+    /* Resizable via the .col-splitter to its right; persisted. */
+    flex: 0 0 var(--autorun-list-w, 300px);
     min-width: 0;
+}
+/* Vertical splitter between flex columns (AUTORUN list column <-> cards). A
+   thin flex item the user drags to resize the column on its left. */
+.col-splitter {
+    flex: 0 0 7px;
+    align-self: stretch;
+    margin: 0 -2px;
+    cursor: ew-resize;
+    border-radius: 3px;
+    background: transparent;
+    touch-action: none;
+    z-index: 5;
+}
+.col-splitter:hover,
+.col-splitter.dragging {
+    background: rgba(103, 232, 249, 0.55);
 }
 /* Col 2: the sequence cards rail. Own scroll, fixed width so the
    centre preview keeps the rest. Cards stack vertically (one per row)
@@ -10215,7 +10232,7 @@ label select.input-sm {
     /* Reserve room for the floating control panel (340px) so the bitmap
        stays centred in the visible area, collapsing to the handle width
        when the panel is hidden. See LIVE/PREVIEW note above. */
-    margin-right: 360px; /* 340px panel + ~20px gap */
+    margin-right: calc(var(--video-qc-width, 340px) + 20px); /* panel + gap */
     transition: margin-right 200ms ease;
 }
 .video-pane.controls-collapsed .preview-area {
@@ -10230,7 +10247,8 @@ label select.input-sm {
     right: 8px;
     top: 8px;
     bottom: 8px;
-    width: 340px;
+    /* User-resizable (drag the left-edge grip); persisted to localStorage. */
+    width: var(--video-qc-width, 340px);
     z-index: 4;
     display: flex;
     flex-direction: column;
@@ -12094,10 +12112,10 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
    pane (same model as the LIVE/PREVIEW sidebars); the main column reserves
    room for it so its content stays clear, and the reserve shrinks to just the
    retract handle when collapsed. */
-.guide-pane.guide-has-side > .guide-main { margin-right:348px; /* 336 panel + 12 gap */
+.guide-pane.guide-has-side > .guide-main { margin-right:calc(var(--guide-side-width, 336px) + 12px);
     transition:margin-right 200ms ease; }
 .guide-pane.guide-has-side.guide-controls-collapsed > .guide-main { margin-right:36px; }
-.guide-side { position:absolute; right:0; top:0; bottom:0; width:336px; z-index:4;
+.guide-side { position:absolute; right:0; top:0; bottom:0; width:var(--guide-side-width, 336px); z-index:4;
     display:flex; flex-direction:column; gap:8px;
     /* padding-left reserves room for the full-height retract handle */
     padding:10px 12px 10px 44px; overflow:hidden;

@@ -2770,13 +2770,8 @@ function ninaApp() {
             this.loadDeviceName();
             this.updateFov();
 
-            // Restore the resizable LIVE/PREVIEW control-panel width.
-            try {
-                const w = parseInt(localStorage.getItem('polaris.qcWidth') || '', 10);
-                if (w >= 240 && w <= 900) {
-                    document.documentElement.style.setProperty('--qc-width', w + 'px');
-                }
-            } catch { /* ignore */ }
+            // Restore all resizable side-panel / column widths.
+            this._restorePanelWidths();
 
             // LIVE capture settings persistence. exposure / gain / binning
             // are client-side UI prefs read by the capture loop per frame;
@@ -18068,49 +18063,83 @@ function ninaApp() {
             } catch { /* private-browsing / quota — silent */ }
         },
 
-        // Drag the LIVE/PREVIEW control panel's left-edge grip to resize its
-        // width. The panel is right-anchored, so dragging left grows it. Width
-        // lives in the --qc-width CSS var (used by the panel + the canvas
-        // margin), clamped and persisted to localStorage.
-        startQcResize(ev) {
+        // Generic side-panel / column width resizer. Every resizable panel in
+        // the app is anchored to the RIGHT of its drag grip (floating control
+        // panels are right-anchored; the AUTORUN sidebar sits right of the list
+        // column), so dragging the grip LEFT always grows the panel. The width
+        // lives in a CSS var (consumed by the panel + any sibling margin/flex),
+        // clamped to [min, min(max, 70vw)] and persisted to localStorage.
+        _panelResize(ev, varName, storeKey, def, min, max, dir) {
             ev.preventDefault();
             const grip = ev.currentTarget;
             grip.classList.add('dragging');
             try { grip.setPointerCapture?.(ev.pointerId); } catch {}
             const startX = ev.clientX;
-            const startW = parseFloat(getComputedStyle(document.documentElement)
-                .getPropertyValue('--qc-width')) || 320;
-            // Body CSS `zoom` (small-screen breakpoints) renders the drag in a
-            // scaled space; divide the delta back to layout px so the panel
-            // tracks the pointer 1:1.
+            const root = document.documentElement;
+            const startW = parseFloat(getComputedStyle(root).getPropertyValue(varName)) || def;
+            // dir 'right' = the panel is LEFT of the grip (grows when dragged
+            // right, e.g. the AUTORUN list column); default 'left' = panel is
+            // right of the grip (grows when dragged left).
+            const sign = (dir === 'right') ? -1 : 1;
+            // Body CSS `zoom` (small-screen breakpoints) scales the drag space;
+            // divide the delta back to layout px so the panel tracks 1:1.
             let z = parseFloat(getComputedStyle(document.body).zoom);
             if (!z || isNaN(z)) z = 1;
             const onMove = (e) => {
                 const cx = (e.clientX != null) ? e.clientX : startX;
-                const dx = (startX - cx) / z;              // left = wider
-                const maxW = Math.min(760, window.innerWidth * 0.7);
-                const w = Math.max(240, Math.min(maxW, startW + dx));
-                document.documentElement.style.setProperty('--qc-width', w + 'px');
+                const dx = sign * (startX - cx) / z;
+                const maxW = Math.min(max, window.innerWidth * 0.7);
+                const w = Math.max(min, Math.min(maxW, startW + dx));
+                root.style.setProperty(varName, w + 'px');
             };
             const onUp = () => {
                 window.removeEventListener('pointermove', onMove);
                 window.removeEventListener('pointerup', onUp);
                 grip.classList.remove('dragging');
-                const w = Math.round(parseFloat(getComputedStyle(document.documentElement)
-                    .getPropertyValue('--qc-width')) || 320);
-                try { localStorage.setItem('polaris.qcWidth', String(w)); } catch {}
-                // Canvas size tracks its container; nudge a redraw so the live
+                const w = Math.round(parseFloat(getComputedStyle(root).getPropertyValue(varName)) || def);
+                try { localStorage.setItem(storeKey, String(w)); } catch {}
+                // Canvases track their container; nudge a redraw so any live
                 // bitmap re-fits the new width immediately.
                 try { window.dispatchEvent(new Event('resize')); } catch {}
             };
             window.addEventListener('pointermove', onMove);
             window.addEventListener('pointerup', onUp);
         },
-        resetQcWidth() {
-            document.documentElement.style.setProperty('--qc-width', '320px');
-            try { localStorage.setItem('polaris.qcWidth', '320'); } catch {}
+        _panelResizeReset(varName, storeKey, def) {
+            document.documentElement.style.setProperty(varName, def + 'px');
+            try { localStorage.setItem(storeKey, String(def)); } catch {}
             try { window.dispatchEvent(new Event('resize')); } catch {}
         },
+        // Restore every persisted panel width on boot.
+        _restorePanelWidths() {
+            const defs = [
+                ['--qc-width', 'polaris.qcWidth', 240, 900],
+                ['--video-qc-width', 'polaris.videoQcWidth', 240, 900],
+                ['--guide-side-width', 'polaris.guideSideWidth', 240, 900],
+                ['--autorun-side-w', 'polaris.autorunSideW', 180, 700],
+                ['--autorun-list-w', 'polaris.autorunListW', 200, 700],
+            ];
+            for (const [v, k, lo, hi] of defs) {
+                try {
+                    const w = parseInt(localStorage.getItem(k) || '', 10);
+                    if (w >= lo && w <= hi) {
+                        document.documentElement.style.setProperty(v, w + 'px');
+                    }
+                } catch { /* ignore */ }
+            }
+        },
+
+        // Thin wrappers per panel (kept so existing markup keeps working).
+        startQcResize(ev)   { this._panelResize(ev, '--qc-width', 'polaris.qcWidth', 320, 240, 760); },
+        resetQcWidth()      { this._panelResizeReset('--qc-width', 'polaris.qcWidth', 320); },
+        startVideoResize(ev){ this._panelResize(ev, '--video-qc-width', 'polaris.videoQcWidth', 340, 240, 760); },
+        resetVideoWidth()   { this._panelResizeReset('--video-qc-width', 'polaris.videoQcWidth', 340); },
+        startGuideResize(ev){ this._panelResize(ev, '--guide-side-width', 'polaris.guideSideWidth', 336, 260, 760); },
+        resetGuideWidth()   { this._panelResizeReset('--guide-side-width', 'polaris.guideSideWidth', 336); },
+        startAutorunSideResize(ev){ this._panelResize(ev, '--autorun-side-w', 'polaris.autorunSideW', 260, 180, 560); },
+        resetAutorunSide()  { this._panelResizeReset('--autorun-side-w', 'polaris.autorunSideW', 260); },
+        startAutorunListResize(ev){ this._panelResize(ev, '--autorun-list-w', 'polaris.autorunListW', 300, 200, 640, 'right'); },
+        resetAutorunList()  { this._panelResizeReset('--autorun-list-w', 'polaris.autorunListW', 300); },
 
         // Toggle the floating overlay chrome on the image frames. Called by
         // the pan/zoom tap detector (a clean tap on the bare canvas), so the

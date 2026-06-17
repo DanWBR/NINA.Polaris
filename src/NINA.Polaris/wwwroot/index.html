@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260617-qcresize">
+    <link rel="stylesheet" href="/css/app.css?v=20260617-panelresize">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -3080,6 +3080,10 @@
                                 @click="toggleQuickControls()"
                                 :title="quickControlsCollapsed ? 'Show controls' : 'Hide controls'"
                                 x-text="quickControlsCollapsed ? '◀' : '▶'"></button>
+                        <div class="quick-controls-resize" x-show="!quickControlsCollapsed"
+                             @pointerdown="startVideoResize($event)"
+                             @dblclick="resetVideoWidth()"
+                             title="Drag to resize · double-click to reset"></div>
                         <div class="quick-controls-scroll">
                         <!-- ASIAIR / iOS-date-picker-style vertical drum
          wheels for Exposure / Gain / Focus. Each
@@ -3894,6 +3898,10 @@
                             @click="toggleGuideSide()"
                             :title="guideSideCollapsed ? 'Show guiding parameters' : 'Hide guiding parameters'"
                             x-text="guideSideCollapsed ? '◀' : '▶'"></button>
+                    <div class="quick-controls-resize" x-show="!guideSideCollapsed"
+                         @pointerdown="startGuideResize($event)"
+                         @dblclick="resetGuideWidth()"
+                         title="Drag to resize · double-click to reset"></div>
                     <div class="quick-controls-scroll">
                     <!-- Live metrics (moved from the main column) -->
                     <div x-show="guider.connected" class="guide-info" style="margin-bottom:10px">
@@ -8418,6 +8426,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </div>
                 </div>
                 </div><!-- /.autorun-list-col -->
+
+                <!-- Drag to resize the list column. -->
+                <div class="col-splitter"
+                     @pointerdown="startAutorunListResize($event)"
+                     @dblclick="resetAutorunList()"
+                     title="Drag to resize · double-click to reset"></div>
 
                 <!-- Col 2: sequence item cards in their own vertical rail.
                      Single-column stack so each target card reads top to
@@ -14323,7 +14337,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260617-qcresize"></script>
+    <script src="/js/app.js?v=20260617-panelresize"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
