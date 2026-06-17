@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260617-panelresize">
+    <link rel="stylesheet" href="/css/app.css?v=20260617-seqtabs">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -8085,40 +8085,26 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <div class="autorun-pane" x-show="autorunTab === 'sequence'">
                 <div class="autorun-list-col">
 
-                <!-- Compact options bar (Meridian / Dither / End Events).
-                     Three pill-style chips that show a one-line summary
-                     + ON/OFF state. Click expands the matching settings
-                     panel inline; the bar replaces the 3 stacked
-                     accordions that used to eat ~120 px of fixed
-                     vertical space even when collapsed. -->
-                <div class="autorun-options-bar">
-                    <button class="autorun-option-chip"
-                            :class="{ active: seqMfExpanded, 'chip-on': mfSettings.enabled }"
-                            @click="seqMfExpanded = !seqMfExpanded; if (seqMfExpanded) { seqDitherExpanded = false; seqEndExpanded = false; }">
-                        <span x-show="mfSettings.enabled" class="chip-dot chip-dot-on"></span>
-                        <span x-show="!mfSettings.enabled" class="chip-dot"></span>
-                        <strong>Meridian Flip</strong>
-                        <span class="chip-state" x-text="mfSettings.enabled ? 'ON' : 'OFF'"></span>
-                        <span class="chip-detail" x-show="mfState !== 'idle'"
-                              x-text="' · ' + mfState.toUpperCase()"></span>
+                <!-- Meridian / Dither / End Events as an underline tab strip
+                     (same control style as the LIVE refocus/recenter/dither
+                     tabs). One panel shows at a time; the dot in each tab
+                     reflects that section's ON state. seqOptTab is scoped here. -->
+                <div x-data="{ seqOptTab: 'mf' }">
+                <div class="livestack-trig-tabs">
+                    <button type="button" class="livestack-trig-tab"
+                            :class="{ active: seqOptTab === 'mf' }" @click="seqOptTab = 'mf'">
+                        <span class="chip-dot" :class="mfSettings.enabled ? 'chip-dot-on' : ''"></span>
+                        Meridian Flip
                     </button>
-                    <button class="autorun-option-chip"
-                            :class="{ active: seqDitherExpanded, 'chip-on': ditherSettings.enabled }"
-                            @click="seqDitherExpanded = !seqDitherExpanded; if (seqDitherExpanded) { seqMfExpanded = false; seqEndExpanded = false; }">
-                        <span x-show="ditherSettings.enabled" class="chip-dot chip-dot-on"></span>
-                        <span x-show="!ditherSettings.enabled" class="chip-dot"></span>
-                        <strong>Dithering</strong>
-                        <span class="chip-state" x-text="ditherSettings.enabled ? 'ON' : 'OFF'"></span>
-                        <span class="chip-detail" x-show="ditherSettings.enabled && seqStatus?.dithersIssued >= 0"
-                              x-text="' · ' + (seqStatus?.dithersIssued || 0) + ' dithered'"></span>
+                    <button type="button" class="livestack-trig-tab"
+                            :class="{ active: seqOptTab === 'dither' }" @click="seqOptTab = 'dither'">
+                        <span class="chip-dot" :class="ditherSettings.enabled ? 'chip-dot-on' : ''"></span>
+                        Dithering
                     </button>
-                    <button class="autorun-option-chip"
-                            :class="{ active: seqEndExpanded, 'chip-on': endActionsHasAny() }"
-                            @click="seqEndExpanded = !seqEndExpanded; if (seqEndExpanded) { seqMfExpanded = false; seqDitherExpanded = false; }">
-                        <span x-show="endActionsHasAny()" class="chip-dot chip-dot-on"></span>
-                        <span x-show="!endActionsHasAny()" class="chip-dot"></span>
-                        <strong>End Events</strong>
-                        <span class="chip-state" x-text="endActionsSummary() || 'none'"></span>
+                    <button type="button" class="livestack-trig-tab"
+                            :class="{ active: seqOptTab === 'end' }" @click="seqOptTab = 'end'">
+                        <span class="chip-dot" :class="endActionsHasAny() ? 'chip-dot-on' : ''"></span>
+                        End Events
                     </button>
                 </div>
 
@@ -8129,7 +8115,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <!-- Meridian flip settings panel.
                      Header lives in the .autorun-options-bar chip
                      above; this is just the expandable body. -->
-                <div class="seq-dither-panel" x-show="seqMfExpanded">
+                <div class="seq-dither-panel" x-show="seqOptTab === 'mf'">
                     <div class="autorun-option-body-head">
                         <label class="seq-dither-toggle">
                             <input type="checkbox" x-model="mfSettings.enabled" @change="saveMfSettings()"
@@ -8193,7 +8179,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
 
                 <!-- Dither settings panel.
                      Header lives in the .autorun-options-bar chip above. -->
-                <div class="seq-dither-panel" x-show="seqDitherExpanded">
+                <div class="seq-dither-panel" x-show="seqOptTab === 'dither'">
                     <div class="autorun-option-body-head">
                         <label class="seq-dither-toggle">
                             <input type="checkbox" x-model="ditherSettings.enabled" @change="saveDitherSettings()"
@@ -8256,9 +8242,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </div>
                 </div>
 
-                <!-- End-of-run actions panel.
-                     Header lives in the .autorun-options-bar chip above. -->
-                <div class="seq-dither-panel" x-show="seqEndExpanded">
+                <!-- End-of-run actions panel. Header is the End Events tab. -->
+                <div class="seq-dither-panel" x-show="seqOptTab === 'end'">
                     <div class="seq-dither-body">
                         <div class="seq-dither-row">
                             <label class="seq-dither-checkbox">
@@ -8310,6 +8295,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </p>
                     </div>
                 </div>
+                </div><!-- /x-data seqOptTab tab control -->
 
                 <!-- Estimate row: total frames, total exposure time, total disk hit.
                      Mirrors the bottom strip in ASIAIR's shooting schedule. -->
@@ -14337,7 +14323,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260617-panelresize"></script>
+    <script src="/js/app.js?v=20260617-seqtabs"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
