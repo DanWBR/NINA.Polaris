@@ -46,6 +46,8 @@ public class PHD2Client : IGuider, IDisposable {
     /// <summary>PHD2 AppState: Stopped, Selected, Calibrating, Guiding, LostLock, Paused, Looping</summary>
     public string AppState { get; private set; } = "Stopped";
     public double PixelScale { get; private set; }
+    // Guards the lazy re-fetch of the pixel scale (see EnsurePixelScaleAsync).
+    private int _pixelScaleFetching;
     public bool IsGuiding => AppState == "Guiding";
     public bool IsCalibrating => AppState == "Calibrating";
     public bool IsPaused => AppState == "Paused";
@@ -107,6 +109,34 @@ public class PHD2Client : IGuider, IDisposable {
                 PixelScale = scale.Value.GetDouble();
             }
         } catch (Exception ex) { _logger.LogWarning(ex, "get_pixel_scale failed"); }
+    }
+
+    /// <summary>
+    /// Lazily (re)fetch the guide-camera pixel scale (arcsec/px). PHD2 only
+    /// knows it once equipment is connected; if Polaris attached to PHD2
+    /// before the guide camera was selected, the connect-time
+    /// get_pixel_scale returned nothing and PixelScale stayed 0. GuideStep
+    /// then converted error to arcsec with a 1.0 fallback, i.e. it showed
+    /// raw PIXELS while PHD2's own window shows arcsec — the two never
+    /// matched. Call this when a step arrives without a known scale.
+    /// Fire-and-forget only: it issues a JSON-RPC whose reply is read by the
+    /// same receive loop, so awaiting it from a message handler would
+    /// deadlock.
+    /// </summary>
+    private async Task EnsurePixelScaleAsync() {
+        if (PixelScale > 0) return;
+        if (Interlocked.CompareExchange(ref _pixelScaleFetching, 1, 0) != 0) return;
+        try {
+            var scale = await CallAsync("get_pixel_scale", timeoutMs: 3000);
+            if (scale.HasValue && scale.Value.ValueKind == JsonValueKind.Number) {
+                var v = scale.Value.GetDouble();
+                if (v > 0) PixelScale = v;
+            }
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "lazy get_pixel_scale failed");
+        } finally {
+            Interlocked.Exchange(ref _pixelScaleFetching, 0);
+        }
     }
 
     public async Task DisconnectAsync() {
@@ -209,6 +239,10 @@ public class PHD2Client : IGuider, IDisposable {
             case "GuideStep": {
                 var raRaw = TryGetDouble(msg, "RADistanceRaw");
                 var decRaw = TryGetDouble(msg, "DECDistanceRaw");
+                // If the scale isn't known yet, kick off a lazy re-fetch so
+                // the next steps convert to real arcsec (matching PHD2's own
+                // window) instead of showing raw pixels.
+                if (PixelScale <= 0) _ = EnsurePixelScaleAsync();
                 var pxScale = PixelScale > 0 ? PixelScale : 1.0;
                 var step = new GuideStep {
                     Timestamp = DateTime.UtcNow,
