@@ -10533,6 +10533,28 @@ label select.input-sm {
     gap: 10px 16px;
     margin-bottom: 6px;
 }
+/* Calibration master pickers: caption + full-width themed select, stacked,
+   one per line so long master filenames have room. */
+.livestack-calib-grid {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+}
+.livestack-calib-field {
+    display: flex !important;
+    align-items: center;
+    gap: 10px;
+}
+.livestack-calib-field > span {
+    flex: 0 0 42px;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+.livestack-calib-field > select.input {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+}
 .livestack-triggers-row label {
     display: inline-flex;
     align-items: center;

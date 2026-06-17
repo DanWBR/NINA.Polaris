@@ -193,6 +193,10 @@ function ninaApp() {
             bgeSmoothing: 1.0,
             bgeCorrection: 'Subtraction'
         },
+        // Master calibration frames available in the FrameLibrary, grouped by
+        // type, for the per-frame calibration override dropdowns. Each entry:
+        // { id, fileName, exposureSec, gain, filter }. Loaded on demand.
+        calibMasters: { dark: [], flat: [], bias: [], loaded: false },
         liveStackStatus: null,    // { isRunning, frameCount, ..., triggers: {...}, preProc: {...} }
 
         // Mount
@@ -18201,6 +18205,41 @@ function ninaApp() {
             } catch (e) { /* first load may 404 before any save -- ignore */ }
         },
         _liveStackPreProcSaveTimer: null,
+        // Populate the calibration-master override dropdowns from the
+        // FrameLibrary (the folders where masters built in STUDIO land). Each
+        // type is a separate query; results feed the Dark/Flat/Bias selects.
+        async loadCalibMasters(force) {
+            if (this.calibMasters.loaded && !force) return;
+            const fetchType = async (t) => {
+                try {
+                    const rows = await this.apiGet(
+                        '/api/studio/frames?type=' + encodeURIComponent(t) + '&limit=500');
+                    return (rows || []).map(r => ({
+                        id: r.id,
+                        fileName: r.fileName,
+                        exposureSec: r.exposureSec,
+                        gain: r.gain,
+                        filter: r.filter
+                    }));
+                } catch (e) { return []; }
+            };
+            const [dark, flat, bias] = await Promise.all([
+                fetchType('MASTERDARK'), fetchType('MASTERFLAT'), fetchType('MASTERBIAS')
+            ]);
+            this.calibMasters = { dark, flat, bias, loaded: true };
+        },
+
+        // Short human label for a master row in the dropdown: filename plus the
+        // specs that matter for matching (exposure / gain / filter).
+        calibMasterLabel(m) {
+            if (!m) return '';
+            const bits = [];
+            if (m.exposureSec) bits.push((+m.exposureSec).toFixed(0) + 's');
+            if (m.gain) bits.push('g' + m.gain);
+            if (m.filter) bits.push(m.filter);
+            return m.fileName + (bits.length ? '  (' + bits.join(' · ') + ')' : '');
+        },
+
         saveLiveStackPreProc() {
             if (this._liveStackPreProcSaveTimer) clearTimeout(this._liveStackPreProcSaveTimer);
             this._liveStackPreProcSaveTimer = setTimeout(async () => {
