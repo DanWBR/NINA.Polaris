@@ -2065,7 +2065,7 @@ label select.input-sm {
 /* PREVIEW / LIVE target identification row: text field + Identify button
    aligned along the input baseline. */
 .target-row {
-    align-items: flex-end;
+    align-items: center;
     gap: 6px;
 }
 .target-row .btn {
@@ -2074,11 +2074,41 @@ label select.input-sm {
 /* In the narrow LIVE/PREVIEW sidebar the generic .control-row rule
    forces flex-direction: column, which stacks the identify (🔍)
    button below the Target input. Keep this particular row horizontal
-   so the button sits right after the input. */
+   so the button sits right after the input, all items vertically
+   centred on one baseline. */
 .live-pane > .quick-controls .control-row.target-row,
 .preview-pane > .quick-controls .control-row.target-row {
     flex-direction: row;
-    align-items: flex-end;
+    align-items: center;
+}
+/* The label wraps "Target" + the input. Lay it out as a row so the
+   caption sits left and the input fills the remaining width, then
+   matches the identify button's height exactly. Overrides the generic
+   sidebar rule that pins wrapped inputs to a fixed 50% basis (which
+   left a big gap between the caption and a too-narrow input). */
+.target-row > label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+.live-pane > .quick-controls .control-row.target-row > label > input,
+.preview-pane > .quick-controls .control-row.target-row > label > input,
+.target-row > label > input {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    margin-left: 0;
+}
+/* Identify button: same tap-friendly height as .input-sm so the row
+   reads as a single aligned unit instead of mismatched boxes. */
+.target-row .btn {
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .btn-lg {

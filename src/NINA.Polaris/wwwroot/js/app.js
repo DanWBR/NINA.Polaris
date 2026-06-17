@@ -2710,6 +2710,11 @@ function ninaApp() {
         // are fed from the WS status; lastResult + history are pulled
         // over REST after a run finishes (or on first open).
         bench: { state: 'idle', progress: 0, phase: '', lastResult: null, history: [] },
+        // CLST: client-side WASM live-stack readiness. Declared here (not only
+        // assigned in init) so Alpine expressions that reference them never hit
+        // a ReferenceError during the first render before init() runs.
+        wasmReady: false,
+        wasmVersion: null,
         // OCL: GPU (OpenCL) capability + Settings toggle + self-test.
         gpuInfo: null,
         gpuSelftest: 'idle',      // idle | running
