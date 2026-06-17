@@ -332,6 +332,13 @@ public class ImageRelayService : IDisposable {
             // canvas). The W/H/bayer fields describe the source frame but
             // the client ignores them for JPEG payloads.
             var buffer = ImageBuffer.FromImageData(src, resolved);
+            // Record the latest frame so annotate / plate-solve / crop (which
+            // read LatestImageData) work off the live video frame. The video
+            // stream path never set this, so in a LIVE/PREVIEW view fed by the
+            // stream, annotate reported "No image available". Reuses the buffer
+            // already built for the wire, so no extra cost.
+            _latestImage = buffer;
+            _latestImageData = src;
             var header = buffer.GetStreamHeader((int)kind);
             var frame = new byte[4 + header.Length + jpeg.Length];
             BitConverter.GetBytes(header.Length).CopyTo(frame, 0);
@@ -373,6 +380,11 @@ public class ImageRelayService : IDisposable {
             if (jpeg == null || jpeg.Length == 0) return false;
 
             var buffer = ImageBuffer.FromImageData(rgb);
+            // Record the latest frame for annotate / plate-solve / crop, same
+            // as RelayVideoJpegAsync. The colour live-stacker's RGB stack is
+            // what's on the LIVE canvas, so annotate should target it.
+            _latestImage = buffer;
+            _latestImageData = rgb;
             var header = buffer.GetStreamHeader((int)kind);
             var frame = new byte[4 + header.Length + jpeg.Length];
             BitConverter.GetBytes(header.Length).CopyTo(frame, 0);
