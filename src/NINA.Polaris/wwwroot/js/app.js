@@ -2770,6 +2770,14 @@ function ninaApp() {
             this.loadDeviceName();
             this.updateFov();
 
+            // Restore the resizable LIVE/PREVIEW control-panel width.
+            try {
+                const w = parseInt(localStorage.getItem('polaris.qcWidth') || '', 10);
+                if (w >= 240 && w <= 900) {
+                    document.documentElement.style.setProperty('--qc-width', w + 'px');
+                }
+            } catch { /* ignore */ }
+
             // LIVE capture settings persistence. exposure / gain / binning
             // are client-side UI prefs read by the capture loop per frame;
             // without this they snapped back to hardcoded defaults on every
@@ -18058,6 +18066,50 @@ function ninaApp() {
                 localStorage.setItem('polaris.quickControlsCollapsed',
                     this.quickControlsCollapsed ? '1' : '0');
             } catch { /* private-browsing / quota — silent */ }
+        },
+
+        // Drag the LIVE/PREVIEW control panel's left-edge grip to resize its
+        // width. The panel is right-anchored, so dragging left grows it. Width
+        // lives in the --qc-width CSS var (used by the panel + the canvas
+        // margin), clamped and persisted to localStorage.
+        startQcResize(ev) {
+            ev.preventDefault();
+            const grip = ev.currentTarget;
+            grip.classList.add('dragging');
+            try { grip.setPointerCapture?.(ev.pointerId); } catch {}
+            const startX = ev.clientX;
+            const startW = parseFloat(getComputedStyle(document.documentElement)
+                .getPropertyValue('--qc-width')) || 320;
+            // Body CSS `zoom` (small-screen breakpoints) renders the drag in a
+            // scaled space; divide the delta back to layout px so the panel
+            // tracks the pointer 1:1.
+            let z = parseFloat(getComputedStyle(document.body).zoom);
+            if (!z || isNaN(z)) z = 1;
+            const onMove = (e) => {
+                const cx = (e.clientX != null) ? e.clientX : startX;
+                const dx = (startX - cx) / z;              // left = wider
+                const maxW = Math.min(760, window.innerWidth * 0.7);
+                const w = Math.max(240, Math.min(maxW, startW + dx));
+                document.documentElement.style.setProperty('--qc-width', w + 'px');
+            };
+            const onUp = () => {
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onUp);
+                grip.classList.remove('dragging');
+                const w = Math.round(parseFloat(getComputedStyle(document.documentElement)
+                    .getPropertyValue('--qc-width')) || 320);
+                try { localStorage.setItem('polaris.qcWidth', String(w)); } catch {}
+                // Canvas size tracks its container; nudge a redraw so the live
+                // bitmap re-fits the new width immediately.
+                try { window.dispatchEvent(new Event('resize')); } catch {}
+            };
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp);
+        },
+        resetQcWidth() {
+            document.documentElement.style.setProperty('--qc-width', '320px');
+            try { localStorage.setItem('polaris.qcWidth', '320'); } catch {}
+            try { window.dispatchEvent(new Event('resize')); } catch {}
         },
 
         // Toggle the floating overlay chrome on the image frames. Called by

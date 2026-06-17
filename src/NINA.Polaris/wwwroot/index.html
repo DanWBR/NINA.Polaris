@@ -39,7 +39,7 @@
          the @font-face fetches. Bold and the other font families load
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/css/app.css?v=20260617-calibpickers">
+    <link rel="stylesheet" href="/css/app.css?v=20260617-qcresize">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -991,6 +991,10 @@
                             @click="toggleQuickControls()"
                             :title="quickControlsCollapsed ? 'Show controls' : 'Hide controls'"
                             x-text="quickControlsCollapsed ? '◀' : '▶'"></button>
+                    <div class="quick-controls-resize" x-show="!quickControlsCollapsed"
+                         @pointerdown="startQcResize($event)"
+                         @dblclick="resetQcWidth()"
+                         title="Drag to resize · double-click to reset"></div>
                     <div class="quick-controls-scroll">
                     <!-- SHUT-1: sidebar reorganised into three vertical
                          blocks. .shutter-inputs (Exp/Gain/Bin/Filter)
@@ -2701,6 +2705,10 @@
                             @click="toggleQuickControls()"
                             :title="quickControlsCollapsed ? 'Show controls' : 'Hide controls'"
                             x-text="quickControlsCollapsed ? '◀' : '▶'"></button>
+                    <div class="quick-controls-resize" x-show="!quickControlsCollapsed"
+                         @pointerdown="startQcResize($event)"
+                         @dblclick="resetQcWidth()"
+                         title="Drag to resize · double-click to reset"></div>
                     <div class="quick-controls-scroll">
                     <!-- SHUT-2: same three-block layout LIVE uses
                          (.shutter-inputs / .shutter-wrap / .shutter-secondary). -->
@@ -14315,7 +14323,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260617-calibpickers"></script>
+    <script src="/js/app.js?v=20260617-qcresize"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

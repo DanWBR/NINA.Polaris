@@ -874,7 +874,9 @@ body {
     right: 8px;
     top: 8px;
     bottom: 8px;
-    width: 320px;
+    /* User-resizable width (drag the left-edge grip); default 320px,
+       persisted to localStorage and restored on load. */
+    width: var(--qc-width, 320px);
     z-index: 4;
     display: flex;
     flex-direction: column;
@@ -911,7 +913,7 @@ body {
    the panel's 200ms slide so they move together. */
 .live-pane > .preview-area,
 .preview-pane > .preview-area {
-    margin-right: 332px; /* 320px panel + 12px gap */
+    margin-right: calc(var(--qc-width, 320px) + 12px); /* panel + 12px gap */
     transition: margin-right 200ms ease;
 }
 .live-pane.controls-collapsed > .preview-area,
@@ -974,6 +976,25 @@ body {
 .quick-controls-toggle:hover {
     background: rgba(56, 189, 248, 0.35);
     color: white;
+}
+/* Width-resize grip on the panel's extreme left edge (the boundary with
+   the canvas). Drag to resize; double-click to reset. Sits over the
+   leftmost few px of the collapse handle, leaving the rest of the handle
+   clickable. */
+.quick-controls-resize {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 7px;
+    cursor: ew-resize;
+    z-index: 11;
+    background: transparent;
+    touch-action: none;
+}
+.quick-controls-resize:hover,
+.quick-controls-resize.dragging {
+    background: rgba(103, 232, 249, 0.55);
 }
 /* Inner scroll region of the floating PREVIEW / LIVE / VIDEO sidebars. The
    panel is a fixed-height flex column (top:8 → bottom:8); this wrapper takes
