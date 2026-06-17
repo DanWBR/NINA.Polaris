@@ -21973,15 +21973,30 @@ function ninaApp() {
                 (ev.changedTouches && ev.changedTouches[0] ? ev.changedTouches[0].clientX : 0);
             let cy = ev.clientY != null ? ev.clientY :
                 (ev.changedTouches && ev.changedTouches[0] ? ev.changedTouches[0].clientY : 0);
-            // CSS `zoom` on <body> (0.85 / 0.75 on small screens — Android)
-            // is reported inconsistently by Blink/Android WebView:
-            // getBoundingClientRect() returns LAYOUT (unzoomed) coords while
-            // pointer clientX/Y come in VISUAL (zoomed) coords. Mixing them
-            // shrank the crop rectangle by exactly the zoom factor — only on
-            // mobile (PC runs at zoom 1, so this is a no-op there). Convert
-            // the pointer back into the rect's layout space.
-            const _bz = parseFloat(getComputedStyle(document.body).zoom);
-            if (_bz && _bz !== 1) { cx /= _bz; cy /= _bz; }
+            // CSS `zoom` on <body> (0.85 / 0.75 at small widths, and on
+            // Android) is handled DIFFERENTLY across Chromium versions, so a
+            // blind "divide clientX by body.zoom" is wrong on at least one of
+            // them:
+            //   - Older Blink / Android WebView: getBoundingClientRect()
+            //     returns LAYOUT (unzoomed) coords while pointer clientX/Y are
+            //     VISUAL (zoomed) — they must be reconciled or the ROI is off
+            //     by the zoom factor.
+            //   - Chrome 128+ (desktop): getBoundingClientRect() already bakes
+            //     in `zoom`, so it matches clientX and NO correction is needed.
+            //     Dividing again over-corrected and shrank the rectangle to
+            //     ~zoom% of the image when the UI was scaled below 100%.
+            // `rect.width / offsetWidth` reads the effective zoom actually
+            // present in the rect (offsetWidth stays in unzoomed CSS px on both
+            // builds). Dividing the DOM zoom by that ratio yields the exact
+            // factor to map clientX into the rect's coordinate space: 1 (a
+            // no-op) on modern Chrome and at 100% zoom, and the true zoom on
+            // older builds. Self-correcting, so it works on both.
+            let _domZoom = parseFloat(getComputedStyle(document.body).zoom);
+            if (!_domZoom || isNaN(_domZoom)) _domZoom = 1;
+            const _rectRatio = pickerEl.offsetWidth > 0
+                ? (pickerRect.width / pickerEl.offsetWidth) : _domZoom;
+            const _factor = _rectRatio ? (_domZoom / _rectRatio) : 1;
+            if (_factor && Math.abs(_factor - 1) > 0.001) { cx /= _factor; cy /= _factor; }
             // Map everything relative to the IMAGE, not the picker. The
             // displayed <img> can be smaller than / offset within the picker
             // box (object-fit letterboxing, inline-block dead space), so
