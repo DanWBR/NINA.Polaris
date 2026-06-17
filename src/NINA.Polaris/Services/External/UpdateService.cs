@@ -180,17 +180,27 @@ public class UpdateService {
             return (false, check.Error ?? "No update available to install.");
 
         // 1. Download the .deb to the fixed staging path the updater unit reads.
+        //
+        //    The download is deliberately NOT tied to the request abort token
+        //    (ct): a multi-tens-of-MB .deb over a slow SBC/mobile link easily
+        //    outlasts the browser's fetch timeout, and if the client aborts we
+        //    do not want to kill an in-progress install (it left the staged
+        //    .deb half-written and surfaced a "task was canceled" error). Bound
+        //    the download by its own 10-minute timeout instead so a genuinely
+        //    stuck transfer still fails cleanly.
+        using var dlCts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+        var dlToken = dlCts.Token;
         try {
             Directory.CreateDirectory(CacheDir);
             var http = _httpFactory.CreateClient();
             http.Timeout = TimeSpan.FromMinutes(10);
             using var dl = new HttpRequestMessage(HttpMethod.Get, check.AssetUrl);
             dl.Headers.UserAgent.ParseAdd("NINA.Polaris-Updater");
-            using var resp = await http.SendAsync(dl, HttpCompletionOption.ResponseHeadersRead, ct);
+            using var resp = await http.SendAsync(dl, HttpCompletionOption.ResponseHeadersRead, dlToken);
             if (!resp.IsSuccessStatusCode)
                 return (false, $"Download failed: HTTP {(int)resp.StatusCode}");
             await using (var fs = File.Create(DebStagePath))
-                await resp.Content.CopyToAsync(fs, ct);
+                await resp.Content.CopyToAsync(fs, dlToken);
             _logger.LogInformation("Update: downloaded {Asset} ({Bytes} bytes) to {Path}",
                 check.AssetName, new FileInfo(DebStagePath).Length, DebStagePath);
         } catch (Exception ex) {
@@ -218,8 +228,10 @@ public class UpdateService {
             using var proc = Process.Start(psi)
                 ?? throw new InvalidOperationException("Failed to start systemctl");
 
-            using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            waitCts.CancelAfter(TimeSpan.FromSeconds(30));
+            // Not linked to ct for the same reason as the download above: once
+            // we have the .deb staged, launching the install must not be undone
+            // by a client that has already navigated away / timed out.
+            using var waitCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             var stderr = await proc.StandardError.ReadToEndAsync(waitCts.Token);
             await proc.WaitForExitAsync(waitCts.Token);
 

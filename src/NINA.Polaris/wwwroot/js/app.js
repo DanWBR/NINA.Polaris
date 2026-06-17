@@ -26366,7 +26366,13 @@ function ninaApp() {
             this.update.installing = true;
             this.update.progress = 'Downloading and installing the new package…';
             try {
-                const r = await this.apiFetch('/api/update/install', { method: 'POST' });
+                // The server blocks on downloading the (tens-of-MB) .deb before
+                // it returns, which easily outlasts the default 15s apiFetch
+                // timeout — that abort was cancelling the install mid-download
+                // ("signal is aborted without reason" / server TaskCanceled).
+                // Allow up to 10 min, matching the server's download timeout.
+                const r = await this.apiFetch('/api/update/install',
+                    { method: 'POST', timeout: 600000 });
                 if (!r.ok) {
                     let msg = 'Install failed.';
                     try { const j = await r.json(); if (j && j.error) msg = j.error; } catch (e) {}
