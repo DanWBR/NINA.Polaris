@@ -13946,6 +13946,11 @@ function ninaApp() {
             const predRaVals = [];
             const predDecVals = [];
             const labels = [];
+            // Plain snapshot of the plotted steps (dither flag + correction
+            // durations + pixel sign) for the overlay plugin to draw the hatch
+            // band and the normalized correction impulse bars. Primitives only,
+            // copied off Alpine's reactive proxy to avoid re-entrant reactivity.
+            const overlaySteps = [];
             const hasPred = stepsRef.some(s => s && (Math.abs(s.predRa || 0) > 1e-6 || Math.abs(s.predDec || 0) > 1e-6));
             for (let i = 0; i < stepsRef.length; i++) {
                 const s = stepsRef[i];
@@ -13956,6 +13961,13 @@ function ninaApp() {
                     raVals.push(ra);
                     decVals.push(dec);
                     labels.push(i);
+                    overlaySteps.push({
+                        dither: !!s.dither,
+                        raDur: Number(s.raDur) || 0,
+                        decDur: Number(s.decDur) || 0,
+                        raPx: Number(s.raPx) || 0,
+                        decPx: Number(s.decPx) || 0
+                    });
                     if (hasPred) {
                         predRaVals.push(Number(s.predRa) || 0);
                         predDecVals.push(Number(s.predDec) || 0);
@@ -13963,10 +13975,78 @@ function ninaApp() {
                 }
             }
 
+            // Overlay plugin: hatch the dither/settle region (matching the PLAN
+            // chart) behind the lines, and draw normalized correction impulse
+            // bars (largest correction in the window = full half-height) so the
+            // external-PHD2 chart has parity with the native PHD2-style view.
+            const overlayPlugin = {
+                id: 'guideDitherOverlay',
+                beforeDatasetsDraw(chart) {
+                    const steps = chart.$guideSteps;
+                    const meta = chart.getDatasetMeta(0);
+                    if (!steps || !steps.length || !meta || !meta.data.length) return;
+                    const ctx = chart.ctx, area = chart.chartArea;
+                    const xAt = i => (meta.data[i] ? meta.data[i].x : area.left);
+                    // Hatched bands over contiguous dither runs.
+                    let runStart = -1;
+                    const n = Math.min(steps.length, meta.data.length);
+                    const paint = (x0, x1) => {
+                        const x = Math.max(area.left, x0), ww = Math.min(area.right, x1) - x;
+                        if (ww <= 0) return;
+                        ctx.save();
+                        ctx.beginPath(); ctx.rect(x, area.top, ww, area.bottom - area.top); ctx.clip();
+                        ctx.fillStyle = 'rgba(255,255,255,0.05)';
+                        ctx.fillRect(x, area.top, ww, area.bottom - area.top);
+                        ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1.6;
+                        const hh = area.bottom - area.top;
+                        ctx.beginPath();
+                        for (let p = -hh; p < ww + hh; p += 6) {
+                            ctx.moveTo(x + p, area.top);
+                            ctx.lineTo(x + p + hh, area.bottom);
+                        }
+                        ctx.stroke();
+                        ctx.restore();
+                    };
+                    const slot = n > 1 ? (xAt(1) - xAt(0)) : (area.right - area.left);
+                    for (let i = 0; i < n; i++) {
+                        const d = steps[i].dither;
+                        if (d && runStart < 0) runStart = i;
+                        if ((!d || i === n - 1) && runStart >= 0) {
+                            const endIdx = d ? i : i - 1;
+                            paint(xAt(runStart) - slot / 2, xAt(endIdx) + slot / 2);
+                            runStart = -1;
+                        }
+                    }
+                    // Normalized correction impulse bars from the y=0 baseline.
+                    const y = chart.scales.y, baseline = y.getPixelForValue(0);
+                    let durRef = 0;
+                    for (const s of steps) durRef = Math.max(durRef, s.raDur, s.decDur);
+                    durRef = Math.max(1, durRef);
+                    const barMax = (area.bottom - area.top) / 2 - 6;
+                    const bw = Math.max(2, Math.min(8, slot * 0.7)), half = bw / 2;
+                    for (let i = 0; i < n; i++) {
+                        const s = steps[i], x = xAt(i);
+                        if (s.raDur > 0) {
+                            ctx.fillStyle = 'rgba(229,115,115,0.45)';
+                            const hgt = Math.max(2, Math.min(1, s.raDur / durRef) * barMax);
+                            const dir = s.raPx >= 0 ? 1 : -1;
+                            ctx.fillRect(x - half, baseline, half, dir * hgt);
+                        }
+                        if (s.decDur > 0) {
+                            ctx.fillStyle = 'rgba(100,181,246,0.45)';
+                            const hgt = Math.max(2, Math.min(1, s.decDur / durRef) * barMax);
+                            const dir = s.decPx >= 0 ? 1 : -1;
+                            ctx.fillRect(x, baseline, half, dir * hgt);
+                        }
+                    }
+                }
+            };
+
             let c = _polarisCharts.guide;
             if (!c) {
                 c = new Chart(canvas, {
                     type: 'line',
+                    plugins: [overlayPlugin],
                     data: {
                         labels,
                         datasets: [
@@ -14017,6 +14097,8 @@ function ninaApp() {
                 if (c.data.datasets[2]) c.data.datasets[2].data = predRaVals;
                 if (c.data.datasets[3]) c.data.datasets[3].data = predDecVals;
             }
+            // Hand the overlay plugin the current dither/correction snapshot.
+            c.$guideSteps = overlaySteps;
             // Default update mode re-runs the layout pass and the
             // axis-scale calculation. 'none' (which we tried before)
             // skips animation but in some Chart.js v4 builds also
@@ -14084,6 +14166,45 @@ function ninaApp() {
 
         // History graph: RA (red) + Dec (blue) error lines over time plus
         // per-frame correction impulse bars, on a symmetric arcsec scale.
+        // Shade contiguous runs of dither/settle-flagged steps with a 45° hatch
+        // (same look as the PLAN chart's .plan-viz-hatch). x = i * dx maps a
+        // step index to its pixel column; a run spans from the first flagged
+        // step's column to the last, padded half a slot on each side.
+        _drawGuideDitherHatch(ctx, steps, dx, w, h) {
+            const n = steps.length;
+            let runStart = -1;
+            const paint = (x0, x1) => {
+                const x = Math.max(0, x0), ww = Math.min(w, x1) - x;
+                if (ww <= 0) return;
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(x, 0, ww, h);
+                ctx.clip();
+                // faint base tint so the band reads even where stripes are sparse
+                ctx.fillStyle = 'rgba(255,255,255,0.05)';
+                ctx.fillRect(x, 0, ww, h);
+                // 45° stripes: 1.6px line every 6px
+                ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+                ctx.lineWidth = 1.6;
+                ctx.beginPath();
+                for (let p = -h; p < w + h; p += 6) {
+                    ctx.moveTo(x + p, 0);
+                    ctx.lineTo(x + p + h, h);
+                }
+                ctx.stroke();
+                ctx.restore();
+            };
+            for (let i = 0; i < n; i++) {
+                const d = !!steps[i].dither;
+                if (d && runStart < 0) runStart = i;
+                if ((!d || i === n - 1) && runStart >= 0) {
+                    const endIdx = d ? i : i - 1;
+                    paint(runStart * dx - dx / 2, endIdx * dx + dx / 2);
+                    runStart = -1;
+                }
+            }
+        },
+
         drawGuidePhdGraph() {
             const canvas = this.$refs.guidePhdGraph;
             if (!canvas) return;
@@ -14126,13 +14247,20 @@ function ninaApp() {
             const n = steps.length;
             const dx = n > 1 ? w / (n - 1) : w;
 
-            // correction impulse bars (RA + Dec pulse durations). Scale each
-            // axis against its configured Max Duration cap (a fixed reference)
-            // rather than the rolling max of the window — otherwise a single
-            // big pulse (e.g. a dither recovery) flattens every other bar to
-            // invisibility. Clamped to the half-height.
-            const raRef = Math.max(50, this.nativeMaxRaDurationMs || 2500);
-            const decRef = Math.max(50, this.nativeMaxDecDurationMs || 2500);
+            // Shade the dither/settle region with a hatched texture (matching
+            // the PLAN chart's .plan-viz-hatch) so it's clear which samples were
+            // the deliberate dither excursion, not guiding performance. Drawn
+            // under the bars/lines as contiguous runs of dither-flagged steps.
+            this._drawGuideDitherHatch(ctx, steps, dx, w, h);
+
+            // correction impulse bars (RA + Dec pulse durations), normalized so
+            // the single largest correction in the visible window reaches 100%
+            // of the half-axis and every other bar is scaled against it. A
+            // shared reference across both axes keeps RA/Dec directly comparable.
+            let durRef = 0;
+            for (const s of steps) durRef = Math.max(durRef, s.raDur || 0, s.decDur || 0);
+            durRef = Math.max(1, durRef);
+            const raRef = durRef, decRef = durRef;
             // Bar width adapts to sample spacing so the impulses read clearly
             // (RA + Dec sit side by side within each slot). Clamped so a sparse
             // history doesn't draw fat slabs and a dense one stays legible.

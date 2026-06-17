@@ -214,7 +214,10 @@ public static class StatusStreamHandler {
                                 // Predicted next-frame error (arcsec) from the native
                                 // predictive algorithm; 0 for PHD2 / reactive algos.
                                 predRa = s.PredRaArcsec,
-                                predDec = s.PredDecArcsec
+                                predDec = s.PredDecArcsec,
+                                // True while this step was recorded during a dither/settle,
+                                // so the guide charts can hatch the dither region.
+                                dither = s.Dither
                             }),
                             // Live guide-frame view (native backend only; null for PHD2).
                             view = activeGuider.ViewState,

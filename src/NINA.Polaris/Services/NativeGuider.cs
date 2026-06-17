@@ -1223,7 +1223,9 @@ public sealed class NativeGuider : IGuider, IDisposable {
             RaDirection = null,
             DecDirection = null,
             PredRaArcsec = p.PredRaArcsec,
-            PredDecArcsec = p.PredDecArcsec
+            PredDecArcsec = p.PredDecArcsec,
+            // Mark dither/settle steps so the guide charts can hatch the region.
+            Dither = IsDithering || IsSettling
         };
         lock (_stepsLock) {
             _recentSteps.Add(step);

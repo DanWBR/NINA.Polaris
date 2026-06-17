@@ -255,7 +255,10 @@ public class PHD2Client : IGuider, IDisposable {
                     RaDuration = TryGetInt(msg, "RADuration"),
                     DecDuration = TryGetInt(msg, "DECDuration"),
                     RaDirection = TryGetString(msg, "RADirection"),
-                    DecDirection = TryGetString(msg, "DECDirection")
+                    DecDirection = TryGetString(msg, "DECDirection"),
+                    // Settling follows a dither command; mark these steps so
+                    // the guide charts can hatch the dither/settle region.
+                    Dither = IsSettling
                 };
                 AddStep(step);
                 // A GuideStep arriving means PHD2 is actively guiding,
@@ -706,6 +709,9 @@ public record GuideStep {
     /// algorithm; 0 for PHD2 and reactive native algorithms.</summary>
     public double PredRaArcsec { get; init; }
     public double PredDecArcsec { get; init; }
+    /// <summary>True when this step was recorded while the guider was
+    /// dithering or settling. Lets the guide charts hatch the dither region.</summary>
+    public bool Dither { get; init; }
 }
 
 public record SettleResult {
