@@ -21965,6 +21965,47 @@ function ninaApp() {
             }
         },
 
+        // Runtime probe: does getBoundingClientRect() include CSS `zoom`?
+        // Chrome 128+ bakes zoom into the rect (so it matches pointer clientX);
+        // older Blink / some Android WebViews return layout-space rects that
+        // DON'T. The two can't be told apart from CSS values, so render a
+        // zoom:2 element and a zoom:1 reference (both under the live body zoom,
+        // which cancels in the ratio) and check whether the measured rect
+        // actually doubled. Cached after the first call.
+        _rectAppliesZoom() {
+            if (this.__rectZoom !== undefined) return this.__rectZoom;
+            try {
+                const mk = (z) => {
+                    const d = document.createElement('div');
+                    d.style.cssText = 'position:fixed;left:-9999px;top:-9999px;'
+                        + 'width:100px;height:1px;pointer-events:none;opacity:0;zoom:' + z;
+                    document.body.appendChild(d);
+                    const w = d.getBoundingClientRect().width;
+                    d.remove();
+                    return w;
+                };
+                const a = mk(1), b = mk(2);
+                this.__rectZoom = (a > 0 && (b / a) > 1.5);
+            } catch (e) {
+                // Assume modern behaviour (no extra correction) on failure.
+                this.__rectZoom = true;
+            }
+            return this.__rectZoom;
+        },
+
+        // Product of the CSS `zoom` of an element and all its ancestors. Used
+        // to map a visual-space pointer coordinate back into layout space on
+        // engines whose getBoundingClientRect() is still layout-based.
+        _cumulativeZoom(el) {
+            let z = 1, n = el;
+            while (n && n.nodeType === 1) {
+                const cz = parseFloat(getComputedStyle(n).zoom);
+                if (cz && !isNaN(cz)) z *= cz;
+                n = n.parentElement;
+            }
+            return z || 1;
+        },
+
         _cropPointerXY(ev, pickerEl) {
             const pickerRect = pickerEl.getBoundingClientRect();
             // Touch events nest the coords under changedTouches[0];
@@ -21985,18 +22026,15 @@ function ninaApp() {
             //     in `zoom`, so it matches clientX and NO correction is needed.
             //     Dividing again over-corrected and shrank the rectangle to
             //     ~zoom% of the image when the UI was scaled below 100%.
-            // `rect.width / offsetWidth` reads the effective zoom actually
-            // present in the rect (offsetWidth stays in unzoomed CSS px on both
-            // builds). Dividing the DOM zoom by that ratio yields the exact
-            // factor to map clientX into the rect's coordinate space: 1 (a
-            // no-op) on modern Chrome and at 100% zoom, and the true zoom on
-            // older builds. Self-correcting, so it works on both.
-            let _domZoom = parseFloat(getComputedStyle(document.body).zoom);
-            if (!_domZoom || isNaN(_domZoom)) _domZoom = 1;
-            const _rectRatio = pickerEl.offsetWidth > 0
-                ? (pickerRect.width / pickerEl.offsetWidth) : _domZoom;
-            const _factor = _rectRatio ? (_domZoom / _rectRatio) : 1;
-            if (_factor && Math.abs(_factor - 1) > 0.001) { cx /= _factor; cy /= _factor; }
+            // The two builds can't be told apart from CSS values alone (both
+            // report the same rect/offset ratio), so probe the engine directly:
+            // _rectAppliesZoom() renders a zoom:2 element and checks whether its
+            // measured rect actually doubled. Only divide the pointer when the
+            // rect does NOT include zoom (the old layout-space behaviour).
+            if (!this._rectAppliesZoom()) {
+                const _cz = this._cumulativeZoom(pickerEl);
+                if (_cz && Math.abs(_cz - 1) > 0.001) { cx /= _cz; cy /= _cz; }
+            }
             // Map everything relative to the IMAGE, not the picker. The
             // displayed <img> can be smaller than / offset within the picker
             // box (object-fit letterboxing, inline-block dead space), so
