@@ -5643,6 +5643,14 @@ function ninaApp() {
                     this._paintJpegToCanvases(source, frameKind);
                     // Fan out to still-hidden canvases for tab switches.
                     this._mirrorLiveToPreviewCanvas();
+                    // Refresh the histogram mini-panel from this JPEG frame.
+                    // New frame → invalidate the cached bins so min/max/avg/std
+                    // recompute (the JPEG branch of _ensureHistogram derives
+                    // them from the 8-bit luminance). Without this the stats
+                    // stayed at their zero init whenever the live feed was
+                    // server-rendered JPEG (no raw buffer to scan).
+                    this._histoToken++;
+                    this.drawHistogram();
                 }
             };
             img.onerror = () => URL.revokeObjectURL(url);
@@ -6020,12 +6028,31 @@ function ninaApp() {
         // and runs every draw.
         _ensureHistogram() {
             const f = this._lastRawFrame;
-            if (!f || !f.pixels || !f.pixels.length) return false;
+            const hasRaw = !!(f && f.pixels && f.pixels.length);
+            // Fall back to the server-rendered JPEG frame (8-bit RGBA) when
+            // there's no raw buffer — otherwise the histogram + min/max/avg/std
+            // stayed zeroed whenever the live feed was JPEG.
+            const j = hasRaw ? null : this._lastJpegFrame;
+            const hasJpeg = !!(j && j.imageData && j.imageData.data && j.imageData.data.length);
+            if (!hasRaw && !hasJpeg) return false;
             if (this.histo._token === this._histoToken && this.histo.bins) {
                 this._histoUpdateEndpoints();
                 return true;
             }
-            const px = f.pixels, n = px.length, maxVal = f.maxVal || 65535;
+            let px, n, maxVal;
+            if (hasRaw) {
+                px = f.pixels; n = px.length; maxVal = f.maxVal || 65535;
+            } else {
+                // Derive a luminance array (Rec.601) from the JPEG RGBA pixels.
+                // The server already display-stretched it, so the stats describe
+                // the shown image (0..255 space).
+                const d = j.imageData.data, npix = d.length >> 2;
+                const lum = new Uint16Array(npix);
+                for (let i = 0, p = 0; i < npix; i++, p += 4) {
+                    lum[i] = (d[p] * 0.299 + d[p + 1] * 0.587 + d[p + 2] * 0.114) | 0;
+                }
+                px = lum; n = npix; maxVal = 255;
+            }
             const NB = 256;
             const bins = new Float64Array(NB);
             const step = Math.max(1, Math.floor(n / 300000)); // subsample big sensors
