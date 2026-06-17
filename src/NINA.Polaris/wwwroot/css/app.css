@@ -9158,6 +9158,12 @@ label select.input-sm {
     cursor: crosshair;
     user-select: none;
     -webkit-user-select: none;
+    /* The crop rectangle is a touch-drag. Without touch-action:none the
+       browser treats the gesture as a scroll/pan (the @touchmove.prevent
+       is ignored on a passive listener), so the page scrolled under the
+       finger and the rectangle no longer tracked the touch. none = this
+       element owns all touch gestures. */
+    touch-action: none;
     background: #000;
     border: 1px solid var(--border);
     border-radius: 4px;
