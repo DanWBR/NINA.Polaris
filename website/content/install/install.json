@@ -82,7 +82,7 @@
         "color": "#e11d6b",
         "url": "https://drive.google.com/uc?export=download&id=1xpPaMUTon2xfVae8OW4SBkyGMqfqvBy-",
         "os": "Raspberry Pi OS 64-bit (Debian Trixie)",
-        "polaris": "0.84.6",
+        "polaris": "0.84.6 (2026-06-18)",
         "size": "8.64 GB (.7z)",
         "access": "https://polaris-pi.local:5000/",
         "note": "7-Zip archive; extract before flashing."
