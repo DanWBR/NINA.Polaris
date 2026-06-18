@@ -793,3 +793,36 @@ body {
     height: 100%;
 }
 
+
+/* Update modal changelog: one row per commit since the installed version. */
+.update-changelog { line-height: 1.4; }
+.update-commit {
+    display: flex;
+    gap: 8px;
+    padding: 6px 2px;
+    border-bottom: 1px solid var(--border, rgba(255,255,255,.08));
+}
+.update-commit:last-child { border-bottom: none; }
+.update-commit-sha {
+    flex: 0 0 auto;
+    font-family: var(--font-mono, monospace);
+    font-size: .72em;
+    color: var(--text-muted);
+    background: rgba(127,127,127,.18);
+    padding: 1px 5px;
+    border-radius: 4px;
+    height: fit-content;
+    margin-top: 1px;
+}
+.update-commit-text { min-width: 0; }
+.update-commit-subject {
+    font-size: .84em;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.update-commit-body {
+    font-size: .78em;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    margin-top: 2px;
+}

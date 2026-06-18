@@ -105,6 +105,7 @@ function ninaApp() {
             supported: false, available: false, modalOpen: false,
             currentVersion: '', latestVersion: '', releaseName: '',
             releaseNotes: '', publishedAt: '', htmlUrl: '',
+            commits: [],   // changelog: [{ sha, subject, body }] since installed version
             assetName: '', assetSize: 0,
             installing: false, done: false,
             progress: '', error: ''
@@ -26495,6 +26496,7 @@ function ninaApp() {
                 this.update.latestVersion = u.latestVersion || '';
                 this.update.releaseName = u.releaseName || '';
                 this.update.releaseNotes = u.releaseNotes || '';
+                this.update.commits = Array.isArray(u.commits) ? u.commits : [];
                 this.update.publishedAt = u.publishedAt || '';
                 this.update.htmlUrl = u.htmlUrl || '';
                 this.update.assetName = u.assetName || '';

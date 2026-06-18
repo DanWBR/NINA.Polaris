@@ -136,6 +136,17 @@ public class UpdateService {
                 Version.TryParse(result.LatestVersion, out var latest)
                 && latest > CurrentVersion
                 && !string.IsNullOrEmpty(result.AssetUrl);
+
+            // Changelog: list the commits between the installed version's tag
+            // and this release's tag (best-effort; the release body is just
+            // download/install instructions so we don't surface it).
+            if (result.UpdateAvailable && !string.IsNullOrEmpty(tag)) {
+                try {
+                    result.Commits = await FetchCommitsAsync(http, tag!, ct);
+                } catch (Exception ex) {
+                    _logger.LogDebug(ex, "Update changelog fetch failed");
+                }
+            }
         } catch (OperationCanceledException) {
             throw;
         } catch (Exception ex) {
@@ -154,6 +165,56 @@ public class UpdateService {
     private static string? NormalizeTag(string? tag) =>
         string.IsNullOrEmpty(tag) ? tag
         : (tag.StartsWith("v", StringComparison.OrdinalIgnoreCase) ? tag[1..] : tag);
+
+    /// <summary>List commits between the installed version's tag and the
+    /// release's <paramref name="headTag"/> via the GitHub compare API,
+    /// newest first. The base tag is derived from the running version using
+    /// the same prefix convention as the head tag (e.g. v3.3.0.1041). Returns
+    /// an empty list if the compare can't be resolved (404 = the installed
+    /// build has no matching tag, e.g. a dev build).</summary>
+    private async Task<List<UpdateCommit>> FetchCommitsAsync(HttpClient http, string headTag, CancellationToken ct) {
+        var prefix = headTag.StartsWith("v", StringComparison.OrdinalIgnoreCase) ? "v" : "";
+        var baseTag = prefix + CurrentVersion;
+        if (string.Equals(baseTag, headTag, StringComparison.OrdinalIgnoreCase))
+            return new();
+
+        var url = $"https://api.github.com/repos/{Repo}/compare/{baseTag}...{headTag}";
+        using var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.UserAgent.ParseAdd("NINA.Polaris-Updater");
+        req.Headers.Accept.ParseAdd("application/vnd.github+json");
+        using var resp = await http.SendAsync(req, ct);
+        if (!resp.IsSuccessStatusCode) return new();
+
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+        if (!doc.RootElement.TryGetProperty("commits", out var commits)
+                || commits.ValueKind != JsonValueKind.Array)
+            return new();
+
+        var list = new List<UpdateCommit>();
+        foreach (var c in commits.EnumerateArray()) {
+            var sha = c.TryGetProperty("sha", out var s) ? (s.GetString() ?? "") : "";
+            var message = c.TryGetProperty("commit", out var cm)
+                && cm.TryGetProperty("message", out var msg) ? (msg.GetString() ?? "") : "";
+            if (string.IsNullOrWhiteSpace(message)) continue;
+            // Skip the automated "Bump version to x" commits — noise to the user.
+            if (message.StartsWith("Bump version to", StringComparison.OrdinalIgnoreCase)) continue;
+
+            var lines = message.Replace("\r\n", "\n").Split('\n');
+            var subject = lines[0].Trim();
+            // Body = everything after the subject, minus trailer/boilerplate
+            // lines (co-author + the Claude Code generation footer).
+            var bodyLines = lines.Skip(1)
+                .Where(l => !l.TrimStart().StartsWith("Co-Authored-By:", StringComparison.OrdinalIgnoreCase)
+                         && !l.TrimStart().StartsWith("Co-authored-by:", StringComparison.OrdinalIgnoreCase)
+                         && !l.Contains("Generated with", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            var body = string.Join("\n", bodyLines).Trim();
+            list.Add(new UpdateCommit(sha.Length >= 7 ? sha[..7] : sha, subject, body));
+        }
+        // GitHub returns base..head oldest-first; show newest changes on top.
+        list.Reverse();
+        return list;
+    }
 
     /// <summary>
     /// Download the latest .deb and kick off the install in a transient systemd
@@ -272,4 +333,14 @@ public class UpdateCheckResult {
     public string? AssetUrl { get; set; }
     public long AssetSize { get; set; }
     public string? Error { get; set; }
+    /// <summary>Commits between the installed version's tag and the release
+    /// tag, newest first. The UI shows these as the changelog instead of the
+    /// release body (which is download/install instructions). Empty when the
+    /// compare can't be resolved (e.g. the installed build has no tag).</summary>
+    public List<UpdateCommit> Commits { get; set; } = new();
 }
+
+/// <summary>One commit in the update changelog. <see cref="Subject"/> is the
+/// first line of the message; <see cref="Body"/> is the rest (trailers like
+/// Co-Authored-By stripped).</summary>
+public record UpdateCommit(string Sha, string Subject, string Body);
