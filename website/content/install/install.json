@@ -69,9 +69,9 @@
         "device": "Raspberry Pi 4",
         "badge": "arm64",
         "color": "#e11d6b",
-        "url": "https://drive.google.com/uc?export=download&id=1viFUCX0kYA2U3VmmsT5muaxnkbIsrDJ2",
+        "url": "https://drive.google.com/uc?export=download&id=1zchQgpzdE9DBRFtS6oUqtusNyUpXQQH9",
         "os": "Raspberry Pi OS 64-bit (Debian Trixie)",
-        "polaris": "0.84.1 (2026-06-16)",
+        "polaris": "0.84.7 (2026-06-18)",
         "size": "7.1 GB (.7z)",
         "access": "https://polaris-pi4-1.local:5000/",
         "note": "7-Zip archive; extract before flashing."
