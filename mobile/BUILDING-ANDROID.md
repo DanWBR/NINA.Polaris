@@ -181,6 +181,22 @@ Share `app-release.apk`. Installers must allow "unknown sources".
 - **Self-signed Pi cert**: the app allows it in dev (`capacitor.config`
   `allowMixedContent`). For a hardened release, pin the fingerprint from
   `/api/system/server-cert` instead.
+- **App freezes / "isn't responding" (ANR) on tablets**: the Polaris UI is
+  a WebGL + WASM single-page app (and the connect screen can host several
+  host tabs at once = several full SPA instances). On the default per-app
+  heap a powerful tablet can still thrash GC and ANR. After `cap add
+  android`, add these to `<application>` in
+  `mobile/android/app/src/main/AndroidManifest.xml` (the folder is
+  git-ignored, so re-apply after a fresh `cap add`):
+  ```xml
+  android:hardwareAccelerated="true"
+  android:largeHeap="true"
+  ```
+  `cap sync` does **not** overwrite the manifest, so this only needs
+  re-doing after a full `cap add android`. If the freeze persists, capture
+  the ANR trace: `adb pull /data/anr/traces.txt` (or `adb logcat | grep -i
+  ANR`) and check which thread is blocked — and avoid leaving multiple host
+  tabs open, since each runs the full live pipeline.
 
 ---
 
