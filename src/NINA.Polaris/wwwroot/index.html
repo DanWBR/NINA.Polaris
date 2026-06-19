@@ -4022,6 +4022,23 @@
                             title="Review the last calibration (rates, angles, plot)">
                         ⊹ Calibration details
                     </button>
+                    <div class="cal-corr-grid" style="margin-top:10px">
+                        <label class="gb-field">Calibration step (ms)
+                            <input type="number" min="50" max="10000" step="50"
+                                   :value="nativeCalibrationStepMs"
+                                   @change="setNativeCalSetting('nativeCalibrationStepMs', $event.target.value)">
+                        </label>
+                        <label class="gb-field">Max RA duration (ms)
+                            <input type="number" min="50" max="10000" step="50"
+                                   :value="nativeMaxRaDurationMs"
+                                   @change="setNativeCalSetting('nativeMaxRaDurationMs', $event.target.value)">
+                        </label>
+                        <label class="gb-field">Max DEC duration (ms)
+                            <input type="number" min="50" max="10000" step="50"
+                                   :value="nativeMaxDecDurationMs"
+                                   @change="setNativeCalSetting('nativeMaxDecDurationMs', $event.target.value)">
+                        </label>
+                    </div>
                     </div><!-- /calibration: mount actions -->
 
                     <!-- RA/Dec aggressiveness (ASIAIR-style, 10–150%). The
@@ -4263,26 +4280,6 @@
                         <span style="font-size:12px">Reverse Dec after flip</span>
                     </label>
                     </div><!-- /settings: guiding parameters -->
-                    <div x-show="guideSideTab === 'calibration'">
-                    <div class="guide-side-title">Calibration &amp; correction</div>
-                    <div class="cal-corr-grid">
-                        <label class="gb-field">Calibration step (ms)
-                            <input type="number" min="50" max="10000" step="50"
-                                   :value="nativeCalibrationStepMs"
-                                   @change="setNativeCalSetting('nativeCalibrationStepMs', $event.target.value)">
-                        </label>
-                        <label class="gb-field">Max RA duration (ms)
-                            <input type="number" min="50" max="10000" step="50"
-                                   :value="nativeMaxRaDurationMs"
-                                   @change="setNativeCalSetting('nativeMaxRaDurationMs', $event.target.value)">
-                        </label>
-                        <label class="gb-field">Max DEC duration (ms)
-                            <input type="number" min="50" max="10000" step="50"
-                                   :value="nativeMaxDecDurationMs"
-                                   @change="setNativeCalSetting('nativeMaxDecDurationMs', $event.target.value)">
-                        </label>
-                    </div>
-                    </div><!-- /calibration: cal & correction -->
                     </div><!-- /native params -->
                     </div><!-- /quick-controls-scroll -->
                 </div>
