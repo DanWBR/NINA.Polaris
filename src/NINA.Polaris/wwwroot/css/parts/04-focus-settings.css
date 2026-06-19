@@ -1345,7 +1345,7 @@
     font-size: 22px;
     width: 40px; height: 40px;
     line-height: 40px; text-align: center;
-    background: rgba(56, 189, 248, 0.1);
+    background: rgba(var(--accent2-rgb), 0.1);
     border-radius: 8px;
     margin-bottom: 4px;
 }
@@ -1538,7 +1538,7 @@
     cursor: pointer;
 }
 .palette-item:hover:not(:disabled) {
-    background: rgba(56, 189, 248, 0.1); border-color: var(--accent, #38bdf8);
+    background: rgba(var(--accent2-rgb), 0.1); border-color: var(--accent, #38bdf8);
 }
 .palette-item:disabled { opacity: 0.4; cursor: not-allowed; }
 .palette-kind {
@@ -1547,7 +1547,7 @@
     font-size: 10px; font-weight: 700; color: #000;
 }
 .palette-kind[data-kind="Container"]  { background: #fbbf24; }
-.palette-kind[data-kind="Instruction"] { background: #38bdf8; }
+.palette-kind[data-kind="Instruction"] { background: var(--accent2); }
 .palette-kind[data-kind="Condition"]   { background: #a78bfa; }
 .palette-kind[data-kind="Trigger"]     { background: #f87171; }
 
@@ -1561,7 +1561,7 @@
 }
 .tree-node:hover { background: rgba(255,255,255,0.06); }
 .tree-node.selected {
-    background: rgba(56, 189, 248, 0.15);
+    background: rgba(var(--accent2-rgb), 0.15);
     border-left-color: var(--accent, #38bdf8);
 }
 .tree-node.status-Running   { border-left-color: var(--ok, #22c55e); }

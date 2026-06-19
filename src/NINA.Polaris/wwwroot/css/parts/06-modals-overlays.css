@@ -289,7 +289,7 @@
     flex-wrap: wrap;
 }
 .tonight-name {
-    color: #4fc3f7;
+    color: var(--accent2);
     text-decoration: none;
     font-weight: 700;
     font-size: 14px;
@@ -352,7 +352,7 @@
 }
 .tonight-compass-label {
     font-size: 10px;
-    color: #4fc3f7;
+    color: var(--accent2);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
 }
@@ -673,8 +673,8 @@
 }
 .studio-card:hover { border-color: rgba(79, 195, 247, 0.5); }
 .studio-card.selected {
-    border-color: #4fc3f7;
-    box-shadow: 0 0 0 1px #4fc3f7 inset;
+    border-color: var(--accent2);
+    box-shadow: 0 0 0 1px var(--accent2) inset;
 }
 .studio-thumb {
     width: 100%;
@@ -876,7 +876,7 @@
     height: 100%;
     /* Progress fill in the new icy-cyan palette (matches the brand
        wordmark gradient). */
-    background: linear-gradient(90deg, #0891b2, #67e8f9);
+    background: linear-gradient(90deg, var(--accent2-deep), var(--accent2-light));
     transition: width 0.3s ease;
 }
 
@@ -1034,7 +1034,7 @@
     height: 100%;
     /* Progress fill in the new icy-cyan palette (matches the brand
        wordmark gradient). */
-    background: linear-gradient(90deg, #0891b2, #67e8f9);
+    background: linear-gradient(90deg, var(--accent2-deep), var(--accent2-light));
     transition: width 0.4s ease;
 }
 .siril-modal-progress-meta {
@@ -1853,7 +1853,7 @@
 
 /* Status dot variants used by the new metadata cards. */
 .equip-status-dot.configured {
-    background: rgba(56, 189, 248, 0.6);
+    background: rgba(var(--accent2-rgb), 0.6);
 }
 
 /* Accessories collapsible. Open state shows the embedded grid;

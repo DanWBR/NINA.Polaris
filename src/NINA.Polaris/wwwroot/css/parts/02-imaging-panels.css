@@ -186,13 +186,13 @@
     left: 0;
     width: 28px;
     padding: 0;
-    background: rgba(56, 189, 248, 0.18);
-    border: 1px solid rgba(103, 232, 249, 0.45);
+    background: rgba(var(--accent2-rgb), 0.18);
+    border: 1px solid rgba(var(--accent2-light-rgb), 0.45);
     border-top: none;
     border-bottom: none;
     border-left: none;
     border-radius: 0 var(--radius) var(--radius) 0;
-    color: #67e8f9;
+    color: var(--accent2-light);
     font-size: 18px;
     font-weight: 600;
     line-height: 1;
@@ -203,7 +203,7 @@
     z-index: 10;       /* above the scrollable content of the panel */
 }
 .quick-controls-toggle:hover {
-    background: rgba(56, 189, 248, 0.35);
+    background: rgba(var(--accent2-rgb), 0.35);
     color: white;
 }
 /* Width-resize grip on the panel's extreme left edge (the boundary with
@@ -223,7 +223,7 @@
 }
 .quick-controls-resize:hover,
 .quick-controls-resize.dragging {
-    background: rgba(103, 232, 249, 0.55);
+    background: rgba(var(--accent2-light-rgb), 0.55);
 }
 /* Inner scroll region of the floating PREVIEW / LIVE / VIDEO sidebars. The
    panel is a fixed-height flex column (top:8 → bottom:8); this wrapper takes
@@ -279,7 +279,7 @@
 }
 .col-splitter:hover,
 .col-splitter.dragging {
-    background: rgba(103, 232, 249, 0.55);
+    background: rgba(var(--accent2-light-rgb), 0.55);
 }
 /* Col 2: the sequence cards rail. Own scroll, fixed width so the
    centre preview keeps the rest. Cards stack vertically (one per row)
@@ -583,8 +583,8 @@ button,
 }
 .polaris-shutter .shutter-progress {
     fill: none;
-    /* Cyan stellar gradient matches the brand (#0891b2 → #67e8f9). */
-    stroke: #67e8f9;
+    /* Cyan stellar gradient matches the brand (var(--accent2-deep) → var(--accent2-light)). */
+    stroke: var(--accent2-light);
     stroke-width: 4;
     stroke-linecap: round;
     /* Circumference of r=46 is 2π × 46 ≈ 289.027. dashoffset 289
@@ -618,7 +618,7 @@ button,
 .polaris-shutter .shutter-progress-inner {
     fill: none;
     /* Cyan so it reads as distinct from the red outer (sequence) ring. */
-    stroke: #22d3ee;
+    stroke: var(--accent2);
     stroke-width: 4;
     stroke-linecap: round;
     stroke-dasharray: 238.76 238.76;
@@ -636,7 +636,7 @@ button,
     width: 150px;
     height: 150px;
     border-radius: 50%;
-    background: linear-gradient(160deg, #1e3a8a 0%, #0891b2 100%);
+    background: linear-gradient(160deg, #1e3a8a 0%, var(--accent2-deep) 100%);
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45),
                 inset 0 1px 2px rgba(255, 255, 255, 0.15);
     display: flex;
@@ -652,7 +652,7 @@ button,
     transform: scale(0.97);
 }
 .polaris-shutter:not([aria-disabled="true"]):hover .shutter-inner {
-    box-shadow: 0 4px 18px rgba(103, 232, 249, 0.35),
+    box-shadow: 0 4px 18px rgba(var(--accent2-light-rgb), 0.35),
                 inset 0 1px 2px rgba(255, 255, 255, 0.2);
 }
 .polaris-shutter:not([aria-disabled="true"]):active .shutter-inner {
@@ -1107,7 +1107,7 @@ button,
     width: 16px; height: 38px;
     border-radius: 4px;
     border: 1px solid rgba(255, 255, 255, 0.55);
-    background: rgba(56, 189, 248, 0.85);
+    background: rgba(var(--accent2-rgb), 0.85);
 }
 .histo-handle-white::after { background: rgba(226, 232, 240, 0.92); }
 /* Midtones handle: amber, sits below black/white so it never blocks them. */

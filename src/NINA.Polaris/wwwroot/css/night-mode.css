@@ -21,6 +21,13 @@
        desaturate in night mode (match --success / --warning above). */
     --success-rgb: 102, 51, 51;
     --warning-rgb: 136, 68, 34;
+    /* Secondary "icy-cyan" accent family -> red in night mode (side drawer,
+       focus/QC rings, progress fills, video controls). */
+    --accent2: #aa2222;
+    --accent2-rgb: 170, 34, 34;
+    --accent2-light: #cc3333;
+    --accent2-light-rgb: 204, 51, 51;
+    --accent2-deep: #882222;
 }
 
 [data-theme="night"] .logo {

@@ -121,6 +121,15 @@ html[data-font="system"] {
     --accent-rgb: 33, 150, 243;
     /* Light foreground that reads on an accent-tinted chip/pill. */
     --accent-text: #9fcdf6;
+    /* Secondary "icy-cyan" brand accent (side drawer, focus/QC rings,
+       progress fills, video controls). Tokenised so night mode recolours
+       the whole cyan family to red — same approach as --accent-rgb. The
+       brand-badge logo gradient keeps its literal cyan (identity). */
+    --accent2: #38bdf8;            /* sky cyan */
+    --accent2-rgb: 56, 189, 248;
+    --accent2-light: #67e8f9;      /* icy highlight / text on cyan */
+    --accent2-light-rgb: 103, 232, 249;
+    --accent2-deep: #0891b2;       /* deep cyan (gradient start) */
     --success: #4caf50;
     --warning: #ff9800;
     --danger: #f44336;
@@ -396,12 +405,12 @@ body {
     transition: background 0.12s ease, border-color 0.12s ease;
 }
 .zwo-gain-preset:hover {
-    background: rgba(96, 165, 250, 0.18);
-    border-color: rgba(96, 165, 250, 0.5);
+    background: rgba(var(--accent-rgb), 0.18);
+    border-color: rgba(var(--accent-rgb), 0.5);
 }
 .zwo-gain-preset[data-active="true"] {
-    background: rgba(96, 165, 250, 0.28);
-    border-color: rgba(96, 165, 250, 0.7);
+    background: rgba(var(--accent-rgb), 0.28);
+    border-color: rgba(var(--accent-rgb), 0.7);
 }
 
 .exposure-presets-popover {
@@ -432,7 +441,7 @@ body {
 }
 .exposure-preset-item:hover,
 .exposure-preset-item:focus {
-    background: rgba(96, 165, 250, 0.22);
+    background: rgba(var(--accent-rgb), 0.22);
     color: #fff;
 }
 

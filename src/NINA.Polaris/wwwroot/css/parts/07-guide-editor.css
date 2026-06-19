@@ -681,12 +681,12 @@
     touch-action: manipulation;
 }
 .bin-preset:hover:not(:disabled) {
-    background: rgba(96, 165, 250, 0.18);
-    border-color: rgba(96, 165, 250, 0.5);
+    background: rgba(var(--accent-rgb), 0.18);
+    border-color: rgba(var(--accent-rgb), 0.5);
 }
 .bin-preset[data-active="true"] {
-    background: rgba(96, 165, 250, 0.28);
-    border-color: rgba(96, 165, 250, 0.7);
+    background: rgba(var(--accent-rgb), 0.28);
+    border-color: rgba(var(--accent-rgb), 0.7);
 }
 .bin-preset:disabled {
     opacity: 0.45;
@@ -708,7 +708,7 @@
     background: rgba(7, 13, 26, 0.82);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
-    border: 1px solid rgba(96, 165, 250, 0.5);
+    border: 1px solid rgba(var(--accent-rgb), 0.5);
     border-radius: 16px;
     font-size: 11px;
     color: var(--text-primary);
@@ -801,7 +801,7 @@
     left: 8px;
     right: 8px;
     height: 1px;
-    background: rgba(96, 165, 250, 0.55);
+    background: rgba(var(--accent-rgb), 0.55);
     pointer-events: none;
     z-index: 2;
 }
@@ -1642,7 +1642,7 @@
     height: 72px;
     border-radius: 50%;
     object-fit: contain;
-    filter: drop-shadow(0 4px 16px rgba(96, 165, 250, 0.35));
+    filter: drop-shadow(0 4px 16px rgba(var(--accent-rgb), 0.35));
     position: relative;
     z-index: 1;
 }
@@ -1657,7 +1657,7 @@
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    border: 3px solid rgba(96, 165, 250, 0.12);
+    border: 3px solid rgba(var(--accent-rgb), 0.12);
     border-top-color: var(--accent, #60a5fa);
     animation: auth-brand-spin 1.1s linear infinite;
 }
@@ -1665,8 +1665,8 @@
     to { transform: rotate(360deg); }
 }
 @keyframes auth-brand-pulse {
-    0%, 100% { transform: scale(1);    filter: drop-shadow(0 4px 16px rgba(96, 165, 250, 0.35)); }
-    50%      { transform: scale(1.04); filter: drop-shadow(0 6px 22px rgba(96, 165, 250, 0.55)); }
+    0%, 100% { transform: scale(1);    filter: drop-shadow(0 4px 16px rgba(var(--accent-rgb), 0.35)); }
+    50%      { transform: scale(1.04); filter: drop-shadow(0 6px 22px rgba(var(--accent-rgb), 0.55)); }
 }
 
 /* ---- Modal polish pass: location-setup + editor-export ---------------
