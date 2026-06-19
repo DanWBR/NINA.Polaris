@@ -42,14 +42,14 @@
     <!-- app.css was split into ordered parts for readability. Load order is
          significant (CSS cascade) — keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
-    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260618-oschisto">
-    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260618-oschisto">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260618-oschisto">
-    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260618-oschisto">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260618-oschisto">
-    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260618-oschisto">
-    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260618-oschisto">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260618-oschisto">
+    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260618-aggrslider">
+    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260618-aggrslider">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260618-aggrslider">
+    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260618-aggrslider">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260618-aggrslider">
+    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260618-aggrslider">
+    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260618-aggrslider">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260618-aggrslider">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css">
@@ -4015,22 +4015,36 @@
                          each frame. Lower = gentler/slower, higher = snappier
                          but can oscillate. Applies live to the running guider
                          (no restart). Persisted on the active rig. -->
-                    <div class="guide-aggr">
+                    <!-- The sliders bind to a LOCAL model (guideAggr.*) that
+                         mirrors the server value via x-effect, but ONLY when the
+                         user isn't dragging — otherwise the ~1 Hz status stream
+                         resets the thumb before the change is committed. -->
+                    <div class="guide-aggr"
+                         x-effect="if (!_guideAggrEditing) {
+                             guideAggr.ra = Math.round((guider.raAggression ?? 0.7) * 100);
+                             guideAggr.dec = Math.round((guider.decAggression ?? 0.7) * 100);
+                         }">
                         <div class="guide-aggr-row">
                             <label>RA aggressiveness
-                                <span class="text-muted" x-text="Math.round((guider.raAggression ?? 0.7) * 100) + '%'"></span>
+                                <span class="text-muted" x-text="guideAggr.ra + '%'"></span>
                             </label>
                             <input type="range" min="10" max="150" step="5"
-                                   :value="Math.round((guider.raAggression ?? 0.7) * 100)"
-                                   @change="setGuideAggression(($event.target.value/100), null)">
+                                   x-model.number="guideAggr.ra"
+                                   @pointerdown="_guideAggrEditing = true"
+                                   @touchstart="_guideAggrEditing = true"
+                                   @pointerup="_guideAggrEditing = false"
+                                   @change="setGuideAggression(guideAggr.ra / 100, null); _guideAggrEditing = false">
                         </div>
                         <div class="guide-aggr-row">
                             <label>Dec aggressiveness
-                                <span class="text-muted" x-text="Math.round((guider.decAggression ?? 0.7) * 100) + '%'"></span>
+                                <span class="text-muted" x-text="guideAggr.dec + '%'"></span>
                             </label>
                             <input type="range" min="10" max="150" step="5"
-                                   :value="Math.round((guider.decAggression ?? 0.7) * 100)"
-                                   @change="setGuideAggression(null, ($event.target.value/100))">
+                                   x-model.number="guideAggr.dec"
+                                   @pointerdown="_guideAggrEditing = true"
+                                   @touchstart="_guideAggrEditing = true"
+                                   @pointerup="_guideAggrEditing = false"
+                                   @change="setGuideAggression(null, guideAggr.dec / 100); _guideAggrEditing = false">
                         </div>
                     </div>
 
@@ -14478,7 +14492,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260618-oschisto"></script>
+    <script src="/js/app.js?v=20260618-aggrslider"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

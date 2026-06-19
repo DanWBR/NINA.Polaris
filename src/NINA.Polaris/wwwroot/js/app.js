@@ -113,6 +113,12 @@ function ninaApp() {
         // Brightness/contrast for the GUIDE camera frame (CSS filter on the
         // <img>, client-only). Restored from localStorage in init().
         guideView: { brightness: 1, contrast: 1 },
+        // Local model for the RA/Dec aggressiveness sliders (percent). Kept in
+        // sync with the server value via x-effect ONLY while the user isn't
+        // dragging — otherwise the ~1 Hz WS status snapped the slider back
+        // before the change could be sent (field report).
+        guideAggr: { ra: 70, dec: 70 },
+        _guideAggrEditing: false,
         cameraTemp: null,
         sessionCaptures: 0,
         imageHistory: [],
