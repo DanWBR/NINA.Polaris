@@ -26425,9 +26425,9 @@ function ninaApp() {
         phd2BadgeText() {
             const g = this.guider || {};
             // Backend name only — never the generic word "GUIDE"/"GUIDER",
-            // which doubled up with the state verb ("GUIDE GUIDING"). Native
-            // guider -> "NATIVE", external -> "PHD2".
-            const tag = (g.backend === 'native') ? 'NATIVE' : 'PHD2';
+            // which doubled up with the state verb ("GUIDE GUIDING").
+            // Native guider -> "PHD2N", external PHD2 -> "PHD2E".
+            const tag = (g.backend === 'native') ? 'PHD2N' : 'PHD2E';
             if (!g.connected) return tag + ' OFF';
             // Dither/settle take priority over the steady "GUIDING" label so
             // the operator sees the scope is deliberately being moved + settled
