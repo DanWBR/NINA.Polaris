@@ -273,6 +273,24 @@ public class LiveStackingService {
     private bool _serverBgeUnavailable;
     public LiveStackPreProcStatus PreProcStatus { get; } = new();
 
+    /// <summary>
+    /// Whether BGE can run with the current setup — computed live (so the LIVE
+    /// settings panel reflects it even while idle, not just mid-stack). True
+    /// when the stack is computed client-side (the browser runs GraXpert ONNX
+    /// over WASM cpu/gpu, MetricsOnly) OR a GraXpert backend is present on the
+    /// host (CLI or RK3588 NPU) for server-side stacking. Only the genuinely
+    /// impossible case — server-side stacking on a host with no GraXpert at all
+    /// — reports false.
+    /// </summary>
+    public bool BgeSupported {
+        get {
+            if (Mode == StackMode.MetricsOnly) return true;   // client-side ONNX (WASM)
+            return _graxpert != null
+                   && (_graxpert.IsAvailable || _graxpert.NpuAvailable)
+                   && !_serverBgeUnavailable;                 // host CLI / NPU
+        }
+    }
+
     public LiveStackingService(ImageRelayService relay,
                                 ILogger<LiveStackingService> logger,
                                 ImageWriterService? writer = null,
@@ -525,10 +543,9 @@ public class LiveStackingService {
         // just tracks supportedThisSession for the WS payload.
         var preProcSettings = _profiles?.ActiveEquipmentProfile?.LiveStackPreProcessing
                               ?? new LiveStackPreProcSettings();
-        // BGE is supported client-side in MetricsOnly, and now server-side in
-        // Full mode when a GraXpert backend (CLI / NPU) is present.
-        PreProcStatus.BgeSupportedThisSession = (mode == StackMode.MetricsOnly)
-            || (mode == StackMode.Full && _graxpert != null && !_serverBgeUnavailable);
+        // Keep the stored flag in sync during stacking; BgeSupported is the
+        // live source of truth (also valid while idle) the WS payload reads.
+        PreProcStatus.BgeSupportedThisSession = BgeSupported;
         if (preProcSettings.CalibrationEnabled && _preProcessor != null) {
             var res = await _preProcessor.ApplyAsync(imageData, preProcSettings, ct);
             if (res.Success && (res.MasterDarkUsed != null

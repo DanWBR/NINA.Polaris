@@ -401,7 +401,7 @@ public static class StatusStreamHandler {
                                 },
                                 bge = new {
                                     enabled = profile.ActiveEquipmentProfile?.LiveStackPreProcessing?.BgeEnabled ?? false,
-                                    supportedThisSession = liveStack.PreProcStatus.BgeSupportedThisSession,
+                                    supportedThisSession = liveStack.BgeSupported,
                                     framesProcessed = liveStack.PreProcStatus.FramesBgeProcessed,
                                     framesFallback = liveStack.PreProcStatus.FramesBgeFallback,
                                     lastError = liveStack.PreProcStatus.LastBgeError,
