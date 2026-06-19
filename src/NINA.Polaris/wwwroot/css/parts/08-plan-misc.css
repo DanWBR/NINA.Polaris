@@ -684,3 +684,25 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     backdrop-filter: blur(5px);
     -webkit-backdrop-filter: blur(5px);
 }
+
+/* GUIDE frame brightness/contrast sliders. Floating bottom-center over the
+   guide camera image; affects only the <img> via a CSS filter (the star
+   overlay canvas is a separate element and stays crisp/unfiltered). */
+.guide-bc {
+    position: absolute;
+    bottom: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 4;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.guide-bc input[type="range"] { width: 84px; }

@@ -110,6 +110,9 @@ function ninaApp() {
             installing: false, done: false,
             progress: '', error: ''
         },
+        // Brightness/contrast for the GUIDE camera frame (CSS filter on the
+        // <img>, client-only). Restored from localStorage in init().
+        guideView: { brightness: 1, contrast: 1 },
         cameraTemp: null,
         sessionCaptures: 0,
         imageHistory: [],
@@ -2819,6 +2822,15 @@ function ninaApp() {
 
             // Restore all resizable side-panel / column widths.
             this._restorePanelWidths();
+
+            // Restore the guide-frame brightness/contrast slider prefs.
+            try {
+                const gv = JSON.parse(localStorage.getItem('polaris.guideView') || 'null');
+                if (gv && typeof gv.brightness === 'number' && typeof gv.contrast === 'number') {
+                    this.guideView.brightness = gv.brightness;
+                    this.guideView.contrast = gv.contrast;
+                }
+            } catch (e) { /* default 1/1 */ }
 
             // LIVE capture settings persistence. exposure / gain / binning
             // are client-side UI prefs read by the capture loop per frame;
@@ -12934,12 +12946,26 @@ function ninaApp() {
             if (!a.active || !a.items.length || !a.width || !a.height) return;
             const sx = w / a.width, sy = h / a.height;
             const fontPx = Math.max(11, Math.round(h / 42));
+            // The LIVE/PREVIEW frame is vertically flipped on the client for
+            // cameras with the verticalFlipImage quirk (e.g. SV605CC/SV405CC),
+            // but the plate-solve annotations are in raw (un-flipped) frame
+            // coordinates. Without matching the flip the markers land mirrored
+            // top-for-bottom (STUDIO is fine — it shows the raw frame as-is).
+            let flipV = false;
+            try {
+                const q = (this.cameraQuirks || []).find(
+                    c => c.cameraId === this.activeCameraIdForQuirks);
+                flipV = !!(q && q.verticalFlipImage);
+            } catch (e) { /* no quirks loaded yet */ }
             ctx.save();
             ctx.font = fontPx + 'px sans-serif';
             ctx.textBaseline = 'bottom';
             ctx.lineJoin = 'round';
             for (const o of a.items) {
-                const [rx0, ry0] = this._rotAnnPoint(o.x, o.y, a.width, a.height, this.annotateExtraRot);
+                // Flip first (to land in the displayed, flipped frame), then
+                // apply the manual rotation knob within that space.
+                const ay = flipV ? (a.height - o.y) : o.y;
+                const [rx0, ry0] = this._rotAnnPoint(o.x, ay, a.width, a.height, this.annotateExtraRot);
                 const x = rx0 * sx, y = ry0 * sy;
                 // Marker radius from the object's catalog size when known.
                 let r = 10;
@@ -14563,6 +14589,14 @@ function ninaApp() {
         },
 
         // Draw lock crosshair/box + star markers over the guide-cam image.
+        // Persist the guide-frame brightness/contrast prefs (CSS-filter only).
+        persistGuideView() {
+            try {
+                localStorage.setItem('polaris.guideView',
+                    JSON.stringify({ brightness: this.guideView.brightness, contrast: this.guideView.contrast }));
+            } catch (e) { /* private mode / quota — non-fatal */ }
+        },
+
         drawGuideCamOverlay() {
             const img = this.$refs.guidePhdCamImg;
             const canvas = this.$refs.guidePhdCamOverlay;
