@@ -57,6 +57,9 @@ public class BatchStackingService {
     private readonly FrameLibraryService _library;
     private readonly ProfileService _profile;
     private readonly ILogger<BatchStackingService> _logger;
+    // Optional: drives the pre-flight RAM guard. Null in unit tests that
+    // construct the service directly — the guard then fails open.
+    private readonly HostMetricsService? _metrics;
     private readonly ConcurrentDictionary<string, IntegrationProgress> _jobs = new();
 
     // Tiled-integration RAM budget for the spilled aligned planes (same
@@ -65,10 +68,20 @@ public class BatchStackingService {
     private const long StripBudgetBytes = 96L * 1024 * 1024;
 
     public BatchStackingService(FrameLibraryService library, ProfileService profile,
-                                ILogger<BatchStackingService> logger) {
+                                ILogger<BatchStackingService> logger,
+                                HostMetricsService? metrics = null) {
         _library = library;
         _profile = profile;
         _logger = logger;
+        _metrics = metrics;
+    }
+
+    /// <summary>Currently-available system memory in bytes, or 0 when the
+    /// metrics sampler hasn't produced a snapshot yet (guard fails open).</summary>
+    private long AvailableBytes() {
+        var s = _metrics?.Latest;
+        if (s == null || s.MemoryTotalMB <= 0) return 0;
+        return Math.Max(0, s.MemoryTotalMB - s.MemoryUsedMB) * 1024L * 1024L;
     }
 
     // UNIF-3a: switched FrameIds -> FramePaths; service opens FITS by
@@ -151,6 +164,22 @@ public class BatchStackingService {
 
             if (frames.Count < 2)
                 throw new InvalidOperationException("Need at least 2 valid frames to integrate.");
+
+            // Pre-flight RAM guard now that dimensions + colour are known.
+            {
+                int guardPlanes = pattern == NINA.Core.Enum.BayerPatternEnum.None ? 1 : 3;
+                long needBytes = StackMemoryGuard.EstimateLightBytes(
+                    width!.Value, height!.Value, guardPlanes, StripBudgetBytes);
+                var (memOk, memMsg) = StackMemoryGuard.Check(
+                    needBytes, AvailableBytes(), "integrate these lights");
+                if (!memOk) {
+                    _logger.LogWarning("Integration job {JobId} refused: {Msg}", jobId, memMsg);
+                    _jobs[jobId] = _jobs[jobId] with {
+                        InProgress = false, Stage = "error", Error = memMsg
+                    };
+                    return;
+                }
+            }
 
             // ---- Phase 2: pick reference, align + spill to disk -------
             // Reference = frame with the most detected stars (largest

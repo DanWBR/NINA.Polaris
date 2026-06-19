@@ -55,13 +55,26 @@ public class MasterFrameService {
     private readonly FrameLibraryService _library;
     private readonly ProfileService _profile;
     private readonly ILogger<MasterFrameService> _logger;
+    // Optional: drives the pre-flight RAM guard. Null in unit tests that
+    // construct the service directly — the guard then fails open.
+    private readonly HostMetricsService? _metrics;
     private readonly ConcurrentDictionary<string, MasterProgress> _jobs = new();
 
     public MasterFrameService(FrameLibraryService library, ProfileService profile,
-                              ILogger<MasterFrameService> logger) {
+                              ILogger<MasterFrameService> logger,
+                              HostMetricsService? metrics = null) {
         _library = library;
         _profile = profile;
         _logger = logger;
+        _metrics = metrics;
+    }
+
+    /// <summary>Currently-available system memory in bytes, or 0 when the
+    /// metrics sampler hasn't produced a snapshot yet (guard fails open).</summary>
+    private long AvailableBytes() {
+        var s = _metrics?.Latest;
+        if (s == null || s.MemoryTotalMB <= 0) return 0;
+        return Math.Max(0, s.MemoryTotalMB - s.MemoryUsedMB) * 1024L * 1024L;
     }
 
     /// <summary>Kick off integration in the background. Returns the
@@ -114,8 +127,26 @@ public class MasterFrameService {
             // strips; float / RGB-cube inputs fall back to whole-frame
             // loading where the FITSReader global rescale still applies.
             bool stripable;
+            int probeW, probeH;
             using (var probe = FitsStripReader.Open(framePaths[0])) {
                 stripable = probe.IsStripable;
+                probeW = probe.Width;
+                probeH = probe.Height;
+            }
+
+            // Pre-flight RAM guard. The tiled path is light; the float/RGB
+            // fallback loads every frame whole, so estimate that worst case.
+            long needBytes = stripable
+                ? StackMemoryGuard.EstimateMasterBytes(probeW, probeH, StripBudgetBytes)
+                : (long)framePaths.Count * probeW * probeH * 2 + (long)probeW * probeH * 2;
+            var (memOk, memMsg) = StackMemoryGuard.Check(
+                needBytes, AvailableBytes(), $"build the {type.ToString().ToLowerInvariant()} master");
+            if (!memOk) {
+                _logger.LogWarning("Master frame job {JobId} refused: {Msg}", jobId, memMsg);
+                _jobs[jobId] = _jobs[jobId] with {
+                    InProgress = false, Stage = "error", Error = memMsg
+                };
+                return;
             }
 
             if (stripable) {
