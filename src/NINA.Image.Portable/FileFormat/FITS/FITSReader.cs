@@ -149,10 +149,36 @@ public static class FITSReader {
             totalRead += read;
         }
 
-        // BENCH-PERF: the per-pixel decode loops are pure maps (each output
-        // pixel depends only on its own raw bytes), so they fan out across
-        // cores. On a Pi this is the bottleneck when opening masters / batch
-        // stacking. Output is byte-identical to the old serial loops.
+        switch (bitpix) {
+            case 8:
+            case 16:
+            case 32:
+                DecodeIntegerPixels(rawData, pixels, pixelCount, bitpix, bzero, bscale);
+                break;
+            case -32: // IEEE single-precision float
+                ReadFloatPixels(rawData, pixels, pixelCount, bzero, bscale, bytesPerSample: 4);
+                break;
+            case -64: // IEEE double-precision float
+                ReadFloatPixels(rawData, pixels, pixelCount, bzero, bscale, bytesPerSample: 8);
+                break;
+        }
+
+        return pixels;
+    }
+
+    /// <summary>
+    /// Decode <paramref name="pixelCount"/> integer pixels (BITPIX 8/16/32)
+    /// from <paramref name="rawData"/> into <paramref name="pixels"/>. The
+    /// raw bytes start at index 0 and the decode writes to indices
+    /// <c>[0, pixelCount)</c>, so the same routine serves the full-frame read
+    /// and the strip reader (which hands it one horizontal slice at a time).
+    /// <para>BENCH-PERF: the per-pixel loops are pure maps (each output pixel
+    /// depends only on its own raw bytes), so they fan out across cores. On a
+    /// Pi this is the bottleneck when opening masters / batch stacking. Output
+    /// is byte-identical to the old serial loops.</para>
+    /// </summary>
+    internal static void DecodeIntegerPixels(byte[] rawData, ushort[] pixels, long pixelCount,
+                                             int bitpix, int bzero, double bscale) {
         switch (bitpix) {
             case 8:
                 // 8-bit source (e.g. an INDI driver left in RAW8 — the
@@ -186,15 +212,7 @@ public static class FITSReader {
                     }
                 });
                 break;
-            case -32: // IEEE single-precision float
-                ReadFloatPixels(rawData, pixels, pixelCount, bzero, bscale, bytesPerSample: 4);
-                break;
-            case -64: // IEEE double-precision float
-                ReadFloatPixels(rawData, pixels, pixelCount, bzero, bscale, bytesPerSample: 8);
-                break;
         }
-
-        return pixels;
     }
 
     /// <summary>
@@ -287,7 +305,7 @@ public static class FITSReader {
         }
     }
 
-    private static ImageMetaData ExtractMetaData(Dictionary<string, FITSHeaderCard> headers) {
+    internal static ImageMetaData ExtractMetaData(Dictionary<string, FITSHeaderCard> headers) {
         var meta = new ImageMetaData();
 
         meta.Camera.Name = GetStringHeader(headers, "INSTRUME", "");
@@ -326,19 +344,19 @@ public static class FITSReader {
         return meta;
     }
 
-    private static int GetIntHeader(Dictionary<string, FITSHeaderCard> headers, string key, int defaultValue) {
+    internal static int GetIntHeader(Dictionary<string, FITSHeaderCard> headers, string key, int defaultValue) {
         if (headers.TryGetValue(key, out var card) && int.TryParse(card.Value, out int val)) return val;
         return defaultValue;
     }
 
-    private static double GetDoubleHeader(Dictionary<string, FITSHeaderCard> headers, string key, double defaultValue) {
+    internal static double GetDoubleHeader(Dictionary<string, FITSHeaderCard> headers, string key, double defaultValue) {
         if (headers.TryGetValue(key, out var card) && double.TryParse(card.Value,
                 System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double val))
             return val;
         return defaultValue;
     }
 
-    private static string GetStringHeader(Dictionary<string, FITSHeaderCard> headers, string key, string defaultValue) {
+    internal static string GetStringHeader(Dictionary<string, FITSHeaderCard> headers, string key, string defaultValue) {
         if (headers.TryGetValue(key, out var card)) return card.Value;
         return defaultValue;
     }

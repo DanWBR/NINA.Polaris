@@ -37,10 +37,19 @@ namespace NINA.Polaris.Services.Studio;
 ///   6. Trigger a FrameLibraryService rescan so the new file shows
 ///      up in the browser.
 ///
-/// Memory model: v1 loads every input pixel buffer into memory at
-/// once. For a typical session (~20 frames × 20 MP × 2 B = ~800 MB)
-/// this fits comfortably on a 4 GB RPi. Larger stacks should tile;
-/// that's tracked as a follow-up.
+/// Memory model: the integer fast path (BITPIX 8/16/32, the camera-native
+/// format of every raw bias/dark/flat) streams the inputs in horizontal
+/// strips via <see cref="FitsStripReader"/>, so only one strip of each of
+/// the N frames is resident at a time instead of all N full-resolution
+/// buffers. A 30 × 24 MP OSC stack drops from ~1.4 GB to ~100 MB, which
+/// is what keeps a 4 GB Pi 5 from running into the OOM killer. The tile
+/// height is chosen from a fixed RAM budget so the footprint stays flat
+/// regardless of frame count or sensor size.
+///
+/// Float (BITPIX -32/-64) or RGB-cube inputs fall back to the original
+/// "load every frame whole" path: the float decode in FITSReader needs a
+/// global min/max scan that can't be reproduced strip-by-strip. Those are
+/// rare as calibration-frame inputs (they're already-processed masters).
 /// </summary>
 public class MasterFrameService {
     private readonly FrameLibraryService _library;
@@ -78,94 +87,46 @@ public class MasterFrameService {
     public MasterProgress? GetStatus(string jobId)
         => _jobs.TryGetValue(jobId, out var p) ? p : null;
 
+    // Strip-tiling RAM budget. The integer fast path keeps roughly this
+    // many bytes of decoded + raw strip data resident across all N frames
+    // at once (output buffer + per-partition scratch are extra but small).
+    // ~96 MB leaves comfortable headroom on a 2 GB SBC while still giving
+    // a deep enough tile that the per-tile seek overhead is negligible.
+    private const long StripBudgetBytes = 96L * 1024 * 1024;
+
     private void RunJob(string jobId, IReadOnlyList<string> framePaths, MasterType type, IntegrationMethod method) {
         try {
-            // ---- Phase 1: load all inputs ---------------------------
-            _jobs[jobId] = _jobs[jobId] with { Stage = "loading", Done = 0 };
-            var loaded = new List<BaseImageData>(framePaths.Count);
-            int? width = null, height = null, bitDepth = null;
-            double sumExposure = 0;
-            int gain = 0;
-            string filter = "";
-
             for (int i = 0; i < framePaths.Count; i++) {
                 var path = framePaths[i];
                 if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
                     throw new InvalidOperationException($"Frame missing on disk: {path}");
-                using var fs = File.OpenRead(path);
-                var img = FITSReader.Read(fs);
-                if (width == null) {
-                    width = img.Properties.Width;
-                    height = img.Properties.Height;
-                    bitDepth = img.Properties.BitDepth;
-                    gain = img.MetaData.Camera.Gain;
-                    filter = img.MetaData.Exposure.Filter ?? "";
-                } else {
-                    if (img.Properties.Width != width || img.Properties.Height != height) {
-                        throw new InvalidOperationException(
-                            $"Frame {Path.GetFileName(path)} is {img.Properties.Width}×{img.Properties.Height}, " +
-                            $"expected {width}×{height}. Frames must agree.");
-                    }
-                }
-                sumExposure += img.MetaData.Exposure.ExposureTime;
-                loaded.Add(img);
-                _jobs[jobId] = _jobs[jobId] with { Done = i + 1 };
             }
 
-            // ---- Phase 2: integrate per-pixel -----------------------
-            // Done stays at the input frame count; folding the row
-            // counter into Done/Total used to make "done / total"
-            // read as "row 1842 / 3672" mid-integration, hiding the
-            // actual frame count. Row-level progress moves to
-            // IntegrationPercent so the UI can render it as a
-            // dedicated sub-bar.
-            _jobs[jobId] = _jobs[jobId] with {
-                Stage = "integrating",
-                Done = loaded.Count,
-                IntegrationPercent = 0,
-            };
-            int W = width!.Value;
-            int H = height!.Value;
-            int N = loaded.Count;
-            var output = new ushort[W * H];
+            int W, H, bitDepth, gain, N;
+            double sumExposure;
+            string filter;
+            ushort[] output;
+            ImageProperties firstProps;
+            ImageMetaData firstMeta;
 
-            // Pre-snapshot the pixel buffers so the inner loop hits a
-            // dense ushort[][] (loaded[k].Data is a property access).
-            var stacks = new ushort[N][];
-            for (int k = 0; k < N; k++) stacks[k] = loaded[k].Data;
+            // Probe the first frame to decide which path to take. Integer
+            // 2-D frames (every camera-native bias/dark/flat) stream in
+            // strips; float / RGB-cube inputs fall back to whole-frame
+            // loading where the FITSReader global rescale still applies.
+            bool stripable;
+            using (var probe = FitsStripReader.Open(framePaths[0])) {
+                stripable = probe.IsStripable;
+            }
 
-            // One scratch buffer per parallel partition (median sorts
-            // in-place). The Parallel.For overload returns a per-thread
-            // local that gets reused across iterations of the same
-            // worker, avoiding per-row allocation.
-            int rowsDone = 0;
-            int lastReportedPct = 0;
-            Parallel.For(0, H, () => new ushort[N], (y, _, scratch) => {
-                int rowOff = y * W;
-                for (int x = 0; x < W; x++) {
-                    int idx = rowOff + x;
-                    for (int k = 0; k < N; k++) scratch[k] = stacks[k][idx];
-                    output[idx] = method switch {
-                        IntegrationMethod.Mean   => IntegrationMath.Mean(scratch),
-                        IntegrationMethod.Median => IntegrationMath.Median(scratch),
-                        IntegrationMethod.SigmaClippedMean
-                                                 => IntegrationMath.SigmaClippedMean(scratch),
-                        _                        => IntegrationMath.Mean(scratch)
-                    };
-                }
-                // Throttle the status writeback to whole percent
-                // ticks; the inner loop fires once per row (thousands
-                // of times per master) and the record-with churn is
-                // surprisingly expensive at that frequency.
-                var done = System.Threading.Interlocked.Increment(ref rowsDone);
-                int pct = (int)(done * 100L / H);
-                if (pct != lastReportedPct) {
-                    lastReportedPct = pct;
-                    _jobs[jobId] = _jobs[jobId] with { IntegrationPercent = pct };
-                }
-                return scratch;
-            }, _ => { });
-            _jobs[jobId] = _jobs[jobId] with { IntegrationPercent = 100 };
+            if (stripable) {
+                IntegrateTiled(jobId, framePaths, method,
+                    out W, out H, out bitDepth, out gain, out filter, out sumExposure,
+                    out N, out output, out firstProps, out firstMeta);
+            } else {
+                IntegrateFullLoad(jobId, framePaths, method,
+                    out W, out H, out bitDepth, out gain, out filter, out sumExposure,
+                    out N, out output, out firstProps, out firstMeta);
+            }
 
             // ---- Phase 3: write master FITS -------------------------
             _jobs[jobId] = _jobs[jobId] with { Stage = "writing" };
@@ -192,19 +153,19 @@ public class MasterFrameService {
                 outPath = Path.Combine(dir, Path.GetFileNameWithoutExtension(fileName) + $"_{copy++}.fits");
 
             var props = new ImageProperties {
-                Width = W, Height = H, BitDepth = bitDepth!.Value,
-                BayerPattern = loaded[0].Properties.BayerPattern,
-                IsBayered = loaded[0].Properties.IsBayered
+                Width = W, Height = H, BitDepth = bitDepth,
+                BayerPattern = firstProps.BayerPattern,
+                IsBayered = firstProps.IsBayered
             };
             // Carry over key headers from the first input so the master
             // looks "real" to PixInsight / Siril (same camera, gain,
             // average exposure per sub).
             var meta = new ImageMetaData {
                 CreationTime = DateTime.UtcNow,
-                Camera   = loaded[0].MetaData.Camera,
-                Telescope = loaded[0].MetaData.Telescope,
-                Observer = loaded[0].MetaData.Observer,
-                Target   = loaded[0].MetaData.Target,
+                Camera   = firstMeta.Camera,
+                Telescope = firstMeta.Telescope,
+                Observer = firstMeta.Observer,
+                Target   = firstMeta.Target,
                 Exposure = new ImageMetaData.ExposureInfo {
                     ExposureTime = sumExposure / N,
                     Filter       = filter,
@@ -240,6 +201,204 @@ public class MasterFrameService {
                 Error = ex.Message
             };
         }
+    }
+
+    /// <summary>
+    /// Integer fast path: stream the inputs in horizontal strips so only
+    /// one tile of each of the N frames is in memory at a time. Reduces
+    /// peak RAM from O(N · W · H) to O(N · tileRows · W), which is what
+    /// keeps deep OSC stacks off the OOM killer on a 4 GB SBC.
+    /// </summary>
+    private void IntegrateTiled(string jobId, IReadOnlyList<string> framePaths,
+            IntegrationMethod method,
+            out int W, out int H, out int bitDepth, out int gain, out string filter,
+            out double sumExposure, out int N, out ushort[] output,
+            out ImageProperties firstProps, out ImageMetaData firstMeta) {
+
+        _jobs[jobId] = _jobs[jobId] with { Stage = "loading", Done = 0 };
+        int n = framePaths.Count;
+        var readers = new FitsStripReader[n];
+        try {
+            for (int i = 0; i < n; i++) {
+                readers[i] = FitsStripReader.Open(framePaths[i]);
+                if (!readers[i].IsStripable) {
+                    // Mixed integer + float/RGB set: bail to the whole-frame
+                    // path which handles every format uniformly.
+                    for (int k = 0; k <= i; k++) readers[k]?.Dispose();
+                    IntegrateFullLoad(jobId, framePaths, method,
+                        out W, out H, out bitDepth, out gain, out filter, out sumExposure,
+                        out N, out output, out firstProps, out firstMeta);
+                    return;
+                }
+                if (i > 0 && (readers[i].Width != readers[0].Width || readers[i].Height != readers[0].Height)) {
+                    throw new InvalidOperationException(
+                        $"Frame {Path.GetFileName(framePaths[i])} is {readers[i].Width}×{readers[i].Height}, " +
+                        $"expected {readers[0].Width}×{readers[0].Height}. Frames must agree.");
+                }
+                _jobs[jobId] = _jobs[jobId] with { Done = i + 1 };
+            }
+
+            // Locals (the lambda below can't close over out parameters).
+            int w = readers[0].Width;
+            int h = readers[0].Height;
+            double exp = 0;
+            for (int k = 0; k < n; k++) exp += readers[k].MetaData.Exposure.ExposureTime;
+            var outBuf = new ushort[(long)w * h];
+
+            // Tile height from the RAM budget: each tile holds N decoded
+            // strips (ushort) plus each reader's raw byte scratch. Clamp to
+            // at least one row and at most the full image.
+            int tileRows = (int)Math.Clamp(
+                StripBudgetBytes / Math.Max(1, (long)n * w * 4),
+                1, h);
+
+            // Per-frame decoded strip buffers, reused across tiles.
+            var strips = new ushort[n][];
+            for (int k = 0; k < n; k++) strips[k] = new ushort[(long)tileRows * w];
+
+            _jobs[jobId] = _jobs[jobId] with {
+                Stage = "integrating", Done = n, IntegrationPercent = 0,
+            };
+
+            int rowsDone = 0;
+            int lastReportedPct = 0;
+            for (int tileStart = 0; tileStart < h; tileStart += tileRows) {
+                int rows = Math.Min(tileRows, h - tileStart);
+                // Load this tile from every frame (sequential per-file
+                // seek + read; the per-pixel reduce below is the parallel
+                // part).
+                for (int k = 0; k < n; k++) readers[k].ReadRows(tileStart, rows, strips[k]);
+
+                int baseOff = tileStart * w;
+                Parallel.For(0, rows, () => new ushort[n], (ly, _, scratch) => {
+                    int localOff = ly * w;
+                    int outOff = baseOff + localOff;
+                    for (int x = 0; x < w; x++) {
+                        int sidx = localOff + x;
+                        for (int k = 0; k < n; k++) scratch[k] = strips[k][sidx];
+                        outBuf[outOff + x] = method switch {
+                            IntegrationMethod.Mean   => IntegrationMath.Mean(scratch),
+                            IntegrationMethod.Median => IntegrationMath.Median(scratch),
+                            IntegrationMethod.SigmaClippedMean
+                                                     => IntegrationMath.SigmaClippedMean(scratch),
+                            _                        => IntegrationMath.Mean(scratch)
+                        };
+                    }
+                    var done = System.Threading.Interlocked.Increment(ref rowsDone);
+                    int pct = (int)(done * 100L / h);
+                    if (pct != lastReportedPct) {
+                        lastReportedPct = pct;
+                        _jobs[jobId] = _jobs[jobId] with { IntegrationPercent = pct };
+                    }
+                    return scratch;
+                }, _ => { });
+            }
+            _jobs[jobId] = _jobs[jobId] with { IntegrationPercent = 100 };
+
+            // Publish results.
+            W = w;
+            H = h;
+            N = n;
+            output = outBuf;
+            bitDepth = readers[0].Properties.BitDepth;
+            gain = readers[0].MetaData.Camera.Gain;
+            filter = readers[0].MetaData.Exposure.Filter ?? "";
+            sumExposure = exp;
+            firstProps = readers[0].Properties;
+            firstMeta = readers[0].MetaData;
+        } finally {
+            for (int k = 0; k < n; k++) readers[k]?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Legacy whole-frame path: loads every input buffer at once. Used for
+    /// float (BITPIX &lt; 0) or RGB-cube inputs, whose FITSReader decode
+    /// needs a global pass the strip reader can't reproduce. Memory is
+    /// O(N · W · H); acceptable because these inputs are rare (processed
+    /// masters re-stacked) rather than the common deep raw-frame case.
+    /// </summary>
+    private void IntegrateFullLoad(string jobId, IReadOnlyList<string> framePaths,
+            IntegrationMethod method,
+            out int W, out int H, out int bitDepth, out int gain, out string filter,
+            out double sumExposure, out int N, out ushort[] output,
+            out ImageProperties firstProps, out ImageMetaData firstMeta) {
+
+        _jobs[jobId] = _jobs[jobId] with { Stage = "loading", Done = 0 };
+        var loaded = new List<BaseImageData>(framePaths.Count);
+        int? width = null, height = null, depth = null;
+        double exp = 0;
+        int localGain = 0;
+        string localFilter = "";
+
+        for (int i = 0; i < framePaths.Count; i++) {
+            using var fs = File.OpenRead(framePaths[i]);
+            var img = FITSReader.Read(fs);
+            if (width == null) {
+                width = img.Properties.Width;
+                height = img.Properties.Height;
+                depth = img.Properties.BitDepth;
+                localGain = img.MetaData.Camera.Gain;
+                localFilter = img.MetaData.Exposure.Filter ?? "";
+            } else if (img.Properties.Width != width || img.Properties.Height != height) {
+                throw new InvalidOperationException(
+                    $"Frame {Path.GetFileName(framePaths[i])} is {img.Properties.Width}×{img.Properties.Height}, " +
+                    $"expected {width}×{height}. Frames must agree.");
+            }
+            exp += img.MetaData.Exposure.ExposureTime;
+            loaded.Add(img);
+            _jobs[jobId] = _jobs[jobId] with { Done = i + 1 };
+        }
+
+        // Locals (the lambda below can't close over out parameters).
+        int w = width!.Value;
+        int h = height!.Value;
+        int n = loaded.Count;
+        var outBuf = new ushort[(long)w * h];
+
+        var stacks = new ushort[n][];
+        for (int k = 0; k < n; k++) stacks[k] = loaded[k].Data;
+
+        _jobs[jobId] = _jobs[jobId] with {
+            Stage = "integrating", Done = n, IntegrationPercent = 0,
+        };
+
+        int rowsDone = 0;
+        int lastReportedPct = 0;
+        Parallel.For(0, h, () => new ushort[n], (y, _, scratch) => {
+            int rowOff = y * w;
+            for (int x = 0; x < w; x++) {
+                int idx = rowOff + x;
+                for (int k = 0; k < n; k++) scratch[k] = stacks[k][idx];
+                outBuf[idx] = method switch {
+                    IntegrationMethod.Mean   => IntegrationMath.Mean(scratch),
+                    IntegrationMethod.Median => IntegrationMath.Median(scratch),
+                    IntegrationMethod.SigmaClippedMean
+                                             => IntegrationMath.SigmaClippedMean(scratch),
+                    _                        => IntegrationMath.Mean(scratch)
+                };
+            }
+            var done = System.Threading.Interlocked.Increment(ref rowsDone);
+            int pct = (int)(done * 100L / h);
+            if (pct != lastReportedPct) {
+                lastReportedPct = pct;
+                _jobs[jobId] = _jobs[jobId] with { IntegrationPercent = pct };
+            }
+            return scratch;
+        }, _ => { });
+        _jobs[jobId] = _jobs[jobId] with { IntegrationPercent = 100 };
+
+        // Publish results.
+        W = w;
+        H = h;
+        N = n;
+        output = outBuf;
+        bitDepth = depth!.Value;
+        gain = localGain;
+        filter = localFilter;
+        sumExposure = exp;
+        firstProps = loaded[0].Properties;
+        firstMeta = loaded[0].MetaData;
     }
 
     private static string MasterImageType(MasterType type) => type switch {
