@@ -32,21 +32,35 @@ All sources are public-domain or openly licensed; Polaris itself
    License: Public domain via the CDS, Strasbourg.
 
 -------------------------------------------------------------------
-4. Abell Catalog of Planetary Nebulae
+4. LDN -- Lynds' Catalogue of Dark Nebulae
+-------------------------------------------------------------------
+   Source:  CDS VizieR catalog VII/7A/ldn
+            (Lynds 1962, "Catalogue of Dark Nebulae")
+   License: Public domain via the CDS, Strasbourg.
+
+-------------------------------------------------------------------
+5. LBN -- Lynds' Catalogue of Bright Nebulae
+-------------------------------------------------------------------
+   Source:  CDS VizieR catalog VII/9/catalog
+            (Lynds 1965, "Catalogue of Bright Nebulae")
+   License: Public domain via the CDS, Strasbourg.
+
+-------------------------------------------------------------------
+6. Abell Catalog of Planetary Nebulae
 -------------------------------------------------------------------
    Source:  CDS VizieR catalog V/84/abell
             (Abell 1966)
    License: Public domain via the CDS, Strasbourg.
 
 -------------------------------------------------------------------
-5. Hickson Compact Groups
+7. Hickson Compact Groups
 -------------------------------------------------------------------
    Source:  CDS VizieR catalog VII/213/groups
             (Hickson 1982; Hickson et al. 1989)
    License: Public domain via the CDS, Strasbourg.
 
 -------------------------------------------------------------------
-6. Abell-Corwin-Olowin (ACO) Galaxy Clusters
+8. Abell-Corwin-Olowin (ACO) Galaxy Clusters
 -------------------------------------------------------------------
    Source:  CDS VizieR catalog VII/110A/table3
             (Abell, Corwin & Olowin 1989)
@@ -55,7 +69,7 @@ All sources are public-domain or openly licensed; Polaris itself
 -------------------------------------------------------------------
 VizieR acknowledgment
 -------------------------------------------------------------------
-Catalogs 2-6 above were obtained from VizieR, the CDS Strasbourg
+Catalogs 2-8 above were obtained from VizieR, the CDS Strasbourg
 astronomical catalogues service. As requested by CDS, please cite:
 
    "This research has made use of the VizieR catalogue access tool,

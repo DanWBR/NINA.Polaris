@@ -14,16 +14,18 @@ Catalogs ingested (CAT-1):
                     https://github.com/mattiaverga/OpenNGC
   2. Sharpless 2 -- 313 HII regions. Vizier VII/20 (public domain).
   3. ARP         -- 338 peculiar galaxies. Vizier VII/192A (public domain).
-  4. Abell PN    -- ~86 planetary nebulae. Vizier V/84 (public domain).
-  5. Hickson CG  -- 100 compact galaxy groups. Vizier VII/213 (public).
-  6. Abell GC    -- ~2700 Abell-Corwin-Olowin galaxy clusters.
+  4. LDN         -- Lynds' dark nebulae. Vizier VII/7A (public domain).
+  5. LBN         -- Lynds' bright nebulae. Vizier VII/9 (public domain).
+  6. Abell PN    -- ~86 planetary nebulae. Vizier V/84 (public domain).
+  7. Hickson CG  -- 100 compact galaxy groups. Vizier VII/213 (public).
+  8. Abell GC    -- ~2700 Abell-Corwin-Olowin galaxy clusters.
                     Vizier VII/110A (public, mag-trimmed to brightest).
 
 Schema:
 
     CREATE TABLE objects (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        catalog TEXT NOT NULL,    -- 'NGC' | 'IC' | 'M' | 'C' | 'Arp' | 'Sh2' | 'Abell-PN' | 'HCG' | 'AGC'
+        catalog TEXT NOT NULL,    -- 'NGC' | 'IC' | 'M' | 'C' | 'Arp' | 'Sh2' | 'LDN' | 'LBN' | 'Abell-PN' | 'HCG' | 'AGC'
         catalog_id TEXT NOT NULL, -- '7331' | '273' | '92'
         name TEXT NOT NULL,       -- 'NGC 7331'
         common_name TEXT,
@@ -110,6 +112,30 @@ VIZIER_CATALOGS = [
         "ingest":  dict(catalog="Arp", type_str="Peculiar Galaxy",
                         name_prefix="Arp", id_col=2, ra_col=0,
                         dec_col=1, mag_col=3, size_col=4),
+    },
+    {
+        # Lynds' Catalogue of Dark Nebulae (LDN). Vizier VII/7A.
+        # `Area` is in square degrees (not an angular diameter), so we
+        # don't map it to size_col to avoid mixing units with the
+        # arcmin sizes the other catalogs use.
+        "cache":   "LDN.tsv",
+        "source":  "VII/7A/ldn",
+        "columns": ["_RAJ2000", "_DEJ2000", "LDN", "Area"],
+        "ingest":  dict(catalog="LDN", type_str="Dark Nebula",
+                        name_prefix="LDN", id_col=2, ra_col=0,
+                        dec_col=1, mag_col=None, size_col=None),
+    },
+    {
+        # Lynds' Catalogue of Bright Nebulae (LBN). Vizier VII/9.
+        # The table is `catalog`; the LBN designation is the running
+        # number `Seq` (e.g. "LBN 552"); `Diam1` is the major axis in
+        # arcmin.
+        "cache":   "LBN.tsv",
+        "source":  "VII/9/catalog",
+        "columns": ["_RAJ2000", "_DEJ2000", "Seq", "Diam1"],
+        "ingest":  dict(catalog="LBN", type_str="Bright Nebula",
+                        name_prefix="LBN", id_col=2, ra_col=0,
+                        dec_col=1, mag_col=None, size_col=3),
     },
     # V/84 (Strasbourg-ESO PN catalog, ~1500 PNe) was tried here but
     # asu-tsv exposes only B1950 sexagesimal columns + `_RA.icrs` as
