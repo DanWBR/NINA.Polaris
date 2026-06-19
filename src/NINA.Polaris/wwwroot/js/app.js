@@ -4163,7 +4163,7 @@ function ninaApp() {
                         title: 'Connect your first device',
                         tab: 'equip',
                         tabLabel: 'RIGS',
-                        screenshot: 'first-night/05-first-device.png',
+                        screenshot: 'first-night/05-first-device.jpg',
                         docLink: 'rigs.md',
                         body: [
                             'RIGS tab is where every camera / mount / focuser / filter wheel lives. Pick a driver (INDI is the default on Linux + cross-platform, Alpaca / native vendor drivers also work), connect, and Polaris remembers it as part of the active rig profile.',
@@ -4180,7 +4180,7 @@ function ninaApp() {
                 capture: [
                     {
                         title: 'Welcome to Polaris',
-                        screenshot: 'capture/01-welcome.png',
+                        screenshot: 'capture/01-welcome.jpg',
                         body: [
                             'This tutorial walks you from cold equipment all the way to a finished image you can post or print. About 12 steps, mostly waiting on the night sky.',
                             'You will spend most of the time inside the AUTORUN tab once the sequence is running; the steps before it are setup, the steps after it are post-processing. Each step has a "Read more" link into the deeper docs for when you want detail.'
@@ -4191,7 +4191,7 @@ function ninaApp() {
                         title: 'Connect equipment in RIGS',
                         tab: 'equip',
                         tabLabel: 'RIGS',
-                        screenshot: 'capture/02-rigs.png',
+                        screenshot: 'capture/02-rigs.jpg',
                         docLink: 'rigs.md',
                         body: [
                             'Open the RIGS tab. Each device (Main Telescope, Main Camera, Mount, Focuser, Filter Wheel, Guidescope, Guide Camera) is a card. Pick the driver, pick the specific device the driver reports, hit Connect.',
@@ -4215,7 +4215,7 @@ function ninaApp() {
                         title: 'Focus',
                         tab: 'focus',
                         tabLabel: 'FOCUS',
-                        screenshot: 'capture/04-focus.png',
+                        screenshot: 'capture/04-focus.jpg',
                         docLink: 'focus.md',
                         body: [
                             'Two flavors: Manual Assist (HFR trend loop + optional Bahtinov overlay) for setups without an electronic focuser, and Auto V-curve for motorised focusers.',
@@ -4226,7 +4226,7 @@ function ninaApp() {
                         title: 'Pick a target on SKY',
                         tab: 'sky',
                         tabLabel: 'SKY',
-                        screenshot: 'capture/05-sky.png',
+                        screenshot: 'capture/05-sky.jpg',
                         docLink: 'sky-explorer.md',
                         body: [
                             'SKY embeds the Stellarium Web engine: pan around, type a name in the search bar (M31, NGC 7000, etc), click the result. The FOV overlay shows what your camera will actually see overlaid on the sky.',
@@ -4238,7 +4238,7 @@ function ninaApp() {
                         title: 'Slew & Center on the target',
                         tab: 'sky',
                         tabLabel: 'SKY',
-                        screenshot: 'capture/06-slew-center.png',
+                        screenshot: 'capture/06-slew-center.jpg',
                         docLink: 'sky-explorer.md',
                         body: [
                             'With the target picked, hit "Slew & Center". The mount slews, Polaris takes a plate-solve frame, computes the offset, nudges the mount, and re-checks. The loop converges until the target is inside the tolerance you configured (default 30 arcsec).',
@@ -4250,7 +4250,7 @@ function ninaApp() {
                         title: 'Start guiding with PHD2',
                         tab: 'guide',
                         tabLabel: 'GUIDE',
-                        screenshot: 'capture/07-guide.png',
+                        screenshot: 'capture/07-guide.jpg',
                         docLink: 'guide-phd2.md',
                         body: [
                             'GUIDE tab embeds the PHD2 protocol client + (on Linux) the actual PHD2 GUI via xpra. Pick a profile (or create one in the wizard), connect equipment, hit Calibrate then Guide.',
@@ -4262,7 +4262,7 @@ function ninaApp() {
                         title: 'Build the sequence in AUTORUN',
                         tab: 'sequence',
                         tabLabel: 'AUTORUN',
-                        screenshot: 'capture/08-sequence.png',
+                        screenshot: 'capture/08-sequence.jpg',
                         docLink: 'sequence.md',
                         body: [
                             'AUTORUN runs the simple sequencer: N frames per filter at a given exposure + gain, with optional triggers (auto-refocus on temperature change, dither every K frames, meridian flip, etc).',
@@ -4275,7 +4275,7 @@ function ninaApp() {
                         title: 'Watch live stacking',
                         tab: 'live',
                         tabLabel: 'LIVE',
-                        screenshot: 'capture/09-live.png',
+                        screenshot: 'capture/09-live.jpg',
                         docLink: 'live-stacking.md',
                         body: [
                             'LIVE accumulates every frame the sequence captures into a running mean stack, aligned by star matching. SNR climbs in real time, you watch the nebula emerge over the first 20 frames.',
@@ -4286,7 +4286,7 @@ function ninaApp() {
                         title: 'Calibrate + integrate in STUDIO',
                         tab: 'files',
                         tabLabel: 'STUDIO',
-                        screenshot: 'capture/10-studio.png',
+                        screenshot: 'capture/10-studio.jpg',
                         docLink: 'files.md',
                         body: [
                             'STUDIO is the unified post-capture workspace: file browser on the left, Stack workspace pinned to the right. Browse to your captures, multi-select the lights, click "+ Add selection" on the Lights slot card; repeat for darks, flats, biases by browsing to those folders.',
@@ -4298,7 +4298,7 @@ function ninaApp() {
                         title: 'AI cleanup (optional)',
                         tab: 'files',
                         tabLabel: 'STUDIO',
-                        screenshot: 'capture/11-ai.png',
+                        screenshot: 'capture/11-ai.jpg',
                         docLink: 'onnx-inference.md',
                         body: [
                             'Pick the integrated master in the browser and click the GraXpert icons in the toolbar (BGE for gradient removal, Decon for sharpening, Denoise for noise reduction). All three run in the browser via WebAssembly + WebGPU when supported; falls back to CLI subprocess on the server otherwise.',
