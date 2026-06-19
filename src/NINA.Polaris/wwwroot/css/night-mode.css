@@ -17,6 +17,10 @@
     --warning: #884422;
     --danger: #aa2222;
     --border: #331111;
+    /* Red equivalents of the status RGB triples so success/warning tints
+       desaturate in night mode (match --success / --warning above). */
+    --success-rgb: 102, 51, 51;
+    --warning-rgb: 136, 68, 34;
 }
 
 [data-theme="night"] .logo {

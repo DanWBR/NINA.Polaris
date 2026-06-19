@@ -317,7 +317,7 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     outline:none; transition:border-color .12s; text-transform:none; }
 .cal-corr-grid .gb-field input:focus { border-color:#2962ff; }
 .phd2-cal-banner { position:absolute; left:50%; top:10px; transform:translateX(-50%);
-    background:rgba(20,22,30,0.85); color:#ffd54f; border:1px solid #4caf50;
+    background:rgba(20,22,30,0.85); color:#ffd54f; border:1px solid var(--success);
     border-radius:6px; padding:4px 12px; font-size:12px; font-family:monospace;
     white-space:nowrap; pointer-events:none; z-index:5; }
 /* Dither / settle banner over the guide-cam view (ASIAIR-style). Amber for

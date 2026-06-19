@@ -200,7 +200,7 @@
 }
 
 .status-indicator-sm.ok {
-    background: rgba(76, 175, 80, 0.15);
+    background: rgba(var(--success-rgb), 0.15);
     color: var(--success);
 }
 

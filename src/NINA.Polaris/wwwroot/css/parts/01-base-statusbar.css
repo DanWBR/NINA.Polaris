@@ -124,6 +124,11 @@ html[data-font="system"] {
     --success: #4caf50;
     --warning: #ff9800;
     --danger: #f44336;
+    /* RGB triples of the status colours, for rgba() tints — same role as
+       --accent-rgb. Lets night mode desaturate every success/warning
+       tint by overriding one token instead of each rgba() call site. */
+    --success-rgb: 76, 175, 80;
+    --warning-rgb: 255, 152, 0;
     --border: #2a2a4a;
     --sidebar-width: 64px;
     --statusbar-height: 40px;
@@ -644,7 +649,7 @@ body {
 }
 
 .status-indicator.ok {
-    background: rgba(76, 175, 80, 0.2);
+    background: rgba(var(--success-rgb), 0.2);
     color: var(--success);
 }
 
@@ -656,7 +661,7 @@ body {
 /* Amber, running but not fully connected (e.g. PHD2 process up but
    no camera/mount equipment hooked up yet). */
 .status-indicator.warn {
-    background: rgba(255, 152, 0, 0.18);
+    background: rgba(var(--warning-rgb), 0.18);
     color: #ffb74d;
 }
 
