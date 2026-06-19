@@ -108,6 +108,13 @@ From https://docs.qualcomm.com/doc/80-63442-10/topic/linux_setup.html
   - Note: the minimal route (quantize ONNX with onnxruntime's quantizer,
     let ORT QNN EP build+cache the HTP context on-device first run) needs
     NO Hexagon SDK at all -- prefer this for the QNN-0 spike.
+- **Offline conversion pipeline** (Caminho B, only if on-device cold-start
+  is too slow): `qnn-onnx-converter` (ONNX -> model.cpp/.bin + model_net.json)
+  -> `qnn-model-lib-generator` (-> aarch64 .so) -> `qnn-context-binary-generator`
+  (-> HTP context .bin for fast on-device init). Convert at a FIXED tile
+  shape (we already tile, so dynamic-shape limits don't bite). Prefer the
+  **FP16** HTP path (v68+) over int8 to avoid quality loss on the
+  image->image GraXpert models; int8 would need a calibration input list.
 - **Target arm-Linux** officially supported on **Ubuntu 24.04 / Python
   3.12** -- prefer an Ubuntu-24.04 aarch64 base on the Q6A for the runtime
   (check what the Radxa/Armbian image is based on).
