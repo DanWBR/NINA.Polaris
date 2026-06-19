@@ -258,7 +258,13 @@ public sealed partial class NativeGuider {
         using var capCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         capCts.CancelAfter(budgetMs);
         try {
-            return await cam.CaptureAsync(expMs / 1000.0, opts, capCts.Token);
+            var img = await cam.CaptureAsync(expMs / 1000.0, opts, capCts.Token);
+            // Apply the dark library / bad-pixel map (per NativeGuideCalibrationMode)
+            // before any consumer sees the frame, so star detection, the multi-star
+            // tracker, calibration and the live view all run on a calibrated frame.
+            if (img?.Data != null)
+                ApplyCalibrationInPlace(img.Data, img.Properties.Width, img.Properties.Height);
+            return img;
         } catch (OperationCanceledException) when (!ct.IsCancellationRequested) {
             // Our budget elapsed, not a user Stop: a dropped/stalled frame.
             // Abort the exposure so the driver resets before the next attempt.

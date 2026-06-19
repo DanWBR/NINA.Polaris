@@ -222,6 +222,8 @@ public static class StatusStreamHandler {
                             }),
                             // Live guide-frame view (native backend only; null for PHD2).
                             view = activeGuider.ViewState,
+                            // Native dark library / bad-pixel-map status (null for PHD2).
+                            darkCalibration = activeGuider.DarkCalibration,
                             // Native guide-camera connection state (its own connect switch).
                             guideCameraConnected = equip.GuideCamera?.IsConnected ?? false,
                             guideCameraName = equip.GuideCamera?.DeviceName,

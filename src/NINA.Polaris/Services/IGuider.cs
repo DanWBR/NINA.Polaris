@@ -81,6 +81,12 @@ public interface IGuider {
     /// panel. Null until one completes. Default null (PHD2).</summary>
     object? CalibrationDetails => null;
 
+    /// <summary>Native dark library / bad-pixel-map status (mode, build
+    /// progress, whether a matching master dark / defect map is loaded) for
+    /// the GUIDE calibration card. Native backend only; null for PHD2, which
+    /// manages its own dark library in its GUI.</summary>
+    object? DarkCalibration => null;
+
     /// <summary>Current guide-camera exposure in milliseconds, surfaced to the
     /// GUIDE panel's exposure field. 0 when not reported by the backend.</summary>
     int ExposureMs => 0;

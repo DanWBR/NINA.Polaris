@@ -4048,6 +4048,66 @@
                         </div>
                     </div>
 
+                    <!-- Dark library / bad-pixel map (native guider only). A
+                         single build captures darks for the current
+                         exposure/gain/bin and derives a hot-pixel map; the mode
+                         selects what is applied to each guide frame. -->
+                    <div class="guide-darkcal" x-show="guiderDriver === 'native'"
+                         style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px">
+                        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px">
+                            Dark / bad-pixel calibration
+                        </label>
+                        <select class="input-md" style="width:100%"
+                                x-model="guideCal.mode"
+                                @change="setGuideCalMode(guideCal.mode)">
+                            <option value="off">Off</option>
+                            <option value="dark">Dark subtraction</option>
+                            <option value="bpm">Bad-pixel map</option>
+                            <option value="both">Both</option>
+                        </select>
+
+                        <div class="info-row" style="margin-top:6px">
+                            <span>Dark frames</span>
+                            <input type="number" min="1" max="100" class="input-sm"
+                                   x-model.number="guideCal.frames"
+                                   @change="setGuideCalFrames(guideCal.frames)">
+                        </div>
+
+                        <!-- Status from the WS guider.darkCalibration block. -->
+                        <div class="info-row" x-show="guider.darkCalibration">
+                            <span>Master dark</span>
+                            <strong :class="guider.darkCalibration?.hasDark ? 'text-ok' : 'text-muted'"
+                                    x-text="guider.darkCalibration?.hasDark ? (guider.darkCalibration?.darkLabel || 'ready') : 'none'"></strong>
+                        </div>
+                        <div class="info-row" x-show="guider.darkCalibration">
+                            <span>Bad pixels</span>
+                            <strong :class="guider.darkCalibration?.hasBpm ? 'text-ok' : 'text-muted'"
+                                    x-text="guider.darkCalibration?.hasBpm ? (guider.darkCalibration?.bpmPixels + ' px') : 'none'"></strong>
+                        </div>
+                        <div class="info-row" x-show="guider.darkCalibration?.progress">
+                            <span>Build</span>
+                            <strong x-text="guider.darkCalibration?.progress"></strong>
+                        </div>
+                        <div class="text-warn" style="font-size:11px" x-show="guider.darkCalibration?.error"
+                             x-text="guider.darkCalibration?.error"></div>
+
+                        <div style="display:flex; gap:6px; margin-top:8px">
+                            <button class="btn btn-sm btn-primary" style="flex:1"
+                                    :disabled="!guider.guideCameraConnected || guider.darkCalibration?.building"
+                                    @click="buildGuideCal()"
+                                    x-text="guider.darkCalibration?.building ? 'Building…' : 'Build'"></button>
+                            <button class="btn btn-sm" x-show="guider.darkCalibration?.building"
+                                    @click="cancelGuideCal()">Cancel</button>
+                            <button class="btn btn-sm" x-show="!guider.darkCalibration?.building"
+                                    :disabled="!guider.darkCalibration?.hasDark && !guider.darkCalibration?.hasBpm"
+                                    @click="clearGuideCal()">Clear</button>
+                        </div>
+                        <p class="text-muted" style="font-size:11px; margin-top:6px">
+                            Cover the guide scope, then Build. Darks are matched to the
+                            current exposure / gain / binning.
+                        </p>
+                    </div>
+
                     <!-- Review Calibration modal (ASIAIR / PHD2 style).
                          Teleported to <body>: the .guide-side ancestor uses
                          backdrop-filter, which makes it the containing block
@@ -14562,7 +14622,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260619-storagepush2"></script>
+    <script src="/js/app.js?v=20260619-guidedark1"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

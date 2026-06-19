@@ -97,6 +97,50 @@ public static class GuiderEndpoints {
             return Results.Ok(new { wormPeriodSec = worm, windowSamples = window, blend });
         });
 
+        // ----- Native dark library / bad-pixel map -----
+        // Per-rig calibration mode: off | dark | bpm | both. Persists on the
+        // active rig and reloads the in-memory artifacts on the running guider.
+        group.MapPost("/calibration/mode", (ModeBody body,
+                ActiveGuiderProvider guiders, ProfileService profiles) => {
+            var mode = (body.Mode ?? "off").Trim().ToLowerInvariant();
+            if (mode is not ("off" or "dark" or "bpm" or "both"))
+                return Results.BadRequest(new { error = "mode must be off | dark | bpm | both" });
+            var rig = profiles.ActiveEquipmentProfile;
+            profiles.UpdateEquipmentProfile(rig.Id, r => r.NativeGuideCalibrationMode = mode);
+            (guiders.Active as NativeGuider)?.ReloadGuideCalibration();
+            return Results.Ok(new { mode });
+        });
+
+        // Optional: number of darks to average on the next build.
+        group.MapPost("/calibration/frames", (FramesBody body, ProfileService profiles) => {
+            int n = Math.Clamp(body.Frames, 1, 100);
+            var rig = profiles.ActiveEquipmentProfile;
+            profiles.UpdateEquipmentProfile(rig.Id, r => r.NativeGuideDarkFrames = n);
+            return Results.Ok(new { frames = n });
+        });
+
+        // Capture darks + derive the bad-pixel map for the current
+        // exposure/gain/bin. Native backend only; runs in the background and
+        // reports via the WS guider.darkCalibration block.
+        group.MapPost("/calibration/build", async (ActiveGuiderProvider guiders) => {
+            if (guiders.Active is not NativeGuider ng)
+                return Results.BadRequest(new { error = "Dark library is only available on the native guider." });
+            await ng.StartBuildCalibrationAsync();
+            return Results.Accepted("/api/guider/calibration/build", new { started = true });
+        });
+
+        group.MapPost("/calibration/cancel", (ActiveGuiderProvider guiders) => {
+            (guiders.Active as NativeGuider)?.CancelBuildCalibration();
+            return Results.Ok(new { cancelled = true });
+        });
+
+        group.MapPost("/calibration/clear", (ActiveGuiderProvider guiders) => {
+            if (guiders.Active is not NativeGuider ng)
+                return Results.BadRequest(new { error = "Dark library is only available on the native guider." });
+            ng.ClearGuideCalibration();
+            return Results.Ok(new { cleared = true });
+        });
+
         group.MapGet("/equipment", async (PHD2Client phd2) => {
             if (!phd2.IsConnected)
                 return Results.Ok(new { connected = false });
@@ -730,4 +774,6 @@ public static class GuiderEndpoints {
     public record AlgoParamRequest(string Axis, string Name, double Value);
     public record AggressionDto(double Ra, double Dec);
     public record PredictiveDto(double WormPeriodSec, int WindowSamples, double Blend);
+    public record ModeBody(string? Mode);
+    public record FramesBody(int Frames);
 }

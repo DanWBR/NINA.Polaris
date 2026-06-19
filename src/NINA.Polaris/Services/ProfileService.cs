@@ -422,6 +422,8 @@ public class ProfileService {
                 MaxSearchIterations = src.FlatWizard.MaxSearchIterations,
                 PanelBrightness = src.FlatWizard.PanelBrightness
             },
+            NativeGuideCalibrationMode = src.NativeGuideCalibrationMode,
+            NativeGuideDarkFrames = src.NativeGuideDarkFrames,
             LiveStackComputeMode = src.LiveStackComputeMode,
             LiveStackSaveFramesToDisk = src.LiveStackSaveFramesToDisk,
             LiveStackColor = src.LiveStackColor,

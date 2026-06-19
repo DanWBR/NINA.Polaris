@@ -556,6 +556,18 @@ public class EquipmentProfile {
     /// Bin 2 lowers resolution but boosts SNR + frame rate, common for guiding.</summary>
     public int NativeGuideBin { get; set; } = 1;
 
+    /// <summary>What the native guider applies to each guide frame from its
+    /// dark library / bad-pixel map (PHD2-style): "off", "dark" (subtract a
+    /// master dark matching the current exposure/gain/bin), "bpm" (interpolate
+    /// over mapped hot/dead pixels), or "both". A single "Build calibration"
+    /// capture produces both artifacts, so switching modes never recaptures.</summary>
+    public string NativeGuideCalibrationMode { get; set; } = "off";
+
+    /// <summary>Number of dark frames averaged when building the native guide
+    /// dark library. More frames = cleaner master (less residual read noise)
+    /// at the cost of a longer build.</summary>
+    public int NativeGuideDarkFrames { get; set; } = 15;
+
     /// <summary>How the native guider reacts to a German-equatorial pier-side
     /// change (meridian flip) detected mid-session: "mirror" (auto-adjust the
     /// existing calibration, default), "recalibrate" (run a fresh calibration),

@@ -1326,8 +1326,13 @@ function ninaApp() {
             peakRA: 0, peakDec: 0, stepCount: 0,
             raAggression: 0.7, decAggression: 0.7,
             lastAlert: null, lastSettleStatus: null, calProgress: null, calDetails: null,
+            darkCalibration: null,
             recentSteps: []
         },
+        // Local mirror of the native guide dark-library mode + frame count, so
+        // the dropdown/number bind without the ~1 Hz status stream resetting
+        // them mid-edit. Synced from guider.darkCalibration when not editing.
+        guideCal: { mode: 'off', frames: 15 },
         // Text of the guiding alert the user dismissed; the alert row hides
         // while guider.lastAlert equals this, so a stale WS re-broadcast of
         // the same message doesn't pop it back. A new alert text shows again.
@@ -24374,6 +24379,36 @@ function ninaApp() {
                 this.toast('Guide history cleared', 'ok');
             } catch (e) { this.toast('Clear failed', 'error'); }
         },
+        // ----- Native dark library / bad-pixel map -----
+        async setGuideCalMode(mode) {
+            this._guideCalEditing = true;
+            try {
+                await this.apiPost('/api/guider/calibration/mode', { mode });
+                this.toast('Guide calibration mode: ' + mode, 'ok');
+            } catch (e) { this.toast('Mode change failed: ' + (e.message || e), 'error'); }
+            finally { setTimeout(() => { this._guideCalEditing = false; }, 500); }
+        },
+        async setGuideCalFrames(frames) {
+            this._guideCalEditing = true;
+            try { await this.apiPost('/api/guider/calibration/frames', { frames: Math.max(1, Math.min(100, frames | 0)) }); }
+            catch (e) { this.toast('Frame count update failed', 'error'); }
+            finally { setTimeout(() => { this._guideCalEditing = false; }, 500); }
+        },
+        async buildGuideCal() {
+            try {
+                await this.apiPost('/api/guider/calibration/build');
+                this.toast('Building guide dark library — cover the scope', 'ok');
+            } catch (e) { this.toast('Build failed: ' + (e.message || e), 'error'); }
+        },
+        async cancelGuideCal() {
+            try { await this.apiPost('/api/guider/calibration/cancel'); } catch (e) { }
+        },
+        async clearGuideCal() {
+            try {
+                await this.apiPost('/api/guider/calibration/clear');
+                this.toast('Guide dark library cleared', 'ok');
+            } catch (e) { this.toast('Clear failed: ' + (e.message || e), 'error'); }
+        },
 
         // Compute SVG polyline points string for the guider chart.
         // axis: 'ra' or 'dec'. Maps RA/Dec arcsec → y-coordinate in chart space.
@@ -27538,8 +27573,16 @@ function ninaApp() {
                         // PH2X-9 sub-objects, UI binds chips + state to these.
                         profileSync: g.profileSync || null,
                         calibrateJob: g.calibrateJob || null,
-                        guiSession: g.guiSession || null
+                        guiSession: g.guiSession || null,
+                        // Native dark library / bad-pixel-map status (null for PHD2).
+                        darkCalibration: g.darkCalibration || null
                     };
+                    // Mirror the dark-cal mode/frames into the local edit model
+                    // unless the user is mid-edit (selecting the dropdown).
+                    if (g.darkCalibration && !this._guideCalEditing) {
+                        this.guideCal.mode = g.darkCalibration.mode || 'off';
+                        this.guideCal.frames = g.darkCalibration.frames || 15;
+                    }
                     // Auto-expand chart scale based on peak (with floor of 2")
                     const need = Math.max(this.guider.peakRA, this.guider.peakDec, 1.0) * 1.2;
                     if (need > this.guideChartScale) this.guideChartScale = Math.ceil(need);
