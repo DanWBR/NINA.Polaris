@@ -398,6 +398,15 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .guide-side .guide-status-card .info-row strong { color:var(--text-primary, #e6e9ef);
     font-variant-numeric:tabular-nums; }
 
+/* Functional groups inside the Settings / Calibration tabs — same carded
+   look as the Status readout, so each function (aggressiveness, guiding
+   parameters, meridian flip, mount calibration, dark library, calibration &
+   correction) reads as its own tidy block. */
+.guide-side .guide-group { background:rgba(255,255,255,0.025); border:1px solid #20242c;
+    border-radius:10px; padding:10px 12px; margin-bottom:12px; }
+.guide-side .guide-group:last-child { margin-bottom:0; }
+.guide-side .guide-group > .guide-side-title:first-child { margin-top:0; }
+
 /* Alert callout (replaces the plain red text row). */
 .guide-alert { display:flex; align-items:flex-start; gap:8px; margin-top:10px;
     padding:9px 11px; border-radius:8px; font-size:12.5px; line-height:1.4;
