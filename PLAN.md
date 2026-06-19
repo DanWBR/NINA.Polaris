@@ -80,8 +80,12 @@ inference primitive changes.
    Transpose/Reshape, plus InstanceNormalization, and BatchNorm/PRelu
    (constraints = static weights / inference mode, satisfied by a frozen
    model). Remaining unknown: the doc lists *converter* support, not
-   HTP-vs-CPU partitioning -- an op can convert yet fall back off-HTP and
-   fragment the graph. That's measured on-device in QNN-0, not a blocker.
+   HTP-vs-CPU partitioning -- an op can convert yet not place on HTP and
+   fragment the graph. NOTE: the raw QNN HTP backend has NO per-op CPU
+   fallback (arch mismatch = "indeterminate result") -- the graceful
+   partitioning (unsupported ops -> CPU) comes from **ORT QNN EP**, which is
+   another reason to drive HTP via ONNX Runtime rather than raw QNN.
+   Fragmentation is measured on-device in QNN-0; not a blocker.
 4. **Effort vs. payoff** -- comparable scope to the RKNN epic, against a
    GPU path that already works on this board.
 
@@ -137,6 +141,17 @@ From https://docs.qualcomm.com/doc/80-63442-10/topic/linux_setup.html
   3.12** -- prefer an Ubuntu-24.04 aarch64 base on the Q6A for the runtime
   (check what the Radxa/Armbian image is based on).
 - GPU EP needs `libOpenCL.so` >= 2.0 (we already have that path).
+- **Backend choice = HTP** (`libQnnHtp.so`), driven via **ORT QNN EP**.
+  Confirmed from the backend docs: HTP runs int8/int16 + **fp16 math (no
+  fp32 math)** -> FP16 is the float path. Select the SoC via
+  `QnnHtpDevice_CustomConfig_t` `QNN_HTP_DEVICE_CONFIG_OPTION_SOC`/`_ARCH`
+  -- **must confirm the QCS6490 socModel / dsp_arch** (docs only example
+  SM8350/SM8550, arch v73/v75/v81; the Q6A is likely the older v68 and may
+  need the matching HTP stub). Perf tunables for QNN-0: HVX thread count,
+  DCVS/clock vote, RPC-latency vote. NOT the **HTA** backend (legacy
+  accelerator, not on the Q6A) nor the QNN **GPU** backend (`libQnnGpu.so`,
+  OpenCL, no int8, and its device table doesn't list QCS6490 -- also
+  redundant with our own IGpuCompute OpenCL kernels).
 
 ### Notes
 Reference benchmarks live in `docs/user-guide/benchmark.md`; add Dragon
