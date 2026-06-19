@@ -11,7 +11,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
  * a secure context (also lets the Pi self-signed cert flow be handled).
  */
 const config: CapacitorConfig = {
-  appId: 'dev.danwbr.polaris',
+  appId: 'com.danielmedeiros.polaris',
   appName: 'Polaris',
   webDir: 'www',
   server: {
