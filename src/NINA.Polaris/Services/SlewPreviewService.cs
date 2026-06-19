@@ -23,8 +23,15 @@ namespace NINA.Polaris.Services;
 /// preview snap, manual stream, recording, meridian flip, flat wizard).
 ///
 /// Lifecycle: BackgroundService polls every 1s. Toggle via the
-/// <see cref="Enabled"/> property (persisted in profile through the
-/// settings endpoint).
+/// <see cref="Enabled"/> property.
+///
+/// DISABLED BY DEFAULT: on at least the SVBONY SV605CC the video stream
+/// this starts during a slew collided with the still capture that
+/// slew-and-center fires the moment the slew finishes. The driver handed
+/// back an empty/zero-dimension BLOB mid video->still transition, which
+/// blew up FITSReader ("toExclusive '0' must be greater than '0'") and
+/// failed the centering. Until the transition is made race-free, the
+/// auto slew preview stays off.
 /// </summary>
 public class SlewPreviewService : BackgroundService {
     private readonly EquipmentManager _equip;
@@ -36,7 +43,7 @@ public class SlewPreviewService : BackgroundService {
     private readonly VideoRecordingService _recording;
     private readonly ILogger<SlewPreviewService> _logger;
 
-    public bool Enabled { get; set; } = true;
+    public bool Enabled { get; set; } = false;
     public bool IsPreviewActive { get; private set; }
     public bool LastDecision_Slewing { get; private set; }
     public bool LastDecision_CaptureIdle { get; private set; }

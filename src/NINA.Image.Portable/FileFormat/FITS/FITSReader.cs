@@ -127,6 +127,16 @@ public static class FITSReader {
 
     private static ushort[] ReadPixelData(Stream stream, int width, int height, int bitpix, int bzero, double bscale) {
         long pixelCount = (long)width * height;
+        // A 0x0 (or negative-dimension) image means the source FITS had no
+        // NAXIS1/NAXIS2 — e.g. an empty or malformed BLOB handed back by an
+        // INDI driver during a video->still transition. Bail out with a
+        // clear, catchable error instead of letting Partitioner.Create(0, 0)
+        // throw the cryptic "toExclusive ('0') must be greater than '0'".
+        if (pixelCount <= 0) {
+            throw new InvalidDataException(
+                $"FITS image has no pixels (NAXIS1={width}, NAXIS2={height}); " +
+                "the camera returned an empty or malformed frame.");
+        }
         var pixels = new ushort[pixelCount];
 
         int bytesPerPixel = Math.Abs(bitpix) / 8;
