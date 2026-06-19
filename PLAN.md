@@ -62,8 +62,17 @@ inference primitive changes.
    Needs the Qualcomm libs (`libQnnHtp*.so`) + Hexagon DSP firmware
    reachable (`/dev/cdsp`). Well-trodden on Android/Windows-on-ARM;
    fiddlier on Linux and dependent on the Radxa BSP.
-2. **Quantization** -- HTP wants int8 (or fp16) for real throughput;
-   GraXpert models are fp32. Same quality-vs-speed trade the RKNN port hit.
+2. **Quantization** -- MOSTLY MITIGATED (checked the QAIRT quantization
+   doc, 2026-06): HTP requires a "quantized" artifact, but **FP16 counts**
+   (`--float_bw 16 --enable_float_fallback`, NO calibration needed) and is
+   first-class -- so the lowest-quality-risk path needs no calibration set.
+   `--input_list` (int8 calibration) and `--enable_float_fallback` are
+   mutually exclusive, one is mandatory. If FP16 is too slow, int8 has good
+   escape hatches: `--param_quantizer` **TF-adjusted** (doc cites denoise
+   models specifically), per-channel Conv weights, `--quantization_overrides`
+   JSON to keep sensitive layers (e.g. output conv) higher precision, and
+   AIMET (AdaRound/AMP) via `--use_aimet_quantizer`. Caveat: CLE only
+   supports ReLU activations (skip it if GraXpert uses LeakyReLU).
 3. **Op coverage** -- LARGELY DE-RISKED (checked the QAIRT
    supported_onnx_ops doc, 2026-06): every op a GraXpert U-Net uses is
    supported by the converter -- Conv/ConvTranspose/Relu/Add/Mul/Concat/
@@ -120,8 +129,10 @@ From https://docs.qualcomm.com/doc/80-63442-10/topic/linux_setup.html
   -> `qnn-model-lib-generator` (-> aarch64 .so) -> `qnn-context-binary-generator`
   (-> HTP context .bin for fast on-device init). Convert at a FIXED tile
   shape (we already tile, so dynamic-shape limits don't bite). Prefer the
-  **FP16** HTP path (v68+) over int8 to avoid quality loss on the
-  image->image GraXpert models; int8 would need a calibration input list.
+  **FP16** HTP path (`--float_bw 16 --enable_float_fallback`, no calibration)
+  over int8 to avoid quality loss on the image->image GraXpert models; int8
+  (`--input_list` + TF-adjusted + per-channel + `--quantization_overrides`)
+  only if FP16 throughput is insufficient.
 - **Target arm-Linux** officially supported on **Ubuntu 24.04 / Python
   3.12** -- prefer an Ubuntu-24.04 aarch64 base on the Q6A for the runtime
   (check what the Radxa/Armbian image is based on).
