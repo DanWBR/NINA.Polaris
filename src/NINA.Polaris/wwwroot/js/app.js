@@ -147,6 +147,10 @@ function ninaApp() {
             try { return localStorage.getItem('polaris.guideSideCollapsed') === '1'; }
             catch { return false; }
         })(),
+        // Which tab of the native guiding side-panel is shown: status | settings
+        // | calibration. Groups the panel's controls by function instead of one
+        // long scroll.
+        guideSideTab: 'status',
         // UI lock: a full-window overlay eats pointer events so the running
         // session can't be disturbed by an accidental tap. Persisted so an
         // accidental reload doesn't silently unlock.

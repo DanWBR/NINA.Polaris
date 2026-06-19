@@ -372,8 +372,29 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     border-radius:6px; transition:transform 200ms ease; }
 /* Collapsed: slide off to the right leaving only the 28px handle visible. */
 .guide-side.guide-side--collapsed { transform:translateX(calc(100% - 28px)); }
-.guide-side-title { font-size:12px; color:#888; margin-bottom:8px;
+/* Each section title doubles as a functional-group divider: a top rule +
+   padding-top separates the panel into clear groups (calibration, dark/
+   bad-pixel, guiding parameters, calibration & correction) with consistent
+   breathing room. */
+.guide-side-title { font-size:12px; color:#888; margin:14px 0 8px;
+    padding-top:12px; border-top:1px solid #1e1e24;
     text-transform:uppercase; letter-spacing:.04em; }
+/* Small muted helper text inside the guiding panel. Without this the generic
+   .hint has no scoped rule here and falls back to the ~16px body size. */
+.guide-side .hint { font-size:11px; line-height:1.45; color:#8a93a6; margin-top:6px; }
+.guide-side .hint.text-warn { color:var(--danger, #e05252); }
+/* Functional tabs (Status / Settings / Calibration) for the native panel. */
+.guide-side-tabs { display:flex; gap:4px; margin-bottom:10px; }
+.guide-side-tab { flex:1; padding:6px 4px; font-size:11px; cursor:pointer;
+    text-transform:uppercase; letter-spacing:.03em; color:#9aa3b2;
+    background:#11151c; border:1px solid #242a35; border-radius:6px;
+    transition:background .12s, color .12s, border-color .12s; }
+.guide-side-tab:hover { color:#cdd3de; }
+.guide-side-tab.active { background:#1d2738; color:#e6e9ef; border-color:#2962ff; }
+/* The first section title inside a tab pane sits right under the tabstrip;
+   drop its divider rule so there isn't a stray line immediately below the
+   tabs. */
+.guide-side [x-show] > .guide-side-title:first-child { border-top:none; padding-top:0; margin-top:0; }
 .guide-backend-radios { display:inline-flex; align-items:center; gap:10px;
     margin-left:12px; font-size:12px; }
 .guide-backend-radios label { display:inline-flex; align-items:center; gap:4px; cursor:pointer; }

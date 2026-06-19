@@ -42,17 +42,17 @@
     <!-- app.css was split into ordered parts for readability. Load order is
          significant (CSS cascade) — keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
-    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260619-nightpanel">
-    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260619-nightpanel">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260619-nightpanel">
-    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260619-nightpanel">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260619-nightpanel">
-    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260619-nightpanel">
-    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260619-nightpanel">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260619-nightpanel">
+    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260619-guidetabs">
+    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260619-guidetabs">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260619-guidetabs">
+    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260619-guidetabs">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260619-guidetabs">
+    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260619-guidetabs">
+    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260619-guidetabs">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260619-guidetabs">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
-    <link rel="stylesheet" href="/css/night-mode.css?v=20260619-nightpanel">
+    <link rel="stylesheet" href="/css/night-mode.css?v=20260619-guidetabs">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -3929,7 +3929,8 @@
                          title="Drag to resize · double-click to reset"></div>
                     <div class="quick-controls-scroll">
                     <!-- Live metrics (moved from the main column) -->
-                    <div x-show="guider.connected" class="guide-info" style="margin-bottom:10px">
+                    <div x-show="guider.connected && (guiderDriver !== 'native' || guideSideTab === 'status')"
+                         class="guide-info" style="margin-bottom:10px">
                         <div class="info-row"><span>State:</span><strong x-text="guider.appState"></strong></div>
                         <div class="info-row" x-show="guiderEquipment.camera">
                             <span>Guide Camera:</span>
@@ -3997,6 +3998,19 @@
                     </div>
 
                     <div x-show="guiderDriver === 'native'">
+                    <!-- Group the native panel by function: Status (metrics),
+                         Settings (aggression + algorithms), Calibration
+                         (mount recalibrate + dark/bad-pixel library). -->
+                    <div class="guide-side-tabs">
+                        <button class="guide-side-tab" :class="{ active: guideSideTab === 'status' }"
+                                @click="guideSideTab = 'status'">Status</button>
+                        <button class="guide-side-tab" :class="{ active: guideSideTab === 'settings' }"
+                                @click="guideSideTab = 'settings'">Settings</button>
+                        <button class="guide-side-tab" :class="{ active: guideSideTab === 'calibration' }"
+                                @click="guideSideTab = 'calibration'">Calibration</button>
+                    </div>
+
+                    <div x-show="guideSideTab === 'calibration'">
                     <button class="btn btn-sm" style="width:100%;margin-bottom:10px"
                             @click="guiderRecalibrate()"
                             :disabled="!guider.connected || guider.calibrating"
@@ -4009,6 +4023,7 @@
                             title="Review the last calibration (rates, angles, plot)">
                         ⊹ Calibration details
                     </button>
+                    </div><!-- /calibration: mount actions -->
 
                     <!-- RA/Dec aggressiveness (ASIAIR-style, 10–150%). The
                          percentage = fraction of the measured error corrected
@@ -4019,7 +4034,7 @@
                          mirrors the server value via x-effect, but ONLY when the
                          user isn't dragging — otherwise the ~1 Hz status stream
                          resets the thumb before the change is committed. -->
-                    <div class="guide-aggr"
+                    <div class="guide-aggr" x-show="guideSideTab === 'settings'"
                          x-effect="if (!_guideAggrEditing) {
                              guideAggr.ra = Math.round((guider.raAggression ?? 0.7) * 100);
                              guideAggr.dec = Math.round((guider.decAggression ?? 0.7) * 100);
@@ -4052,8 +4067,8 @@
                          single build captures darks for the current
                          exposure/gain/bin and derives a hot-pixel map; the mode
                          selects what is applied to each guide frame. -->
-                    <div class="guide-darkcal" x-show="guiderDriver === 'native'">
-                        <div class="guide-side-title" style="margin-top:12px">Dark / bad-pixel calibration</div>
+                    <div class="guide-darkcal" x-show="guideSideTab === 'calibration'">
+                        <div class="guide-side-title">Dark / bad-pixel calibration</div>
 
                         <div class="equip-driver-row">
                             <label class="equip-driver-label">Mode</label>
@@ -4171,6 +4186,7 @@
                         </div>
                     </div>
                     </template>
+                    <div x-show="guideSideTab === 'settings'">
                     <div class="guide-side-title">Guiding parameters</div>
                     <div class="equip-driver-row">
                         <label class="equip-driver-label">RA algo</label>
@@ -4243,7 +4259,9 @@
                                @change="setNativeReverseDecAfterFlip($event.target.checked)">
                         <span style="font-size:12px">Reverse Dec after flip</span>
                     </label>
-                    <div class="guide-side-title" style="margin-top:12px">Calibration &amp; correction</div>
+                    </div><!-- /settings: guiding parameters -->
+                    <div x-show="guideSideTab === 'calibration'">
+                    <div class="guide-side-title">Calibration &amp; correction</div>
                     <div class="cal-corr-grid">
                         <label class="gb-field">Calibration step (ms)
                             <input type="number" min="50" max="10000" step="50"
@@ -4261,6 +4279,7 @@
                                    @change="setNativeCalSetting('nativeMaxDecDurationMs', $event.target.value)">
                         </label>
                     </div>
+                    </div><!-- /calibration: cal & correction -->
                     </div><!-- /native params -->
                     </div><!-- /quick-controls-scroll -->
                 </div>
@@ -14622,7 +14641,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260619-defaults1"></script>
+    <script src="/js/app.js?v=20260619-guidetabs"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
