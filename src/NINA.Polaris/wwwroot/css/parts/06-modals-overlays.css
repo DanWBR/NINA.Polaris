@@ -1398,6 +1398,10 @@
     font-size: 11px;
     line-height: 1.2;
     cursor: default;
+    /* Keep the natural content width — the parent .activity-bar-ops row
+       scrolls when crowded. Without this the chips are flex-shrunk below
+       their nowrap text, which then spills past the rounded pill edge. */
+    flex: 0 0 auto;
 }
 .activity-chip-warn { border-color: rgba(245, 158, 11, 0.55); }
 .activity-chip-error { border-color: rgba(239, 68, 68, 0.6); }
@@ -1493,6 +1497,9 @@
     font-size: 11px;
     line-height: 1.2;
     max-width: 260px;
+    /* Same as .activity-chip: don't let the flex row shrink the pill
+       below its nowrap text (which spills past the right edge). */
+    flex: 0 0 auto;
     transition: background 0.2s ease, border-color 0.2s ease;
 }
 .activity-transfer-up {
