@@ -154,6 +154,13 @@
          via xterm.js without needing a screen, and lets a Windows host
          SSH into a separate Linux box on the LAN. MIT-licensed. -->
     <PackageReference Include="SSH.NET" Version="2024.*" />
+    <!-- Pure-managed SMB1/SMB2 client (Tal Aloni). Powers the "auto-push
+         images to network storage" feature's SMB/CIFS backend
+         (StoragePushService → SmbStorageTarget): writes captured FITS/XISF
+         to a NAS / Windows share / Samba box. No native deps, cross-platform.
+         LGPL-3.0-or-later — compatible with this AGPL-3.0 app; attribution +
+         terms in licenses/SMBLibrary-LICENSE.txt. -->
+    <PackageReference Include="SMBLibrary" Version="1.5.7" />
     <!-- PH2VNC-1: Windows-only registry + service-control surface for
          the TightVNC integration (Phd2VncSessionService). Both packages
          compile cross-platform but throw PlatformNotSupportedException

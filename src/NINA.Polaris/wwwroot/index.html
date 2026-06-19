@@ -10141,6 +10141,77 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </div>
                 </div>
 
+                <!-- Auto-push captured images to network storage (SMB / SFTP /
+                     mounted path). Mirrors the capture folder tree onto the
+                     target; the local copy is kept. -->
+                <div class="settings-section" x-init="loadStorageConfig()">
+                    <h3><span class="settings-card-icon">📤</span>Auto-push to network storage</h3>
+                    <p class="hint" style="margin-top:0">
+                        Copy every saved image to a NAS, network share or SSH box as it's
+                        written, mirroring the capture folder tree. The local copy stays put.
+                    </p>
+                    <label class="chk" style="display:flex; align-items:center; gap:8px; margin-bottom:12px">
+                        <input type="checkbox" x-model="storagePush.enabled" @change="saveStorageConfig()">
+                        Enable auto-push
+                    </label>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px">
+                        <label>Protocol
+                            <select class="input input-sm" x-model="storagePush.kind">
+                                <option value="smb">SMB / CIFS (NAS, Windows share)</option>
+                                <option value="sftp">SFTP (SSH)</option>
+                                <option value="local">Mounted / local folder</option>
+                            </select>
+                        </label>
+                        <label x-show="storagePush.kind !== 'local'">Host
+                            <input class="input input-sm" type="text" x-model="storagePush.host" placeholder="192.168.0.50">
+                        </label>
+                        <label x-show="storagePush.kind === 'smb'">Share
+                            <input class="input input-sm" type="text" x-model="storagePush.share" placeholder="astro">
+                        </label>
+                        <label x-show="storagePush.kind === 'sftp'">Remote base path
+                            <input class="input input-sm" type="text" x-model="storagePush.basePath" placeholder="/home/user/captures">
+                        </label>
+                        <label x-show="storagePush.kind === 'local'">Destination path
+                            <input class="input input-sm" type="text" x-model="storagePush.basePath" placeholder="/mnt/nas/astro">
+                        </label>
+                        <label x-show="storagePush.kind === 'smb'">Domain <span class="text-muted">(optional)</span>
+                            <input class="input input-sm" type="text" x-model="storagePush.domain" placeholder="WORKGROUP">
+                        </label>
+                        <label x-show="storagePush.kind !== 'local'">Username
+                            <input class="input input-sm" type="text" x-model="storagePush.username" autocomplete="off">
+                        </label>
+                        <label x-show="storagePush.kind !== 'local'">Password
+                            <input class="input input-sm" type="password" x-model="storagePush.password"
+                                   autocomplete="new-password"
+                                   :placeholder="storagePush.hasPassword ? '•••••• (unchanged)' : ''">
+                        </label>
+                        <label x-show="storagePush.kind !== 'local'">Port <span class="text-muted">(0 = default)</span>
+                            <input class="input input-sm" type="number" min="0" max="65535" x-model.number="storagePush.port">
+                        </label>
+                    </div>
+                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:12px">
+                        <button class="btn btn-primary" @click="saveStorageConfig()">Save</button>
+                        <button class="btn" @click="testStorageConnection()" :disabled="storagePush.testing">
+                            <span x-show="!storagePush.testing">Test connection</span>
+                            <span x-show="storagePush.testing" x-cloak>Testing…</span>
+                        </button>
+                        <span x-show="storagePush.testResult" x-cloak
+                              :class="storagePush.testOk ? 'status-pill status-pill-ok' : 'status-pill status-pill-error'"
+                              x-text="storagePush.testResult"></span>
+                    </div>
+                    <!-- Live push counters from /ws/status. -->
+                    <div class="text-muted" style="font-size:11px; margin-top:12px" x-show="storagePush.enabled" x-cloak>
+                        <span x-text="storagePushStatus.connected ? '● connected' : '○ idle'"></span>
+                        · queued <span x-text="storagePushStatus.queued || 0"></span>
+                        · uploaded <span x-text="storagePushStatus.uploaded || 0"></span>
+                        · failed <span x-text="storagePushStatus.failed || 0"></span>
+                        <button class="btn btn-sm" style="margin-left:8px" x-show="(storagePushStatus.failed || 0) > 0"
+                                @click="retryStoragePush()">Retry failed</button>
+                        <div class="text-warn" style="margin-top:4px" x-show="storagePushStatus.lastError"
+                             x-text="'Last error: ' + storagePushStatus.lastError"></div>
+                    </div>
+                </div>
+
                 <!-- Appearance / interface scale. Slider writes to a
                      draft value (uiZoomDraft) while you drag, the
                      actual page zoom only updates when you click
@@ -14492,7 +14563,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260618-guidebadge2"></script>
+    <script src="/js/app.js?v=20260619-storagepush"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

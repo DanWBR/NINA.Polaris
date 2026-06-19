@@ -109,6 +109,23 @@ public class UserProfile {
     public string? LetsEncryptStatus { get; set; }            // last operation outcome (Ok / Error / "in progress")
     public string? LetsEncryptLastError { get; set; }         // last failure message (null on success)
 
+    // Auto-push of saved images to network storage (NAS / share / SSH box).
+    // Global (one target for the host), persisted in plain JSON like the
+    // DuckDns/PHD2 creds above — the profile file is already gated by OS
+    // file permissions. Password is never returned by GET /api/storage/config
+    // nor exposed over the WebSocket status. Pushed files mirror the local
+    // capture tree onto the target; the local copy is kept.
+    public bool   StoragePushEnabled { get; set; } = false;
+    public string StorageKind { get; set; } = "smb";   // smb | sftp | local
+    public string StorageHost { get; set; } = "";        // host or IP (smb/sftp)
+    public int    StoragePort { get; set; } = 0;          // 0 => provider default (445 smb / 22 sftp)
+    public string StorageShare { get; set; } = "";        // SMB share name (no slashes)
+    public string StorageBasePath { get; set; } = "";     // SFTP base dir OR local/mounted path
+    public string StorageDomain { get; set; } = "";       // SMB workgroup/domain (optional)
+    public string StorageUsername { get; set; } = "";
+    public string StoragePassword { get; set; } = "";
+    public string? StorageLastTestResult { get; set; }    // last "Test connection" outcome
+
     // External post-processing tools (Siril + GraXpert). Empty/null
     // means "auto-detect" via BinaryLocator; set explicitly to
     // override the default path search.

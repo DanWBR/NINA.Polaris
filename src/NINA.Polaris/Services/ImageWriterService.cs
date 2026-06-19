@@ -84,6 +84,14 @@ public class ImageWriterService {
     public string? LastWrittenPath => _lastWrittenPath;
     public int SessionFrameCount => _sessionFrameNumber;
 
+    /// <summary>Raised with the absolute path right after a frame is written to
+    /// disk. The single post-save choke point — every SaveImage call site
+    /// (sequence, live stack, flat wizard, ADV sequencer) funnels through here.
+    /// Used by <see cref="StoragePushService"/> to auto-push to network storage.
+    /// Handlers must be fast + non-throwing; the invocation is wrapped so a
+    /// subscriber can never break a capture.</summary>
+    public event Action<string>? ImageSaved;
+
     public ImageWriterService(EquipmentManager equip, ProfileService profile, ILogger<ImageWriterService> logger) {
         _equip = equip;
         _profile = profile;
@@ -183,6 +191,10 @@ public class ImageWriterService {
                 _logger.LogInformation("Saved FITS: {Path}", fullPath);
             }
             _lastWrittenPath = fullPath;
+            // Fire-and-forget notify for auto-push to network storage. Wrapped
+            // so a misbehaving subscriber never fails the capture.
+            try { ImageSaved?.Invoke(fullPath); }
+            catch (Exception ex) { _logger.LogDebug(ex, "ImageSaved handler threw"); }
             return fullPath;
         } catch (Exception ex) {
             _logger.LogError(ex, "Failed to save FITS to {Dir}", dir);

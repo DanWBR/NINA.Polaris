@@ -1,0 +1,34 @@
+SMBLibrary
+==========
+
+N.I.N.A. Polaris uses SMBLibrary, a pure-managed SMB1/SMB2 client, for the
+SMB/CIFS backend of the "auto-push images to network storage" feature
+(NINA.Polaris.Services.Storage.SmbStorageTarget). It writes captured
+FITS/XISF files to a NAS, Windows share or Samba server.
+
+Author / source
+---------------
+    Tal Aloni <tal.aloni.il@gmail.com>
+    https://github.com/TalAloni/SMBLibrary
+    https://www.nuget.org/packages/SMBLibrary
+
+License
+-------
+SMBLibrary is licensed under the GNU Lesser General Public License,
+version 3.0 or (at your option) any later version (LGPL-3.0-or-later).
+
+The full LGPL-3.0 text is available at:
+
+    https://www.gnu.org/licenses/lgpl-3.0.txt
+
+LGPL-3.0 builds on the GNU General Public License v3.0 by adding the
+permissions in the LGPL; the GPL-3.0 text is at:
+
+    https://www.gnu.org/licenses/gpl-3.0.txt
+
+Use in N.I.N.A. Polaris
+-----------------------
+The package is consumed unmodified as a NuGet PackageReference; no SMBLibrary
+source is copied into this repository. N.I.N.A. Polaris is distributed under
+the GNU Affero General Public License v3.0, with which LGPL-3.0-licensed
+libraries are compatible.

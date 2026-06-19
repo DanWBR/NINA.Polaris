@@ -76,6 +76,7 @@ public static class StatusStreamHandler {
         var simulator = context.RequestServices
             .GetRequiredService<NINA.Polaris.Services.Simulator.SimulatorService>();
         var network = context.RequestServices.GetRequiredService<NetworkManagerService>();
+        var storagePush = context.RequestServices.GetRequiredService<StoragePushService>();
         var benchmark = context.RequestServices.GetRequiredService<BenchmarkService>();
         var sensorAnalysis = context.RequestServices.GetRequiredService<SensorAnalysisService>();
         var notifications = context.RequestServices.GetRequiredService<NotificationService>();
@@ -562,6 +563,20 @@ public static class StatusStreamHandler {
                             // show "Hotspot started automatically".
                             autoHotspotFallback = network.AutoHotspotFallback,
                             fallbackEngaged     = network.HotspotFallbackEngaged
+                        },
+                        // Auto-push of saved images to network storage
+                        // (SMB / SFTP / mounted path). Drives the Settings
+                        // card's live status line. Password is never exposed.
+                        storagePush = new {
+                            enabled       = storagePush.Enabled,
+                            kind          = storagePush.Kind,
+                            connected     = storagePush.Connected,
+                            queued        = storagePush.Queued,
+                            uploaded      = storagePush.Uploaded,
+                            failed        = storagePush.Failed,
+                            currentFile   = storagePush.CurrentFile,
+                            lastError     = storagePush.LastError,
+                            lastUploadUtc = storagePush.LastUploadUtc?.ToString("o")
                         },
                         // BENCH: compact progress for the Settings card.
                         // Full results are fetched over REST.

@@ -192,6 +192,13 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Auth.AuthService>();
 builder.Services.AddSingleton<ClockSyncService>();
 builder.Services.AddSingleton<PowerService>();
 builder.Services.AddSingleton<ImageWriterService>();
+// Auto-push saved images to network storage (SMB / SFTP / mounted path).
+// Background consumer subscribes to ImageWriterService.ImageSaved; the
+// factory hands out a fresh connection-owning adapter per connect cycle.
+builder.Services.AddSingleton<NINA.Polaris.Services.Storage.IStorageTargetFactory,
+    NINA.Polaris.Services.Storage.StorageTargetFactory>();
+builder.Services.AddSingleton<StoragePushService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<StoragePushService>());
 builder.Services.AddSingleton<PHD2Client>();
 // Native in-process autoguider (drop-in alternative to PHD2, per-rig).
 builder.Services.AddSingleton<NativeGuider>();
@@ -988,6 +995,7 @@ app.MapSimulatorEndpoints();
 app.MapIndiWebEndpoints();
 // WIFI-3: hotspot ↔ station mode switch (Linux + NetworkManager only)
 app.MapNetworkEndpoints();
+app.MapStorageEndpoints();
 app.MapAutoFocusEndpoints();
 // Sticky UI field persistence (panel exposure/gain/binning, target name,
 // AF params, ...): client PUTs a JSON blob, restores it on load.

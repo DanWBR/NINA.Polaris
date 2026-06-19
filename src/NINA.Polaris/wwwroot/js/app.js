@@ -1079,6 +1079,20 @@ function ninaApp() {
         // Persisted in localStorage so the choice survives reloads.
         slewPreviewVisible: true,
 
+        // Auto-push of saved images to network storage (SMB / SFTP / mounted
+        // path). `storagePush` is the Settings config form; `storagePushStatus`
+        // is the live counters pushed over /ws/status (kept separate so the
+        // status broadcast never clobbers what the user is typing).
+        storagePush: {
+            enabled: false, kind: 'smb', host: '', port: 0, share: '',
+            basePath: '', domain: '', username: '', password: '',
+            hasPassword: false, testing: false, testResult: '', testOk: false
+        },
+        storagePushStatus: {
+            enabled: false, kind: 'smb', connected: false, queued: 0,
+            uploaded: 0, failed: 0, currentFile: null, lastError: null, lastUploadUtc: null
+        },
+
         // Custom confirm() modal -- replaces window.confirm() so OK/Cancel
         // labels are in English regardless of browser locale. Driven via
         // _confirmAsync() which returns a Promise that resolves true on
@@ -18802,6 +18816,70 @@ function ninaApp() {
             } catch { /* non-fatal */ }
         },
 
+        // ---- Auto-push to network storage (Settings card) ----
+        async loadStorageConfig() {
+            try {
+                const d = await this.apiGet('/api/storage/config');
+                const s = this.storagePush;
+                s.enabled = !!d.enabled;
+                s.kind = d.kind || 'smb';
+                s.host = d.host || '';
+                s.port = d.port || 0;
+                s.share = d.share || '';
+                s.basePath = d.basePath || '';
+                s.domain = d.domain || '';
+                s.username = d.username || '';
+                s.hasPassword = !!d.hasPassword;
+                s.password = '';   // never round-tripped; blank = keep stored
+                if (d.lastTestResult) { s.testResult = d.lastTestResult; }
+            } catch (e) {
+                console.warn('[storage] load config failed', e);
+            }
+        },
+        async saveStorageConfig() {
+            const s = this.storagePush;
+            try {
+                const r = await (await this.apiPut('/api/storage/config', {
+                    enabled: s.enabled, kind: s.kind, host: s.host, port: Number(s.port) || 0,
+                    share: s.share, basePath: s.basePath, domain: s.domain,
+                    username: s.username, password: s.password
+                })).json();
+                if (r && r.ok) {
+                    if (s.password) s.hasPassword = true;
+                    s.password = '';
+                    this.toast('Network storage settings saved', 'ok');
+                } else {
+                    this.toast((r && r.error) || 'Save failed', 'warn');
+                }
+            } catch (e) {
+                this.toast('Save failed: ' + (e.message || e), 'warn');
+            }
+        },
+        async testStorageConnection() {
+            const s = this.storagePush;
+            // Persist first so the server tests the values shown on screen.
+            await this.saveStorageConfig();
+            s.testing = true; s.testResult = '';
+            try {
+                const r = await (await this.apiPost('/api/storage/test', {})).json();
+                s.testOk = !!r.ok;
+                s.testResult = r.message || (r.ok ? 'OK' : 'Failed');
+            } catch (e) {
+                s.testOk = false;
+                s.testResult = 'Test failed: ' + (e.message || e);
+            } finally {
+                s.testing = false;
+            }
+        },
+        async retryStoragePush() {
+            try {
+                const r = await (await this.apiPost('/api/storage/retry', {})).json();
+                this.toast(`Re-queued ${r.requeued || 0} file(s)`, 'ok');
+            } catch (e) {
+                this.toast('Retry failed: ' + (e.message || e), 'warn');
+            }
+        },
+
         // ESC-key safety net: closes any open floating panel
         // (Mount + Camera) regardless of what's happening with the
         // X buttons. Wired in init() via a global keydown listener.
@@ -27615,6 +27693,9 @@ function ninaApp() {
             if (msg.videoRecording) this.videoRecording = msg.videoRecording;
             if (msg.videoStack !== undefined) this.videoStack = msg.videoStack;  // null when idle
             if (msg.slewPreview) this.slewPreview = msg.slewPreview;
+            // Auto-push to network storage: live counters for the Settings card.
+            // Kept separate from the storagePush config-form object.
+            if (msg.storagePush) this.storagePushStatus = msg.storagePush;
             // FW-1: Flat Wizard tick. state + lastError always present;
             // progress is null when the wizard never ran (preserved as
             // null so the UI hides the progress block). When a run
