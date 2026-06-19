@@ -42,17 +42,17 @@
     <!-- app.css was split into ordered parts for readability. Load order is
          significant (CSS cascade) — keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
-    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260619-guidetabs">
-    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260619-guidetabs">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260619-guidetabs">
-    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260619-guidetabs">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260619-guidetabs">
-    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260619-guidetabs">
-    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260619-guidetabs">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260619-guidetabs">
+    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260619-guidetabs2">
+    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260619-guidetabs2">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260619-guidetabs2">
+    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260619-guidetabs2">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260619-guidetabs2">
+    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260619-guidetabs2">
+    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260619-guidetabs2">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260619-guidetabs2">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
-    <link rel="stylesheet" href="/css/night-mode.css?v=20260619-guidetabs">
+    <link rel="stylesheet" href="/css/night-mode.css?v=20260619-guidetabs2">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -3928,9 +3928,20 @@
                          @dblclick="resetGuideWidth()"
                          title="Drag to resize · double-click to reset"></div>
                     <div class="quick-controls-scroll">
-                    <!-- Live metrics (moved from the main column) -->
+                    <!-- Functional tabs for the native panel (Status / Settings /
+                         Calibration); reuses the app's own .guide-tabstrip style.
+                         Sits above the content so each pane renders below it. -->
+                    <div class="guide-tabstrip guide-side-tabstrip" x-show="guiderDriver === 'native'">
+                        <button class="guide-tab" :class="{ active: guideSideTab === 'status' }"
+                                @click="guideSideTab = 'status'">Status</button>
+                        <button class="guide-tab" :class="{ active: guideSideTab === 'settings' }"
+                                @click="guideSideTab = 'settings'">Settings</button>
+                        <button class="guide-tab" :class="{ active: guideSideTab === 'calibration' }"
+                                @click="guideSideTab = 'calibration'">Calibration</button>
+                    </div>
+                    <!-- Live metrics (Status pane) -->
                     <div x-show="guider.connected && (guiderDriver !== 'native' || guideSideTab === 'status')"
-                         class="guide-info" style="margin-bottom:10px">
+                         class="guide-info guide-status-card" style="margin-bottom:10px">
                         <div class="info-row"><span>State:</span><strong x-text="guider.appState"></strong></div>
                         <div class="info-row" x-show="guiderEquipment.camera">
                             <span>Guide Camera:</span>
@@ -3988,28 +3999,15 @@
                              (guideAlertDismissed) hides one the user dismissed
                              so a stale WS re-broadcast doesn't bring it back,
                              while a genuinely NEW alert text still shows. -->
-                        <div class="info-row" x-show="guider.lastAlert && guider.lastAlert !== guideAlertDismissed"
-                             style="align-items:flex-start;gap:6px">
-                            <span class="text-danger">Alert:</span>
-                            <strong class="text-danger" style="flex:1" x-text="guider.lastAlert"></strong>
-                            <button class="btn btn-sm btn-icon-only" title="Dismiss"
+                        <div class="guide-alert" x-show="guider.lastAlert && guider.lastAlert !== guideAlertDismissed">
+                            <span class="guide-alert-icon">⚠</span>
+                            <strong x-text="guider.lastAlert"></strong>
+                            <button class="btn btn-sm btn-icon-only guide-alert-dismiss" title="Dismiss"
                                     @click="guideAlertDismissed = guider.lastAlert">&times;</button>
                         </div>
                     </div>
 
                     <div x-show="guiderDriver === 'native'">
-                    <!-- Group the native panel by function: Status (metrics),
-                         Settings (aggression + algorithms), Calibration
-                         (mount recalibrate + dark/bad-pixel library). -->
-                    <div class="guide-side-tabs">
-                        <button class="guide-side-tab" :class="{ active: guideSideTab === 'status' }"
-                                @click="guideSideTab = 'status'">Status</button>
-                        <button class="guide-side-tab" :class="{ active: guideSideTab === 'settings' }"
-                                @click="guideSideTab = 'settings'">Settings</button>
-                        <button class="guide-side-tab" :class="{ active: guideSideTab === 'calibration' }"
-                                @click="guideSideTab = 'calibration'">Calibration</button>
-                    </div>
-
                     <div x-show="guideSideTab === 'calibration'">
                     <button class="btn btn-sm" style="width:100%;margin-bottom:10px"
                             @click="guiderRecalibrate()"
@@ -14641,7 +14639,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260619-guidetabs"></script>
+    <script src="/js/app.js?v=20260619-guidetabs2"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
