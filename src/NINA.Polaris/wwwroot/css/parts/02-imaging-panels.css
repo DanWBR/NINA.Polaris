@@ -120,7 +120,7 @@
        content, so the grab bar didn't reach the bottom when the panel
        overflowed (had a scrollbar). */
     overflow: hidden;
-    background: rgba(15, 23, 42, 0.88);
+    background: rgba(var(--panel-glass-rgb), 0.88);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border: 1px solid var(--border);
@@ -351,7 +351,7 @@
     z-index: 3;
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    background: rgba(15, 23, 42, 0.82);
+    background: rgba(var(--panel-glass-rgb), 0.82);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
 }

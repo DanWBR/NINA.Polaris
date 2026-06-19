@@ -28,6 +28,9 @@
     --accent2-light: #cc3333;
     --accent2-light-rgb: 204, 51, 51;
     --accent2-deep: #882222;
+    /* Glass panel navy -> very dark red so the floating sidebars match
+       the night theme instead of staying blue. */
+    --panel-glass-rgb: 26, 0, 0;
 }
 
 [data-theme="night"] .logo {

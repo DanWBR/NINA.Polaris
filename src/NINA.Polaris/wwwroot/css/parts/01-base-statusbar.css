@@ -130,6 +130,11 @@ html[data-font="system"] {
     --accent2-light: #67e8f9;      /* icy highlight / text on cyan */
     --accent2-light-rgb: 103, 232, 249;
     --accent2-deep: #0891b2;       /* deep cyan (gradient start) */
+    /* RGB of the translucent "glass" panel background (floating quick-
+       controls sidebars, HUD overlays). rgba()-composited at various
+       alphas, so night mode recolours the navy to dark red via this one
+       triple. */
+    --panel-glass-rgb: 15, 23, 42;
     --success: #4caf50;
     --warning: #ff9800;
     --danger: #f44336;

@@ -1277,7 +1277,7 @@
     /* Translucent dark glass so the nebula behind the panel shows
        through. The backdrop-filter blur (where supported) keeps text
        crisp on top of busy background regions. */
-    background: rgba(15, 23, 42, 0.65);
+    background: rgba(var(--panel-glass-rgb), 0.65);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     border: 1px solid var(--border, #334155);
@@ -1323,7 +1323,7 @@
 .home-quick-card {
     /* Same glass treatment as the status cards so the row reads as a
        single cohesive surface against the nebula. */
-    background: rgba(15, 23, 42, 0.65);
+    background: rgba(var(--panel-glass-rgb), 0.65);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     border: 1px solid var(--border, #334155);
