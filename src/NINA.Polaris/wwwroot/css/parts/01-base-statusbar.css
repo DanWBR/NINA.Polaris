@@ -130,6 +130,34 @@ html[data-font="system"] {
     --success-rgb: 76, 175, 80;
     --warning-rgb: 255, 152, 0;
     --border: #2a2a4a;
+
+    /* Aliases for token names that grew up across the codebase as
+       var(--name, #fallback) where --name was never defined — so the
+       hard-coded fallback rendered (and the call sites that forgot the
+       fallback rendered an invalid value). Defining them here as aliases
+       of the core palette makes every call site real, centralised, and
+       night-mode aware. Kept as separate names rather than mass-renamed
+       to avoid churning hundreds of call sites. */
+    --text: var(--text-primary);
+    --text-on-accent: #fff;
+    --text-warn: var(--danger);   /* fallbacks were red, i.e. danger */
+    --ok: var(--success);
+    --warn: var(--warning);
+    --accent-success: var(--success);
+    --bg: var(--bg-primary);
+    --panel: var(--bg-secondary);
+    --panel-bg: var(--bg-secondary);
+    /* Translucent overlays (theme-neutral): a faint white wash over
+       whatever sits behind. Used for elevated cards / input wells. */
+    --bg-elevated: rgba(255, 255, 255, 0.05);
+    --input-bg: rgba(255, 255, 255, 0.05);
+    --surface-2: rgba(255, 255, 255, 0.04);
+    /* Panel widths previously only defined via inline var() fallbacks. */
+    --autorun-list-w: 300px;
+    --editor-panel-w: 320px;
+    --guide-side-width: 336px;
+    --qc-width: 320px;
+    --video-qc-width: 340px;
     --sidebar-width: 64px;
     --statusbar-height: 40px;
     --activitybar-height: 36px;   /* bottom activity bar (.activity-bar) */
