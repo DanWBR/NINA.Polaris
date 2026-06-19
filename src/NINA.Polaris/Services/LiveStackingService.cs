@@ -200,6 +200,42 @@ public class LiveStackingService {
     // frames stack.
     public double LastFrameSnr { get; private set; }
     public double CumulativeSnr { get; private set; }
+
+    // 16-bit luminance histogram + stats of the latest colour stack, surfaced
+    // over the WS status so the LIVE histogram panel shows the real 16-bit data
+    // even though the colour frame is broadcast as an 8-bit JPEG. Null until a
+    // colour frame has been integrated; bins span 0..65535 in 256 buckets.
+    public int[]? ColorHistogram { get; private set; }
+    public int ColorHistMin { get; private set; }
+    public int ColorHistMax { get; private set; }
+    public double ColorHistMean { get; private set; }
+    public double ColorHistStd { get; private set; }
+
+    /// <summary>Build the 256-bin 16-bit luminance histogram + min/max/mean/std
+    /// of a planar RGB stack (subsampled on big sensors). Cheap; runs once per
+    /// integrated colour frame, off the relay's broadcast.</summary>
+    private void ComputeColorHistogram(ushort[] rgb, int w, int h) {
+        int plane = w * h;
+        if (rgb.Length < plane * 3 || plane == 0) { ColorHistogram = null; return; }
+        const int NB = 256;
+        var bins = new int[NB];
+        int mn = 65535, mx = 0; double sum = 0, sumSq = 0; long cnt = 0;
+        int step = Math.Max(1, plane / 300_000);
+        for (int i = 0; i < plane; i += step) {
+            int lum = (int)(rgb[i] * 0.299 + rgb[plane + i] * 0.587 + rgb[2 * plane + i] * 0.114);
+            if (lum < 0) lum = 0; else if (lum > 65535) lum = 65535;
+            if (lum < mn) mn = lum;
+            if (lum > mx) mx = lum;
+            sum += lum; sumSq += (double)lum * lum; cnt++;
+            bins[lum * (NB - 1) / 65535]++;
+        }
+        var mean = cnt > 0 ? sum / cnt : 0;
+        ColorHistogram = bins;
+        ColorHistMin = cnt > 0 ? mn : 0;
+        ColorHistMax = mx;
+        ColorHistMean = mean;
+        ColorHistStd = cnt > 0 ? Math.Sqrt(Math.Max(0, sumSq / cnt - mean * mean)) : 0;
+    }
     /// <summary>Rolling history of (frameCount, cumulativeSnr) used
     /// by <see cref="SnrEtaCalculator"/> to fit the √N model + ETA.
     /// Capped at 50 entries — beyond that the fit is dominated by
@@ -671,6 +707,13 @@ public class LiveStackingService {
                     BayerPattern = BayerPatternEnum.None
                 };
                 var rgbImage = new BaseImageData(rgbPixels, rgbProps, imageData.MetaData);
+                // The colour stack is broadcast as an 8-bit JPEG (the raw WS
+                // protocol is single-channel only), so the client can't build a
+                // 16-bit histogram from it — it would pin the LIVE histogram
+                // panel to 0..255 while the real frame is 16-bit. Compute the
+                // true 16-bit luminance histogram + stats here and surface them
+                // via the WS status so the panel reflects the actual data.
+                ComputeColorHistogram(rgbPixels, _width, _height);
                 // The colour live stack is the image the operator zooms into on
                 // the LIVE tab, and it's broadcast only once per integrated
                 // frame (seconds apart), so it isn't fps-critical like the video

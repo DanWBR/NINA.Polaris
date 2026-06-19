@@ -364,6 +364,16 @@ public static class StatusStreamHandler {
                             etaFrames = liveStack.LastEta?.RemainingFrames,
                             etaSeconds = liveStack.LastEta?.RemainingSeconds,
                             etaConfidence = liveStack.LastEta?.Confidence,
+                            // 16-bit luminance histogram + stats of the colour
+                            // stack (the broadcast frame is an 8-bit JPEG, so the
+                            // client can't compute these itself). Null when not
+                            // colour-stacking. Lets the LIVE histogram panel show
+                            // real 16-bit min/max/mean/std + bars.
+                            colorHistogram = liveStack.ColorActive ? liveStack.ColorHistogram : null,
+                            colorHistMin = liveStack.ColorHistMin,
+                            colorHistMax = liveStack.ColorHistMax,
+                            colorHistMean = liveStack.ColorHistMean,
+                            colorHistStd = liveStack.ColorHistStd,
                             triggers = liveStackTriggers.CurrentStatus,
                             // REFSUG-1: trend-based advisory. Always
                             // emitted so the UI can decide whether to

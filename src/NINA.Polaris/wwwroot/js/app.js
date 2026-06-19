@@ -6102,6 +6102,15 @@ function ninaApp() {
         _ensureHistogram() {
             const f = this._lastRawFrame;
             const hasRaw = !!(f && f.pixels && f.pixels.length);
+            // Colour live stack: the frame on screen is an 8-bit JPEG, but the
+            // server sends the real 16-bit histogram + stats over the WS status.
+            // Use those so the panel reflects the true data (min/max/mean/std +
+            // bars on the 0..65535 scale) instead of the 8-bit JPEG luminance.
+            const ls = this.liveStackStatus;
+            if (!hasRaw && ls && Array.isArray(ls.colorHistogram)
+                    && ls.colorHistogram.length === 256) {
+                return this._histogramFromServer(ls);
+            }
             // Fall back to the server-rendered JPEG frame (8-bit RGBA) when
             // there's no raw buffer — otherwise the histogram + min/max/avg/std
             // stayed zeroed whenever the live feed was JPEG.
@@ -6166,6 +6175,34 @@ function ninaApp() {
             this.histo._autoBlack = Math.max(0, Math.min(1, ap.shadow / maxVal));
             this.histo._autoWhite = Math.max(0, Math.min(1, aWhite / maxVal));
             this.histo._autoMid = ap.midtone;
+            this.histo._token = this._histoToken;
+            this._histoUpdateEndpoints();
+            return true;
+        },
+
+        // Populate the histogram panel from the server-provided 16-bit colour-
+        // stack histogram + stats (OSC live stacking, where the on-wire frame is
+        // an 8-bit JPEG). Mirrors the tail of _ensureHistogram but skips the
+        // pixel scan. Handles stay at identity (the server already auto-stretched
+        // the displayed JPEG); the Zoom button frames the populated band.
+        _histogramFromServer(ls) {
+            const NB = 256;
+            const bins = Float64Array.from(ls.colorHistogram);
+            let peak = 1;
+            for (let i = 0; i < NB; i++) if (bins[i] > peak) peak = bins[i];
+            const maxVal = 65535;
+            this.histo.bins = bins;
+            this.histo.peak = Math.log1p(peak);
+            this.histo.count = bins.reduce((a, b) => a + b, 0);
+            this.histo.min = (ls.colorHistMin || 0) | 0;
+            this.histo.max = (ls.colorHistMax || 0) | 0;
+            this.histo.avg = Math.round(ls.colorHistMean || 0);
+            this.histo.std = Math.round(ls.colorHistStd || 0);
+            this.histo._maxVal = maxVal;
+            // Server already stretched the JPEG → keep the handles at identity.
+            this.histo._autoBlack = 0;
+            this.histo._autoWhite = 1;
+            this.histo._autoMid = 0.5;
             this.histo._token = this._histoToken;
             this._histoUpdateEndpoints();
             return true;
