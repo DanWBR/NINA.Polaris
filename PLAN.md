@@ -83,10 +83,29 @@ inference primitive changes.
 - **QNN-5:** packaging (Qualcomm libs per-RID), license/attribution,
   Benchmark NPU column, docs, tests.
 
+### SDK / toolchain references (Qualcomm docs, confirmed 2026-06)
+From https://docs.qualcomm.com/doc/80-63442-10/topic/linux_setup.html
+(Qualcomm AI Engine Direct, now branded **QAIRT**):
+- The QNN/QAIRT SDK is a **separate ~2 GB licensed download** ("Get
+  Software" at qualcomm.com/developer/software/qualcomm-ai-engine-direct-sdk)
+  -- **NOT shipped by Armbian.** This is the source of `libQnnHtp*.so`,
+  `libQnnSystem.so`, and the per-DSP HTP **Skel** libs we'd copy to the
+  board. Confirms risk #3.
+- **Host model-prep box** (QNN-4): Ubuntu 22.04/24.04 **x86**, clang++14,
+  + **Hexagon SDK** (via QPM3) to compile the HTP context binary; ONNX
+  1.19.1. `source qairt/<ver>/bin/envsetup.sh` sets `QAIRT_SDK_ROOT`,
+  `LD_LIBRARY_PATH`, `PYTHONPATH`; verify with `bin/envcheck -c`.
+- **Target arm-Linux** officially supported on **Ubuntu 24.04 / Python
+  3.12** -- prefer an Ubuntu-24.04 aarch64 base on the Q6A for the runtime
+  (check what the Radxa/Armbian image is based on).
+- GPU EP needs `libOpenCL.so` >= 2.0 (we already have that path).
+
 ### Notes
 Reference benchmarks live in `docs/user-guide/benchmark.md`; add Dragon
 Q6A NPU numbers once measured. The Dragon Q6A is the main rig board, so
 this is the highest-value NPU target even though RKNN already exists.
+The `scripts/qnn-probe.sh` read-only inspector is the QNN-0 deliverable
+(checks firmware / FastRPC / QNN libs / ORT QNN EP / OpenCL on the board).
 
 ## VIDSTREAM -- efficient video streaming (downscaled JPEG) + raw recording on server
 
