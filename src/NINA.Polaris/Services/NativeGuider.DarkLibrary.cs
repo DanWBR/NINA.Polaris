@@ -59,13 +59,29 @@ public sealed partial class NativeGuider {
         bpmPixels = _bpmCount,
     };
 
-    private string CalDir {
+    // Guide darks + master dark live in the normal images tree, so they show
+    // up in FILES next to every other FITS frame:
+    //   {ImageOutputDir}/{rig}/calibration/guide-dark/{exp}ms_g{gain}_bin{bin}/
+    //       master.fits  +  guidedark_NN.fits
+    //   {ImageOutputDir}/{rig}/calibration/guide-dark/bpm_g{gain}_bin{bin}.json
+    // The guide subtree is deliberately separate from the main camera's
+    // calibration/dark/ so STUDIO never matches a guide dark to a science
+    // light (different sensor / dimensions). When no output dir is configured
+    // we fall back to the legacy DataDir location so guiding still calibrates
+    // on a headless rig that never set a FILES root.
+    private string GuideCalRoot {
         get {
-            var dir = Path.Combine(_profiles.DataDir, "guide-calibration", Sanitize(Rig.Id));
-            Directory.CreateDirectory(dir);
-            return dir;
+            var outDir = (_profiles.Active.ImageOutputDir ?? "").Trim();
+            return string.IsNullOrEmpty(outDir)
+                ? LegacyCalDir
+                : Path.Combine(outDir, SanitizeFolder(Rig.Name), "calibration", "guide-dark");
         }
     }
+
+    // Pre-relocation builds wrote a flat layout under DataDir; kept for the
+    // read/cleanup fallback so an existing library keeps working.
+    private string LegacyCalDir
+        => Path.Combine(_profiles.DataDir, "guide-calibration", SanitizeFolder(Rig.Id));
 
     private (int expMs, int gain, int bin) CalParams() {
         int expMs = Math.Max(50, Rig.NativeGuideExposureMs);
@@ -74,17 +90,32 @@ public sealed partial class NativeGuider {
         return (expMs, gain, bin);
     }
 
+    // Per-(exp,gain,bin) folder holding the master + the raw darks it was built
+    // from. Not created here (read paths must not litter empty dirs); the build
+    // creates it explicitly before writing.
+    private string SetDir(int expMs, int gain, int bin)
+        => Path.Combine(GuideCalRoot, $"{expMs}ms_g{gain}_bin{bin}");
     private string DarkPath(int expMs, int gain, int bin)
-        => Path.Combine(CalDir, $"dark_e{expMs}_g{gain}_b{bin}.fits");
+        => Path.Combine(SetDir(expMs, gain, bin), "master.fits");
+    private string SubPath(int expMs, int gain, int bin, int idx)
+        => Path.Combine(SetDir(expMs, gain, bin), $"guidedark_{idx:00}.fits");
     // BPM is keyed by gain+bin only: a hot pixel's *location* is stable across
     // exposure even though its intensity scales with it (PHD2 does the same).
     private string BpmPath(int gain, int bin)
-        => Path.Combine(CalDir, $"bpm_g{gain}_b{bin}.json");
+        => Path.Combine(GuideCalRoot, $"bpm_g{gain}_bin{bin}.json");
 
-    private static string Sanitize(string s) {
-        if (string.IsNullOrWhiteSpace(s)) return "default";
+    // Legacy artifact paths for the read/cleanup fallback.
+    private string LegacyDarkPath(int expMs, int gain, int bin)
+        => Path.Combine(LegacyCalDir, $"dark_e{expMs}_g{gain}_b{bin}.fits");
+    private string LegacyBpmPath(int gain, int bin)
+        => Path.Combine(LegacyCalDir, $"bpm_g{gain}_b{bin}.json");
+
+    // Matches ImageWriterService.SanitizeFolder so the {rig} folder lines up
+    // with the one lights/calibration are written under (spaces → underscore).
+    private static string SanitizeFolder(string s) {
+        if (string.IsNullOrWhiteSpace(s)) return "Default";
         foreach (var c in Path.GetInvalidFileNameChars()) s = s.Replace(c, '_');
-        return s;
+        return s.Replace(' ', '_');
     }
 
     /// <summary>Drop the in-memory calibration + cached load keys so the next
@@ -112,6 +143,7 @@ public sealed partial class NativeGuider {
             _darkMaster = null; _darkLabel = null;
             try {
                 var path = DarkPath(expMs, gain, bin);
+                if (!File.Exists(path)) path = LegacyDarkPath(expMs, gain, bin);
                 if (File.Exists(path)) {
                     using var fs = File.OpenRead(path);
                     var img = FITSReader.Read(fs);
@@ -133,6 +165,7 @@ public sealed partial class NativeGuider {
             _bpmSet = null; _bpmCount = 0;
             try {
                 var path = BpmPath(gain, bin);
+                if (!File.Exists(path)) path = LegacyBpmPath(gain, bin);
                 if (File.Exists(path)) {
                     var map = JsonSerializer.Deserialize<BadPixelMapFile>(File.ReadAllText(path));
                     if (map?.Pixels != null) {
@@ -224,25 +257,40 @@ public sealed partial class NativeGuider {
             _buildProgress = "Mapping hot pixels…";
             var bad = GuideDarkMath.DetectBadPixels(master, sigmaK: 8.0);
 
-            // Persist the master dark (FITS) + bad-pixel map (JSON).
-            var meta = new ImageMetaData {
-                CreationTime = DateTime.UtcNow,
-                Exposure = new ImageMetaData.ExposureInfo {
-                    ExposureTime = expMs / 1000.0, ImageType = "DARK"
-                }
-            };
-            meta.Camera.Gain = gain;
-            meta.Camera.BinX = (short)bin;
-            meta.Camera.BinY = (short)bin;
-            var props = new ImageProperties { Width = w, Height = h, BitDepth = bitDepth };
-            FITSWriter.Write(new BaseImageData(master, props, meta), DarkPath(expMs, gain, bin));
+            // Persist the raw darks + master dark (FITS) into the images tree so
+            // they appear in FILES like every other frame, plus the bad-pixel
+            // map (JSON) alongside them. Tag each DARK frame with the guide
+            // camera's name so it's distinguishable from main-camera darks.
+            var camName = cam.DeviceName;
+            BaseImageData DarkFrame(ushort[] d) {
+                var meta = new ImageMetaData {
+                    CreationTime = DateTime.UtcNow,
+                    Exposure = new ImageMetaData.ExposureInfo {
+                        ExposureTime = expMs / 1000.0, ImageType = "DARK"
+                    }
+                };
+                if (!string.IsNullOrWhiteSpace(camName)) meta.Camera.Name = camName;
+                meta.Camera.Gain = gain;
+                meta.Camera.BinX = (short)bin;
+                meta.Camera.BinY = (short)bin;
+                return new BaseImageData(d,
+                    new ImageProperties { Width = w, Height = h, BitDepth = bitDepth }, meta);
+            }
+
+            Directory.CreateDirectory(SetDir(expMs, gain, bin));
+            _buildProgress = "Saving dark frames…";
+            for (int i = 0; i < frames.Count; i++) {
+                ct.ThrowIfCancellationRequested();
+                FITSWriter.Write(DarkFrame(frames[i]), SubPath(expMs, gain, bin, i + 1));
+            }
+            FITSWriter.Write(DarkFrame(master), DarkPath(expMs, gain, bin));
 
             var mapJson = JsonSerializer.Serialize(new BadPixelMapFile(w, h, bad));
             await File.WriteAllTextAsync(BpmPath(gain, bin), mapJson, ct);
 
             _logger.LogInformation(
-                "Guide calibration built: {N} darks at {Exp}ms g{Gain} bin{Bin}, {Bad} bad pixels",
-                frames.Count, expMs, gain, bin, bad.Length);
+                "Guide calibration built: {N} darks at {Exp}ms g{Gain} bin{Bin}, {Bad} bad pixels → {Dir}",
+                frames.Count, expMs, gain, bin, bad.Length, SetDir(expMs, gain, bin));
 
             ReloadGuideCalibration();
             EnsureCalibrationLoaded();
@@ -265,8 +313,12 @@ public sealed partial class NativeGuider {
     /// bad-pixel map (current gain/bin), and clear them from memory.</summary>
     public void ClearGuideCalibration() {
         var (expMs, gain, bin) = CalParams();
-        try { File.Delete(DarkPath(expMs, gain, bin)); } catch { }
+        // Remove the whole per-(exp,gain,bin) folder (master + raw darks) and
+        // the bad-pixel map, in both the current and the legacy locations.
+        try { var sd = SetDir(expMs, gain, bin); if (Directory.Exists(sd)) Directory.Delete(sd, true); } catch { }
         try { File.Delete(BpmPath(gain, bin)); } catch { }
+        try { File.Delete(LegacyDarkPath(expMs, gain, bin)); } catch { }
+        try { File.Delete(LegacyBpmPath(gain, bin)); } catch { }
         _darkMaster = null; _darkLabel = null; _bpmSet = null; _bpmCount = 0;
         ReloadGuideCalibration();
         RaiseAlert("Guide dark library cleared.");
