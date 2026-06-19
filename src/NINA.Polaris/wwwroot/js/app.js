@@ -21008,7 +21008,8 @@ function ninaApp() {
                 ['Location & time',     ['clock', 'observatory']],
                 ['Appearance & interface', ['appearance', 'device name']],
                 ['Network & security',  ['authentication', 'https certificate',
-                    'https endpoints (for webgpu + multi-thread wasm)', 'network (wifi)', 'remote terminal']],
+                    'https endpoints (for webgpu + multi-thread wasm)', 'network (wifi)', 'remote terminal',
+                    'auto-push to network storage']],
                 ['System & maintenance', ['debug logging', 'hardware benchmark',
                     'reset everything to factory defaults']],
             ];
