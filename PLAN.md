@@ -64,8 +64,15 @@ inference primitive changes.
    fiddlier on Linux and dependent on the Radxa BSP.
 2. **Quantization** -- HTP wants int8 (or fp16) for real throughput;
    GraXpert models are fp32. Same quality-vs-speed trade the RKNN port hit.
-3. **Op coverage** -- unsupported ops fall back to CPU and fragment the
-   graph, killing the speedup.
+3. **Op coverage** -- LARGELY DE-RISKED (checked the QAIRT
+   supported_onnx_ops doc, 2026-06): every op a GraXpert U-Net uses is
+   supported by the converter -- Conv/ConvTranspose/Relu/Add/Mul/Concat/
+   Resize(4D bilinear-nearest)/MaxPool/AveragePool/Sigmoid/Tanh/Pad/Slice/
+   Transpose/Reshape, plus InstanceNormalization, and BatchNorm/PRelu
+   (constraints = static weights / inference mode, satisfied by a frozen
+   model). Remaining unknown: the doc lists *converter* support, not
+   HTP-vs-CPU partitioning -- an op can convert yet fall back off-HTP and
+   fragment the graph. That's measured on-device in QNN-0, not a blocker.
 4. **Effort vs. payoff** -- comparable scope to the RKNN epic, against a
    GPU path that already works on this board.
 
