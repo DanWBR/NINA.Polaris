@@ -1374,7 +1374,10 @@
     flex-wrap: nowrap;
     overflow-x: auto;
     overflow-y: hidden;
-    flex: 0 1 auto;
+    /* Own the leftover middle space and scroll internally — basis 0 so the
+       chips' total width never dictates the bar layout and pushes the fixed
+       net / CPU / RAM blocks off the right edge. */
+    flex: 1 1 0;
     min-width: 0;
     /* Hide the scrollbar, most users have <5 chips at once. */
     scrollbar-width: thin;

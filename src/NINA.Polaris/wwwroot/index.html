@@ -42,17 +42,17 @@
     <!-- app.css was split into ordered parts for readability. Load order is
          significant (CSS cascade) — keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
-    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260619-badgefix">
-    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260619-badgefix">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260619-badgefix">
-    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260619-badgefix">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260619-badgefix">
-    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260619-badgefix">
-    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260619-badgefix">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260619-badgefix">
+    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260619-badgefix2">
+    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260619-badgefix2">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260619-badgefix2">
+    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260619-badgefix2">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260619-badgefix2">
+    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260619-badgefix2">
+    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260619-badgefix2">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260619-badgefix2">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
-    <link rel="stylesheet" href="/css/night-mode.css?v=20260619-badgefix">
+    <link rel="stylesheet" href="/css/night-mode.css?v=20260619-badgefix2">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -12409,7 +12409,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
             </template>
         </div>
 
-        <span style="flex:1"></span>
         <!-- NET-1: client↔server traffic. Two stacked rows (↓ rx, ↑ tx)
              with auto-scaled units. Pulse class lights up briefly when
              bytes arrive, gives an LED-style "data flowing" hint that's
