@@ -62,6 +62,18 @@ inference primitive changes.
    Needs the Qualcomm libs (`libQnnHtp*.so`) + Hexagon DSP firmware
    reachable (`/dev/cdsp`). Well-trodden on Android/Windows-on-ARM;
    fiddlier on Linux and dependent on the Radxa BSP.
+   **Device-OS tension (from the Avnet QCS6490-Vision-AI-Demo, 2026-06):**
+   that reference design runs on **Qualcomm Linux (Yocto/QIMSDK)** -- it uses
+   `qtisocketsink`/`qtisocketsrc` GStreamer plugins, NV12_Q08C UBWC, and
+   QProf, all vendor-distro-specific -- where the NPU + QNN/SNPE libs ship
+   pre-installed and "just work." That PROVES the QCS6490 NPU is fully
+   usable, but on Qualcomm's own distro, NOT Armbian. So two routes:
+   (a) **Qualcomm Linux** = turnkey NPU but a heavy vendor distro that's a
+   poor host for Polaris (.NET + INDI, tuned for Debian/Ubuntu/Armbian);
+   (b) **Armbian/Ubuntu** = great Polaris host but we must bring the QNN
+   libs/firmware in by hand (what qnn-probe.sh checks). Plan stays route (b);
+   use a Qualcomm-Linux image only as a REFERENCE for the exact .so/firmware
+   layout to replicate.
 2. **Quantization** -- MOSTLY MITIGATED (checked the QAIRT quantization
    doc, 2026-06): HTP requires a "quantized" artifact, but **FP16 counts**
    (`--float_bw 16 --enable_float_fallback`, NO calibration needed) and is
