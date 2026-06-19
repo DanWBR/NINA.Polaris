@@ -1708,7 +1708,7 @@
                                  x-show="liveStackPreProc.bgeEnabled"
                                  style="font-size:11px;">
                                 Correction
-                                <select x-model="liveStackPreProc.bgeCorrection"
+                                <select class="input-sm" x-model="liveStackPreProc.bgeCorrection"
                                         @change="saveLiveStackPreProc()">
                                     <option value="Subtraction">Subtraction</option>
                                     <option value="Division">Division</option>
@@ -4052,29 +4052,29 @@
                          single build captures darks for the current
                          exposure/gain/bin and derives a hot-pixel map; the mode
                          selects what is applied to each guide frame. -->
-                    <div class="guide-darkcal" x-show="guiderDriver === 'native'"
-                         style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px">
-                        <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px">
-                            Dark / bad-pixel calibration
-                        </label>
-                        <select class="input-md" style="width:100%"
-                                x-model="guideCal.mode"
-                                @change="setGuideCalMode(guideCal.mode)">
-                            <option value="off">Off</option>
-                            <option value="dark">Dark subtraction</option>
-                            <option value="bpm">Bad-pixel map</option>
-                            <option value="both">Both</option>
-                        </select>
+                    <div class="guide-darkcal" x-show="guiderDriver === 'native'">
+                        <div class="guide-side-title" style="margin-top:12px">Dark / bad-pixel calibration</div>
 
-                        <div class="info-row" style="margin-top:6px">
-                            <span>Dark frames</span>
-                            <input type="number" min="1" max="100" class="input-sm"
+                        <div class="equip-driver-row">
+                            <label class="equip-driver-label">Mode</label>
+                            <select class="equip-select equip-driver-select"
+                                    x-model="guideCal.mode" @change="setGuideCalMode(guideCal.mode)">
+                                <option value="off">Off</option>
+                                <option value="dark">Dark subtraction</option>
+                                <option value="bpm">Bad-pixel map</option>
+                                <option value="both">Both</option>
+                            </select>
+                        </div>
+
+                        <div class="equip-driver-row" style="margin-top:6px">
+                            <label class="equip-driver-label">Dark frames</label>
+                            <input type="number" min="1" max="100" class="input-sm" style="width:80px"
                                    x-model.number="guideCal.frames"
                                    @change="setGuideCalFrames(guideCal.frames)">
                         </div>
 
                         <!-- Status from the WS guider.darkCalibration block. -->
-                        <div class="info-row" x-show="guider.darkCalibration">
+                        <div class="info-row" x-show="guider.darkCalibration" style="margin-top:8px">
                             <span>Master dark</span>
                             <strong :class="guider.darkCalibration?.hasDark ? 'text-ok' : 'text-muted'"
                                     x-text="guider.darkCalibration?.hasDark ? (guider.darkCalibration?.darkLabel || 'ready') : 'none'"></strong>
@@ -4088,7 +4088,7 @@
                             <span>Build</span>
                             <strong x-text="guider.darkCalibration?.progress"></strong>
                         </div>
-                        <div class="text-warn" style="font-size:11px" x-show="guider.darkCalibration?.error"
+                        <div class="hint text-warn" x-show="guider.darkCalibration?.error"
                              x-text="guider.darkCalibration?.error"></div>
 
                         <div style="display:flex; gap:6px; margin-top:8px">
@@ -4102,10 +4102,10 @@
                                     :disabled="!guider.darkCalibration?.hasDark && !guider.darkCalibration?.hasBpm"
                                     @click="clearGuideCal()">Clear</button>
                         </div>
-                        <p class="text-muted" style="font-size:11px; margin-top:6px">
+                        <div class="hint" style="margin-top:6px">
                             Cover the guide scope, then Build. Darks are matched to the
                             current exposure / gain / binning.
-                        </p>
+                        </div>
                     </div>
 
                     <!-- Review Calibration modal (ASIAIR / PHD2 style).
