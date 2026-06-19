@@ -3585,7 +3585,7 @@
             <!-- GUIDER (PHD2) -->
             <div x-show="tab === 'guide'" class="tab-panel tab-panel-guide">
                 <div class="panel-header">
-                    <span x-text="guider.backend === 'native' ? 'Native' : 'PHD2'">Guider</span>
+                    <span x-text="guider.backend === 'native' ? 'Guider (Native)' : 'Guider (PHD2)'">Guider</span>
                     <span class="status-indicator-sm" :class="guider.connected ? (guider.guiding ? 'ok' : 'warn') : 'error'"
                           x-text="guider.connected ? guider.appState : 'Disconnected'"></span>
                     <!-- PHD2 backend selector: Built-In (native) vs External (PHD2). -->
@@ -14492,7 +14492,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260618-aggrslider"></script>
+    <script src="/js/app.js?v=20260618-guidebadge"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
