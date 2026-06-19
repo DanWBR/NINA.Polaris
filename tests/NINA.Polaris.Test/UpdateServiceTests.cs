@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -57,6 +58,28 @@ public class UpdateServiceTests {
             _ => arch
         };
         Assert.That(arch, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void CandidateBaseTags_includes_3part_tag_for_4part_assembly_version() {
+        // Regression: release tags are 3-part (v0.84.8) but the assembly
+        // version is normalised to 4 parts (0.84.8.0). "v"+version → v0.84.8.0
+        // doesn't exist → compare 404 → "changelog unavailable". The candidate
+        // list must include the 3-part spelling so the changelog resolves.
+        var cands = UpdateService.CandidateBaseTags("v", new Version(0, 84, 8, 0)).ToList();
+        Assert.That(cands, Does.Contain("v0.84.8.0"));  // 4-part (kept for safety)
+        Assert.That(cands, Does.Contain("v0.84.8"));    // 3-part (the real tag)
+        Assert.That(cands, Does.Contain("v0.84"));      // 2-part fallback
+        // Most-specific first, de-duplicated.
+        Assert.That(cands[0], Is.EqualTo("v0.84.8.0"));
+        Assert.That(cands, Is.Unique);
+    }
+
+    [Test]
+    public void CandidateBaseTags_honours_empty_prefix() {
+        var cands = UpdateService.CandidateBaseTags("", new Version(1, 2, 3, 0)).ToList();
+        Assert.That(cands, Does.Contain("1.2.3"));
+        Assert.That(cands, Has.None.StartWith("v"));
     }
 
     [Test]

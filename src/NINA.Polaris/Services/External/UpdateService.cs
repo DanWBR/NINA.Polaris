@@ -168,22 +168,57 @@ public class UpdateService {
 
     /// <summary>List commits between the installed version's tag and the
     /// release's <paramref name="headTag"/> via the GitHub compare API,
-    /// newest first. The base tag is derived from the running version using
-    /// the same prefix convention as the head tag (e.g. v3.3.0.1041). Returns
-    /// an empty list if the compare can't be resolved (404 = the installed
-    /// build has no matching tag, e.g. a dev build).</summary>
+    /// newest first. Returns an empty list if the compare can't be resolved
+    /// (404 = the installed build has no matching tag, e.g. a dev build).
+    /// <para>The base tag is derived from the running version. This is the
+    /// fiddly bit: the release tags are 3-part (<c>v0.84.8</c>) but
+    /// <see cref="CurrentVersion"/> comes from the assembly version, which
+    /// .NET normalises to 4 parts (<c>0.84.8.0</c>). A naive <c>"v" +
+    /// CurrentVersion</c> yields <c>v0.84.8.0</c>, which doesn't exist as a
+    /// tag → 404 → "changelog unavailable". So we try several candidate base
+    /// tags (4-part and the trailing-zero-trimmed 3-/2-part forms) and use
+    /// the first the compare API resolves.</para></summary>
     private async Task<List<UpdateCommit>> FetchCommitsAsync(HttpClient http, string headTag, CancellationToken ct) {
         var prefix = headTag.StartsWith("v", StringComparison.OrdinalIgnoreCase) ? "v" : "";
-        var baseTag = prefix + CurrentVersion;
-        if (string.Equals(baseTag, headTag, StringComparison.OrdinalIgnoreCase))
-            return new();
 
+        foreach (var baseTag in CandidateBaseTags(prefix, CurrentVersion)) {
+            if (string.Equals(baseTag, headTag, StringComparison.OrdinalIgnoreCase))
+                continue;
+            var commits = await TryCompareAsync(http, baseTag, headTag, ct);
+            if (commits != null) return commits;   // resolved (may be empty)
+        }
+        return new();   // no candidate base tag existed on the remote
+    }
+
+    /// <summary>Candidate base-tag spellings for the running version, most-
+    /// specific first: 4-part (v0.84.8.0), then trailing-zero-trimmed forms
+    /// (v0.84.8, v0.84). De-duplicated, prefix applied.</summary>
+    public static IEnumerable<string> CandidateBaseTags(string prefix, Version v) {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        string Tag(string body) => prefix + body;
+
+        var full = v.ToString();                                   // 0.84.8.0
+        var threePart = $"{v.Major}.{v.Minor}.{Math.Max(v.Build, 0)}"; // 0.84.8
+        var twoPart = $"{v.Major}.{v.Minor}";                      // 0.84
+
+        foreach (var body in new[] { full, threePart, twoPart }) {
+            var tag = Tag(body);
+            if (seen.Add(tag)) yield return tag;
+        }
+    }
+
+    /// <summary>Run one GitHub compare. Returns the parsed (filtered) commit
+    /// list when the base..head pair resolves, or <c>null</c> when the API
+    /// can't resolve it (e.g. 404 because the base tag doesn't exist) so the
+    /// caller can fall back to the next candidate.</summary>
+    private async Task<List<UpdateCommit>?> TryCompareAsync(
+            HttpClient http, string baseTag, string headTag, CancellationToken ct) {
         var url = $"https://api.github.com/repos/{Repo}/compare/{baseTag}...{headTag}";
         using var req = new HttpRequestMessage(HttpMethod.Get, url);
         req.Headers.UserAgent.ParseAdd("NINA.Polaris-Updater");
         req.Headers.Accept.ParseAdd("application/vnd.github+json");
         using var resp = await http.SendAsync(req, ct);
-        if (!resp.IsSuccessStatusCode) return new();
+        if (!resp.IsSuccessStatusCode) return null;
 
         using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
         if (!doc.RootElement.TryGetProperty("commits", out var commits)
