@@ -1234,6 +1234,21 @@
 .files-row-dir td:nth-child(2) { font-weight: 500; }
 .files-row-hidden td { opacity: 0.55; }
 .files-row-parent td { color: var(--text-secondary); }
+.files-up-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 500;
+}
+.files-up-link:hover { text-decoration: underline; }
+.files-up-icon {
+    flex: 0 0 auto;
+    border: 1px solid currentColor;
+    border-radius: 4px;
+    padding: 1px;
+}
 
 .files-col-sel  { width: 32px; text-align: center; }
 .files-col-name { /* fills */ }

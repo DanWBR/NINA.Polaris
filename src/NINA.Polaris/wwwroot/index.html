@@ -42,17 +42,17 @@
     <!-- app.css was split into ordered parts for readability. Load order is
          significant (CSS cascade) — keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
-    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260619-guidetabs4">
-    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260619-guidetabs4">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260619-guidetabs4">
-    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260619-guidetabs4">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260619-guidetabs4">
-    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260619-guidetabs4">
-    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260619-guidetabs4">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260619-guidetabs4">
+    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260619-upicon">
+    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260619-upicon">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260619-upicon">
+    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260619-upicon">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260619-upicon">
+    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260619-upicon">
+    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260619-upicon">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260619-upicon">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
-    <link rel="stylesheet" href="/css/night-mode.css?v=20260619-guidetabs4">
+    <link rel="stylesheet" href="/css/night-mode.css?v=20260619-upicon">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -9454,10 +9454,19 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <tbody>
                             <!-- Parent dir shortcut -->
                             <tr class="files-row files-row-parent" x-show="filesParentPath()"
-                                @dblclick="filesCd(filesParentPath())">
+                                @dblclick="filesCd(filesParentPath())"
+                                title="Up one level">
                                 <td></td>
                                 <td colspan="4">
-                                    <a href="#" @click.prevent="filesCd(filesParentPath())">📁 ..</a>
+                                    <a href="#" class="files-up-link" @click.prevent="filesCd(filesParentPath())">
+                                        <svg class="files-up-icon" viewBox="0 0 24 24" width="16" height="16"
+                                             fill="none" stroke="currentColor" stroke-width="2"
+                                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M12 19V5"></path>
+                                            <path d="M5 12l7-7 7 7"></path>
+                                        </svg>
+                                        <span>Up one level</span>
+                                    </a>
                                 </td>
                             </tr>
                             <template x-for="entry in files.entries" :key="entry.fullPath">
