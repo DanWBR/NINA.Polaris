@@ -1022,6 +1022,18 @@
     margin-bottom: 8px;
 }
 
+/* Storage auto-push card: stacked fields (caption above a full-width input)
+   instead of the default inline row, which squeezed multi-word captions like
+   "Port (0 = default)" and made the hint wrap awkwardly beside the input. */
+.storage-form label {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    margin-bottom: 0;
+}
+.storage-form label > .lbl { font-size: 12px; white-space: nowrap; }
+.storage-form label > .input { width: 100%; }
+
 /* Paragraphs and helper lines in settings, same as labels.
    Without this rule a default <p> picks up the user-agent's larger
    body-derived size. */

@@ -42,17 +42,17 @@
     <!-- app.css was split into ordered parts for readability. Load order is
          significant (CSS cascade) — keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
-    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260619-badgefix2">
-    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260619-badgefix2">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260619-badgefix2">
-    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260619-badgefix2">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260619-badgefix2">
-    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260619-badgefix2">
-    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260619-badgefix2">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260619-badgefix2">
+    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260619-storageform">
+    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260619-storageform">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260619-storageform">
+    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260619-storageform">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260619-storageform">
+    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260619-storageform">
+    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260619-storageform">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260619-storageform">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
-    <link rel="stylesheet" href="/css/night-mode.css?v=20260619-badgefix2">
+    <link rel="stylesheet" href="/css/night-mode.css?v=20260619-storageform">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -10154,38 +10154,38 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <input type="checkbox" x-model="storagePush.enabled" @change="saveStorageConfig()">
                         Enable auto-push
                     </label>
-                    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px">
-                        <label>Protocol
+                    <div class="storage-form" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px">
+                        <label><span class="lbl">Protocol</span>
                             <select class="input input-sm" x-model="storagePush.kind">
                                 <option value="smb">SMB / CIFS (NAS, Windows share)</option>
                                 <option value="sftp">SFTP (SSH)</option>
                                 <option value="local">Mounted / local folder</option>
                             </select>
                         </label>
-                        <label x-show="storagePush.kind !== 'local'">Host
+                        <label x-show="storagePush.kind !== 'local'"><span class="lbl">Host</span>
                             <input class="input input-sm" type="text" x-model="storagePush.host" placeholder="192.168.0.50">
                         </label>
-                        <label x-show="storagePush.kind === 'smb'">Share
+                        <label x-show="storagePush.kind === 'smb'"><span class="lbl">Share</span>
                             <input class="input input-sm" type="text" x-model="storagePush.share" placeholder="astro">
                         </label>
-                        <label x-show="storagePush.kind === 'sftp'">Remote base path
+                        <label x-show="storagePush.kind === 'sftp'"><span class="lbl">Remote base path</span>
                             <input class="input input-sm" type="text" x-model="storagePush.basePath" placeholder="/home/user/captures">
                         </label>
-                        <label x-show="storagePush.kind === 'local'">Destination path
+                        <label x-show="storagePush.kind === 'local'"><span class="lbl">Destination path</span>
                             <input class="input input-sm" type="text" x-model="storagePush.basePath" placeholder="/mnt/nas/astro">
                         </label>
-                        <label x-show="storagePush.kind === 'smb'">Domain <span class="text-muted">(optional)</span>
+                        <label x-show="storagePush.kind === 'smb'"><span class="lbl">Domain <span class="text-muted">(optional)</span></span>
                             <input class="input input-sm" type="text" x-model="storagePush.domain" placeholder="WORKGROUP">
                         </label>
-                        <label x-show="storagePush.kind !== 'local'">Username
+                        <label x-show="storagePush.kind !== 'local'"><span class="lbl">Username</span>
                             <input class="input input-sm" type="text" x-model="storagePush.username" autocomplete="off">
                         </label>
-                        <label x-show="storagePush.kind !== 'local'">Password
+                        <label x-show="storagePush.kind !== 'local'"><span class="lbl">Password</span>
                             <input class="input input-sm" type="password" x-model="storagePush.password"
                                    autocomplete="new-password"
                                    :placeholder="storagePush.hasPassword ? '•••••• (unchanged)' : ''">
                         </label>
-                        <label x-show="storagePush.kind !== 'local'">Port <span class="text-muted">(0 = default)</span>
+                        <label x-show="storagePush.kind !== 'local'"><span class="lbl">Port <span class="text-muted">(0 = default)</span></span>
                             <input class="input input-sm" type="number" min="0" max="65535" x-model.number="storagePush.port">
                         </label>
                     </div>
