@@ -21,6 +21,73 @@
 > distributing one SD-card image to several Pis. Everything below was
 > driven by testing on a physical tablet against a Pi on the LAN.
 
+## QNN-NPU -- Qualcomm Hexagon NPU backend (Radxa Dragon Q6A / QCS6490) [PLANNED, hardware-gated]
+
+> STATUS: not started. Blocked on acquiring the board. This is a design
+> record only -- do NOT scaffold code until the spike (QNN-0) confirms the
+> Hexagon runtime actually loads on the Radxa Linux image, because the
+> whole epic hinges on that one unknown.
+
+### Motivation
+The Radxa Dragon Q6A is built on the **Qualcomm QCS6490** -- the same SoC
+whose **Adreno 643** GPU we already drive via the OpenCL `IGpuCompute`
+backend (`Services/OpenCl/`). The QCS6490 also carries the **Hexagon
+processor with the Qualcomm AI Engine / HTP (Hexagon Tensor Processor),
+~12-13 TOPS INT8**. We already accelerate the GraXpert ONNX pipelines
+(BGE / denoise / deconvolution) on:
+  - **RK3588 NPU** via `Services/Rknn/` (RKNN runtime) -- does NOT apply
+    here (that's Rockchip; this is Qualcomm).
+  - **Adreno GPU** via OpenCL -- already working on this board.
+
+So the open question is **not** "can we use the NPU" but **"does the
+Hexagon NPU beat the already-working Adreno OpenCL path enough to justify
+the integration"** -- the likely win is power/thermal efficiency and
+freeing the GPU/CPU during long sessions on an SBC.
+
+### Architecture fit (mirror the RKNN epic)
+| Layer | RK3588 (shipped) | Qualcomm (this epic) |
+|---|---|---|
+| Runtime | librknnrt.so | **ONNX Runtime + QNN Execution Provider (HTP backend)** |
+| Service | `RknnInferenceService` + tile runner | `QnnInferenceService` (new `Services/Qnn/`) |
+| Probe / availability | `RknnRuntime` + `NpuAvailable` | `QnnRuntime` probe, same `GraXpertService` decision point |
+| Models | GraXpert ONNX -> fp16 | ONNX -> fp16/int8 on HTP (quantize for best HTP perf) |
+| Selection | NPU > host CLI > CPU | same; extend GraXpert backend chooser |
+| Bench | BENCH GPU-vs-CPU | extend with NPU column |
+
+Reuse the existing tiling / fallback / status plumbing wholesale; only the
+inference primitive changes.
+
+### Key risks (ordered)
+1. **QNN runtime on Linux aarch64 for QCS6490** -- the gating unknown.
+   Needs the Qualcomm libs (`libQnnHtp*.so`) + Hexagon DSP firmware
+   reachable (`/dev/cdsp`). Well-trodden on Android/Windows-on-ARM;
+   fiddlier on Linux and dependent on the Radxa BSP.
+2. **Quantization** -- HTP wants int8 (or fp16) for real throughput;
+   GraXpert models are fp32. Same quality-vs-speed trade the RKNN port hit.
+3. **Op coverage** -- unsupported ops fall back to CPU and fragment the
+   graph, killing the speedup.
+4. **Effort vs. payoff** -- comparable scope to the RKNN epic, against a
+   GPU path that already works on this board.
+
+### Tasks
+- **QNN-0 (spike, do FIRST, on the board):** confirm runtime present
+  (`ls libQnn*`, `/dev/cdsp`, `dmesg | grep -i cdsp`); run ONE GraXpert
+  model (denoise) through ORT QNN EP / HTP on ONE tile; record ms/tile vs
+  Adreno OpenCL vs CPU. Deliver a probe script under `scripts/` + a short
+  findings note. **Go/no-go gate for the rest.**
+- **QNN-1:** `QnnRuntime` probe + `Services/Qnn/` skeleton (mirror Rknn).
+- **QNN-2:** `QnnInferenceService` + tile runner over ORT QNN EP.
+- **QNN-3:** wire into `GraXpertService` backend chooser + endpoints + WS
+  status (reuse `NpuAvailable`-style flag).
+- **QNN-4:** model prep/quantization step (fp16/int8 context binaries).
+- **QNN-5:** packaging (Qualcomm libs per-RID), license/attribution,
+  Benchmark NPU column, docs, tests.
+
+### Notes
+Reference benchmarks live in `docs/user-guide/benchmark.md`; add Dragon
+Q6A NPU numbers once measured. The Dragon Q6A is the main rig board, so
+this is the highest-value NPU target even though RKNN already exists.
+
 ## VIDSTREAM -- efficient video streaming (downscaled JPEG) + raw recording on server
 
 The VIDEO stream ran at <1 fps. Root cause: `/ws/image-stream` is
