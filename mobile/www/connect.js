@@ -303,10 +303,40 @@ function renderTabs() {
   bar.appendChild(add);
 }
 
+// Single-host fast path: navigate the WebView TOP-LEVEL to the host instead
+// of hosting it in a cross-origin <iframe>. The iframe is noticeably heavier
+// in some Android System WebViews (reported: periodic ANR on a Xiaomi Pad 7
+// where a plain Chrome tab — a top-level load — stays fluid). This matches
+// the Chrome-tab path. The Capacitor bridge + polaris-onnx plugin stay alive
+// on the remote origin via `allowNavigation` in capacitor.config. The Android
+// back button returns here (WebView history) to re-pick a host. Multi-host
+// (2+) still uses the iframe tab bar.
+function openHostDirect(origin) {
+  if (!origin) return;
+  setLastHost(origin);
+  setLastSet([origin]);
+  try { if (KeepAwake) KeepAwake.keepAwake(); } catch { /* not in app */ }
+  window.location.href = origin;
+}
+
+// Open one host the lightest way available: direct top-level load when nothing
+// is open yet, otherwise add it as another iframe tab (multi-instance mode).
+function openHost(origin, name) {
+  if (!origin) return;
+  if (instances.size === 0) { openHostDirect(origin); return; }
+  addInstance(origin, name, { activate: true });
+}
+
 // Open all checked instances at once.
 function openSelected() {
   const origins = Array.from(selected);
   if (origins.length === 0) return;
+  // One host + nothing open yet → top-level load (lightest, Chrome-like).
+  if (origins.length === 1 && instances.size === 0) {
+    selected.clear();
+    openHostDirect(origins[0]);
+    return;
+  }
   origins.forEach((o, i) => addInstance(o, discovered.get(o)?.name, { activate: i === 0 }));
   setLastHost(origins[origins.length - 1]);
   selected.clear();
@@ -341,7 +371,7 @@ async function refreshPickerExtras() {
   const last = await getLastHost();
   if (last && !instances.has(last)) {
     els.lastLink.textContent = last;
-    els.lastLink.onclick = (e) => { e.preventDefault(); addInstance(last, null, { activate: true }); };
+    els.lastLink.onclick = (e) => { e.preventDefault(); openHost(last, null); };
     els.lastRow.hidden = false;
   } else {
     els.lastRow.hidden = true;
@@ -351,6 +381,12 @@ async function refreshPickerExtras() {
     els.reopenLink.textContent = `Reopen last ${set.length > 1 ? set.length + ' instances' : 'instance'}`;
     els.reopenLink.onclick = (e) => {
       e.preventDefault();
+      // A single saved host loads top-level (light, like a Chrome tab);
+      // multiple hosts still come back as iframe tabs.
+      if (set.length === 1 && instances.size === 0) {
+        openHostDirect(set[0]);
+        return;
+      }
       set.forEach((o, i) => addInstance(o, null, { activate: i === 0 }));
       maybeWarnMemory();
     };
@@ -383,7 +419,7 @@ function wire() {
     const origin = toOrigin(els.hostInput.value);
     if (!origin) { els.scanHint.textContent = 'Enter an address first (e.g. 192.168.0.50:5000).'; return; }
     setLastHost(origin);
-    addInstance(origin, hostLabel(origin), { activate: true });
+    openHost(origin, hostLabel(origin));
   };
   els.connectBtn.addEventListener('click', manual);
   els.hostInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') manual(); });

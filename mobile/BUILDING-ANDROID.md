@@ -182,9 +182,14 @@ Share `app-release.apk`. Installers must allow "unknown sources".
   `allowMixedContent`). For a hardened release, pin the fingerprint from
   `/api/system/server-cert` instead.
 - **App freezes / "isn't responding" (ANR) on tablets**: the Polaris UI is
-  a WebGL + WASM single-page app (and the connect screen can host several
-  host tabs at once = several full SPA instances). On the default per-app
-  heap a powerful tablet can still thrash GC and ANR. After `cap add
+  a WebGL + WASM single-page app. When the connect screen hosts a host in a
+  cross-origin `<iframe>`, some Android System WebViews (reported: Xiaomi
+  Pad 7) periodically ANR, while a plain Chrome tab — a top-level load —
+  stays fluid on the same device. `connect.js` therefore takes a **single
+  host top-level** (`window.location.href = origin`, see `openHostDirect`),
+  matching the lighter Chrome-tab path; only the **multi-host** (2+) case
+  still uses iframe tabs. If you do open multiple host tabs and a powerful
+  tablet thrashes GC, the default per-app heap can still ANR. After `cap add
   android`, add these to `<application>` in
   `mobile/android/app/src/main/AndroidManifest.xml` (the folder is
   git-ignored, so re-apply after a fresh `cap add`):
@@ -196,7 +201,9 @@ Share `app-release.apk`. Installers must allow "unknown sources".
   re-doing after a full `cap add android`. If the freeze persists, capture
   the ANR trace: `adb pull /data/anr/traces.txt` (or `adb logcat | grep -i
   ANR`) and check which thread is blocked — and avoid leaving multiple host
-  tabs open, since each runs the full live pipeline.
+  tabs open, since each runs the full live pipeline. On the device side, also
+  update **Android System WebView** (Play Store) and disable HyperOS battery
+  restriction for the app.
 
 ---
 
