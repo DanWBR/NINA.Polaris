@@ -91,10 +91,23 @@ From https://docs.qualcomm.com/doc/80-63442-10/topic/linux_setup.html
   -- **NOT shipped by Armbian.** This is the source of `libQnnHtp*.so`,
   `libQnnSystem.so`, and the per-DSP HTP **Skel** libs we'd copy to the
   board. Confirms risk #3.
-- **Host model-prep box** (QNN-4): Ubuntu 22.04/24.04 **x86**, clang++14,
-  + **Hexagon SDK** (via QPM3) to compile the HTP context binary; ONNX
-  1.19.1. `source qairt/<ver>/bin/envsetup.sh` sets `QAIRT_SDK_ROOT`,
-  `LD_LIBRARY_PATH`, `PYTHONPATH`; verify with `bin/envcheck -c`.
+- **Host model-prep box** (QNN-4): runs on the **dev machine, not the
+  board** (conversion is pure file-in/file-out; copy artifacts to the Q6A
+  by scp). Two host options, both fine:
+  - **Linux x86** (Ubuntu 22.04/24.04, Python 3.10/3.12): `source
+    qairt/<ver>/bin/envsetup.sh`.
+  - **Windows x86-64 -- fully supported, no WSL needed** (per the QAIRT
+    *windows_setup* doc): can do conversion/quantization AND HTP context
+    generation, and can target **Linux** (our aarch64 runtime). Setup via
+    `envsetup.ps1`; deps = MSVC/VS Build Tools 14.34 + CMake 3.21 +
+    clang-cl 15.0.1; **Python 3.10 ONLY** (3.12 not yet supported on
+    Windows). Hexagon SDK installs natively via QPM3.
+  - Either way you need the **Hexagon SDK matching the QCS6490 HTP arch**
+    (likely **v68** -- confirm against the SDK; docs example v73->SDK
+    5.5.5, v81->6.4.0) to compile the HTP context binary. ONNX 1.19.1.
+  - Note: the minimal route (quantize ONNX with onnxruntime's quantizer,
+    let ORT QNN EP build+cache the HTP context on-device first run) needs
+    NO Hexagon SDK at all -- prefer this for the QNN-0 spike.
 - **Target arm-Linux** officially supported on **Ubuntu 24.04 / Python
   3.12** -- prefer an Ubuntu-24.04 aarch64 base on the Q6A for the runtime
   (check what the Radxa/Armbian image is based on).
