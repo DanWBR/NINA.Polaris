@@ -8,6 +8,11 @@
     --text-muted: #662222;
     --accent: #aa2222;
     --accent-hover: #882222;
+    /* Red equivalents of the accent tint / accent text tokens so every
+       rgba(var(--accent-rgb), a) fill and var(--accent-text) label turns
+       red in night mode without per-control overrides. */
+    --accent-rgb: 170, 34, 34;
+    --accent-text: #cc3333;
     --success: #663333;
     --warning: #884422;
     --danger: #aa2222;

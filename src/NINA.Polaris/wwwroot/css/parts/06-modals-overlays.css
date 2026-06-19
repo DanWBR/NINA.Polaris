@@ -181,7 +181,7 @@
 .editor-export-row select:focus,
 .editor-export-row input[type="number"]:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.25);
+    box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.25);
 }
 .editor-export-row select option {
     background: var(--bg-secondary);
@@ -219,9 +219,9 @@
 }
 .tonight-filter-chip:hover { background: rgba(255, 255, 255, 0.08); }
 .tonight-filter-chip.active {
-    background: rgba(33, 150, 243, 0.18);
-    color: #90caf9;
-    border-color: rgba(33, 150, 243, 0.5);
+    background: rgba(var(--accent-rgb), 0.18);
+    color: var(--accent-text);
+    border-color: rgba(var(--accent-rgb), 0.5);
 }
 .tonight-filter-chip.disabled {
     opacity: 0.4;
@@ -423,7 +423,7 @@
     gap: 2px;
 }
 .obs-location-result:hover {
-    background: rgba(33, 150, 243, 0.12);
+    background: rgba(var(--accent-rgb), 0.12);
 }
 
 /* ─── STUDIO tab, frame browser (ST-1) ─────────────────────────────── */
@@ -536,7 +536,7 @@
     letter-spacing: 0.3px;
 }
 .studio-tt-light  { background: rgba(76, 175, 80, 0.18); color: #a5e1a8; }
-.studio-tt-bias   { background: rgba(33, 150, 243, 0.18); color: #9fcdf6; }
+.studio-tt-bias   { background: rgba(var(--accent-rgb), 0.18); color: var(--accent-text); }
 .studio-tt-flat   { background: rgba(255, 167, 38, 0.18); color: #ffcc80; }
 .studio-tt-dark   { background: rgba(229, 57, 53, 0.18); color: #ef9a9a; }
 .studio-tt-master { background: rgba(156, 39, 176, 0.18); color: #ce93d8; }
@@ -559,11 +559,11 @@
 }
 .studio-tree-frame:hover { background: rgba(255, 255, 255, 0.04); }
 .studio-tree-frame.selected {
-    background: rgba(33, 150, 243, 0.12);
+    background: rgba(var(--accent-rgb), 0.12);
     color: var(--text-primary);
 }
 .studio-tree-frame.active {
-    background: rgba(33, 150, 243, 0.25);
+    background: rgba(var(--accent-rgb), 0.25);
     color: var(--text-primary);
     border-left: 2px solid var(--accent);
     padding-left: 46px;
@@ -1486,8 +1486,8 @@
     gap: 6px;
     padding: 3px 9px;
     border-radius: 999px;
-    background: rgba(33, 150, 243, 0.10);
-    border: 1px solid rgba(33, 150, 243, 0.4);
+    background: rgba(var(--accent-rgb), 0.10);
+    border: 1px solid rgba(var(--accent-rgb), 0.4);
     color: var(--text-primary);
     white-space: nowrap;
     font-size: 11px;
@@ -1500,8 +1500,8 @@
     border-color: rgba(76, 175, 80, 0.4);
 }
 .activity-transfer-down {
-    background: rgba(33, 150, 243, 0.10);
-    border-color: rgba(33, 150, 243, 0.4);
+    background: rgba(var(--accent-rgb), 0.10);
+    border-color: rgba(var(--accent-rgb), 0.4);
 }
 .activity-transfer-done {
     /* Brief "✓ done" fade — same colour family but dimmer +

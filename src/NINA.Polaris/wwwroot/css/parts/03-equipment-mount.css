@@ -1658,7 +1658,7 @@
 
 .rig-row.active {
     border-color: var(--accent);
-    background: rgba(33, 150, 243, 0.08);
+    background: rgba(var(--accent-rgb), 0.08);
 }
 
 .rig-row-main {
@@ -1815,7 +1815,7 @@
 .location-search-result:last-child { border-bottom: none; }
 
 .location-search-result:hover {
-    background: rgba(33, 150, 243, 0.18);
+    background: rgba(var(--accent-rgb), 0.18);
 }
 
 .location-search-name {

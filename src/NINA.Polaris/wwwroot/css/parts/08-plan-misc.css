@@ -499,7 +499,7 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .plan-pbar-head span:last-child { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
 .plan-pbar-track { height: 9px; border-radius: 999px; background: var(--bg-tertiary, #0f1218); overflow: hidden; }
 .plan-pbar-fill { height: 100%; border-radius: 999px; transition: width .3s ease; }
-.plan-pbar-fill.item { background: #3b82f6; }
+.plan-pbar-fill.item { background: var(--accent); }
 .plan-pbar-fill.total { background: #16a34a; }
 
 .plan-frame-banner {

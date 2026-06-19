@@ -114,6 +114,13 @@ html[data-font="system"] {
     --text-muted: #606070;
     --accent: #2196f3;
     --accent-hover: #1976d2;
+    /* RGB triple of --accent, for rgba() tints (focus rings, selection,
+       hover/active fills). Kept in sync with --accent so themes (e.g.
+       night mode) can recolour every accent tint by overriding one token
+       instead of every hard-coded rgba(33,150,243,...) call site. */
+    --accent-rgb: 33, 150, 243;
+    /* Light foreground that reads on an accent-tinted chip/pill. */
+    --accent-text: #9fcdf6;
     --success: #4caf50;
     --warning: #ff9800;
     --danger: #f44336;
@@ -493,7 +500,7 @@ body {
     width: 22px;
     height: 22px;
     fill: var(--accent);
-    filter: drop-shadow(0 0 4px rgba(33, 150, 243, 0.5));
+    filter: drop-shadow(0 0 4px rgba(var(--accent-rgb), 0.5));
     flex-shrink: 0;
 }
 /* Polaris mountain badge, bitmap version of the wordmark icon.
@@ -766,7 +773,7 @@ body {
 .nav-btn.active {
     color: var(--accent);
     border-left-color: var(--accent);
-    background: rgba(33, 150, 243, 0.08);
+    background: rgba(var(--accent-rgb), 0.08);
 }
 
 .nav-btn svg {

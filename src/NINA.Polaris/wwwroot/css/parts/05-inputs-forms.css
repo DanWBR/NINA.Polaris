@@ -246,7 +246,7 @@
 .autorun-option-chip.active {
     border-color: var(--accent);
     color: var(--text-primary);
-    background: rgba(33, 150, 243, 0.12);
+    background: rgba(var(--accent-rgb), 0.12);
 }
 .autorun-option-chip strong { font-weight: 600; }
 .autorun-option-chip .chip-state {
@@ -324,9 +324,9 @@
     color: #a5e1a8;
 }
 .seq-type-pill.seq-type-bias {
-    background: rgba(33, 150, 243, 0.18);
-    border-color: #2196f3;
-    color: #9fcdf6;
+    background: rgba(var(--accent-rgb), 0.18);
+    border-color: var(--accent);
+    color: var(--accent-text);
 }
 .seq-type-pill.seq-type-flat {
     background: rgba(255, 167, 38, 0.18);
@@ -472,7 +472,7 @@
 
 .sequence-item.seq-active {
     border-color: var(--accent);
-    background: rgba(33, 150, 243, 0.08);
+    background: rgba(var(--accent-rgb), 0.08);
 }
 
 .sequence-item.seq-done {
@@ -697,7 +697,7 @@
 }
 
 .sky-result-item:hover {
-    background: rgba(33, 150, 243, 0.1);
+    background: rgba(var(--accent-rgb), 0.1);
 }
 
 /* Frente B: per-object DSO preview thumbnail (DSS2 cutout). Sits left of
@@ -756,7 +756,7 @@
 
 .sky-slew-progress {
     padding: 8px 16px;
-    background: rgba(33, 150, 243, 0.08);
+    background: rgba(var(--accent-rgb), 0.08);
     border-bottom: 1px solid var(--accent);
 }
 
@@ -1697,7 +1697,7 @@
    button (and any future toggle the same way) so the user can
    tell at a glance whether the overlay is showing. */
 .btn-toggle-on {
-    background: rgba(33, 150, 243, 0.18);
+    background: rgba(var(--accent-rgb), 0.18);
     border-color: var(--accent);
     color: var(--text-primary);
 }
