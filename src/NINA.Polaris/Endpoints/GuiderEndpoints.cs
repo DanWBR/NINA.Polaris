@@ -405,7 +405,10 @@ public static class GuiderEndpoints {
         // ---- Exposure ----
 
         group.MapGet("/exposure", async (PHD2Client phd2) => {
-            if (!phd2.IsConnected) return Results.BadRequest(new { error = "PHD2 not connected" });
+            // "Not connected" is a normal state for a status probe (e.g. the
+            // native guider is active, or PHD2 hasn't been launched yet), not a
+            // client error — return 200 so it doesn't spam the debug log.
+            if (!phd2.IsConnected) return Results.Ok(new { connected = false });
             try {
                 var current = await phd2.GetExposureAsync();
                 var available = await phd2.GetExposureDurationsAsync();
@@ -424,7 +427,8 @@ public static class GuiderEndpoints {
         // ---- Dec guide mode ----
 
         group.MapGet("/dec-mode", async (PHD2Client phd2) => {
-            if (!phd2.IsConnected) return Results.BadRequest(new { error = "PHD2 not connected" });
+            // Status probe — benign when PHD2 isn't connected (see /exposure).
+            if (!phd2.IsConnected) return Results.Ok(new { connected = false });
             try { return Results.Ok(new { mode = await phd2.GetDecGuideModeAsync() }); }
             catch (Exception ex) { return Results.Problem(ex.Message); }
         });

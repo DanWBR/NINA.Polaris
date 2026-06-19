@@ -102,7 +102,7 @@ function ninaApp() {
         // Self-update (SBC .deb installs). Populated by checkUpdate() from
         // /api/update/check; the badge + modal only surface when supported.
         update: {
-            supported: false, available: false, modalOpen: false,
+            supported: false, available: false, modalOpen: false, checking: false,
             currentVersion: '', latestVersion: '', releaseName: '',
             releaseNotes: '', publishedAt: '', htmlUrl: '',
             commits: [],   // changelog: [{ sha, subject, body }] since installed version
@@ -22765,6 +22765,25 @@ function ninaApp() {
                 ? 'decon-objects' : 'decon-stars';
         },
 
+        // Numeric (semver-ish) version compare. A plain string compare
+        // (localeCompare) is WRONG for dotted versions: "0.84.10" sorts
+        // BEFORE "0.84.8" because '1' < '8' lexicographically. Split on '.'
+        // and compare each component as an integer; any non-numeric suffix
+        // (e.g. "-fp16") is stripped first. Returns <0, 0, >0 like compareTo.
+        _compareVersions(a, b) {
+            const parts = (v) => String(v || '')
+                .replace(/[-+].*$/, '')        // drop -fp16 / -int8 / build suffix
+                .split('.')
+                .map(n => parseInt(n, 10) || 0);
+            const pa = parts(a), pb = parts(b);
+            const len = Math.max(pa.length, pb.length);
+            for (let i = 0; i < len; i++) {
+                const d = (pa[i] || 0) - (pb[i] || 0);
+                if (d !== 0) return d;
+            }
+            return 0;
+        },
+
         // Generic version picker for any GraXpert family (bge / denoise /
         // decon-stars / decon-objects). Lists every version in the
         // manifest (incl. -fp16 / -int8 siblings) with on-disk size, so
@@ -22814,10 +22833,10 @@ function ninaApp() {
                     if (pa !== pb) return pa - pb;
                     return a.sizeBytes - b.sizeBytes;
                 }
-                // Desktop: prefer non-quantized first, then by version.
+                // Desktop: prefer non-quantized first, then newest version.
                 if (a.isQuantized !== b.isQuantized)
                     return a.isQuantized ? 1 : -1;
-                return a.version.localeCompare(b.version);
+                return this._compareVersions(b.version, a.version);
             });
             // Hard fallback when the manifest is empty (server hasn't
             // rescanned yet), keep the original built-in choices so
@@ -23980,8 +23999,12 @@ function ninaApp() {
         },
 
         async fetchPhd2Exposure() {
+            // PHD2-only probe — skip for the native guider so we don't poke a
+            // PHD2 endpoint that will never have a connection on this rig.
+            if (this.guiderDriver !== 'phd2') return;
             try {
                 const r = await this.apiGet('/api/guider/exposure');
+                if (r && r.connected === false) return;
                 this.phd2Exposure = r.current || 1000;
                 this.phd2ExposureOptions = r.available || [];
             } catch (e) { /* ignore */ }
@@ -23995,9 +24018,11 @@ function ninaApp() {
         },
 
         async fetchPhd2DecMode() {
+            // PHD2-only probe — skip for the native guider (see fetchPhd2Exposure).
+            if (this.guiderDriver !== 'phd2') return;
             try {
                 const r = await this.apiGet('/api/guider/dec-mode');
-                if (r.mode) this.phd2DecMode = r.mode;
+                if (r && r.mode) this.phd2DecMode = r.mode;
             } catch (e) { /* ignore */ }
         },
 
@@ -26686,7 +26711,7 @@ function ninaApp() {
         async checkUpdate(force) {
             try {
                 const r = await this.apiFetch('/api/update/check' + (force ? '?force=true' : ''));
-                if (!r.ok) return;
+                if (!r.ok) return null;
                 const u = await r.json();
                 this.update.supported = !!u.supported;
                 this.update.available = !!u.updateAvailable;
@@ -26699,7 +26724,32 @@ function ninaApp() {
                 this.update.htmlUrl = u.htmlUrl || '';
                 this.update.assetName = u.assetName || '';
                 this.update.assetSize = u.assetSize || 0;
-            } catch (e) { /* offline / not supported — leave badge hidden */ }
+                return u;
+            } catch (e) { /* offline / not supported — leave badge hidden */ return null; }
+        },
+        // Manual "Check for updates" (POWER card button). Forces a fresh check
+        // (bypasses the 30-min cache) and surfaces the outcome as a toast; opens
+        // the install modal when a newer release is found.
+        async checkUpdateManual() {
+            if (this.update.checking) return;
+            this.update.checking = true;
+            try {
+                const u = await this.checkUpdate(true);
+                if (!u) { this.toast('Update check failed — offline or server error', 'error'); return; }
+                if (u.error) { this.toast('Update check: ' + u.error, 'error'); return; }
+                if (!u.supported) {
+                    this.toast('Self-update needs a Linux .deb install. Running v' + (u.currentVersion || '?'), 'info');
+                    return;
+                }
+                if (u.updateAvailable) {
+                    this.toast('Update available: v' + (u.latestVersion || '?'), 'success');
+                    this.openUpdateModal();
+                } else {
+                    this.toast("You're up to date (v" + (u.currentVersion || '?') + ')', 'success');
+                }
+            } finally {
+                this.update.checking = false;
+            }
         },
         openUpdateModal() {
             this.update.error = '';

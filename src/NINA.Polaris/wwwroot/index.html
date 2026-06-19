@@ -10870,10 +10870,27 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <span x-show="!power.shuttingDown">⏻ Shut down device</span>
                             <span x-show="power.shuttingDown">Shutting down…</span>
                         </button>
+                        <button class="btn btn-sm"
+                                @click="checkUpdateManual()"
+                                :disabled="update.checking"
+                                title="Query GitHub for a newer Polaris release">
+                            <span x-show="!update.checking">⬇ Check for updates</span>
+                            <span x-show="update.checking">Checking…</span>
+                        </button>
                     </div>
                     <p class="text-muted" x-show="!power.canReboot && power.loaded"
                        style="font-size:11px; margin-top:8px">
                         ⚠ Device reboot is not available on this platform.
+                    </p>
+                    <p class="text-muted" x-show="update.currentVersion"
+                       style="font-size:11px; margin-top:8px">
+                        <span x-show="!update.available">
+                            Running v<span x-text="update.currentVersion"></span>.
+                        </span>
+                        <span x-show="update.available" style="color:var(--accent)">
+                            ⬆ Update available: v<span x-text="update.latestVersion"></span> —
+                            <a href="#" @click.prevent="openUpdateModal()">view &amp; install</a>
+                        </span>
                     </p>
 
                     <!-- Windows boot auto-start. On Linux/SBC this is handled
@@ -14641,7 +14658,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260619-guidetabs4"></script>
+    <script src="/js/app.js?v=20260619-phd2probe"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
