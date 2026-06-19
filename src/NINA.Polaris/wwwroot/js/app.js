@@ -1329,7 +1329,7 @@ function ninaApp() {
             pixelScale: 0, rmsRA: 0, rmsDec: 0, rmsTotal: 0,
             peakRA: 0, peakDec: 0, stepCount: 0,
             raAggression: 0.7, decAggression: 0.7,
-            lastAlert: null, lastSettleStatus: null, calProgress: null, calDetails: null,
+            lastAlert: null, lastAlertSeverity: 'warn', lastSettleStatus: null, calProgress: null, calDetails: null,
             darkCalibration: null,
             recentSteps: []
         },
@@ -27607,6 +27607,7 @@ function ninaApp() {
                         raAggression: g.raAggression ?? this.guider.raAggression ?? 0.7,
                         decAggression: g.decAggression ?? this.guider.decAggression ?? 0.7,
                         lastAlert: g.lastAlert || null,
+                        lastAlertSeverity: g.lastAlertSeverity || 'warn',
                         lastSettleStatus: g.lastSettleStatus || null,
                         calProgress: g.calProgress || null,
                         calDetails: g.calDetails || null,

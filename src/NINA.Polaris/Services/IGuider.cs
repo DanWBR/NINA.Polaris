@@ -69,6 +69,10 @@ public interface IGuider {
 
     string? LastAlert { get; }
     DateTime? LastAlertAt { get; }
+    /// <summary>Severity of <see cref="LastAlert"/> for UI styling:
+    /// "info" | "warn" | "error". Defaults to "warn" so existing backends
+    /// (PHD2) keep their current red/amber callout without changes.</summary>
+    string LastAlertSeverity => "warn";
     string? LastSettleStatus { get; }
 
     /// <summary>Human-readable calibration step shown in the GUIDE UI while

@@ -188,12 +188,23 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         AppStateChanged?.Invoke(s);
     }
 
-    private void RaiseAlert(string msg) {
+    // Severity of the most recent alert ("info" | "warn" | "error"), surfaced
+    // to the GUIDE callout so an informational message (e.g. "dark library
+    // built") isn't styled like an error.
+    public string LastAlertSeverity { get; private set; } = "warn";
+
+    private void RaiseAlert(string msg, string severity = "warn") {
         LastAlert = msg;
         LastAlertAt = DateTime.UtcNow;
-        _logger.LogWarning("Native guider alert: {Msg}", msg);
+        LastAlertSeverity = severity;
+        if (severity == "info") _logger.LogInformation("Native guider: {Msg}", msg);
+        else _logger.LogWarning("Native guider alert: {Msg}", msg);
         Alert?.Invoke(msg);
     }
+
+    /// <summary>Convenience for non-error notifications (styled as info, logged
+    /// at Information level).</summary>
+    private void RaiseInfo(string msg) => RaiseAlert(msg, "info");
 
     private void RecomputePixelScale() {
         var cam = _equipment.GuideCamera;

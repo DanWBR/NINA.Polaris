@@ -295,7 +295,7 @@ public sealed partial class NativeGuider {
             ReloadGuideCalibration();
             EnsureCalibrationLoaded();
             _buildProgress = $"Done: master dark + {bad.Length} bad pixels.";
-            RaiseAlert($"Guide dark library built ({frames.Count} darks, {bad.Length} bad pixels).");
+            RaiseInfo($"Guide dark library built ({frames.Count} darks, {bad.Length} bad pixels).");
         } catch (OperationCanceledException) {
             _buildProgress = null;
             _logger.LogInformation("Guide calibration build cancelled");
@@ -321,6 +321,6 @@ public sealed partial class NativeGuider {
         try { File.Delete(LegacyBpmPath(gain, bin)); } catch { }
         _darkMaster = null; _darkLabel = null; _bpmSet = null; _bpmCount = 0;
         ReloadGuideCalibration();
-        RaiseAlert("Guide dark library cleared.");
+        RaiseInfo("Guide dark library cleared.");
     }
 }

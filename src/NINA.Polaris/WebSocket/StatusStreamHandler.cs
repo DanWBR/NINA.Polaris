@@ -196,6 +196,7 @@ public static class StatusStreamHandler {
                             peakDec = activeGuider.PeakDec,
                             stepCount = steps.Count,
                             lastAlert = activeGuider.LastAlert,
+                            lastAlertSeverity = activeGuider.LastAlertSeverity,
                             lastSettleStatus = activeGuider.LastSettleStatus,
                             calProgress = activeGuider.CalibrationProgress,
                             calDetails = activeGuider.CalibrationDetails,
