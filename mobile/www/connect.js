@@ -425,11 +425,34 @@ function wire() {
   els.hostInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') manual(); });
 }
 
+// Ask for the runtime-dangerous permissions up front (Android) so the
+// operator grants them once at launch instead of being interrupted later
+// when a feature first needs them. The only dangerous permission this app
+// declares is location (observatory site coordinates + the offline Aim
+// helper); INTERNET is a normal permission and the motion sensors need no
+// runtime grant. No-op in a plain browser (no Geolocation plugin) and a
+// no-op when already granted; failure never blocks startup — the user can
+// still grant later from the system settings.
+async function requestStartupPermissions() {
+  if (!Geolocation || typeof Geolocation.requestPermissions !== 'function') return;
+  try {
+    if (typeof Geolocation.checkPermissions === 'function') {
+      const state = await Geolocation.checkPermissions();
+      if (state && (state.location === 'granted' || state.coarseLocation === 'granted')) return;
+    }
+    await Geolocation.requestPermissions({ permissions: ['location', 'coarseLocation'] });
+  } catch (e) {
+    console.warn('[polaris] startup permission request failed', e);
+  }
+}
+
 (function init() {
   // Wire the controls FIRST so Connect always works, even if anything
   // below (plugin calls, discovery) throws.
   wire();
   wireHardwareBack();
   refreshPickerExtras();
+  // Prompt for location right away (see requestStartupPermissions).
+  requestStartupPermissions();
   scan();
 })();
