@@ -121,13 +121,13 @@ public class DitherSettings {
     /// <summary>Random pixel offset (passed to PHD2 'dither' as amount).</summary>
     public double Pixels { get; set; } = 5.0;
     /// <summary>Trigger a dither after every N successfully-captured frames.</summary>
-    public int EveryNFrames { get; set; } = 1;
+    public int EveryNFrames { get; set; } = 3;
     /// <summary>Only dither in RA (useful for mounts with sloppy Dec backlash).</summary>
     public bool RaOnly { get; set; }
     /// <summary>Settle distance tolerance in pixels.</summary>
-    public double SettlePixels { get; set; } = 1.5;
+    public double SettlePixels { get; set; } = 3.0;
     /// <summary>Minimum settled time in seconds.</summary>
-    public int SettleTime { get; set; } = 10;
+    public int SettleTime { get; set; } = 3;
     /// <summary>Hard timeout for settling, in seconds.</summary>
-    public int SettleTimeout { get; set; } = 40;
+    public int SettleTimeout { get; set; } = 60;
 }

@@ -475,8 +475,8 @@ public class EquipmentProfile {
     /// <see cref="CameraDriver"/>. Defaults to <c>indi</c>.</summary>
     public string GuideCameraDriver { get; set; } = "indi";
 
-    /// <summary>Native guider exposure per frame (ms). Default 2 s.</summary>
-    public int NativeGuideExposureMs { get; set; } = 2000;
+    /// <summary>Native guider exposure per frame (ms). Default 1 s.</summary>
+    public int NativeGuideExposureMs { get; set; } = 1000;
 
     /// <summary>Native guider calibration step pulse length (ms). Default 1 s.</summary>
     public int NativeCalibrationStepMs { get; set; } = 1000;
@@ -549,8 +549,8 @@ public class EquipmentProfile {
     public int NativeMaxGuideStars { get; set; } = 8;
 
     /// <summary>Guide-camera gain for native guiding. 0 = leave the camera's
-    /// current/default gain.</summary>
-    public int NativeGuideGain { get; set; } = 0;
+    /// current/default gain. Default 40 (a sane mid-gain for common guide cams).</summary>
+    public int NativeGuideGain { get; set; } = 40;
 
     /// <summary>Guide-camera binning for native guiding (1 = 1x1, 2 = 2x2).
     /// Bin 2 lowers resolution but boosts SNR + frame rate, common for guiding.</summary>

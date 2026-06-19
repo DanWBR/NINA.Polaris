@@ -215,9 +215,9 @@ function ninaApp() {
             ditherEveryNFrames: 3,
             ditherPixels: 5.0,
             ditherRaOnly: false,
-            ditherSettlePixels: 1.5,
-            ditherSettleTime: 10,
-            ditherSettleTimeout: 40
+            ditherSettlePixels: 3.0,
+            ditherSettleTime: 3,
+            ditherSettleTimeout: 60
         },
         // LSPP-3 + LSPP-6: per-frame pre-processing settings. Local
         // copy of the EquipmentProfile.LiveStackPreProcessing state.
@@ -861,7 +861,7 @@ function ninaApp() {
         guideCameraDriver: 'indi',
         guideCameraVendorDevices: [],
         guideCameraDiscovering: false,
-        guideGain: 0,   // native guide-camera gain (0 = camera default)
+        guideGain: 40,   // native guide-camera gain default (0 = camera default)
         // Guide-camera gain range, hydrated from eq.guideCamera each WS tick.
         // Drives the Gain dropdown (min, max + evenly spaced intermediates).
         guideCameraGainMin: 0,
@@ -2751,11 +2751,11 @@ function ninaApp() {
         ditherSettings: {
             enabled: false,
             pixels: 5.0,
-            everyNFrames: 1,
+            everyNFrames: 3,
             raOnly: false,
-            settlePixels: 1.5,
-            settleTime: 10,
-            settleTimeout: 40
+            settlePixels: 3.0,
+            settleTime: 3,
+            settleTimeout: 60
         },
         seqDitherExpanded: false,
         _ditherSaveTimer: null,
@@ -15710,11 +15710,11 @@ function ninaApp() {
                     this.ditherSettings = {
                         enabled: !!data.enabled,
                         pixels: data.pixels ?? 5.0,
-                        everyNFrames: data.everyNFrames ?? 1,
+                        everyNFrames: data.everyNFrames ?? 3,
                         raOnly: !!data.raOnly,
-                        settlePixels: data.settlePixels ?? 1.5,
-                        settleTime: data.settleTime ?? 10,
-                        settleTimeout: data.settleTimeout ?? 40
+                        settlePixels: data.settlePixels ?? 3.0,
+                        settleTime: data.settleTime ?? 3,
+                        settleTimeout: data.settleTimeout ?? 60
                     };
                 }
             } catch (e) { /* server may not be reachable yet */ }

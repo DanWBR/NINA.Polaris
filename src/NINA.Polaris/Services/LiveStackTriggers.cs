@@ -83,7 +83,7 @@ public class LiveStackTriggers {
     /// <summary>Dither after the integrated-frame counter advances by this
     /// much since the last dither. 0 = disabled. Routed through the active
     /// guider (native or external PHD2); a no-op when not guiding.</summary>
-    public int DitherEveryNFrames { get; set; } = 1;
+    public int DitherEveryNFrames { get; set; } = 3;
 
     /// <summary>Random dither offset in guide-camera pixels.</summary>
     public double DitherPixels { get; set; } = 5.0;
@@ -94,9 +94,9 @@ public class LiveStackTriggers {
     /// <summary>Settle tolerance (px) / min settled time (s) / hard timeout (s),
     /// passed to the guider's dither so the next frame waits for the star to
     /// settle, exactly like the AUTORUN sequencer.</summary>
-    public double DitherSettlePixels { get; set; } = 1.5;
-    public int DitherSettleTime { get; set; } = 10;
-    public int DitherSettleTimeout { get; set; } = 40;
+    public double DitherSettlePixels { get; set; } = 3.0;
+    public int DitherSettleTime { get; set; } = 3;
+    public int DitherSettleTimeout { get; set; } = 60;
 
     // ----- One-shot "before starting stack" prep -----
 
